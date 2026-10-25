@@ -8,9 +8,11 @@ every user.
 
 ## GitHub issues
 
-Issues for this work live on the fork, `mattyv/ai-pair` (the `origin`
-remote). `jakehurst` is the remote for `jakehurst/ai-pair`, the repository the
-fork came from; do not file issues or push there.
+This work lives on the fork, `mattyv/ai-pair` (the `origin` remote), and the
+fork has no issues: do not file, comment on, or enable them (set by Matt on
+2026-10-25). `jakehurst` is the remote for `jakehurst/ai-pair`, the repository
+the fork came from; do not file issues or push there. The rules below that
+mention issues predate this and wait for Matt to revise them.
 
 -   **Add what you find to the open issue it belongs to.** When work turns up a
     detail that is relevant to an open issue, add it as a comment on that issue,
