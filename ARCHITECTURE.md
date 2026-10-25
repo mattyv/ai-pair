@@ -6,7 +6,10 @@ pairing session starts and ends. The agent-facing contract is in
 [DESIGN.md](DESIGN.md).
 
 The diagrams of these components, with a guided tour, are in the interactive
-page [docs/ai-pair.html](docs/ai-pair.html).
+page, [viewable on GitHub Pages][pages] and kept in
+[docs/ai-pair.html](docs/ai-pair.html).
+
+[pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
 Status: describes 0.2.0.
 
