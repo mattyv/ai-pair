@@ -5,6 +5,10 @@ pairing session starts and ends. The agent-facing contract is in
 [PROTOCOL.md](PROTOCOL.md); the programmer-facing design is in
 [DESIGN.md](DESIGN.md).
 
+The diagrams of these components are in [docs/diagrams.md](docs/diagrams.md),
+which GitHub renders, and as an interactive page with a guided tour in
+[docs/ai-pair.html](docs/ai-pair.html).
+
 Status: describes 0.2.0.
 
 ## Components
