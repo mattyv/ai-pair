@@ -8,9 +8,9 @@ every user.
 
 ## GitHub issues
 
-Issues for this work live on the fork, `jakehurst/ai-pair` (the `jakehurst`
-remote). `origin` is the upstream repository, `faiface/ai-pair`; do not file
-issues or push there.
+Issues for this work live on the fork, `mattyv/ai-pair` (the `origin`
+remote). `jakehurst` is the remote for `jakehurst/ai-pair`, the repository the
+fork came from; do not file issues or push there.
 
 -   **Add what you find to the open issue it belongs to.** When work turns up a
     detail that is relevant to an open issue, add it as a comment on that issue,
@@ -39,7 +39,7 @@ issues or push there.
     commit message and the PR description from it. The issue is where the notes
     are kept for good. Once the fix is merged, or work on the issue stops, post
     the file verbatim as a comment on the issue
-    (`gh issue comment <N> -R jakehurst/ai-pair --body-file <file>`), without
+    (`gh issue comment <N> -R mattyv/ai-pair --body-file <file>`), without
     asking first, then delete the local file (set by Justine on 2026-10-07).
 -   Never stage or commit the notes file, and do not mention it in the commit
     message.
