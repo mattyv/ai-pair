@@ -11,7 +11,7 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes 0.12.0.
+Status: describes 0.13.0.
 
 ## Components
 
@@ -45,6 +45,9 @@ Status: describes 0.12.0.
     terminals can be reused; explicit reveal uses the command ID and reports
     unavailable if its terminal has closed or been reused. Automatic visibility
     is an independent persisted preference.
+-   **Session diagnostics** keep a bounded allowlisted lifecycle history in
+    the VS Code adapter. The panel requests a snapshot explicitly; its clipboard
+    export contains no chat, code, paths, command text, output, or tokens.
 -   **The narration panel** is a webview. It talks to the extension via
     `postMessage`, with the messages typed in
     [`panel_messages.ts`](packages/vscode/src/panel_messages.ts). Its markup is

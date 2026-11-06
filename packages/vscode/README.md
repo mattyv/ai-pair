@@ -64,7 +64,10 @@ command on the Ubuntu host using that folder's host path.
 
 Reload the VS Code window and restart the agent after updating. The Pair
 panel's Settings dialog shows the running version and build ID, so you can
-verify the loaded build.
+verify the loaded build. For troubleshooting, **Copy diagnostics** in
+Settings copies recent connection, session, request, pause and command status
+metadata to the clipboard. It does not include chat, code, paths, command text,
+or output. Copying is explicit; timestamps and numeric IDs are included.
 
 ## Set up
 

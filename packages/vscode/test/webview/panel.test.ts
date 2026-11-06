@@ -7,6 +7,7 @@
 import { ok } from 'node:assert/strict';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest';
 import type { Element, HTMLElement, Window } from 'happy-dom';
+import type { PanelEvent } from '@ai-pair/core';
 import { ELLIPSIS, LABEL_SEPARATOR, RANGE_DASH, RIGHT_ARROW, SPEED_SUFFIX } from '@ai-pair/core/constants';
 import type { ToPanel } from '../../src/panel_messages';
 import { loadPage, ui } from '../page';
@@ -266,6 +267,27 @@ describe('the history (specs/Panel.tla, specs/PanelScroll.tla)', () => {
       'Session started',
     ]);
     expect(text('status-text')).toBe('Session started');
+  });
+
+  it.each([false, true])('ShownIsState: a replacement session clears an old suspension (replay %s)', (replay) => {
+    const events: PanelEvent[] = [
+      { type: 'session', active: true, task: 'Previous' },
+      { type: 'session', active: true, task: 'Previous', suspended: true },
+      { type: 'session', active: true, task: 'Replacement' },
+      { type: 'state', state: 'typing', turn: 'agent', paused: false },
+    ];
+    if (replay) send({ type: 'replay', events });
+    else for (const event of events) send(event);
+    expect(text('status-text')).toContain('Playing');
+    expect(text('status-text')).not.toContain('Suspended');
+  });
+
+  it('ShownIsState: late state and run events do not clear a real suspension', () => {
+    start();
+    send({ type: 'session', active: true, suspended: true });
+    send({ type: 'state', state: 'typing', turn: 'agent', paused: false });
+    send({ type: 'run', id: 40, command: 'test', phase: 'done', exitCode: 0 });
+    expect(text('status-text')).toBe('Suspended: waiting for the agent');
   });
 
   it('ShownIsState: a session revived after a reload shows as suspended (#138)', () => {
@@ -1519,11 +1541,20 @@ describe('Your move guidance', () => {
     expect(status.textContent).toBe('Your move');
     expect(status.getAttribute('tabindex')).toBe('0');
     expect(status.dataset.tip).toBe(
-      'The agent is listening for your reply. Answer its question, ask a question, or say continue in the reply box.',
+      'The agent is listening for your reply. You can reply, ask a question, or say continue; it may continue after waiting.',
     );
     send({ type: 'state', state: 'listening', turn: 'agent', paused: true });
     expect(status.dataset.tip).toBeUndefined();
     expect(status.hasAttribute('tabindex')).toBe(false);
+  });
+
+  it('updates a visible listening hint when the session becomes suspended', () => {
+    start();
+    send({ type: 'state', state: 'listening', turn: 'agent', paused: false });
+    element('status-text').focus();
+    expect(tip()).toContain('agent is listening');
+    send({ type: 'session', active: true, suspended: true });
+    expect(tip()).toContain('same project');
   });
 
   it('clears a pending or visible explanation on a status change', () => {
@@ -1540,7 +1571,7 @@ describe('Your move guidance', () => {
     hover(element('status-text'));
     send({ type: 'session', active: true, suspended: true });
     vi.advanceTimersByTime(TIP_DELAY_MS);
-    expect(tip()).toBeUndefined();
+    expect(tip()).toContain('same project');
   });
 });
 
@@ -1602,4 +1633,18 @@ it('ChoiceSaved: keeps mode in the pace label when speed and mode messages arriv
   expect(element('speed').getAttribute('aria-label')).toContain('lines');
   send({ type: 'speed', value: 3 });
   expect(element('speed').getAttribute('aria-label')).toContain('lines');
+});
+
+it('explains how to resume a suspended session and clears the hint on reconnect', () => {
+  start();
+  send({ type: 'session', active: true, suspended: true });
+  expect(element('status-text').dataset.tip).toContain('same project');
+  send({ type: 'session', active: true, resumed: true });
+  expect(element('status-text').dataset.tip).toBeUndefined();
+});
+
+it('OnlyOnRequest: requests diagnostics only when the button is activated', () => {
+  expect(posted().filter((message) => message.type === 'copyDiagnostics')).toEqual([]);
+  click(element('copy-diagnostics'));
+  expect(posted().filter((message) => message.type === 'copyDiagnostics')).toEqual([{ type: 'copyDiagnostics' }]);
 });

@@ -30,6 +30,17 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   Place one Settings gear in the toolbar, available in idle and active states.
     Explain Your move on hover or keyboard focus only while the agent listens.
 
+## Session diagnostics
+
+-   Keep a bounded, in-memory history of allowlisted lifecycle metadata for
+    connection, requests, pause reasons, and commands. Exclude chat, source,
+    paths, command text, output, and tokens. Copy a snapshot only on an explicit
+    Settings action; report clipboard failure. Values not yet observed remain
+    unavailable, and timestamps and identifiers are still diagnostic metadata.
+-   A fresh session replaces an old suspended display; unrelated late status
+    events cannot clear an actual suspension. Explain how to reconnect in the
+    same project, without claiming why a connection ended.
+
 ## Command terminals
 
 -   Keep Pair command terminals hidden by default, with an opt-in setting and

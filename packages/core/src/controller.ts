@@ -22,6 +22,7 @@ import {
   type AgentState,
   type Change,
   type CursorView,
+  type DiagnosticEvent,
   type EditorPort,
   type PanelPort,
   type Ref,
@@ -258,6 +259,18 @@ export class Controller {
   private lastPosted = '';
   /** After any change the session's `saved` form may have: the window saves it (#25). */
   onChange?: () => void;
+  /** Receives allowlisted lifecycle facts, without session text. */
+  onDiagnostic?: (event: DiagnosticEvent) => void;
+
+  /** Records diagnostics without allowing an observer to affect the session. */
+  private diagnostic(event: DiagnosticEvent): void {
+    try {
+      this.onDiagnostic?.(event);
+    } catch {
+      // Diagnostic observers cannot change session behavior.
+    }
+  }
+
   /** Where the session's interactions are logged: statuses, batches, pauses, interrupts, edits, reports (#149). */
   trace?: (line: string) => void;
 
@@ -294,6 +307,8 @@ export class Controller {
         allowedCommands: new Set(),
       };
       this.open(scene, task);
+      this.diagnostic({ kind: 'session', state: 'active' });
+      this.diagnostic({ kind: 'pause', paused: this.pauseReasons.size > 0, reasons: [...this.pauseReasons] });
       this.trace?.(`session started${task === undefined ? '' : `: ${task}`}`);
       this.panel.post({ type: 'session', active: true, task, ...(rules !== undefined && rules.length > 0 ? { rules } : {}) });
       this.render();
@@ -307,6 +322,7 @@ export class Controller {
    */
   private resumeSession(session: Session, rules?: string[]): Promise<Report> {
     session.suspended = false;
+    this.diagnostic({ kind: 'session', state: 'active' });
     this.trace?.('session resumed');
     session.seen = new Map();
     session.seenCursor = undefined;
@@ -396,6 +412,8 @@ export class Controller {
     };
     const session = this.open(scene, saved.task);
     session.suspended = true;
+    this.diagnostic({ kind: 'session', state: 'suspended' });
+    this.diagnostic({ kind: 'pause', paused: this.pauseReasons.size > 0, reasons: [...this.pauseReasons] });
     this.trace?.('session revived after a reload, suspended');
     session.finished = [...saved.finished];
     session.events = [...saved.events];
@@ -678,6 +696,7 @@ export class Controller {
     // `EndByProgrammer` in specs/Bridge.tla and specs/Controller.tla: its last report, to the owner's next call, closes it
     // (`End` in specs/Serialize.tla).
     session.ended = true;
+    this.diagnostic({ kind: 'session', state: 'ended' });
     session.events.push({ kind: 'end' });
     this.interrupt(session);
     this.panel.post({ type: 'session', active: false, reason: 'programmer' });
@@ -704,6 +723,7 @@ export class Controller {
     // Nothing plays without its agent: what's queued is discarded, and reported once it's back.
     this.interrupt(session);
     session.suspended = true;
+    this.diagnostic({ kind: 'session', state: 'suspended' });
     this.trace?.('session suspended: the agent disconnected');
     this.panel.post({ type: 'session', active: true, task: session.task, suspended: true });
     this.update();
@@ -711,8 +731,10 @@ export class Controller {
 
   /** Adds a pause reason, and pauses playback (specs/Timeline.tla, `Pause`). */
   pause(reason: PauseReason = 'programmer'): void {
-    if (!this.pauseReasons.has(reason)) this.trace?.(`pause ${reason}`);
+    const changed = !this.pauseReasons.has(reason);
+    if (changed) this.trace?.(`pause ${reason}`);
     this.pauseReasons.add(reason);
+    if (changed) this.diagnostic({ kind: 'pause', paused: true, reasons: [...this.pauseReasons] });
     this.session?.timeline.pause();
     this.render();
   }
@@ -724,12 +746,16 @@ export class Controller {
    */
   resume(reason?: PauseReason, { reveal = true }: { reveal?: boolean } = {}): void {
     if (this.pauseReasons.size === 0) return;
+    const before = this.pauseReasons.size;
     const lookedAway = this.pauseReasons.has('away');
     if (reason === undefined || this.pauseReasons.has(reason)) this.trace?.(`resume ${reason ?? 'all'}`);
     if (reason === undefined) {
       this.pauseReasons.clear();
     } else {
       this.pauseReasons.delete(reason);
+    }
+    if (this.pauseReasons.size !== before) {
+      this.diagnostic({ kind: 'pause', paused: this.pauseReasons.size > 0, reasons: [...this.pauseReasons] });
     }
     if (this.pauseReasons.size > 0) return;
     const session = this.session;
@@ -1134,6 +1160,7 @@ export class Controller {
 
   private close(session: Session): void {
     this.trace?.('session closed');
+    this.diagnostic({ kind: 'session', state: 'ended' });
     this.session = undefined;
     session.timeline.interrupt();
     this.editor.cleanupIdleTerminals();

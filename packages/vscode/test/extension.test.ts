@@ -3,6 +3,7 @@
 // the extension it builds on are fakes, so a test says what each answers and sees what activate asked of it.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as vscode from 'vscode';
 import { isSavedSession } from '@ai-pair/core';
 import { playDemo } from '../src/demo';
 import { activate, deactivate } from '../src/extension';
@@ -38,14 +39,24 @@ const fakes = vi.hoisted(() => {
     editors: [] as Array<InstanceType<typeof FakeEditor>>,
     panels: [] as Array<InstanceType<typeof FakePanel>>,
     calibrations: [] as Array<InstanceType<typeof FakeCalibration>>,
+    diagnostics: [] as Array<InstanceType<typeof FakeDiagnostics>>,
     starting: Promise.resolve(),
     arms: true,
   };
+
+  class FakeDiagnostics {
+    readonly record = vi.fn<(event: unknown) => void>();
+    readonly snapshot = vi.fn(() => ({ safe: 'snapshot' }));
+    constructor(readonly identity: unknown) {
+      made.diagnostics.push(this);
+    }
+  }
 
   /** Core's Controller, faked: what activate sets, and the calls its commands make. */
   class FakeController {
     trace?: (line: string) => void;
     onChange?: () => void;
+    onDiagnostic?: (event: unknown) => void;
     isPaused = false;
     turn: string | undefined = undefined;
     saved: unknown = undefined;
@@ -85,6 +96,7 @@ const fakes = vi.hoisted(() => {
         trace: (line: string) => void;
         failed: (error: unknown) => void;
         calibrate: (passage: unknown) => boolean;
+        onDiagnostic: (event: unknown) => void;
       },
     ) {
       made.bridges.push(this);
@@ -106,6 +118,7 @@ const fakes = vi.hoisted(() => {
       readonly agentName: string,
       readonly controller: () => unknown,
       readonly showAutomatically: () => boolean,
+      readonly onDiagnostic: (event: unknown) => void,
     ) {
       made.editors.push(this);
     }
@@ -134,7 +147,7 @@ const fakes = vi.hoisted(() => {
       readonly selection: { current: () => unknown; ref: () => unknown },
       readonly trace: (line: string) => void,
       readonly extensionUri: unknown,
-      readonly wiring: { controller: () => unknown; calibration: () => unknown; starter: unknown },
+      readonly wiring: { controller: () => unknown; calibration: () => unknown; starter: unknown; copyDiagnostics: () => Promise<void> },
       readonly chatOrder: { get: () => string; set: (value: string) => void },
       readonly buildInfo: unknown,
       readonly terminalSettings: { get: () => boolean; set: (value: boolean) => void },
@@ -170,6 +183,7 @@ const fakes = vi.hoisted(() => {
     FakeEditor,
     FakePanel,
     FakeCalibration,
+    FakeDiagnostics,
     made,
     /** The workspace's folders; none until a test says. */
     folders: undefined as Array<{ uri: { fsPath: string } }> | undefined,
@@ -219,6 +233,7 @@ vi.mock('vscode', () => ({
     onDidChangeWindowState: fakes.event('window'),
     registerWebviewViewProvider: () => ({ dispose: () => {} }),
   },
+  env: { clipboard: { writeText: vi.fn(() => Promise.resolve()) } },
   commands: {
     registerCommand: (name: string, run: () => unknown) => {
       fakes.commands.set(name, run);
@@ -235,6 +250,7 @@ vi.mock('@ai-pair/core', () => ({
 vi.mock('@ai-pair/protocol', () => ({ discoveryDir: () => '/discovery' }));
 vi.mock('../src/demo', () => ({ playDemo: vi.fn(() => Promise.resolve()) }));
 vi.mock('../src/editor', () => ({ VsCodeEditor: fakes.FakeEditor }));
+vi.mock('../src/diagnostics', () => ({ Diagnostics: fakes.FakeDiagnostics }));
 vi.mock('../src/outside_watch', () => ({ watchOutside: vi.fn(() => ({ outside: 'outside', disposable: { dispose: () => {} } })) }));
 vi.mock('../src/panel', () => ({ NarrationPanel: fakes.FakePanel }));
 vi.mock('../src/panel_html', () => ({ settingSpeed: vi.fn((value: unknown) => (typeof value === 'number' ? value : 1)) }));
@@ -397,6 +413,20 @@ describe('activate', () => {
     fakes.settings.set('chatOrder', 'invalid');
     changed('chatOrder');
     expect(h.panel.showChatOrder).toHaveBeenLastCalledWith('newestFirst');
+  });
+
+  it('copies a fresh diagnostic snapshot only on request and connects lifecycle sources', async () => {
+    const h = activated();
+    const diagnostics = fakes.made.diagnostics.at(-1);
+    if (diagnostics === undefined) throw new Error('Missing diagnostics');
+    h.editor.onDiagnostic({ kind: 'command', id: 4, phase: 'start' });
+    h.controller.onDiagnostic?.({ kind: 'session', state: 'active' });
+    h.bridge.options.onDiagnostic({ kind: 'connection', state: 'connected', connectionId: 1 });
+    expect(diagnostics.record).toHaveBeenCalledTimes(3);
+    expect(diagnostics.snapshot).not.toHaveBeenCalled();
+    await h.panel.wiring.copyDiagnostics();
+    expect(diagnostics.snapshot).toHaveBeenCalledOnce();
+    expect(vi.mocked(vscode.env.clipboard, { deep: true }).writeText.mock.calls).toContainEqual([JSON.stringify({ safe: 'snapshot' })]);
   });
 
   it('reads, saves and applies automatic terminal visibility and routes a reveal by ID', () => {

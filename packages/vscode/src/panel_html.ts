@@ -77,6 +77,8 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
     </select>
     </label>
     <label><input type="checkbox" data-ui="show-terminals"> Show terminals automatically</label>
+    <button type="button" data-ui="copy-diagnostics" class="quiet">Copy diagnostics</button>
+    <p>Copies version and recent connection, session, and command status; no command text.</p>
     <p class="build-identity">v${safeVersion} - build ${safeBuild}</p>
     <button type="button" data-ui="settings-close" class="primary">Close</button>
   </dialog>

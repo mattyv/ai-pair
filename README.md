@@ -141,7 +141,10 @@ command on the Ubuntu host using that folder's host path.
 
 Reload the VS Code window and restart the agent after updating. The Pair
 panel's Settings dialog shows the running version and build ID, so you can
-check what is actually loaded.
+check what is actually loaded. For troubleshooting, **Copy diagnostics** in
+Settings copies recent connection, session, request, pause and command status
+metadata to the clipboard. It does not include chat, code, paths, command text,
+or output. Copying is explicit; timestamps and numeric IDs are included.
 
 To build it from source instead, you also need **Node.js 22.19 or newer**:
 

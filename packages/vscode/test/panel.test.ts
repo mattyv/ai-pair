@@ -64,6 +64,7 @@ vi.mock('vscode', () => {
     window: {
       showTextDocument: vi.fn(() => Promise.resolve()),
       showInformationMessage: vi.fn(() => Promise.resolve()),
+      showErrorMessage: vi.fn(() => Promise.resolve()),
       showQuickPick: vi.fn((items: unknown[]) => Promise.resolve(fakes.pick === undefined ? undefined : items[fakes.pick])),
     },
     workspace: {
@@ -115,6 +116,7 @@ interface Harness {
   };
   terminalSettings: { get: ReturnType<typeof vi.fn<() => boolean>>; set: ReturnType<typeof vi.fn<(value: boolean) => void>> };
   showTerminal: ReturnType<typeof vi.fn<(id: number) => boolean>>;
+  copyDiagnostics: ReturnType<typeof vi.fn<() => Promise<void>>>;
   onPost: ReturnType<typeof vi.fn<() => void>>;
   traced: string[];
 }
@@ -142,6 +144,7 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
   };
   const terminalSettings = { get: vi.fn(() => false), set: vi.fn<(value: boolean) => void>() };
   const showTerminal = vi.fn<(id: number) => boolean>();
+  const copyDiagnostics = vi.fn<() => Promise<void>>().mockResolvedValue();
   const controller = mock<Controller>({ turn });
   const calibration = mock<Calibration>();
   calibration.reply.mockReturnValue(false);
@@ -157,7 +160,7 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
       traced.push(line);
     },
     vscode.Uri.file(EXTENSION),
-    { controller: () => controller, calibration: () => calibration, starter },
+    { controller: () => controller, calibration: () => calibration, starter, copyDiagnostics },
     chatOrder,
     buildInfo,
     terminalSettings,
@@ -165,7 +168,20 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
   );
   const onPost = vi.fn<() => void>();
   panel.onPost = onPost;
-  return { panel, controller, calibration, starter, speed, readingSpeed, chatOrder, terminalSettings, showTerminal, onPost, traced };
+  return {
+    panel,
+    controller,
+    calibration,
+    starter,
+    speed,
+    readingSpeed,
+    chatOrder,
+    terminalSettings,
+    showTerminal,
+    copyDiagnostics,
+    onPost,
+    traced,
+  };
 }
 
 /** Resolves a fake view into `panel`, and returns it. */
@@ -532,6 +548,21 @@ describe('receive', () => {
     expect(chatOrder.set).toHaveBeenCalledTimes(1);
     panel.showChatOrder('oldestFirst');
     expect(view.posted).toContainEqual({ type: 'chatOrder', value: 'oldestFirst' });
+  });
+
+  it('OnlyOnRequest and RequestedCompletes: copies only when asked and reports either outcome', async () => {
+    const { panel, copyDiagnostics } = harness();
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(copyDiagnostics).not.toHaveBeenCalled();
+    view.send({ type: 'copyDiagnostics' });
+    await flush();
+    expect(copyDiagnostics).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(vscode.window.showInformationMessage)).toHaveBeenCalledWith('AI Pair diagnostics copied.');
+    copyDiagnostics.mockRejectedValueOnce(new Error('clipboard unavailable'));
+    view.send({ type: 'copyDiagnostics' });
+    await flush();
+    expect(vi.mocked(vscode.window.showErrorMessage)).toHaveBeenCalledWith('Could not copy AI Pair diagnostics.');
   });
 
   it('forwards only valid reading countdown IDs', () => {

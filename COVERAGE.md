@@ -87,6 +87,7 @@ Last updated: css, 2026-11-06.
 | `packages/vscode/src/agents.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 81.1% B 66.7% F 87.2% | - | - | - | - |
 | `packages/vscode/src/calibration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 71.7% B 88.9% F 50.0% | - | - | - | - |
 | `packages/vscode/src/demo.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.8% B 83.9% F 100.0% | - | - | - | - |
+| `packages/vscode/src/diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/editor.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.3% B 90.7% F 97.9% | - | - | - | - |
 | `packages/vscode/src/extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 93.0% B 92.7% F 83.8% | - | - | - | - |
 | `packages/vscode/src/output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 93.2% B 90.9% F 100.0% | - | - | - | - |
@@ -108,6 +109,7 @@ Last updated: css, 2026-11-06.
 | `packages/vscode/test/css.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/vscode/test/diagnostics.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/editor.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/extension.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/integration.ts` | TypeScript | test | test | test | test | test | test |
@@ -165,6 +167,10 @@ Last updated: css, 2026-11-06.
 | `specs/Controller.tla` | TLA+ | - | - | 17 of 17 actions | - | - | - |
 | `specs/Diagnostics.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Diagnostics.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
+| `specs/DiagnosticsCopy.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/DiagnosticsCopy.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
+| `specs/DiagnosticsPrivacy.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/DiagnosticsPrivacy.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/Discovery.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Discovery.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/Discovery_InPlace.cfg` | TLC config | - | - | - | - | - | - |
@@ -235,7 +241,7 @@ Last updated: css, 2026-11-06.
 | `specs/TerminalPanel.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/TerminalPanel.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
 | `specs/TerminalReuse.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/TerminalReuse.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/TerminalReuse.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/Terminals.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Terminals.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
 | `specs/Timeline.cfg` | TLC config | - | - | - | - | - | - |

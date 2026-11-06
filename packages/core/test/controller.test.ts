@@ -15,7 +15,7 @@ import { boundedDiff, lineChanges } from '../src/diff';
 import { followChange, rehearse } from '../src/rehearsal';
 import type { LineIds, Sighting } from '../src/lines';
 import type { Failure, Scene, Stage } from '../src/player';
-import type { EditorPort, PanelEvent, PanelPort, SharedSelection } from '../src/ports';
+import type { DiagnosticEvent, EditorPort, PanelEvent, PanelPort, SharedSelection } from '../src/ports';
 import { glideDuration, withOverrides } from '../src/timing';
 
 /** What the mocked modules share with the tests, made before the `vi.mock` factories run. */
@@ -392,6 +392,44 @@ describe('isSavedSession', () => {
   });
 });
 
+describe('diagnostic events', () => {
+  it('keeps session behavior unchanged if the diagnostic observer throws', async () => {
+    const h = harness();
+    h.controller.onDiagnostic = () => {
+      throw new Error('observer');
+    };
+    const result = await h.controller.start();
+    expect(result.turn).toBe('agent');
+    h.controller.pause('away');
+    h.controller.resume('away');
+    h.controller.disconnect();
+    expect(h.controller.isSuspended).toBe(true);
+  });
+
+  it('does not flood diagnostics with duplicate pause notifications', async () => {
+    const h = harness();
+    const events = vi.fn<(entry: DiagnosticEvent) => void>();
+    h.controller.onDiagnostic = events;
+    await h.controller.start();
+    for (let index = 0; index < 120; index++) h.controller.pause('reply');
+    expect(events.mock.calls.map(([event]) => event).filter((event) => event.kind === 'pause')).toHaveLength(2);
+  });
+
+  it('records session and pause states without task text', async () => {
+    const h = harness();
+    const events = vi.fn<(entry: DiagnosticEvent) => void>();
+    h.controller.onDiagnostic = events;
+    await h.controller.start('private task');
+    h.controller.pause('away');
+    h.controller.resume('away');
+    h.controller.disconnect();
+    expect(events.mock.calls.map(([event]) => event)).toContainEqual({ kind: 'session', state: 'active' });
+    expect(events.mock.calls.map(([event]) => event)).toContainEqual({ kind: 'pause', paused: true, reasons: ['away'] });
+    expect(events.mock.calls.map(([event]) => event)).toContainEqual({ kind: 'session', state: 'suspended' });
+    expect(JSON.stringify(events.mock.calls)).not.toContain('private task');
+  });
+});
+
 describe('start', () => {
   it('starts a session with its task, rules, and root, and gives the Player its stage', async () => {
     const h = harness();
@@ -460,6 +498,11 @@ describe('a session the agent leaves, and comes back to', () => {
     expect(fakes.players).toHaveLength(2);
     expect(scene().root).toBe('/other');
     expect(h.controller.isSuspended).toBe(false);
+    expect(posted(h).filter((event) => event.type === 'session')).toEqual([
+      { type: 'session', active: true, task: 'Kept.' },
+      { type: 'session', active: true, task: 'Kept.', suspended: true },
+      { type: 'session', active: true, task: 'New.' },
+    ]);
   });
 
   it('WaitsProp: closes a suspended session at once when the programmer ends it', async () => {
@@ -642,6 +685,7 @@ describe('steps and their batches', () => {
     const refused = await report(h.controller.step([{ say: 'Editing.' }, { move: { line: 1, to: 'line_end' } }, edit]));
     expect(refused.rejected).toMatchObject({ index: 3, action: edit, error: { kind: 'file_required' } });
     expect(rehearse).not.toHaveBeenCalled();
+    expect((await report(h.controller.step([{ select: { text: 'x' } }, edit]))).rejected?.error.kind).toBe('file_required');
     expect((await report(h.controller.step([{ say: 'Reading.' }, { point: { line: 1, text: 'x' } }]))).rejected).toBeUndefined();
     expect((await report(h.controller.step([ANCHORED, edit]))).rejected).toBeUndefined();
   });
@@ -743,6 +787,29 @@ describe('steps and their batches', () => {
 });
 
 describe('playing the queue', () => {
+  it('leaves an edited batch unchanged when the advisory check returns no findings', async () => {
+    const h = await started();
+    h.editor.diagnostics.mockResolvedValue({ diagnostics: [], warnings: [] });
+    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed' }, sightings: [], editedFiles: [A] });
+    await report(h.controller.step(SAY));
+    await settle();
+    expect((await report(h.controller.listen())).batches).toContainEqual({ id: 1, status: 'completed' });
+  });
+
+  it('accumulates advisory results for multiple edited files', async () => {
+    const h = await started();
+    h.editor.diagnostics.mockResolvedValue({
+      diagnostics: [{ line: 1, endLine: 1, message: 'problem' }],
+      warnings: ['warning'],
+    });
+    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed' }, sightings: [], editedFiles: [A, B] });
+    await report(h.controller.step(SAY));
+    await settle();
+    const done = await report(h.controller.listen());
+    expect(done.batches[0]?.diagnostics).toHaveLength(2);
+    expect(done.batches[0]?.warnings).toEqual(['warning', 'warning']);
+  });
+
   it('OnlyEdited, Advisory: reports diagnostics only for files actually edited and does not reject the batch', async () => {
     const h = await started();
     h.editor.diagnostics.mockResolvedValue({

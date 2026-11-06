@@ -1,6 +1,6 @@
 // What the core needs from the editor and the narration panel.
 
-import type { Excerpt, Turn } from '@ai-pair/protocol';
+import type { Excerpt, PauseReason, Turn } from '@ai-pair/protocol';
 
 /** What the agent is doing, as the panel shows it. */
 export type AgentState = 'typing' | 'read' | 'running' | 'thinking' | 'absent' | 'paused' | 'listening' | 'navigator';
@@ -20,6 +20,27 @@ export interface EditOptions {
   undoStopBefore: boolean;
   undoStopAfter: boolean;
 }
+
+/** The only lifecycle facts allowed in copied diagnostics. */
+export type DiagnosticEvent =
+  | { kind: 'session'; state: 'active' | 'suspended' | 'ended' }
+  | { kind: 'connection'; state: 'connected' | 'disconnected'; connectionId: number }
+  | { kind: 'pause'; paused: boolean; reasons: PauseReason[] }
+  | {
+      kind: 'request';
+      connectionId: number;
+      id: number;
+      method: 'start' | 'step' | 'listen' | 'end' | 'read' | 'calibrate' | 'unknown';
+      phase: 'received' | 'replied' | 'failed' | 'cancelled';
+    }
+  | CommandDiagnostic;
+
+/** A command lifecycle event with no command text or output. */
+export type CommandDiagnostic =
+  | { kind: 'command'; id: number; phase: 'requested'; waitMs: number }
+  | { kind: 'command'; id: number; phase: 'integration'; available: boolean }
+  | { kind: 'command'; id: number; phase: 'end'; exitCode?: number }
+  | { kind: 'command'; id: number; phase: 'start' | 'timeout' | 'abort' | 'closed' | 'untracked' | 'failed' };
 
 /** What a command produced in the terminal, and how it ended. */
 export interface CommandOutcome {

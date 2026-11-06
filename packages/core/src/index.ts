@@ -3,7 +3,9 @@ export { Controller, isSavedSession, type SavedSession } from './controller';
 export type {
   AgentState,
   Change,
+  CommandDiagnostic,
   CommandOutcome,
+  DiagnosticEvent,
   CursorView,
   DiagnosticCheck,
   EditorDiagnostic,

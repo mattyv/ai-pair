@@ -10,6 +10,7 @@ import {
   withinFolder,
   type AgentState,
   type Change,
+  type CommandDiagnostic,
   type CommandOutcome,
   type Controller,
   type CursorView,
@@ -179,8 +180,9 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     /** The controller, made after the editor: read once the programmer edits or looks away, or the view scrolls. */
     private readonly controller: () => Controller,
     showTerminalsAutomatically: () => boolean = () => false,
+    onDiagnostic?: (event: CommandDiagnostic) => void,
   ) {
-    this.terminals = new PairTerminals(showTerminalsAutomatically);
+    this.terminals = new PairTerminals(showTerminalsAutomatically, onDiagnostic);
     this.cursorTypes = new Map([
       ['typing', cursorDecoration(CURSOR, 'solid', /* opacity= */ 1)],
       ['read', cursorDecoration(READ, 'solid', /* opacity= */ 1)],

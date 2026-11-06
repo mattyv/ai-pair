@@ -101,3 +101,11 @@ The newline action adds its requested indentation to the current line's leading
 indentation. This is by design and is covered by unit and end-to-end tests;
 the agent guide now spells it out with an example. The report does not establish
 an editor on-enter action or formatter as the cause.
+
+## Listening status feedback
+
+A host screenshot showed Your move while the agent's `listen` call was waiting
+after an informational message, and the agent continued after a long pause. The
+label can imply that a reply is required even when no question was asked. Clarify
+that replying is optional and the agent may continue after waiting; do not infer
+a disconnection from this status.

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.13.0
+
+-   Copy a bounded diagnostic snapshot from Pair Settings when troubleshooting a
+    session. It contains status and timing metadata, not chat, code, command
+    text, paths, or output, and is copied only when requested.
+-   A new session now clears an earlier session's suspended status; the
+    suspended status offers recovery guidance.
+-   Clarify that replying to a listening agent is optional.
+
 ## 0.12.0
 
 -   Pair command terminals stay quiet by default. Use **Show terminal** on a

@@ -83,8 +83,10 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `EditEvents.cfg` | one file, 3 texts, `MaxEdits = 4` | holds | 516 |
 | `Scroll.cfg` | `NumLines = 8` lines, a view of `ViewHeight = 4`, `MaxMoves = 2`, `MaxFollowSwitches = 2`, `scrollBeyondLastLine` on and off, the programmer's turn | holds | 14,131 |
 | `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
-| `Resume.cfg` | 2 directories, `MaxSessions = 3` sessions, `PostOnRevive = TRUE` | holds | 56 |
+| `Resume.cfg` | 2 directories, `MaxSessions = 3`, revive and replacement updates enabled | holds | 56 |
 | `TerminalPanel.cfg` | two command IDs and automatic visibility | holds | 61 |
+| `DiagnosticsCopy.cfg` | explicit request with clipboard success or failure | holds | 3 |
+| `DiagnosticsPrivacy.cfg` | bounded two-event history, copy and allowlisted projection | holds | 1,598 |
 | `Timeline.cfg` | `MaxSleeps = 3` sleeps, holds, and a second sleep while one is pending | holds | 864 |
 | `ReadingSkip.cfg` | two countdown IDs, hold, pause, turn and suspension changes | holds | 5,840 |
 | `ReadingHold.cfg` | matching hold and release with changing pause state | holds | 444 |
@@ -1224,6 +1226,7 @@ model, run in TLC and then reverted:
 |---|---|
 | `EndByAgent` leaves a fifth state, `"closed"` | `TypeOK` |
 | `PostOnRevive = FALSE`, the code before #138 | `ShownIsState` |
+| `ClearOnReplace = FALSE`, preserving the previous suspended display | `ShownIsState` |
 | `SendMessage` leaves `stored` unchanged | `SavedIsCurrent` |
 | `Start(d)` never resumes: a new session from any directory | `ResumesSameProp` |
 | `ReloadWindow` brings back no session, checked without `ShownIsState`, which fails first | `WaitsProp` |
@@ -1242,7 +1245,7 @@ Every invariant and property names the test that proves the code obeys it:
 | `ResumesSameProp`, `Arrives` | `controller.test.ts`: ResumesSameProp, Arrives: suspends a session the agent disconnects from, and resumes it on a start from its directory |
 | `WaitsProp` | `controller.test.ts`: WaitsProp: starts a new session from another directory, ending the suspended one; WaitsProp: closes a suspended session at once when the programmer ends it |
 | `EndedHasAgent` | `controller.test.ts`: WaitsProp: closes a suspended session at once when the programmer ends it; EndedHasAgent: rejects the open call when the agent disconnects, and closes at once a session the programmer ended |
-| `ShownIsState` | `controller.test.ts`: SavedIsCurrent, NotLostProp, ShownIsState: brings back a session the window saved, suspended, after a reload; `webview/panel.test.ts`: ShownIsState: a session revived after a reload shows as suspended; ShownIsState: a revive after a disconnect shows the suspension once |
+| `ShownIsState` | `controller.test.ts`: SavedIsCurrent, NotLostProp, ShownIsState: brings back a session the window saved, suspended, after a reload; `webview/panel.test.ts`: ShownIsState: a session revived after a reload shows as suspended; ShownIsState: a revive after a disconnect shows the suspension once; ShownIsState: a replacement session clears an old suspension (live and replay) |
 
 ### `Navigator`: the programmer's edits, reported when they pause
 
@@ -1942,3 +1945,45 @@ an available request violates `TypeOK`, `StartRespectsPreference`, `ShowExact`,
 | `ShowExact` | `terminal.test.ts`: ShowExact: invalidates the old command ID when a hidden terminal is reused |
 | `AvailableShown` | `webview/panel.test.ts`: AvailableShown: offers the matching terminal for running and filed commands |
 | `MissingReported` | `panel.test.ts`: MissingReported and AvailableShown: validates settings and reports a closed terminal |
+
+### `DiagnosticsPrivacy`: bounded allowlisted history
+
+The recorder keeps a bounded history and constructs each event from permitted
+fields before it can be copied. The model represents an extra raw secret field,
+abstracts timestamps and lifecycle values, and checks a capacity of two. TLC
+checked 1,598 distinct states. Concrete tests check runtime validation, the
+100-event limit, pause-reason bounds, and independent snapshots.
+
+| Mutation | Breaks |
+|---|---|
+| append the raw event instead of its safe projection | `TypeOK`, `OnlyAllowed` |
+| stop dropping the oldest event at capacity | `Bounded` |
+| copy an empty history instead of the current history | `CopiedExactly` |
+| record without appending | `Recorded` |
+| disable recording | `RecordsEventually` |
+
+| Property | Test |
+|---|---|
+| `TypeOK`, `OnlyAllowed` | `diagnostics.test.ts`: copies only allowlisted fields and rejects malformed input and unsafe identity strings; rejects malformed values rather than copying untrusted data |
+| `Bounded` | `diagnostics.test.ts`: bounds its history while retaining the latest state and returns independent snapshots |
+| `CopiedExactly` | `diagnostics.test.ts`: starts with unavailable states and records typed events in order |
+| `Recorded`, `RecordsEventually` | `diagnostics.test.ts`: retains valid request, integration and completion events |
+
+The owner connection ID is local to this extension activation; request IDs are
+scoped by that ID. `replied` records that the bridge sent a response to the
+socket, not that the client acknowledged or consumed it. Unknown state and
+uncaptured values stay unavailable; no task, chat, command, output, path,
+environment, credential or error text enters this history.
+
+### `DiagnosticsCopy`: explicit clipboard export
+
+An explicit action can succeed or fail; opening Settings alone does not copy.
+TLC checked three states. Mutations that copy before a request, fail to produce
+an outcome, or produce both outcomes violate `OnlyOnRequest`,
+`RequestedCompletes`, and `ExclusiveOutcome`; an invalid type is rejected.
+
+| Invariant | Test |
+|---|---|
+| `TypeOK` | TypeScript checks the control and outcome types |
+| `OnlyOnRequest` | `webview/panel.test.ts`: OnlyOnRequest: requests diagnostics only when the button is activated |
+| `RequestedCompletes`, `ExclusiveOutcome` | `panel.test.ts`: OnlyOnRequest and RequestedCompletes: copies only when asked and reports either outcome |
