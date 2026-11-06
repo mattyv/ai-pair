@@ -12,6 +12,7 @@ import {
   moveProblem,
   SPAN_TARGET_SCHEMA,
   spanProblem,
+  speechProblem,
   typeProblem,
 } from '@ai-pair/protocol';
 import { TOOLS } from '../src/tools';
@@ -21,6 +22,7 @@ vi.mock(import('@ai-pair/protocol'), async (importOriginal) => ({
   actionKinds: vi.fn(),
   moveProblem: vi.fn(),
   spanProblem: vi.fn(),
+  speechProblem: vi.fn(),
   typeProblem: vi.fn(),
 }));
 
@@ -42,6 +44,20 @@ function problems(action: unknown): string[] {
 
 afterEach(() => {
   vi.resetAllMocks();
+});
+
+describe('selected narration', () => {
+  it('checks flagged text and leaves unflagged narration alone', () => {
+    vi.mocked(actionKinds).mockReturnValue(['say']);
+    vi.mocked(speechProblem).mockReturnValue('shorten the narration');
+    expect(problems({ say: 'hello', speak: true })).toEqual(['shorten the narration']);
+    expect(speechProblem).toHaveBeenCalledWith('hello');
+    vi.mocked(speechProblem).mockClear();
+    expect(problems({ say: 'hello' })).toEqual([]);
+    expect(problems({ say: 'hello', speak: false })).toEqual([]);
+    expect(speechProblem).not.toHaveBeenCalled();
+    expect(problems({ delete: true, speak: true })).not.toEqual([]);
+  });
 });
 
 describe('a move', () => {

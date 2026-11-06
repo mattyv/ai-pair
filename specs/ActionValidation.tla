@@ -148,4 +148,24 @@ ASSUME NeverThrows ==
     /\ \A p \in Moves : MoveProblem(p) # Throws
     /\ \A p \in Spans : SpanProblem(p) # Throws
 
+\* A selected spoken unit accepts only plain, nonempty text within both bounds.
+SpeechTextKinds == {"empty", "fence", "within", "tooLong", "tooManyWords"}
+SpeechFlags == {"missing", "false", "true", "other"}
+SpeechProblem(text, flag) ==
+    IF flag = "other" THEN TRUE
+    ELSE IF flag # "true" THEN FALSE
+    ELSE text # "within"
+ValidSpeech(text, flag) ==
+    flag \in {"missing", "false"} \/ (flag = "true" /\ text = "within")
+ASSUME SpeechExactly ==
+    \A text \in SpeechTextKinds, flag \in SpeechFlags :
+        ~SpeechProblem(text, flag) <=> ValidSpeech(text, flag)
+
+\* The engine accepts at least one and at most 510 phoneme content tokens.
+ContentCounts == {0, 1, 510, 511}
+TokensAccepted(n) == n > 0 /\ n <= 510
+ASSUME TokenBounds ==
+    /\ ~TokensAccepted(0) /\ TokensAccepted(1)
+    /\ TokensAccepted(510) /\ ~TokensAccepted(511)
+
 ================================================================================

@@ -8,6 +8,7 @@ import {
   moveProblem,
   MOVE_TARGET_SCHEMA,
   spanProblem,
+  speechProblem,
   SPAN_SCHEMA,
   SPAN_TARGET_SCHEMA,
   typeProblem,
@@ -99,6 +100,12 @@ const actionSchema = z.union(
         .describe(
           "Narrate right before the actions it describes: what you're doing, why, and how your code does it. It's about your code and your choices, not how the language or its libraries work (unless the programmer asked to learn them). Explain the code, don't recite it. One to three sentences; `backticks` render as code. Playback pauses so the programmer can read it.",
         ),
+      speak: z.boolean().optional().describe('Request local speech for this short narration when enabled.'),
+    }).superRefine((narration, ctx) => {
+      if (narration.speak === true) {
+        const problem = speechProblem(narration.say);
+        if (problem !== undefined) ctx.addIssue({ code: 'custom', message: problem });
+      }
     }),
     action({
       move: z

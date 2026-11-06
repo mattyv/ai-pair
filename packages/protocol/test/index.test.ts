@@ -109,8 +109,33 @@ describe('fieldsProblem', () => {
     }
   });
 
+  it('accepts only bounded plain speech units and allows unflagged narration', () => {
+    for (const action of [
+      { say: 'Hello.', speak: true },
+      { say: '😀'.repeat(280), speak: true },
+      { say: Array(45).fill('word').join(' '), speak: true },
+      { say: ' '.repeat(300) },
+      { say: '```code```', speak: false },
+    ]) {
+      expect(fieldsProblem(action)).toBeUndefined();
+      expect(ACTION_SCHEMA.parse(action)).toEqual(action);
+    }
+    for (const action of [
+      { say: '', speak: true },
+      { say: '   ', speak: true },
+      { say: '😀'.repeat(281), speak: true },
+      { say: Array(46).fill('word').join(' '), speak: true },
+      { say: '```code```', speak: true },
+      { say: '~~~\ncode\n~~~', speak: true },
+      { say: 'Hi', speak: 'yes' },
+      { delete: true, speak: true },
+    ]) {
+      expect(fieldsProblem(action)).toBeDefined();
+    }
+  });
+
   it('names a field the action does not have, and what it has', () => {
-    expect(fieldsProblem({ say: 'hi', loud: true })).toBe('Unknown field `loud` in a `say` action: it has `say`.');
+    expect(fieldsProblem({ say: 'hi', loud: true })).toBe('Unknown field `loud` in a `say` action: it has `say`, `speak`.');
     expect(fieldsProblem({ run: 'x', wait: 1, cwd: '/', env: {} })).toBe(
       'Unknown field `cwd`, `env` in a `run` action: it has `run`, `wait`.',
     );

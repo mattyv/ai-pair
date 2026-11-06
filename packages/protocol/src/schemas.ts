@@ -35,7 +35,7 @@ export const SPAN_SCHEMA = z.union([
 
 /** Checks an {@link Action}. */
 export const ACTION_SCHEMA = z.union([
-  z.object({ say: z.string() }),
+  z.object({ say: z.string(), speak: z.boolean().optional() }),
   z.object({ move: MOVE_TARGET_SCHEMA }),
   z.object({ select: SPAN_SCHEMA }),
   z.object({ type: z.string() }),

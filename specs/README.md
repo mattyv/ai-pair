@@ -90,6 +90,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Timeline.cfg` | `MaxSleeps = 3` sleeps, holds, and a second sleep while one is pending | holds | 864 |
 | `ReadingSkip.cfg` | two countdown IDs, hold, pause, turn and suspension changes | holds | 5,840 |
 | `ReadingHold.cfg` | matching hold and release with changing pause state | holds | 444 |
+| `Narration.cfg` | two units, two page and session epochs, interruptions and independent gates | holds | 7,328 |
 | `ReadingGesture.cfg` | short and long gestures across two countdown IDs | holds | 170 |
 | `ListeningHint.cfg` | status and session context | holds | 64 |
 | `SettingsAccess.cfg` | idle and active toolbar | holds | 4 |
@@ -1886,6 +1887,18 @@ violates `IneligibleKeepsReading`; an out-of-range ID violates `TypeOK`.
 | `OnlyCurrent` | `player.test.ts`: OnlyCurrent: only finishes the currently pending say and rejects stale IDs |
 | `EligibleFinishes`, `IneligibleKeepsReading` | `session.e2e.test.ts`: EligibleFinishes, IneligibleKeepsReading: finishes the requested delay without lifting a user pause |
 | `IneligibleKeepsReading` | `controller.test.ts`: IneligibleKeepsReading: forwards an ID only in an active unpaused agent turn |
+
+### `Narration`: selected speech and reading gates
+
+`Narration.tla` models one outstanding selected unit, two successive units,
+generation IDs, two page and session epochs, page loss, reply, pause, reading
+holds, and an independent command decision. `ReadyCurrent` and
+`CompletionCurrent` reject stale worker and page callbacks; `GateSafe` keeps
+speech completion, error, and cancellation from changing reading, holds,
+pause, or command approval. `AdvanceAfterGates` requires both gates, and
+`Progress` checks eventual advancement under weak fairness when a page and
+session eventually stay present and all pauses and holds eventually clear.
+The model abstracts the audio transport and the full queue implementation.
 
 ### `ReadingHold`: scoped timer holds
 
