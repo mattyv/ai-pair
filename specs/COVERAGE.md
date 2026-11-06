@@ -72,6 +72,7 @@ Code goes without a spec for one of these reasons:
 | | `followChange` | `Rehearsal` (`EditAsOther`, `ShareIds`) |
 | `timeline.ts` | all | `Timeline` |
 | `places.ts` | `resolveSpot`, `resolveSpan`, and their helpers | `Places` |
+| `structural_typing.ts` | `structuralNewline`, `isCode` | `StructuralTyping` abstracts context categories; concrete lexical scanning is checked by unit tests |
 | `typing.ts` | `planTyping`, `isIndent` | `Typing` |
 | | `groupTyping` | `CodePlayback` (abstract bounded groups); concrete line and whitespace preferences: Pure |
 | | `readingTime` | Pure |

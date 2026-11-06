@@ -16,7 +16,7 @@ The changes in version 0.14 include:
 
 The next release is being developed with a separate code-display dropdown,
 more readable Settings, and optional local spoken narration. These additions
-are not yet available in the 0.14 release.
+are not yet available in the 0.14.1 release.
 
 [Download a fork build from GitHub Actions](https://github.com/mattyv/ai-pair/actions)
 (run **Build VSIX**, then download its artifact). The Marketplace link in the
