@@ -10,6 +10,7 @@ import { SpeechService } from './speech_service';
 import { installedSpeechModel, setupSpeech } from './speech_setup';
 import { speechRuntimeAvailable } from './speech_runtime_status';
 import type { SpeechSettings } from './speech_types';
+import type { SpeechState } from './panel_messages';
 import type { OutsideChanges } from './outside';
 import { watchOutside } from './outside_watch';
 import { NarrationPanel } from './panel';
@@ -38,6 +39,14 @@ const AGENT_NAME = 'agentName';
 const CONFIRM_COMMANDS = 'confirmCommands';
 const CALIBRATION_PASSAGE = 'calibrationPassage';
 
+/** The latest speech state, without narration text or audio bytes. */
+export interface SpeechObservation {
+  id: number;
+  state: SpeechState;
+  started: boolean;
+  message?: string;
+}
+
 /** Returned from `activate`, for integration tests. */
 export interface Api {
   controller: Controller;
@@ -45,6 +54,12 @@ export interface Api {
   bridge: Bridge;
   outside: OutsideChanges;
   playDemo: () => Promise<void>;
+  /** Runs the Settings preview through the normal speech service. */
+  previewSpeech: () => Promise<void>;
+  /** Reports whether the Pair webview is ready for live speech. */
+  speechPageReady: () => boolean;
+  /** Reports the latest state and whether that unit started playback. */
+  speechStatus: () => SpeechObservation | undefined;
   launcher: string;
   ready: Promise<void>;
   /** The session as the workspace's storage holds it. */
@@ -112,6 +127,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   let controller: Controller;
   let calibration: Calibration;
   let speech: SpeechService;
+  let speechObservation: SpeechObservation | undefined;
   const localSpeechSupported = speechSupported();
   let runtimeSpeechSupported = false;
   const diagnostics = new Diagnostics({ version: AI_PAIR_VERSION, build: AI_PAIR_BUILD_ID });
@@ -241,6 +257,8 @@ export function activate(context: vscode.ExtensionContext): Api {
         panel.controlSpeech(id, pageId, action);
       },
       status: (id, state, message) => {
+        const started = state === 'speaking' || (speechObservation?.id === id && speechObservation.started);
+        speechObservation = { id, state, started, ...(message === undefined ? {} : { message }) };
         panel.showSpeechStatus(id, state, message);
       },
     },
@@ -450,6 +468,9 @@ export function activate(context: vscode.ExtensionContext): Api {
     bridge,
     outside,
     playDemo: () => playDemo(controller, root),
+    previewSpeech: () => speech.preview(),
+    speechPageReady: () => panel.speechPageIsReady(),
+    speechStatus: () => (speechObservation === undefined ? undefined : { ...speechObservation }),
     launcher,
     ready,
     saved: () => {

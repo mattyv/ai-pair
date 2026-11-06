@@ -182,7 +182,7 @@ export async function phonemize(text, language = "a", norm = true) {
 
   // 3. Convert each section to phonemes
   const lang = language === "a" ? "en-us" : "en";
-  const ps = (await Promise.all(sections.map(async ({ match, text }) => (match ? text : (await espeakng(text, lang)).join(" "))))).join("");
+  const ps = (await Promise.all(sections.map(async ({ match, text: segment }) => (match ? segment : (await espeakng(segment, lang)).join(" "))))).join("");
 
   // 4. Post-process phonemes
   let processed = ps

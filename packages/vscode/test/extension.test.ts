@@ -11,6 +11,9 @@ import { setTimings } from '../src/timings';
 import { watchOutside } from '../src/outside_watch';
 import { settingSpeed } from '../src/panel_html';
 import { speechRuntimeAvailable } from '../src/speech_runtime_status';
+import type { SpeechOutput } from '../src/speech_service';
+import type { PanelWiring } from '../src/panel';
+import { installedSpeechModel, setupSpeech } from '../src/speech_setup';
 import { builtInPassage } from '../src/passage';
 import { claudeStarter, setUpAgent, writeLauncher } from '../src/setup';
 
@@ -56,7 +59,7 @@ const fakes = vi.hoisted(() => {
     readonly audioEvent = vi.fn();
     readonly pageClosed = vi.fn();
     constructor(
-      readonly options: { settings: () => { enabled: boolean; voice: string; speed: number }; output: unknown; localDesktop: boolean },
+      readonly options: { settings: () => { enabled: boolean; voice: string; speed: number }; output: SpeechOutput; localDesktop: boolean },
     ) {
       made.speech.push(this);
     }
@@ -156,7 +159,11 @@ const fakes = vi.hoisted(() => {
     readonly showChatOrder = vi.fn();
     readonly showCodePlayback = vi.fn();
     readonly showSpeechSettings = vi.fn();
+    readonly showSpeechStatus = vi.fn();
+    readonly playSpeech = vi.fn(() => 7);
+    readonly controlSpeech = vi.fn();
     readonly refreshSpeechSupport = vi.fn();
+    readonly speechPageIsReady = vi.fn(() => true);
     readonly showTerminalPreference = vi.fn();
     readonly showCalibration = vi.fn();
     readonly showTimings = vi.fn();
@@ -176,7 +183,7 @@ const fakes = vi.hoisted(() => {
         calibration: () => unknown;
         starter: unknown;
         copyDiagnostics: () => Promise<void>;
-        speech: { supported: () => boolean };
+        speech: PanelWiring['speech'];
       },
       readonly chatOrder: { get: () => string; set: (value: string) => void },
       readonly buildInfo: unknown,
@@ -376,7 +383,16 @@ function changed(...names: string[]): void {
   fire('configuration', { affectsConfiguration: (section: string) => names.some((name) => section === `aiPair.${name}`) });
 }
 
+/** Save and simulate the supported host without depending on the CI machine. */
+const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+const originalArch = Object.getOwnPropertyDescriptor(process, 'arch');
+const diagnosticReport = process.report.getReport();
+Object.defineProperty(diagnosticReport.header, 'glibcVersionRuntime', { value: '2.35', configurable: true });
+
 beforeEach(() => {
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
+  vi.spyOn(process.report, 'getReport').mockReturnValue(diagnosticReport);
   fakes.folders = [{ uri: { fsPath: '/project' } }];
   fakes.made.starting = Promise.resolve();
   fakes.made.arms = true;
@@ -386,6 +402,9 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
+  if (originalPlatform !== undefined) Object.defineProperty(process, 'platform', originalPlatform);
+  if (originalArch !== undefined) Object.defineProperty(process, 'arch', originalArch);
   fakes.listeners.clear();
   fakes.settings.clear();
   fakes.commands.clear();
@@ -478,6 +497,27 @@ describe('activate', () => {
     expect(h.panel.showChatOrder).toHaveBeenLastCalledWith('newestFirst');
   });
 
+  it('exposes the same preview service and page readiness to integration tests', async () => {
+    const h = activated();
+    expect(h.api.speechPageReady()).toBe(true);
+    await h.api.previewSpeech();
+    expect(fakes.made.speech.at(-1)?.preview.mock.calls).toEqual([[]]);
+  });
+
+  it('exposes only the latest speech state and whether that unit started', () => {
+    const h = activated();
+    const speech = fakes.made.speech.at(-1);
+    if (speech === undefined) throw new Error('Missing speech');
+    expect(h.api.speechStatus()).toBeUndefined();
+    speech.options.output.status(1, 'preparing');
+    speech.options.output.status(1, 'speaking');
+    speech.options.output.status(1, 'idle');
+    expect(h.api.speechStatus()).toEqual({ id: 1, state: 'idle', started: true });
+    speech.options.output.status(2, 'unavailable', 'Audio could not play.');
+    expect(h.api.speechStatus()).toEqual({ id: 2, state: 'unavailable', started: false, message: 'Audio could not play.' });
+    expect(h.panel.showSpeechStatus).toHaveBeenCalledWith(2, 'unavailable', 'Audio could not play.');
+  });
+
   it('copies a fresh diagnostic snapshot only on request and connects lifecycle sources', async () => {
     const h = activated();
     const diagnostics = fakes.made.diagnostics.at(-1);
@@ -511,6 +551,39 @@ describe('activate', () => {
     expect(speech.cancel).toHaveBeenCalledOnce();
   });
 
+  it('routes settings, setup, page events and audio through the speech wiring', async () => {
+    const h = activated();
+    const speech = fakes.made.speech.at(-1);
+    if (speech === undefined) throw new Error('Missing speech');
+    const wiring = h.panel.wiring.speech;
+    fakes.settings.set('speech.enabled', true);
+    wiring.settings.set({ enabled: false, voice: 'bf_emma', speed: 1.25 });
+    expect(speech.cancel).toHaveBeenCalledOnce();
+    expect(fakes.updated).toEqual(expect.arrayContaining([
+      ['speech.enabled', false, 1], ['speech.voice', 'bf_emma', 1], ['speech.speed', 1.25, 1],
+    ]));
+    wiring.settings.set({ enabled: true, voice: 'af_heart', speed: 1 });
+    expect(speech.cancel).toHaveBeenCalledOnce();
+    expect(await wiring.installed()).toBe(false);
+    vi.mocked(installedSpeechModel).mockResolvedValueOnce('/verified/model');
+    expect(await wiring.installed()).toBe(true);
+    await wiring.setup();
+    expect(setupSpeech).toHaveBeenCalled();
+    await wiring.preview();
+    wiring.stop();
+    wiring.event({ id: 1, pageId: 7, event: 'started' });
+    wiring.pageClosed(7);
+    expect(speech.preview).toHaveBeenCalledOnce();
+    expect(speech.cancel).toHaveBeenCalledTimes(2);
+    expect(speech.audioEvent).toHaveBeenCalledWith({ id: 1, pageId: 7, event: 'started' });
+    expect(speech.pageClosed).toHaveBeenCalledWith(7);
+    expect(speech.options.output.play(1, new Uint8Array([1]), 10)).toBe(7);
+    speech.options.output.control(1, 7, 'stop');
+    expect(h.panel.controlSpeech).toHaveBeenCalledWith(1, 7, 'stop');
+    changed('speech');
+    expect(h.panel.showSpeechSettings).toHaveBeenCalled();
+  });
+
   it('keeps setup unavailable when this package has no speech runtime', async () => {
     vi.mocked(speechRuntimeAvailable).mockResolvedValue(false);
     const h = activated();
@@ -526,6 +599,12 @@ describe('activate', () => {
     await Promise.resolve();
     expect(h.panel.wiring.speech.supported()).toBe(true);
     expect(h.panel.refreshSpeechSupport.mock.calls).toEqual([[]]);
+  });
+
+  it('disables local speech when the host platform report fails', () => {
+    vi.mocked(process.report.getReport).mockImplementationOnce(() => { throw new Error('unavailable'); });
+    activated();
+    expect(fakes.made.speech.at(-1)?.options.localDesktop).toBe(false);
   });
 
   it('does not enable local speech on a remote extension host', () => {

@@ -43,8 +43,14 @@ async function settle(): Promise<void> {
   for (let index = 0; index < 6; index++) await Promise.resolve();
 }
 
+/** Keeps the process host settings so each test can restore them. */
+const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+const originalArch = Object.getOwnPropertyDescriptor(process, 'arch');
+
 /** Makes a service with a live page and local preferences. */
 function harness(enabled = true) {
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
   const output = mock<SpeechOutput>();
   output.play.mockReturnValue(7);
   const service = new SpeechService({
@@ -67,9 +73,26 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.resetAllMocks();
+  if (originalPlatform !== undefined) Object.defineProperty(process, 'platform', originalPlatform);
+  if (originalArch !== undefined) Object.defineProperty(process, 'arch', originalArch);
 });
 
 describe('SpeechService', () => {
+  it('uses a supported test host even when the test process is not Linux', async () => {
+    const original = Object.getOwnPropertyDescriptor(process, 'platform');
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+    try {
+      const { service } = harness();
+      const gate = service.speak('Hello.');
+      await settle();
+      expect(fake.Worker.made).toHaveLength(1);
+      service.cancel();
+      await gate;
+    } finally {
+      if (original !== undefined) Object.defineProperty(process, 'platform', original);
+    }
+  });
+
   it('defaults to silent behavior when disabled', async () => {
     const { service, output } = harness(false);
     await service.speak('Hello.');
@@ -426,6 +449,26 @@ describe('SpeechService failures and races', () => {
     expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('runtime'));
     expect(fake.Worker.made).toHaveLength(0);
     await gate;
+  });
+
+  it.each([
+    ['darwin', 'arm64'],
+    ['win32', 'x64'],
+    ['linux', 'arm64'],
+  ])('leaves speech unavailable on %s %s', async (platform, arch) => {
+    Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+    Object.defineProperty(process, 'arch', { value: arch, configurable: true });
+    const output = mock<SpeechOutput>();
+    const service = new SpeechService({
+      runtimeDirectory: '/runtime',
+      storageDirectory: '/storage',
+      localDesktop: true,
+      output,
+      settings: () => ({ enabled: true, voice: 'af_heart', speed: 1 }),
+    });
+    await service.speak('Hello.');
+    expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('local Linux'));
+    expect(fake.Worker.made).toHaveLength(0);
   });
 
   it('explains unsupported extension hosts without starting a worker', async () => {

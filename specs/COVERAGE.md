@@ -172,6 +172,7 @@ Code goes without a spec for one of these reasons:
 | `setup.ts` | `claudeStarter` | `Start` (`AnswerCheck`, `Click`, `AgentExits`) |
 | | the rest | Glue |
 | `extension.ts` | saving the session and the panel's history, and reviving them | `Resume` (`Store`, `ReloadWindow`) |
+| | integration speech status observation | Glue: exposes only the existing live speech state |
 | | the calibration's host: `store` applies the timing before it resolves | `Calibration` (`ApplyRate`) |
 | | asking the panel again after Set Up Agent | `Start` (`FlipSetUp`) |
 | | the rest | Glue |

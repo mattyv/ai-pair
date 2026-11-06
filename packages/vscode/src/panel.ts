@@ -221,6 +221,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     });
   }
 
+  /** Whether the current page can receive live speech for integration tests. */
+  speechPageIsReady(): boolean {
+    return this.speechPageReady;
+  }
+
   /** Refreshes runtime availability for the currently open page only. */
   refreshSpeechSupport(): void {
     if (!this.speechPageReady) return;

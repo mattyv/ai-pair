@@ -53,7 +53,13 @@ Issue discussions and working notes hold the detailed evidence and history.
     downloads the pinned model; unsupported hosts retain text-only operation.
     CPU synthesis in a VM can be slow, and audio quality depends on the host.
 -   Keep one audio unit at a time and invalidate it on reply, interruption or
-    page replacement. Do not persist generated audio or narration text.
+    page replacement. Do not persist generated audio or a separate speech
+    transcript; visible text follows normal session history behavior.
+-   Ship an AI Pair-owned bridge in the VSIX; explicit speech setup downloads
+    and verifies a pinned phonemizer executable and license alongside the
+    model. The embedded eSpeak NG revision in that upstream executable is not
+    identified by its published package. This delivery choice does not establish
+    corresponding source provenance or certify license compliance.
 
 ## Session diagnostics
 
