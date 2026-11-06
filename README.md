@@ -166,8 +166,13 @@ has it fetch the text and start the calibration with it.
 
 ## Settings
 
+The Pair panel's **Settings** button lets you choose the chat order. The default
+shows the newest messages at the top; choose **Oldest first** to put new messages
+and the reply box at the bottom. Your choice is saved across reloads.
+
 | Setting | |
 |---|---|
+| `aiPair.chatOrder` | `newestFirst` (default) or `oldestFirst`; also available in the Pair panel settings. |
 | `aiPair.speed` | Overall playback speed, the follow scroll's glide included (the panel's speed menu offers 0.4x to 3.0x). |
 | `aiPair.readingSpeed` | Reading speed: divides only the pause after each of the agent's messages (the panel's reading menu offers 0.4x to 3.0x). |
 | `aiPair.calibrationPassage` | The passage *AI Pair: Calibrate Reading Speed* times you on, as `{ "title": ..., "text": ..., "notice": ... }`; empty, the built-in one. The agent's `calibrate` tool writes it. |

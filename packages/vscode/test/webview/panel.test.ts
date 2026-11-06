@@ -38,10 +38,20 @@ type Target = Window | Window['document'] | Window['document']['documentElement'
 let targets: Array<{ target: Target; spy: MockInstance<Target['addEventListener']> }> = [];
 
 let post: Mock<(message: { type: string }) => void>;
+let resizeHistory: () => void;
 
 beforeEach(async () => {
   targets = [window, document, document.documentElement].map((target) => ({ target, spy: vi.spyOn(target, 'addEventListener') }));
   post = vi.fn<(message: { type: string }) => void>();
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(callback: () => void) {
+        resizeHistory = callback;
+      }
+      observe(): void {}
+    },
+  );
   await loadPage(post);
 });
 
@@ -53,6 +63,7 @@ afterEach(() => {
   }
   vi.useRealTimers();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 /** Dispatches a message from the extension to the page, as the webview does. */
@@ -1037,4 +1048,172 @@ describe('guards', () => {
     expect(element('tip').hidden).toBe(false);
     expect(text('tip')).toBe('');
   });
+});
+
+describe('chat order', () => {
+  it('renders events oldest first and places the current message and reply after history', () => {
+    send({ type: 'chatOrder', value: 'oldestFirst' });
+    start();
+    send({ type: 'say', text: 'First' });
+    send({ type: 'say', text: 'Second' });
+    expect(history()).toEqual(['Session started', 'First']);
+    expect(element('history').getAttribute('aria-label')).toBe('Earlier, oldest first');
+    expect(element('history').compareDocumentPosition(element('reply')) & window.Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('reorders existing entries when the setting changes and keeps the current message once', () => {
+    start();
+    send({ type: 'say', text: 'First' });
+    send({ type: 'say', text: 'Second' });
+    send({ type: 'chatOrder', value: 'oldestFirst' });
+    expect(history()).toEqual(['Session started', 'First']);
+    send({ type: 'say', text: 'Third' });
+    expect(history()).toEqual(['Session started', 'First', 'Second']);
+    send({ type: 'chatOrder', value: 'newestFirst' });
+    expect(history()).toEqual(['Second', 'First', 'Session started']);
+    expect(element('history').getAttribute('aria-label')).toBe('Earlier, newest first');
+  });
+});
+
+describe('panel settings', () => {
+  it('opens a named settings dialog, sends a changed order, and restores focus on close', () => {
+    const button = element('settings');
+    button.focus();
+    click(button);
+    const dialog = element('settings-dialog');
+    expect(dialog.getAttribute('aria-label')).toBe('Settings');
+    expect(dialog.hasAttribute('open')).toBe(true);
+    const select = element('chat-order');
+    expect(document.activeElement).toBe(select);
+    if (!(select instanceof window.HTMLSelectElement)) throw new TypeError('Expected a select');
+    select.value = 'oldestFirst';
+    select.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect(posted()).toContainEqual({ type: 'chatOrder', value: 'oldestFirst' });
+    click(element('settings-close'));
+    expect(dialog.hasAttribute('open')).toBe(false);
+    expect(document.activeElement).toBe(button);
+  });
+});
+
+describe('visible chronology', () => {
+  it.each(['newestFirst', 'oldestFirst'] as const)(
+    'VisibleOnce, NoneLost: shows each agent and programmer message once in %s order',
+    (order) => {
+      send({ type: 'chatOrder', value: order });
+      start();
+      send({ type: 'say', text: 'Agent A' });
+      send({ type: 'programmer', text: 'Programmer B' });
+      expect(text('now-text')).not.toContain('Agent A');
+      expect(history().filter((value) => value.includes('Agent A'))).toHaveLength(1);
+      expect(history().filter((value) => value.includes('Programmer B'))).toHaveLength(1);
+      send({ type: 'say', text: 'Agent C' });
+      expect(text('now-text')).toBe('Agent C');
+      const messages = history().filter((value) => value === 'Agent A' || value === 'Programmer B');
+      expect(messages).toEqual(order === 'newestFirst' ? ['Programmer B', 'Agent A'] : ['Agent A', 'Programmer B']);
+    },
+  );
+});
+
+it('keeps a pointed code link with the filed agent message', () => {
+  start();
+  send({ type: 'point', file: 'src/example.ts', line: 12 });
+  send({ type: 'say', text: 'Look here' });
+  send({ type: 'programmer', text: 'I see it' });
+  const link = element('history').querySelector('.agent a.ref');
+  expect(link?.textContent).toBe(`${RIGHT_ARROW} src/example.ts:12`);
+  if (link === null) throw new Error('Filed message has no code link');
+  click(link);
+  expect(posted()).toContainEqual({ type: 'open', file: 'src/example.ts', line: 12 });
+});
+
+describe('history position', () => {
+  it('follows the newest edge on input and resize but preserves a scrolled-away view', () => {
+    const historyElement = element('history');
+    Object.defineProperty(historyElement, 'scrollHeight', { configurable: true, value: 500 });
+    Object.defineProperty(historyElement, 'clientHeight', { configurable: true, value: 100 });
+    resizeHistory();
+    send({ type: 'chatOrder', value: 'oldestFirst' });
+    historyElement.scrollTop = 400;
+    historyElement.dispatchEvent(new window.Event('scroll'));
+    typeReply('draft');
+    expect(historyElement.scrollTop).toBe(500);
+    historyElement.scrollTop = 400;
+    resizeHistory();
+    expect(historyElement.scrollTop).toBe(500);
+    historyElement.scrollTop = 100;
+    historyElement.dispatchEvent(new window.Event('scroll'));
+    send({ type: 'say', text: 'one' });
+    send({ type: 'say', text: 'two' });
+    typeReply('other draft');
+    resizeHistory();
+    expect(historyElement.scrollTop).toBe(100);
+    Object.defineProperty(historyElement, 'clientHeight', { configurable: true, value: 90 });
+    historyElement.dispatchEvent(new window.Event('scroll'));
+    resizeHistory();
+    expect(historyElement.scrollTop).toBe(100);
+  });
+
+  it('preserves a visible entry when switching away from the newest edge', () => {
+    vi.useFakeTimers();
+    start();
+    send({ type: 'say', text: 'First' });
+    send({ type: 'say', text: 'Second' });
+    const historyElement = element('history');
+    Object.defineProperty(historyElement, 'scrollHeight', { configurable: true, value: 500 });
+    Object.defineProperty(historyElement, 'clientHeight', { configurable: true, value: 100 });
+    historyElement.scrollTop = 120;
+    vi.spyOn(historyElement, 'getBoundingClientRect').mockReturnValue(new window.DOMRect(0, 10, 100, 100));
+    for (const entry of historyElement.children) {
+      vi.spyOn(entry, 'getBoundingClientRect').mockReturnValue(new window.DOMRect(0, 20, 100, 30));
+    }
+    send({ type: 'chatOrder', value: 'oldestFirst' });
+    expect(historyElement.scrollTop).toBe(120);
+    send({ type: 'chatOrder', value: 'newestFirst' });
+    expect(historyElement.scrollTop).toBe(120);
+    vi.runAllTimers();
+    expect(historyElement.classList.contains('reordering')).toBe(false);
+  });
+
+  it('sends newest first when that option is selected', () => {
+    const select = element('chat-order');
+    if (!(select instanceof window.HTMLSelectElement)) throw new TypeError('Expected a select');
+    select.value = 'newestFirst';
+    select.dispatchEvent(new window.Event('change'));
+    expect(posted()).toContainEqual({ type: 'chatOrder', value: 'newestFirst' });
+  });
+});
+
+describe('conversation ordering across replay', () => {
+  it.each(['newestFirst', 'oldestFirst'] as const)('keeps prior questions and replies in event order in %s', (order) => {
+    send({ type: 'chatOrder', value: order });
+    send({
+      type: 'replay',
+      events: [
+        { type: 'session', active: true },
+        { type: 'say', text: 'Earlier explanation' },
+        { type: 'programmer', text: 'Earlier question' },
+        { type: 'say', text: 'Which of the two goes in total_balance?' },
+      ],
+    });
+    send({ type: 'programmer', text: "Where is total_balance? I don't see it." });
+    const expected = [
+      'Earlier explanation',
+      'Earlier question',
+      'Which of the two goes in total_balance?',
+      "Where is total_balance? I don't see it.",
+    ];
+    const messages = history().filter((value) => expected.includes(value));
+    expect(messages).toEqual(order === 'oldestFirst' ? expected : expected.toReversed());
+    expect(text('now-text')).toBe('');
+    send({ type: 'say', text: 'So the question again' });
+    expect(text('now-text')).toBe('So the question again');
+    expect(history().filter((value) => expected.includes(value))).toEqual(order === 'oldestFirst' ? expected : expected.toReversed());
+  });
+});
+
+it('can switch order when a hidden or empty viewport has no visible anchor', () => {
+  const historyElement = element('history');
+  historyElement.scrollTop = 50;
+  send({ type: 'chatOrder', value: 'oldestFirst' });
+  expect(historyElement.getAttribute('aria-label')).toBe('Earlier, oldest first');
 });

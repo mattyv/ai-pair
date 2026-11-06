@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 import type { Controller, PanelEvent, PanelPort, Ref, SharedSelection } from '@ai-pair/core';
 import { panelHtml, SPEEDS } from './panel_html';
 import { timings } from './timings';
-import type { FromPanel, ToPanel } from './panel_messages';
+import type { ChatOrder, FromPanel, ToPanel } from './panel_messages';
 import type { Calibration, CalibrationView } from './calibration';
 
 const MAX_LOG = 400;
@@ -74,6 +74,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     /** The extension's folder, which holds the page's dist/panel.css and dist/panel.js. */
     private readonly extensionUri: vscode.Uri,
     private readonly wiring: PanelWiring,
+    private readonly chatOrder: { get: () => ChatOrder; set: (value: ChatOrder) => void },
   ) {}
 
   /** Posts to the page, if there is one. */
@@ -89,6 +90,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   /** Shows the speed setting, which changed. Not logged: only the current value matters. */
   showSpeed(value: number): void {
     this.send({ type: 'speed', value });
+  }
+
+  /** Shows the saved history order, including changes made in VS Code settings. */
+  showChatOrder(value: ChatOrder): void {
+    this.send({ type: 'chatOrder', value });
   }
 
   showReadingSpeed(value: number): void {
@@ -171,6 +177,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       case 'ready':
         // A new page has an empty draft (#69): specs/Draft.tla, `LoadPage`.
         controller.resume('reply');
+        this.showChatOrder(this.chatOrder.get());
         this.send({ type: 'replay', events: this.log });
         this.showSpeed(this.speed.get());
         this.showReadingSpeed(this.readingSpeed.get());
@@ -178,6 +185,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         this.showTimings();
         // The new page asks once whether a session can start: specs/Start.tla, `LoadPage`.
         this.askStart();
+        return;
+      case 'chatOrder':
+        if (message.value === 'newestFirst' || message.value === 'oldestFirst') this.chatOrder.set(message.value);
         return;
       case 'speed':
         // Only the menu's speeds: the page sends no others (#17).

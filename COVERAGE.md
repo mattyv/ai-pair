@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: integration, 2026-10-20.
+Last updated: css, 2026-11-06.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -98,7 +98,7 @@ Last updated: integration, 2026-10-20.
 | `packages/vscode/src/terminal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.3% B 98.1% F 92.3% | - | - | - | - |
 | `packages/vscode/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/view.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 88.0% F 100.0% | - | - | - | - |
-| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 115 of 115 rules matched |
+| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 121 of 121 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/test/agents.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/calibration.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -121,6 +121,7 @@ Last updated: integration, 2026-10-20.
 | `packages/vscode/test/terminal.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/timings.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/view.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/vscode/test/visual/chat_order.spec.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/visual/panel.spec.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/webview/panel.test.ts` | TypeScript | test | test | test | test | test | test |
 | `playwright.config.ts` | TypeScript | - | - | - | - | - | - |
@@ -176,11 +177,11 @@ Last updated: integration, 2026-10-20.
 | `specs/Outside.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/PairDefs.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/Panel.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/Panel.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
+| `specs/Panel.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
 | `specs/PanelReplay.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/PanelReplay.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/PanelScroll.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/PanelScroll.tla` | TLA+ | - | - | 4 of 4 actions | - | - | - |
+| `specs/PanelScroll.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
 | `specs/Places.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Places.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/Player.cfg` | TLC config | - | - | - | - | - | - |

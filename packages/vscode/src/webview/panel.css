@@ -567,7 +567,7 @@ button:focus-visible {
   padding: 0 4px;
 }
 
-/* The history, newest first. entry() in webview/panel.ts gives each entry the class entry and its kind. */
+/* The history. entry() in webview/panel.ts gives each entry the class entry and its kind. */
 
 .history {
   color: var(--muted);
@@ -580,9 +580,19 @@ button:focus-visible {
   padding: 14px 14px 18px;
 }
 
+/* The order switch restores an explicit anchor; do not also apply browser anchoring. */
+.history.reordering {
+  overflow-anchor: none;
+}
+
 .entry {
   line-height: 1.5;
   overflow-wrap: anywhere;
+}
+
+/* The agent's messages use the theme foreground for readability. */
+.agent {
+  color: var(--fg);
 }
 
 /* you: the programmer's reply, as a bubble on the right. */
@@ -749,4 +759,29 @@ a:hover {
   .arrive {
     animation: none;
   }
+}
+
+/* Settings stay available when there is no active session. */
+.settings-bar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.settings-dialog {
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-widget-border);
+  color: var(--fg);
+  font: inherit;
+}
+
+.settings-dialog select {
+  background: var(--vscode-input-background);
+  color: var(--fg);
+  font: inherit;
+  margin: 0 12px;
+}
+
+.oldest-first .band {
+  border-bottom: none;
+  border-top: 1px solid var(--border);
 }

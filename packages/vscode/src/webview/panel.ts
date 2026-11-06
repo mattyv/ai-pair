@@ -2,7 +2,7 @@
 // styles are in panel_html.ts; the messages in panel_messages.ts.
 
 import type { AgentState, PanelEvent, Ref } from '@ai-pair/core';
-import type { FromPanel, ToPanel } from '../panel_messages';
+import type { ChatOrder, FromPanel, ToPanel } from '../panel_messages';
 import type { CalibrationView } from '../calibration';
 import { ELLIPSIS, LABEL_SEPARATOR, RANGE_DASH, RIGHT_ARROW, SPEED_SUFFIX } from '@ai-pair/core/constants';
 
@@ -59,6 +59,10 @@ function $<T extends HTMLElement>(name: string, type: abstract new () => T): T {
 
 const ui = {
   band: $('band', HTMLElement),
+  settings: $('settings', HTMLButtonElement),
+  settingsDialog: $('settings-dialog', HTMLDialogElement),
+  settingsClose: $('settings-close', HTMLButtonElement),
+  chatOrder: $('chat-order', HTMLSelectElement),
   dot: $('dot', HTMLElement),
   status: $('status-text', HTMLElement),
   pause: $('pause', HTMLButtonElement),
@@ -95,6 +99,9 @@ const ui = {
   tip: $('tip', HTMLElement),
 };
 
+let chatOrder: ChatOrder = 'newestFirst';
+let followingLatest = true;
+let historyHeight = 0;
 let active = false;
 let calibrating = false;
 let turn = 'agent';
@@ -155,20 +162,33 @@ function entry(cls: string, html?: string): HTMLElement {
   return el;
 }
 
-/**
- * Puts the current message into the history, once: when the next entry comes, or when it is replaced
- * (specs/Panel.tla, `WithMessageFiled`).
- */
+/** Inserts an entry at the newest edge of the history. */
+function insertHistory(el: HTMLElement): void {
+  if (chatOrder === 'newestFirst') {
+    ui.history.prepend(el);
+  } else {
+    const atEnd = ui.history.scrollHeight - ui.history.clientHeight - ui.history.scrollTop <= 1;
+    ui.history.append(el);
+    if (atEnd) ui.history.scrollTop = ui.history.scrollHeight;
+  }
+}
+
+/** Files the current message once before the next entry (specs/Panel.tla, `WithMessageFiled`). */
 function fileCurrent(): void {
-  if (current !== undefined && !filed) ui.history.prepend(entry('agent', rich(current)));
+  if (current !== undefined && !filed) {
+    const message = entry('agent', rich(current));
+    message.append(...ui.ref.childNodes);
+    insertHistory(message);
+    ui.now.textContent = '';
+  }
   filed = true;
 }
 
 function add(el: HTMLElement): HTMLElement {
-  // Newest first: the current message came before this entry, so it goes in first
-  // (specs/Panel.tla, `AddEntry`; specs/PanelScroll.tla, `AddEntry`: the scroll position stays).
+  // The current message came before this entry, so it is filed first
+  // (specs/Panel.tla, `AddEntry`; specs/PanelScroll.tla, `AddEntry`).
   fileCurrent();
-  ui.history.prepend(el);
+  insertHistory(el);
   return el;
 }
 
@@ -215,8 +235,8 @@ function addYou(text: string | undefined, ref: Ref | undefined): void {
   const el = entry('you', text === undefined ? '' : rich(text));
   if (ref) el.append(refLink(ref));
   add(el);
-  // specs/PanelScroll.tla, `AddYours`: the programmer's message scrolls the history to its top (#139).
-  ui.history.scrollTop = 0;
+  // specs/PanelScroll.tla, `AddYours`: reveal the programmer's message at the newest edge.
+  ui.history.scrollTop = chatOrder === 'newestFirst' ? 0 : ui.history.scrollHeight;
 }
 
 /** Writes how a run went into `outcome`, the span of its row `el`. */
@@ -526,8 +546,73 @@ function showSpeed(button: HTMLButtonElement, menu: HTMLElement, name: string, p
   }
 }
 
+/** Applies the order while preserving the view (Panel.tla and PanelScroll.tla, `SwitchOrder`). */
+function setChatOrder(value: ChatOrder): void {
+  ui.chatOrder.value = value;
+  if (value === chatOrder) return;
+  const atLatest =
+    chatOrder === 'newestFirst' ? ui.history.scrollTop <= 1 : ui.history.scrollHeight - ui.history.clientHeight - ui.history.scrollTop <= 1;
+  followingLatest = atLatest;
+  const entries = [...ui.history.children];
+  const top = ui.history.getBoundingClientRect().top;
+  const anchor = entries.find((element) => element.getBoundingClientRect().bottom > top);
+  const before = anchor === undefined ? 0 : anchor.getBoundingClientRect().top - top;
+  chatOrder = value;
+  ui.history.classList.add('reordering');
+  document.body.classList.toggle('oldest-first', value === 'oldestFirst');
+  ui.history.replaceChildren(...entries.toReversed());
+  if (value === 'oldestFirst') {
+    ui.band.before(ui.history);
+  } else {
+    ui.band.after(ui.history);
+  }
+  ui.history.setAttribute('aria-label', value === 'oldestFirst' ? 'Earlier, oldest first' : 'Earlier, newest first');
+  if (atLatest) {
+    ui.history.scrollTop = value === 'oldestFirst' ? ui.history.scrollHeight : 0;
+  } else if (anchor !== undefined) {
+    ui.history.scrollTop += anchor.getBoundingClientRect().top - ui.history.getBoundingClientRect().top - before;
+  }
+  requestAnimationFrame(() => {
+    ui.history.classList.remove('reordering');
+  });
+}
+
+// A growing composer or a resized panel must keep the newest edge in view only
+// while the reader was already following it.
+ui.history.addEventListener('scroll', () => {
+  // A resize can emit scroll before ResizeObserver; retain the prior follow state.
+  if (ui.history.clientHeight !== historyHeight) return;
+  followingLatest = ui.history.scrollHeight - ui.history.clientHeight - ui.history.scrollTop <= 1;
+});
+const historyResize = new ResizeObserver(() => {
+  historyHeight = ui.history.clientHeight;
+  if (chatOrder === 'oldestFirst' && followingLatest) ui.history.scrollTop = ui.history.scrollHeight;
+});
+historyResize.observe(ui.band);
+historyResize.observe(ui.history);
+
+// specs/Panel.tla, `OpenSettings` and `CloseSettings`.
+ui.settings.addEventListener('click', () => {
+  ui.settingsDialog.showModal();
+  ui.chatOrder.focus();
+});
+ui.settingsClose.addEventListener('click', () => {
+  ui.settingsDialog.close();
+});
+ui.settingsDialog.addEventListener('close', () => {
+  ui.settings.focus();
+});
+ui.chatOrder.addEventListener('change', () => {
+  const value = ui.chatOrder.value === 'oldestFirst' ? 'oldestFirst' : 'newestFirst';
+  setChatOrder(value);
+  vscode.postMessage({ type: 'chatOrder', value });
+});
+
 function handle(message: ToPanel): void {
   switch (message.type) {
+    case 'chatOrder':
+      setChatOrder(message.value);
+      return;
     case 'replay':
       replaying = true;
       for (const ev of message.events) {
@@ -544,7 +629,7 @@ function handle(message: ToPanel): void {
       ui.starting.hidden = true;
       return;
     case 'session':
-      // specs/Panel.tla, `ChangeSession`: the band is filed, and a divider goes on top.
+      // specs/Panel.tla, `ChangeSession`: the band is filed and a divider is added.
       if (message.active) {
         // specs/Start.tla, `StartSession`: a session clears the note (NoteUntilSession).
         ui.starting.hidden = true;
@@ -712,11 +797,17 @@ function decide(run: boolean, remember: boolean): void {
 
 window.addEventListener('message', (m: MessageEvent) => {
   // The extension posts only ToPanel messages.
+  const follow = chatOrder === 'oldestFirst' && ui.history.scrollHeight - ui.history.clientHeight - ui.history.scrollTop <= 1;
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   handle(m.data as ToPanel);
+  if (follow && chatOrder === 'oldestFirst') ui.history.scrollTop = ui.history.scrollHeight;
 });
 
-ui.reply.addEventListener('input', syncDraft);
+ui.reply.addEventListener('input', () => {
+  const follow = chatOrder === 'oldestFirst' && ui.history.scrollHeight - ui.history.clientHeight - ui.history.scrollTop <= 1;
+  syncDraft();
+  if (follow) ui.history.scrollTop = ui.history.scrollHeight;
+});
 ui.reply.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
@@ -784,7 +875,7 @@ window.addEventListener('blur', hideTip);
 // button, which after a click could be End; Enter still does.
 document.addEventListener('keydown', (e) => {
   if (e.key !== ' ' || e.ctrlKey || e.metaKey || e.altKey || !active) return;
-  if (e.target === ui.reply) return;
+  if (e.target === ui.reply || e.target === ui.settings || (e.target instanceof Node && ui.settingsDialog.contains(e.target))) return;
   e.preventDefault();
   if (e.repeat || turn === 'programmer') return;
   vscode.postMessage({ type: paused ? 'resume' : 'pause' });

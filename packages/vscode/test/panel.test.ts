@@ -109,6 +109,10 @@ interface Harness {
   starter: MockProxy<Starter>;
   speed: { get: ReturnType<typeof vi.fn<() => number>>; set: ReturnType<typeof vi.fn<(value: number) => void>> };
   readingSpeed: { get: ReturnType<typeof vi.fn<() => number>>; set: ReturnType<typeof vi.fn<(value: number) => void>> };
+  chatOrder: {
+    get: ReturnType<typeof vi.fn<() => 'newestFirst' | 'oldestFirst'>>;
+    set: ReturnType<typeof vi.fn<(value: 'newestFirst' | 'oldestFirst') => void>>;
+  };
   onPost: ReturnType<typeof vi.fn<() => void>>;
   traced: string[];
 }
@@ -130,6 +134,10 @@ function harness(turn: Turn = 'agent'): Harness {
   const traced: string[] = [];
   const speed = { get: vi.fn(() => SPEEDS[1] ?? 0), set: vi.fn<(value: number) => void>() };
   const readingSpeed = { get: vi.fn(() => SPEEDS[2] ?? 0), set: vi.fn<(value: number) => void>() };
+  const chatOrder = {
+    get: vi.fn<() => 'newestFirst' | 'oldestFirst'>(() => 'newestFirst'),
+    set: vi.fn<(value: 'newestFirst' | 'oldestFirst') => void>(),
+  };
   const controller = mock<Controller>({ turn });
   const calibration = mock<Calibration>();
   calibration.reply.mockReturnValue(false);
@@ -146,10 +154,11 @@ function harness(turn: Turn = 'agent'): Harness {
     },
     vscode.Uri.file(EXTENSION),
     { controller: () => controller, calibration: () => calibration, starter },
+    chatOrder,
   );
   const onPost = vi.fn<() => void>();
   panel.onPost = onPost;
-  return { panel, controller, calibration, starter, speed, readingSpeed, onPost, traced };
+  return { panel, controller, calibration, starter, speed, readingSpeed, chatOrder, onPost, traced };
 }
 
 /** Resolves a fake view into `panel`, and returns it. */
@@ -467,6 +476,7 @@ describe('receive', () => {
     await flush();
     expect(controller.resume.mock.calls).toEqual([['reply']]);
     expect(view.posted).toEqual([
+      { type: 'chatOrder', value: 'newestFirst' },
       { type: 'replay', events: [{ type: 'say', text: 'hi' }] },
       { type: 'speed', value: SPEEDS[1] },
       { type: 'readingSpeed', value: SPEEDS[2] },
@@ -474,6 +484,25 @@ describe('receive', () => {
       { type: 'timings', tipDelayMs: 7, tipWarmMs: 8 },
       { type: 'canStart', value: true },
     ]);
+  });
+
+  it('sends the saved order before replay and accepts only valid choices', () => {
+    const { panel, chatOrder } = harness();
+    chatOrder.get.mockReturnValue('oldestFirst');
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(view.posted.slice(0, 2)).toEqual([
+      { type: 'chatOrder', value: 'oldestFirst' },
+      { type: 'replay', events: [] },
+    ]);
+    view.send({ type: 'chatOrder', value: 'newestFirst' });
+    expect(chatOrder.set).toHaveBeenCalledWith('newestFirst');
+    // A webview message crosses a runtime boundary despite its compile-time type.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    view.send({ type: 'chatOrder', value: 'invalid' } as unknown as FromPanel);
+    expect(chatOrder.set).toHaveBeenCalledTimes(1);
+    panel.showChatOrder('oldestFirst');
+    expect(view.posted).toContainEqual({ type: 'chatOrder', value: 'oldestFirst' });
   });
 
   it('showTimings: tells the page its delays, as a test sets them', () => {

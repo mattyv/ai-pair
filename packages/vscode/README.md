@@ -84,6 +84,11 @@ pair on..."). In Claude Code you can also run `/mcp__pair__start`.
 
 ## Settings
 
+The Pair panel's **Settings** button lets you choose the chat order. The default
+shows the newest messages at the top; choose **Oldest first** to put new messages
+and the reply box at the bottom. Your choice is saved across reloads.
+
+-   `aiPair.chatOrder`: newest first (default) or oldest first.
 -   `aiPair.speed`: overall playback speed, the follow scroll's glide included.
 -   `aiPair.readingSpeed`: reading speed, for the pause after each message.
 -   `aiPair.calibrationPassage`: the passage the calibration times you on;

@@ -3,6 +3,9 @@
 import type { PanelEvent, Ref } from '@ai-pair/core';
 import type { CalibrationView } from './calibration';
 
+/** The order of the panel history. */
+export type ChatOrder = 'newestFirst' | 'oldestFirst';
+
 /** Messages from the page. */
 export type FromPanel =
   | { type: 'ready' }
@@ -23,6 +26,7 @@ export type FromPanel =
   | { type: 'command'; command: string }
   /** The Start a session button: Claude Code's CLI starts with the prompt in a hidden terminal (#107, #115). */
   | { type: 'start' }
+  | { type: 'chatOrder'; value: ChatOrder }
   | { type: 'speed'; value: number }
   | { type: 'readingSpeed'; value: number }
   | { type: 'runDecision'; id: number; run: boolean; remember?: boolean };
@@ -35,6 +39,7 @@ export type ToPanel =
   /** The programmer's selection, offered with a reply. */
   | { type: 'selection'; ref: Ref | undefined }
   | { type: 'focusReply' }
+  | { type: 'chatOrder'; value: ChatOrder }
   | { type: 'speed'; value: number }
   | { type: 'readingSpeed'; value: number }
   /** The reading speed calibration's state, for the band (#109). */

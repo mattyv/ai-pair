@@ -81,6 +81,7 @@ function send(event: object): void {
 
 /** The page's states, one message at a time; the selectors are checked after each. */
 const SCENARIO: object[] = [
+  { type: 'chatOrder', value: 'oldestFirst' },
   { type: 'canStart', value: true },
   { type: 'session', active: false, reason: 'agent', summary: 'Done: the API has its tests.' },
   { type: 'session', active: true, task: 'Add tests', rules: ['.ai-pair/GUIDE.md'] },

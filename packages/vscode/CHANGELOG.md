@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.0
+
+-   Choose oldest first in the Pair panel's Settings to put new messages and the
+    reply box at the bottom. The default remains newest first. The setting is
+    saved and can also be changed in VS Code settings.
+-   Agent messages in the history use the theme text color for easier reading.
+-   A filed agent message appears once in the conversation, in time order with
+    replies; its code link stays with it.
+
 ## 0.8.1
 
 -   The TLA+ specs and the code agree again, after an audit of every spec

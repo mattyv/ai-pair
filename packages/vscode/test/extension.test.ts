@@ -117,6 +117,7 @@ const fakes = vi.hoisted(() => {
     readonly showSelection = vi.fn();
     readonly showSpeed = vi.fn();
     readonly showReadingSpeed = vi.fn();
+    readonly showChatOrder = vi.fn();
     readonly showCalibration = vi.fn();
     readonly showTimings = vi.fn();
     readonly restoreHistory = vi.fn();
@@ -131,6 +132,7 @@ const fakes = vi.hoisted(() => {
       readonly trace: (line: string) => void,
       readonly extensionUri: unknown,
       readonly wiring: { controller: () => unknown; calibration: () => unknown; starter: unknown },
+      readonly chatOrder: { get: () => string; set: (value: string) => void },
     ) {
       made.panels.push(this);
     }
@@ -375,6 +377,20 @@ describe('activate', () => {
     expect(h.panel.selection.ref()).toBe('ref');
     h.editor.onSelection?.('a ref');
     expect(h.panel.showSelection).toHaveBeenCalledWith('a ref');
+  });
+
+  it('reads, saves, and applies the chat order, defaulting invalid values to newest first', () => {
+    const h = activated();
+    expect(h.panel.chatOrder.get()).toBe('newestFirst');
+    fakes.settings.set('chatOrder', 'oldestFirst');
+    expect(h.panel.chatOrder.get()).toBe('oldestFirst');
+    changed('chatOrder');
+    expect(h.panel.showChatOrder).toHaveBeenCalledWith('oldestFirst');
+    h.panel.chatOrder.set('newestFirst');
+    expect(fakes.updated).toContainEqual(['chatOrder', 'newestFirst', 1]);
+    fakes.settings.set('chatOrder', 'invalid');
+    changed('chatOrder');
+    expect(h.panel.showChatOrder).toHaveBeenLastCalledWith('newestFirst');
   });
 
   it('traces the controller at Info, and the panel and the bridge at the Trace level, or at Info with the setting', () => {

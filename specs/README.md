@@ -63,8 +63,8 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 |---|---|---|---|
 | `Serialize.cfg` | `NumCalls = 2` calls, each empty or not, the session ending, an interrupt, and the socket closing at any point | holds | 3,646 |
 | `Wire.cfg` | `NumSockets = 2` sockets, `NumCalls = 2` calls | holds | 43,426 |
-| `Panel.cfg` | `MaxEvents = 5` | holds | 21 |
-| `PanelScroll.cfg` | `MaxEvents = 5`, `ScrollOn = "you"` | holds | 42 |
+| `Panel.cfg` | `MaxEvents = 5`, both display orders and the settings dialog | holds | 84 |
+| `PanelScroll.cfg` | `MaxEvents = 5`, `ScrollOn = "you"`, both display orders | holds | 108 |
 | `PanelReplay.cfg` | `MaxLog = 3`, `MaxEvents = 6` | holds | 127 |
 | `Controller.cfg` | `NumBatches = 2` batches, `NumEvents = 1` event, `NumQuietEdits = 1` quiet edit, `MaxCancels = 2` | holds | 82,085 |
 | `Discovery.cfg` | `NumWindows = 2` windows, one junk file, a write that may fail, a window that may refuse the hello | holds | 782 |
@@ -256,11 +256,13 @@ since #18.
 
 | Spec | Code |
 |---|---|
+| `OpenSettings`, `CloseSettings` | the Settings dialog opens and closes |
+| `SwitchOrder` | the setting changes the displayed order without changing events |
 | `Say` | `setNow` |
 | `AddEntry` | `addYou`, `addRun`, `addOutside`, the interrupt and turn dividers: `add()` |
 | `ChangeSession` | the `session` event: a start, an end, and a suspension or resumption shown for the first time |
 | `RepeatSession` | the `session` event repeating a suspension the page already shows (#138): the band is filed and emptied, with no divider |
-| `currentMessage`, `messageFiled`, `WithMessageFiled` | `current`, `filed`, `fileCurrent()` |
+| `currentMessage`, `messageFiled`, `bandVisible`, `WithMessageFiled` | `current`, `filed`, the current narration, and `fileCurrent()` |
 
 Each invariant was proved to bite with a mutation, run in TLC and then
 reverted. NewestFirst implies NoDuplicates (a strictly decreasing history has
@@ -274,47 +276,56 @@ config:
 | `ChangeSession` drops the band's message | `NoneLost` |
 | `RepeatSession` drops the band's message | `NoneLost` |
 | Fix 1 never marks the message as filed | `NoDuplicates` |
+| Present the logical history without reversing it in oldest-first order | `DisplayOrdered` |
+| Leave the filed message visible in the band | `VisibleOnce` |
+| Hide a new message in the band | `NoneLost` |
 
 Every invariant names the test that proves the code obeys it:
 
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `VisibleOnce` | `webview/panel.test.ts`: VisibleOnce, NoneLost: shows each agent and programmer message once in each order |
+| `DisplayOrdered` | `visual/chat_order.spec.ts`: DisplayOrdered, NoneLost and NoDuplicates: switching reverses populated history and keeps the draft |
 | `NewestFirst` | `webview/panel.test.ts`: NewestFirst, NoneLost: puts a reply above the agent message it answers; NoDuplicates, NewestFirst: files the current message once, before anything added while it was current |
 | `NoneLost` | `webview/panel.test.ts`: NewestFirst, NoneLost: puts a reply above the agent message it answers |
 | `NoDuplicates` | `webview/panel.test.ts`: NoDuplicates, NewestFirst: files the current message once, before anything added while it was current |
 
 ### `PanelScroll`: the history's scroll position
 
-`add` and `addYou` in `packages/vscode/src/webview/panel.ts`. Issue #139. The
-constant `ScrollOn` says which entries scroll the history to its top; the code
-is `"you"`.
+`add` and `addYou` in `packages/vscode/src/webview/panel.ts`. Issue #139
+and #5. `ScrollOn = "you"` reveals the programmer's message. The model
+abstracts the viewport to one entry and permits newest-first browser anchoring
+at the top to keep the old entry. Oldest-first follows the latest edge only
+when already there, and preserves the visible entry otherwise.
 
 | Spec | Code |
 |---|---|
-| `AddEntry` | everything put in but the programmer's message: the agent's message filed (by `add()`, or by `setNow` through `fileCurrent` when a new message replaces it), runs, dividers, changes outside the editor |
-| `AddYours` | `addYou`, for the `programmer` event and a `turn` event with a message or a selection: it sets `scrollTop` to 0 |
+| `AddEntry` | add a filed message, run, divider or outside change |
+| `AddYours` | add a programmer message and reveal the newest edge |
 | `Scroll` | the programmer scrolling the history |
-| `entriesAboveView`, and `Prepend` keeping the entry at the view's top | `scrollTop`, and the browser's scroll anchoring |
+| `SwitchOrder` | reverse the entries and preserve the visible position |
+| `view` | the visible entry tracked by browser scroll anchoring |
 
-Each invariant was proved to bite with a mutation, run in TLC and then reverted:
+Each invariant was mutation-tested in TLC and the mutation reverted:
 
 | Mutation | Breaks |
 |---|---|
-| `ScrollOn = "none"`, the code before #139 | `YoursInView` |
-| `ScrollOn = "all"` | `KeepsPlace` |
-| `Scroll` reaches `Len(history)` | `ViewAtEntry` |
-| an entry stamped with the old time, 0 at first | `TypeOK` |
-
-Every invariant names the test that proves the code obeys it; the test's title
-carries the invariant's name:
+| Set the view to 0 on addition | `TypeOK` |
+| Clear the view on addition | `ViewAtEntry` |
+| Keep the old view when a reply arrives | `YoursInView` |
+| Always follow the latest entry | `KeepsPlace` |
+| Keep the old view when the latest entry arrives | `FollowsLatest` |
+| Clear the view on an order switch | `SwitchKeepsPlace` |
 
 | Invariant | Proved by |
 |---|---|
-| `YoursInView` | `webview/panel.test.ts`: YoursInView: your message scrolls the history back to its top (#139) |
-| `KeepsPlace` | `webview/panel.test.ts`: KeepsPlace: entries other than your message leave the history where you scrolled it (#139) |
-| `ViewAtEntry` | Nothing: the browser keeps `scrollTop` within the history |
-| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `YoursInView` | `visual/chat_order.spec.ts`: FollowsLatest, KeepsPlace and YoursInView: oldest-first tracks the reader |
+| `KeepsPlace` | `visual/chat_order.spec.ts`: FollowsLatest, KeepsPlace and YoursInView: oldest-first tracks the reader |
+| `SwitchKeepsPlace` | `visual/chat_order.spec.ts`: SwitchKeepsPlace: switching order keeps the visible history entry in place |
+| `FollowsLatest` | `visual/chat_order.spec.ts`: FollowsLatest, KeepsPlace and YoursInView: oldest-first tracks the reader |
+| `ViewAtEntry` | Browser scrolling keeps the view within the history |
+| `TypeOK` | The TypeScript compiler checks these types |
 
 ### `PanelReplay`: the panel's log and its replay
 

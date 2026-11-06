@@ -95,6 +95,12 @@ export function activate(context: vscode.ExtensionContext): Api {
       void config().update(READING_SPEED, value, vscode.ConfigurationTarget.Global);
     },
   };
+  const chatOrder = {
+    get: () => (config().get<unknown>('chatOrder') === 'oldestFirst' ? ('oldestFirst' as const) : ('newestFirst' as const)),
+    set: (value: 'newestFirst' | 'oldestFirst') => {
+      void config().update('chatOrder', value, vscode.ConfigurationTarget.Global);
+    },
+  };
   // Frames and panel messages at the Trace level, which VS Code hides unless it is set, and resets
   // when the extension is reinstalled; with `aiPair.trace`, at Info, which it shows (#27).
   const log = vscode.window.createOutputChannel('AI Pair', { log: true });
@@ -118,6 +124,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     trace,
     context.extensionUri,
     { controller: () => controller, calibration: () => calibration, starter },
+    chatOrder,
   );
   controller = new Controller(editor, panel);
   controller.trace = (line) => {
@@ -235,6 +242,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       webviewOptions: { retainContextWhenHidden: true },
     }),
     vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('aiPair.chatOrder')) panel.showChatOrder(chatOrder.get());
       if (e.affectsConfiguration('aiPair.speed')) {
         controller.setSpeed(speed.get());
         panel.showSpeed(speed.get());
