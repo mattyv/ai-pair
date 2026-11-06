@@ -18,6 +18,21 @@ Track frustrations with the current tool and possible improvements.
     keeps making formatting mistakes while writing code and what would prevent
     them.
 
+1.  **Explore selective spoken narration.** Consider text-to-speech for selected
+    AI Pair MCP narration while keeping the same message visible in the panel.
+    Do not speak all chat automatically; explore how the user chooses it.
+    Prefer the existing Claude Code CLI session signed into the user's Team
+    plan: Claude selects what deserves speech through the Pair MCP, while a
+    local TTS model generates audio. No additional Claude session or API key
+    should be needed for this design. Consider an optional `speak: true` flag
+    on narration, with voice, speed and automatic speech controls in Settings.
+    Audition [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) and measure
+    startup latency and CPU use on the Ubuntu host before selecting a model.
+    Replying should stop playback; stale narration should not accumulate.
+    Speech must not approve commands or advance the reading countdown.
+    Speech-to-text is deferred; keep this proposal focused on spoken narration.
+    These are design candidates, not implemented features.
+
 1.  **Restore pair context after restart.** Investigate preserving and restoring
     the pair conversation and session context across VS Code restarts.
 
@@ -59,14 +74,15 @@ Consider these proposals during that investigation:
 
 The audit checked the reported behaviors against source, tests, and isolated
 native trials. It does not establish every detail of the original session.
-The fixes below are in the current source and await the final 0.11.0 build.
+The 0.11.0 fixes shipped; the current 0.12.0 work adds quiet terminals and
+clarifies the relative indentation contract.
 
 | Claim | Verdict |
 |---|---|
 | 1. Extra triple quotes | Confirmed with published 0.10.0, Python 2026.10 and Pylance 2026.4.1: with auto-closing always enabled, all three normal-speed function-body trials were interrupted after three quotes became six, while the closing triple remained unplayed. With auto-closing disabled, all three completed. Pylance's single-character quote handler inserts the extra triple; the 0.11 development build completed all three with auto-closing still enabled by typing the quote run atomically. A basic native profile without Python extensions also passed. A corrected no-Pylance control with Python 2026.10 completed all three trials. |
-| 2. Context after restart | Same-root resume and persisted session state pass current tests; native reconnect passed. The reported loss of the LLM's own conversation context was not reproduced or established by those checks. |
-| 3. Interrupted typing | Interruption can stop within a token, report the unplayed remainder, and discard queued batches. This is the current safety contract; finishing an arbitrary action after intervention would risk further unintended edits. |
-| 4. Interactive commands | Interactive prompt handling is not supported. A still-running command retains an unknown exit status; a no-output report now suggests checking the terminal without claiming a prompt was detected. |
+| 2. Context after restart | Same-root resume and persisted session state pass current tests; native reconnect passed. The reported loss of the LLM's own conversation context was not reproduced or established by those checks. A host screenshot showed the panel suspended; source associates that state with a disconnected or restored session, but does not establish why it occurred. See the command-hang evidence below. |
+| 3. Interrupted typing | Reproduced by design: Send can interrupt within a token and report the exact unplayed remainder. Explore an explicit send-after-this-action option later, with urgent Stop and editor changes still interrupting immediately. Do not silently finish an unbounded action. |
+| 4. Interactive commands | The reported host hang remains unresolved. Host evidence shows Bash using `/snap/code/276/.../shellIntegration-bash.sh`, Rich integration, sequences P A B E C D, and an empty prompt. In our separate native environment, shell-integrated checks returned promptly for completed and still-running commands; a no-integration control returned an unknown outcome. The host screenshot also showed a suspended session, which is connection or restore evidence rather than proof of a terminal cause; see claim 2. These checks do not establish the host cause. Interactive prompt handling is not supported. |
 | 5. Crossing closing brackets | `line_end` can cross multiple closes. Its former advisory arrived after later actions in the batch. The new narrow preflight guard rejects that crossing before playback unless explicitly acknowledged, with `next_close` and exact spots available as alternatives. |
 | 6. Diagnostics | Pylance and environment diagnostics remain advisory and visible; they are not suppressed wholesale. They do not prove the intended meaning of syntactically valid code. |
 | 7. Formatter changes | A formatter can invalidate queued edits to the file it changes, regardless of command origin. Guidance now says to use a separate run-only batch, wait for the formatter to exit, and read the files before further edits. |
@@ -78,3 +94,10 @@ corresponding event in the historical session:
 - The unseen-line and named-file checks refuse unsafe locations and files.
 - Looking away or scrolling away pauses playback.
 - Reports include the agent cursor's position in the code shown.
+
+## Follow-up: structural indentation
+
+The newline action adds its requested indentation to the current line's leading
+indentation. This is by design and is covered by unit and end-to-end tests;
+the agent guide now spells it out with an example. The report does not establish
+an editor on-enter action or formatter as the cause.

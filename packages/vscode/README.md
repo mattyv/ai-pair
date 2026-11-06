@@ -87,7 +87,11 @@ pair on..."). In Claude Code you can also run `/mcp__pair__start`.
     goes along (**x** leaves it out). Or right-click it: *Ask the Agent About
     the Selection*.
 -   **Commands:** the agent's tests and builds play in an *AI Pair* terminal.
-    Choose **Run**, **Allow for session**, or **Skip** in the panel.
+    Choose **Run**, **Allow for session**, or **Skip** in the panel. Terminals
+    stay hidden by default; use **Show terminal** or enable automatic display
+    in Pair Settings. If shell integration is unavailable, the terminal opens
+    so you can see and control the command. Hidden terminals are not restored
+    when the workspace is reopened.
 -   **Interrupt:** the button, or just edit the code.
 -   **Look around:** scrolling or switching files pauses playback. **Resume**
     brings you back.
@@ -119,5 +123,7 @@ and the reply box at the bottom. Your choice is saved across reloads.
     empty, the built-in one.
 -   `aiPair.agentName`: the name on the agent's cursor.
 -   `aiPair.timing`: fine-tune any typing, pause, or glide duration.
+-   `aiPair.showTerminalsAutomatically`: show command terminals automatically
+    (off by default; also in Pair Settings).
 -   `aiPair.confirmCommands`: ask before each command the agent runs in the
     terminal (on by default).

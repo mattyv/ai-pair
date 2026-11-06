@@ -601,7 +601,7 @@ export class Player {
     // specs/RunBox.tla, `FinishCommand`: done or background when it ran, declined when it never started or threw.
     let outcome;
     try {
-      outcome = await editor.runCommand(command, { cwd: scene.root ?? editor.resolvePath('.'), waitMs, signal });
+      outcome = await editor.runCommand(command, { id, cwd: scene.root ?? editor.resolvePath('.'), waitMs, signal });
     } catch (error) {
       panel.post({ type: 'run', id, command, phase: 'declined' });
       throw error;

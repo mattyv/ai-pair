@@ -2810,7 +2810,7 @@
           "exec": [
             {
               "id": "n-command-run-confirmationexec",
-              "text": "The command runs in a terminal the programmer can see.",
+              "text": "The command runs in a Pair-owned terminal; the programmer can reveal it.",
               "ts": 0
             }
           ],
@@ -3994,7 +3994,7 @@
       "type": "dataflow",
       "origin": "llm",
       "generation": {
-        "focus": "Command Run and Terminal Output — A `run` action saves edited files, optionally waits for the programmer's confirmation in the panel, executes the command in a VS Code terminal via shell integration, tails and cleans the output, and returns the outcome (exit code, truncation, background status) in the batch report."
+        "focus": "Command Run and Terminal Output — A `run` action saves edited files, optionally waits for approval, runs quietly in an eligible Pair-owned terminal, and reports output and status. The panel can reveal the terminal for a specific command; an unavailable terminal is reported honestly."
       },
       "doc": {
         "type": "dataflow",
@@ -4128,6 +4128,11 @@
             "from": "panel",
             "to": "ctrl",
             "label": "run decision and remember flag"
+          },
+          {
+            "from": "panel",
+            "to": "editor",
+            "label": "show terminal by command ID"
           },
           {
             "from": "editor",

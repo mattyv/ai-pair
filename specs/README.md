@@ -84,6 +84,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Scroll.cfg` | `NumLines = 8` lines, a view of `ViewHeight = 4`, `MaxMoves = 2`, `MaxFollowSwitches = 2`, `scrollBeyondLastLine` on and off, the programmer's turn | holds | 14,131 |
 | `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
 | `Resume.cfg` | 2 directories, `MaxSessions = 3` sessions, `PostOnRevive = TRUE` | holds | 56 |
+| `TerminalPanel.cfg` | two command IDs and automatic visibility | holds | 61 |
 | `Timeline.cfg` | `MaxSleeps = 3` sleeps, holds, and a second sleep while one is pending | holds | 864 |
 | `ReadingSkip.cfg` | two countdown IDs, hold, pause, turn and suspension changes | holds | 5,840 |
 | `ReadingHold.cfg` | matching hold and release with changing pause state | holds | 444 |
@@ -91,6 +92,9 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `ListeningHint.cfg` | status and session context | holds | 64 |
 | `SettingsAccess.cfg` | idle and active toolbar | holds | 4 |
 | `Terminals.cfg` | `NumTerminals = 2` terminals, `MaxRuns = 3`, 2 directories | holds | 3,361 |
+| `QuietTerminals.cfg` | quiet default, fallback and guarded cleanup | holds | 9 |
+| `QuietTerminals_Visible.cfg` | automatic show, fallback and guarded cleanup | holds | 11 |
+| `TerminalReuse.cfg` | shell state, exposure, pending drain and foreign starts | holds | 48 |
 | `Turns.cfg` | batches of up to 2 actions, `MaxTurns = 2` turn changes | holds | 1,530 |
 | `Reload.cfg` | `NumLines = 5` lines, any of them changed on disk, a selection at a line's start or not | holds | 320 |
 | `Rehearsal.cfg` | `MaxLines = 3` lines, `MaxOthers = 2` changes by others, `MaxProgrammerEdits = 1`, `MaxBatches = 2` batches, `MaxQueued = 2` queued, either turn, `ReportWaitsForQueue = TRUE` | holds, in about 200 seconds | 6,721,044 |
@@ -1595,6 +1599,56 @@ Every invariant and property names the test that proves the code obeys it:
 | `FreedAfterEnd` | `terminal.test.ts`: FreedAfterEnd, Exit: reuses a terminal once its command ends, in the folder it's in, and not one whose shell exited |
 | `RunReturns` | `terminal.test.ts`: RunReturns, SkipAborted: doesn't wait for shell integration once playback is interrupted, and starts nothing; RunReturns, ExecuteCommand, End: runs the command, reads its output, and reports how it ended, with its shell; RunReturns, StopWaiting: returns with the command still running when the wait is over, or playback is interrupted; RunReturns, CloseTerminal: ends the wait when the programmer closes the terminal, and not for another terminal; RunReturns, SendText: waits for shell integration to come, for this terminal only, and types the command in without it |
 
+### `QuietTerminals`: visibility and cleanup
+
+This model checks quiet startup, automatic show, explicit reveal, fallback
+visibility, and cleanup. It abstracts shell completion; a live shell is never
+closed automatically because background work cannot be ruled out. Exposed
+terminals are also retained. Both settings were checked: 9 distinct states
+for quiet and 11 for automatic show.
+
+| Mutation | Breaks |
+|---|---|
+| allow cleanup of protected or live shells | `NeverCloseProtected` |
+| hide the untracked fallback | `FallbackVisible` |
+| fail to show on a reveal request | `RevealWorks` |
+| show a quiet start | `QuietStart` |
+| fail to show an automatic start | `AutoStartVisible` |
+| make starts a no-op | `RunBegins` |
+
+| Property | Test |
+|---|---|
+| `TypeOK` | TypeScript checks these types |
+| `NeverCloseProtected` | `terminal.test.ts`: cleans up exited owned terminals while preserving live, running and untracked shells |
+| `FallbackVisible` | `terminal.test.ts`: RunReturns, SendText |
+| `RevealWorks`, `QuietStart` | `terminal.test.ts`: runs quietly and reveals only the owned terminal on request |
+| `AutoStartVisible` | `terminal.test.ts`: StartRespectsPreference: reveals commands when automatic display is enabled |
+| `RunBegins` | `terminal.test.ts`: RunReturns, ExecuteCommand, End |
+
+### `TerminalReuse`: protected reuse
+
+This separate model enumerates shell state, exposure and pending output drain,
+and a foreign shell-start event. It abstracts path and terminal-ID matching,
+which the existing `Terminals` model and terminal tests cover. TLC checked 48
+states. An unobserved background descendant is not modeled as detectable; live
+shells are retained on cleanup even after a foreground command ends.
+
+| Mutation | Breaks |
+|---|---|
+| ignore exposure | `ProtectedNotReused` |
+| ignore pending output drain | `ProtectedNotReused` |
+| fail to protect a foreign start | `ForeignProtected` |
+| skip eligible reuse | `EligibleReused` |
+| make an attempt a no-op | `AttemptCompletes` |
+
+| Property | Test |
+|---|---|
+| `TypeOK` | TypeScript checks these types |
+| `ProtectedNotReused` | `terminal.test.ts`: NoReuseWhileBusy; protects a terminal if another execution starts; pending output drain prevents reuse |
+| `EligibleReused` | `terminal.test.ts`: ShowExact: invalidates the old command ID when a hidden terminal is reused |
+| `ForeignProtected` | `terminal.test.ts`: protects a terminal if another execution starts, while recognizing its own execution |
+| `AttemptCompletes` | `terminal.test.ts`: RunReturns, ExecuteCommand, End |
+
 ### Pure functions: `LineIdentity`, `Places`, `Typing`, `ActionValidation`
 
 These have no state or concurrency, so each spec is a model of the function and
@@ -1870,3 +1924,21 @@ in idle and active panels. Mutating the hint to ignore context violates
 | `TypeOK` | The TypeScript compiler checks types |
 | `HintMatchesStatus` | `webview/panel.test.ts`: offers a focusable explanation only while the active agent is listening |
 | `SettingsAvailable` | `panel_html.test.ts`: places one icon-only Settings control in the toolbar before End; `visual/chat_order.spec.ts`: the Settings gear remains available while idle, calibrating, and active |
+
+### `TerminalPanel`: preference and explicit terminal reveal
+
+The panel keeps automatic visibility separate from explicit requests. A reveal
+uses the command ID; a missing terminal produces an unavailable response. The
+model abstracts terminal ownership and cleanup, which the terminal model covers.
+TLC checked 61 distinct states. Mutating the result type, ignoring automatic
+visibility, showing a different ID, failing to report a missing ID, or ignoring
+an available request violates `TypeOK`, `StartRespectsPreference`, `ShowExact`,
+`MissingReported`, and `AvailableShown`, respectively.
+
+| Invariant | Test |
+|---|---|
+| `TypeOK` | TypeScript checks the message types; runtime requests are validated |
+| `StartRespectsPreference` | `terminal.test.ts`: StartRespectsPreference: reveals commands when automatic display is enabled |
+| `ShowExact` | `terminal.test.ts`: ShowExact: invalidates the old command ID when a hidden terminal is reused |
+| `AvailableShown` | `webview/panel.test.ts`: AvailableShown: offers the matching terminal for running and filed commands |
+| `MissingReported` | `panel.test.ts`: MissingReported and AvailableShown: validates settings and reports a closed terminal |

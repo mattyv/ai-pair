@@ -99,11 +99,13 @@ const fakes = vi.hoisted(() => {
     readonly selectionRef = vi.fn(() => 'ref');
     readonly resolvePath = vi.fn((file: string) => `/project/${file}`);
     readonly dispose = vi.fn();
+    readonly showTerminal = vi.fn(() => true);
 
     constructor(
       readonly root: string,
       readonly agentName: string,
       readonly controller: () => unknown,
+      readonly showAutomatically: () => boolean,
     ) {
       made.editors.push(this);
     }
@@ -118,6 +120,7 @@ const fakes = vi.hoisted(() => {
     readonly showSpeed = vi.fn();
     readonly showReadingSpeed = vi.fn();
     readonly showChatOrder = vi.fn();
+    readonly showTerminalPreference = vi.fn();
     readonly showCalibration = vi.fn();
     readonly showTimings = vi.fn();
     readonly restoreHistory = vi.fn();
@@ -133,6 +136,9 @@ const fakes = vi.hoisted(() => {
       readonly extensionUri: unknown,
       readonly wiring: { controller: () => unknown; calibration: () => unknown; starter: unknown },
       readonly chatOrder: { get: () => string; set: (value: string) => void },
+      readonly buildInfo: unknown,
+      readonly terminalSettings: { get: () => boolean; set: (value: boolean) => void },
+      readonly showTerminal: (id: number) => boolean,
     ) {
       made.panels.push(this);
     }
@@ -391,6 +397,24 @@ describe('activate', () => {
     fakes.settings.set('chatOrder', 'invalid');
     changed('chatOrder');
     expect(h.panel.showChatOrder).toHaveBeenLastCalledWith('newestFirst');
+  });
+
+  it('reads, saves and applies automatic terminal visibility and routes a reveal by ID', () => {
+    const h = activated();
+    expect(h.editor.showAutomatically()).toBe(false);
+    expect(h.panel.terminalSettings.get()).toBe(false);
+    fakes.settings.set('showTerminalsAutomatically', true);
+    expect(h.editor.showAutomatically()).toBe(true);
+    expect(h.panel.terminalSettings.get()).toBe(true);
+    changed('showTerminalsAutomatically');
+    expect(h.panel.showTerminalPreference).toHaveBeenCalledWith(true);
+    h.panel.terminalSettings.set(false);
+    expect(fakes.updated).toContainEqual(['showTerminalsAutomatically', false, 1]);
+    expect(h.panel.showTerminal(42)).toBe(true);
+    expect(h.editor.showTerminal).toHaveBeenCalledWith(42);
+    fakes.settings.set('showTerminalsAutomatically', 'false');
+    expect(h.editor.showAutomatically()).toBe(false);
+    expect(h.panel.terminalSettings.get()).toBe(false);
   });
 
   it('traces the controller at Info, and the panel and the bridge at the Trace level, or at Info with the setting', () => {

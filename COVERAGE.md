@@ -101,7 +101,7 @@ Last updated: css, 2026-11-06.
 | `packages/vscode/src/terminal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.3% B 98.1% F 92.3% | - | - | - | - |
 | `packages/vscode/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/view.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 88.0% F 100.0% | - | - | - | - |
-| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 129 of 129 rules matched |
+| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 131 of 131 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/test/agents.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/calibration.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -125,6 +125,7 @@ Last updated: css, 2026-11-06.
 | `packages/vscode/test/setup.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/smoke_integration.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/terminal.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/vscode/test/terminal_smoke_integration.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/timings.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/view.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/visual/chat_order.spec.ts` | TypeScript | test | - | test | - | - | test |
@@ -204,6 +205,9 @@ Last updated: css, 2026-11-06.
 | `specs/PointFocus.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/ProjectGuide.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ProjectGuide.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
+| `specs/QuietTerminals.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/QuietTerminals.tla` | TLA+ | - | - | 7 of 7 actions | - | - | - |
+| `specs/QuietTerminals_Visible.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ReadingGesture.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ReadingGesture.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/ReadingHold.cfg` | TLC config | - | - | - | - | - | - |
@@ -228,6 +232,10 @@ Last updated: css, 2026-11-06.
 | `specs/Start.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
 | `specs/StructuralTyping.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/StructuralTyping.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
+| `specs/TerminalPanel.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/TerminalPanel.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
+| `specs/TerminalReuse.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/TerminalReuse.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/Terminals.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Terminals.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
 | `specs/Timeline.cfg` | TLC config | - | - | - | - | - | - |

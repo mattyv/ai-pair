@@ -86,7 +86,12 @@ export function activate(context: vscode.ExtensionContext): Api {
   // from callbacks that run after activation returns.
   let controller: Controller;
   let calibration: Calibration;
-  const editor = new VsCodeEditor(root, config().get(AGENT_NAME, 'Agent'), () => controller);
+  const editor = new VsCodeEditor(
+    root,
+    config().get(AGENT_NAME, 'Agent'),
+    () => controller,
+    () => config().get<unknown>('showTerminalsAutomatically') === true,
+  );
   const speed = {
     get: () => settingSpeed(config().get<unknown>(SPEED, 1)),
     set: (value: number) => {
@@ -103,6 +108,12 @@ export function activate(context: vscode.ExtensionContext): Api {
     get: () => (config().get<unknown>('chatOrder') === 'oldestFirst' ? ('oldestFirst' as const) : ('newestFirst' as const)),
     set: (value: 'newestFirst' | 'oldestFirst') => {
       void config().update('chatOrder', value, vscode.ConfigurationTarget.Global);
+    },
+  };
+  const terminalSettings = {
+    get: () => config().get<unknown>('showTerminalsAutomatically') === true,
+    set: (value: boolean) => {
+      void config().update('showTerminalsAutomatically', value, vscode.ConfigurationTarget.Global);
     },
   };
   // Frames and panel messages at the Trace level, which VS Code hides unless it is set, and resets
@@ -130,6 +141,8 @@ export function activate(context: vscode.ExtensionContext): Api {
     { controller: () => controller, calibration: () => calibration, starter },
     chatOrder,
     { version: AI_PAIR_VERSION, build: AI_PAIR_BUILD_ID },
+    terminalSettings,
+    (id) => editor.showTerminal(id),
   );
   controller = new Controller(editor, panel);
   controller.trace = (line) => {
@@ -248,6 +261,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     }),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('aiPair.chatOrder')) panel.showChatOrder(chatOrder.get());
+      if (e.affectsConfiguration('aiPair.showTerminalsAutomatically')) panel.showTerminalPreference(terminalSettings.get());
       if (e.affectsConfiguration('aiPair.speed')) {
         controller.setSpeed(speed.get());
         panel.showSpeed(speed.get());

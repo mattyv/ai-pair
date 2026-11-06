@@ -153,3 +153,12 @@ it('places one icon-only Settings control in the toolbar before End', () => {
   expect(next.dataset.ui).toBe('end');
   expect(page.querySelector('.settings-bar')).toBeNull();
 });
+
+it('offers an accessible automatic-terminal setting and a live reveal control', () => {
+  const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js');
+  const page = new window.DOMParser().parseFromString(html, 'text/html');
+  const checkbox = page.querySelector('[data-ui="show-terminals"]');
+  expect(checkbox?.getAttribute('type')).toBe('checkbox');
+  expect(checkbox?.closest('label')?.textContent).toContain('Show terminals automatically');
+  expect(page.querySelector('[data-ui="show-terminal"]')?.textContent).toContain('Show terminal');
+});

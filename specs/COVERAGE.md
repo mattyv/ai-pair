@@ -21,7 +21,7 @@ Code goes without a spec for one of these reasons:
 | Functions | Spec |
 |---|---|
 | `step`, `listen`, `block`, `finishCall`, `callReady`, `ready`, `pump`, `update`, `serialize` | `Serialize`, `Controller` |
-| `snapshot`, `restore`, `withCursor`, `end`, `endSession`, `close` | `Controller`; `snapshot`'s edit events: `EditEvents`; a held rejection in `restore` and `snapshot`: `Anchor` (`Restore`, `TakeHeld`) |
+| `snapshot`, `restore`, `withCursor`, `end`, `endSession`, `close` | `Controller`; `close` terminal cleanup: `QuietTerminals`; `snapshot`'s edit events: `EditEvents`; a held rejection in `restore` and `snapshot`: `Anchor` (`Restore`, `TakeHeld`) |
 | `rehearse`, `rejectBatch`, `planned`, `saw`, `read` | `Rehearsal` |
 | `cursorAnchor`, `rejectUnanchored`, `anchorNeeded` in `step` and `snapshot` | `Anchor` |
 | `unnamedEdit` and its preflight in `step` | `BatchFile` (`EditRequiresNamed`) |
@@ -120,7 +120,7 @@ Code goes without a spec for one of these reasons:
 | `show`, `selfNav`, `navigating`, `onActiveEditor` | `FollowMode` |
 | `renderCursor`, `reveal`, `follow`, `keepInView`, `scroll`, `glide`, `onScroll` | `Scroll`; `onScroll`'s pause: `Timeline` |
 | `landing`, `viewport`, `visibleEditor`, `scrollsBeyondEnd`, `revealLine`, `revealTop`, `target` | Pure, Glue: VS Code calls `Scroll` abstracts as a view's top line |
-| `runCommand` | Glue: passes to `terminal.ts` |
+| `runCommand`, `showTerminal`, `cleanupIdleTerminals` | Glue: pass to `terminal.ts`; `QuietTerminals`, `TerminalReuse` |
 | `onSelectionChange`, `programmerSelection`, `selectionRef` | Look: what the programmer can attach to a message |
 | `redraw`, `updatePulse`, `cursorDecoration`, `labelDecoration`, `renderPoint`, `setAgentName` | Look |
 | `displayPath`, `resolvePath`, `inWorkspace`, `eol`, `dispose` | Pure, Glue |
@@ -132,6 +132,7 @@ Code goes without a spec for one of these reasons:
 | `panel.ts` | `post`, the `ready` message | `PanelReplay` |
 | | `history`, `restoreHistory`, `onPost` | `Resume` (`Store`, `ReloadWindow`) |
 | | the `draft` and `reply` messages, `onDidDispose` | `Draft`; the `reply` lifting the pause without a reveal: `PointFocus` |
+| | `showTerminalPreference`, `receive` terminal messages | `TerminalPanel` (`SetAuto`, `Show`) |
 | | `receive`'s other messages, `send` | Glue: each calls one controller function |
 | | `openByName`, `openChange` | Glue: opens a file or its diff; `seen` for `Outside` |
 | | `resolveWebviewView`, `reveal`, `focusReply`, `showSelection`, `showSpeed`, `showReadingSpeed`, `showTimings` | Glue |
@@ -140,13 +141,14 @@ Code goes without a spec for one of these reasons:
 | `webview/panel.ts` | `setNow`, `add`, `addYou`, `addRun`, `addDivider`, `addOutside`, `fileCurrent`, `entry` | `Panel`; the scroll position: `PanelScroll` |
 | | `syncDraft`, `takeDraft` | `Draft` |
 | | `handle`'s `run` case, `clearRun`, `setOutcome`, `setActive` | `RunBox`; `setActive` and replaying: `PanelReplay` |
+| | terminal setting and reveal controls | `TerminalPanel` (`SetAuto`, `Show`) |
 | | `handle`'s `session` case for a suspended or resumed session | `Resume` (`ShownIsState`) |
 | | `setState`, `syncStatus`, `statusText`, `arrive`, `startReading`, `syncReading`, `tick`, the tips, the speed menu, `syncAttach`, `takeAttach` | Look: status text gives actual pauses precedence while retaining confirmation or turn context |
 | | `showCalibration` | Look |
 | | the `canStart` and `startEnded` messages, the Start a session button, its starting note | `Start` |
 | | `esc`, `codeLink`, `refLink` | Format |
 | `outside.ts`, `outside_watch.ts` | all | `Outside` |
-| `terminal.ts` | all | `Terminals` |
+| `terminal.ts` | all | `Terminals`, `QuietTerminals`, `TerminalReuse` |
 | `view.ts` | `comfortable`, `landing`, `glideTop` | Pure; `Scroll` models `comfortable` and `landing` |
 | `python_diagnostics.ts` | `pythonDiagnostic` | `Diagnostics`: bounded advisory check, with Python parsing source on stdin |
 | | `row`, `viewport`, `isOwnEdit` | Pure |

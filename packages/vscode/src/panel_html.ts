@@ -76,6 +76,7 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
       <option value="oldestFirst">Oldest first</option>
     </select>
     </label>
+    <label><input type="checkbox" data-ui="show-terminals"> Show terminals automatically</label>
     <p class="build-identity">v${safeVersion} - build ${safeBuild}</p>
     <button type="button" data-ui="settings-close" class="primary">Close</button>
   </dialog>
@@ -169,6 +170,7 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
         <div data-ui="run" class="run-box">
           <div data-ui="run-label" class="run-label"></div>
           <div data-ui="run-cmd" class="run-cmd"></div>
+          <button type="button" data-ui="show-terminal" class="quiet" hidden>Show terminal</button>
           <div class="run-actions">
             <button type="button" data-ui="run-go" class="primary">${ICONS.play}<span>Run</span></button>
             <button

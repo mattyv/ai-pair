@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.0
+
+-   Pair command terminals stay quiet by default. Use **Show terminal** on a
+    command or enable **Show terminals automatically** in Pair Settings.
+-   Reuse eligible Pair-owned terminals and clean up exited shells after a
+    session; live shells and terminals used for other work remain protected.
+-   Clarify that structural newline indentation is relative to the current line.
+
 ## 0.11.0
 
 -   Click the reading ring to finish the current countdown, or hold it to pause

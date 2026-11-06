@@ -135,7 +135,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   onSelection?: (ref: Ref | undefined) => void;
   private lastEditor?: vscode.TextEditor;
   private lastSelectionKey = '';
-  private readonly terminals = new PairTerminals();
+  private readonly terminals: PairTerminals;
   private readonly mirror = new Map<string, string>();
   private readonly own = new Map<string, OwnEdit[]>();
   /** Called with a file the editor writes on disk itself, and its text: `show` creating it (#15). */
@@ -178,7 +178,9 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     agentName: string,
     /** The controller, made after the editor: read once the programmer edits or looks away, or the view scrolls. */
     private readonly controller: () => Controller,
+    showTerminalsAutomatically: () => boolean = () => false,
   ) {
+    this.terminals = new PairTerminals(showTerminalsAutomatically);
     this.cursorTypes = new Map([
       ['typing', cursorDecoration(CURSOR, 'solid', /* opacity= */ 1)],
       ['read', cursorDecoration(READ, 'solid', /* opacity= */ 1)],
@@ -387,6 +389,16 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
 
   runCommand(command: string, options: RunOptions): Promise<CommandOutcome> {
     return this.terminals.run(command, options);
+  }
+
+  /** Reveals the owned terminal associated with a command, if still available. */
+  showTerminal(id: number): boolean {
+    return this.terminals.showTerminal(id);
+  }
+
+  /** Cleans up idle owned terminals at the end of a session. */
+  cleanupIdleTerminals(): void {
+    this.terminals.cleanupIdle();
   }
 
   // ---- The programmer's selection ------------------------------------------

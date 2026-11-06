@@ -170,7 +170,7 @@ const actionSchema = z.union(
       run: z
         .string()
         .describe(
-          "Run a shell command in a terminal the programmer sees: tests, builds, starting the app. They may be asked to allow it. The exit code, the output and the terminal's shell come back in the batch's report; a nonzero exit fails the batch. Make it the last action of its batch.",
+          "Run a shell command the programmer can follow in the Pair panel: tests, builds, starting the app. They can reveal its terminal. They may be asked to allow it. The exit code, the output and the terminal's shell come back in the batch's report; a nonzero exit fails the batch. Make it the last action of its batch.",
         ),
       wait: z.number().optional().describe('Seconds to wait (default 120). For a server, a few: it keeps running.'),
     }),

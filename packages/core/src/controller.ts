@@ -1129,6 +1129,7 @@ export class Controller {
     this.trace?.('session closed');
     this.session = undefined;
     session.timeline.interrupt();
+    this.editor.cleanupIdleTerminals();
     clearTimeout(session.navigatorTimer);
     this.endGrace();
     this.endQuiet();

@@ -76,11 +76,18 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     private readonly wiring: PanelWiring,
     private readonly chatOrder: { get: () => ChatOrder; set: (value: ChatOrder) => void },
     private readonly buildInfo: { version: string; build: string },
+    private readonly terminalSettings: { get: () => boolean; set: (value: boolean) => void },
+    private readonly showTerminal: (id: number) => boolean,
   ) {}
 
   /** Posts to the page, if there is one. */
   private send(message: ToPanel): void {
     void this.view?.webview.postMessage(message);
+  }
+
+  /** Syncs the persisted terminal preference to the page. */
+  showTerminalPreference(value: boolean): void {
+    this.send({ type: 'showTerminals', value });
   }
 
   /** Shows the programmer's selection, which changed. Not logged: only the current one matters. */
@@ -183,6 +190,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         controller.resume('reply');
         this.showChatOrder(this.chatOrder.get());
         this.send({ type: 'replay', events: this.log });
+        this.showTerminalPreference(this.terminalSettings.get());
         this.showSpeed(this.speed.get());
         this.showReadingSpeed(this.readingSpeed.get());
         this.showSelection(this.selection.ref());
@@ -192,6 +200,16 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         return;
       case 'chatOrder':
         if (message.value === 'newestFirst' || message.value === 'oldestFirst') this.chatOrder.set(message.value);
+        return;
+      case 'showTerminals':
+        // specs/TerminalPanel.tla, `SetAuto`.
+        if (typeof message.value === 'boolean') this.terminalSettings.set(message.value);
+        return;
+      case 'showTerminal':
+        // specs/TerminalPanel.tla, `Show`: unavailable never creates a replacement.
+        if (Number.isSafeInteger(message.id) && message.id > 0 && !this.showTerminal(message.id)) {
+          void vscode.window.showInformationMessage('That terminal is no longer available.');
+        }
         return;
       case 'holdReading':
         if (Number.isSafeInteger(message.id) && message.id > 0 && typeof message.held === 'boolean') {

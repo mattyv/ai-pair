@@ -66,6 +66,8 @@ const ui = {
   settingsDialog: $('settings-dialog', HTMLDialogElement),
   settingsClose: $('settings-close', HTMLButtonElement),
   chatOrder: $('chat-order', HTMLSelectElement),
+  showTerminals: $('show-terminals', HTMLInputElement),
+  showTerminal: $('show-terminal', HTMLButtonElement),
   dot: $('dot', HTMLElement),
   skipReading: $('skip-reading', HTMLButtonElement),
   status: $('status-text', HTMLElement),
@@ -279,6 +281,14 @@ function addRun(id: number, command: string, phase: RunPhase, exitCode: number |
   cmd.dataset.tip = command;
   const outcome = document.createElement('span');
   el.append(cmd, outcome);
+  if (phase !== 'declined') {
+    const show = document.createElement('button');
+    show.type = 'button';
+    show.className = 'quiet';
+    show.dataset.showTerminal = String(id);
+    show.textContent = 'Show terminal';
+    el.append(show);
+  }
   setOutcome(el, outcome, phase, exitCode);
   add(el);
 }
@@ -741,6 +751,14 @@ ui.settingsClose.addEventListener('click', () => {
 ui.settingsDialog.addEventListener('close', () => {
   ui.settings.focus();
 });
+// specs/TerminalPanel.tla, `SetAuto`.
+ui.showTerminals.addEventListener('change', () => {
+  vscode.postMessage({ type: 'showTerminals', value: ui.showTerminals.checked });
+});
+ui.showTerminal.addEventListener('click', () => {
+  if (runId !== undefined && !runConfirming) vscode.postMessage({ type: 'showTerminal', id: runId });
+});
+
 ui.chatOrder.addEventListener('change', () => {
   const value = ui.chatOrder.value === 'oldestFirst' ? 'oldestFirst' : 'newestFirst';
   setChatOrder(value);
@@ -749,6 +767,9 @@ ui.chatOrder.addEventListener('change', () => {
 
 function handle(message: ToPanel): void {
   switch (message.type) {
+    case 'showTerminals':
+      ui.showTerminals.checked = message.value;
+      return;
     case 'chatOrder':
       setChatOrder(message.value);
       return;
@@ -840,6 +861,7 @@ function handle(message: ToPanel): void {
       if (message.phase === 'confirm' || message.phase === 'running') {
         runId = message.id;
         runConfirming = message.phase === 'confirm';
+        ui.showTerminal.hidden = runConfirming;
         ui.run.classList.add('on');
         ui.run.classList.toggle('confirm', runConfirming);
         // A command waiting for the programmer's decision is announced at once (#16).
@@ -1050,6 +1072,9 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('click', (e) => {
   const target = e.target instanceof Element ? e.target : undefined;
   if (target?.closest('a[href]')) e.preventDefault();
+  // specs/TerminalPanel.tla, `Show`: request this historical command's terminal.
+  const reveal = target?.closest<HTMLElement>('button[data-show-terminal]');
+  if (reveal?.dataset.showTerminal !== undefined) vscode.postMessage({ type: 'showTerminal', id: Number(reveal.dataset.showTerminal) });
   const a = target?.closest<HTMLElement>('a.file, a.url, a.command');
   if (a?.dataset.file !== undefined) vscode.postMessage({ type: 'openFile', file: a.dataset.file });
   if (a?.dataset.url !== undefined) vscode.postMessage({ type: 'openUrl', url: a.dataset.url });

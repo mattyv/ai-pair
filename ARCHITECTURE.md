@@ -11,7 +11,7 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes 0.11.0.
+Status: describes 0.12.0.
 
 ## Components
 
@@ -41,6 +41,10 @@ Status: describes 0.11.0.
     and matching each change VS Code reports by offset, deleted length, and
     text. An unmatched editor change is classified conservatively; this does
     not establish that a person made it.
+-   **Command terminals** are owned by the VS Code adapter. Eligible idle Pair
+    terminals can be reused; explicit reveal uses the command ID and reports
+    unavailable if its terminal has closed or been reused. Automatic visibility
+    is an independent persisted preference.
 -   **The narration panel** is a webview. It talks to the extension via
     `postMessage`, with the messages typed in
     [`panel_messages.ts`](packages/vscode/src/panel_messages.ts). Its markup is

@@ -1226,6 +1226,7 @@ describe("the programmer's input", () => {
     expect(posted(h).at(-1)).toEqual({ type: 'session', active: false, reason: 'programmer' });
     expect((await report(h.controller.listen())).events).toEqual([{ kind: 'end' }]);
     expect(h.traced).toContain('session closed');
+    expect(h.editor.cleanupIdleTerminals.mock.calls).toEqual([[]]);
     expect(h.editor.renderPoint.mock.calls).toContainEqual([undefined]);
   });
 

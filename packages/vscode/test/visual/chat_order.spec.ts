@@ -440,3 +440,42 @@ test('Your move exposes guidance on keyboard focus and clears it on status chang
   await post({ type: 'state', state: 'thinking', turn: 'agent', paused: false });
   await expect(page.getByRole('tooltip')).toBeHidden();
 });
+
+test('terminal controls expose the saved preference and reveal the selected command', async ({ page }) => {
+  const post = await load(page);
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const automatic = page.getByRole('checkbox', { name: 'Show terminals automatically' });
+  await expect(automatic).not.toBeChecked();
+  await automatic.check();
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return (globalThis as unknown as { messages: unknown[] }).messages;
+      }),
+    )
+    .toContainEqual({ type: 'showTerminals', value: true });
+  await post({ type: 'showTerminals', value: false });
+  await expect(automatic).not.toBeChecked();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await post({ type: 'session', active: true });
+  await post({ type: 'run', id: 71, command: 'npm test', phase: 'confirm' });
+  await expect(page.getByRole('button', { name: 'Show terminal' })).toBeHidden();
+  await post({ type: 'run', id: 71, command: 'npm test', phase: 'running' });
+  await page.getByRole('button', { name: 'Show terminal' }).click();
+  await post({ type: 'run', id: 71, command: 'npm test', phase: 'done', exitCode: 0 });
+  await page.getByRole('button', { name: 'Show terminal' }).click();
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return (globalThis as unknown as { messages: Array<{ type: string }> }).messages.filter(
+          (message) => message.type === 'showTerminal',
+        );
+      }),
+    )
+    .toEqual([
+      { type: 'showTerminal', id: 71 },
+      { type: 'showTerminal', id: 71 },
+    ]);
+});

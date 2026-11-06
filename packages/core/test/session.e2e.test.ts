@@ -456,6 +456,22 @@ describe('structural editing across rehearsal and playback', () => {
     expect(editor.text('a.py')).toBe('x = {\n    "answer": 42\n}\n');
   });
 
+  it('adds structural indentation relative to an already indented line', async () => {
+    const { editor, controller } = setup({ 'a.py': '    x = {}\n' });
+    await controller.start();
+    await controller.read('a.py');
+    const report = await until(
+      controller.step([
+        { move: { file: 'a.py', line: 1, at: `    x = {${CURSOR_MARKER}}` } },
+        { newline: { indent: '    ' } },
+        { type: `"answer": 42${CURSOR_MARKER}` },
+      ]),
+    );
+    expect(report.rejected).toBeUndefined();
+    await until(controller.step([]));
+    expect(editor.text('a.py')).toBe('    x = {\n        "answer": 42\n    }\n');
+  });
+
   it('steps past one nested close before typing the following comma', async () => {
     const { editor, controller } = setup({ 'a.py': 'x = ({})\n' });
     await controller.start();

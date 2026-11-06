@@ -141,8 +141,10 @@ const fakes = vi.hoisted(() => {
   class FakeTerminals {
     readonly run = vi.fn((command: string) => Promise.resolve({ output: `ran ${command}` }));
     readonly dispose = vi.fn();
+    readonly showTerminal = vi.fn<(id: number) => boolean>(() => true);
+    readonly cleanupIdle = vi.fn();
 
-    constructor() {
+    constructor(readonly showAutomatically: () => boolean) {
       created.terminals.push(this);
     }
   }
@@ -1086,10 +1088,20 @@ describe('edit', () => {
 describe('runCommand', () => {
   it("runs a command in the agent's terminals", async () => {
     const { editor } = made();
-    const options = { cwd: ROOT, waitMs: 1, signal: new AbortController().signal };
+    const options = { id: 1, cwd: ROOT, waitMs: 1, signal: new AbortController().signal };
     await expect(editor.runCommand('ls', options)).resolves.toEqual({ output: 'ran ls' });
     expect(at(fakes.created.terminals, 0).run.mock.calls).toEqual([['ls', options]]);
   });
+});
+
+it('forwards terminal reveal and cleanup to the terminal owner', () => {
+  const { editor } = made();
+  const terminals = at(fakes.created.terminals, 0);
+  expect(terminals.showAutomatically()).toBe(false);
+  expect(editor.showTerminal(42)).toBe(true);
+  editor.cleanupIdleTerminals();
+  expect(terminals.showTerminal.mock.calls).toEqual([[42]]);
+  expect(terminals.cleanupIdle).toHaveBeenCalledOnce();
 });
 
 describe('follow mode: scrolling', () => {

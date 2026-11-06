@@ -29,6 +29,8 @@ export type FromPanel =
   /** The Start a session button: Claude Code's CLI starts with the prompt in a hidden terminal (#107, #115). */
   | { type: 'start' }
   | { type: 'chatOrder'; value: ChatOrder }
+  | { type: 'showTerminals'; value: boolean }
+  | { type: 'showTerminal'; id: number }
   | { type: 'speed'; value: number }
   | { type: 'readingSpeed'; value: number }
   | { type: 'runDecision'; id: number; run: boolean; remember?: boolean };
@@ -42,6 +44,7 @@ export type ToPanel =
   | { type: 'selection'; ref: Ref | undefined }
   | { type: 'focusReply' }
   | { type: 'chatOrder'; value: ChatOrder }
+  | { type: 'showTerminals'; value: boolean }
   | { type: 'speed'; value: number }
   | { type: 'readingSpeed'; value: number }
   /** The reading speed calibration's state, for the band (#109). */

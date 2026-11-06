@@ -38,6 +38,8 @@ export interface CommandOutcome {
 
 /** How to run a command: where, how long to wait, and the signal that stops waiting. */
 export interface RunOptions {
+  /** The panel's ID for this command. */
+  id: number;
   /** Directory to run in (absolute). */
   cwd: string;
   /** Stop waiting after this long; the command keeps running. */
@@ -103,12 +105,14 @@ export interface EditorPort {
   reveal(): void;
   /** Keeps what the view follows in view, after a keystroke, move, selection or point of the agent changed it. */
   follow(): void;
-  /** Runs a command in a terminal the programmer can see. */
+  /** Runs a command in an owned terminal. */
   runCommand(command: string, options: RunOptions): Promise<CommandOutcome>;
+  /** Closes idle owned terminals that are safe to clean up. */
+  cleanupIdleTerminals(): void;
 }
 
 /** What a `Player` asks of the editor: the rest of `EditorPort` is the controller's. */
-export type PlayerEditor = Omit<EditorPort, 'diagnostics' | 'isDirty' | 'renderCursor' | 'reveal'>;
+export type PlayerEditor = Omit<EditorPort, 'cleanupIdleTerminals' | 'diagnostics' | 'isDirty' | 'renderCursor' | 'reveal'>;
 
 /** Something the panel shows: a session starting or ending, a status, a word to the programmer, a report. */
 export type PanelEvent =

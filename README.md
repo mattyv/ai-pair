@@ -76,7 +76,7 @@ account. While you pair:
 |---|---|
 | say something to the agent | type in the reply box, press Enter. Typing pauses playback. |
 | ask about some code | select it in the editor, then reply: the selection goes along (**x** leaves it out) |
-| let it run a command | the agent's tests and builds play in an *AI Pair* terminal; **Run**, **Allow for session**, or **Skip** in the panel |
+| let it run a command | **Run**, **Allow for session**, or **Skip** in the panel; **Show terminal** reveals the command's terminal |
 | stop it right now | **Interrupt**, or just edit the code: any edit interrupts |
 | look around | scroll or switch files. Playback pauses until you **Resume**, which brings you back to the agent's cursor |
 | write a part yourself | **My turn**. The agent becomes the navigator and comments as you type. **Hand back** returns the turn, with your reply if you typed one |
@@ -187,12 +187,17 @@ has it fetch the text and start the calibration with it.
 
 ## Settings
 
+Commands use quiet terminals by default; **Show terminal** reveals one. If shell
+integration is unavailable, the terminal opens so you can see the command.
+Hidden terminals are not restored when the workspace is reopened.
+
 The Pair panel's **Settings** button lets you choose the chat order. The default
 shows the newest messages at the top; choose **Oldest first** to put new messages
 and the reply box at the bottom. Your choice is saved across reloads.
 
 | Setting | |
 |---|---|
+| `aiPair.showTerminalsAutomatically` | Show Pair command terminals automatically (default off); also available in Pair Settings. |
 | `aiPair.chatOrder` | `newestFirst` (default) or `oldestFirst`; also available in the Pair panel settings. |
 | `aiPair.speed` | Overall playback speed, the follow scroll's glide included (the panel's speed menu offers 0.4x to 3.0x). |
 | `aiPair.readingSpeed` | Reading speed: divides only the pause after each of the agent's messages (the panel's reading menu offers 0.4x to 3.0x). |

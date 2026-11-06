@@ -99,6 +99,8 @@ export class FakeEditor implements EditorPort {
     this.follows++;
   }
 
+  cleanupIdleTerminals(): void {}
+
   async runCommand(command: string, options: RunOptions): Promise<CommandOutcome> {
     const script = this.commandScript.get(command) ?? { ms: 0, exitCode: 0 };
     if (script.startMs !== undefined && script.startMs > 0) {

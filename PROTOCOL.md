@@ -363,9 +363,10 @@ a clickable reference instead.
 
 ### `run`
 
-Runs a shell command in an integrated terminal the programmer can see, in the
-agent's working directory. For commands whose outcome the programmer should
-witness: tests, builds, starting the app, a request to it. Purely mechanical
+Runs a shell command in an integrated terminal in the agent's working directory.
+The Pair panel shows the command and result; the programmer can reveal its
+terminal. For commands whose outcome the programmer should witness: tests,
+builds, starting the app, a request to it. Purely mechanical
 commands can still run in the background with the agent's native tools.
 
 -   **Confirmation.** By default the narration panel asks the programmer to

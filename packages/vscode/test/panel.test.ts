@@ -113,6 +113,8 @@ interface Harness {
     get: ReturnType<typeof vi.fn<() => 'newestFirst' | 'oldestFirst'>>;
     set: ReturnType<typeof vi.fn<(value: 'newestFirst' | 'oldestFirst') => void>>;
   };
+  terminalSettings: { get: ReturnType<typeof vi.fn<() => boolean>>; set: ReturnType<typeof vi.fn<(value: boolean) => void>> };
+  showTerminal: ReturnType<typeof vi.fn<(id: number) => boolean>>;
   onPost: ReturnType<typeof vi.fn<() => void>>;
   traced: string[];
 }
@@ -138,6 +140,8 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
     get: vi.fn<() => 'newestFirst' | 'oldestFirst'>(() => 'newestFirst'),
     set: vi.fn<(value: 'newestFirst' | 'oldestFirst') => void>(),
   };
+  const terminalSettings = { get: vi.fn(() => false), set: vi.fn<(value: boolean) => void>() };
+  const showTerminal = vi.fn<(id: number) => boolean>();
   const controller = mock<Controller>({ turn });
   const calibration = mock<Calibration>();
   calibration.reply.mockReturnValue(false);
@@ -156,10 +160,12 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
     { controller: () => controller, calibration: () => calibration, starter },
     chatOrder,
     buildInfo,
+    terminalSettings,
+    showTerminal,
   );
   const onPost = vi.fn<() => void>();
   panel.onPost = onPost;
-  return { panel, controller, calibration, starter, speed, readingSpeed, chatOrder, onPost, traced };
+  return { panel, controller, calibration, starter, speed, readingSpeed, chatOrder, terminalSettings, showTerminal, onPost, traced };
 }
 
 /** Resolves a fake view into `panel`, and returns it. */
@@ -500,6 +506,7 @@ describe('receive', () => {
     expect(view.posted).toEqual([
       { type: 'chatOrder', value: 'newestFirst' },
       { type: 'replay', events: [{ type: 'say', text: 'hi' }] },
+      { type: 'showTerminals', value: false },
       { type: 'speed', value: SPEEDS[1] },
       { type: 'readingSpeed', value: SPEEDS[2] },
       { type: 'selection', ref: REF },
@@ -545,7 +552,27 @@ describe('receive', () => {
     view.send({ type: 'holdReading', id: Number.NaN, held: true });
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     view.send({ type: 'holdReading', id: 42, held: 'yes' } as unknown as FromPanel);
-    expect(controller.holdReading.mock.calls).toEqual([[42, true], [42, false]]);
+    expect(controller.holdReading.mock.calls).toEqual([
+      [42, true],
+      [42, false],
+    ]);
+  });
+
+  it('MissingReported and AvailableShown: validates settings and reports a closed terminal', () => {
+    const { panel, terminalSettings, showTerminal } = harness();
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(view.posted).toContainEqual({ type: 'showTerminals', value: false });
+    view.send({ type: 'showTerminals', value: true });
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    view.send({ type: 'showTerminals', value: 'yes' } as unknown as FromPanel);
+    expect(terminalSettings.set.mock.calls).toEqual([[true]]);
+    showTerminal.mockReturnValueOnce(true).mockReturnValueOnce(false);
+    view.send({ type: 'showTerminal', id: 71 });
+    view.send({ type: 'showTerminal', id: 72 });
+    view.send({ type: 'showTerminal', id: -1 });
+    expect(showTerminal.mock.calls).toEqual([[71], [72]]);
+    expect(vi.mocked(vscode.window.showInformationMessage)).toHaveBeenCalledWith('That terminal is no longer available.');
   });
 
   it('showTimings: tells the page its delays, as a test sets them', () => {

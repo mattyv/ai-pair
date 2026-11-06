@@ -99,7 +99,8 @@ the code must be said before or as the code appears.
     "Let me look at how sessions are handled."
 -   Never go silent for long. A batch with only a `say` is fine.
 -   **Terminal commands:** use `run` for the ones the programmer should see
-    (tests, builds, starting the app). Say what you're running and why, make the
+    (tests, builds, starting the app). The Pair panel shows the command; the
+    programmer can reveal its terminal. Say what you're running and why, make the
     `run` the last action of its batch, and once its report is back, say what
     came out ("tests pass", "two failures, both in the parser"). If they decline
     a command, don't run it in the background instead.
@@ -195,7 +196,10 @@ too), in boilerplate, in config and markup, with `type_fast`, in every language.
     `"x▌"`, the `)` is on your line, so `to: "line_end"` steps past it.
 -   **Split adjacent pairs safely when useful.** In Python and JSON,
     `{ newline: { indent: "    " } }` splits an adjacent pair in code and puts
-    the cursor on its indented line. It refuses strings, comments, selections,
+    the cursor on its indented line. `indent` is extra indentation relative to
+    the current line, not the full target indentation: if that line starts with
+    four spaces, `indent: "    "` creates an inner line with eight spaces and
+    leaves the close at four. It refuses strings, comments, selections,
     unsupported languages, and uncertain contexts. Use literal `type` elsewhere.
 -   **Start new lines at the end of the line above**, `"\n  ...▌"`, never at the
     start of a line with code on it: that code would slide right with every

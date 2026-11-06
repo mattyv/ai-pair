@@ -457,6 +457,10 @@ button:focus-visible {
   display: block;
 }
 
+.run-box [hidden] {
+  display: none;
+}
+
 .run-label {
   color: var(--muted);
   font-size: 12px;
@@ -830,4 +834,9 @@ a:hover {
   color: var(--fg);
   font-size: 11px;
   overflow-wrap: anywhere;
+}
+
+/* Terminal controls */
+.run button {
+  flex: none;
 }

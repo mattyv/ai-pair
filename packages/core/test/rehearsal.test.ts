@@ -193,7 +193,7 @@ describe('the editor in memory', () => {
     await stage.editor.save(A);
     stage.editor.renderPoint();
     stage.editor.follow();
-    expect(await stage.editor.runCommand('npm test', { cwd: '/project', waitMs: 0, signal: new AbortController().signal })).toEqual({
+    expect(await stage.editor.runCommand('npm test', { id: 1, cwd: '/project', waitMs: 0, signal: new AbortController().signal })).toEqual({
       exitCode: 0,
       output: '',
     });

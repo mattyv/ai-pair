@@ -30,6 +30,18 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   Place one Settings gear in the toolbar, available in idle and active states.
     Explain Your move on hover or keyboard focus only while the agent listens.
 
+## Command terminals
+
+-   Keep Pair command terminals hidden by default, with an opt-in setting and
+    explicit reveal for each started command. A closed or reused terminal is
+    reported unavailable rather than opening an unrelated terminal. Preserve
+    command approval and captured output independently of visibility.
+-   Reuse only eligible Pair-owned terminals. At session end, clean up only
+    owned terminals whose shells have exited; preserve live shells, including
+    those with possible background descendants. Reveal the terminal if shell
+    integration is unavailable. Hidden terminals are not restored when the
+    workspace is reopened; users can reveal a terminal when they need it visible.
+
 ## Editing safety
 
 -   Require each editing batch to name its target file before its first edit.

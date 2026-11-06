@@ -1556,3 +1556,39 @@ it('shows the Your move explanation on keyboard focus and removes it on turn cha
   expect(status.hasAttribute('aria-describedby')).toBe(false);
   expect(status.dataset.tip).toBeUndefined();
 });
+
+it('AvailableShown: offers the matching terminal for running and filed commands', () => {
+  start();
+  send({ type: 'run', id: 71, command: 'npm test', phase: 'running' });
+  click(element('show-terminal'));
+  expect(posted()).toContainEqual({ type: 'showTerminal', id: 71 });
+  send({ type: 'run', id: 71, command: 'npm test', phase: 'done', exitCode: 0 });
+  const button = element('history').querySelector('[data-show-terminal="71"]');
+  ok(button);
+  click(button);
+  expect(posted().filter((message) => message.type === 'showTerminal')).toEqual([
+    { type: 'showTerminal', id: 71 },
+    { type: 'showTerminal', id: 71 },
+  ]);
+});
+
+it('persists the automatic terminal preference and reflects host changes', () => {
+  const checkbox = element('show-terminals');
+  if (!(checkbox instanceof window.HTMLInputElement)) throw new TypeError('missing checkbox');
+  expect(checkbox.checked).toBe(false);
+  send({ type: 'showTerminals', value: true });
+  expect(checkbox.checked).toBe(true);
+  checkbox.checked = false;
+  checkbox.dispatchEvent(new window.Event('change', { bubbles: true }));
+  expect(posted()).toContainEqual({ type: 'showTerminals', value: false });
+});
+
+it('does not offer a terminal for an unapproved or declined command', () => {
+  start();
+  send({ type: 'run', id: 81, command: 'npm test', phase: 'confirm' });
+  expect(element('show-terminal').hidden).toBe(true);
+  click(element('show-terminal'));
+  expect(posted().filter((message) => message.type === 'showTerminal')).toEqual([]);
+  send({ type: 'run', id: 81, command: 'npm test', phase: 'declined' });
+  expect(element('history').querySelector('[data-show-terminal="81"]')).toBeNull();
+});
