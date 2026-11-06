@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CURSOR_MARKER } from '@ai-pair/protocol';
 import { structuralNewline } from '../src/structural_typing';
 
 /** Places the cursor at the marker without passing the marker to production. */
@@ -12,6 +13,8 @@ describe('structural newline', () => {
     expect(expand('a.py', '  x = {|}')).toEqual({ before: '\n      ', after: '\n  ' });
     expect(expand('a.json', '{|}', '  ')).toEqual({ before: '\n  ', after: '\n' });
     expect(expand('a.py', 'x = [|]', '\t')).toEqual({ before: '\n\t', after: '\n' });
+    expect(expand('a.py', '    x = {|}', '      ')).toEqual({ before: '\n          ', after: '\n    ' });
+    expect(expand('a.py', '  x = {|}', '    ')).toEqual({ before: '\n      ', after: '\n  ' });
   });
 
   it.each([
@@ -41,6 +44,36 @@ describe('structural newline', () => {
     expect(expand('a.py', 'x = {|}', 'abc')).toBeUndefined();
     expect(structuralNewline('a.py', '{}', -1, '  ')).toBeUndefined();
     expect(structuralNewline('a.py', '{}', 3, '  ')).toBeUndefined();
+  });
+
+  it.each([
+    `message = f"Missing {'value'}"`,
+    `message = f"{aapl['custom_fields']}"`,
+    `message = fr"{{literal}} {'value'}"`,
+    `message = f"""{'value'}"""`,
+    `message = f"{call('} {', {'x': 1})}"`,
+    `message = f"{call('escaped \\' value')}"`,
+    `message = f"{'''one ' two'''}"`,
+  ])('ClosedFieldRecovers: accepts a later assertion after a closed field: %s', (prefix) => {
+    const marked = `${prefix}\n    assert {k: aapl[k] for k in aapl if k != "custom_fields"} == {${CURSOR_MARKER}}`;
+    const offset = marked.indexOf(CURSOR_MARKER);
+    expect(structuralNewline('example.py', marked.replace(CURSOR_MARKER, ''), offset, '    ')).toEqual({
+      before: '\n        ',
+      after: '\n    ',
+    });
+  });
+
+  it.each([
+    `f"{call('unterminated {${CURSOR_MARKER}}`,
+    `f"{call('inside {${CURSOR_MARKER}}')}"`,
+    `f"{call('closed') # unsupported\n}"\nx = {${CURSOR_MARKER}}`,
+    `f"{f'{x}'}"\nx = {${CURSOR_MARKER}}`,
+    `f"{'unterminated\nvalue'}"\nx = {${CURSOR_MARKER}}`,
+    `f"{[)}"\nx = {${CURSOR_MARKER}}`,
+    `f"{${'('.repeat(64)}x${')'.repeat(64)}}"\nx = {${CURSOR_MARKER}}`,
+  ])('OpaqueFieldRefused: retains conservative refusal for %s', (marked) => {
+    const offset = marked.indexOf(CURSOR_MARKER);
+    expect(structuralNewline('example.py', marked.replace(CURSOR_MARKER, ''), offset, '    ')).toBeUndefined();
   });
 
   it('recognizes each adjacent pair after closed strings', () => {
@@ -77,6 +110,16 @@ describe('structural newline', () => {
     `f"""\\{call("{|}")}"""`,
   ])('rejects pairs inside formatted string expressions: %s', (text) => {
     expect(expand('a.py', text)).toBeUndefined();
+  });
+
+  it('accepts a fully balanced field at the nesting limit and preserves JSON behavior', () => {
+    const prefix = `f"{${'('.repeat(63)}x${')'.repeat(63)}}"`;
+    const python = `${prefix}\nx = {${CURSOR_MARKER}}`;
+    const pythonOffset = python.indexOf(CURSOR_MARKER);
+    expect(structuralNewline('a.py', python.replace(CURSOR_MARKER, ''), pythonOffset, '  ')).toBeDefined();
+    const json = `"closed { f }"\n{${CURSOR_MARKER}}`;
+    const jsonOffset = json.indexOf(CURSOR_MARKER);
+    expect(structuralNewline('a.json', json.replace(CURSOR_MARKER, ''), jsonOffset, '  ')).toBeDefined();
   });
 
   it('rejects empty or multiline indentation and non-integer offsets', () => {

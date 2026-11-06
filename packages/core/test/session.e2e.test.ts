@@ -546,6 +546,21 @@ describe('structural editing across rehearsal and playback', () => {
     expect(editor.text('a.py')).toBe('x = {\n    "answer": 42\n}\n');
   });
 
+  it.each([`message = f"Missing {'value'}"`, `message = f"{aapl['custom_fields']}"`])(
+    'ClosedFieldRecovers: splits the assertion after a closed quoted field',
+    async (prefix) => {
+      const assertion = '    assert {k: aapl[k] for k in aapl if k != "custom_fields"} == {}';
+      const { editor, controller } = setup({ 'a.py': `${prefix}\n${assertion}\n` });
+      await controller.start();
+      await controller.read('a.py');
+      const at = assertion.replace('{}', `{${CURSOR_MARKER}}`);
+      const report = await until(controller.step([{ move: { file: 'a.py', line: 2, at } }, { newline: { indent: '    ' } }]));
+      expect(report.rejected).toBeUndefined();
+      await until(controller.step([]));
+      expect(editor.text('a.py')).toBe(`${prefix}\n${assertion.replace('{}', '{\n        \n    }')}\n`);
+    },
+  );
+
   it('adds structural indentation relative to an already indented line', async () => {
     const { editor, controller } = setup({ 'a.py': '    x = {}\n' });
     await controller.start();

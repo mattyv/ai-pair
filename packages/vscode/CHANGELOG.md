@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.14.1
+
+-   Allow a structural newline in safe code after a closed Python f-string
+    containing a quoted expression.
+
 ## 0.14.0
 
 -   Choose Typing, Lines, or Blocks in the existing playback speed menu. The

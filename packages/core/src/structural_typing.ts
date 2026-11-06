@@ -1,11 +1,14 @@
 const TRIPLE_QUOTE_LENGTH = 3;
+const MAX_FIELD_DEPTH = 64;
 
 /** Returns whether the cursor is outside strings and comments. */
 function isCode(text: string, offset: number, python: boolean): boolean {
   let quote = '';
   let triple = false;
   let formatted = false;
-  let fieldDepth = 0;
+  let fieldStack: string[] = [];
+  let fieldQuote = '';
+  let fieldTriple = false;
   let comment = false;
   for (let index = 0; index < offset; index++) {
     const character = text[index];
@@ -16,16 +19,42 @@ function isCode(text: string, offset: number, python: boolean): boolean {
       continue;
     }
     if (quote) {
-      if (formatted && fieldDepth > 0) {
-        // Nested strings, comments and escapes require parsing Python's
-        // expression grammar, so leave the rest of the prefix unsupported.
-        if (character === '"' || character === "'" || character === '#' || character === '\\') {
-          return false;
+      if (formatted && fieldStack.length > 0) {
+        // specs/StructuralTyping.tla, ClosedFieldRecovers: scan a quoted
+        // literal inside a field, without treating its braces as delimiters.
+        if (fieldQuote !== '') {
+          if (character === '\\') {
+            index++;
+          } else if (character === '\n' && !fieldTriple) {
+            return false;
+          } else if (character === fieldQuote) {
+            if (!fieldTriple) {
+              fieldQuote = '';
+            } else if (text.slice(index, index + TRIPLE_QUOTE_LENGTH) === fieldQuote.repeat(TRIPLE_QUOTE_LENGTH)) {
+              fieldQuote = '';
+              fieldTriple = false;
+              index += TRIPLE_QUOTE_LENGTH - 1;
+            }
+          }
+          continue;
         }
-        if (character === '{') {
-          fieldDepth++;
-        } else if (character === '}') {
-          fieldDepth--;
+        if (character === '"' || character === "'") {
+          // A nested formatted string needs another lexical stack. Refuse it
+          // instead of guessing where its own replacement fields end.
+          if (/(?:^|[^a-zA-Z0-9_])(?:[ft]|[ft]r|r[ft])$/i.test(text.slice(0, index))) return false;
+          fieldQuote = character;
+          fieldTriple = text.slice(index, index + TRIPLE_QUOTE_LENGTH) === character.repeat(TRIPLE_QUOTE_LENGTH);
+          if (fieldTriple) index += TRIPLE_QUOTE_LENGTH - 1;
+        } else if (character === '#' || character === '\\') {
+          return false;
+        } else if (character === '{' || character === '[' || character === '(') {
+          if (fieldStack.length >= MAX_FIELD_DEPTH) return false;
+          fieldStack.push(character);
+        } else if (character === '}' || character === ']' || character === ')') {
+          const opening = fieldStack.pop();
+          if ((character === '}' && opening !== '{') || (character === ']' && opening !== '[') || (character === ')' && opening !== '(')) {
+            return false;
+          }
         }
         continue;
       }
@@ -33,7 +62,7 @@ function isCode(text: string, offset: number, python: boolean): boolean {
         if (text[index + 1] === character) {
           index++;
         } else if (character === '{') {
-          fieldDepth = 1;
+          fieldStack = ['{'];
         } else {
           return false;
         }
@@ -48,9 +77,7 @@ function isCode(text: string, offset: number, python: boolean): boolean {
         if (!triple) {
           quote = '';
           formatted = false;
-        } else if (
-          text.slice(index, index + TRIPLE_QUOTE_LENGTH) === quote.repeat(TRIPLE_QUOTE_LENGTH)
-        ) {
+        } else if (text.slice(index, index + TRIPLE_QUOTE_LENGTH) === quote.repeat(TRIPLE_QUOTE_LENGTH)) {
           quote = '';
           triple = false;
           formatted = false;
@@ -64,9 +91,7 @@ function isCode(text: string, offset: number, python: boolean): boolean {
     } else if (character === '"' || (python && character === "'")) {
       formatted = python && /(?:^|[^a-zA-Z0-9_])(?:[ft]|[ft]r|r[ft])$/i.test(text.slice(0, index));
       quote = character;
-      triple =
-        python &&
-        text.slice(index, index + TRIPLE_QUOTE_LENGTH) === character.repeat(TRIPLE_QUOTE_LENGTH);
+      triple = python && text.slice(index, index + TRIPLE_QUOTE_LENGTH) === character.repeat(TRIPLE_QUOTE_LENGTH);
       if (triple) {
         index += TRIPLE_QUOTE_LENGTH - 1;
       }

@@ -63,7 +63,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 |---|---|---|---|
 | `Serialize.cfg` | `NumCalls = 2` calls, each empty or not, the session ending, an interrupt, and the socket closing at any point | holds | 3,646 |
 | `Wire.cfg` | `NumSockets = 2` sockets, `NumCalls = 2` calls | holds | 43,426 |
-| `StructuralTyping.cfg` | both operations, supported and unsupported contexts, selection and one or two closes | holds | 144 |
+| `StructuralTyping.cfg` | both operations, closed and opaque field categories, selection and one or two closes | holds | 288 |
 | `LineEndGuard.cfg` | rehearsal and live suffix danger, with or without acknowledgment | holds | 22 |
 | `BuildIdentity.cfg` | two builds, installing and reloading | holds | 4 |
 | `Panel.cfg` | `MaxEvents = 5`, both display orders and the settings dialog | holds | 84 |
@@ -1818,8 +1818,9 @@ distinct states include different rehearsed and live contexts.
 
 `structuralNewline` and `Player.perform` split a supported Python or JSON pair
 only in code, and `next_close` crosses one adjacent close without altering the
-text. The model abstracts the lexer result to `code` and the language to
-`supported`; the helper tests cover concrete lexical contexts.
+text. The model abstracts the prefix to ordinary, closed-field, open-field, and
+opaque categories; it does not model character-by-character lexing. The helper
+tests cover quoted fields, nesting, escaping, mismatches and the depth bound.
 
 | Spec | Code |
 |---|---|
@@ -1838,12 +1839,16 @@ Each invariant was mutation-tested in TLC, then the mutation was reverted:
 | Accept an unmatched pair | `NewlineSafe` |
 | Make an eligible close step a no-op | `StepActs` |
 | Change state after refusing a newline | `RefusalSafe` |
+| Treat a closed formatted field as opaque | `ClosedFieldRecovers` |
+| Treat open or unsupported fields as code | `OpaqueFieldRefused` |
 
 | Invariant | Test |
 |---|---|
 | `TypeOK` | The TypeScript compiler checks the types |
 | `NewlineSafe`, `RefusalSafe` | `player.test.ts`: NewlineSafe, RefusalSafe: refuses newline without a cursor, with a selection, or in an unsafe context |
 | `NewlineActs` | `player.test.ts`: NewlineActs: inserts a structural newline inside a Python pair |
+| `ClosedFieldRecovers` | `structural_typing.test.ts`: ClosedFieldRecovers: accepts a later assertion after a closed field; `session.e2e.test.ts`: ClosedFieldRecovers: splits the assertion after a closed quoted field |
+| `OpaqueFieldRefused` | `structural_typing.test.ts`: OpaqueFieldRefused: retains conservative refusal |
 | `StepOne`, `StepActs` | `player.test.ts`: StepOne, StepActs: steps past exactly one adjacent close and refuses any other character |
 
 ### `BuildIdentity`: the running bundle's label

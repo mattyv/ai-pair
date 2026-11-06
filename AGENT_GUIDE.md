@@ -200,7 +200,10 @@ too), in boilerplate, in config and markup, with `type_fast`, in every language.
     the current line, not the full target indentation: if that line starts with
     four spaces, `indent: "    "` creates an inner line with eight spaces and
     leaves the close at four. It refuses strings, comments, selections,
-    unsupported languages, and uncertain contexts. Use literal `type` elsewhere.
+    unsupported languages, and uncertain contexts. A quoted expression in an
+    earlier closed f-string no longer prevents a safe split. Nested formatted
+    strings and other unsupported expression forms remain conservative: use
+    literal `type` when the structural action is refused.
 -   **Start new lines at the end of the line above**, `"\n  ...▌"`, never at the
     start of a line with code on it: that code would slide right with every
     character you type. At the very top of a file, make an empty line first:

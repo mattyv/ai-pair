@@ -229,6 +229,43 @@ export async function run(): Promise<void> {
     }
     controller.setCodePlayback('typing');
 
+    controller.setSpeed(20);
+    for (const expression of [`f"Missing {'value'}"`, `f"{aapl['custom_fields']}"`]) {
+      const fieldFile = `native-fstring-${randomUUID()}.py`;
+      const fieldUri = vscode.Uri.joinPath(workspace.uri, fieldFile);
+      const prefix = `def example(aapl):\n    message = ${expression}\n`;
+      const assertion = '    assert {k: aapl[k] for k in aapl if k != "custom_fields"} == {}';
+      syntheticFiles.add(fieldUri.toString());
+      await vscode.workspace.fs.writeFile(fieldUri, Buffer.from(`${prefix}${assertion}\n`));
+      createdFiles.push(fieldUri);
+      const fieldDocument = await vscode.workspace.openTextDocument(fieldUri);
+      await vscode.window.showTextDocument(fieldDocument);
+      await controller.start('Native f-string structural newline', workspace.uri.fsPath);
+      try {
+        await controller.read(fieldFile);
+        const submitted = await controller.step([
+          { move: { file: fieldFile, line: 3, at: assertion.replace('{}', `{${CURSOR_MARKER}}`) } },
+          { newline: { indent: '    ' } },
+        ]);
+        const finished = await controller.step([]);
+        assert.equal(submitted.rejected, undefined);
+        assert.deepEqual(
+          [submitted, finished].flatMap((report) => report.batches.map((batch) => batch.status)),
+          ['completed'],
+        );
+        assert.equal(fieldDocument.getText(), `${prefix}${assertion.replace('{}', '{\n        \n    }')}\n`);
+        assert.equal(
+          [submitted, finished].flatMap((report) => report.events).some((event) => event.kind === 'edit' && event.by === 'programmer'),
+          false,
+        );
+        console.log(`Native structural newline after ${expression} passed`);
+      } catch (error) {
+        failures.push(`F-string structural newline ${expression}: ${String(error)}`);
+      } finally {
+        controller.endSession();
+      }
+    }
+
     assert.deepEqual(failures, [], 'One or more native trials failed; see synthetic event trace');
     console.log('Native smoke passed: triple quotes, cursor, event authorship, and same-root reconnect');
   } finally {

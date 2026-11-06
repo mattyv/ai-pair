@@ -94,6 +94,9 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   Guide agents to the explicit structural newline and single-close move when
     appropriate. The observed line-ending defect does not establish the cause
     of the earlier bracket incident.
+-   Recover after a closed formatted string containing quoted expression text
+    with a bounded lexical scan. Continue refusing incomplete, mismatched, and
+    unsupported nested formatted expressions; this is not a Python parser.
 -   Use explicit action validation and error reporting so malformed input cannot
     silently become a different edit.
 

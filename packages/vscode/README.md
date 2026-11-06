@@ -1,5 +1,26 @@
 # AI Pair
 
+## Additions in this fork
+
+This fork builds on the original [AI Pair project](https://github.com/faiface/ai-pair).
+The changes in version 0.14 include:
+
+-   Choose the order of the conversation and read clearer message text.
+-   See clearer pause and playback status; click the reading indicator to finish
+    its timer, or hold it to pause the timer.
+-   Choose typing, line, or block playback, and control its speed. In 0.14,
+    these choices are in the pace menu.
+-   Keep command terminals quiet by default and reveal an available run when needed.
+-   Copy session diagnostics for troubleshooting and find the running version and
+    build in Settings. GitHub Actions provides downloadable extension builds.
+
+Install this fork from the [Build VSIX workflow](https://github.com/mattyv/ai-pair/actions/workflows/build-vsix.yml).
+The upstream Marketplace listing does not include the fork's additions.
+
+The next release is being developed with a separate code-display dropdown,
+more readable Settings, and optional local spoken narration. These additions
+are not yet available in the 0.14.1 release.
+
 ## For those of us who want, need, or love to stay close to the code
 
 > A **mirror neuron** is a neuron that fires both when an animal acts and when
