@@ -17,3 +17,33 @@ Track frustrations with the current tool and possible improvements.
 1.  **Investigate repeated LLM formatting errors.** Later, examine why the LLM
     keeps making formatting mistakes while writing code and what would prevent
     them.
+
+## Future investigation: structural editing mistakes
+
+Claude's explanation of the bracket, newline and wrong-file mistakes is a
+hypothesis about that session, not a verified cause. Keep the session trace and
+installed extension version when investigating it.
+
+The current source shows:
+
+-   The agent guide directs agents to put closing delimiters in first and warns
+    that `line_end` moves past all the closes on a line.
+-   Typing applies literal editor replacements; the player does not perform a
+    structural Enter operation. A file omitted from an action falls back to the
+    cursor's file, although named files prevent switching within a batch.
+-   The controller already rejects unanchored batches after a reported
+    interruption or discard. The wrong-file anecdote needs an exact trace and
+    version to determine whether it involved an older build or a guard gap.
+
+Consider these proposals during that investigation:
+
+1.  Provide a precise way to step over one closing delimiter.
+2.  Validate an explicit file for each batch, rather than relying on a cursor
+    fallback, with a migration path for existing callers.
+3.  Offer advisory language-server parse diagnostics. A trailing comma that
+    makes a tuple can be syntactically valid, so type checks and tests may also
+    be needed.
+4.  Explore opt-in, language-aware structural newline behavior only if playback
+    and rehearsal can use the same semantics.
+5.  Consider a warning for `line_end` near closing delimiters, accounting for
+    false positives from any heuristic.
