@@ -615,7 +615,10 @@ export class Player {
   }
 
   /** Types `before`, then `after`, then steps back to between them: to where the text had its `CURSOR_MARKER`. */
-  private async type(before: string, after: string, fast: boolean, playing: Playing): Promise<Outcome> {
+  private async type(rawBefore: string, rawAfter: string, fast: boolean, playing: Playing): Promise<Outcome> {
+    // specs/TypingEol.tla, CorrectEol and SuffixSafe: normalize before planning and tracking the remainder.
+    const before = rawBefore.replaceAll('\r\n', '\n');
+    const after = rawAfter.replaceAll('\r\n', '\n');
     const scene = this.scene;
     const { editor } = this.stage;
     if (!scene.cursor) return fail('no_cursor', "Your cursor isn't in a file yet; `move` first.");

@@ -23,6 +23,45 @@ function reload(editor: ReturnType<typeof setup>['editor']): void {
 // With the test config, a beat is 100 ms and `type` takes 100 ms per character.
 
 describe('where the controller and the player meet', () => {
+  it.each(['type', 'type_fast'] as const)('refuses %s with the cursor inside CRLF before editing', async (kind) => {
+    const { editor, controller } = setup({ 'a.ts': 'x\n' });
+    await controller.start();
+    await controller.read('a.ts');
+    const text = `a\r${CURSOR_MARKER}\nb`;
+    const action = kind === 'type' ? { type: text } : { type_fast: text };
+    const report = await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, action]);
+    expect(report.rejected?.error.message).toContain('CRLF');
+    expect(editor.text('a.ts')).toBe('x\n');
+  });
+
+  it.each([
+    ['\n', 'type'],
+    ['\r\n', 'type'],
+    ['\n', 'type_fast'],
+    ['\r\n', 'type_fast'],
+  ] as const)('normalizes CRLF and replays the interrupted %s document using %s', async (eol, kind) => {
+    const { editor, controller } = setup({ 'a.ts': '' });
+    if (eol === '\r\n') editor.crlf.add(editor.resolvePath('a.ts'));
+    await controller.start();
+    const input = `a\r\nb${CURSOR_MARKER}c\r\nd`;
+    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, kind === 'type' ? { type: input } : { type_fast: input }]);
+    const beat = kind === 'type' ? 100 : 10;
+    await advance(100 + 3 * beat + beat / 2);
+    expect(editor.text('a.ts')).toBe(`a${eol}b`);
+    controller.userInterrupt();
+    const report = await until(controller.listen());
+    const tail = `${CURSOR_MARKER}c\nd`;
+    const remaining = kind === 'type' ? { type: tail } : { type_fast: tail };
+    expect(report.batches[0]).toMatchObject({ status: 'interrupted', unplayed: [remaining] });
+    controller.handBack();
+    await controller.read('a.ts');
+    const resumed = await until(controller.step([{ move: { file: 'a.ts', line: 2, to: 'line_end' } }, remaining]));
+    expect(resumed.rejected).toBeUndefined();
+    await until(controller.step([]));
+    expect(editor.text('a.ts')).toBe(`a${eol}bc${eol}d`);
+    expect(editor.cursor?.offset).toBe(2 + eol.length);
+  });
+
   it('rejects malformed file-naming input at the player boundary without editing', async () => {
     const { editor, controller } = setup({ 'a.ts': 'keep\n' });
     await controller.start();

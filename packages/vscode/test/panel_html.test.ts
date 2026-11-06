@@ -112,6 +112,19 @@ it('is the page the page tests load, test/fixtures/panel.html: run with UPDATE_F
 
 it('shows the running extension version and build in the panel', () => {
   const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js', '0.10.0', 'abcd1234');
-  expect(html).toContain('v0.10.0');
-  expect(html).toContain('build abcd1234');
+  const page = new window.DOMParser().parseFromString(html, 'text/html');
+  const identity = page.querySelector('.build-identity');
+  ok(identity);
+  expect(identity.textContent).toBe('v0.10.0 - build abcd1234');
+  expect(identity.closest('[data-ui="settings-dialog"]')).not.toBeNull();
+  expect(page.querySelector('.settings-bar .build-identity')).toBeNull();
+});
+
+it('escapes the running version and build as text in Settings', () => {
+  const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js', '<version>', 'id&more');
+  const page = new window.DOMParser().parseFromString(html, 'text/html');
+  const identity = page.querySelector('[data-ui="settings-dialog"] .build-identity');
+  ok(identity);
+  expect(identity.textContent).toBe('v<version> - build id&more');
+  expect(identity.children).toHaveLength(0);
 });

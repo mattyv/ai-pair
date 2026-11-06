@@ -322,7 +322,8 @@ and no pause.
 Text is inserted **literally**: no auto-closing brackets, no auto-indent, no
 completions. The agent must include indentation itself. Newlines are inserted as
 the document's line ending (LF or CRLF) as the editor reports it, which it does
-even for an empty file.
+even for an empty file. CRLF input is normalized to that ending; a lone carriage
+return remains literal. The cursor marker cannot divide a CRLF input sequence.
 
 ### `newline`
 

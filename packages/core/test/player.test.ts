@@ -629,6 +629,20 @@ describe('select', () => {
 });
 
 describe('type', () => {
+  it.each([
+    ['type', '\n'],
+    ['type', '\r\n'],
+    ['type_fast', '\n'],
+    ['type_fast', '\r\n'],
+  ] as const)('normalizes CRLF input for %s with document EOL %j', async (kind, eol) => {
+    const h = harness({ files: { 'a.ts': 'x' }, scene: { cursor: { file: A, offset: 1 } } });
+    h.editor.eol.mockResolvedValue(eol);
+    const text = `a\r\n${CURSOR_MARKER}b\r\nz\r`;
+    await played(h, [kind === 'type' ? { type: text } : { type_fast: text }]);
+    expect(h.files.get(A)).toBe(`xa${eol}b${eol}z\r`);
+    expect(h.scene.cursor?.offset).toBe(2 + eol.length);
+  });
+
   it('types each chunk, then steps back between the two parts, with the line ending the file uses', async () => {
     const h = harness({ files: { 'a.ts': 'x' }, scene: { cursor: { file: A, offset: 1 } } });
     h.editor.eol.mockResolvedValue('\r\n');

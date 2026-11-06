@@ -83,8 +83,10 @@ account. While you pair:
 | change the pace | the speed menu (**1.0x**), from 0.4x to 3.0x |
 | finish | **End**, or tell the agent you're done. You can pair again anytime |
 
-The cursor's color tells you what the agent is doing. It's yellow and pulsing
-when it's just said something and is waiting for you to read it.
+The status shows when playback is **Paused** or **Playing**. Reading pauses,
+command confirmations, your turn and suspended sessions remain distinct. The
+cursor is yellow and pulsing when the agent has just spoken and is waiting for
+you to read.
 
 **Try it without an agent:** *AI Pair: Play Demo Session* plays a scripted
 session that adds a small API to an Express app, which it creates in
@@ -101,7 +103,9 @@ delete, point, run. The extension plays them at a human pace and reports back ex
 what happened, including everything you did in the meantime. The agent plans its
 next batch while you watch the current one, which hides most of its thinking
 time. And it's never more than one batch ahead, so your interruptions land
-immediately.
+immediately. Typing handles CRLF line endings consistently and preserves a
+standalone carriage return. Structural newlines and single-close moves are
+explicit choices; other typing remains literal.
 
 The design is written up in:
 
@@ -130,9 +134,9 @@ artifact. Copy it to the Ubuntu host running VS Code and install it there:
 code --install-extension /path/to/ai-pair-build.vsix
 ```
 
-Reload the VS Code window and restart the agent after updating. The Pair panel
-shows the running version and build ID, so you can check what is actually
-loaded.
+Reload the VS Code window and restart the agent after updating. The Pair
+panel's Settings dialog shows the running version and build ID, so you can
+check what is actually loaded.
 
 To build it from source instead, you also need **Node.js 22.19 or newer**:
 

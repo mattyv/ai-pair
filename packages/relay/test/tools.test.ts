@@ -7,6 +7,7 @@ import { z } from 'zod';
 import {
   ACTION_KINDS,
   actionKinds,
+  CURSOR_MARKER,
   MOVE_TARGET_SCHEMA,
   moveProblem,
   SPAN_TARGET_SCHEMA,
@@ -25,6 +26,13 @@ vi.mock(import('@ai-pair/protocol'), async (importOriginal) => ({
 
 /** The `step` tool's arguments, as the MCP server checks them. */
 const STEP = z.object(TOOLS.step.inputSchema);
+
+it('guides agents toward safe structural edits and a named file', () => {
+  const schema = JSON.stringify(z.toJSONSchema(STEP, { unrepresentable: 'any' }));
+  expect(schema).toContain('next_close');
+  expect(schema).toContain('structural newline');
+  expect(schema).toContain('Name the file before the first edit');
+});
 
 /** Returns the messages the `step` schema gives for a batch of this one action; none if it passes. */
 function problems(action: unknown): string[] {
@@ -104,6 +112,14 @@ describe.each(['type', 'type_fast'] as const)('a %s', (kind) => {
     expect(typeProblem).toHaveBeenLastCalledWith('x');
     expect(problems({ [kind]: 5 })).toEqual(['Mark where your cursor ends']);
     expect(typeProblem).toHaveBeenLastCalledWith(5);
+  });
+
+  it('forwards the CRLF cursor boundary refusal', () => {
+    vi.mocked(actionKinds).mockReturnValue([kind]);
+    vi.mocked(typeProblem).mockReturnValue('Place the cursor before or after the CRLF line ending, not inside it.');
+    const text = `a\r${CURSOR_MARKER}\nb`;
+    expect(problems({ [kind]: text })).toEqual(['Place the cursor before or after the CRLF line ending, not inside it.']);
+    expect(typeProblem).toHaveBeenCalledWith(text);
   });
 });
 

@@ -101,7 +101,7 @@ Last updated: css, 2026-11-06.
 | `packages/vscode/src/terminal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.3% B 98.1% F 92.3% | - | - | - | - |
 | `packages/vscode/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/view.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 88.0% F 100.0% | - | - | - | - |
-| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 122 of 122 rules matched |
+| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 125 of 125 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/test/agents.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/calibration.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -223,6 +223,8 @@ Last updated: css, 2026-11-06.
 | `specs/Turns.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/Typing.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Typing.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
+| `specs/TypingEol.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/TypingEol.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/Wire.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Wire.tla` | TLA+ | - | - | 15 of 15 actions | - | - | - |
 | `specs/check.sh` | Shell | - | - | - | - | - | - |

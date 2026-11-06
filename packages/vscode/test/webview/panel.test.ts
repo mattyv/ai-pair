@@ -358,6 +358,47 @@ describe('the history (specs/Panel.tla, specs/PanelScroll.tla)', () => {
 });
 
 describe('the band', () => {
+  it('PausedMatchesReasons: distinguishes actual pause, active playback, natural reading, and turn or confirmation waits', () => {
+    start();
+    send({ type: 'state', state: 'typing', turn: 'agent', paused: false });
+    expect(text('status-text')).toBe('Playing: typing');
+    expect(element('status-text').classList.contains('is-playing')).toBe(true);
+    runPhase('confirm');
+    expect(text('status-text')).toBe('Needs you');
+    expect(element('status-text').classList.contains('is-playing')).toBe(false);
+    runPhase('running');
+    send({ type: 'state', state: 'typing', turn: 'agent', paused: true });
+    expect(text('status-text')).toBe('Paused');
+    expect(element('status-text').classList.contains('is-paused')).toBe(true);
+    expect(element('status-text').classList.contains('is-playing')).toBe(false);
+    runPhase('confirm');
+    expect(text('status-text')).toBe(`Paused${LABEL_SEPARATOR}Needs you`);
+    send({ type: 'state', state: 'navigator', turn: 'programmer', paused: true });
+    runPhase('done');
+    expect(text('status-text')).toBe(`Paused${LABEL_SEPARATOR}Your turn`);
+    send({ type: 'state', state: 'navigator', turn: 'programmer', paused: false });
+    expect(text('status-text')).toBe('Your turn');
+    send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+    expect(text('status-text')).toBe('Read this');
+    expect(element('status-text').classList.contains('is-paused')).toBe(false);
+    send({ type: 'session', active: true, suspended: true });
+    expect(text('status-text')).toBe('Suspended: waiting for the agent');
+    expect(element('status-text').classList.contains('is-playing')).toBe(false);
+    send({ type: 'session', active: false, reason: 'agent' });
+    expect(text('status-text')).toBe('No session');
+  });
+
+  it('does not announce the same status again when the status is unchanged', () => {
+    start();
+    const message = { type: 'state', state: 'typing', turn: 'agent', paused: false } as const;
+    send(message);
+    const observer = new window.MutationObserver(() => {});
+    observer.observe(element('status-text'), { childList: true, characterData: true, subtree: true });
+    send(message);
+    expect(observer.takeRecords()).toHaveLength(0);
+    observer.disconnect();
+  });
+
   it('waits for the agent when a session starts, and says there is no session before and after it', () => {
     expect(text('status-text')).toBe('No session');
     send({ type: 'say', text: 'Earlier' });
@@ -374,7 +415,7 @@ describe('the band', () => {
   });
 
   it.each([
-    ['typing', '', 'Agent is typing'],
+    ['typing', '', 'Playing: typing'],
     ['read', 'read', 'Read this'],
     ['running', '', 'Running a command'],
     ['thinking', 'dim', 'Agent is thinking'],

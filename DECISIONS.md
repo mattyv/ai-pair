@@ -16,6 +16,13 @@ Issue discussions and working notes hold the detailed evidence and history.
     default. Keep the preference in VS Code settings and expose it in the panel.
 -   Show messages in their event order, including a reply immediately after the
     message it follows. History text uses the theme foreground for readability.
+-   Keep the Settings dialog inside the panel at narrow widths, with padding
+    around its contents and space for its close button.
+-   Identify an actual playback pause in text and theme-aware color; keep
+    confirmation, programmer turn, suspended, idle, and natural reading states
+    distinguishable. Show active typing as Playing, while a natural reading
+    pause remains a reading state. A pause stays visible while any pause reason
+    remains.
 
 ## Editing safety
 
@@ -35,6 +42,13 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   Check Python syntax with the system `python3`, isolated from the workspace's
     imports and startup files. Its version can differ from the project's Python;
     when it is missing or fails, report that the check was unavailable.
+-   Normalize CRLF input in `type` and `type_fast` before planning chunks and
+    tracking cursor positions or interrupted remainders; preserve standalone
+    carriage returns. Reject a cursor marker inside a CRLF pair rather than
+    splitting the line ending. Literal typing remains literal otherwise.
+-   Guide agents to the explicit structural newline and single-close move when
+    appropriate. The observed line-ending defect does not establish the cause
+    of the earlier bracket incident.
 -   Use explicit action validation and error reporting so malformed input cannot
     silently become a different edit.
 
@@ -49,8 +63,9 @@ Issue discussions and working notes hold the detailed evidence and history.
     installing it on the Ubuntu host is a separate manual step. This workflow does
     not publish to a marketplace or create a release.
 -   Show the version compiled into the running extension bundle and a
-    content-derived SHA-256 build ID for the extension and web assets. The build
-    ID changes with the built content; it is not a manually incremented number.
+    content-derived SHA-256 build ID for the extension and web assets in the
+    Settings dialog, keeping the main panel uncluttered. The build ID changes
+    with the built content; it is not a manually incremented number.
 -   The VM's previously installed extension was version 0.1.0; its installed
     extension bundle lacked the current post-interruption anchor guard. This does
     not establish the host's version or what caused any particular editing incident.

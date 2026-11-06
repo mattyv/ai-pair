@@ -127,6 +127,10 @@ describe('fieldsProblem', () => {
 });
 
 describe('typeProblem', () => {
+  it('rejects a cursor marker between CR and LF while allowing lone CR', () => {
+    expect(typeProblem(`a\r${CURSOR_MARKER}\nb`)).toContain('CRLF');
+    expect(typeProblem(`a\r${CURSOR_MARKER}b`)).toBeUndefined();
+  });
   it('takes one text with one marker', () => {
     expect(typeProblem(`f(${CURSOR_MARKER})`)).toBeUndefined();
   });

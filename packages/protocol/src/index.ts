@@ -147,6 +147,8 @@ export function typeProblem(text: unknown): string | undefined {
   if (markers > 1) {
     return `The text to type has ${markers} ${CURSOR_MARKER}, but marks one place: where your cursor ends. A literal ${CURSOR_MARKER} can't be typed.`;
   }
+  // specs/TypingEol.tla, NoSplitCRLF: a cursor cannot divide a CRLF line ending.
+  if (text.includes(`\r${CURSOR_MARKER}\n`)) return 'Place the cursor before or after the CRLF line ending, not inside it.';
   return undefined;
 }
 

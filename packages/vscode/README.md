@@ -58,8 +58,9 @@ artifact. Copy it to the Ubuntu host running VS Code, then install it there:
 code --install-extension /path/to/ai-pair-build.vsix
 ```
 
-Reload the VS Code window and restart the agent after updating. The Pair panel
-shows the running version and build ID, so you can verify the loaded build.
+Reload the VS Code window and restart the agent after updating. The Pair
+panel's Settings dialog shows the running version and build ID, so you can
+verify the loaded build.
 
 ## Set up
 
@@ -92,6 +93,11 @@ pair on..."). In Claude Code you can also run `/mcp__pair__start`.
     3.0x.
 -   **AI Pair: Calibrate Reading Speed** times you on a passage and sets the
     pause after each message to your own pace.
+
+The status distinguishes **Paused** and **Playing** from reading, command
+confirmation, your turn and a suspended session. Typing handles CRLF line
+endings consistently while preserving standalone carriage returns. Structural
+newlines and single-close moves are explicit; other typing remains literal.
 
 **AI Pair: Play Demo Session** shows what it's like without an agent.
 

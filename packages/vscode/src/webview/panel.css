@@ -27,6 +27,8 @@
   /* Secondary text. Not descriptionForeground, which some themes set equal to the text color. */
   --muted: color-mix(in srgb, var(--fg) 66%, transparent);
   --ok: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
+  --pause: var(--vscode-editorWarning-foreground, var(--fg));
+  --playing: var(--vscode-testing-iconPassed, var(--fg));
   --read: var(--vscode-aiPair-cursorRead, #facc15);
   --soft: color-mix(in srgb, var(--fg) 7%, transparent);
   --soft-hover: color-mix(in srgb, var(--fg) 13%, transparent);
@@ -184,6 +186,15 @@ button:focus-visible {
   white-space: nowrap;
 }
 
+.status-text.is-paused {
+  color: var(--pause);
+  font-weight: 700;
+}
+
+.status-text.is-playing {
+  color: var(--playing);
+}
+
 /* The status dot. syncStatus in webview/panel.ts gives it a class for the agent's state. */
 .dot {
   background: var(--accent);
@@ -193,6 +204,10 @@ button:focus-visible {
   margin-left: 4px;
   position: relative;
   width: 7px;
+}
+
+.dot.paused-indicator {
+  background: var(--pause);
 }
 
 /* A message to read, or a command waiting for the programmer: the read color, pulsing. */
@@ -765,14 +780,16 @@ a:hover {
 .settings-bar {
   align-items: center;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
 }
 
 .settings-dialog {
   background: var(--vscode-editor-background);
   border: 1px solid var(--vscode-widget-border);
+  box-sizing: border-box;
   color: var(--fg);
   font: inherit;
+  max-width: calc(100% - 28px);
 }
 
 .settings-dialog select {

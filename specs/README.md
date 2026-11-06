@@ -96,6 +96,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Places.cfg` | texts up to 5 characters, needles up to 3 | holds (`ASSUME`s) | |
 | `ActionValidation.cfg` | move and span places, including relative `next_close`, `CheckAtText = TRUE` | holds (`ASSUME`s) | |
 | `Typing.cfg` | texts up to 7 characters | holds (`ASSUME`s) | |
+| `TypingEol.cfg` | up to 5 ordinary, LF, or CRLF input units; LF and CRLF document endings | holds (`ASSUME`s) | |
 | `Anchor.cfg` | `MaxBatches = 4`, `Guard = TRUE`, `DropsHeld = FALSE` | holds | 113 |
 | `Calibration.cfg` | `MaxRounds = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
 | `PointFocus.cfg` | a point, a look-away, a closed tab, `MaxReplies = 2` replies or resumes, `DropStaleFocus = TRUE`, `RevealOnReply = FALSE` | holds | 67 |
@@ -629,7 +630,7 @@ carries the invariant's name:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `PausedMatchesReasons` | `controller.test.ts`: PausedMatchesReasons, NoTimerWhilePaused, ResumeContinues: holds playback until the last pause reason is gone |
+| `PausedMatchesReasons` | `controller.test.ts`: PausedMatchesReasons, NoTimerWhilePaused, ResumeContinues: holds playback until the last pause reason is gone; `webview/panel.test.ts`: PausedMatchesReasons: distinguishes actual pause, active playback, natural reading, and turn or confirmation waits (the display consumes the controller's aggregated flag) |
 | `NoTimerWhilePaused` | `controller.test.ts`: PausedMatchesReasons, NoTimerWhilePaused, ResumeContinues: holds playback until the last pause reason is gone; `timeline.test.ts`: NoTimerWhilePaused, ResumeContinues: pauses a sleep with its time left, and resumes it for only that; `integration.ts`, in VS Code: NoTimerWhilePaused, ResumeContinues, ResolvedOnce: a pause held a say until the resume; an interrupt during a show cut the move, and the next batch played |
 | `ResolvedOnce` | `timeline.test.ts`: ResolvedOnce: resolves an interrupted sleep false once, and the next sleep after reset only when its own time is up. A `Promise` settles once, so no change to `timeline.ts` can resolve a sleep twice; the test checks what the code decides: `false` on an interrupt, and the next sleep's own time after `reset`; `integration.ts`, in VS Code: NoTimerWhilePaused, ResumeContinues, ResolvedOnce: a pause held a say until the resume; an interrupt during a show cut the move, and the next batch played |
 | `LatestPending` | `timeline.test.ts`: LatestPending: an earlier sleep that runs out leaves the later sleep that replaced it pending, for an interrupt to cut short |
@@ -1657,6 +1658,25 @@ Each names the test that proves the code obeys it:
 | `ConcatenatesToText` | `typing.test.ts`: ConcatenatesToText, ChunksAreUnits: splits text into chunks that concatenate to it, each one character or a line break with its indentation |
 | `ChunksAreUnits` | the same test |
 
+#### `TypingEol`
+
+The model normalizes CRLF input before chunk planning and writes line feeds in
+the document's line ending. It covers suffixes at input-unit boundaries; lone
+carriage returns are outside the model. TLC checked all sequences of up to five
+units, for both output endings.
+
+| Mutation | Breaks |
+|---|---|
+| omit normalization before encoding | `CorrectEol` |
+| omit normalization from the remaining suffix | `SuffixSafe` |
+| allow a cursor between CR and LF | `NoSplitCRLF` |
+
+| Assumption | Proved by |
+|---|---|
+| `CorrectEol` | `player.test.ts`: normalizes CRLF input for both actions and document endings |
+| `SuffixSafe` | `session.e2e.test.ts`: normalizes CRLF and replays the interrupted action in both document endings and typing modes |
+| `NoSplitCRLF` | `index.test.ts`: rejects a cursor marker between CR and LF while allowing lone CR; `session.e2e.test.ts`: refuses both actions before editing |
+
 #### `ActionValidation`
 
 The checks both the relay's schema and the player ask (#45), over every
@@ -1730,9 +1750,9 @@ Each invariant was mutation-tested in TLC, then the mutation was reverted:
 
 ### `BuildIdentity`: the running bundle's label
 
-The panel displays the version and content-derived build ID compiled into the
-running extension. Installing another bundle changes the model's `installed`
-value; only a reload changes `running` and `displayed`.
+The panel's Settings dialog displays the version and content-derived build ID
+compiled into the running extension. Installing another bundle changes the
+model's `installed` value; only a reload changes `running` and `displayed`.
 
 | Spec | Code |
 |---|---|

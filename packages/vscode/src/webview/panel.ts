@@ -16,7 +16,7 @@ const FILE =
 const URL_PATTERN = /\bhttps?:\/\/[^\s<>"'`]*[^\s<>"'`.,;:!?)\]]/g;
 
 const STATUS: Record<AgentState, [string, string]> = {
-  typing: ['', 'Agent is typing'],
+  typing: ['', 'Playing: typing'],
   read: ['read', 'Read this'],
   running: ['', 'Running a command'],
   thinking: ['dim', 'Agent is thinking'],
@@ -362,21 +362,38 @@ function startReading(ms: number): void {
   requestAnimationFrame(tick);
 }
 
+/** Changes the live status only when its text changes, avoiding repeated announcements. */
+function statusText(text: string): void {
+  if (ui.status.textContent !== text) ui.status.textContent = text;
+}
+
 function syncStatus(): void {
+  const showPause = active && !suspended && paused;
+  const playing = active && !suspended && !paused && !runConfirming && turn === 'agent' && (state === 'typing' || state === 'running');
+  ui.status.classList.toggle('is-paused', showPause);
+  ui.status.classList.toggle('is-playing', playing);
   if (!active) {
     ui.dot.className = 'dot off';
-    ui.status.textContent = 'No session';
+    statusText('No session');
     return;
   }
   if (suspended) {
     ui.dot.className = 'dot off';
-    ui.status.textContent = 'Suspended: waiting for the agent';
+    statusText('Suspended: waiting for the agent');
+    return;
+  }
+  if (showPause) {
+    ui.dot.className = 'dot paused-indicator';
+    syncReading();
+    statusText(
+      runConfirming ? `Paused${LABEL_SEPARATOR}Needs you` : turn === 'programmer' ? `Paused${LABEL_SEPARATOR}Your turn` : 'Paused',
+    );
     return;
   }
   const [cls, text] = runConfirming ? ['read', 'Needs you'] : state ? STATUS[state] : ['', 'Session started'];
   ui.dot.className = `dot ${cls}`;
   syncReading();
-  ui.status.textContent = text;
+  statusText(text);
 }
 
 // ---- Tooltips --------------------------------------------------------------

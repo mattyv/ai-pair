@@ -63,7 +63,6 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
 <link rel="stylesheet" href="${styleUri}">
 <div class="app">
   <div class="settings-bar">
-    <span class="build-identity">v${safeVersion} - build ${safeBuild}</span>
     <button type="button" data-ui="settings" class="quiet" aria-label="Settings" aria-haspopup="dialog">Settings</button>
   </div>
   <dialog data-ui="settings-dialog" class="settings-dialog" aria-label="Settings">
@@ -74,6 +73,7 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
       <option value="oldestFirst">Oldest first</option>
     </select>
     </label>
+    <p class="build-identity">v${safeVersion} - build ${safeBuild}</p>
     <button type="button" data-ui="settings-close" class="primary">Close</button>
   </dialog>
   <div data-ui="band" class="band">

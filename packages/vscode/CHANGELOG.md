@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.10.1
+
+-   The running version and build ID now appear in the Settings dialog, which
+    stays usable at narrow panel widths.
+-   Playback uses clearer Paused and Playing status text and theme-aware colors,
+    while preserving distinct prompts, turn, suspended, idle, and reading states.
+-   Typing handles CRLF input consistently across document line endings, cursor
+    placement, and interrupted remainders. A cursor marker inside a CRLF pair
+    is rejected; standalone carriage returns are preserved.
+-   Agent guidance now describes the structural newline and single-close move.
+
 ## 0.10.0
 
 -   The Pair panel shows the running version and a content-derived build ID
