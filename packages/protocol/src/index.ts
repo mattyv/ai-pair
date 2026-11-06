@@ -12,7 +12,7 @@ export const CURSOR_MARKER = '\u{258C}';
 export const ACTION_KINDS = ['say', 'move', 'select', 'type', 'type_fast', 'newline', 'delete', 'point', 'run'] as const;
 
 /** The fields a `move` takes. */
-const MOVE_FIELDS = ['file', 'line', 'at', 'to'];
+const MOVE_FIELDS = ['file', 'line', 'at', 'to', 'allow_multiple_closes'];
 
 /** The fields a `select` or `point` takes. */
 const SPAN_FIELDS = ['file', 'line', 'text', 'from', 'through'];
@@ -60,6 +60,9 @@ export function moveProblem(target: Unchecked<MoveTarget>): string | undefined {
   const line = lineProblem(target.line);
   if (line !== undefined) return line;
   if (target.to !== undefined && target.to !== 'line_end' && target.to !== 'next_close') return '`to` is `"line_end"` or `"next_close"`.';
+  if (target.allow_multiple_closes !== undefined && (target.allow_multiple_closes !== true || target.to !== 'line_end')) {
+    return '`allow_multiple_closes` may only be `true` with `to: "line_end"`.';
+  }
   if (target.to === 'next_close' && (target.line !== undefined || target.file !== undefined)) {
     return '`next_close` acts at the current cursor: omit `file` and `line`.';
   }

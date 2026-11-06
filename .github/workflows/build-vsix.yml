@@ -21,6 +21,9 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test:coverage
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: npx playwright test packages/vscode/test/visual/chat_order.spec.ts
       - run: npm run package
       - name: Name artifact
         id: artifact

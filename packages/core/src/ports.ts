@@ -116,7 +116,7 @@ export type PanelEvent =
   | { type: 'session'; active: true; task?: string; rules?: string[]; suspended?: true; resumed?: true }
   | { type: 'session'; active: false; reason: 'agent' | 'programmer' | 'disconnected'; summary?: string }
   | { type: 'say'; text: string }
-  | { type: 'reading'; ms: number }
+  | { type: 'reading'; ms: number; id?: number }
   | { type: 'state'; state: AgentState; turn: Turn; paused: boolean }
   | { type: 'programmer'; text: string; ref?: Ref }
   | { type: 'turn'; to: Turn; message?: string; ref?: Ref }

@@ -246,6 +246,16 @@ describe('resolveWebviewView', () => {
     ]);
   });
 
+  it('releases a reading hold only when the current view is disposed', () => {
+    const { panel, controller } = harness();
+    const old = open(panel);
+    const current = open(panel);
+    old.dispose();
+    expect(controller.releaseReadingHold.mock.calls).toEqual([]);
+    current.dispose();
+    expect(controller.releaseReadingHold.mock.calls).toEqual([[]]);
+  });
+
   it('Dispose: forgets a disposed view, but not a newer one an older disposal follows', () => {
     const { panel } = harness();
     const older = open(panel);
@@ -515,6 +525,27 @@ describe('receive', () => {
     expect(chatOrder.set).toHaveBeenCalledTimes(1);
     panel.showChatOrder('oldestFirst');
     expect(view.posted).toContainEqual({ type: 'chatOrder', value: 'oldestFirst' });
+  });
+
+  it('forwards only valid reading countdown IDs', () => {
+    const { panel, controller } = harness();
+    const view = open(panel);
+    view.send({ type: 'skipReading', id: 42 });
+    view.send({ type: 'skipReading', id: -1 });
+    view.send({ type: 'skipReading', id: Number.NaN });
+    expect(controller.finishReading.mock.calls).toEqual([[42]]);
+  });
+
+  it('validates reading hold requests at the webview boundary', () => {
+    const { panel, controller } = harness();
+    const view = open(panel);
+    view.send({ type: 'holdReading', id: 42, held: true });
+    view.send({ type: 'holdReading', id: 42, held: false });
+    view.send({ type: 'holdReading', id: -1, held: true });
+    view.send({ type: 'holdReading', id: Number.NaN, held: true });
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    view.send({ type: 'holdReading', id: 42, held: 'yes' } as unknown as FromPanel);
+    expect(controller.holdReading.mock.calls).toEqual([[42, true], [42, false]]);
   });
 
   it('showTimings: tells the page its delays, as a test sets them', () => {

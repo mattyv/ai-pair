@@ -9,6 +9,8 @@ export type ChatOrder = 'newestFirst' | 'oldestFirst';
 /** Messages from the page. */
 export type FromPanel =
   | { type: 'ready' }
+  | { type: 'skipReading'; id: number }
+  | { type: 'holdReading'; id: number; held: boolean }
   | { type: 'reply'; text: string; attach?: boolean }
   | { type: 'draft'; empty: boolean }
   | { type: 'pause' }

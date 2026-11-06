@@ -81,6 +81,7 @@ account. While you pair:
 | look around | scroll or switch files. Playback pauses until you **Resume**, which brings you back to the agent's cursor |
 | write a part yourself | **My turn**. The agent becomes the navigator and comments as you type. **Hand back** returns the turn, with your reply if you typed one |
 | change the pace | the speed menu (**1.0x**), from 0.4x to 3.0x |
+| manage the reading pause | click the ring to finish; hold it to pause the countdown until release. Focus it and use Space for the same behavior |
 | finish | **End**, or tell the agent you're done. You can pair again anytime |
 
 The status shows when playback is **Paused** or **Playing**. Reading pauses,
@@ -133,6 +134,10 @@ artifact. Copy it to the Ubuntu host running VS Code and install it there:
 ```sh
 code --install-extension /path/to/ai-pair-build.vsix
 ```
+
+For a local development build, the VSIX can instead be taken directly from the
+shared repository folder (`/workspace/code/ai-pair` in the VM). Run the install
+command on the Ubuntu host using that folder's host path.
 
 Reload the VS Code window and restart the agent after updating. The Pair
 panel's Settings dialog shows the running version and build ID, so you can

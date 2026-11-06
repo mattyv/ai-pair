@@ -285,9 +285,12 @@ selection. Without `line`, it's on the cursor's line: that's how the agent steps
 past a close it just typed without knowing its line's number. Use
 `{ move: { to: "next_close" } }` to move past exactly one adjacent `)`, `]`,
 or `}`. It requires an unselected cursor and accepts no `file`, `line`, or
-`at`; it does not anchor a cursor after an interrupted batch. A `line_end`
-that crosses multiple closing brackets with only whitespace among them includes
-an advisory in the report; the move still completes.
+`at`; it does not anchor a cursor after an interrupted batch. If the rest of the
+cursor's current line contains only two or more closing brackets and spaces or
+tabs, `line_end` is refused during rehearsal unless the move also sets
+`allow_multiple_closes: true`. Use `next_close` or an exact `at` spot to stop
+earlier. The guard is a narrow suffix check, not a parser; it does not cover
+other lines or suffixes containing code or comments. Playback checks it again.
 
 ### `select`
 
@@ -397,6 +400,7 @@ type Place = {
   line?: number     // the line the cursor lands on, exactly; omitted: the cursor's line
   at?: string       // a spot: the exact text around it, with one ▌ where the cursor goes; may span lines
   to?: "line_end" | "next_close"   // end of line, or one adjacent close
+  allow_multiple_closes?: true // acknowledge crossing multiple closes with line_end
 }
 
 type Span = {
@@ -607,11 +611,10 @@ type Excerpt = {              // code the programmer had selected
 ```
 
 During the agent's turn, **every event interrupts**: it stops playback and
-triggers the no-stale-plans rule. This includes any edit by the programmer,
-anywhere. The one exception is a change the programmer didn't make (an edit
-`by: "other"`) to a file no playing or queued batch edits: it's reported,
-without interrupting. (A finer rule for the programmer's edits, such as only
-edits near the agent cursor, may come later.)
+triggers the no-stale-plans rule. This includes changes attributed
+conservatively to `by: "programmer"`, anywhere. The one exception is an edit
+`by: "other"` to a file no playing or queued batch edits: it's reported
+without interrupting.
 
 -   `message`: the programmer sent a message from the narration panel. If they
     had code selected in the editor, it comes along as `selection`, unless they
@@ -619,13 +622,14 @@ edits near the agent cursor, may come later.)
 -   `interrupt`: the Interrupt button.
 -   `turn`: see [Turns](#turns).
 -   `edit`: a file changed. Edits are coalesced per file into a single diff per
-    report. `by` says whether the programmer made them, or something else did: a
-    tool or a command writing to disk (including the agent's own), or a
-    formatter when the file is saved. A diff with any edit by the programmer is
-    theirs. A change by others to a file the playing or queued batches edit
-    interrupts, since they were planned against the text before it: a formatter
-    when a batch saves, say. Changes by others to any other file don't
-    interrupt, and don't make `listen` return.
+    report. `by: "programmer"` is the conservative category for an editor
+    change whose source cannot be identified; it does not prove a person typed
+    it. `by: "other"` covers identified outside changes such as a formatter
+    during save or a disk reload. A diff containing any conservatively
+    classified change uses `"programmer"`. A change by others to a file the
+    playing or queued batches edit interrupts, since they were planned against
+    the text before it: a formatter when a batch saves, say. Changes by others
+    to any other file don't interrupt, and don't make `listen` return.
     A diff longer than 200 lines comes as its hunks' headers alone, the line
     ranges it changed, with `omitted` saying how many lines were left out: the
     agent reads the file for the text (#149).
@@ -768,7 +772,7 @@ Programmer presses "My turn".
   It's the programmer's turn: you're the navigator. ...
 -> listen
 ... programmer writes a loop, pauses typing ...
-<- The programmer edited src/server.ts:
+<- Editor text changed in src/server.ts:
   @@ -20,2 +20,4 @@
   ...
 -> read src/server.ts, from line 20: the loop is on line 21
@@ -777,7 +781,7 @@ Programmer presses "My turn".
  { "say": "Careful: `<=` will go one past the end." }]
 -> listen
 ... programmer fixes it, presses "Hand back" ...
-<- The programmer edited src/server.ts:
+<- Editor text changed in src/server.ts:
   ...
   The programmer handed the turn back to you:
   > ok, finish the handler

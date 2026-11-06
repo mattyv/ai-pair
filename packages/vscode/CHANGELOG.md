@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.11.0
+
+-   Click the reading ring to finish the current countdown, or hold it to pause
+    just that countdown until release. Space provides the same keyboard behavior;
+    other playback pauses remain in effect.
+-   The Settings gear is in the toolbar, and the Your move status explains how
+    to reply when focused or hovered.
+-   A line-end move across multiple adjacent closing brackets is rejected during
+    preflight unless explicitly allowed; exact spots and `next_close` remain
+    available.
+-   Triple-quote runs are inserted together to prevent extra closing quotes
+    from Pylance, without changing user settings.
+-   The relay and extension now use protocol version 5; reload VS Code and
+    restart the agent together after updating.
+
 ## 0.10.1
 
 -   The running version and build ID now appear in the Settings dialog, which

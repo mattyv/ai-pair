@@ -21,13 +21,17 @@ Track frustrations with the current tool and possible improvements.
 1.  **Restore pair context after restart.** Investigate preserving and restoring
     the pair conversation and session context across VS Code restarts.
 
-## Future investigation: structural editing mistakes
+## Earlier investigation: structural editing mistakes
+
+This section records the earlier hypotheses and proposals, not the current
+implementation. See the [2026-11-06 smoke audit](#2026-11-06-smoke-audit) for
+the verified findings and changes.
 
 Claude's explanation of the bracket, newline and wrong-file mistakes is a
 hypothesis about that session, not a verified cause. Keep the session trace and
 installed extension version when investigating it.
 
-The current source shows:
+The source inspected at that stage showed:
 
 -   The agent guide directs agents to put closing delimiters in first and warns
     that `line_end` moves past all the closes on a line.
@@ -50,3 +54,27 @@ Consider these proposals during that investigation:
     and rehearsal can use the same semantics.
 5.  Consider a warning for `line_end` near closing delimiters, accounting for
     false positives from any heuristic.
+
+## 2026-11-06 smoke audit
+
+The audit checked the reported behaviors against source, tests, and isolated
+native trials. It does not establish every detail of the original session.
+The fixes below are in the current source and await the final 0.11.0 build.
+
+| Claim | Verdict |
+|---|---|
+| 1. Extra triple quotes | Confirmed with published 0.10.0, Python 2026.10 and Pylance 2026.4.1: with auto-closing always enabled, all three normal-speed function-body trials were interrupted after three quotes became six, while the closing triple remained unplayed. With auto-closing disabled, all three completed. Pylance's single-character quote handler inserts the extra triple; the 0.11 development build completed all three with auto-closing still enabled by typing the quote run atomically. A basic native profile without Python extensions also passed. A corrected no-Pylance control with Python 2026.10 completed all three trials. |
+| 2. Context after restart | Same-root resume and persisted session state pass current tests; native reconnect passed. The reported loss of the LLM's own conversation context was not reproduced or established by those checks. |
+| 3. Interrupted typing | Interruption can stop within a token, report the unplayed remainder, and discard queued batches. This is the current safety contract; finishing an arbitrary action after intervention would risk further unintended edits. |
+| 4. Interactive commands | Interactive prompt handling is not supported. A still-running command retains an unknown exit status; a no-output report now suggests checking the terminal without claiming a prompt was detected. |
+| 5. Crossing closing brackets | `line_end` can cross multiple closes. Its former advisory arrived after later actions in the batch. The new narrow preflight guard rejects that crossing before playback unless explicitly acknowledged, with `next_close` and exact spots available as alternatives. |
+| 6. Diagnostics | Pylance and environment diagnostics remain advisory and visible; they are not suppressed wholesale. They do not prove the intended meaning of syntactically valid code. |
+| 7. Formatter changes | A formatter can invalidate queued edits to the file it changes, regardless of command origin. Guidance now says to use a separate run-only batch, wait for the formatter to exit, and read the files before further edits. |
+
+Current tests also verify these useful behaviors; they do not prove every
+corresponding event in the historical session:
+
+- Reads can reflect the predicted state after queued edits.
+- The unseen-line and named-file checks refuse unsafe locations and files.
+- Looking away or scrolling away pauses playback.
+- Reports include the agent cursor's position in the code shown.

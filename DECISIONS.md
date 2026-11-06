@@ -23,6 +23,12 @@ Issue discussions and working notes hold the detailed evidence and history.
     distinguishable. Show active typing as Playing, while a natural reading
     pause remains a reading state. A pause stays visible while any pause reason
     remains.
+-   Make the reading ring keyboard accessible: click to finish its current
+    countdown, or hold to pause only that countdown until release. Bind gestures
+    to their original message; preserve explicit pauses, session suspension,
+    command confirmations, and the programmer's turn.
+-   Place one Settings gear in the toolbar, available in idle and active states.
+    Explain Your move on hover or keyboard focus only while the agent listens.
 
 ## Editing safety
 
@@ -33,8 +39,9 @@ Issue discussions and working notes hold the detailed evidence and history.
     adjacent delimiters in Python and JSON, and a separate operation to move
     past a closing delimiter. Reject ambiguous contexts, including complex
     formatted-string prefixes; agents can use literal typing when needed.
--   Advise when a line-end move crosses multiple closing delimiters. This is a
-    warning, not a substitute for choosing an exact cursor position.
+-   Reject a line-end move that crosses multiple adjacent closing brackets at
+    preflight unless it explicitly opts in. Exact spots and the single-close
+    move remain available; this narrow check is not a language parser.
 -   Surface available VS Code error diagnostics as advisory information after
     edits. Language providers may be absent, late, or stale; diagnostics are not
     a parser guarantee and cannot reliably identify valid but unintended Python
@@ -46,6 +53,9 @@ Issue discussions and working notes hold the detailed evidence and history.
     tracking cursor positions or interrupted remainders; preserve standalone
     carriage returns. Reject a cursor marker inside a CRLF pair rather than
     splitting the line ending. Literal typing remains literal otherwise.
+-   Insert runs of three or more identical quotes in one edit. Pylance can
+    otherwise react to a partially entered triple quote by adding unwanted
+    closing quotes. Keep the user's editor and extension settings unchanged.
 -   Guide agents to the explicit structural newline and single-close move when
     appropriate. The observed line-ending defect does not establish the cause
     of the earlier bracket incident.
@@ -57,7 +67,8 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   Build and verify the local extension before installing it for use. A local
     installation is distinct from publishing a release. This workspace runs in a
     VM: installing there does not install into the user's host VS Code. The host
-    needs the verified VSIX installed separately with the tools currently available.
+    installs the verified VSIX separately. For local development, place it in the
+    shared repository folder so the host can install it directly.
 -   Build a downloadable VSIX in GitHub Actions for branch pushes, pull requests,
     and manual runs. The artifact identifies its version and checked-out commit;
     installing it on the Ubuntu host is a separate manual step. This workflow does

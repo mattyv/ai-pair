@@ -1013,6 +1013,25 @@ describe('who made a change', () => {
 });
 
 describe('edit', () => {
+  it('reports a dirty unmatched combined event during an agent edit as a programmer edit', async () => {
+    const view = inView(FILE);
+    const { editor, controller } = made();
+    view.document.isDirty = true;
+    view.edit.mockImplementation((build) => {
+      build(view.builder);
+      view.document.text = '""';
+      changeOf(view.document, [{ rangeOffset: 0, rangeLength: 0, text: '""' }]);
+      return Promise.resolve(true);
+    });
+    await editor.edit(FILE, 0, 0, '"', { undoStopBefore: true, undoStopAfter: true });
+    expect(vi.mocked(isOwnEdit).mock.lastCall).toEqual([
+      [{ offset: 0, deleteLength: 0, text: '""' }],
+      { offset: 0, deleteLength: 0, text: '"' },
+    ]);
+    expect(controller.userEdit.mock.calls).toHaveLength(1);
+    expect(controller.otherEdit.mock.calls).toHaveLength(0);
+  });
+
   it('RightAuthor: edits a file in view through its editor, with its undo stops, and takes its change event for its own', async () => {
     const view = inView(FILE);
     const { editor, controller } = made();

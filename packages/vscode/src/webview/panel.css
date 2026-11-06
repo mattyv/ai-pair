@@ -158,25 +158,26 @@ button:focus-visible {
   min-height: calc(32px + var(--vscode-editor-font-size, 13px) * 3.9);
 }
 
-/* The header: the status and the controls. Without a session, the idle screen's title says it all. */
+/* The header keeps Settings available even without a session. */
 .head {
   align-items: center;
-  display: none;
+  display: flex;
   gap: 4px;
   height: 24px;
-}
-
-.active .head {
-  display: flex;
+  justify-content: flex-end;
 }
 
 .status {
   align-items: center;
-  display: flex;
+  display: none;
   flex: 1;
   font-size: 12px;
   gap: 12px;
   min-width: 0;
+}
+
+.active .status {
+  display: flex;
 }
 
 .status-text {
@@ -186,6 +187,10 @@ button:focus-visible {
   white-space: nowrap;
 }
 
+.status-text:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
 .status-text.is-paused {
   color: var(--pause);
   font-weight: 700;
@@ -193,6 +198,18 @@ button:focus-visible {
 
 .status-text.is-playing {
   color: var(--playing);
+}
+
+/* The status ring is a keyboard-accessible control during a reading pause. */
+.reading-control {
+  height: 20px;
+  min-width: 20px;
+  padding: 0;
+  width: 20px;
+}
+
+.reading-control .dot {
+  margin-left: 0;
 }
 
 /* The status dot. syncStatus in webview/panel.ts gives it a class for the agent's state. */
@@ -264,14 +281,20 @@ button:focus-visible {
   position: absolute;
 }
 
-/* The controls, shown only in a session. */
+/* Settings stays visible; session controls appear only in a session. */
 .controls {
+  align-items: center;
+  display: flex;
+  gap: 1px;
+}
+
+.session-controls {
   align-items: center;
   display: none;
   gap: 1px;
 }
 
-.active .controls {
+.active .session-controls {
   display: flex;
 }
 
@@ -301,7 +324,12 @@ button:focus-visible {
 }
 
 .end {
+  display: none;
   margin-left: 2px;
+}
+
+.active .end {
+  display: inline-flex;
 }
 
 /* The speed menus: playback speed and reading speed */
@@ -774,13 +802,6 @@ a:hover {
   .arrive {
     animation: none;
   }
-}
-
-/* Settings stay available when there is no active session. */
-.settings-bar {
-  align-items: center;
-  display: flex;
-  justify-content: flex-end;
 }
 
 .settings-dialog {

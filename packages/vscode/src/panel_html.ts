@@ -43,6 +43,12 @@ const ICONS = {
   swap: svg('<path d="M7 7h11l-3-3M17 17H6l3 3"/>'),
   exit: svg('<path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h11"/>'),
   send: svg('<path d="M4 12l16-8-6 16-2.5-6.5z"/>'),
+  settings: svg(
+    '<circle cx="12" cy="12" r="3"/>' +
+      '<path d="M10 2h4l.5 2.4 1.9.8 2.1-1.3 1.4 1.4-1.3 2.1.8 1.9L22 10v4l-2.6.5-.8 1.9 ' +
+      '1.3 2.1-1.4 1.4-2.1-1.3-1.9.8L14 22h-4l-.5-2.6-1.9-.8-2.1 1.3-1.4-1.4 1.3-2.1 ' +
+      '-.8-1.9L2 14v-4l2.6-.5.8-1.9-1.3-2.1 1.4-1.4 2.1 1.3 1.9-.8L10 2z"/>',
+  ),
   play: svg('<path d="M8 5l11 7-11 7z"/>'),
 };
 
@@ -62,9 +68,6 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
 <title>AI Pair</title>
 <link rel="stylesheet" href="${styleUri}">
 <div class="app">
-  <div class="settings-bar">
-    <button type="button" data-ui="settings" class="quiet" aria-label="Settings" aria-haspopup="dialog">Settings</button>
-  </div>
   <dialog data-ui="settings-dialog" class="settings-dialog" aria-label="Settings">
     <h1>Settings</h1>
     <label>Chat order
@@ -80,10 +83,20 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
     <div class="main">
       <div class="head">
         <div class="status">
-          <span data-ui="dot" class="dot off"></span>
+          <button
+            type="button"
+            data-ui="skip-reading"
+            class="reading-control"
+            aria-label="Finish reading pause"
+            data-tip="Click to finish; hold to pause the timer"
+            disabled
+          >
+            <span data-ui="dot" class="dot off"></span>
+          </button>
           <span data-ui="status-text" class="status-text" role="status">No session</span>
         </div>
         <div class="controls">
+          <div class="session-controls">
           <button
             type="button"
             data-ui="pause"
@@ -128,6 +141,15 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
             >read 1.0${SPEED_SUFFIX}</button>
             <div data-ui="reading-menu" class="speed-menu" role="menu" aria-label="Reading speed" hidden>${speeds}</div>
           </div>
+          </div>
+          <button
+            type="button"
+            data-ui="settings"
+            class="quiet"
+            aria-label="Settings"
+            aria-haspopup="dialog"
+            data-tip="Settings"
+          >${ICONS.settings}</button>
           <button
             type="button"
             data-ui="end"

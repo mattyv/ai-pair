@@ -117,7 +117,7 @@ it('shows the running extension version and build in the panel', () => {
   ok(identity);
   expect(identity.textContent).toBe('v0.10.0 - build abcd1234');
   expect(identity.closest('[data-ui="settings-dialog"]')).not.toBeNull();
-  expect(page.querySelector('.settings-bar .build-identity')).toBeNull();
+  expect(page.querySelector('.controls .build-identity')).toBeNull();
 });
 
 it('escapes the running version and build as text in Settings', () => {
@@ -127,4 +127,29 @@ it('escapes the running version and build as text in Settings', () => {
   ok(identity);
   expect(identity.textContent).toBe('v<version> - build id&more');
   expect(identity.children).toHaveLength(0);
+});
+
+it('explains how to click or hold the reading timer', () => {
+  const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js');
+  const page = new window.DOMParser().parseFromString(html, 'text/html');
+  const control = page.querySelector('[data-ui="skip-reading"]');
+  ok(control instanceof window.HTMLElement);
+  expect(control.dataset.tip).toBe('Click to finish; hold to pause the timer');
+});
+
+it('places one icon-only Settings control in the toolbar before End', () => {
+  const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js');
+  const page = new window.DOMParser().parseFromString(html, 'text/html');
+  const buttons = page.querySelectorAll('[data-ui="settings"]');
+  expect(buttons).toHaveLength(1);
+  const control = buttons[0];
+  ok(control);
+  expect(control.getAttribute('aria-label')).toBe('Settings');
+  expect(control.querySelector('svg')).not.toBeNull();
+  expect(control.textContent?.trim()).toBe('');
+  expect(control.closest('.controls')).not.toBeNull();
+  const next = control.nextElementSibling;
+  ok(next instanceof window.HTMLElement);
+  expect(next.dataset.ui).toBe('end');
+  expect(page.querySelector('.settings-bar')).toBeNull();
 });

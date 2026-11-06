@@ -2,8 +2,8 @@
 (******************************************************************************)
 (* How planTyping in packages/core/src/typing.ts splits text into chunks,     *)
 (* each inserted in one edit, checked over every small text. Delays aren't    *)
-(* modeled: only the splitting. Characters are Letter, Space, and LineFeed,   *)
-(* named in PairDefs. Typing in #19: the chunks of a plan concatenate to the  *)
+(* modeled: only the splitting. Two quote kinds are distinct from the other  *)
+(* characters named in PairDefs. The chunks of a plan concatenate to the      *)
 (* input text.                                                                *)
 (******************************************************************************)
 EXTENDS Naturals, Sequences, PairDefs
@@ -16,7 +16,8 @@ ASSUME AssumeMaxChars == MaxChars \in Nat
 --------------------------------------------------------------------------------
 
 \* The characters: any other, a space or tab, and a line feed.
-Chars == {Letter, Space, LineFeed}
+Quotes == {"singleQuote", "doubleQuote"}
+Chars == {Letter, Space, LineFeed} \cup Quotes
 
 \* Every text up to MaxChars characters.
 Texts == Seqs(Chars, MaxChars)
@@ -34,6 +35,13 @@ IndentOf(cs) ==
                  /\ (k = Len(cs) \/ cs[k + 1] # Space)
     IN  SubSeq(cs, 1, n)
 
+\* The longest initial run of the same quote character.
+QuoteRun(cs) ==
+    LET n == CHOOSE k \in 1..Len(cs) :
+                 /\ \A i \in 1..k : cs[i] = Head(cs)
+                 /\ (k = Len(cs) \/ cs[k + 1] # Head(cs))
+    IN SubSeq(cs, 1, n)
+
 \* The loop: a line feed goes with the indentation after it; anything else
 \* goes alone. A function over the finite set Texts (6.16); each step recurs
 \* on a shorter text, so it ends.
@@ -44,6 +52,9 @@ Chunks[cs \in Texts] ==
          THEN LET indent == IndentOf(Tail(cs))
               IN  <<<<LineFeed>> \o indent>> \o Chunks[Drop(Tail(cs),
                                                             Len(indent))]
+         ELSE IF Head(cs) \in Quotes /\ Len(QuoteRun(cs)) >= 3
+              THEN LET run == QuoteRun(cs)
+                   IN <<run>> \o Chunks[Drop(cs, Len(run))]
          ELSE <<<<Head(cs)>>>> \o Chunks[Tail(cs)]
 
 \* With atLineStart, indentation at the very start is one chunk first.
@@ -75,9 +86,23 @@ ChunksAreUnits ==
         IN  \A i \in 1..Len(p) :
                 \/ Len(p[i]) = 1 /\ p[i][1] # LineFeed
                 \/ p[i][1] = LineFeed /\ AllSpaces(Tail(p[i]))
+                \/ p[i][1] \in Quotes /\ Len(p[i]) >= 3 /\
+                   (\A j \in 1..Len(p[i]) : p[i][j] = p[i][1])
                 \/ i = 1 /\ s /\ p[i] # <<>> /\ AllSpaces(p[i])
+
+\* A run of three or more identical quotes is never split across edits.
+QuoteRunsAtomic ==
+    \A t \in Texts, s \in BOOLEAN :
+        LET p == Plan(t, s)
+        IN \A i \in 1..(Len(p) - 1) :
+             (p[i][1] \in Quotes /\ p[i + 1][1] = p[i][1]) =>
+               /\ Len(p[i]) = 1 /\ Len(p[i + 1]) = 1
+               /\ (IF i = 1 THEN TRUE ELSE p[i - 1][1] # p[i][1])
+               /\ (IF i + 1 = Len(p) THEN TRUE
+                   ELSE p[i + 2][1] # p[i][1])
 
 ASSUME AssumeConcatenatesToText == ConcatenatesToText
 ASSUME AssumeChunksAreUnits == ChunksAreUnits
+ASSUME AssumeQuoteRunsAtomic == QuoteRunsAtomic
 
 ================================================================================

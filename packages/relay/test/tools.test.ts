@@ -153,3 +153,12 @@ it('accepts structural actions and rejects malformed indentation', () => {
   expect(problems({ newline: { indent: 'x' } })).not.toEqual([]);
   expect(problems({ newline: { indent: '  ', extra: true } })).not.toEqual([]);
 });
+
+it('accepts an explicit multi-close acknowledgment and rejects false', () => {
+  vi.mocked(actionKinds).mockReturnValue(['move']);
+  expect(problems({ move: { to: 'line_end', allow_multiple_closes: true } })).toEqual([]);
+  expect(problems({ move: { to: 'line_end', allow_multiple_closes: false } })).not.toEqual([]);
+  const input = { actions: [{ move: { to: 'line_end', allow_multiple_closes: true } }] };
+  expect(STEP.parse(input)).toEqual(input);
+  expect(JSON.stringify(z.toJSONSchema(STEP, { unrepresentable: 'any' }))).toContain('allow_multiple_closes');
+});

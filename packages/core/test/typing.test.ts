@@ -10,7 +10,7 @@ const CADENCE = { charMs: 100, jitter: 0, wordStartMs: 50, punctuationMs: 30, op
 /** Every case, on CI's slower runners alongside the other test files. */
 const EXHAUSTIVE_MS = 30_000;
 
-const CHARS = ['x', ' ', '\t', '\n', '('];
+const CHARS = ['x', ' ', '\t', '\n', '(', '"', "'"];
 
 /** Returns each chunk planTyping makes of `text` at CADENCE, with its delay. */
 function delays(text: string, atLineStart = false): Array<[string, number]> {
@@ -18,6 +18,31 @@ function delays(text: string, atLineStart = false): Array<[string, number]> {
 }
 
 describe('typing', () => {
+  it.each(['"', "'"])('types a run of three or more %s quotes in one edit without losing cadence', (quote) => {
+    expect(delays(`${quote.repeat(3)}x${quote.repeat(4)}`)).toEqual([
+      [quote.repeat(3), 300],
+      ['x', 150],
+      [quote.repeat(4), 400],
+    ]);
+    expect(delays(quote.repeat(6))).toEqual([[quote.repeat(6), 600]]);
+    expect(delays(quote.repeat(5))).toEqual([[quote.repeat(5), 500]]);
+    expect(delays(quote.repeat(7))).toEqual([[quote.repeat(7), 700]]);
+    expect(delays(quote.repeat(2))).toEqual([
+      [quote, 100],
+      [quote, 100],
+    ]);
+  });
+
+  it('keeps mixed quote runs separate and preserves the original random draws', () => {
+    const draws = [0, 0.25, 0.5, 0.75, 1];
+    let index = 0;
+    const chunks = planTyping(`"""''`, { ...CADENCE, jitter: 0.2 }, false, () => draws[index++] ?? 0.5, 0.5);
+    expect(chunks.map((chunk) => chunk.text)).toEqual(['"""', "'", "'"]);
+    expect(chunks[0]?.delay).toBeCloseTo(135);
+    expect(chunks[1]?.delay).toBeCloseTo(55);
+    expect(chunks[2]?.delay).toBeCloseTo(60);
+    expect(index).toBe(5);
+  });
   it('pauses as words start, and after punctuation and opening brackets', () => {
     expect(delays('ab c(d, e')).toEqual([
       ['a', 100],
@@ -78,8 +103,9 @@ it(
         chunks.forEach((c, i) => {
           const unit = c.text.length === 1 && c.text !== '\n';
           const lineBreak = /^\n[ \t]*$/.test(c.text);
+          const quotes = /^(?:"{3,}|'{3,})$/.test(c.text);
           const leading = i === 0 && atLineStart && /^[ \t]+$/.test(c.text);
-          expect(unit || lineBreak || leading, `${at}: chunk ${i} ${JSON.stringify(c.text)}`).toBe(true);
+          expect(unit || lineBreak || leading || quotes, `${at}: chunk ${i} ${JSON.stringify(c.text)}`).toBe(true);
           expect(c.delay, at).toBeGreaterThanOrEqual(0);
         });
       }

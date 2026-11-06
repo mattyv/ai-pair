@@ -123,6 +123,9 @@ class FakePacing implements Pacing {
   isInterrupted = false;
   readonly abort = new AbortController();
   /** Resolves true, or false once interrupted. */
+  readonly finish = vi.fn<Pacing['finish']>();
+  readonly hold = vi.fn<Pacing['hold']>();
+  readonly release = vi.fn<Pacing['release']>();
   readonly sleep = vi.fn<Pacing['sleep']>(() => Promise.resolve(!this.isInterrupted));
 
   get signal(): AbortSignal {
@@ -513,10 +516,13 @@ describe('say', () => {
       return Promise.resolve(true);
     });
     expect((await played(h, [{ say: 'Hi.' }])).result).toEqual({ id: 1, status: 'completed' });
-    expect(posted(h)).toEqual([
-      { type: 'say', text: 'Hi.' },
-      { type: 'reading', ms: READING_MS / READING_SPEED },
-    ]);
+    const events = posted(h);
+    expect(events[0]).toEqual({ type: 'say', text: 'Hi.' });
+    const event = events[1];
+    if (event?.type !== 'reading') throw new Error('No reading event');
+    expect(event.ms).toBe(READING_MS / READING_SPEED);
+    expect(typeof event.id).toBe('number');
+    expect(events).toHaveLength(2);
     expect([readingDuring, h.player.reading]).toEqual([[true], false]);
   });
 });
@@ -953,11 +959,12 @@ describe('structural typing', () => {
   });
 });
 
-it('advises when line_end crosses multiple adjacent closes, without blocking it', async () => {
+it('guards multiple adjacent closes during playback unless acknowledged', async () => {
   const h = harness({ files: { 'a.ts': 'f(x))' }, scene: { cursor: { file: A, offset: 3 } } });
   const result = (await played(h, [{ move: { to: 'line_end' } }])).result;
-  expect(result.status).toBe('completed');
-  expect(result.warnings).toHaveLength(1);
+  expect(result.error?.kind).toBe('invalid_action');
+  expect(h.scene.cursor?.offset).toBe(3);
+  expect((await played(h, [{ move: { to: 'line_end', allow_multiple_closes: true } }])).result.status).toBe('completed');
   expect(h.scene.cursor?.offset).toBe(5);
 });
 
@@ -1005,10 +1012,10 @@ describe('structural action edge cases', () => {
     expect(outcome.editedFiles).toEqual([file]);
   });
 
-  it('does not warn for a single close or when code follows the closes', async () => {
+  it('allows line_end for a single close or when code follows the closes', async () => {
     for (const text of ['f(x)', 'f(x));']) {
       const h = harness({ files: { 'a.ts': text }, scene: { cursor: { file: A, offset: 3 } } });
-      expect((await played(h, [{ move: { to: 'line_end' } }])).result.warnings).toBeUndefined();
+      expect((await played(h, [{ move: { to: 'line_end' } }])).result.status).toBe('completed');
     }
   });
 });
@@ -1027,4 +1034,50 @@ it('refuses next_close at the end of a file without moving the cursor', async ()
   const h = harness({ files: { 'a.ts': '()' }, scene: { cursor: { file: A, offset: 2 } } });
   expect((await played(h, [{ move: { to: 'next_close' } }])).result.error?.kind).toBe('invalid_action');
   expect(h.scene.cursor?.offset).toBe(2);
+});
+
+describe('finish reading', () => {
+  it('OnlyCurrent: only finishes the currently pending say and rejects stale IDs', async () => {
+    const h = harness();
+    const pending = Promise.withResolvers<boolean>();
+    h.pacing.sleep.mockReturnValueOnce(pending.promise);
+    const playing = h.player.play(1, [{ say: 'Read this.' }]);
+    await vi.waitFor(() => {
+      expect(posted(h).some((event) => event.type === 'reading')).toBe(true);
+    });
+    const event = posted(h).find((entry) => entry.type === 'reading');
+    if (event?.type !== 'reading' || event.id === undefined) throw new Error('No reading event ID');
+    h.player.finishReading(event.id + 1);
+    expect(h.pacing.finish).not.toHaveBeenCalled();
+    h.player.finishReading(event.id);
+    expect(h.pacing.finish).toHaveBeenCalledTimes(1);
+    pending.resolve(true);
+    await playing;
+    h.player.finishReading(event.id);
+    expect(h.pacing.finish).toHaveBeenCalledTimes(1);
+  });
+});
+
+it('ScopedHold, StaleDoesNothing, EligibleHold: holds only the matching reading timer', async () => {
+  const h = harness();
+  const pending = Promise.withResolvers<boolean>();
+  h.pacing.sleep.mockReturnValueOnce(pending.promise);
+  h.player.releaseReadingHold();
+  const playing = h.player.play(1, [{ say: 'Read this.' }]);
+  await vi.waitFor(() => {
+    expect(posted(h).some((event) => event.type === 'reading')).toBe(true);
+  });
+  const event = posted(h).find((entry) => entry.type === 'reading');
+  if (event?.type !== 'reading' || event.id === undefined) throw new Error('No reading event ID');
+  h.player.holdReading(event.id + 1, true);
+  expect(h.pacing.hold).not.toHaveBeenCalled();
+  h.player.holdReading(event.id, true);
+  h.player.holdReading(event.id, false);
+  h.player.releaseReadingHold();
+  expect(h.pacing.hold).toHaveBeenCalledTimes(1);
+  expect(h.pacing.release).toHaveBeenCalledTimes(2);
+  pending.resolve(true);
+  await playing;
+  h.player.releaseReadingHold();
+  expect(h.pacing.release).toHaveBeenCalledTimes(2);
 });

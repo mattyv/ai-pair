@@ -2,9 +2,9 @@
   "version": 1,
   "bundleId": "277c3415-7b74-4008-8be4-8c14ae6d41dd",
   "revision": {
-    "number": 4,
+    "number": 5,
     "updatedAt": "2026-11-06T00:00:00.000Z",
-    "summary": "Structural typing safety, diagnostics, runtime identity and VSIX delivery"
+    "summary": "Multi-close preflight, reading controls, and development delivery"
   },
   "diagrams": [
     {
@@ -1145,6 +1145,11 @@
               "id": "update-20261106-architecture-player",
               "text": "Explicit structural newline splits an adjacent matching pair only in supported Python or JSON code. The lexical scan treats strings and comments conservatively; it is not a Python grammar parser.",
               "ts": 0
+            },
+            {
+              "id": "update-20261106b-architecture-player",
+              "text": "Rehearsal refuses an unacknowledged line_end crossing a current-line suffix consisting only of multiple closing brackets and whitespace; an explicit allow_multiple_closes flag permits it. Playback checks the live suffix again. This narrow check is not a parser.",
+              "ts": 0
             }
           ],
           "editor": [
@@ -1152,12 +1157,22 @@
               "id": "n-architectureeditor",
               "text": "The adapter that applies the player's steps to VS Code. It also notices edits the programmer makes and tells the session.",
               "ts": 0
+            },
+            {
+              "id": "update-20261106b-architecture-editor",
+              "text": "A document event matching a pending agent edit is recognized by offset, length and text. Other editor changes are conservatively classified; attribution does not prove that a person typed them.",
+              "ts": 0
             }
           ],
           "panel": [
             {
               "id": "n-architecturepanel",
               "text": "A side panel that shows the agent's narration. The programmer uses it to reply, pause, interrupt, or answer a command prompt.",
+              "ts": 0
+            },
+            {
+              "id": "update-20261106b-architecture-panel",
+              "text": "The reading control can finish the identified current message delay. It does not lift a separate pause; stale or ineligible control requests have no effect. A hold and release act only on the matching reading ID and preserve independent pauses; disposing the panel releases its hold.",
               "ts": 0
             }
           ],
@@ -2138,6 +2153,11 @@
             {
               "id": "n-batch-rehearsal-and-playbackfailed",
               "text": "If an action would fail, such as text that is not on its line, the whole batch is refused now.",
+              "ts": 0
+            },
+            {
+              "id": "update-20261106b-batch-rehearsal-and-playback-failed",
+              "text": "The multi-close line_end guard rejects the whole batch during rehearsal before any action plays. Explicit acknowledgment allows intentional crossings; next_close and an exact spot provide alternatives.",
               "ts": 0
             }
           ],
@@ -9714,6 +9734,13 @@
               "text": "Collects advisory VS Code diagnostics and a separate system-python3 syntax check after edits. The system interpreter can differ from the project interpreter; stale or unavailable checks are reported.",
               "ts": 0
             }
+          ],
+          "panelts": [
+            {
+              "id": "update-20261106b-vscode-integration-panelts",
+              "text": "The webview displays the message reading pause and sends its identifier when the programmer requests early completion. The controller validates eligibility and leaves independent pauses intact. A hold and release act only on the matching reading ID and preserve independent pauses; disposing the panel releases its hold.",
+              "ts": 0
+            }
           ]
         }
       }
@@ -9871,6 +9898,24 @@
             "x": 40,
             "y": 600,
             "step": 5
+          },
+          {
+            "id": "dev-build",
+            "label": "VM dev build",
+            "files": [
+              "packages/vscode/package.json"
+            ],
+            "x": 400,
+            "y": 180,
+            "step": 6
+          },
+          {
+            "id": "shared-vsix",
+            "label": "Shared-folder VSIX",
+            "files": [],
+            "x": 400,
+            "y": 320,
+            "step": 7
           }
         ],
         "edges": [
@@ -9890,6 +9935,15 @@
           {
             "from": "host",
             "to": "runtime"
+          },
+          {
+            "from": "dev-build",
+            "to": "shared-vsix"
+          },
+          {
+            "from": "shared-vsix",
+            "to": "host",
+            "label": "manual install"
           }
         ],
         "comments": {
@@ -9897,6 +9951,13 @@
             {
               "id": "d-build-and-delivery",
               "text": "GitHub Actions builds a VSIX on Ubuntu and uploads an artifact named with its version and commit. Download and install it on the target Ubuntu host, reload VS Code, and check the running build identity.",
+              "ts": 0
+            }
+          ],
+          "dev-build": [
+            {
+              "id": "n-build-delivery-dev",
+              "text": "For development, build the VSIX in the VM and place it in the shared repository folder. The Ubuntu host accesses the same folder and installs that artifact manually.",
               "ts": 0
             }
           ]

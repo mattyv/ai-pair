@@ -123,6 +123,10 @@ const actionSchema = z.union(
               .describe(
                 "Instead of a spot: `next_close` steps over exactly one adjacent close with no file or line; `line_end` goes to the end of the line. It steps past a close you typed only if that close is on this line. A block's closing brace, below its body, isn't on your cursor's line.",
               ),
+            allow_multiple_closes: z
+              .literal(true)
+              .optional()
+              .describe('Explicitly permit line_end to cross multiple adjacent closing brackets.'),
           },
           // zod reports unrecognized keys only on an object it matched to this schema.
           // oxlint-disable-next-line typescript/no-unsafe-type-assertion

@@ -753,6 +753,26 @@ export class Controller {
     return glideDuration(this.config.timing, lines, this.speed);
   }
 
+  /** Finishes only the current message's reading delay, without ending a pause. */
+  finishReading(id: number): void {
+    const session = this.activeSession();
+    if (session === undefined || session.suspended || session.scene.turn !== 'agent' || this.pauseReasons.size > 0) return;
+    session.player.finishReading(id);
+  }
+
+  /** Holds or releases only the matching reading delay, preserving pauses. */
+  holdReading(id: number, held: boolean): void {
+    const session = this.session;
+    if (session === undefined) return;
+    if (held && (session.ended || session.suspended || session.scene.turn !== 'agent' || this.pauseReasons.size > 0)) return;
+    session.player.holdReading(id, held);
+  }
+
+  /** Releases a reading hold belonging to a disposed panel. */
+  releaseReadingHold(): void {
+    this.session?.player.releaseReadingHold();
+  }
+
   setReadingSpeed(speed: number): void {
     this.readingSpeed = speed;
   }

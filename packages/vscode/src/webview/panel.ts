@@ -38,6 +38,9 @@ let tipWarmMs = TIP_WARM_MS;
 const TIP_GAP = 4;
 const TIP_MARGIN = 6;
 
+/** A press held this long pauses only the reading countdown. */
+const READING_HOLD_MS = 400;
+
 /** The tallest the reply box grows, in pixels, before it scrolls. */
 const REPLY_MAX_HEIGHT = 120;
 /** A shell's exit code after Ctrl+C, and after SIGTERM. */
@@ -64,6 +67,7 @@ const ui = {
   settingsClose: $('settings-close', HTMLButtonElement),
   chatOrder: $('chat-order', HTMLSelectElement),
   dot: $('dot', HTMLElement),
+  skipReading: $('skip-reading', HTMLButtonElement),
   status: $('status-text', HTMLElement),
   pause: $('pause', HTMLButtonElement),
   interrupt: $('interrupt', HTMLButtonElement),
@@ -102,6 +106,7 @@ const ui = {
 let chatOrder: ChatOrder = 'newestFirst';
 let followingLatest = true;
 let historyHeight = 0;
+let historyScrollHeight = 0;
 let active = false;
 let calibrating = false;
 let turn = 'agent';
@@ -124,9 +129,13 @@ let current: string | undefined = undefined;
 /** Whether the current message is in the history already. */
 let filed = false;
 /** The reading pause under way: its length, and how much of it has elapsed, as of `last`. */
-let reading: { ms: number; elapsed: number; last: number } | undefined = undefined;
+let reading: { ms: number; elapsed: number; last: number; held: boolean; id?: number } | undefined = undefined;
 /** A link to the code the agent just pointed at, shown with the message about it. */
 let pointed: HTMLAnchorElement | undefined = undefined;
+/** A physical pointer or Space gesture is bound to the ID it started on. */
+let readingGesture:
+  { id: number; timer: ReturnType<typeof setTimeout>; held: boolean; kind: 'pointer' | 'keyboard'; pointerId?: number } | undefined;
+let readingClick: { id: number; suppress: boolean } | undefined;
 let draftEmpty = true;
 let tipTarget: HTMLElement | undefined = undefined;
 let tipTimer: ReturnType<typeof setTimeout> | undefined;
@@ -336,30 +345,37 @@ function showCalibration(view: CalibrationView): void {
 }
 
 function syncReading(): void {
-  ui.dot.classList.toggle('reading', reading !== undefined);
+  ui.dot.classList.toggle('reading', reading !== undefined && active && !suspended);
+  ui.skipReading.disabled =
+    reading?.id === undefined || !active || suspended || paused || turn !== 'agent' || state !== 'read' || runConfirming;
 }
 
-function tick(now: number): void {
-  if (!reading) return;
-  if (!paused) reading.elapsed += now - reading.last;
-  reading.last = now;
-  const f = Math.min(1, reading.elapsed / reading.ms);
+function tick(now: number, countdown: NonNullable<typeof reading>): void {
+  if (reading !== countdown) return;
+  if (!paused && !countdown.held) countdown.elapsed += now - countdown.last;
+  countdown.last = now;
+  const f = Math.min(1, countdown.elapsed / countdown.ms);
   ui.dot.style.setProperty('--progress', String(f));
   if (f >= 1) {
     reading = undefined;
     syncReading();
     return;
   }
-  requestAnimationFrame(tick);
+  requestAnimationFrame((time) => {
+    tick(time, countdown);
+  });
 }
 
 // The reading pause fills a ring around the status dot.
-function startReading(ms: number): void {
+function startReading(ms: number, id?: number): void {
   if (replaying) return;
-  reading = { ms, elapsed: 0, last: performance.now() };
+  const countdown = { ms, elapsed: 0, last: performance.now(), held: false, id };
+  reading = countdown;
   ui.dot.style.setProperty('--progress', '0');
   syncReading();
-  requestAnimationFrame(tick);
+  requestAnimationFrame((time) => {
+    tick(time, countdown);
+  });
 }
 
 /** Changes the live status only when its text changes, avoiding repeated announcements. */
@@ -367,18 +383,39 @@ function statusText(text: string): void {
   if (ui.status.textContent !== text) ui.status.textContent = text;
 }
 
+function hideTip(): void {
+  clearTimeout(tipTimer);
+  tipPending = undefined;
+  if (!tipTarget) return;
+  tipTarget.removeAttribute('aria-describedby');
+  tipTarget = undefined;
+  ui.tip.hidden = true;
+  tipWarmUntil = performance.now() + tipWarmMs;
+}
+
 function syncStatus(): void {
   const showPause = active && !suspended && paused;
+  const explainListening = active && !suspended && !paused && !runConfirming && turn === 'agent' && state === 'listening';
+  if (explainListening) {
+    ui.status.dataset.tip = 'The agent is listening for your reply. Answer its question, ask a question, or say continue in the reply box.';
+    ui.status.tabIndex = 0;
+  } else {
+    if (tipTarget === ui.status || tipPending === ui.status) hideTip();
+    delete ui.status.dataset.tip;
+    ui.status.removeAttribute('tabindex');
+  }
   const playing = active && !suspended && !paused && !runConfirming && turn === 'agent' && (state === 'typing' || state === 'running');
   ui.status.classList.toggle('is-paused', showPause);
   ui.status.classList.toggle('is-playing', playing);
   if (!active) {
     ui.dot.className = 'dot off';
+    syncReading();
     statusText('No session');
     return;
   }
   if (suspended) {
     ui.dot.className = 'dot off';
+    syncReading();
     statusText('Suspended: waiting for the agent');
     return;
   }
@@ -426,16 +463,6 @@ function showTip(el: HTMLElement): void {
   ui.tip.hidden = false;
   el.setAttribute('aria-describedby', 'tip');
   placeTip(el);
-}
-
-function hideTip(): void {
-  clearTimeout(tipTimer);
-  tipPending = undefined;
-  if (!tipTarget) return;
-  tipTarget.removeAttribute('aria-describedby');
-  tipTarget = undefined;
-  ui.tip.hidden = true;
-  tipWarmUntil = performance.now() + tipWarmMs;
 }
 
 function hoverTip(el: HTMLElement | undefined): void {
@@ -600,13 +627,108 @@ ui.history.addEventListener('scroll', () => {
   // A resize can emit scroll before ResizeObserver; retain the prior follow state.
   if (ui.history.clientHeight !== historyHeight) return;
   followingLatest = ui.history.scrollHeight - ui.history.clientHeight - ui.history.scrollTop <= 1;
+  historyScrollHeight = ui.history.scrollHeight;
 });
 const historyResize = new ResizeObserver(() => {
   historyHeight = ui.history.clientHeight;
+  historyScrollHeight = ui.history.scrollHeight;
   if (chatOrder === 'oldestFirst' && followingLatest) ui.history.scrollTop = ui.history.scrollHeight;
 });
 historyResize.observe(ui.band);
 historyResize.observe(ui.history);
+
+// specs/Panel.tla, `OpenSettings` and `CloseSettings`.
+/** Starts a timed gesture, capturing the countdown ID before it can change. */
+function beginReadingGesture(kind: 'pointer' | 'keyboard', pointerId?: number): void {
+  if (readingGesture !== undefined || ui.skipReading.disabled || reading?.id === undefined) return;
+  readingClick = undefined;
+  const id = reading.id;
+  const gesture = {
+    id,
+    kind,
+    pointerId,
+    held: false,
+    timer: setTimeout(() => {
+      if (readingGesture !== gesture || reading?.id !== id || ui.skipReading.disabled) return;
+      const now = performance.now();
+      reading.elapsed += now - reading.last;
+      reading.last = now;
+      reading.held = true;
+      gesture.held = true;
+      vscode.postMessage({ type: 'holdReading', id, held: true });
+    }, READING_HOLD_MS),
+  };
+  readingGesture = gesture;
+}
+
+/** Releases a timed gesture without affecting an independent playback pause. */
+function endReadingGesture(cancelled: boolean): void {
+  const gesture = readingGesture;
+  if (gesture === undefined) return;
+  clearTimeout(gesture.timer);
+  if (gesture.held) {
+    if (reading?.id === gesture.id) {
+      reading.held = false;
+      reading.last = performance.now();
+    }
+    vscode.postMessage({ type: 'holdReading', id: gesture.id, held: false });
+  }
+  const click = { id: gesture.id, suppress: cancelled || gesture.held };
+  readingClick = click;
+  readingGesture = undefined;
+  // Native clicks follow release in the same task. Do not let a missing click
+  // suppress an unrelated later assistive activation.
+  setTimeout(() => {
+    if (readingClick === click) readingClick = undefined;
+  }, 0);
+}
+
+ui.skipReading.addEventListener('pointerdown', (event) => {
+  if (event.button !== 0) return;
+  beginReadingGesture('pointer', event.pointerId);
+  if (readingGesture?.kind === 'pointer') {
+    try {
+      ui.skipReading.setPointerCapture(event.pointerId);
+    } catch {
+      // A synthetic event or a lost pointer cannot be captured; window events still release it.
+    }
+  }
+});
+globalThis.addEventListener('pointerup', (event) => {
+  if (readingGesture?.kind === 'pointer' && readingGesture.pointerId === event.pointerId) endReadingGesture(false);
+});
+globalThis.addEventListener('pointercancel', (event) => {
+  if (readingGesture?.kind === 'pointer' && readingGesture.pointerId === event.pointerId) endReadingGesture(true);
+});
+ui.skipReading.addEventListener('lostpointercapture', (event) => {
+  if (readingGesture?.kind === 'pointer' && readingGesture.pointerId === event.pointerId) endReadingGesture(true);
+});
+ui.skipReading.addEventListener('keydown', (event) => {
+  if (event.key === ' ' && !event.repeat) beginReadingGesture('keyboard');
+});
+globalThis.addEventListener('keyup', (event) => {
+  if (event.key === ' ' && readingGesture?.kind === 'keyboard') endReadingGesture(false);
+});
+window.addEventListener('blur', () => {
+  endReadingGesture(true);
+});
+window.addEventListener('pagehide', () => {
+  endReadingGesture(true);
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) endReadingGesture(true);
+});
+ui.skipReading.addEventListener('click', () => {
+  const click = readingClick;
+  readingClick = undefined;
+  const id = click?.id ?? readingGesture?.id ?? reading?.id;
+  if (click?.suppress === true || readingGesture?.held === true || ui.skipReading.disabled || id === undefined || reading?.id !== id) {
+    return;
+  }
+  vscode.postMessage({ type: 'skipReading', id });
+  reading = undefined;
+  syncReading();
+});
 
 // specs/Panel.tla, `OpenSettings` and `CloseSettings`.
 ui.settings.addEventListener('click', () => {
@@ -656,6 +778,7 @@ function handle(message: ToPanel): void {
           current = undefined;
           const was = suspended;
           suspended = message.suspended === true;
+          if (suspended) reading = undefined;
           // A revive repeats the suspension a disconnect already showed (#138): specs/Panel.tla, `RepeatSession`,
           // with no divider; else `ChangeSession`.
           if (was !== suspended) {
@@ -690,7 +813,7 @@ function handle(message: ToPanel): void {
       setNow(message.text);
       return;
     case 'reading':
-      startReading(message.ms);
+      startReading(message.ms, message.id);
       return;
     case 'state':
       setState(message);
@@ -812,18 +935,35 @@ function decide(run: boolean, remember: boolean): void {
 
 // ---- Wiring ----------------------------------------------------------------
 
+// Preserve a followed edge across a resize whose observer has not run yet,
+// while still noticing a reader scroll before its scroll event is delivered.
+function followsHistory(): boolean {
+  const { scrollHeight, clientHeight, scrollTop } = ui.history;
+  return scrollHeight - clientHeight - scrollTop <= 1 || (followingLatest && historyScrollHeight - historyHeight - scrollTop <= 1);
+}
+
 window.addEventListener('message', (m: MessageEvent) => {
   // The extension posts only ToPanel messages.
-  const follow = chatOrder === 'oldestFirst' && ui.history.scrollHeight - ui.history.clientHeight - ui.history.scrollTop <= 1;
+  const follow = chatOrder === 'oldestFirst' && followsHistory();
+  if (chatOrder === 'oldestFirst') followingLatest = follow;
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   handle(m.data as ToPanel);
-  if (follow && chatOrder === 'oldestFirst') ui.history.scrollTop = ui.history.scrollHeight;
+  if (follow && chatOrder === 'oldestFirst') {
+    ui.history.scrollTop = ui.history.scrollHeight;
+    historyScrollHeight = ui.history.scrollHeight;
+    historyHeight = ui.history.clientHeight;
+  }
 });
 
 ui.reply.addEventListener('input', () => {
-  const follow = chatOrder === 'oldestFirst' && ui.history.scrollHeight - ui.history.clientHeight - ui.history.scrollTop <= 1;
+  const follow = chatOrder === 'oldestFirst' && followsHistory();
+  if (chatOrder === 'oldestFirst') followingLatest = follow;
   syncDraft();
-  if (follow) ui.history.scrollTop = ui.history.scrollHeight;
+  if (follow) {
+    ui.history.scrollTop = ui.history.scrollHeight;
+    historyScrollHeight = ui.history.scrollHeight;
+    historyHeight = ui.history.clientHeight;
+  }
 });
 ui.reply.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
@@ -892,7 +1032,14 @@ window.addEventListener('blur', hideTip);
 // button, which after a click could be End; Enter still does.
 document.addEventListener('keydown', (e) => {
   if (e.key !== ' ' || e.ctrlKey || e.metaKey || e.altKey || !active) return;
-  if (e.target === ui.reply || e.target === ui.settings || (e.target instanceof Node && ui.settingsDialog.contains(e.target))) return;
+  if (
+    e.target === ui.reply ||
+    e.target === ui.skipReading ||
+    e.target === ui.settings ||
+    (e.target instanceof Node && ui.settingsDialog.contains(e.target))
+  ) {
+    return;
+  }
   e.preventDefault();
   if (e.repeat || turn === 'programmer') return;
   vscode.postMessage({ type: paused ? 'resume' : 'pause' });

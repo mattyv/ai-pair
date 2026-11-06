@@ -33,7 +33,7 @@ MoveOldKinds == {"missing", "before"}
 
 \* Every `move` place, by the kind of value in each field.
 Moves == [line : LineKinds, at : AtKinds, to : ToKinds, old : MoveOldKinds,
-          file : {"missing", "named"}]
+          file : {"missing", "named"}, allow : {"missing", "true", "other"}]
 
 \* A span's `text`, `from`, or `through`: none, code, the empty text, or a
 \* number.
@@ -51,7 +51,7 @@ Spans ==
 \* Everything a check can answer when something is wrong, each named for its
 \* problem.
 Problems ==
-    {"oldSpot", "line", "to", "bothPlaces", "noPlace", "relativeClose",
+    {"oldSpot", "line", "to", "allow", "bothPlaces", "noPlace", "relativeClose",
      "atIsText", "unmarked",
      "twoMarkers", "markerOnly", "nearLine", "rangeEnd", "bothForms",
      "rangeTexts", "noCode", "emptyCode"}
@@ -83,6 +83,8 @@ MoveProblem(p) ==
     IF p.old = "before" THEN "oldSpot"
     ELSE IF ~LineOK(p.line) THEN "line"
     ELSE IF p.to = "otherText" THEN "to"
+    ELSE IF p.allow # "missing" /\
+            (p.allow # "true" \/ p.to # "line_end") THEN "allow"
     ELSE IF p.to = "next_close" /\
             (p.line # "missing" \/ p.file # "missing")
          THEN "relativeClose"
@@ -97,6 +99,7 @@ MoveProblem(p) ==
 ValidMove(p) ==
     /\ p.old = "missing"
     /\ LineOK(p.line)
+    /\ (p.allow = "missing" \/ (p.allow = "true" /\ p.to = "line_end"))
     /\ \/ p.at = "spot" /\ p.to = "missing"
        \/ p.at = "missing" /\ p.to = "line_end"
        \/ p.at = "missing" /\ p.to = "next_close" /\ p.line = "missing" /\

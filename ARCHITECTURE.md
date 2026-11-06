@@ -11,7 +11,7 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes 0.10.0.
+Status: describes 0.11.0.
 
 ## Components
 
@@ -37,9 +37,10 @@ Status: describes 0.10.0.
     editor dependencies, so it can be tested against a fake editor.
 -   **The VS Code adapter** is a thin layer over the VS Code API: apply edits
     with undo stops, report document changes, render decorations, scroll, save.
-    It tells the agent's edits apart from the programmer's by keeping a queue of
-    its own pending edits for each file, and matching each change VS Code
-    reports by its offset, deleted length, and text.
+    It identifies its own edits by keeping a queue of pending edits per file
+    and matching each change VS Code reports by offset, deleted length, and
+    text. An unmatched editor change is classified conservatively; this does
+    not establish that a person made it.
 -   **The narration panel** is a webview. It talks to the extension via
     `postMessage`, with the messages typed in
     [`panel_messages.ts`](packages/vscode/src/panel_messages.ts). Its markup is
@@ -77,7 +78,7 @@ file:
   "workspaceFolders": ["/Users/me/projects/todo-app"],
   "port": 53817,
   "token": "...",             // random, per window
-  "protocolVersion": 3,
+  "protocolVersion": 5,
   "lastFocused": 1758700000000   // epoch ms, updated when the window gains focus
 }
 ```

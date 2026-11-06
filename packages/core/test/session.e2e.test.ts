@@ -23,6 +23,78 @@ function reload(editor: ReturnType<typeof setup>['editor']): void {
 // With the test config, a beat is 100 ms and `type` takes 100 ms per character.
 
 describe('where the controller and the player meet', () => {
+  it.each([
+    [250, 'x', `"""${CURSOR_MARKER}y`],
+    [550, 'x"""', `${CURSOR_MARKER}y`],
+  ])('reports the correct remaining text when interrupted around an atomic quote run at %i ms', async (ms, typed, rest) => {
+    const { editor, controller } = setup({ 'a.py': '' });
+    await controller.start();
+    await controller.step([{ move: { file: 'a.py', line: 1, to: 'line_end' } }, { type: `x"""${CURSOR_MARKER}y` }]);
+    await advance(ms);
+    expect(editor.text('a.py')).toBe(typed);
+    controller.userInterrupt();
+    const report = await until(controller.listen());
+    expect(report.batches[0]).toMatchObject({ status: 'interrupted', unplayed: [{ type: rest }] });
+  });
+
+  it('types a requested empty triple-quoted string as six literal quotes', async () => {
+    const { editor, controller } = setup({ 'a.py': '' });
+    await controller.start();
+    await controller.step([{ move: { file: 'a.py', line: 1, to: 'line_end' } }, { type: `"""${CURSOR_MARKER}"""` }]);
+    await until(controller.step([]));
+    expect(editor.text('a.py')).toBe('""""""');
+    expect(editor.cursor?.offset).toBe(3);
+  });
+
+  it('allows an explicitly acknowledged multi-close move and subsequent edit', async () => {
+    const { editor, controller } = setup({ 'a.py': 'x = call((1))\n' });
+    await controller.start();
+    await controller.read('a.py');
+    const first = await controller.step([
+      { move: { file: 'a.py', line: 1, at: `x = call((1${CURSOR_MARKER}))` } },
+      { move: { to: 'line_end', allow_multiple_closes: true } },
+      { type: `,${CURSOR_MARKER}` },
+    ]);
+    expect(first.rejected).toBeUndefined();
+    expect(first.batches).toEqual([]);
+    const report = await until(controller.step([]));
+    expect(editor.text('a.py')).toBe('x = call((1)),\n');
+    expect(report.batches[0]?.status).toBe('completed');
+  });
+
+  it('rejects an entire batch when a later line_end would cross multiple closes', async () => {
+    const { editor, controller } = setup({ 'a.py': 'x = call((1))\n' });
+    await controller.start();
+    await controller.read('a.py');
+    const report = await controller.step([
+      { move: { file: 'a.py', line: 1, at: `x${CURSOR_MARKER} =` } },
+      { type: `z${CURSOR_MARKER}` },
+      { move: { at: `1${CURSOR_MARKER}))` } },
+      { move: { to: 'line_end' } },
+      { type: `,${CURSOR_MARKER}` },
+    ]);
+    expect(report.rejected).toMatchObject({ index: 4, error: { kind: 'invalid_action' } });
+    expect(editor.text('a.py')).toBe('x = call((1))\n');
+  });
+
+  it('interrupts within a token, reports its remainder, and discards the queued batch', async () => {
+    const { editor, controller } = setup({ 'a.py': '' });
+    await controller.start();
+    await controller.step([{ move: { file: 'a.py', line: 1, to: 'line_end' } }, { type: `unknown${CURSOR_MARKER}` }]);
+    const queued = controller.step([{ say: 'Later.' }]);
+    await advance(100 + 3 * 100 + 50);
+    expect(editor.text('a.py')).toBe('unk');
+    controller.userInterrupt();
+    const first = await until(queued);
+    const second = await until(controller.listen());
+    expect(first.rejected).toBeUndefined();
+    expect([...first.batches, ...second.batches]).toMatchObject([
+      { status: 'interrupted', unplayed: [{ type: `nown${CURSOR_MARKER}` }] },
+      { status: 'discarded' },
+    ]);
+    expect(editor.text('a.py')).toBe('unk');
+  });
+
   it.each(['type', 'type_fast'] as const)('refuses %s with the cursor inside CRLF before editing', async (kind) => {
     const { editor, controller } = setup({ 'a.ts': 'x\n' });
     await controller.start();
@@ -399,4 +471,25 @@ describe('structural editing across rehearsal and playback', () => {
     await until(controller.step([]));
     expect(editor.text('a.py')).toBe('x = ({},)\n');
   });
+});
+
+it('EligibleFinishes, IneligibleKeepsReading: finishes the requested delay without lifting a user pause', async () => {
+  const { panel, controller } = setup();
+  await controller.start();
+  await controller.step([{ say: 'A message to read.' }, { say: 'Next message.' }]);
+  await advance(0);
+  const event = panel.events.find((entry) => entry.type === 'reading');
+  if (event?.type !== 'reading' || event.id === undefined) throw new Error('No reading countdown');
+  controller.pause();
+  controller.finishReading(event.id);
+  await advance(1000);
+  expect(panel.says()).toEqual(['A message to read.']);
+  controller.resume();
+  controller.finishReading(event.id + 1);
+  await advance(100);
+  expect(panel.says()).toEqual(['A message to read.']);
+  controller.finishReading(event.id);
+  await advance(0);
+  expect(panel.says()).toEqual(['A message to read.', 'Next message.']);
+  await until(controller.step([]));
 });

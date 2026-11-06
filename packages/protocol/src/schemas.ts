@@ -13,6 +13,8 @@ export const MOVE_TARGET_SCHEMA = z.object({
   at: z.string().optional(),
   /** The end of the line, or one close immediately after the cursor. */
   to: z.enum(['line_end', 'next_close']).optional(),
+  /** Explicitly allows line_end to cross multiple closing brackets. */
+  allow_multiple_closes: z.literal(true).optional(),
 });
 
 /** Checks the fields a span may have, before `spanProblem` holds them to a {@link SpanTarget}. */

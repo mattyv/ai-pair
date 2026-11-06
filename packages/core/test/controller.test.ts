@@ -57,6 +57,9 @@ const fakes = vi.hoisted(() => {
   /** The Player, faked: it records its scene and stage, plays each batch as a test says, and shows no cursor. */
   class FakePlayer {
     reading = false;
+    readonly finishReading = vi.fn();
+    readonly holdReading = vi.fn();
+    readonly releaseReadingHold = vi.fn();
     commandRunning = false;
     readonly play = vi.fn((id: number): Promise<{ result: BatchResult; sightings: Sighting[]; editedFiles: string[] }> =>
       Promise.resolve({ result: { id, status: 'completed' }, sightings: [], editedFiles: [] }),
@@ -1518,4 +1521,48 @@ describe('reports', () => {
     await report(h.controller.listen());
     expect(boundedDiff).toHaveBeenCalledWith('src/a.ts', 'a', 'b');
   });
+});
+
+describe('finish reading', () => {
+  it('IneligibleKeepsReading: forwards an ID only in an active unpaused agent turn', async () => {
+    const idle = harness();
+    idle.controller.finishReading(1);
+    const h = await started();
+    const current = player();
+    h.controller.finishReading(42);
+    expect(current.finishReading).toHaveBeenCalledExactlyOnceWith(42);
+    h.controller.pause();
+    h.controller.finishReading(42);
+    expect(current.finishReading).toHaveBeenCalledTimes(1);
+    h.controller.resume();
+    h.controller.takeTurn();
+    h.controller.finishReading(42);
+    expect(current.finishReading).toHaveBeenCalledTimes(1);
+    h.controller.handBack();
+    h.controller.disconnect();
+    h.controller.finishReading(42);
+    expect(current.finishReading).toHaveBeenCalledTimes(1);
+    h.controller.endSession();
+    h.controller.finishReading(42);
+    expect(current.finishReading).toHaveBeenCalledTimes(1);
+  });
+});
+
+it('releases an existing reading hold even after a separate pause, but rejects new holds', async () => {
+  const idle = harness();
+  idle.controller.holdReading(42, true);
+  idle.controller.releaseReadingHold();
+  const h = await started();
+  const current = player();
+  h.controller.holdReading(42, true);
+  h.controller.pause();
+  h.controller.holdReading(42, true);
+  h.controller.holdReading(42, false);
+  h.controller.releaseReadingHold();
+  expect(current.holdReading.mock.calls).toEqual([
+    [42, true],
+    [42, false],
+  ]);
+  expect(current.releaseReadingHold).toHaveBeenCalledOnce();
+  expect(h.controller.isPaused).toBe(true);
 });

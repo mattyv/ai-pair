@@ -1194,6 +1194,54 @@ describe('history position', () => {
     expect(historyElement.scrollTop).toBe(100);
   });
 
+  it.each(['message', 'input'] as const)('KeepsPlace: observes a scroll before a pending resize when handling %s', (change) => {
+    const historyElement = element('history');
+    Object.defineProperty(historyElement, 'scrollHeight', { configurable: true, value: 500 });
+    Object.defineProperty(historyElement, 'clientHeight', { configurable: true, value: 100 });
+    resizeHistory();
+    send({ type: 'chatOrder', value: 'oldestFirst' });
+    historyElement.scrollTop = 400;
+    historyElement.dispatchEvent(new window.Event('scroll'));
+    // A user scroll can precede delivery of the browser's scroll event.
+    historyElement.scrollTop = 40;
+    if (change === 'message') send({ type: 'say', text: 'incoming' });
+    else typeReply('draft');
+    resizeHistory();
+    expect(historyElement.scrollTop).toBe(40);
+  });
+
+  it.each([500, 900])('FollowsLatest: a message during a pending viewport resize keeps the latest edge (height %i)', (newScrollHeight) => {
+    const historyElement = element('history');
+    Object.defineProperty(historyElement, 'scrollHeight', { configurable: true, value: 500 });
+    Object.defineProperty(historyElement, 'clientHeight', { configurable: true, value: 100 });
+    resizeHistory();
+    send({ type: 'chatOrder', value: 'oldestFirst' });
+    historyElement.scrollTop = 400;
+    historyElement.dispatchEvent(new window.Event('scroll'));
+    Object.defineProperty(historyElement, 'clientHeight', { configurable: true, value: 90 });
+    Object.defineProperty(historyElement, 'scrollHeight', { configurable: true, value: newScrollHeight });
+    send({ type: 'say', text: 'incoming' });
+    resizeHistory();
+    expect(historyElement.scrollTop).toBe(newScrollHeight);
+  });
+
+  it('KeepsPlace: observes a new reader scroll after following a resize', () => {
+    const historyElement = element('history');
+    Object.defineProperty(historyElement, 'scrollHeight', { configurable: true, value: 500 });
+    Object.defineProperty(historyElement, 'clientHeight', { configurable: true, value: 100 });
+    resizeHistory();
+    send({ type: 'chatOrder', value: 'oldestFirst' });
+    historyElement.scrollTop = 400;
+    historyElement.dispatchEvent(new window.Event('scroll'));
+    Object.defineProperty(historyElement, 'clientHeight', { configurable: true, value: 90 });
+    send({ type: 'say', text: 'first' });
+    // A browser clamps the followed position to the new maximum, 410.
+    historyElement.scrollTop = 405;
+    send({ type: 'say', text: 'second' });
+    resizeHistory();
+    expect(historyElement.scrollTop).toBe(405);
+  });
+
   it('preserves a visible entry when switching away from the newest edge', () => {
     vi.useFakeTimers();
     start();
@@ -1257,4 +1305,254 @@ it('can switch order when a hidden or empty viewport has no visible anchor', () 
   historyElement.scrollTop = 50;
   send({ type: 'chatOrder', value: 'oldestFirst' });
   expect(historyElement.getAttribute('aria-label')).toBe('Earlier, oldest first');
+});
+
+describe('finish reading control', () => {
+  it('offers a named button for the current countdown and posts its ID once', () => {
+    start();
+    send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+    send({ type: 'reading', ms: 5000, id: 42 });
+    const control = element('skip-reading');
+    expect(control.getAttribute('aria-label')).toBe('Finish reading pause');
+    click(control);
+    click(control);
+    expect(posted().filter((message) => message.type === 'skipReading')).toEqual([{ type: 'skipReading', id: 42 }]);
+  });
+
+  it('does not send a skip while paused or on the programmer turn', () => {
+    start();
+    send({ type: 'reading', ms: 5000, id: 43 });
+    send({ type: 'state', state: 'read', turn: 'agent', paused: true });
+    click(element('skip-reading'));
+    send({ type: 'state', state: 'navigator', turn: 'programmer', paused: false });
+    click(element('skip-reading'));
+    expect(posted().filter((message) => message.type === 'skipReading')).toEqual([]);
+  });
+});
+
+it('disables finishing the reading pause on suspension and session end', () => {
+  start();
+  send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+  send({ type: 'reading', ms: 5000, id: 99 });
+  send({ type: 'session', active: true, suspended: true });
+  click(element('skip-reading'));
+  send({ type: 'session', active: false, reason: 'agent' });
+  click(element('skip-reading'));
+  expect(posted().filter((message) => message.type === 'skipReading')).toEqual([]);
+});
+
+it('does not offer a stale countdown after playback has resumed', () => {
+  start();
+  send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+  send({ type: 'reading', ms: 5000, id: 101 });
+  send({ type: 'state', state: 'typing', turn: 'agent', paused: false });
+  click(element('skip-reading'));
+  expect(posted().filter((message) => message.type === 'skipReading')).toEqual([]);
+});
+
+it('does not treat old replayed countdowns or a command confirmation as skippable', () => {
+  start();
+  send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+  send({ type: 'reading', ms: 5000 });
+  click(element('skip-reading'));
+  send({ type: 'reading', ms: 5000, id: 102 });
+  send({ type: 'run', id: 1, command: 'npm test', phase: 'confirm' });
+  click(element('skip-reading'));
+  expect(posted().filter((message) => message.type === 'skipReading')).toEqual([]);
+});
+
+it('does not intercept Space on the reading control as a playback pause', () => {
+  start();
+  send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+  send({ type: 'reading', ms: 5000, id: 103 });
+  const control = element('skip-reading');
+  press(control, ' ');
+  expect(posted().filter((message) => message.type === 'pause')).toEqual([]);
+});
+
+it('does not let an old animation frame schedule updates for a new countdown', () => {
+  vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'performance'] });
+  start();
+  send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+  send({ type: 'reading', ms: 5000, id: 201 });
+  click(element('skip-reading'));
+  send({ type: 'reading', ms: 5000, id: 202 });
+  vi.advanceTimersByTime(16);
+  expect(vi.getTimerCount()).toBe(1);
+});
+
+describe('reading ring long press', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    start();
+    send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+    send({ type: 'reading', ms: 5000, id: 301 });
+  });
+
+  it('LongDoesNotSkip: holds, resumes on release, and suppresses the resulting click', () => {
+    const control = element('skip-reading');
+    control.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 1 }));
+    vi.advanceTimersByTime(400);
+    expect(posted()).toContainEqual({ type: 'holdReading', id: 301, held: true });
+    const progress = element('dot').style.getPropertyValue('--progress');
+    vi.advanceTimersByTime(1000);
+    expect(element('dot').style.getPropertyValue('--progress')).toBe(progress);
+    window.dispatchEvent(new window.PointerEvent('pointerup', { bubbles: true, button: 0, pointerId: 1 }));
+    click(control);
+    expect(posted()).toContainEqual({ type: 'holdReading', id: 301, held: false });
+    expect(posted().filter((message) => message.type === 'skipReading')).toEqual([]);
+    vi.advanceTimersByTime(100);
+    expect(Number(element('dot').style.getPropertyValue('--progress'))).toBeGreaterThan(Number(progress));
+  });
+
+  it('releases a hold on focus loss even if playback was separately paused', () => {
+    const control = element('skip-reading');
+    control.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 1 }));
+    vi.advanceTimersByTime(400);
+    send({ type: 'state', state: 'read', turn: 'agent', paused: true });
+    window.dispatchEvent(new window.Event('blur'));
+    expect(posted()).toContainEqual({ type: 'holdReading', id: 301, held: false });
+    expect(posted().filter((message) => message.type === 'resume')).toEqual([]);
+  });
+
+  it('NoNewerSkip: does not let an old press finish a newer countdown', () => {
+    const control = element('skip-reading');
+    control.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 1 }));
+    send({ type: 'reading', ms: 5000, id: 302 });
+    window.dispatchEvent(new window.PointerEvent('pointerup', { bubbles: true, button: 0, pointerId: 1 }));
+    click(control);
+    expect(posted().filter((message) => message.type === 'skipReading')).toEqual([]);
+  });
+});
+
+describe('reading hold cleanup and keyboard access', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    start();
+    send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+    send({ type: 'reading', ms: 5000, id: 501 });
+  });
+
+  it.each(['pointercancel', 'lostpointercapture', 'pagehide', 'visibilitychange'] as const)('releases the hold after %s', (event) => {
+    const control = element('skip-reading');
+    control.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 1 }));
+    vi.advanceTimersByTime(400);
+    if (event === 'pointercancel') {
+      window.dispatchEvent(new window.PointerEvent(event, { pointerId: 1 }));
+    } else if (event === 'lostpointercapture') {
+      control.dispatchEvent(new window.PointerEvent(event, { pointerId: 1 }));
+    } else if (event === 'pagehide') {
+      window.dispatchEvent(new window.Event(event));
+    } else {
+      vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+      document.dispatchEvent(new window.Event(event));
+    }
+    expect(posted()).toContainEqual({ type: 'holdReading', id: 501, held: true });
+    expect(posted()).toContainEqual({ type: 'holdReading', id: 501, held: false });
+    click(control);
+    expect(posted().filter((message) => message.type === 'skipReading')).toEqual([]);
+  });
+
+  it('uses Space for a hold and release without also finishing the countdown', () => {
+    const control = element('skip-reading');
+    control.dispatchEvent(new window.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    vi.advanceTimersByTime(400);
+    window.dispatchEvent(new window.KeyboardEvent('keyup', { key: ' ', bubbles: true }));
+    click(control);
+    expect(posted()).toContainEqual({ type: 'holdReading', id: 501, held: true });
+    expect(posted()).toContainEqual({ type: 'holdReading', id: 501, held: false });
+    expect(posted().filter((message) => message.type === 'skipReading')).toEqual([]);
+  });
+
+  it('ShortCurrentSkips: finishes once on a short pointer press', () => {
+    const control = element('skip-reading');
+    control.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 1 }));
+    vi.advanceTimersByTime(100);
+    window.dispatchEvent(new window.PointerEvent('pointerup', { pointerId: 1 }));
+    click(control);
+    expect(posted().filter((message) => message.type === 'skipReading')).toEqual([{ type: 'skipReading', id: 501 }]);
+    expect(posted().filter((message) => message.type === 'holdReading')).toEqual([]);
+  });
+
+  it('ignores unrelated input and stale or ineligible hold attempts', () => {
+    const control = element('skip-reading');
+    send({ type: 'state', state: 'read', turn: 'agent', paused: true });
+    control.dispatchEvent(new window.PointerEvent('pointerdown', { button: 0, pointerId: 1 }));
+    send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+    control.dispatchEvent(new window.PointerEvent('pointerdown', { button: 2, pointerId: 2 }));
+    control.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+    control.dispatchEvent(new window.KeyboardEvent('keydown', { key: ' ', repeat: true }));
+    window.dispatchEvent(new window.KeyboardEvent('keyup', { key: 'Enter' }));
+    window.dispatchEvent(new window.PointerEvent('pointerup', { pointerId: 2 }));
+    window.dispatchEvent(new window.PointerEvent('pointercancel', { pointerId: 2 }));
+    control.dispatchEvent(new window.PointerEvent('lostpointercapture', { pointerId: 2 }));
+    document.dispatchEvent(new window.Event('visibilitychange'));
+    control.dispatchEvent(new window.PointerEvent('pointerdown', { button: 0, pointerId: 1 }));
+    control.dispatchEvent(new window.PointerEvent('pointerdown', { button: 0, pointerId: 1 }));
+    window.dispatchEvent(new window.PointerEvent('pointerup', { pointerId: 2 }));
+    send({ type: 'reading', ms: 5000, id: 502 });
+    vi.advanceTimersByTime(400);
+    expect(posted().filter((message) => message.type === 'holdReading')).toEqual([]);
+    window.dispatchEvent(new window.PointerEvent('pointerup', { pointerId: 1 }));
+    vi.advanceTimersByTime(0);
+    click(control);
+    expect(posted().filter((message) => message.type === 'skipReading')).toEqual([{ type: 'skipReading', id: 502 }]);
+  });
+
+  it('releases an old hold without affecting a newer reading', () => {
+    const control = element('skip-reading');
+    control.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 1 }));
+    vi.advanceTimersByTime(400);
+    send({ type: 'reading', ms: 5000, id: 502 });
+    window.dispatchEvent(new window.PointerEvent('pointerup', { pointerId: 1 }));
+    click(control);
+    expect(posted()).toContainEqual({ type: 'holdReading', id: 501, held: false });
+    expect(posted().filter((message) => message.type === 'skipReading')).toEqual([]);
+  });
+});
+
+describe('Your move guidance', () => {
+  it('offers a focusable explanation only while the active agent is listening', () => {
+    start();
+    send({ type: 'state', state: 'listening', turn: 'agent', paused: false });
+    const status = element('status-text');
+    expect(status.textContent).toBe('Your move');
+    expect(status.getAttribute('tabindex')).toBe('0');
+    expect(status.dataset.tip).toBe(
+      'The agent is listening for your reply. Answer its question, ask a question, or say continue in the reply box.',
+    );
+    send({ type: 'state', state: 'listening', turn: 'agent', paused: true });
+    expect(status.dataset.tip).toBeUndefined();
+    expect(status.hasAttribute('tabindex')).toBe(false);
+  });
+
+  it('clears a pending or visible explanation on a status change', () => {
+    vi.useFakeTimers();
+    start();
+    send({ type: 'state', state: 'listening', turn: 'agent', paused: false });
+    hover(element('status-text'));
+    vi.advanceTimersByTime(TIP_DELAY_MS);
+    expect(tip()).toContain('agent is listening');
+    send({ type: 'state', state: 'thinking', turn: 'agent', paused: false });
+    expect(tip()).toBeUndefined();
+    expect(element('status-text').dataset.tip).toBeUndefined();
+    send({ type: 'state', state: 'listening', turn: 'agent', paused: false });
+    hover(element('status-text'));
+    send({ type: 'session', active: true, suspended: true });
+    vi.advanceTimersByTime(TIP_DELAY_MS);
+    expect(tip()).toBeUndefined();
+  });
+});
+
+it('shows the Your move explanation on keyboard focus and removes it on turn change', () => {
+  start();
+  send({ type: 'state', state: 'listening', turn: 'agent', paused: false });
+  const status = element('status-text');
+  status.focus();
+  expect(tip()).toContain('agent is listening');
+  expect(status.getAttribute('aria-describedby')).toBe('tip');
+  send({ type: 'state', state: 'navigator', turn: 'programmer', paused: false });
+  expect(tip()).toBeUndefined();
+  expect(status.hasAttribute('aria-describedby')).toBe(false);
+  expect(status.dataset.tip).toBeUndefined();
 });

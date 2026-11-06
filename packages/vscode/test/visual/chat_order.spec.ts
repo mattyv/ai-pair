@@ -296,3 +296,131 @@ test('agent and programmer messages appear once in chronological order in both l
   await expect(page.locator('body')).toHaveClass(/paused/);
   await expect(current).toHaveCSS('opacity', '1');
 });
+
+test('reading ring finishes the current countdown by click or keyboard', async ({ page }) => {
+  const post = await load(page);
+  await post({ type: 'session', active: true });
+  await post({ type: 'state', state: 'read', turn: 'agent', paused: false });
+  await post({ type: 'reading', ms: 30_000, id: 101 });
+  const control = page.getByRole('button', { name: 'Finish reading pause' });
+  await expect(control).toBeEnabled();
+  await control.click();
+  await post({ type: 'reading', ms: 30_000, id: 102 });
+  await expect(control).toBeEnabled();
+  await control.focus();
+  await page.keyboard.press('Space');
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return (globalThis as unknown as { messages: Array<{ type: string; id?: number }> }).messages.filter(
+          (message) => message.type === 'skipReading' || message.type === 'pause',
+        );
+      }),
+    )
+    .toEqual([
+      { type: 'skipReading', id: 101 },
+      { type: 'skipReading', id: 102 },
+    ]);
+});
+
+test('holding the reading ring pauses and releases without finishing it', async ({ page }) => {
+  const post = await load(page);
+  await post({ type: 'session', active: true });
+  await post({ type: 'state', state: 'read', turn: 'agent', paused: false });
+  await post({ type: 'reading', ms: 30_000, id: 301 });
+  const control = page.getByRole('button', { name: 'Finish reading pause' });
+  await expect(control).toBeEnabled();
+  await control.hover();
+  await page.mouse.down();
+  await page.waitForTimeout(500);
+  await page.mouse.up();
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return (globalThis as unknown as { messages: Array<{ type: string }> }).messages.filter(
+          (message) => message.type === 'holdReading' || message.type === 'skipReading',
+        );
+      }),
+    )
+    .toEqual([
+      { type: 'holdReading', id: 301, held: true },
+      { type: 'holdReading', id: 301, held: false },
+    ]);
+  await post({ type: 'reading', ms: 30_000, id: 302 });
+  await expect(control).toBeEnabled();
+  await control.focus();
+  await page.keyboard.down('Space');
+  await page.waitForTimeout(500);
+  await page.keyboard.up('Space');
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return (globalThis as unknown as { messages: Array<{ type: string }> }).messages.filter(
+          (message) => message.type === 'holdReading' || message.type === 'skipReading',
+        );
+      }),
+    )
+    .toEqual([
+      { type: 'holdReading', id: 301, held: true },
+      { type: 'holdReading', id: 301, held: false },
+      { type: 'holdReading', id: 302, held: true },
+      { type: 'holdReading', id: 302, held: false },
+    ]);
+});
+
+test('a gesture started on one message cannot skip a later message', async ({ page }) => {
+  const post = await load(page);
+  await post({ type: 'session', active: true });
+  await post({ type: 'state', state: 'read', turn: 'agent', paused: false });
+  await post({ type: 'reading', ms: 30_000, id: 401 });
+  const control = page.getByRole('button', { name: 'Finish reading pause' });
+  await expect(control).toBeEnabled();
+  await control.hover();
+  await page.mouse.down();
+  await post({ type: 'reading', ms: 30_000, id: 402 });
+  await page.mouse.up();
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return (globalThis as unknown as { messages: Array<{ type: string }> }).messages.filter(
+          (message) => message.type === 'skipReading',
+        );
+      }),
+    )
+    .toEqual([]);
+  await expect(control).toBeEnabled();
+});
+
+test('the Settings gear remains available while idle, calibrating, and active', async ({ page }) => {
+  const post = await load(page);
+  const settings = page.getByRole('button', { name: 'Settings' });
+  await expect(settings).toHaveCount(1);
+  await expect(settings).toBeVisible();
+  await expect(settings.locator('svg')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'End the session' })).toBeHidden();
+  await settings.click();
+  await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close' }).click();
+  await post({ type: 'calibration', view: { phase: 'armed', title: 'Test' } });
+  await expect(settings).toBeVisible();
+  await post({ type: 'session', active: true });
+  await expect(settings).toBeVisible();
+  await expect(page.getByRole('button', { name: 'End the session' })).toBeVisible();
+});
+
+test('Your move exposes guidance on keyboard focus and clears it on status change', async ({ page }) => {
+  const post = await load(page);
+  await post({ type: 'session', active: true });
+  await post({ type: 'state', state: 'listening', turn: 'agent', paused: false });
+  const status = page.getByText('Your move', { exact: true });
+  await expect(status).toHaveAttribute('tabindex', '0');
+  await page.keyboard.press('Tab');
+  await status.focus();
+  await expect(page.getByRole('tooltip')).toContainText('agent is listening for your reply');
+  await post({ type: 'state', state: 'thinking', turn: 'agent', paused: false });
+  await expect(page.getByRole('tooltip')).toBeHidden();
+});

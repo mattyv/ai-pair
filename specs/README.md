@@ -64,6 +64,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Serialize.cfg` | `NumCalls = 2` calls, each empty or not, the session ending, an interrupt, and the socket closing at any point | holds | 3,646 |
 | `Wire.cfg` | `NumSockets = 2` sockets, `NumCalls = 2` calls | holds | 43,426 |
 | `StructuralTyping.cfg` | both operations, supported and unsupported contexts, selection and one or two closes | holds | 144 |
+| `LineEndGuard.cfg` | rehearsal and live suffix danger, with or without acknowledgment | holds | 22 |
 | `BuildIdentity.cfg` | two builds, installing and reloading | holds | 4 |
 | `Panel.cfg` | `MaxEvents = 5`, both display orders and the settings dialog | holds | 84 |
 | `PanelScroll.cfg` | `MaxEvents = 5`, `ScrollOn = "you"`, both display orders | holds | 108 |
@@ -83,7 +84,12 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Scroll.cfg` | `NumLines = 8` lines, a view of `ViewHeight = 4`, `MaxMoves = 2`, `MaxFollowSwitches = 2`, `scrollBeyondLastLine` on and off, the programmer's turn | holds | 14,131 |
 | `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
 | `Resume.cfg` | 2 directories, `MaxSessions = 3` sessions, `PostOnRevive = TRUE` | holds | 56 |
-| `Timeline.cfg` | `MaxSleeps = 3` sleeps, a second sleep while one is pending | holds | 656 |
+| `Timeline.cfg` | `MaxSleeps = 3` sleeps, holds, and a second sleep while one is pending | holds | 864 |
+| `ReadingSkip.cfg` | two countdown IDs, hold, pause, turn and suspension changes | holds | 5,840 |
+| `ReadingHold.cfg` | matching hold and release with changing pause state | holds | 444 |
+| `ReadingGesture.cfg` | short and long gestures across two countdown IDs | holds | 170 |
+| `ListeningHint.cfg` | status and session context | holds | 64 |
+| `SettingsAccess.cfg` | idle and active toolbar | holds | 4 |
 | `Terminals.cfg` | `NumTerminals = 2` terminals, `MaxRuns = 3`, 2 directories | holds | 3,361 |
 | `Turns.cfg` | batches of up to 2 actions, `MaxTurns = 2` turn changes | holds | 1,530 |
 | `Reload.cfg` | `NumLines = 5` lines, any of them changed on disk, a selection at a line's start or not | holds | 320 |
@@ -94,7 +100,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Player.cfg` | `MaxEdits = 2` | holds | 26 |
 | `LineIdentity.cfg` | texts up to 4 characters, inserts up to 2 | holds (checked as `ASSUME`s) | |
 | `Places.cfg` | texts up to 5 characters, needles up to 3 | holds (`ASSUME`s) | |
-| `ActionValidation.cfg` | move and span places, including relative `next_close`, `CheckAtText = TRUE` | holds (`ASSUME`s) | |
+| `ActionValidation.cfg` | move and span places, including `next_close` and multi-close acknowledgment, `CheckAtText = TRUE` | holds (`ASSUME`s) | |
 | `Typing.cfg` | texts up to 7 characters | holds (`ASSUME`s) | |
 | `TypingEol.cfg` | up to 5 ordinary, LF, or CRLF input units; LF and CRLF document endings | holds (`ASSUME`s) | |
 | `Anchor.cfg` | `MaxBatches = 4`, `Guard = TRUE`, `DropsHeld = FALSE` | holds | 113 |
@@ -604,6 +610,8 @@ away (`editor.ts`).
 | Spec | Code |
 |---|---|
 | `Sleep`, `Fire` | `sleep(ms)` and its timer |
+| `FinishEarly` | `finish()` completes an armed sleep without interrupting playback |
+| `Hold`, `Release` | `hold()` freezes the remaining delay; `release()` resumes only if globally unpaused |
 | `Pause`, `Resume` | `Controller.pause(reason)` with `Timeline.pause()`; `Controller.resume(reason)`, or with no reason all of them, then `Timeline.resume()` |
 | `Interrupt`, `Reset` | `interrupt()`; `reset()` for the next batch |
 | `SleepAgain`, `FireReplaced` | `sleep(ms)` with a sleep pending, which no caller makes; the replaced sleep's timer in `arm`, which leaves `sleeping` alone (#174) |
@@ -619,6 +627,7 @@ in TLC and then reverted:
 | `Pause` adds a reason outside `PauseReasons` | `TypeOK` |
 | `Resume` of one reason resumes the timeline with others left | `PausedMatchesReasons` |
 | `Pause` leaves the timer running | `NoTimerWhilePaused` |
+| `Hold` leaves the timer running | `NoTimerWhileHeld` |
 | `Interrupt` resolves the pending sleep but keeps it pending | `ResolvedOnce` |
 | `Resume` never restarts a waiting sleep's timer | `ResumeContinues` |
 | `FireReplaced` clears the pending sleep, the code without its check | `LatestPending` |
@@ -632,6 +641,7 @@ carries the invariant's name:
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `PausedMatchesReasons` | `controller.test.ts`: PausedMatchesReasons, NoTimerWhilePaused, ResumeContinues: holds playback until the last pause reason is gone; `webview/panel.test.ts`: PausedMatchesReasons: distinguishes actual pause, active playback, natural reading, and turn or confirmation waits (the display consumes the controller's aggregated flag) |
 | `NoTimerWhilePaused` | `controller.test.ts`: PausedMatchesReasons, NoTimerWhilePaused, ResumeContinues: holds playback until the last pause reason is gone; `timeline.test.ts`: NoTimerWhilePaused, ResumeContinues: pauses a sleep with its time left, and resumes it for only that; `integration.ts`, in VS Code: NoTimerWhilePaused, ResumeContinues, ResolvedOnce: a pause held a say until the resume; an interrupt during a show cut the move, and the next batch played |
+| `NoTimerWhileHeld` | `timeline.test.ts`: NoTimerWhileHeld: holds only the remaining time and resumes it on release |
 | `ResolvedOnce` | `timeline.test.ts`: ResolvedOnce: resolves an interrupted sleep false once, and the next sleep after reset only when its own time is up. A `Promise` settles once, so no change to `timeline.ts` can resolve a sleep twice; the test checks what the code decides: `false` on an interrupt, and the next sleep's own time after `reset`; `integration.ts`, in VS Code: NoTimerWhilePaused, ResumeContinues, ResolvedOnce: a pause held a say until the resume; an interrupt during a show cut the move, and the next batch played |
 | `LatestPending` | `timeline.test.ts`: LatestPending: an earlier sleep that runs out leaves the later sleep that replaced it pending, for an interrupt to cut short |
 | `ResumeContinues` | `controller.test.ts`: PausedMatchesReasons, NoTimerWhilePaused, ResumeContinues: holds playback until the last pause reason is gone; `timeline.test.ts`: ResumeContinues: holds a sleep begun while paused until the resume, then runs all of its time; `integration.ts`, in VS Code: NoTimerWhilePaused, ResumeContinues, ResolvedOnce: a pause held a say until the resume; an interrupt during a show cut the move, and the next batch played |
@@ -1596,7 +1606,7 @@ code are held to one contract.
 |---|---|---|---|
 | `LineIdentity` | `applyChange` in `core/src/lines.ts` | one identity per line, none named twice; lines outside the change keep theirs; a line break at the end of a line keeps it in place, at its start moves it down | `core/test/lines.test.ts` |
 | `Places` | `resolveSpot`, `resolveSpan` in `core/src/places.ts` | a spot or span resolves exactly when one match is on its line, and lies there; a range ends at the first `through` after `from` | `core/test/places.test.ts`, with `through` up to 2 characters (the spec: 3) |
-| `Typing` | `planTyping` in `core/src/typing.ts` | the chunks concatenate to the text; each is one character, a line break with its indentation, or the leading indentation | `core/test/typing.test.ts`, texts up to 5 characters (the spec: 7) |
+| `Typing` | `planTyping` in `core/src/typing.ts` | chunks concatenate to the text; quote runs of three or more are atomic, and other chunks are characters or indentation with their line break | `core/test/typing.test.ts`, texts up to 5 characters (the spec: 7) |
 | `ActionValidation` | `moveProblem`, `spanProblem` in `protocol/src/index.ts` | a place gets no problem exactly when it is valid, and no place makes either check throw | `protocol/test/index.test.ts`, with the same kinds of value as the spec |
 
 Each is a module of `ASSUME`s alone, with a config that only gives the
@@ -1650,6 +1660,7 @@ Each `ASSUME` was proved to bite with a mutation, run in TLC and then reverted:
 |---|---|
 | a line feed's chunk drops the line feed | `ConcatenatesToText` |
 | an "x" shares its chunk with the character after it | `ChunksAreUnits` |
+| split every quote run into individual characters | `QuoteRunsAtomic` |
 
 Each names the test that proves the code obeys it:
 
@@ -1657,6 +1668,7 @@ Each names the test that proves the code obeys it:
 |---|---|
 | `ConcatenatesToText` | `typing.test.ts`: ConcatenatesToText, ChunksAreUnits: splits text into chunks that concatenate to it, each one character or a line break with its indentation |
 | `ChunksAreUnits` | the same test |
+| `QuoteRunsAtomic` | `typing.test.ts`: types a run of three or more quotes in one edit without losing cadence; `session.e2e.test.ts`: reports the correct remaining text when interrupted around an atomic quote run |
 
 #### `TypingEol`
 
@@ -1680,21 +1692,22 @@ units, for both output endings.
 #### `ActionValidation`
 
 The checks both the relay's schema and the player ask (#45), over every
-`move` and every `select` or `point`, by the kind of value in each field: 180
-moves and 960 spans. Each `ASSUME` was proved to bite with a mutation, run in
+`move` and every `select` or `point`, by the kind of value in each field.
+Each `ASSUME` was proved to bite with a mutation, run in
 TLC and then reverted:
 
 | Mutation | Breaks |
 |---|---|
 | `CheckAtText = FALSE`, the code before #163, where `{ at: 5 }` threw in `spotProblem` | `NeverThrows` |
 | `MoveProblem` without its check for neither `at` nor `to` | `MoveExactly` |
+| omit the multi-close acknowledgment restriction | `MoveExactly` |
 | `SpanProblem` without its check for empty code | `SpanExactly` |
 
 Each names the test that proves the code obeys it:
 
 | Assumption | Proved by |
 |---|---|
-| `MoveExactly` | `protocol/test/index.test.ts`: MoveExactly, NeverThrows: gives no problem exactly for a valid move, and a message for every other; `integration.ts`, in VS Code: MoveExactly, SpanExactly, NeverThrows: 27 malformed actions refused by name in the editor; frames that aren't messages dropped |
+| `MoveExactly` | `protocol/test/index.test.ts`: MoveExactly, NeverThrows: gives no problem exactly for a valid move, and a message for every other; accepts the multiple-close acknowledgment only as true on line_end; `integration.ts`, in VS Code: MoveExactly, SpanExactly, NeverThrows: malformed actions refused by name in the editor; frames that aren't messages dropped |
 | `SpanExactly` | `protocol/test/index.test.ts`: SpanExactly, NeverThrows: gives no problem exactly for a valid span, and a message for every other; `integration.ts`, in VS Code: MoveExactly, SpanExactly, NeverThrows: 27 malformed actions refused by name in the editor; frames that aren't messages dropped |
 | `NeverThrows` | both tests |
 
@@ -1715,6 +1728,29 @@ above (#163); this contract holds the relay's schema and the player to them.
 
 Nothing ties a spec to its code but the tables above. When code in one of the
 files above changes, update its spec, and run `specs/check.sh`.
+
+### `LineEndGuard`: intent before crossing multiple closes
+
+Rehearsal rejects a batch before playback when its current-line suffix contains
+only multiple closing brackets and whitespace, unless the move acknowledges
+the crossing. Playback checks the live suffix again. The model abstracts this
+predicate as danger; it does not parse code or cover other suffixes. Its 22
+distinct states include different rehearsed and live contexts.
+
+| Mutation | Breaks |
+|---|---|
+| disable the rehearsal guard | `PreflightRefuses` |
+| disable the live guard | `LiveGuard` |
+| make an edit before rejecting | `RejectBeforeEdits` |
+| refuse acknowledged live crossings | `AllowedActs` |
+| make all allowed moves no-ops | `AllowedActs` |
+
+| Invariant | Test |
+|---|---|
+| `TypeOK` | TypeScript checks the state types |
+| `RejectBeforeEdits`, `PreflightRefuses` | `session.e2e.test.ts`: rejects an entire batch when a later line_end would cross multiple closes |
+| `LiveGuard` | `player.test.ts`: guards multiple adjacent closes during playback unless acknowledged |
+| `AllowedActs` | `session.e2e.test.ts`: allows an explicitly acknowledged multi-close move and subsequent edit; `player.test.ts`: allows line_end for a single close or when code follows the closes |
 
 ### `StructuralTyping`: explicit structural edits
 
@@ -1768,3 +1804,69 @@ leave it stale on reload violate `TypeOK`, `ShowsRunning`, and
 |---|---|
 | `TypeOK` | The TypeScript compiler checks the types |
 | `ShowsRunning`, `ShowsNewAfterReload` | `vscode/test/panel.test.ts`: ShowsRunning, ShowsNewAfterReload: each page uses its running bundle identity |
+
+### `ReadingSkip`: finishing a message's reading delay
+
+The panel sends an ID for the selected message countdown. The controller checks
+the session and pause state, and the Player matches the ID before the timeline
+finishes its active sleep. IDs absent from older replay events do not enable the
+control. The model abstracts the timeline to one pending countdown.
+
+| Spec | Code |
+|---|---|
+| `Start`, `Finish` | a `say` starts and ends its reading delay |
+| `ChangeContext` | pause, turn or session suspension changes |
+| `Click` | the panel request and Controller/Player guards |
+
+Each property was checked by a mutation in a temporary model: accepting the
+wrong ID or an explicit pause violates `OnlyCurrent`; ignoring an eligible
+click violates `EligibleFinishes`; clearing a countdown on an ineligible click
+violates `IneligibleKeepsReading`; an out-of-range ID violates `TypeOK`.
+
+| Invariant | Test |
+|---|---|
+| `TypeOK` | The TypeScript compiler checks types |
+| `OnlyCurrent` | `player.test.ts`: OnlyCurrent: only finishes the currently pending say and rejects stale IDs |
+| `EligibleFinishes`, `IneligibleKeepsReading` | `session.e2e.test.ts`: EligibleFinishes, IneligibleKeepsReading: finishes the requested delay without lifting a user pause |
+| `IneligibleKeepsReading` | `controller.test.ts`: IneligibleKeepsReading: forwards an ID only in an active unpaused agent turn |
+
+### `ReadingHold`: scoped timer holds
+
+The controller accepts a hold only for the current eligible reading. Release
+clears the matching hold even if another pause arose meanwhile; it never clears
+that separate pause. Mutations accepting a stale ID, clearing global pause,
+ignoring eligible holds, or refusing a matching release while paused violate
+`StaleDoesNothing`, `ReleaseKeepsPause`, `EligibleHold`, and `EligibleRelease`.
+An unscoped hold violates `ScopedHold`.
+
+| Invariant | Test |
+|---|---|
+| `TypeOK` | The TypeScript compiler checks types |
+| `ScopedHold`, `StaleDoesNothing`, `EligibleHold` | `player.test.ts`: ScopedHold, StaleDoesNothing, EligibleHold: holds only the matching reading timer |
+| `ReleaseKeepsPause`, `EligibleRelease` | `timeline.test.ts`: ReleaseKeepsPause, EligibleRelease: does not release a separate playback pause when the hold ends |
+
+### `ReadingGesture`: binding a press to its countdown
+
+The panel captures the countdown ID at press time. A long press suppresses its
+following click; a short press can finish only that captured countdown. Mutations
+using the new ID, allowing the long click, and ignoring a short current press
+violate `NoNewerSkip`, `LongDoesNotSkip`, and `ShortCurrentSkips`.
+
+| Invariant | Test |
+|---|---|
+| `TypeOK` | The TypeScript compiler checks types |
+| `NoNewerSkip` | `webview/panel.test.ts`: NoNewerSkip: does not let an old press finish a newer countdown |
+| `LongDoesNotSkip` | `webview/panel.test.ts`: LongDoesNotSkip: holds, resumes on release, and suppresses the resulting click |
+| `ShortCurrentSkips` | `webview/panel.test.ts`: ShortCurrentSkips: finishes once on a short pointer press |
+
+### `ListeningHint` and `SettingsAccess`: panel controls
+
+The hint appears only for active, unpaused listening; Settings remains reachable
+in idle and active panels. Mutating the hint to ignore context violates
+`HintMatchesStatus`; hiding the gear while idle violates `SettingsAvailable`.
+
+| Invariant | Test |
+|---|---|
+| `TypeOK` | The TypeScript compiler checks types |
+| `HintMatchesStatus` | `webview/panel.test.ts`: offers a focusable explanation only while the active agent is listening |
+| `SettingsAvailable` | `panel_html.test.ts`: places one icon-only Settings control in the toolbar before End; `visual/chat_order.spec.ts`: the Settings gear remains available while idle, calibrating, and active |

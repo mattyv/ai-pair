@@ -101,7 +101,7 @@ Last updated: css, 2026-11-06.
 | `packages/vscode/src/terminal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.3% B 98.1% F 92.3% | - | - | - | - |
 | `packages/vscode/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/view.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 88.0% F 100.0% | - | - | - | - |
-| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 125 of 125 rules matched |
+| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 129 of 129 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/test/agents.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/calibration.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -123,6 +123,7 @@ Last updated: css, 2026-11-06.
 | `packages/vscode/test/python_diagnostics.e2e.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/python_diagnostics.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/setup.test.ts` | TypeScript | test | test | test | test | - | test |
+| `packages/vscode/test/smoke_integration.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/terminal.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/timings.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/view.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -176,10 +177,14 @@ Last updated: css, 2026-11-06.
 | `specs/FileText.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
 | `specs/FollowMode.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/FollowMode.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
+| `specs/LineEndGuard.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/LineEndGuard.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/LineIdentity.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/LineIdentity.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/ListenGrace.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ListenGrace.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
+| `specs/ListeningHint.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/ListeningHint.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/Navigator.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Navigator.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/Outside.cfg` | TLC config | - | - | - | - | - | - |
@@ -199,6 +204,12 @@ Last updated: css, 2026-11-06.
 | `specs/PointFocus.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/ProjectGuide.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ProjectGuide.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
+| `specs/ReadingGesture.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/ReadingGesture.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
+| `specs/ReadingHold.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/ReadingHold.tla` | TLA+ | - | - | 7 of 7 actions | - | - | - |
+| `specs/ReadingSkip.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/ReadingSkip.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
 | `specs/Rehearsal.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Rehearsal.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/Reload.cfg` | TLC config | - | - | - | - | - | - |
@@ -211,6 +222,8 @@ Last updated: css, 2026-11-06.
 | `specs/Scroll.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/Serialize.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Serialize.tla` | TLA+ | - | - | 13 of 13 actions | - | - | - |
+| `specs/SettingsAccess.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/SettingsAccess.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/Start.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Start.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
 | `specs/StructuralTyping.cfg` | TLC config | - | - | - | - | - | - |
@@ -218,13 +231,13 @@ Last updated: css, 2026-11-06.
 | `specs/Terminals.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Terminals.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
 | `specs/Timeline.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/Timeline.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
+| `specs/Timeline.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
 | `specs/Turns.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Turns.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/Typing.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Typing.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/TypingEol.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/TypingEol.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/TypingEol.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/Wire.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Wire.tla` | TLA+ | - | - | 15 of 15 actions | - | - | - |
 | `specs/check.sh` | Shell | - | - | - | - | - | - |

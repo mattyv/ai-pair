@@ -4,6 +4,7 @@
 // from are constants, and real.
 
 import { describe, expect, it, vi } from 'vitest';
+import { ACTION_SCHEMA } from '../src/schemas';
 import { actionKinds, CURSOR_MARKER, fieldsProblem, moveProblem, spanProblem, ToolError, typeProblem } from '../src/index';
 
 vi.mock('../src/wire', () => ({}));
@@ -38,6 +39,19 @@ function lineOK(line: unknown): boolean {
 }
 
 describe('ActionValidation', () => {
+  it('accepts the multiple-close acknowledgment only as true on line_end', () => {
+    expect(moveProblem({ to: 'line_end', allow_multiple_closes: true })).toBeUndefined();
+    const action = { move: { to: 'line_end', allow_multiple_closes: true } };
+    expect(ACTION_SCHEMA.parse(action)).toEqual(action);
+    for (const place of [
+      { to: 'line_end', allow_multiple_closes: false },
+      { to: 'line_end', allow_multiple_closes: 'yes' },
+      { to: 'next_close', allow_multiple_closes: true },
+      { at: SPOT, allow_multiple_closes: true },
+    ]) {
+      expect(moveProblem(place)).toContain('allow_multiple_closes');
+    }
+  });
   it('MoveExactly, NeverThrows: gives no problem exactly for a valid move, and a message for every other', () => {
     const moves = LINES.flatMap((line) =>
       ATS.flatMap((at) => TOS.flatMap((to) => [undefined, 'x'].map((before) => ({ line, at, to, before })))),
@@ -112,7 +126,7 @@ describe('fieldsProblem', () => {
     const withTo: Record<string, unknown> = { to: 'y' };
     expect(fieldsProblem({ select: { ...withTo, extra: 1 } })).toBe(spanProblem(withTo));
     expect(fieldsProblem({ move: { to: 'line_end', extra: 1 } })).toBe(
-      'Unknown field `extra` in `move`: it takes `file`, `line`, `at`, `to`.',
+      'Unknown field `extra` in `move`: it takes `file`, `line`, `at`, `to`, `allow_multiple_closes`.',
     );
     expect(fieldsProblem({ point: { text: 'x', near: 1 } })).toBe(
       'Unknown field `near` in `point`: it takes `file`, `line`, `text`, `from`, `through`.',
@@ -120,7 +134,7 @@ describe('fieldsProblem', () => {
   });
 
   it('refuses a place that is not an object by name: an array, a number, JSON null', () => {
-    expect(fieldsProblem({ move: [] })).toBe('`move` is an object: it takes `file`, `line`, `at`, `to`.');
+    expect(fieldsProblem({ move: [] })).toBe('`move` is an object: it takes `file`, `line`, `at`, `to`, `allow_multiple_closes`.');
     expect(fieldsProblem({ select: 5 })).toBe('`select` is an object: it takes `file`, `line`, `text`, `from`, `through`.');
     expect(fieldsProblem({ point: jsonNull })).toBe('`point` is an object: it takes `file`, `line`, `text`, `from`, `through`.');
   });

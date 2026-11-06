@@ -39,6 +39,8 @@ const nothing: Outcome = { kind: 'ok', nothing: true };
 
 /** Shared by all players, so the panel never sees two commands with one id. */
 let nextRunId = 1;
+/** Unique per extension host, so delayed clicks cannot skip a later message. */
+let nextReadingId = 1;
 
 /** What playback reads and changes. */
 export interface Scene {
@@ -106,7 +108,6 @@ interface Playing {
   touched: Set<string>;
   editedFiles: Set<string>;
   runs: RunResult[];
-  warnings: Set<string>;
   /** The lines its report shows. */
   sightings: Sighting[];
   /** The file it names, in `move`, `select` or `point`, and whether it has edited yet. */
@@ -176,11 +177,29 @@ export class Player {
   /** A `run` whose command is executing. */
   commandRunning = false;
   private playing?: Playing;
+  private readingId?: number;
 
   constructor(
     readonly scene: Scene,
     private readonly stage: Stage,
   ) {}
+
+  /** Completes the matching say's reading delay, leaving other waits alone. */
+  finishReading(id: number): void {
+    if (this.readingId === id) this.stage.pacing.finish();
+  }
+
+  /** Changes a hold only for the matching live reading countdown. */
+  holdReading(id: number, held: boolean): void {
+    if (this.readingId !== id) return;
+    if (held) this.stage.pacing.hold();
+    else this.stage.pacing.release();
+  }
+
+  /** Releases a current reading hold when its view disappears. */
+  releaseReadingHold(): void {
+    if (this.readingId !== undefined) this.stage.pacing.release();
+  }
 
   /** Plays a batch, saves the files it edited, and says how it went, and which lines that shows. */
   async play(
@@ -192,7 +211,6 @@ export class Player {
       touched: new Set(),
       editedFiles: new Set(),
       runs: [],
-      warnings: new Set(),
       sightings: [],
       edited: false,
       moved: false,
@@ -205,7 +223,6 @@ export class Player {
       this.playing = undefined;
     }
     if (playing.runs.length > 0) result.runs = playing.runs;
-    if (playing.warnings.size > 0) result.warnings = [...playing.warnings];
     if (result.status !== 'discarded') {
       try {
         const shown = await this.code(playing);
@@ -392,9 +409,11 @@ export class Player {
       // specs/Calibration.tla, `StartSay`: timed with the rate in force now; the sleep's end is `EndSay`.
       const ms = readingTime(action.say, timing.reading) / this.stage.readingSpeed();
       this.reading = true;
-      panel.post({ type: 'reading', ms });
+      this.readingId = nextReadingId++;
+      panel.post({ type: 'reading', ms, id: this.readingId });
       this.stage.render();
       await this.stage.pacing.sleep(ms);
+      this.readingId = undefined;
       this.reading = false;
       this.stage.render();
       return ok;
@@ -421,11 +440,16 @@ export class Player {
         offset = lineEnd(text, line);
         if (
           scene.cursor?.file === file &&
+          move.allow_multiple_closes !== true &&
           scene.cursor.offset <= offset &&
           position(text, scene.cursor.offset).line === line &&
           /^[\t ]*[)\]}](?:[\t ]*[)\]}])+[\t ]*$/.test(text.slice(scene.cursor.offset, offset))
         ) {
-          playing.warnings.add('`line_end` crossed multiple closing brackets; use `next_close` to step over one.');
+          // specs/LineEndGuard.tla, Rehearse and Play: require intent before crossing several closes.
+          return fail(
+            'invalid_action',
+            '`line_end` would cross multiple closing brackets. Use `next_close`, an exact `at` spot, or set `allow_multiple_closes: true`.',
+          );
         }
       } else {
         const r = resolveSpot(text, { at, line });

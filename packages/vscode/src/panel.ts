@@ -154,7 +154,10 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     });
     view.onDidDispose(() => {
       // specs/Start.tla, `Dispose`: the page goes, its button and note with it.
-      if (this.view === view) this.view = undefined;
+      if (this.view === view) {
+        this.view = undefined;
+        this.wiring.controller().releaseReadingHold();
+      }
       // Its draft went with it, and so does the pause the draft asked for (#69): specs/Draft.tla, `Dispose`.
       this.wiring.controller().resume('reply');
       this.wiring.calibration().cancel();
@@ -189,6 +192,14 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         return;
       case 'chatOrder':
         if (message.value === 'newestFirst' || message.value === 'oldestFirst') this.chatOrder.set(message.value);
+        return;
+      case 'holdReading':
+        if (Number.isSafeInteger(message.id) && message.id > 0 && typeof message.held === 'boolean') {
+          controller.holdReading(message.id, message.held);
+        }
+        return;
+      case 'skipReading':
+        if (Number.isSafeInteger(message.id) && message.id > 0) controller.finishReading(message.id);
         return;
       case 'speed':
         // Only the menu's speeds: the page sends no others (#17).

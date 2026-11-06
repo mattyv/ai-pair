@@ -336,12 +336,15 @@ type_fast ";▌"
 -   **A `select` takes whole pairs.** Replacing `foo(a,` leaves its `)` behind,
     and typing `foo(` with its close then adds another. Select from an opening
     through its close, or neither.
--   **`to: "line_end"` steps past every close on the line.** After a parameter
-    list on a line that ends `) }`, it lands after the `}`. To stop after the
-    first close, move to a spot: the text up to and including that `)`.
--   **Don't reformat files from a `run`.** A formatter's rewrite counts as an
-    outside edit of a file your batch is in, and cuts the batch short; run it
-    from your own tools instead, between batches.
+-   **`to: "line_end"` steps past every close on the line.** When the current
+    line's remaining suffix contains only two or more closes and spaces or
+    tabs, the batch is refused unless that move sets
+    `allow_multiple_closes: true`. Use `next_close` or a precise `at` spot to
+    stop sooner. This narrow check does not parse code or guard every suffix.
+-   **Run formatters between editing batches.** Use a separate `run` batch,
+    and queue no edits to its files until the formatter has exited. Its rewrite
+    is an outside edit and interrupts work planned for those files. Read the
+    formatted files before planning more edits.
 -   **A `\uXXXX` sequence in a `type` may arrive as the character it names,**
     decoded by the harness on the way. To put an escape in source, build the
     character another way, such as `String.fromCharCode(0xd7)`.
