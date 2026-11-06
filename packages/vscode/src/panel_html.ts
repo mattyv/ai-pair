@@ -129,7 +129,14 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
               aria-expanded="false"
               data-tip="Playback speed"
             >1.0${SPEED_SUFFIX}</button>
-            <div data-ui="speed-menu" class="speed-menu" role="menu" aria-label="Playback speed" hidden>${speeds}</div>
+            <div data-ui="speed-menu" class="speed-menu" role="menu" aria-label="Playback speed" hidden>
+              <div role="group" aria-label="Playback speed">${speeds}</div>
+              <div role="group" aria-label="Code playback">
+                <button type="button" role="menuitemradio" aria-checked="true" data-code-playback="typing">Typing</button>
+                <button type="button" role="menuitemradio" aria-checked="false" data-code-playback="lines">Lines</button>
+                <button type="button" role="menuitemradio" aria-checked="false" data-code-playback="blocks">Blocks</button>
+              </div>
+            </div>
           </div>
           <div class="speed-wrap">
             <button

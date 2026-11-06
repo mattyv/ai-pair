@@ -16,6 +16,7 @@ import { structuralNewline } from '../src/structural_typing';
 import { position } from '../src/text';
 import type { CommandOutcome, PanelEvent, PanelPort, PlayerEditor } from '../src/ports';
 import type { Pacing } from '../src/timeline';
+import { groupTyping } from '../src/typing';
 
 /** The agent's project. */
 const ROOT = '/project';
@@ -115,6 +116,9 @@ vi.mock('../src/typing', () => ({
   planTyping: vi.fn((...[text, , , , scale = 1]: [string, unknown, boolean, unknown, number?]) =>
     Array.from(text).map((c) => ({ text: c, delay: CHAR_MS * scale })),
   ),
+  groupTyping: vi.fn((chunks: Array<{ text: string; delay: number }>, mode: string) =>
+    mode === 'typing' ? chunks : chunks.map((chunk) => ({ ...chunk, delay: 0 })),
+  ),
   readingTime: vi.fn(() => READING_MS),
 }));
 
@@ -192,6 +196,7 @@ function harness({ files = {}, scene = {}, config = {}, knows }: HarnessOptions 
     config: () => ({ ...CONFIG, ...config }),
     speed: () => 1,
     readingSpeed: () => READING_SPEED,
+    codePlayback: () => 'typing',
     render: vi.fn<Stage['render']>(),
     confirm,
     lines,
@@ -1080,4 +1085,51 @@ it('ScopedHold, StaleDoesNothing, EligibleHold: holds only the matching reading 
   await playing;
   h.player.releaseReadingHold();
   expect(h.pacing.release).toHaveBeenCalledTimes(2);
+});
+
+
+describe('grouped playback', () => {
+  it('reads each inserted code group at the calibrated and playback speed', async () => {
+    const h = harness({ files: { 'a.ts': '' }, scene: { cursor: { file: A, offset: 0 } } });
+    h.stage.codePlayback = () => 'lines';
+    h.stage.speed = () => 2;
+    await played(h, [{ type: `ab${CURSOR_MARKER}` }]);
+    expect(h.editor.edit.mock.calls.map((call) => call[3])).toEqual(['a', 'b']);
+    expect(pauses(h)).toEqual([0, 25, 0, 25]);
+    expect(posted(h).filter((event) => event.type === 'reading')).toEqual([
+      expect.objectContaining({ owner: 'code', ms: 25 }),
+      expect.objectContaining({ owner: 'code', ms: 25 }),
+    ]);
+  });
+
+  it('tracks the same atomic changes when a group is inserted in one edit', async () => {
+    const h = harness({ files: { 'a.ts': '' }, scene: { cursor: { file: A, offset: 0 } } });
+    h.stage.codePlayback = () => 'blocks';
+    vi.mocked(groupTyping).mockReturnValueOnce([{ text: 'a\nb', delay: 0 }]);
+    await played(h, [{ type: `a\nb${CURSOR_MARKER}` }]);
+    expect(h.editor.edit).toHaveBeenCalledTimes(1);
+    expect(h.lines.apply.mock.calls).toEqual([
+      [A, { offset: 0, deleteLength: 0, text: 'a' }],
+      [A, { offset: 1, deleteLength: 0, text: '\n' }],
+      [A, { offset: 2, deleteLength: 0, text: 'b' }],
+    ]);
+  });
+
+  it('PrefixExact: returns only the suffix when interrupted during reading', async () => {
+    const h = harness({ files: { 'a.ts': '' }, scene: { cursor: { file: A, offset: 0 } } });
+    h.stage.codePlayback = () => 'blocks';
+    h.pacing.sleep.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    const { result } = await played(h, [{ type: `ab${CURSOR_MARKER}` }, { say: 'After' }]);
+    expect(h.files.get(A)).toBe('a');
+    expect(result.unplayed).toEqual([{ type: `b${CURSOR_MARKER}` }, { say: 'After' }]);
+  });
+
+  it('completes a final inserted chunk on interruption during its reading pause', async () => {
+    const h = harness({ files: { 'a.ts': '' }, scene: { cursor: { file: A, offset: 0 } } });
+    h.stage.codePlayback = () => 'lines';
+    h.pacing.sleep.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    const { result } = await played(h, [{ type: `a${CURSOR_MARKER}` }, { say: 'After' }]);
+    expect(h.files.get(A)).toBe('a');
+    expect(result.unplayed).toEqual([{ say: 'After' }]);
+  });
 });

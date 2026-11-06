@@ -2,7 +2,7 @@
 // specs/Typing.tla checks on its model. typing.ts imports only types, so the test needs no mocks.
 
 import { describe, expect, it } from 'vitest';
-import { planTyping, readingTime } from '../src/typing';
+import { groupTyping, planTyping, readingTime } from '../src/typing';
 
 /** A typing pace with no jitter, so each pause is the same every run. */
 const CADENCE = { charMs: 100, jitter: 0, wordStartMs: 50, punctuationMs: 30, openBracketMs: 20, newlineMs: 250 };
@@ -113,3 +113,37 @@ it(
   },
   EXHAUSTIVE_MS,
 );
+
+
+describe('grouped code playback', () => {
+  const atoms = (text: string) => planTyping(text, CADENCE, true, () => 0.5);
+  const groups = (text: string, mode: 'lines' | 'blocks') => groupTyping(atoms(text), mode).map((chunk) => chunk.text);
+
+  it('PrefixExact: groups complete lines without losing indentation or quote atoms', () => {
+    expect(groups(`one\n  """two"""\nthree`, 'lines')).toEqual(['one\n  ', '"""two"""\n', 'three']);
+    const text = `one\n\n  """two"""\nthree`;
+    expect(groups(text, 'blocks').join('')).toBe(text);
+  });
+
+  it('BoundedGroups: limits blocks to four lines and 240 Unicode characters', () => {
+    expect(groups('a\nb\nc\nd\ne', 'blocks')).toEqual(['a\nb\nc\nd\n', 'e']);
+    const text = '😀'.repeat(241);
+    expect(groups(text, 'blocks').map((part) => Array.from(part).length)).toEqual([240, 1]);
+  });
+
+  it('prefers whitespace when a long line crosses the size limit', () => {
+    const text = `${'a'.repeat(200)} ${'b'.repeat(100)}`;
+    expect(groups(text, 'blocks')).toEqual([`${'a'.repeat(200)} `, 'b'.repeat(100)]);
+  });
+
+  it('keeps an oversized atomic quote run whole and makes progress', () => {
+    const quotes = '"'.repeat(241);
+    expect(groups(`a${quotes}b`, 'blocks')).toEqual(['a', quotes, 'b']);
+  });
+
+  it('leaves typing unchanged and groups no empty plan', () => {
+    const plan = atoms('a\n  b');
+    expect(groupTyping(plan, 'typing')).toEqual(plan);
+    expect(groupTyping([], 'lines')).toEqual([]);
+  });
+});

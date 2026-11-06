@@ -90,6 +90,55 @@ export function planTyping(text: string, cadence: Cadence, atLineStart: boolean,
   return result;
 }
 
+/** How code appears during a typing action. */
+export type CodePlayback = 'typing' | 'lines' | 'blocks';
+
+const BLOCK_LINES = 4;
+const BLOCK_CHARS = 240;
+
+/** Groups existing atomic edits without splitting them or changing their text. */
+export function groupTyping(atoms: Chunk[], mode: CodePlayback): Chunk[] {
+  if (mode === 'typing') return atoms;
+  const groups: Chunk[] = [];
+  let start = 0;
+  while (start < atoms.length) {
+    let end = start;
+    let chars = 0;
+    let lines = 0;
+    let lineEnd = start;
+    let whitespace = start;
+    while (end < atoms.length) {
+      const atom = atoms[end];
+      if (atom === undefined) break;
+      const length = Array.from(atom.text).length;
+      if (mode === 'blocks' && end > start && chars + length > BLOCK_CHARS) break;
+      chars += length;
+      end++;
+      if (atom.text.includes('\n')) {
+        lines++;
+        lineEnd = end;
+        if (mode === 'lines' || lines === BLOCK_LINES) break;
+      } else if (/\s/u.test(atom.text)) {
+        whitespace = end;
+      }
+      if (mode === 'blocks' && chars >= BLOCK_CHARS) break;
+    }
+    // A size boundary favors a complete line, then a word boundary. Oversized
+    // indivisible atoms still make progress as a group of their own.
+    if (mode === 'blocks' && end < atoms.length && lines < BLOCK_LINES && chars >= BLOCK_CHARS) {
+      if (lineEnd > start) end = lineEnd;
+      else if (whitespace > start) end = whitespace;
+    } else if (mode === 'blocks' && end < atoms.length && lines < BLOCK_LINES && end > start) {
+      if (lineEnd > start) end = lineEnd;
+      else if (whitespace > start) end = whitespace;
+    }
+    const group = atoms.slice(start, end);
+    groups.push({ text: group.map((atom) => atom.text).join(''), delay: 0 });
+    start = end;
+  }
+  return groups;
+}
+
 /** Returns the characters a text takes to read: runs of whitespace count as one, so indentation and line breaks do not. */
 export function readingChars(text: string): number {
   return text.trim().replaceAll(/\s+/g, ' ').length;

@@ -371,6 +371,11 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     this.redraw();
   }
 
+  /** Highlights the inserted group with the existing theme-aware point decoration. */
+  renderCodeReading(range: { file: string; start: number; end: number } | undefined): void {
+    this.renderPoint(range);
+  }
+
   reveal(): void {
     // specs/Scroll.tla, `Follow`: a pause ends in `resume`, which reveals the target.
     const target = this.target();

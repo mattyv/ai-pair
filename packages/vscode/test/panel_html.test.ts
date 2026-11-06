@@ -162,3 +162,11 @@ it('offers an accessible automatic-terminal setting and a live reveal control', 
   expect(checkbox?.closest('label')?.textContent).toContain('Show terminals automatically');
   expect(page.querySelector('[data-ui="show-terminal"]')?.textContent).toContain('Show terminal');
 });
+
+it('offers code playback modes in the playback speed menu', () => {
+  const html = panelHtml('source', 'style', 'script');
+  expect(html).toContain('aria-label="Code playback"');
+  expect(html).toContain('data-code-playback="typing"');
+  expect(html).toContain('data-code-playback="lines"');
+  expect(html).toContain('data-code-playback="blocks"');
+});

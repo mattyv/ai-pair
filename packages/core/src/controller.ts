@@ -254,6 +254,7 @@ export class Controller {
   private readonly pauseReasons = new Set<PauseReason>();
   private speed = 1;
   private readingSpeed = 1;
+  private codePlayback: import('./typing').CodePlayback = 'typing';
   private lastPosted = '';
   /** After any change the session's `saved` form may have: the window saves it (#25). */
   onChange?: () => void;
@@ -334,6 +335,7 @@ export class Controller {
         config: () => this.config,
         speed: () => this.speed,
         readingSpeed: () => this.readingSpeed,
+        codePlayback: () => this.codePlayback,
         render: () => {
           this.render();
         },
@@ -771,6 +773,11 @@ export class Controller {
   /** Releases a reading hold belonging to a disposed panel. */
   releaseReadingHold(): void {
     this.session?.player.releaseReadingHold();
+  }
+
+  /** Sets the granularity used by the next typing action. */
+  setCodePlayback(mode: import('./typing').CodePlayback): void {
+    this.codePlayback = mode;
   }
 
   setReadingSpeed(speed: number): void {

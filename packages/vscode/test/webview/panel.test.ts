@@ -1592,3 +1592,14 @@ it('does not offer a terminal for an unapproved or declined command', () => {
   send({ type: 'run', id: 81, command: 'npm test', phase: 'declined' });
   expect(element('history').querySelector('[data-show-terminal="81"]')).toBeNull();
 });
+
+it('ChoiceSaved: keeps mode in the pace label when speed and mode messages arrive in either order', () => {
+  start();
+  send({ type: 'codePlayback', value: 'blocks' });
+  send({ type: 'speed', value: 2 });
+  expect(element('speed').getAttribute('aria-label')).toContain('blocks');
+  send({ type: 'codePlayback', value: 'lines' });
+  expect(element('speed').getAttribute('aria-label')).toContain('lines');
+  send({ type: 'speed', value: 3 });
+  expect(element('speed').getAttribute('aria-label')).toContain('lines');
+});

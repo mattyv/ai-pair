@@ -103,6 +103,7 @@ export async function rehearse(
     config: () => config,
     speed: () => 1,
     readingSpeed: () => 1,
+    codePlayback: () => 'typing',
     render: () => {},
     confirm: () => Promise.resolve(true),
     lines,

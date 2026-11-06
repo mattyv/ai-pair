@@ -556,6 +556,10 @@ function speedMenu(button: HTMLButtonElement, menu: HTMLElement, type: 'speed' |
     b.addEventListener('click', () => {
       close();
       button.focus();
+      if (b.dataset.codePlayback !== undefined) {
+        vscode.postMessage({ type: 'codePlayback', value: b.dataset.codePlayback });
+        return;
+      }
       vscode.postMessage({ type, value: Number(b.dataset.speed) });
     });
   }
@@ -595,7 +599,7 @@ function showSpeed(button: HTMLButtonElement, menu: HTMLElement, name: string, p
   const label = `${Number.isInteger(value * TENTHS) ? value.toFixed(1) : String(value)}${SPEED_SUFFIX}`;
   button.textContent = prefix + label;
   button.setAttribute('aria-label', `${name}: ${label}`);
-  for (const b of menu.querySelectorAll('button')) {
+  for (const b of menu.querySelectorAll<HTMLButtonElement>('button[data-speed]')) {
     b.setAttribute('aria-checked', String(Math.abs(Number(b.dataset.speed) - value) < SPEED_TOLERANCE));
   }
 }
@@ -901,6 +905,12 @@ function handle(message: ToPanel): void {
     case 'speed':
       showSpeed(ui.speed, ui.speedMenu, 'Playback speed', '', message.value);
       return;
+    case 'codePlayback':
+      for (const button of ui.speedMenu.querySelectorAll<HTMLButtonElement>('button[data-code-playback]')) {
+        button.setAttribute('aria-checked', String(button.dataset.codePlayback === message.value));
+      }
+      ui.speed.setAttribute('aria-label', `Playback speed: ${ui.speed.textContent ?? ''}, code: ${message.value}`);
+      break;
     case 'readingSpeed':
       showSpeed(ui.readingSpeed, ui.readingMenu, 'Reading speed', 'read ', message.value);
       return;

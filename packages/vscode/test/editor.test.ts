@@ -548,6 +548,17 @@ describe('the decorations', () => {
     expect(drawn(here, cursorType('typing'))).toEqual([]);
   });
 
+  it('highlights only the inserted code in its editor and clears the highlight', () => {
+    const { editor } = made();
+    const here = inView(FILE);
+    const there = inView(OTHER);
+    editor.renderCodeReading({ file: FILE, start: 1, end: 3 });
+    expect(drawn(here, at(fakes.created.types, 1))).toEqual([[pos(1), pos(3)]]);
+    expect(drawn(there, at(fakes.created.types, 1))).toEqual([]);
+    editor.renderCodeReading(undefined);
+    expect(drawn(here, at(fakes.created.types, 1))).toEqual([]);
+  });
+
   it('pulses the read cursor, dimming it every PULSE_MS, until the state changes', () => {
     const { editor } = made();
     const view = inView(FILE);

@@ -25,7 +25,7 @@ import type { LineIds, Sighting } from './lines';
 import type { Change, Focus, PanelPort, PlayerEditor } from './ports';
 import { fileLines, isLineStart, lineEnd, lineText, position } from './text';
 import type { Pacing } from './timeline';
-import { planTyping, readingTime } from './typing';
+import { groupTyping, planTyping, readingTime, type CodePlayback } from './typing';
 import { structuralNewline } from './structural_typing';
 
 /** A report's code longer than this skips lines in the middle. */
@@ -67,6 +67,8 @@ export interface Stage {
   speed(): number;
   /** Divides only a say's reading pause; `speed` paces everything else. */
   readingSpeed(): number;
+  /** Returns the granularity for the next typing action. */
+  codePlayback(): CodePlayback;
   /** Shows the agent cursor and state after a change. */
   render(): void;
   /** Waits for the programmer to allow or decline a command. */
@@ -168,6 +170,11 @@ export function transformScene(s: Scene, file: string, change: Change): void {
     s.selection = { start: map(s.selection.start), end: map(s.selection.end) };
   }
   if (s.point?.file === file) s.point = { file, start: map(s.point.start), end: map(s.point.end) };
+}
+
+/** Posts a code reading countdown on the existing panel clock. */
+function panelForCode(panel: PanelPort, ms: number, id: number): void {
+  panel.post({ type: 'reading', owner: 'code', ms, id });
 }
 
 /** Plays one batch's actions in the editor at a human pace: moves, typing, saying, running commands. */
@@ -657,7 +664,8 @@ export class Player {
     const insertAt = scene.selection ? scene.selection.start : cursor.offset;
     const { timing, random } = this.stage.config();
     const scale = fast ? timing.fastFactor : 1;
-    const chunks = planTyping(before + after, timing.type, isLineStart(doc, insertAt), random, scale);
+    const mode = this.stage.codePlayback();
+    const chunks = groupTyping(planTyping(before + after, timing.type, isLineStart(doc, insertAt), random, scale), mode);
 
     if (chunks.length === 0 && scene.selection) chunks.push({ text: '', delay: 0 });
     let typed = '';
@@ -686,6 +694,30 @@ export class Player {
       playing.editedFiles.add(cursor.file);
       typed += chunk.text;
       this.follow();
+      if (mode !== 'typing' && chunk.text !== '') {
+        // specs/CodePlayback.tla, Insert and Finish: read each inserted group before the next.
+        const ms = (readingTime(chunk.text, timing.reading) * scale) / this.stage.readingSpeed() / this.stage.speed();
+        this.reading = true;
+        this.readingId = nextReadingId++;
+        panelForCode(this.stage.panel, ms, this.readingId);
+        this.stage.editor.renderCodeReading?.({ file: cursor.file, start, end: start + insert.length });
+        this.stage.render();
+        const completed = await this.stage.pacing.sleep(ms);
+        this.stage.editor.renderCodeReading?.(undefined);
+        this.readingId = undefined;
+        this.reading = false;
+        this.stage.render();
+        if (!completed) {
+          if (typed.length < before.length + after.length) {
+            const rest = typed.length <= before.length
+              ? before.slice(typed.length) + CURSOR_MARKER + after
+              : CURSOR_MARKER + after.slice(typed.length - before.length);
+            return { kind: 'interrupted', rest: fast ? { type_fast: rest } : { type: rest } };
+          }
+          if (after !== '') cursor.offset -= eol === '\n' ? after.length : after.replaceAll('\n', eol).length;
+          return { kind: 'interrupted', consumed: true };
+        }
+      }
     }
     if (after !== '') {
       // Into the pair just closed: a move within sight, so the same beat before it, and pause after,
