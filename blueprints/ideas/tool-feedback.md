@@ -14,3 +14,6 @@ Track frustrations with the current tool and possible improvements.
     label so the status does not depend on colour alone.
 1.  **Improve message contrast.** The grey chat history is hard to read. Use
     the theme's foreground for message text so it is easier to follow.
+1.  **Investigate repeated LLM formatting errors.** Later, examine why the LLM
+    keeps making formatting mistakes while writing code and what would prevent
+    them.
