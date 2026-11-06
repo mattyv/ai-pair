@@ -71,7 +71,13 @@ async function load(page: Page): Promise<(event: object) => Promise<void>> {
             addEventListener(type: string, listener: () => void, options: { once: boolean }): void;
             postMessage(message: unknown, origin: string): void;
           };
-          target.addEventListener('message', () => resolve(), { once: true });
+          target.addEventListener(
+            'message',
+            () => {
+              resolve();
+            },
+            { once: true },
+          );
           target.postMessage(data, '*');
         }),
       event,
