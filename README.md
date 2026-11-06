@@ -1,5 +1,29 @@
 # AI Pair Programmer
 
+## Additions in this fork
+
+This fork builds on the original [AI Pair project](https://github.com/faiface/ai-pair).
+The changes in version 0.14 include:
+
+-   Choose the order of the conversation and read clearer message text.
+-   See clearer pause and playback status; click the reading indicator to finish
+    its timer, or hold it to pause the timer.
+-   Choose typing, line, or block playback, and control its speed. In 0.14,
+    these choices are in the pace menu.
+-   Keep command terminals quiet by default and reveal an available run when needed.
+-   Copy session diagnostics for troubleshooting and find the running version and
+    build in Settings. GitHub Actions provides downloadable extension builds.
+
+The next release is being developed with a separate code-display dropdown,
+more readable Settings, and optional local spoken narration. These additions
+are not yet available in the 0.14 release.
+
+[Download a fork build from GitHub Actions](https://github.com/mattyv/ai-pair/actions)
+(run **Build VSIX**, then download its artifact). The Marketplace link in the
+original README below installs the upstream version without these additions.
+
+## Original project README
+
 **[Install it from the VS Code
 Marketplace](https://marketplace.visualstudio.com/items?itemName=michalstrba.ai-pair)**
 
@@ -205,7 +229,7 @@ and the reply box at the bottom. Your choice is saved across reloads.
 | Setting | |
 |---|---|
 | `aiPair.showTerminalsAutomatically` | Show Pair command terminals automatically (default off); also available in Pair Settings. |
-| `aiPair.codePlayback` | `typing` (default), `lines`, or `blocks`; also in the pace menu. Applies to the next typing action. |
+| `aiPair.codePlayback` | `typing` (default), `lines`, or `blocks`; also in the code display dropdown and Settings. Applies to the next typing action. |
 | `aiPair.chatOrder` | `newestFirst` (default) or `oldestFirst`; also available in the Pair panel settings. |
 | `aiPair.speed` | Overall playback speed, the follow scroll's glide included (the panel's speed menu offers 0.4x to 3.0x). |
 | `aiPair.readingSpeed` | Reading speed: divides the reading pauses after narration and grouped code (the panel's reading menu offers 0.4x to 3.0x). |

@@ -113,7 +113,7 @@ describe('fieldsProblem', () => {
     for (const action of [
       { say: 'Hello.', speak: true },
       { say: '😀'.repeat(280), speak: true },
-      { say: Array(45).fill('word').join(' '), speak: true },
+      { say: Array.from({ length: 45 }, () => 'word').join(' '), speak: true },
       { say: ' '.repeat(300) },
       { say: '```code```', speak: false },
     ]) {
@@ -124,7 +124,7 @@ describe('fieldsProblem', () => {
       { say: '', speak: true },
       { say: '   ', speak: true },
       { say: '😀'.repeat(281), speak: true },
-      { say: Array(46).fill('word').join(' '), speak: true },
+      { say: Array.from({ length: 46 }, () => 'word').join(' '), speak: true },
       { say: '```code```', speak: true },
       { say: '~~~\ncode\n~~~', speak: true },
       { say: 'Hi', speak: 'yes' },
@@ -132,6 +132,11 @@ describe('fieldsProblem', () => {
     ]) {
       expect(fieldsProblem(action)).toBeDefined();
     }
+  });
+
+  it('does not strip a speech modifier from a different action at the schema boundary', () => {
+    expect(ACTION_SCHEMA.safeParse({ delete: true, speak: true }).success).toBe(false);
+    expect(ACTION_SCHEMA.safeParse({ move: { to: 'line_end' }, speak: false }).success).toBe(false);
   });
 
   it('names a field the action does not have, and what it has', () => {

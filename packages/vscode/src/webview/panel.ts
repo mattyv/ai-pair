@@ -2,7 +2,9 @@
 // styles are in panel_html.ts; the messages in panel_messages.ts.
 
 import type { AgentState, CodePlayback, PanelEvent, Ref } from '@ai-pair/core';
-import type { ChatOrder, FromPanel, ToPanel } from '../panel_messages';
+import type { ChatOrder, FromPanel, SpeechState, ToPanel } from '../panel_messages';
+import { SpeechAudio, decodeWav } from './speech_audio';
+import { SPEECH_SPEEDS, SPEECH_VOICES, type SpeechVoice } from '../speech_types';
 import type { CalibrationView } from '../calibration';
 import { ELLIPSIS, LABEL_SEPARATOR, RANGE_DASH, RIGHT_ARROW, SPEED_SUFFIX } from '@ai-pair/core/constants';
 
@@ -66,7 +68,18 @@ const ui = {
   settingsDialog: $('settings-dialog', HTMLDialogElement),
   settingsClose: $('settings-close', HTMLButtonElement),
   chatOrder: $('chat-order', HTMLSelectElement),
+  settingsCodePlayback: $('settings-code-playback', HTMLSelectElement),
   copyDiagnostics: $('copy-diagnostics', HTMLButtonElement),
+  speechEnabled: $('speech-enabled', HTMLInputElement),
+  speechVoice: $('speech-voice', HTMLSelectElement),
+  speechSpeed: $('speech-speed', HTMLSelectElement),
+  speechSetup: $('speech-setup', HTMLButtonElement),
+  speechPreview: $('speech-preview', HTMLButtonElement),
+  speechStop: $('speech-stop', HTMLButtonElement),
+  speechSettingsStatus: $('speech-settings-status', HTMLElement),
+  speechLive: $('speech-live', HTMLElement),
+  speechLiveStatus: $('speech-live-status', HTMLElement),
+  speechStopLive: $('speech-stop-live', HTMLButtonElement),
   showTerminals: $('show-terminals', HTMLInputElement),
   showTerminal: $('show-terminal', HTMLButtonElement),
   dot: $('dot', HTMLElement),
@@ -78,6 +91,8 @@ const ui = {
   turnLabel: $('turn-label', HTMLElement),
   speed: $('speed', HTMLButtonElement),
   speedMenu: $('speed-menu', HTMLElement),
+  codeMode: $('code-mode', HTMLButtonElement),
+  codeModeMenu: $('code-mode-menu', HTMLElement),
   readingSpeed: $('reading-speed', HTMLButtonElement),
   readingMenu: $('reading-menu', HTMLElement),
   passage: $('passage', HTMLElement),
@@ -107,7 +122,33 @@ const ui = {
 };
 
 let chatOrder: ChatOrder = 'newestFirst';
-let codePlayback: CodePlayback = 'typing';
+let speechPage = 0;
+let speechId = 0;
+let speechCanceled = false;
+let speechState: SpeechState = 'idle';
+let speechEnabled = false;
+let speechSupported = false;
+const speechAudio = new SpeechAudio(
+  (base64) => {
+    const bytes = decodeWav(base64);
+    const url = URL.createObjectURL(new Blob([Uint8Array.from(bytes).buffer], { type: 'audio/wav' }));
+    try {
+      return {
+        audio: new Audio(url),
+        revoke: () => {
+          URL.revokeObjectURL(url);
+        },
+      };
+    } catch (error) {
+      URL.revokeObjectURL(url);
+      throw error;
+    }
+  },
+  (event) => {
+    vscode.postMessage({ type: 'speechEvent', ...event });
+  },
+);
+
 let followingLatest = true;
 let historyHeight = 0;
 let historyScrollHeight = 0;
@@ -362,34 +403,6 @@ function syncReading(): void {
     reading?.id === undefined || !active || suspended || paused || turn !== 'agent' || state !== 'read' || runConfirming;
 }
 
-function tick(now: number, countdown: NonNullable<typeof reading>): void {
-  if (reading !== countdown) return;
-  if (!paused && !countdown.held) countdown.elapsed += now - countdown.last;
-  countdown.last = now;
-  const f = Math.min(1, countdown.elapsed / countdown.ms);
-  ui.dot.style.setProperty('--progress', String(f));
-  if (f >= 1) {
-    reading = undefined;
-    syncReading();
-    return;
-  }
-  requestAnimationFrame((time) => {
-    tick(time, countdown);
-  });
-}
-
-// The reading pause fills a ring around the status dot.
-function startReading(ms: number, id?: number): void {
-  if (replaying) return;
-  const countdown = { ms, elapsed: 0, last: performance.now(), held: false, id };
-  reading = countdown;
-  ui.dot.style.setProperty('--progress', '0');
-  syncReading();
-  requestAnimationFrame((time) => {
-    tick(time, countdown);
-  });
-}
-
 /** Changes the live status only when its text changes, avoiding repeated announcements. */
 function statusText(text: string): void {
   if (ui.status.textContent !== text) ui.status.textContent = text;
@@ -463,6 +476,12 @@ function syncStatus(): void {
     );
     return;
   }
+  if (!runConfirming && turn === 'agent' && speechState === 'speaking' && reading === undefined) {
+    ui.dot.className = 'dot';
+    syncReading();
+    statusText('Speaking');
+    return;
+  }
   const [cls, text] = runConfirming ? ['read', 'Needs you'] : state ? STATUS[state] : ['', 'Session started'];
   ui.dot.className = `dot ${cls}`;
   syncReading();
@@ -470,6 +489,46 @@ function syncStatus(): void {
 }
 
 // ---- Tooltips --------------------------------------------------------------
+
+/** Silences locally before an interruption can cross the webview boundary. */
+function stopSpeechLocally(): void {
+  speechCanceled = true;
+  speechAudio.stop();
+  if (speechState !== 'idle') {
+    speechState = 'idle';
+    ui.speechLive.hidden = true;
+    ui.speechSettingsStatus.textContent = 'Speech stopped.';
+    syncStatus();
+  }
+}
+
+function tick(now: number, countdown: NonNullable<typeof reading>): void {
+  if (reading !== countdown) return;
+  if (!paused && !countdown.held) countdown.elapsed += now - countdown.last;
+  countdown.last = now;
+  const f = Math.min(1, countdown.elapsed / countdown.ms);
+  ui.dot.style.setProperty('--progress', String(f));
+  if (f >= 1) {
+    reading = undefined;
+    syncStatus();
+    return;
+  }
+  requestAnimationFrame((time) => {
+    tick(time, countdown);
+  });
+}
+
+// The reading pause fills a ring around the status dot.
+function startReading(ms: number, id?: number): void {
+  if (replaying) return;
+  const countdown = { ms, elapsed: 0, last: performance.now(), held: false, id };
+  reading = countdown;
+  ui.dot.style.setProperty('--progress', '0');
+  syncReading();
+  requestAnimationFrame((time) => {
+    tick(time, countdown);
+  });
+}
 
 function showTip(el: HTMLElement): void {
   clearTimeout(tipTimer);
@@ -549,15 +608,17 @@ function clearRun(): void {
 /** Keeps the active mode in the pace control's accessible name and menu. */
 function setCodePlayback(value: CodePlayback): void {
   // specs/PlaybackPreference.tla, `Choose` and `Reload`.
-  codePlayback = value;
-  for (const item of ui.speedMenu.querySelectorAll<HTMLButtonElement>('button[data-code-playback]')) {
+  ui.settingsCodePlayback.value = value;
+  for (const item of ui.codeModeMenu.querySelectorAll<HTMLButtonElement>('button[data-code-playback]')) {
     item.setAttribute('aria-checked', String(item.dataset.codePlayback === value));
   }
-  ui.speed.setAttribute('aria-label', `Playback speed: ${ui.speed.textContent}, code: ${value}`);
+  const label = value === 'typing' ? 'Typing' : value === 'lines' ? 'Lines' : 'Blocks';
+  ui.codeMode.textContent = label;
+  ui.codeMode.setAttribute('aria-label', `Code display: ${label}`);
 }
 
 /** Wires a speed menu to its button, and returns what closes it. */
-function speedMenu(button: HTMLButtonElement, menu: HTMLElement, type: 'speed' | 'readingSpeed'): () => void {
+function speedMenu(button: HTMLButtonElement, menu: HTMLElement, type: 'speed' | 'readingSpeed' | 'codePlayback'): () => void {
   function close(): void {
     menu.hidden = true;
     button.setAttribute('aria-expanded', 'false');
@@ -581,7 +642,7 @@ function speedMenu(button: HTMLButtonElement, menu: HTMLElement, type: 'speed' |
         vscode.postMessage({ type: 'codePlayback', value: mode });
         return;
       }
-      vscode.postMessage({ type, value: Number(b.dataset.speed) });
+      if (type !== 'codePlayback') vscode.postMessage({ type, value: Number(b.dataset.speed) });
     });
   }
   document.addEventListener('click', (e) => {
@@ -596,6 +657,7 @@ function speedMenu(button: HTMLButtonElement, menu: HTMLElement, type: 'speed' |
   return close;
 }
 const closeSpeedMenu = speedMenu(ui.speed, ui.speedMenu, 'speed');
+const closeCodeModeMenu = speedMenu(ui.codeMode, ui.codeModeMenu, 'codePlayback');
 const closeReadingMenu = speedMenu(ui.readingSpeed, ui.readingMenu, 'readingSpeed');
 
 function setActive(on: boolean): void {
@@ -608,6 +670,7 @@ function setActive(on: boolean): void {
     // specs/RunBox.tla, `EndSession`: the session ending clears the box.
     clearRun();
     closeSpeedMenu();
+    closeCodeModeMenu();
     closeReadingMenu();
   }
   syncStatus();
@@ -619,7 +682,7 @@ function setActive(on: boolean): void {
 function showSpeed(button: HTMLButtonElement, menu: HTMLElement, name: string, prefix: string, value: number): void {
   const label = `${Number.isInteger(value * TENTHS) ? value.toFixed(1) : String(value)}${SPEED_SUFFIX}`;
   button.textContent = prefix + label;
-  button.setAttribute('aria-label', `${name}: ${label}${button === ui.speed ? `, code: ${codePlayback}` : ''}`);
+  button.setAttribute('aria-label', `${name}: ${label}`);
   for (const b of menu.querySelectorAll<HTMLButtonElement>('button[data-speed]')) {
     b.setAttribute('aria-checked', String(Math.abs(Number(b.dataset.speed) - value) < SPEED_TOLERANCE));
   }
@@ -749,9 +812,17 @@ window.addEventListener('blur', () => {
 });
 window.addEventListener('pagehide', () => {
   endReadingGesture(true);
+  stopSpeechLocally();
+  if (speechPage > 0) vscode.postMessage({ type: 'speechPageHidden', pageId: speechPage });
 });
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) endReadingGesture(true);
+  if (document.hidden) {
+    endReadingGesture(true);
+    stopSpeechLocally();
+    if (speechPage > 0) vscode.postMessage({ type: 'speechPageHidden', pageId: speechPage });
+  } else if (speechPage > 0) {
+    vscode.postMessage({ type: 'speechPageVisible', pageId: speechPage });
+  }
 });
 ui.skipReading.addEventListener('click', () => {
   const click = readingClick;
@@ -781,12 +852,48 @@ ui.settingsClose.addEventListener('click', () => {
 ui.settingsDialog.addEventListener('close', () => {
   ui.settings.focus();
 });
+function isSpeechVoice(value: string): value is SpeechVoice {
+  return SPEECH_VOICES.some((voice) => voice === value);
+}
+
+function saveSpeechSettings(): void {
+  const voice = ui.speechVoice.value;
+  const speed = Number(ui.speechSpeed.value);
+  if (!isSpeechVoice(voice) || !SPEECH_SPEEDS.some((option) => option === speed)) return;
+  if (speechEnabled && !ui.speechEnabled.checked) stopSpeechLocally();
+  speechEnabled = ui.speechEnabled.checked;
+  vscode.postMessage({ type: 'speechSettings', value: { enabled: speechEnabled, voice, speed } });
+}
+ui.speechEnabled.addEventListener('change', saveSpeechSettings);
+ui.speechVoice.addEventListener('change', saveSpeechSettings);
+ui.speechSpeed.addEventListener('change', saveSpeechSettings);
+ui.speechSetup.addEventListener('click', () => {
+  vscode.postMessage({ type: 'speechSetup' });
+});
+ui.speechPreview.addEventListener('click', () => {
+  vscode.postMessage({ type: 'speechPreview' });
+});
+function stopSpeech(): void {
+  stopSpeechLocally();
+  vscode.postMessage({ type: 'speechStop' });
+}
+ui.speechStop.addEventListener('click', stopSpeech);
+ui.speechStopLive.addEventListener('click', stopSpeech);
+
 // specs/TerminalPanel.tla, `SetAuto`.
 ui.showTerminals.addEventListener('change', () => {
   vscode.postMessage({ type: 'showTerminals', value: ui.showTerminals.checked });
 });
 ui.showTerminal.addEventListener('click', () => {
   if (runId !== undefined && !runConfirming) vscode.postMessage({ type: 'showTerminal', id: runId });
+});
+
+ui.settingsCodePlayback.addEventListener('change', () => {
+  const mode = ui.settingsCodePlayback.value;
+  if (mode === 'typing' || mode === 'lines' || mode === 'blocks') {
+    setCodePlayback(mode);
+    vscode.postMessage({ type: 'codePlayback', value: mode });
+  }
 });
 
 ui.chatOrder.addEventListener('change', () => {
@@ -797,6 +904,67 @@ ui.chatOrder.addEventListener('change', () => {
 
 function handle(message: ToPanel): void {
   switch (message.type) {
+    case 'speechPage':
+      speechPage = message.pageId;
+      speechId = 0;
+      speechCanceled = false;
+      speechAudio.page(message.pageId);
+      return;
+    case 'speechSupport':
+      speechSupported = message.supported;
+      ui.speechSetup.disabled = !message.supported;
+      ui.speechPreview.disabled = !message.supported;
+      if (!message.supported) ui.speechSettingsStatus.textContent = 'Local speech is unavailable in this build or on this host.';
+      return;
+    case 'speechSettings':
+      if (speechEnabled && !message.value.enabled) stopSpeechLocally();
+      speechEnabled = message.value.enabled;
+      ui.speechEnabled.checked = message.value.enabled;
+      ui.speechVoice.value = message.value.voice;
+      ui.speechSpeed.value = String(message.value.speed);
+      return;
+    case 'speechSetupState':
+      ui.speechSetup.disabled = message.pending || !speechSupported;
+      ui.speechPreview.disabled = message.pending || !speechSupported;
+      ui.speechSettingsStatus.textContent = message.message;
+      return;
+    case 'speechAudio':
+      if (message.pageId === speechPage && message.id === speechId && !speechCanceled) {
+        speechAudio.audio(message.id, message.pageId, message.wavBase64, paused);
+      }
+      return;
+    case 'speechControl':
+      speechAudio.control(message.id, message.pageId, message.action);
+      return;
+    case 'speechStatus': {
+      if (
+        message.pageId !== speechPage ||
+        message.id < speechId ||
+        (message.id === speechId && speechCanceled && message.state !== 'idle')
+      ) {
+        return;
+      }
+      if (message.id > speechId) {
+        speechId = message.id;
+        speechCanceled = false;
+      }
+      if (message.state === 'preparing') speechAudio.begin(message.id, message.pageId);
+      speechState = message.state;
+      if (message.state === 'idle') speechAudio.stop();
+      const labels: Record<SpeechState, string> = {
+        preparing: 'Preparing speech',
+        speaking: 'Speaking',
+        paused: 'Speech paused',
+        unavailable: message.message ?? 'Speech unavailable',
+        idle: '',
+      };
+      ui.speechLiveStatus.textContent = labels[message.state];
+      ui.speechSettingsStatus.textContent = labels[message.state];
+      ui.speechLive.hidden = message.state === 'idle';
+      ui.speechStopLive.hidden = message.state === 'idle' || message.state === 'unavailable';
+      syncStatus();
+      return;
+    }
     case 'showTerminals':
       ui.showTerminals.checked = message.value;
       return;
@@ -983,7 +1151,10 @@ function takeAttach(): boolean {
 
 function sendReply(): void {
   const text = takeDraft();
-  if (text) vscode.postMessage({ type: 'reply', text, attach: takeAttach() });
+  if (text) {
+    stopSpeechLocally();
+    vscode.postMessage({ type: 'reply', text, attach: takeAttach() });
+  }
 }
 
 function decide(run: boolean, remember: boolean): void {
@@ -1035,9 +1206,11 @@ ui.pause.addEventListener('click', () => {
   vscode.postMessage({ type: paused ? 'resume' : 'pause' });
 });
 ui.interrupt.addEventListener('click', () => {
+  stopSpeechLocally();
   vscode.postMessage({ type: 'interrupt' });
 });
 ui.turn.addEventListener('click', () => {
+  stopSpeechLocally();
   const handingBack = turn === 'programmer';
   const message = handingBack ? takeDraft() : '';
   const attach = handingBack && takeAttach();
@@ -1057,6 +1230,7 @@ ui.runSkip.addEventListener('click', () => {
   decide(/* run= */ false, /* remember= */ false);
 });
 ui.end.addEventListener('click', () => {
+  stopSpeechLocally();
   vscode.postMessage({ type: 'end' });
 });
 

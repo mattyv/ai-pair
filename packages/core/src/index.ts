@@ -12,6 +12,7 @@ export type {
   EditOptions,
   EditorPort,
   Focus,
+  NarrationPort,
   PanelEvent,
   PanelPort,
   Ref,

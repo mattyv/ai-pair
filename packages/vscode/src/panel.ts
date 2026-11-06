@@ -4,7 +4,8 @@ import * as vscode from 'vscode';
 import type { CodePlayback, Controller, PanelEvent, PanelPort, Ref, SharedSelection } from '@ai-pair/core';
 import { panelHtml, SPEEDS } from './panel_html';
 import { timings } from './timings';
-import type { ChatOrder, FromPanel, ToPanel } from './panel_messages';
+import type { ChatOrder, FromPanel, SpeechAction, SpeechEvent, SpeechState, ToPanel } from './panel_messages';
+import { SPEECH_SPEEDS, SPEECH_VOICES, type SpeechSettings } from './speech_types';
 import type { Calibration, CalibrationView } from './calibration';
 
 const MAX_LOG = 400;
@@ -31,6 +32,16 @@ export interface PanelWiring {
   starter: Starter;
   /** Copies the sanitized diagnostics snapshot on explicit request. */
   copyDiagnostics: () => Promise<void>;
+  speech: {
+    settings: { get: () => SpeechSettings; set: (value: SpeechSettings) => void };
+    supported: () => boolean;
+    installed: () => Promise<boolean>;
+    setup: () => Promise<void>;
+    preview: () => Promise<void>;
+    stop: () => void;
+    event: (value: { id: number; pageId: number; event: SpeechEvent }) => void;
+    pageClosed: (pageId: number) => void;
+  };
 }
 
 /** How many files of a name to look for before asking which was meant. */
@@ -42,6 +53,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   /** Questions asked of the starter so far; an answer to an earlier one is dropped. */
   private asked = 0;
   private view?: vscode.WebviewView;
+  private speechPageId = 0;
+  private speechPageReady = false;
+  private speechSetupCheck = 0;
   /** Everything posted so far, replayed when the view is (re)created. */
   private readonly log: PanelEvent[] = [];
   /** After each post: the window saves the history with a session, for a reload (#25). */
@@ -91,6 +105,28 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   /** Syncs the persisted terminal preference to the page. */
   showTerminalPreference(value: boolean): void {
     this.send({ type: 'showTerminals', value });
+  }
+
+  /** Sends audio only to a ready page, never to the history log. */
+  playSpeech(id: number, wav: Uint8Array, durationMs: number): number | undefined {
+    if (!this.view || !this.speechPageReady) return undefined;
+    const pageId = this.speechPageId;
+    this.send({ type: 'speechAudio', id, pageId, wavBase64: Buffer.from(wav).toString('base64'), durationMs });
+    return pageId;
+  }
+
+  controlSpeech(id: number, pageId: number, action: SpeechAction): void {
+    if (this.speechPageReady && pageId === this.speechPageId) this.send({ type: 'speechControl', id, pageId, action });
+  }
+
+  showSpeechStatus(id: number, state: SpeechState, message?: string): void {
+    if (this.speechPageReady) {
+      this.send({ type: 'speechStatus', id, pageId: this.speechPageId, state, ...(message === undefined ? {} : { message }) });
+    }
+  }
+
+  showSpeechSettings(value: SpeechSettings): void {
+    this.send({ type: 'speechSettings', value });
   }
 
   /** Shows the programmer's selection, which changed. Not logged: only the current one matters. */
@@ -157,7 +193,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
+    if (this.speechPageId > 0) this.wiring.speech.pageClosed(this.speechPageId);
     this.view = view;
+    this.speechPageId++;
+    this.speechPageReady = false;
+    const pageId = this.speechPageId;
     const dist = vscode.Uri.joinPath(this.extensionUri, 'dist');
     view.webview.options = { enableScripts: true, localResourceRoots: [dist] };
     const style = view.webview.asWebviewUri(vscode.Uri.joinPath(dist, 'panel.css')).toString();
@@ -165,18 +205,46 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     view.webview.html = panelHtml(view.webview.cspSource, style, script, this.buildInfo.version, this.buildInfo.build);
     // The page posts only FromPanel messages; VS Code types them `any`.
     view.webview.onDidReceiveMessage((m: FromPanel) => {
-      this.receive(m);
+      if (this.view === view) this.receive(m, pageId);
     });
     view.onDidDispose(() => {
       // specs/Start.tla, `Dispose`: the page goes, its button and note with it.
       if (this.view === view) {
         this.view = undefined;
+        this.speechPageReady = false;
+        this.wiring.speech.pageClosed(pageId);
         this.wiring.controller().releaseReadingHold();
+        // Its draft and its pause went with this view: specs/Draft.tla, `Dispose`.
+        this.wiring.controller().resume('reply');
+        this.wiring.calibration().cancel();
       }
-      // Its draft went with it, and so does the pause the draft asked for (#69): specs/Draft.tla, `Dispose`.
-      this.wiring.controller().resume('reply');
-      this.wiring.calibration().cancel();
     });
+  }
+
+  /** Refreshes runtime availability for the currently open page only. */
+  refreshSpeechSupport(): void {
+    if (!this.speechPageReady) return;
+    const pageId = this.speechPageId;
+    const check = ++this.speechSetupCheck;
+    this.send({ type: 'speechSupport', supported: this.wiring.speech.supported() });
+    if (this.wiring.speech.supported()) {
+      void this.wiring.speech.installed().then(
+        (installed) => {
+          if (this.speechPageId === pageId && this.speechSetupCheck === check) {
+            this.send({
+              type: 'speechSetupState',
+              pending: false,
+              message: installed ? 'Local speech is ready.' : 'Local speech is not set up.',
+            });
+          }
+        },
+        () => {
+          if (this.speechPageId === pageId && this.speechSetupCheck === check) {
+            this.send({ type: 'speechSetupState', pending: false, message: 'Local speech availability is unknown.' });
+          }
+        },
+      );
+    }
   }
 
   private reveal(preserveFocus = true): void {
@@ -187,12 +255,62 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     }
   }
 
-  private receive(message: FromPanel): void {
+  private receive(message: FromPanel, pageId: number): void {
     const controller = this.wiring.controller();
     this.trace(
       `panel ${message.type}${message.type === 'reply' ? ` ${JSON.stringify(message.text)}` : message.type === 'draft' ? (message.empty ? ' empty' : ' typed') : ''}`,
     );
     switch (message.type) {
+      case 'speechEvent':
+        if (
+          message.pageId === pageId &&
+          Number.isSafeInteger(message.id) &&
+          message.id > 0 &&
+          (message.event === 'started' || message.event === 'ended' || message.event === 'failed')
+        ) {
+          this.wiring.speech.event({ id: message.id, pageId, event: message.event });
+        }
+        return;
+      case 'speechPageHidden':
+        if (message.pageId === pageId) {
+          this.speechPageReady = false;
+          this.wiring.speech.pageClosed(pageId);
+        }
+        return;
+      case 'speechPageVisible':
+        if (message.pageId === pageId) this.speechPageReady = true;
+        return;
+      case 'speechSettings':
+        if (
+          typeof message.value?.enabled === 'boolean' &&
+          SPEECH_VOICES.some((voice) => voice === message.value.voice) &&
+          SPEECH_SPEEDS.some((speed) => speed === message.value.speed)
+        ) {
+          this.wiring.speech.settings.set(message.value);
+        }
+        return;
+      case 'speechStop':
+        this.wiring.speech.stop();
+        return;
+      case 'speechPreview':
+        if (!this.wiring.speech.supported()) return;
+        void this.wiring.speech.preview().catch(() => {
+          this.send({ type: 'speechSetupState', pending: false, message: 'Voice preview is unavailable.' });
+        });
+        return;
+      case 'speechSetup':
+        if (!this.wiring.speech.supported()) return;
+        this.speechSetupCheck++;
+        this.send({ type: 'speechSetupState', pending: true, message: 'Setting up local speech...' });
+        void this.wiring.speech.setup().then(
+          () => {
+            this.send({ type: 'speechSetupState', pending: false, message: 'Local speech is ready.' });
+          },
+          () => {
+            this.send({ type: 'speechSetupState', pending: false, message: 'Speech setup did not complete.' });
+          },
+        );
+        return;
       case 'copyDiagnostics':
         // specs/DiagnosticsCopy.tla, `Click`: report both clipboard outcomes.
         void this.wiring.copyDiagnostics().then(
@@ -201,6 +319,10 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         );
         return;
       case 'ready':
+        this.speechPageReady = true;
+        this.send({ type: 'speechPage', pageId });
+        this.showSpeechSettings(this.wiring.speech.settings.get());
+        this.refreshSpeechSupport();
         // A new page has an empty draft (#69): specs/Draft.tla, `LoadPage`.
         controller.resume('reply');
         this.showChatOrder(this.chatOrder.get());
@@ -247,6 +369,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         if (SPEEDS.includes(message.value)) this.readingSpeed.set(message.value);
         return;
       case 'reply':
+        // Cancel before resume so an old generation cannot restart.
+        this.wiring.speech.stop();
         // Replying means "go on with this", so any pause ends. It moves no view, so the programmer's tab and
         // selection stay as they were (specs/PointFocus.tla, `SendReply`, issue 125; specs/Draft.tla,
         // `ResumeAll`).
@@ -274,9 +398,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         controller.resume();
         return;
       case 'interrupt':
+        this.wiring.speech.stop();
         controller.userInterrupt();
         return;
       case 'turn':
+        this.wiring.speech.stop();
         controller.resume();
         if (controller.turn === 'programmer') {
           controller.handBack(message.message, message.attach === true ? this.selection.current() : undefined);
@@ -285,6 +411,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         }
         return;
       case 'end':
+        this.wiring.speech.stop();
         controller.endSession();
         return;
       case 'runDecision':

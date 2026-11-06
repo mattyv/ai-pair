@@ -168,4 +168,17 @@ ASSUME TokenBounds ==
     /\ ~TokensAccepted(0) /\ TokensAccepted(1)
     /\ TokensAccepted(510) /\ ~TokensAccepted(511)
 
+\* Never let the tokenizer silently erase an unsupported phoneme.
+PhonemeKinds == {"supported", "unsupported"}
+PhonemesAccepted(kind) == kind = "supported"
+ASSUME PhonemeCoverage ==
+    /\ PhonemesAccepted("supported") /\ ~PhonemesAccepted("unsupported")
+
+\* Only a say action may carry the speak modifier, even when false.
+SpeechModifierAllowed(kind, present) == ~present \/ kind = "say"
+ASSUME SpeechModifierScope ==
+    /\ SpeechModifierAllowed("say", TRUE)
+    /\ ~SpeechModifierAllowed("move", TRUE)
+    /\ SpeechModifierAllowed("move", FALSE)
+
 ================================================================================

@@ -1,10 +1,15 @@
 import * as os from 'node:os';
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Bridge, Controller, isSavedSession, type DiagnosticEvent, type PanelEvent, type SavedSession } from '@ai-pair/core';
 import { discoveryDir } from '@ai-pair/protocol';
 import { playDemo } from './demo';
 import { VsCodeEditor } from './editor';
 import { Diagnostics } from './diagnostics';
+import { SpeechService } from './speech_service';
+import { installedSpeechModel, setupSpeech } from './speech_setup';
+import { speechRuntimeAvailable } from './speech_runtime_status';
+import type { SpeechSettings } from './speech_types';
 import type { OutsideChanges } from './outside';
 import { watchOutside } from './outside_watch';
 import { NarrationPanel } from './panel';
@@ -79,6 +84,24 @@ function once<T>(f: (arg: T) => void): (arg: T) => void {
   };
 }
 
+/** The bundled runtime supports only a local Linux x64 glibc extension host. */
+function speechSupported(): boolean {
+  if (
+    vscode.env.remoteName !== undefined ||
+    vscode.env.uiKind !== vscode.UIKind.Desktop ||
+    process.platform !== 'linux' ||
+    process.arch !== 'x64'
+  ) {
+    return false;
+  }
+  try {
+    const report = process.report?.getReport();
+    return isRecord(report) && isRecord(report.header) && typeof report.header.glibcVersionRuntime === 'string';
+  } catch {
+    return false;
+  }
+}
+
 /** Starts the extension: the controller, the editor, the panel, the bridge, and the commands; returns the API the integration test drives. */
 export function activate(context: vscode.ExtensionContext): Api {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.homedir();
@@ -88,6 +111,9 @@ export function activate(context: vscode.ExtensionContext): Api {
   // from callbacks that run after activation returns.
   let controller: Controller;
   let calibration: Calibration;
+  let speech: SpeechService;
+  const localSpeechSupported = speechSupported();
+  let runtimeSpeechSupported = false;
   const diagnostics = new Diagnostics({ version: AI_PAIR_VERSION, build: AI_PAIR_BUILD_ID });
   function record(event: DiagnosticEvent): void {
     diagnostics.record(event);
@@ -118,6 +144,22 @@ export function activate(context: vscode.ExtensionContext): Api {
     },
     set: (value: import('@ai-pair/core').CodePlayback) => {
       void config().update(CODE_PLAYBACK, value, vscode.ConfigurationTarget.Global);
+    },
+  };
+  const speechSettings = {
+    get: (): SpeechSettings => {
+      const enabled: unknown = config().get('speech.enabled');
+      const rawVoice: unknown = config().get('speech.voice');
+      const rawSpeed: unknown = config().get('speech.speed');
+      const voice = typeof rawVoice === 'string' ? rawVoice : 'af_heart';
+      const speechSpeed = typeof rawSpeed === 'number' ? rawSpeed : 1;
+      return { enabled: enabled === true, voice, speed: speechSpeed };
+    },
+    set: (value: SpeechSettings): void => {
+      if (speechSettings.get().enabled && !value.enabled) speech.cancel();
+      void config().update('speech.enabled', value.enabled, vscode.ConfigurationTarget.Global);
+      void config().update('speech.voice', value.voice, vscode.ConfigurationTarget.Global);
+      void config().update('speech.speed', value.speed, vscode.ConfigurationTarget.Global);
     },
   };
   const chatOrder = {
@@ -161,6 +203,22 @@ export function activate(context: vscode.ExtensionContext): Api {
       copyDiagnostics: async () => {
         await vscode.env.clipboard.writeText(JSON.stringify(diagnostics.snapshot()));
       },
+      speech: {
+        settings: speechSettings,
+        supported: () => localSpeechSupported && runtimeSpeechSupported,
+        installed: async () => (await installedSpeechModel(context.globalStorageUri.fsPath)) !== undefined,
+        setup: () => setupSpeech(context.globalStorageUri.fsPath),
+        preview: () => speech.preview(),
+        stop: () => {
+          speech.cancel();
+        },
+        event: (event) => {
+          speech.audioEvent(event);
+        },
+        pageClosed: (pageId) => {
+          speech.pageClosed(pageId);
+        },
+      },
     },
     chatOrder,
     { version: AI_PAIR_VERSION, build: AI_PAIR_BUILD_ID },
@@ -168,7 +226,26 @@ export function activate(context: vscode.ExtensionContext): Api {
     (id) => editor.showTerminal(id),
     codePlayback,
   );
-  controller = new Controller(editor, panel);
+  void speechRuntimeAvailable(path.join(context.extensionPath, 'dist', 'speech')).then((available) => {
+    runtimeSpeechSupported = available;
+    panel.refreshSpeechSupport();
+  });
+  speech = new SpeechService({
+    runtimeDirectory: path.join(context.extensionPath, 'dist', 'speech'),
+    storageDirectory: context.globalStorageUri.fsPath,
+    localDesktop: localSpeechSupported,
+    settings: speechSettings.get,
+    output: {
+      play: (id, wav, durationMs) => panel.playSpeech(id, wav, durationMs),
+      control: (id, pageId, action) => {
+        panel.controlSpeech(id, pageId, action);
+      },
+      status: (id, state, message) => {
+        panel.showSpeechStatus(id, state, message);
+      },
+    },
+  });
+  controller = new Controller(editor, panel, undefined, speech);
   controller.onDiagnostic = record;
   controller.trace = (line) => {
     log.info(line);
@@ -267,6 +344,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   }
 
   context.subscriptions.push(
+    speech,
     log,
     starter,
     outsideWatch,
@@ -287,6 +365,11 @@ export function activate(context: vscode.ExtensionContext): Api {
       webviewOptions: { retainContextWhenHidden: true },
     }),
     vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('aiPair.speech')) {
+        const current = speechSettings.get();
+        if (e.affectsConfiguration('aiPair.speech.enabled') && !current.enabled) speech.cancel();
+        panel.showSpeechSettings(current);
+      }
       if (e.affectsConfiguration('aiPair.chatOrder')) panel.showChatOrder(chatOrder.get());
       if (e.affectsConfiguration('aiPair.showTerminalsAutomatically')) panel.showTerminalPreference(terminalSettings.get());
       if (e.affectsConfiguration('aiPair.speed')) {

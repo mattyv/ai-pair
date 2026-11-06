@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.15.0 (in development)
+
+-   Settings has clearer sections and the code display choice has its own
+    toolbar dropdown, with the same choice in Settings.
+-   Optional local speech reads selected agent narration with a choice of voice
+    and speed after explicit model setup on supported Linux x64 desktop hosts.
+
 ## 0.14.0
 
 -   Choose Typing, Lines, or Blocks in the existing playback speed menu. The

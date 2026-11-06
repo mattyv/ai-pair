@@ -122,3 +122,48 @@ it('rejects invalid page and unit IDs and ignores duplicate audio', async () => 
   await Promise.resolve();
   expect(h.make).toHaveBeenCalledOnce();
 });
+
+it('reports a synchronous audio-play failure and releases the URL', () => {
+  const h = harness();
+  h.player.page(1);
+  h.player.begin(1, 1);
+  h.audio.play.mockImplementationOnce(() => {
+    throw new Error('not available');
+  });
+  h.player.audio(1, 1, 'wav', false);
+  expect(h.send.mock.calls).toEqual([[{ id: 1, pageId: 1, event: 'failed' }]]);
+  expect(h.revoke).toHaveBeenCalledOnce();
+});
+
+it('ignores a paused play rejection and resumes the same unit', async () => {
+  const h = harness();
+  const first = Promise.withResolvers<void>();
+  h.audio.play.mockReturnValueOnce(first.promise);
+  h.player.page(1);
+  h.player.begin(1, 1);
+  h.player.audio(1, 1, 'wav', false);
+  h.player.control(1, 1, 'pause');
+  first.reject(new Error('interrupted by pause'));
+  await Promise.resolve();
+  expect(h.send).not.toHaveBeenCalled();
+  expect(h.revoke).not.toHaveBeenCalled();
+  h.player.control(1, 1, 'resume');
+  await Promise.resolve();
+  expect(h.send.mock.calls).toEqual([[{ id: 1, pageId: 1, event: 'started' }]]);
+});
+
+it('ignores an earlier play rejection after a newer resume starts', async () => {
+  const h = harness();
+  const first = Promise.withResolvers<void>();
+  h.audio.play.mockReturnValueOnce(first.promise);
+  h.player.page(1);
+  h.player.begin(1, 1);
+  h.player.audio(1, 1, 'wav', false);
+  h.player.control(1, 1, 'pause');
+  h.player.control(1, 1, 'resume');
+  await Promise.resolve();
+  first.reject(new Error('interrupted by pause'));
+  await Promise.resolve();
+  expect(h.send.mock.calls).toEqual([[{ id: 1, pageId: 1, event: 'started' }]]);
+  expect(h.revoke).not.toHaveBeenCalled();
+});

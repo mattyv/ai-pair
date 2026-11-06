@@ -33,17 +33,20 @@ export const SPAN_SCHEMA = z.union([
   SPAN_TARGET_SCHEMA.pick({ file: true, line: true }).extend({ from: z.string(), through: z.string() }),
 ]);
 
+/** Other action kinds cannot take the narration modifier. */
+const NO_SPEAK = { speak: z.never().optional() };
+
 /** Checks an {@link Action}. */
 export const ACTION_SCHEMA = z.union([
   z.object({ say: z.string(), speak: z.boolean().optional() }),
-  z.object({ move: MOVE_TARGET_SCHEMA }),
-  z.object({ select: SPAN_SCHEMA }),
-  z.object({ type: z.string() }),
-  z.object({ type_fast: z.string() }),
-  z.object({ newline: z.object({ indent: z.string().regex(/^[\t ]+$/) }).strict() }),
-  z.object({ delete: z.literal(true) }),
-  z.object({ point: SPAN_SCHEMA }),
-  z.object({ run: z.string(), wait: z.number().optional() }),
+  z.object({ move: MOVE_TARGET_SCHEMA, ...NO_SPEAK }),
+  z.object({ select: SPAN_SCHEMA, ...NO_SPEAK }),
+  z.object({ type: z.string(), ...NO_SPEAK }),
+  z.object({ type_fast: z.string(), ...NO_SPEAK }),
+  z.object({ newline: z.object({ indent: z.string().regex(/^[\t ]+$/) }).strict(), ...NO_SPEAK }),
+  z.object({ delete: z.literal(true), ...NO_SPEAK }),
+  z.object({ point: SPAN_SCHEMA, ...NO_SPEAK }),
+  z.object({ run: z.string(), wait: z.number().optional(), ...NO_SPEAK }),
 ]);
 
 /** Checks a {@link Turn}. */

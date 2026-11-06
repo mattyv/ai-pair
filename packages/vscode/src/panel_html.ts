@@ -4,6 +4,7 @@
 
 import { randomBytes } from 'node:crypto';
 import { ELLIPSIS, SPEED_SUFFIX } from '@ai-pair/core/constants';
+import { SPEECH_PREVIEW_TEXT } from './speech_types';
 
 /** The range `aiPair.speed` declares in package.json. */
 const MIN_SPEED = 0.25;
@@ -63,24 +64,78 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
   return /* html */ `<!doctype html>
 <html lang="en">
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource}; script-src 'nonce-${nonce}';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource}; media-src blob:; script-src 'nonce-${nonce}';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AI Pair</title>
 <link rel="stylesheet" href="${styleUri}">
 <div class="app">
   <dialog data-ui="settings-dialog" class="settings-dialog" aria-label="Settings">
     <h1>Settings</h1>
-    <label>Chat order
-    <select data-ui="chat-order">
-      <option value="newestFirst">Newest first</option>
-      <option value="oldestFirst">Oldest first</option>
-    </select>
-    </label>
-    <label><input type="checkbox" data-ui="show-terminals"> Show terminals automatically</label>
-    <button type="button" data-ui="copy-diagnostics" class="quiet">Copy diagnostics</button>
-    <p>Copies version and recent connection, session, and command status; no command text.</p>
-    <p class="build-identity">v${safeVersion} - build ${safeBuild}</p>
-    <button type="button" data-ui="settings-close" class="primary">Close</button>
+    <section class="settings-section">
+      <h2>Conversation</h2>
+      <label class="settings-field">Chat order
+        <select data-ui="chat-order">
+          <option value="newestFirst">Newest first</option>
+          <option value="oldestFirst">Oldest first</option>
+        </select>
+      </label>
+    </section>
+    <section class="settings-section">
+      <h2>Playback</h2>
+      <label class="settings-field">Code display
+        <select data-ui="settings-code-playback">
+          <option value="typing">Typing</option>
+          <option value="lines">Lines</option>
+          <option value="blocks">Blocks</option>
+        </select>
+      </label>
+      <p>Changes apply to the next typing action. You can also choose this in the toolbar.</p>
+    </section>
+    <section class="settings-section">
+      <h2>Commands</h2>
+      <label class="settings-check"><input type="checkbox" data-ui="show-terminals"> Show terminals automatically</label>
+    </section>
+    <section class="settings-section">
+      <h2>Local speech</h2>
+      <label class="settings-check"><input type="checkbox" data-ui="speech-enabled"> Speak selected narration automatically</label>
+      <label class="settings-field">Voice
+        <select data-ui="speech-voice">
+          <option value="af_heart">Heart</option>
+          <option value="am_michael">Michael</option>
+          <option value="bf_emma">Emma</option>
+          <option value="bm_george">George</option>
+        </select>
+      </label>
+      <label class="settings-field">Speech speed
+        <select data-ui="speech-speed">
+          <option value="0.75">0.75x</option>
+          <option value="1" selected>1.0x</option>
+          <option value="1.25">1.25x</option>
+          <option value="1.5">1.5x</option>
+        </select>
+      </label>
+      <p>Optional setup downloads a local voice model of about 94 MB.</p>
+      <div class="settings-actions">
+        <button type="button" data-ui="speech-setup" class="soft" disabled>Set up local speech</button>
+      </div>
+      <p>Preview: ${SPEECH_PREVIEW_TEXT}</p>
+      <div class="settings-actions">
+        <button type="button" data-ui="speech-preview" class="soft" disabled>Preview voice</button>
+        <button type="button" data-ui="speech-stop" class="soft">Stop speech</button>
+      </div>
+      <p data-ui="speech-settings-status" role="status"></p>
+    </section>
+    <section class="settings-section">
+      <h2>Diagnostics</h2>
+      <p>Copies version and recent connection, session, and command status; no command text.</p>
+      <div class="settings-actions">
+        <button type="button" data-ui="copy-diagnostics" class="soft">Copy diagnostics</button>
+      </div>
+    </section>
+    <div class="settings-footer">
+      <p class="build-identity">v${safeVersion} - build ${safeBuild}</p>
+      <button type="button" data-ui="settings-close" class="primary">Close</button>
+    </div>
   </dialog>
   <div data-ui="band" class="band">
     <div class="main">
@@ -127,19 +182,27 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
               type="button"
               data-ui="speed"
               class="quiet speed"
-              aria-label="Playback speed: 1.0${SPEED_SUFFIX}, code: typing"
+              aria-label="Playback speed: 1.0${SPEED_SUFFIX}"
               aria-haspopup="menu"
               aria-expanded="false"
               data-tip="Playback speed"
             >1.0${SPEED_SUFFIX}</button>
-            <div data-ui="speed-menu" class="speed-menu" role="menu" aria-label="Playback speed" hidden>
-              <div role="group" aria-label="Playback speed">${speeds}</div>
-              <div role="group" aria-label="Code playback">
-                <span class="menu-heading">Code playback</span>
-                <button type="button" role="menuitemradio" aria-checked="true" data-code-playback="typing">Typing</button>
-                <button type="button" role="menuitemradio" aria-checked="false" data-code-playback="lines">Lines</button>
-                <button type="button" role="menuitemradio" aria-checked="false" data-code-playback="blocks">Blocks</button>
-              </div>
+            <div data-ui="speed-menu" class="speed-menu" role="menu" aria-label="Playback speed" hidden>${speeds}</div>
+          </div>
+          <div class="speed-wrap">
+            <button
+              type="button"
+              data-ui="code-mode"
+              class="quiet speed"
+              aria-label="Code display: Typing"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              data-tip="Code display"
+            >Typing</button>
+            <div data-ui="code-mode-menu" class="speed-menu" role="menu" aria-label="Code display" hidden>
+              <button type="button" role="menuitemradio" aria-checked="true" data-code-playback="typing">Typing</button>
+              <button type="button" role="menuitemradio" aria-checked="false" data-code-playback="lines">Lines</button>
+              <button type="button" role="menuitemradio" aria-checked="false" data-code-playback="blocks">Blocks</button>
             </div>
           </div>
           <div class="speed-wrap">
@@ -174,6 +237,10 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
       <div class="now">
         <div data-ui="now-text" class="now-text empty" aria-live="polite"></div>
         <div data-ui="now-ref" class="now-ref"></div>
+        <div data-ui="speech-live" class="speech-live" hidden>
+          <span data-ui="speech-live-status" role="status"></span>
+          <button type="button" data-ui="speech-stop-live" class="quiet">Stop speech</button>
+        </div>
         <div data-ui="passage" class="passage" hidden>
           <div data-ui="passage-text"></div>
           <div data-ui="passage-notice" class="passage-notice"></div>

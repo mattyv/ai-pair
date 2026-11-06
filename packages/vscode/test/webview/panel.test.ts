@@ -788,7 +788,7 @@ describe('the speed menus', () => {
   it.each(menus)('$type: shows the setting on its button, one decimal unless it has more, and checks it in the menu', (m) => {
     send({ type: m.type, value: 1.5 });
     expect(text(m.button)).toBe(`${m.prefix}1.5${SPEED_SUFFIX}`);
-    expect(element(m.button).getAttribute('aria-label')).toBe(`${m.name}: 1.5${SPEED_SUFFIX}${m.type === 'speed' ? ', code: typing' : ''}`);
+    expect(element(m.button).getAttribute('aria-label')).toBe(`${m.name}: 1.5${SPEED_SUFFIX}`);
     expect(element(m.menu).querySelector('[data-speed][aria-checked="true"]')?.textContent).toBe(`1.5${SPEED_SUFFIX}`);
     send({ type: m.type, value: 2 });
     expect(text(m.button)).toBe(`${m.prefix}2.0${SPEED_SUFFIX}`);
@@ -1624,15 +1624,15 @@ it('does not offer a terminal for an unapproved or declined command', () => {
   expect(element('history').querySelector('[data-show-terminal="81"]')).toBeNull();
 });
 
-it('ChoiceSaved, PaceIndependent: keeps mode in the pace label when speed and mode messages arrive in either order', () => {
+it('ChoiceSaved, PaceIndependent: keeps code display and speed independent in either message order', () => {
   start();
   send({ type: 'codePlayback', value: 'blocks' });
   send({ type: 'speed', value: 2 });
-  expect(element('speed').getAttribute('aria-label')).toContain('blocks');
+  expect(element('code-mode').getAttribute('aria-label')).toBe('Code display: Blocks');
   send({ type: 'codePlayback', value: 'lines' });
-  expect(element('speed').getAttribute('aria-label')).toContain('lines');
+  expect(element('code-mode').getAttribute('aria-label')).toBe('Code display: Lines');
   send({ type: 'speed', value: 3 });
-  expect(element('speed').getAttribute('aria-label')).toContain('lines');
+  expect(element('code-mode').getAttribute('aria-label')).toBe('Code display: Lines');
 });
 
 it('explains how to resume a suspended session and clears the hint on reconnect', () => {
@@ -1649,19 +1649,19 @@ it('OnlyOnRequest: requests diagnostics only when the button is activated', () =
   expect(posted().filter((message) => message.type === 'copyDiagnostics')).toEqual([{ type: 'copyDiagnostics' }]);
 });
 
-it('ChoiceApplied: the pace menu updates mode separately from speed', () => {
+it('ChoiceApplied: the code display menu updates mode separately from speed', () => {
   start();
   send({ type: 'speed', value: 2 });
   send({ type: 'codePlayback', value: 'typing' });
-  click(element('speed'));
-  const menu = element('speed-menu');
+  click(element('code-mode'));
+  const menu = element('code-mode-menu');
   const lines = menu.querySelector('[data-code-playback="lines"]');
   ok(lines);
   click(lines);
   expect(posted().at(-1)).toEqual({ type: 'codePlayback', value: 'lines' });
   expect(lines.getAttribute('aria-checked')).toBe('true');
-  expect(element('speed').getAttribute('aria-label')).toBe('Playback speed: 2.0x, code: lines');
-  expect(menu.querySelector('[data-speed="2"][aria-checked="true"]')).not.toBeNull();
+  expect(element('speed').getAttribute('aria-label')).toBe('Playback speed: 2.0x');
+  expect(element('speed-menu').querySelector('[data-speed="2"][aria-checked="true"]')).not.toBeNull();
   send({ type: 'codePlayback', value: 'blocks' });
   expect(menu.querySelector('[data-code-playback="blocks"]')?.getAttribute('aria-checked')).toBe('true');
 });
@@ -1685,4 +1685,155 @@ it('keeps a reading ring during a global pause and clears it if playback then le
   expect(element('dot').classList.contains('reading')).toBe(true);
   send({ type: 'state', state: 'typing', turn: 'agent', paused: false });
   expect(element('dot').classList.contains('reading')).toBe(false);
+});
+
+it('shows Speaking after the reading ring ends while the voice is still playing', () => {
+  vi.useFakeTimers();
+  start();
+  send({ type: 'speechPage', pageId: 1 });
+  send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+  send({ type: 'reading', ms: 100, id: 51 });
+  send({ type: 'speechStatus', id: 9, pageId: 1, state: 'preparing' });
+  send({ type: 'speechStatus', id: 9, pageId: 1, state: 'speaking' });
+  vi.advanceTimersByTime(200);
+  expect(element('dot').classList.contains('reading')).toBe(false);
+  expect(text('status-text')).toBe('Speaking');
+});
+
+it('sends explicit setup, preview, stop and validated speech preferences', () => {
+  send({ type: 'speechPage', pageId: 1 });
+  send({ type: 'speechSupport', supported: true });
+  send({ type: 'speechSettings', value: { enabled: true, voice: 'af_heart', speed: 1 } });
+  const voice = element('speech-voice');
+  if (!(voice instanceof window.HTMLSelectElement)) throw new TypeError('Missing voice selector');
+  voice.value = 'bf_emma';
+  voice.dispatchEvent(new window.Event('change', { bubbles: true }));
+  expect(posted()).toContainEqual({ type: 'speechSettings', value: { enabled: true, voice: 'bf_emma', speed: 1 } });
+  click(element('speech-setup'));
+  click(element('speech-preview'));
+  click(element('speech-stop'));
+  expect(posted()).toContainEqual({ type: 'speechSetup' });
+  expect(posted()).toContainEqual({ type: 'speechPreview' });
+  expect(posted()).toContainEqual({ type: 'speechStop' });
+});
+
+it('silences the current audio synchronously before posting a reply and ignores late audio', async () => {
+  const pause = vi.fn<() => void>();
+  const play = vi.fn<() => Promise<void>>().mockResolvedValue();
+  class FakeAudio {
+    pause = pause;
+    play = play;
+    addEventListener(): void {}
+  }
+  vi.stubGlobal('Audio', FakeAudio);
+  vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:test');
+  vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+  start();
+  send({ type: 'speechPage', pageId: 1 });
+  send({ type: 'speechSettings', value: { enabled: true, voice: 'af_heart', speed: 1 } });
+  send({ type: 'speechStatus', id: 7, pageId: 1, state: 'preparing' });
+  send({ type: 'speechAudio', id: 7, pageId: 1, wavBase64: 'AQI=', durationMs: 100 });
+  await Promise.resolve();
+  expect(play).toHaveBeenCalledOnce();
+  typeReply('Continue');
+  click(element('send'));
+  const sentIndex = post.mock.calls.findIndex(([message]) => message.type === 'reply');
+  expect(sentIndex).toBeGreaterThanOrEqual(0);
+  expect(pause.mock.invocationCallOrder.at(-1)).toBeLessThan(post.mock.invocationCallOrder[sentIndex] ?? 0);
+  send({ type: 'speechAudio', id: 7, pageId: 1, wavBase64: 'AQI=', durationMs: 100 });
+  expect(play).toHaveBeenCalledOnce();
+});
+
+function unavailableAudio(): never {
+  throw new Error('unavailable');
+}
+
+it('revokes a generated audio URL when the browser cannot create its player', () => {
+  vi.stubGlobal('Audio', unavailableAudio);
+  vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:test');
+  const revoke = vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+  send({ type: 'speechPage', pageId: 1 });
+  send({ type: 'speechStatus', id: 11, pageId: 1, state: 'preparing' });
+  send({ type: 'speechAudio', id: 11, pageId: 1, wavBase64: 'AQI=', durationMs: 100 });
+  expect(revoke).toHaveBeenCalledWith('blob:test');
+  expect(posted()).toContainEqual({ type: 'speechEvent', id: 11, pageId: 1, event: 'failed' });
+});
+
+it('does not stop a preview when voice changes while automatic speech is off', async () => {
+  const pause = vi.fn<() => void>();
+  const play = vi.fn<() => Promise<void>>().mockResolvedValue();
+  class FakeAudio {
+    pause = pause;
+    play = play;
+    addEventListener(): void {}
+  }
+  vi.stubGlobal('Audio', FakeAudio);
+  vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:preview');
+  vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+  send({ type: 'speechPage', pageId: 1 });
+  send({ type: 'speechSettings', value: { enabled: false, voice: 'af_heart', speed: 1 } });
+  send({ type: 'speechStatus', id: 1, pageId: 1, state: 'preparing' });
+  send({ type: 'speechAudio', id: 1, pageId: 1, wavBase64: 'AQI=', durationMs: 100 });
+  await Promise.resolve();
+  send({ type: 'speechSettings', value: { enabled: false, voice: 'bf_emma', speed: 1.25 } });
+  expect(play).toHaveBeenCalledOnce();
+  expect(pause).not.toHaveBeenCalled();
+});
+
+it('keeps the Settings playback selector and toolbar radio choice in sync', () => {
+  start();
+  send({ type: 'codePlayback', value: 'blocks' });
+  const selector = element('settings-code-playback');
+  if (!(selector instanceof window.HTMLSelectElement)) throw new TypeError('Missing playback selector');
+  expect(selector.value).toBe('blocks');
+  selector.value = 'lines';
+  selector.dispatchEvent(new window.Event('change', { bubbles: true }));
+  expect(posted()).toContainEqual({ type: 'codePlayback', value: 'lines' });
+  expect(element('code-mode-menu').querySelector('[data-code-playback="lines"]')?.getAttribute('aria-checked')).toBe('true');
+  click(element('code-mode'));
+  const typing = element('code-mode-menu').querySelector('[data-code-playback="typing"]');
+  ok(typing);
+  click(typing);
+  expect(selector.value).toBe('typing');
+});
+
+it('offers code display in a separate toolbar menu and keeps Settings synchronized', () => {
+  start();
+  send({ type: 'codePlayback', value: 'typing' });
+  const mode = element('code-mode');
+  expect(mode.getAttribute('aria-label')).toBe('Code display: Typing');
+  click(mode);
+  const blocks = element('code-mode-menu').querySelector('[data-code-playback="blocks"]');
+  ok(blocks);
+  click(blocks);
+  expect(posted()).toContainEqual({ type: 'codePlayback', value: 'blocks' });
+  expect(mode.getAttribute('aria-label')).toBe('Code display: Blocks');
+  const selector = element('settings-code-playback');
+  if (!(selector instanceof window.HTMLSelectElement)) throw new TypeError('Missing playback selector');
+  expect(selector.value).toBe('blocks');
+  expect(element('speed').getAttribute('aria-label')).not.toContain('blocks');
+});
+
+it('starts a paused unit prepared after the page opens', async () => {
+  const play = vi.fn<() => Promise<void>>().mockResolvedValue();
+  class FakeAudio {
+    play = play;
+    pause(): void {}
+    addEventListener(): void {}
+  }
+  vi.stubGlobal('Audio', FakeAudio);
+  vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:late');
+  vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+  send({ type: 'speechPage', pageId: 1 });
+  send({ type: 'speechStatus', pageId: 1, id: 8, state: 'paused' });
+  send({ type: 'speechStatus', pageId: 1, id: 8, state: 'preparing' });
+  send({ type: 'speechAudio', pageId: 1, id: 8, wavBase64: 'AQI=', durationMs: 100 });
+  await Promise.resolve();
+  expect(play).toHaveBeenCalledOnce();
+});
+
+it('keeps setup disabled on an unsupported host after a setup state update', () => {
+  send({ type: 'speechSupport', supported: false });
+  send({ type: 'speechSetupState', pending: false, message: 'Unavailable.' });
+  expect(element('speech-setup')).toHaveProperty('disabled', true);
 });

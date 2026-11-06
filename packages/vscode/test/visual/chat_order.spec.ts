@@ -510,19 +510,25 @@ test('Settings copies diagnostics only on request and suspended status explains 
   await expect(status).not.toContainText('Suspended');
 });
 
-test('the pace menu chooses a code playback mode separately from speed', async ({ page }) => {
+test('the code display menu is separate from pace and mirrors Settings', async ({ page }) => {
   const post = await load(page);
   await post({ type: 'session', active: true });
   await post({ type: 'speed', value: 3 });
   await post({ type: 'codePlayback', value: 'typing' });
-  const speed = page.getByRole('button', { name: 'Playback speed: 3.0x, code: typing' });
-  await speed.click();
-  const menu = page.getByRole('menu', { name: 'Playback speed' });
-  const group = menu.getByRole('group', { name: 'Code playback' });
-  const lines = group.getByRole('menuitemradio', { name: 'Lines' });
+  const mode = page.getByRole('button', { name: 'Code display: Typing' });
+  expect(
+    await mode.evaluate((button) => {
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      const browser = globalThis as unknown as { getComputedStyle: (target: unknown, pseudo: string) => { borderTopWidth: string } };
+      return browser.getComputedStyle(button, '::after').borderTopWidth;
+    }),
+  ).toBe('4px');
+  await mode.click();
+  const lines = page.getByRole('menu', { name: 'Code display' }).getByRole('menuitemradio', { name: 'Lines' });
   await lines.focus();
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('button', { name: 'Playback speed: 3.0x, code: lines' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Code display: Lines' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Playback speed: 3.0x' })).toBeVisible();
   await expect
     .poll(async () =>
       page.evaluate(() => {
@@ -531,7 +537,150 @@ test('the pace menu chooses a code playback mode separately from speed', async (
       }),
     )
     .toContainEqual({ type: 'codePlayback', value: 'lines' });
-  await post({ type: 'codePlayback', value: 'blocks' });
-  await post({ type: 'speed', value: 2 });
-  await expect(page.getByRole('button', { name: 'Playback speed: 2.0x, code: blocks' })).toBeVisible();
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const selector = page.getByRole('dialog', { name: 'Settings' }).getByRole('combobox', { name: 'Code display' });
+  await expect(selector).toHaveValue('lines');
+  await selector.selectOption('blocks');
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Code display: Blocks' })).toBeVisible();
+});
+
+/** A small deterministic mono PCM WAV for browser media checks. */
+function toneWav(seconds: number): string {
+  const rate = 24_000;
+  const count = rate * seconds;
+  const header = 44;
+  const wav = Buffer.alloc(header + count * 2);
+  wav.write('RIFF', 0);
+  wav.writeUInt32LE(wav.length - 8, 4);
+  wav.write('WAVEfmt ', 8);
+  wav.writeUInt32LE(16, 16);
+  wav.writeUInt16LE(1, 20);
+  wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(rate, 24);
+  wav.writeUInt32LE(rate * 2, 28);
+  wav.writeUInt16LE(2, 32);
+  wav.writeUInt16LE(16, 34);
+  wav.write('data', 36);
+  wav.writeUInt32LE(count * 2, 40);
+  for (let index = 0; index < count; index++) {
+    wav.writeInt16LE(Math.round(Math.sin((index * 2 * Math.PI * 440) / rate) * 1000), header + index * 2);
+  }
+  return wav.toString('base64');
+}
+
+test('real WAV playback pauses, resumes and stops from the speech controls', async ({ page }) => {
+  await page.addInitScript(() => {
+    // The wrapper retains the browser's real Audio implementation and decode path.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const g = globalThis as unknown as {
+      Audio: new (url: string) => { currentTime: number; paused: boolean };
+      testAudio?: { currentTime: number; paused: boolean };
+    };
+    const Original = g.Audio;
+    g.Audio = new Proxy(Original, {
+      construct(target, args) {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        const audio = Reflect.construct(target, args) as { currentTime: number; paused: boolean };
+        g.testAudio = audio;
+        return audio;
+      },
+    });
+  });
+  const post = await load(page);
+  await post({ type: 'speechPage', pageId: 1 });
+  await post({ type: 'speechSupport', supported: true });
+  await post({ type: 'speechSettings', value: { enabled: false, voice: 'af_heart', speed: 1 } });
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: 'Preview voice' }).click();
+  await post({ type: 'speechStatus', id: 1, pageId: 1, state: 'preparing' });
+  await post({ type: 'speechAudio', id: 1, pageId: 1, wavBase64: toneWav(2), durationMs: 2000 });
+  async function audioState() {
+    return page.evaluate(() => {
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      const audio = (globalThis as unknown as { testAudio?: { currentTime: number; paused: boolean } }).testAudio;
+      return { time: audio?.currentTime ?? 0, paused: audio?.paused ?? true };
+    });
+  }
+  await expect.poll(async () => (await audioState()).time).toBeGreaterThan(0);
+  await post({ type: 'speechControl', id: 1, pageId: 1, action: 'pause' });
+  await expect.poll(async () => (await audioState()).paused).toBe(true);
+  const pausedAt = (await audioState()).time;
+  await post({ type: 'speechControl', id: 1, pageId: 1, action: 'resume' });
+  await expect.poll(async () => (await audioState()).time).toBeGreaterThan(pausedAt);
+  await page.getByRole('button', { name: 'Stop speech', exact: true }).click();
+  await expect.poll(async () => (await audioState()).paused).toBe(true);
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return (globalThis as unknown as { messages: Array<{ type: string }> }).messages.filter((message) => message.type === 'speechStop');
+      }),
+    )
+    .toEqual([{ type: 'speechStop' }]);
+});
+
+test('real audio completion leaves the reading timer and command decision alone', async ({ page }) => {
+  const post = await load(page);
+  await post({ type: 'speechPage', pageId: 1 });
+  await post({ type: 'speechSupport', supported: true });
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByRole('button', { name: 'Preview voice' }).click();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await post({ type: 'session', active: true });
+  await post({ type: 'say', text: 'Keep this visible.' });
+  await post({ type: 'reading', id: 51, ms: 30_000 });
+  await post({ type: 'state', state: 'read', turn: 'agent', paused: false });
+  await post({ type: 'run', id: 81, command: 'npm test', phase: 'confirm' });
+  await post({ type: 'speechStatus', id: 2, pageId: 1, state: 'preparing' });
+  await post({ type: 'speechAudio', id: 2, pageId: 1, wavBase64: toneWav(0.2), durationMs: 200 });
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return (globalThis as unknown as { messages: Array<{ type: string; event?: string }> }).messages.some(
+          (message) => message.type === 'speechEvent' && message.event === 'ended',
+        );
+      }),
+    )
+    .toBe(true);
+  await expect(page.getByText('Keep this visible.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeVisible();
+  await expect(page.locator('[data-ui=dot]')).toHaveClass(/reading/);
+  const forbidden = await page.evaluate(() => {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    return (globalThis as unknown as { messages: Array<{ type: string }> }).messages.filter(
+      (message) => message.type === 'skipReading' || message.type === 'runDecision',
+    );
+  });
+  expect(forbidden).toEqual([]);
+});
+
+test('Settings stays readable and operable in a narrow panel', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 600 });
+  const post = await load(page);
+  await post({ type: 'session', active: true });
+  await post({ type: 'codePlayback', value: 'lines' });
+  await expect(page.getByRole('button', { name: 'Code display: Lines' })).toBeVisible();
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Settings' });
+  await expect(dialog).toBeVisible();
+  for (const title of ['Conversation', 'Playback', 'Commands', 'Local speech', 'Diagnostics']) {
+    await expect(dialog.getByRole('heading', { name: title })).toBeAttached();
+  }
+  await expect(dialog.getByRole('combobox', { name: 'Code display' })).toHaveValue('lines');
+  await dialog.getByRole('combobox', { name: 'Code display' }).selectOption('blocks');
+  const copy = dialog.getByRole('button', { name: 'Copy diagnostics' });
+  await copy.scrollIntoViewIfNeeded();
+  await expect(copy).toBeVisible();
+  const close = dialog.getByRole('button', { name: 'Close', exact: true });
+  await close.scrollIntoViewIfNeeded();
+  await close.click();
+  await expect(page.getByRole('button', { name: 'Code display: Blocks' })).toBeVisible();
+  const widths = await page.evaluate(() => {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const doc = (globalThis as unknown as { document: { documentElement: { scrollWidth: number; clientWidth: number } } }).document;
+    return [doc.documentElement.scrollWidth, doc.documentElement.clientWidth];
+  });
+  expect(widths[0]).toBeLessThanOrEqual(widths[1] ?? 0);
 });

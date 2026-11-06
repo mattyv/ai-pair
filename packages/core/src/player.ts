@@ -22,7 +22,7 @@ import { MS_PER_SECOND } from './constants';
 import { resolveSpan, resolveSpot, spanCandidates, spotCandidates, type Resolution } from './places';
 import type { Config } from './config';
 import type { LineIds, Sighting } from './lines';
-import type { Change, Focus, PanelPort, PlayerEditor } from './ports';
+import type { Change, Focus, NarrationPort, PanelPort, PlayerEditor } from './ports';
 import { fileLines, isLineStart, lineEnd, lineText, position } from './text';
 import type { Pacing } from './timeline';
 import { groupTyping, planTyping, readingTime, type CodePlayback } from './typing';
@@ -69,6 +69,8 @@ export interface Stage {
   readingSpeed(): number;
   /** Returns the granularity for the next typing action. */
   codePlayback(): CodePlayback;
+  /** Live narration only; omitted for rehearsal. */
+  narration?: NarrationPort;
   /** Shows the agent cursor and state after a change. */
   render(): void;
   /** Waits for the programmer to allow or decline a command. */
@@ -413,16 +415,32 @@ export class Player {
     if ('say' in action) {
       // specs/BatchFile.tla, `Say`: it acts in no file.
       panel.post({ type: 'say', text: action.say });
+      // Speech is independent of the single reading timeline and starts only after display.
+      const narration = action.speak === true ? this.stage.narration : undefined;
+      let speech = Promise.resolve();
+      if (narration !== undefined) {
+        try {
+          speech = narration.speak(action.say).catch(() => {});
+        } catch {
+          // A broken optional speech port cannot prevent reading the message.
+        }
+      }
       // specs/Calibration.tla, `StartSay`: timed with the rate in force now; the sleep's end is `EndSay`.
       const ms = readingTime(action.say, timing.reading) / this.stage.readingSpeed();
       this.reading = true;
       this.readingId = nextReadingId++;
       panel.post({ type: 'reading', ms, id: this.readingId });
       this.stage.render();
-      await this.stage.pacing.sleep(ms);
+      const read = await this.stage.pacing.sleep(ms);
       this.readingId = undefined;
       this.reading = false;
       this.stage.render();
+      if (narration !== undefined) {
+        await speech;
+        // The speech gate can finish while globally paused; reuse the now-idle timeline.
+        const unpaused = read && (await this.stage.pacing.sleep(0));
+        if (!unpaused || this.stage.pacing.isInterrupted) return { kind: 'interrupted', consumed: true };
+      }
       return ok;
     }
 

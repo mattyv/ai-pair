@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import * as esbuild from 'esbuild';
+import { stageSpeechRuntime } from './speech_runtime.mts';
 
 /** A compact SHA-256 prefix shown in the panel. */
 const BUILD_ID_LENGTH = 16;
@@ -54,6 +55,24 @@ await esbuild.build({
   outfile: 'dist/relay.js',
 });
 
+// The worker resolves only the explicitly staged, offline CPU runtime.
+stageSpeechRuntime();
+if (process.platform === 'linux' && process.arch === 'x64') {
+  await esbuild.build({
+    ...common,
+    format: 'esm',
+    entryPoints: ['src/speech_phonemizer_bridge.ts'],
+    outfile: 'dist/speech/node_modules/phonemizer/index.mjs',
+  });
+}
+await esbuild.build({
+  ...common,
+  format: 'esm',
+  entryPoints: ['src/speech_worker.ts'],
+  external: ['kokoro-js', '@huggingface/transformers', 'phonemizer'],
+  outfile: 'dist/speech/worker.mjs',
+});
+
 // Hash the extension with a fixed build-id placeholder, plus every other file
 // shipped in the VSIX. This avoids hashing a bundle that contains its own hash.
 const extensionOptions: esbuild.BuildOptions = {
@@ -87,10 +106,23 @@ for (const file of [
   'media/icon.png',
   'media/comma-gets-a-cure.txt',
   'media/comma-gets-a-cure-notice.txt',
+  'THIRD_PARTY_NOTICES.md',
+  'third_party/GPL-3.0.txt',
+  'third_party/LGPL-3.0.txt',
+  'third_party/ONNXRUNTIME-LICENSE.txt',
   '../../LICENSE',
 ]) {
   addInput(file, fs.readFileSync(file));
 }
+// Runtime assets are part of the build identity, including native libraries and voices.
+function addDirectory(directory: string): void {
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true }).toSorted((a, b) => a.name.localeCompare(b.name))) {
+    const file = path.join(directory, entry.name);
+    if (entry.isDirectory()) addDirectory(file);
+    else if (entry.isFile()) addInput(file, fs.readFileSync(file));
+  }
+}
+addDirectory('dist/speech');
 const buildId = hash.digest('hex').slice(0, BUILD_ID_LENGTH);
 await esbuild.build({
   ...extensionOptions,

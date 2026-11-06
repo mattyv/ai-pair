@@ -10,7 +10,9 @@ describe('speech worker messages', () => {
       { type: 'synthesize', id: 1, text: '{}', voice: 'other', speed: 1 },
       { type: 'synthesize', id: 1, text: 'x', voice: 'af_heart', speed: 4 },
       { type: 'synthesize', id: 0, text: 'x', voice: 'af_heart', speed: 1 },
-    ]) expect(SPEECH_WORKER_INPUT.safeParse(value).success).toBe(false);
+    ]) {
+      expect(SPEECH_WORKER_INPUT.safeParse(value).success).toBe(false);
+    }
   });
 
   it('validates replies before the service consumes them', () => {

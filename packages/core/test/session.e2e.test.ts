@@ -23,6 +23,92 @@ function reload(editor: ReturnType<typeof setup>['editor']): void {
 // With the test config, a beat is 100 ms and `type` takes 100 ms per character.
 
 describe('where the controller and the player meet', () => {
+  it('waits for selected speech after reading before playing the next edit', async () => {
+    const { promise, resolve } = Promise.withResolvers<void>();
+    const narration = {
+      speak: vi.fn(() => promise),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn(() => {
+        resolve();
+      }),
+    };
+    const { editor, controller, panel } = setup({ 'a.ts': '' }, {}, narration);
+    await controller.start();
+    await controller.step([
+      { say: 'One idea.', speak: true },
+      { move: { file: 'a.ts', line: 1, to: 'line_end' } },
+      { type: `x${CURSOR_MARKER}` },
+    ]);
+    await advance(3000);
+    expect(narration.speak).toHaveBeenCalledWith('One idea.');
+    expect(panel.says()).toContain('One idea.');
+    expect(editor.text('a.ts')).toBe('');
+    resolve();
+    await until(controller.step([]));
+    expect(editor.text('a.ts')).toBe('x');
+  });
+
+  it('keeps a held reading clock after speech fails and resumes code only on release', async () => {
+    const narration = { speak: vi.fn(() => Promise.reject(new Error('unavailable'))), pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() };
+    const { editor, controller, panel } = setup({ 'a.ts': '' }, {}, narration);
+    await controller.start();
+    await controller.step([
+      { say: 'Read first.', speak: true },
+      { move: { file: 'a.ts', line: 1, to: 'line_end' } },
+      { type: `x${CURSOR_MARKER}` },
+    ]);
+    const reading = panel.events.find((event) => event.type === 'reading');
+    if (reading?.type !== 'reading' || reading.id === undefined) throw new Error('No reading countdown');
+    controller.holdReading(reading.id, true);
+    await advance(3000);
+    expect(editor.text('a.ts')).toBe('');
+    controller.holdReading(reading.id, false);
+    await until(controller.step([]));
+    expect(editor.text('a.ts')).toBe('x');
+  });
+
+  it('keeps code paused when speech finishes after the reading timer', async () => {
+    const { promise, resolve } = Promise.withResolvers<void>();
+    const narration = { speak: vi.fn(() => promise), pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() };
+    const { editor, controller } = setup({ 'a.ts': '' }, {}, narration);
+    await controller.start();
+    await controller.step([
+      { say: 'Read first.', speak: true },
+      { move: { file: 'a.ts', line: 1, to: 'line_end' } },
+      { type: `x${CURSOR_MARKER}` },
+    ]);
+    await advance(1000);
+    controller.pause();
+    resolve();
+    await advance(3000);
+    expect(editor.text('a.ts')).toBe('');
+    controller.resume();
+    await until(controller.step([]));
+    expect(editor.text('a.ts')).toBe('x');
+  });
+
+  it('reply cancels speech and does not return its displayed text as unplayed', async () => {
+    const { promise, resolve } = Promise.withResolvers<void>();
+    const narration = {
+      speak: vi.fn(() => promise),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn(() => {
+        resolve();
+      }),
+    };
+    const { controller, panel } = setup({ 'a.ts': '' }, {}, narration);
+    await controller.start();
+    await controller.step([{ say: 'Already seen.', speak: true }, { move: { file: 'a.ts', line: 1, to: 'line_end' } }]);
+    await advance(50);
+    controller.userMessage('Wait.');
+    const report = await until(controller.listen());
+    expect(narration.cancel).toHaveBeenCalled();
+    expect(panel.says()).toEqual(['Already seen.']);
+    expect(report.batches[0]?.unplayed).toEqual([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }]);
+  });
+
   it.each([
     [250, 'x', `"""${CURSOR_MARKER}y`],
     [550, 'x"""', `${CURSOR_MARKER}y`],

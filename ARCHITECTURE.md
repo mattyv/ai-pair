@@ -11,7 +11,7 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes 0.14.0.
+Status: describes the 0.15.0 work in progress.
 
 ## Components
 
@@ -51,6 +51,11 @@ Status: describes 0.14.0.
 -   **Session diagnostics** keep a bounded allowlisted lifecycle history in
     the VS Code adapter. The panel requests a snapshot explicitly; its clipboard
     export contains no chat, code, paths, command text, output, or tokens.
+-   **Local speech** is an optional port on the session controller. The VS Code
+    service starts a local CPU worker for explicitly selected narration after
+    model setup; the current webview plays bounded WAV data and reports its
+    lifecycle. Page replacement and interruption invalidate the active unit.
+    History and diagnostics do not retain speech audio.
 -   **The narration panel** is a webview. It talks to the extension via
     `postMessage`, with the messages typed in
     [`panel_messages.ts`](packages/vscode/src/panel_messages.ts). Its markup is

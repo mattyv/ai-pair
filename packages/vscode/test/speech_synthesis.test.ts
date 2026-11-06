@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { synthesizeSpeech } from '../src/speech_synthesis';
-import { checkedTokenCount, encodeSpeechWav } from '../src/speech_audio';
+import { checkedTokenCount, encodeSpeechWav } from '../src/speech_waveform';
 
-vi.mock('../src/speech_audio', () => ({
+vi.mock('../src/speech_waveform', () => ({
   checkedTokenCount: vi.fn((count: number) => {
     if (count <= 2 || count > 512) throw new Error('token bounds');
     return count - 2;
@@ -16,7 +16,7 @@ function engine(count: number, samples = new Float32Array([0.5])) {
   return {
     phonemize: vi.fn().mockResolvedValue('phonemes'),
     tokenize: vi.fn().mockReturnValue(ids),
-    generate: vi.fn().mockResolvedValue({ samples, rate: 24000 }),
+    generate: vi.fn().mockResolvedValue({ samples, rate: 24_000 }),
     ids,
   };
 }
@@ -29,15 +29,22 @@ describe('synthesizeSpeech', () => {
     expect(fake.tokenize).toHaveBeenCalledWith('phonemes');
     expect(checkedTokenCount).toHaveBeenCalledWith(3);
     expect(fake.generate).toHaveBeenCalledWith(fake.ids, 'af_heart', 1);
-    expect(encodeSpeechWav).toHaveBeenCalledWith(new Float32Array([0.5]), 24000);
+    expect(encodeSpeechWav).toHaveBeenCalledWith(new Float32Array([0.5]), 24_000);
     expect(result.wav.length).toBeGreaterThan(44);
-    expect(result.durationMs).toBeCloseTo(600 + 1000 / 24000);
+    expect(result.durationMs).toBeCloseTo(600 + 1000 / 24_000);
   });
 
   it('uses British phonemes for British voices', async () => {
     const fake = engine(3);
     await synthesizeSpeech(fake, { text: 'Hello.', voice: 'bf_emma', speed: 1 });
     expect(fake.phonemize).toHaveBeenCalledWith('Hello.', 'b');
+  });
+
+  it('rejects a token tensor without a final dimension', async () => {
+    const fake = engine(3);
+    fake.tokenize.mockReturnValue({ dims: [] });
+    await expect(synthesizeSpeech(fake, { text: 'Hello.', voice: 'af_heart', speed: 1 })).rejects.toThrow();
+    expect(fake.generate).not.toHaveBeenCalled();
   });
 
   it('never runs inference for boundary-only or overlong tokens', async () => {

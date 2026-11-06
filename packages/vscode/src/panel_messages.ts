@@ -2,6 +2,11 @@
 
 import type { CodePlayback, PanelEvent, Ref } from '@ai-pair/core';
 import type { CalibrationView } from './calibration';
+import type { SpeechSettings } from './speech_types';
+
+export type SpeechState = 'preparing' | 'speaking' | 'paused' | 'unavailable' | 'idle';
+export type SpeechEvent = 'started' | 'ended' | 'failed';
+export type SpeechAction = 'pause' | 'resume' | 'stop';
 
 /** The order of the panel history. */
 export type ChatOrder = 'newestFirst' | 'oldestFirst';
@@ -10,6 +15,10 @@ export type ChatOrder = 'newestFirst' | 'oldestFirst';
 export type FromPanel =
   | { type: 'ready' }
   | { type: 'copyDiagnostics' }
+  | { type: 'speechSettings'; value: SpeechSettings }
+  | { type: 'speechSetup' | 'speechPreview' | 'speechStop' }
+  | { type: 'speechPageHidden' | 'speechPageVisible'; pageId: number }
+  | { type: 'speechEvent'; id: number; pageId: number; event: SpeechEvent }
   | { type: 'skipReading'; id: number }
   | { type: 'holdReading'; id: number; held: boolean }
   | { type: 'reply'; text: string; attach?: boolean }
@@ -44,6 +53,13 @@ export type ToPanel =
   | { type: 'replay'; events: PanelEvent[] }
   /** The programmer's selection, offered with a reply. */
   | { type: 'selection'; ref: Ref | undefined }
+  | { type: 'speechPage'; pageId: number }
+  | { type: 'speechSupport'; supported: boolean }
+  | { type: 'speechSettings'; value: SpeechSettings }
+  | { type: 'speechSetupState'; pending: boolean; message: string }
+  | { type: 'speechAudio'; id: number; pageId: number; wavBase64: string; durationMs: number }
+  | { type: 'speechControl'; id: number; pageId: number; action: SpeechAction }
+  | { type: 'speechStatus'; id: number; pageId: number; state: SpeechState; message?: string }
   | { type: 'focusReply' }
   | { type: 'chatOrder'; value: ChatOrder }
   | { type: 'showTerminals'; value: boolean }

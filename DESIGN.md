@@ -194,8 +194,9 @@ the `aiPair.speed` setting, which takes any value from 0.25 to 4. The reading
 menu next to it scales only the reading pause: `aiPair.readingSpeed`, with the
 same range (#109).
 
-**Code playback.** The existing speed menu also offers Typing (the default),
-Lines, and Blocks. A selection takes effect at the next typing action. Lines and
+**Code playback.** A separate toolbar dropdown and Settings offer Typing (the
+default), Lines, and Blocks. A selection takes effect at the next typing
+action. Lines and
 Blocks insert and highlight groups, then give each a reading pause. The main
 pace and reading speed scale these code pauses, and the reading ring can finish
 or hold one. Groups are limited to 240 Unicode code points; blocks also have at

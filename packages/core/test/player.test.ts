@@ -532,6 +532,84 @@ describe('say', () => {
   });
 });
 
+describe('selected speech', () => {
+  it('displays selected text before requesting speech and waits for both gates', async () => {
+    const h = harness();
+    const readingGate = Promise.withResolvers<boolean>();
+    const speechGate = Promise.withResolvers<void>();
+    h.pacing.sleep.mockReturnValueOnce(readingGate.promise);
+    const speak = vi.fn(() => speechGate.promise);
+    Object.assign(h.stage, { narration: { speak, pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() } });
+    const result = h.player.play(1, [{ say: 'One idea.', speak: true }, { say: 'After.' }]);
+    await vi.waitFor(() => {
+      expect(speak).toHaveBeenCalledWith('One idea.');
+    });
+    expect(h.panel.post.mock.invocationCallOrder[0]).toBeLessThan(speak.mock.invocationCallOrder[0] ?? 0);
+    readingGate.resolve(true);
+    await Promise.resolve();
+    expect(posted(h)).not.toContainEqual({ type: 'say', text: 'After.' });
+    speechGate.resolve();
+    await result;
+    expect(posted(h)).toContainEqual({ type: 'say', text: 'After.' });
+  });
+
+  it('waits for reading when speech finishes first and never speaks unflagged text', async () => {
+    const h = harness();
+    const readingGate = Promise.withResolvers<boolean>();
+    h.pacing.sleep.mockReturnValueOnce(readingGate.promise);
+    const speak = vi.fn(() => Promise.resolve());
+    Object.assign(h.stage, { narration: { speak, pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() } });
+    const result = h.player.play(1, [{ say: 'First.', speak: true }, { say: 'After.' }]);
+    await vi.waitFor(() => {
+      expect(speak).toHaveBeenCalledTimes(1);
+    });
+    expect(posted(h)).not.toContainEqual({ type: 'say', text: 'After.' });
+    readingGate.resolve(true);
+    await result;
+    expect(speak).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['throw', 'reject'] as const)('keeps held reading and command approval after speech %s', async (failure) => {
+    const h = harness({ config: { confirmCommands: true } });
+    const readingGate = Promise.withResolvers<boolean>();
+    h.pacing.sleep.mockReturnValueOnce(readingGate.promise);
+    const speak = vi.fn(() => {
+      if (failure === 'throw') throw new Error('speech failed');
+      return Promise.reject(new Error('speech failed'));
+    });
+    Object.assign(h.stage, { narration: { speak, pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() } });
+    const result = h.player.play(1, [{ say: 'Read first.', speak: true }, { run: 'test' }]);
+    await vi.waitFor(() => {
+      expect(speak).toHaveBeenCalled();
+    });
+    const reading = posted(h).find((event) => event.type === 'reading');
+    if (reading?.type !== 'reading' || reading.id === undefined) throw new Error('No reading ID');
+    h.player.holdReading(reading.id, true);
+    await Promise.resolve();
+    expect(h.pacing.hold).toHaveBeenCalledOnce();
+    expect(h.pacing.release).not.toHaveBeenCalled();
+    expect(h.pacing.finish).not.toHaveBeenCalled();
+    expect(h.confirm).not.toHaveBeenCalled();
+    readingGate.resolve(true);
+    await result;
+    expect(h.confirm).toHaveBeenCalledOnce();
+  });
+
+  it('consumes displayed speech when interrupted before following actions', async () => {
+    const h = harness();
+    const speechGate = Promise.withResolvers<void>();
+    const speak = vi.fn(() => speechGate.promise);
+    Object.assign(h.stage, { narration: { speak, pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() } });
+    const result = h.player.play(1, [{ say: 'Seen.', speak: true }, { say: 'After.' }]);
+    await vi.waitFor(() => {
+      expect(speak).toHaveBeenCalled();
+    });
+    h.pacing.interrupt();
+    speechGate.resolve();
+    expect((await result).result).toEqual({ id: 1, status: 'interrupted', unplayed: [{ say: 'After.' }] });
+  });
+});
+
 describe('move', () => {
   it('moves to the end of a line, and to a spot, pausing before and after, nearer or farther', async () => {
     const text = Array.from({ length: 10 }, (_, i) => `l${i + 1}`).join('\n');

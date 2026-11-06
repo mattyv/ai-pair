@@ -1,4 +1,4 @@
-import { checkedTokenCount, encodeSpeechWav } from './speech_audio';
+import { checkedTokenCount, encodeSpeechWav } from './speech_waveform';
 import type { SpeechVoice } from './speech_types';
 
 /** A model token tensor, whose final dimension counts boundary and content tokens. */

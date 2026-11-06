@@ -15,7 +15,7 @@ import { boundedDiff, lineChanges } from '../src/diff';
 import { followChange, rehearse } from '../src/rehearsal';
 import type { LineIds, Sighting } from '../src/lines';
 import type { Failure, Scene, Stage } from '../src/player';
-import type { DiagnosticEvent, EditorPort, PanelEvent, PanelPort, SharedSelection } from '../src/ports';
+import type { DiagnosticEvent, EditorPort, NarrationPort, PanelEvent, PanelPort, SharedSelection } from '../src/ports';
 import { glideDuration, withOverrides } from '../src/timing';
 
 /** What the mocked modules share with the tests, made before the `vi.mock` factories run. */
@@ -207,7 +207,7 @@ type FakePlayer = InstanceType<typeof fakes.FakePlayer>;
 type FakeTimeline = InstanceType<typeof fakes.FakeTimeline>;
 
 /** Returns a controller on mocks, with `config` over CONFIG and `files` in its editor. */
-function harness(config: Partial<Config> = {}, files: Record<string, string> = {}): Harness {
+function harness(config: Partial<Config> = {}, files: Record<string, string> = {}, narration?: NarrationPort): Harness {
   const texts = new Map(Object.entries(files).map(([name, text]) => [path.join(ROOT, name), text]));
   const editor = mock<EditorPort>();
   editor.resolvePath.mockImplementation((file) => path.resolve(ROOT, file));
@@ -218,7 +218,7 @@ function harness(config: Partial<Config> = {}, files: Record<string, string> = {
   });
   editor.isDirty.mockResolvedValue(false);
   const panel = mock<PanelPort>();
-  const controller = new Controller(editor, panel, { ...CONFIG, ...config });
+  const controller = new Controller(editor, panel, { ...CONFIG, ...config }, narration);
   const traced: string[] = [];
   controller.trace = (line) => {
     traced.push(line);
@@ -577,6 +577,30 @@ describe('a session the agent leaves, and comes back to', () => {
 });
 
 describe('steps and their batches', () => {
+  it('rejects another flagged batch while selected narration is outstanding', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step([{ say: 'One.', speak: true }]));
+    const second = await report(h.controller.step([{ say: 'Two.', speak: true }]));
+    expect(second.rejected?.error.message).toContain('current narration');
+    expect(player().play).toHaveBeenCalledTimes(1);
+    finish();
+    await settle();
+  });
+
+  it('rejects two selected narrations in a single batch', async () => {
+    const h = await started();
+    const result = await report(
+      h.controller.step([
+        { say: 'One.', speak: true },
+        { say: 'Two.', speak: true },
+      ]),
+    );
+    expect(result.rejected?.index).toBe(2);
+    expect(result.rejected?.error.message).toContain('one');
+    expect(player().play).not.toHaveBeenCalled();
+  });
+
   it('BatchEnds, ReadyAtHead: returns the first step immediately and blocks the second until the first finishes', async () => {
     const h = await started();
     const finish = holdPlay();
@@ -1342,6 +1366,22 @@ describe('the cursor in a report', () => {
 });
 
 describe('pause and resume', () => {
+  it('pauses speech until all pause reasons clear and cancels it on a reply', async () => {
+    const narration = mock<NarrationPort>();
+    const h = harness({}, {}, narration);
+    await h.controller.start();
+    expect(stage().narration).toBe(narration);
+    h.controller.pause('programmer');
+    h.controller.pause('reply');
+    h.controller.resume('reply');
+    expect(narration.pause).toHaveBeenCalled();
+    expect(narration.resume).not.toHaveBeenCalled();
+    h.controller.resume('programmer');
+    expect(narration.resume).toHaveBeenCalledOnce();
+    h.controller.userMessage('Stop.');
+    expect(narration.cancel).toHaveBeenCalled();
+  });
+
   it('PausedMatchesReasons, NoTimerWhilePaused, ResumeContinues: holds playback until the last pause reason is gone', async () => {
     const h = await started();
     h.controller.pause('programmer');

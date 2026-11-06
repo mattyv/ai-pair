@@ -25,6 +25,7 @@ Code goes without a spec for one of these reasons:
 | `rehearse`, `rejectBatch`, `planned`, `saw`, `read` | `Rehearsal` |
 | `cursorAnchor`, `rejectUnanchored`, `anchorNeeded` in `step` and `snapshot` | `Anchor` |
 | `unnamedEdit` and its preflight in `step` | `BatchFile` (`EditRequiresNamed`) |
+| `selectedSpeech` and admission in `step`; pause, resume and cancellation propagation | `Narration` (`Admit`, `Pause`, `Resume`, `Reply`) |
 | `interrupt`, `discard`, `interrupting`, `userInterrupt`, `userMessage` | `Controller` (`Interrupt`), `Actions` (`Interrupt`) |
 | `userEdit` | `EditorAdapter`, `Navigator` (the programmer's turn), `Player` (`TypeBefore`, `TypeAfter`: the interrupt in the agent's turn) |
 | `otherEdit`, `recordEdit` | `Reload`, `Rehearsal`, `EditEvents` |
@@ -46,7 +47,7 @@ Code goes without a spec for one of these reasons:
 
 | Functions | Spec |
 |---|---|
-| `play`, `actions`, `perform`, `stopped`, `failed`, `fail` | `Actions`, `Turns` |
+| `play`, `actions`, `perform`, `stopped`, `failed`, `fail` | `Actions`, `Turns`; selected say gates: `Narration` |
 | `names`, `fileOf` | `BatchFile` |
 | `type`, `delay` | `Actions`, `Turns`; atomic chunks: `Typing`; grouped chunks and reading: `CodePlayback`; final marker: `PlaybackAnchor` |
 | `edit`, `transform`, `transformScene`, `mapThrough`, `touch` | `Player`, `Reload` |
@@ -104,7 +105,7 @@ Code goes without a spec for one of these reasons:
 |---|---|---|
 | `wire.ts` | `frameJson`, `parseEditorMessage`, `parseRelayMessage` | `Wire` (`SendGarbage`) |
 | | `aiPairHome`, `discoveryDir` | Pure |
-| `index.ts` | `moveProblem`, `spanProblem` | `ActionValidation` |
+| `index.ts` | `moveProblem`, `spanProblem`, `speechProblem` | `ActionValidation` |
 | | `actionKinds`, `fieldsProblem`, `typeProblem` | Pure; `validation.test.ts` |
 | `schemas.ts` | the schemas, and the types taken from them | Types: data declarations, which the parsers above apply (#163) |
 | `paths.ts` | `samePath`, `withinFolder` | Pure |
@@ -134,6 +135,7 @@ Code goes without a spec for one of these reasons:
 | | `history`, `restoreHistory`, `onPost` | `Resume` (`Store`, `ReloadWindow`) |
 | | the `draft` and `reply` messages, `onDidDispose` | `Draft`; the `reply` lifting the pause without a reveal: `PointFocus` |
 | | mode preference messages | `PlaybackPreference` (`Choose`, `Reload`) |
+| | speech delivery and page lifecycle | `SpeechPage`; `Narration` |
 | | `receive` diagnostics-copy message | `DiagnosticsCopy` (`Click`) |
 | | `showTerminalPreference`, `receive` terminal messages | `TerminalPanel` (`SetAuto`, `Show`) |
 | | `receive`'s other messages, `send` | Glue: each calls one controller function |
@@ -141,7 +143,8 @@ Code goes without a spec for one of these reasons:
 | | `resolveWebviewView`, `reveal`, `focusReply`, `showSelection`, `showSpeed`, `showReadingSpeed`, `showTimings` | Glue |
 | | the `reply` message while a calibration runs, `showCalibration`, cancel on dispose and session end | `Calibration` |
 | | `askStart`, the `start` message, posting `startEnded` | `Start` |
-| `webview/panel.ts` | pace menu mode choice | `PlaybackPreference` (`Choose`, `SetPace`) |
+| `webview/speech_audio.ts` | page, unit, audio and controls | `SpeechPage` |
+| `webview/panel.ts` | toolbar and Settings mode choice | `PlaybackPreference` (`Choose`, `SetPace`) |
 | | diagnostics-copy button | `DiagnosticsCopy` (`Click`) |
 | | `setNow`, `add`, `addYou`, `addRun`, `addDivider`, `addOutside`, `fileCurrent`, `entry` | `Panel`; the scroll position: `PanelScroll` |
 | | `syncDraft`, `takeDraft` | `Draft` |
@@ -152,6 +155,11 @@ Code goes without a spec for one of these reasons:
 | | `showCalibration` | Look |
 | | the `canStart` and `startEnded` messages, the Start a session button, its starting note | `Start` |
 | | `esc`, `codeLink`, `refLink` | Format |
+| `speech_service.ts` | worker, audio and page lifecycle; pause, cancel, timeouts | `Narration`, `SpeechWorker`; timer bounds and local platform checks: unit and integration tests |
+| `speech_synthesis.ts`, `speech_waveform.ts` | complete-token and waveform bounds | `ActionValidation` (`TokenBounds`, `PhonemeCoverage`); PCM encoding: Pure |
+| `speech_engine.ts` | `loadSpeechEngine` | Glue: loads the local model, tokenizer and phonemizer; offline worker integration |
+| `speech_worker_host.ts`, `speech_worker.ts` | worker admission, validation and dispatch | `Narration`; worker isolation and concrete messages: unit and integration tests |
+| `speech_worker_messages.ts`, `speech_types.ts` | schemas and settings types | Types; validated at boundaries |
 | `outside.ts`, `outside_watch.ts` | all | `Outside` |
 | `terminal.ts` | all | `Terminals`, `QuietTerminals`, `TerminalReuse`; typed diagnostic events: `DiagnosticsPrivacy` |
 | `view.ts` | `comfortable`, `landing`, `glideTop` | Pure; `Scroll` models `comfortable` and `landing` |

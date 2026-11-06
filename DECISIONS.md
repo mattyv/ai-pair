@@ -32,8 +32,9 @@ Issue discussions and working notes hold the detailed evidence and history.
 
 ## Code playback
 
--   Keep Typing as the default and place Lines and Blocks in the existing pace
-    menu. Save the choice separately from speed; apply changes at the next
+-   Keep Typing as the default and put the mode in its own toolbar dropdown,
+    mirrored in Settings, as requested. Save the choice separately from speed;
+    apply changes at the next
     typing action so an in-progress action keeps its mode.
 -   Show and highlight each inserted group for a reading pause. Use the existing
     reading control for finishing or holding that pause, and the existing pace
@@ -41,6 +42,18 @@ Issue discussions and working notes hold the detailed evidence and history.
     Unicode code points, and Blocks to four logical lines. Prefer line and
     whitespace boundaries; preserve atomic edits, including an indivisible edit
     that exceeds a bound. Follow the highlighted group while it is read.
+
+## Local spoken narration
+
+-   Speak only explicitly selected, bounded agent narration; default to off.
+    Keep the written text visible, and do not replay speech from history.
+-   Use independent voice speed and run speech and reading timers concurrently;
+    completion waits for both. The reading control changes only the timer.
+-   Run locally on supported Linux x64 glibc desktop hosts. An explicit setup
+    downloads the pinned model; unsupported hosts retain text-only operation.
+    CPU synthesis in a VM can be slow, and audio quality depends on the host.
+-   Keep one audio unit at a time and invalidate it on reply, interruption or
+    page replacement. Do not persist generated audio or narration text.
 
 ## Session diagnostics
 

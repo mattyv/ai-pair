@@ -39,6 +39,7 @@ export class SpeechAudio {
   private current = 0;
   private clip?: AudioClip;
   private paused = false;
+  private playAttempt = 0;
 
   constructor(
     private readonly make: (base64: string) => AudioClip,
@@ -47,7 +48,7 @@ export class SpeechAudio {
 
   /** Changes the page epoch and disposes its previous clip. */
   page(pageId: number): void {
-    if (pageId === this.currentPage) return;
+    if (!Number.isSafeInteger(pageId) || pageId <= 0 || pageId === this.currentPage) return;
     this.stop();
     this.currentPage = pageId;
     this.latest = 0;
@@ -55,7 +56,7 @@ export class SpeechAudio {
 
   /** Permits a new monotonic unit, never a cancelled earlier unit. */
   begin(id: number, pageId: number): void {
-    if (pageId !== this.currentPage || !Number.isSafeInteger(id) || id <= this.latest) return;
+    if (this.currentPage === 0 || pageId !== this.currentPage || !Number.isSafeInteger(id) || id <= this.latest) return;
     this.stop();
     this.latest = id;
     this.current = id;
@@ -94,6 +95,7 @@ export class SpeechAudio {
     if (action === 'stop') {
       this.stop();
     } else if (action === 'pause') {
+      this.playAttempt++;
       this.paused = true;
       this.clip?.audio.pause();
     } else if (this.paused) {
@@ -116,14 +118,23 @@ export class SpeechAudio {
   }
 
   private play(id: number, pageId: number, clip: AudioClip): void {
-    void clip.audio.play().then(
+    const attempt = ++this.playAttempt;
+    let started: Promise<void>;
+    try {
+      started = clip.audio.play();
+    } catch {
+      this.stop();
+      this.report({ id, pageId, event: 'failed' });
+      return;
+    }
+    void started.then(
       () => {
-        if (this.current === id && this.currentPage === pageId && this.clip === clip && !this.paused) {
+        if (attempt === this.playAttempt && this.current === id && this.currentPage === pageId && this.clip === clip && !this.paused) {
           this.report({ id, pageId, event: 'started' });
         }
       },
       () => {
-        if (this.current !== id || this.currentPage !== pageId || this.clip !== clip) return;
+        if (attempt !== this.playAttempt || this.current !== id || this.currentPage !== pageId || this.clip !== clip) return;
         this.stop();
         this.report({ id, pageId, event: 'failed' });
       },

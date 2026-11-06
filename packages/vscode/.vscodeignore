@@ -10,3 +10,6 @@
 !media/comma-gets-a-cure.txt
 !media/comma-gets-a-cure-notice.txt
 !LICENSE
+!dist/speech/**
+!THIRD_PARTY_NOTICES.md
+!third_party/**

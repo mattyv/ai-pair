@@ -163,9 +163,9 @@ it('offers an accessible automatic-terminal setting and a live reveal control', 
   expect(page.querySelector('[data-ui="show-terminal"]')?.textContent).toContain('Show terminal');
 });
 
-it('offers code playback modes in the playback speed menu', () => {
+it('offers code playback modes in a separate toolbar menu', () => {
   const html = panelHtml('source', 'style', 'script');
-  expect(html).toContain('aria-label="Code playback"');
+  expect(html).toContain('aria-label="Code display"');
   expect(html).toContain('data-code-playback="typing"');
   expect(html).toContain('data-code-playback="lines"');
   expect(html).toContain('data-code-playback="blocks"');
@@ -174,4 +174,15 @@ it('offers code playback modes in the playback speed menu', () => {
 it('offers an explicit diagnostics copy button in Settings', () => {
   const page = new window.DOMParser().parseFromString(panelHtml('vscode-resource:', 'panel.css', 'panel.js'), 'text/html');
   expect(page.querySelector('[data-ui="copy-diagnostics"]')?.textContent).toContain('Copy diagnostics');
+});
+
+it('offers local speech setup, preferences, preview and stop in Settings', () => {
+  const page = new window.DOMParser().parseFromString(panelHtml('source', 'style', 'script'), 'text/html');
+  expect(page.querySelector('[data-ui="speech-enabled"]')?.closest('label')?.textContent).toContain('Speak selected narration automatically');
+  expect(page.querySelector('[data-ui="speech-voice"]')?.querySelectorAll('option')).toHaveLength(4);
+  expect(page.querySelector('[data-ui="speech-speed"]')?.querySelectorAll('option')).toHaveLength(4);
+  expect(page.querySelector('[data-ui="speech-setup"]')?.textContent).toContain('Set up local speech');
+  expect(page.querySelector('[data-ui="speech-preview"]')?.textContent).toContain('Preview voice');
+  expect(page.querySelector('[data-ui="speech-stop"]')?.textContent).toContain('Stop speech');
+  expect(page.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute('content')).toContain('media-src blob:');
 });

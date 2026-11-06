@@ -1,5 +1,29 @@
 # AI Pair
 
+## Additions in this fork
+
+This fork builds on the original [AI Pair project](https://github.com/faiface/ai-pair).
+The changes in version 0.14 include:
+
+-   Choose the order of the conversation and read clearer message text.
+-   See clearer pause and playback status; click the reading indicator to finish
+    its timer, or hold it to pause the timer.
+-   Choose typing, line, or block playback, and control its speed. In 0.14,
+    these choices are in the pace menu.
+-   Keep command terminals quiet by default and reveal an available run when needed.
+-   Copy session diagnostics for troubleshooting and find the running version and
+    build in Settings. GitHub Actions provides downloadable extension builds.
+
+The next release is being developed with a separate code-display dropdown,
+more readable Settings, and optional local spoken narration. These additions
+are not yet available in the 0.14 release.
+
+[Download a fork build from GitHub Actions](https://github.com/mattyv/ai-pair/actions)
+(run **Build VSIX**, then download its artifact). The Marketplace link in the
+original README below installs the upstream version without these additions.
+
+## Original project README
+
 ## For those of us who want, need, or love to stay close to the code
 
 > A **mirror neuron** is a neuron that fires both when an animal acts and when
@@ -123,13 +147,14 @@ and the reply box at the bottom. Your choice is saved across reloads.
 
 -   `aiPair.chatOrder`: newest first (default) or oldest first.
 -   `aiPair.speed`: overall playback speed, the follow scroll's glide included.
--   `aiPair.readingSpeed`: reading speed, for the pause after each message.
+-   `aiPair.readingSpeed`: reading speed, for pauses after messages and grouped
+    code.
 -   `aiPair.calibrationPassage`: the passage the calibration times you on;
     empty, the built-in one.
 -   `aiPair.agentName`: the name on the agent's cursor.
 -   `aiPair.timing`: fine-tune any typing, pause, or glide duration.
 -   `aiPair.codePlayback`: `typing` (default), `lines`, or `blocks`; also in
-    the speed menu. Changes apply to the next typing action.
+    the code display dropdown and Settings. Changes apply to the next typing action.
 -   `aiPair.showTerminalsAutomatically`: show command terminals automatically
     (off by default; also in Pair Settings).
 -   `aiPair.confirmCommands`: ask before each command the agent runs in the

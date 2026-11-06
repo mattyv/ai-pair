@@ -2,6 +2,18 @@
 
 import type { Excerpt, PauseReason, Turn } from '@ai-pair/protocol';
 
+/** Controls one optional live narration without owning reading or command decisions. */
+export interface NarrationPort {
+  /** Speaks one displayed unit and resolves on completion, cancellation, or text-only fallback. */
+  speak: (text: string) => Promise<void>;
+  /** Pauses audio or prevents a prepared waveform from starting. */
+  pause: () => void;
+  /** Resumes only the current uncanceled audio. */
+  resume: () => void;
+  /** Stops current audio and invalidates its pending generation. */
+  cancel: () => void;
+}
+
 /** What the agent is doing, as the panel shows it. */
 export type AgentState = 'typing' | 'read' | 'running' | 'thinking' | 'absent' | 'paused' | 'listening' | 'navigator';
 

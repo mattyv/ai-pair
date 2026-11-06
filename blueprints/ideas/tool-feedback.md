@@ -21,13 +21,12 @@ Track frustrations with the current tool and possible improvements.
 1.  **Explore selective spoken narration.** Consider text-to-speech for selected
     AI Pair MCP narration while keeping the same message visible in the panel.
     Do not speak all chat automatically; explore how the user chooses it.
-    Prefer the existing Claude Code CLI session signed into the user's Team
-    plan: Claude selects what deserves speech through the Pair MCP, while a
-    local TTS model generates audio. No additional Claude session or API key
-    should be needed for this design. Consider an optional `speak: true` flag
+    The connected coding agent selects narration through Pair MCP, while local
+    Kokoro speech generates audio. No additional agent session or API key
+    is needed for this design. Consider an optional `speak: true` flag
     on narration, with voice, speed and automatic speech controls in Settings.
     Audition [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) and measure
-    startup latency and CPU use on the Ubuntu host before selecting a model.
+    startup latency and CPU use on the Ubuntu host.
     Replying should stop playback; stale narration should not accumulate.
     Speech must not approve commands or advance the reading countdown.
     Speech-to-text is deferred; keep this proposal focused on spoken narration.

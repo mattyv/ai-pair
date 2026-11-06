@@ -1,3 +1,5 @@
+# Kokoro phonemization source
+
 `kokoro_phonemize.mjs` is copied from the Apache-2.0 Kokoro JS phonemizer:
 <https://github.com/hexgrad/kokoro/blob/main/kokoro.js/src/phonemize.js>.
 It preserves upstream normalization and punctuation handling while letting the

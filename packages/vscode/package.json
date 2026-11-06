@@ -2,7 +2,7 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "publisher": "michalstrba",
   "private": true,
   "license": "MIT",
@@ -158,6 +158,36 @@
     "configuration": {
       "title": "AI Pair",
       "properties": {
+        "aiPair.speech.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Speak only narration explicitly selected by the agent after local speech is set up.",
+          "scope": "application"
+        },
+        "aiPair.speech.voice": {
+          "type": "string",
+          "enum": [
+            "af_heart",
+            "am_michael",
+            "bf_emma",
+            "bm_george"
+          ],
+          "default": "af_heart",
+          "description": "Local voice for the next selected narration.",
+          "scope": "application"
+        },
+        "aiPair.speech.speed": {
+          "type": "number",
+          "enum": [
+            0.75,
+            1,
+            1.25,
+            1.5
+          ],
+          "default": 1,
+          "description": "Local speech speed for the next selected narration.",
+          "scope": "application"
+        },
         "aiPair.showTerminalsAutomatically": {
           "type": "boolean",
           "default": false,

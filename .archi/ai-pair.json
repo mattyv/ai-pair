@@ -8897,6 +8897,21 @@
             "y": 177
           },
           {
+            "id": "local-speech",
+            "label": "Local speech service",
+            "files": [
+              "packages/vscode/src/speech_service.ts",
+              "packages/vscode/src/speech_worker_host.ts",
+              "packages/vscode/src/speech_worker.ts",
+              "packages/vscode/src/speech_engine.ts",
+              "packages/vscode/src/speech_setup.ts",
+              "packages/vscode/src/webview/speech_audio.ts"
+            ],
+            "group": "ext",
+            "x": 1830,
+            "y": 342
+          },
+          {
             "id": "api",
             "label": "vscode API surface\nextHost.api.impl",
             "files": [],
@@ -9015,6 +9030,21 @@
           }
         ],
         "edges": [
+          {
+            "from": "ctrl",
+            "to": "local-speech",
+            "label": "selected narration"
+          },
+          {
+            "from": "local-speech",
+            "to": "panelts",
+            "label": "bounded audio and status"
+          },
+          {
+            "from": "extts",
+            "to": "local-speech",
+            "label": "wires local runtime"
+          },
           {
             "from": "extts",
             "to": "session-diagnostics",

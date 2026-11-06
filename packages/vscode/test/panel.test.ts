@@ -121,6 +121,19 @@ interface Harness {
     get: ReturnType<typeof vi.fn<() => 'typing' | 'lines' | 'blocks'>>;
     set: ReturnType<typeof vi.fn<(value: 'typing' | 'lines' | 'blocks') => void>>;
   };
+  speech: {
+    settings: {
+      get: ReturnType<typeof vi.fn<() => { enabled: boolean; voice: 'af_heart'; speed: number }>>;
+      set: ReturnType<typeof vi.fn>;
+    };
+    supported: ReturnType<typeof vi.fn<() => boolean>>;
+    installed: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
+    setup: ReturnType<typeof vi.fn<() => Promise<void>>>;
+    preview: ReturnType<typeof vi.fn<() => Promise<void>>>;
+    stop: ReturnType<typeof vi.fn<() => void>>;
+    event: ReturnType<typeof vi.fn>;
+    pageClosed: ReturnType<typeof vi.fn>;
+  };
   onPost: ReturnType<typeof vi.fn<() => void>>;
   traced: string[];
 }
@@ -153,6 +166,16 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
     set: vi.fn<(value: 'typing' | 'lines' | 'blocks') => void>(),
   };
   const copyDiagnostics = vi.fn<() => Promise<void>>().mockResolvedValue();
+  const speech = {
+    settings: { get: vi.fn(() => ({ enabled: false, voice: 'af_heart' as const, speed: 1 })), set: vi.fn() },
+    supported: vi.fn(() => true),
+    installed: vi.fn<() => Promise<boolean>>().mockResolvedValue(false),
+    setup: vi.fn<() => Promise<void>>().mockResolvedValue(),
+    preview: vi.fn<() => Promise<void>>().mockResolvedValue(),
+    stop: vi.fn<() => void>(),
+    event: vi.fn(),
+    pageClosed: vi.fn(),
+  };
   const controller = mock<Controller>({ turn });
   const calibration = mock<Calibration>();
   calibration.reply.mockReturnValue(false);
@@ -168,7 +191,7 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
       traced.push(line);
     },
     vscode.Uri.file(EXTENSION),
-    { controller: () => controller, calibration: () => calibration, starter, copyDiagnostics },
+    { controller: () => controller, calibration: () => calibration, starter, copyDiagnostics, speech },
     chatOrder,
     buildInfo,
     terminalSettings,
@@ -188,6 +211,7 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
     terminalSettings,
     showTerminal,
     copyDiagnostics,
+    speech,
     codePlayback,
     onPost,
     traced,
@@ -305,6 +329,16 @@ describe('resolveWebviewView', () => {
     const { panel, controller } = harness();
     open(panel).send({ type: 'draft', empty: false });
     expect(controller.pause.mock.calls).toEqual([['reply']]);
+  });
+
+  it('keeps the new view draft and calibration when an old view is disposed', () => {
+    const { panel, controller, calibration } = harness();
+    const old = open(panel);
+    const current = open(panel);
+    current.send({ type: 'draft', empty: false });
+    old.dispose();
+    expect(controller.resume.mock.calls).toEqual([]);
+    expect(calibration.cancel.mock.calls).toEqual([]);
   });
 
   it("ReplyMeansDraft: ends the draft's pause when the view is disposed with it", () => {
@@ -530,6 +564,9 @@ describe('receive', () => {
     await flush();
     expect(controller.resume.mock.calls).toEqual([['reply']]);
     expect(view.posted).toEqual([
+      { type: 'speechPage', pageId: 1 },
+      { type: 'speechSettings', value: { enabled: false, voice: 'af_heart', speed: 1 } },
+      { type: 'speechSupport', supported: true },
       { type: 'chatOrder', value: 'newestFirst' },
       { type: 'replay', events: [{ type: 'say', text: 'hi' }] },
       { type: 'showTerminals', value: false },
@@ -538,6 +575,7 @@ describe('receive', () => {
       { type: 'codePlayback', value: 'typing' },
       { type: 'selection', ref: REF },
       { type: 'timings', tipDelayMs: 7, tipWarmMs: 8 },
+      { type: 'speechSetupState', pending: false, message: 'Local speech is not set up.' },
       { type: 'canStart', value: true },
     ]);
   });
@@ -547,7 +585,7 @@ describe('receive', () => {
     chatOrder.get.mockReturnValue('oldestFirst');
     const view = open(panel);
     view.send({ type: 'ready' });
-    expect(view.posted.slice(0, 2)).toEqual([
+    expect(view.posted.slice(3, 5)).toEqual([
       { type: 'chatOrder', value: 'oldestFirst' },
       { type: 'replay', events: [] },
     ]);
@@ -829,4 +867,44 @@ describe('openFile', () => {
     await flush();
     expect(vi.mocked(vscode.window.showTextDocument).mock.calls).toEqual([[found[1]]]);
   });
+});
+
+it('sends audio only to the ready current page and never adds it to history', () => {
+  const { panel, speech } = harness();
+  expect(panel.playSpeech(1, new Uint8Array([1, 2]), 40)).toBeUndefined();
+  const first = open(panel);
+  first.send({ type: 'ready' });
+  expect(panel.playSpeech(1, new Uint8Array([1, 2]), 40)).toBe(1);
+  expect(first.posted).toContainEqual({ type: 'speechAudio', id: 1, pageId: 1, wavBase64: 'AQI=', durationMs: 40 });
+  expect(panel.history).toEqual([]);
+  const second = open(panel);
+  second.send({ type: 'ready' });
+  first.send({ type: 'speechEvent', id: 1, pageId: 1, event: 'ended' });
+  expect(speech.event).not.toHaveBeenCalled();
+  expect(panel.playSpeech(2, new Uint8Array([3]), 40)).toBe(2);
+  second.send({ type: 'speechEvent', id: 2, pageId: 2, event: 'ended' });
+  expect(speech.event).toHaveBeenCalledWith({ id: 2, pageId: 2, event: 'ended' });
+  second.dispose();
+  expect(speech.pageClosed).toHaveBeenCalledWith(2);
+});
+
+it('cancels speech before resuming for a reply', () => {
+  const { panel, speech, controller } = harness();
+  const view = open(panel);
+  view.send({ type: 'reply', text: 'Continue' });
+  expect(speech.stop).toHaveBeenCalledOnce();
+  expect(speech.stop.mock.invocationCallOrder[0]).toBeLessThan(controller.resume.mock.invocationCallOrder[0] ?? 0);
+});
+
+it('does not offer setup or preview on an unsupported host', async () => {
+  const { panel, speech } = harness();
+  speech.supported.mockReturnValue(false);
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  view.send({ type: 'speechSetup' });
+  view.send({ type: 'speechPreview' });
+  await flush();
+  expect(view.posted).toContainEqual({ type: 'speechSupport', supported: false });
+  expect(speech.setup).not.toHaveBeenCalled();
+  expect(speech.preview).not.toHaveBeenCalled();
 });

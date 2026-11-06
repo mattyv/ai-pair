@@ -96,6 +96,26 @@ export function actionKinds(value: object): string[] {
   return Object.keys(value).filter((k) => (ACTION_KINDS as readonly string[]).includes(k));
 }
 
+/** Largest selected narration, counted as Unicode code points. */
+const MAX_SPEECH_CHARACTERS = 280;
+/** Largest selected narration, counted as whitespace-delimited words. */
+const MAX_SPEECH_WORDS = 45;
+
+/** Returns why text cannot be used as a selected spoken unit. */
+export function speechProblem(text: unknown): string | undefined {
+  if (
+    typeof text !== 'string' ||
+    text.trim() === '' ||
+    text.includes('```') ||
+    text.includes('~~~') ||
+    Array.from(text).length > MAX_SPEECH_CHARACTERS ||
+    text.trim().split(/\s+/u).length > MAX_SPEECH_WORDS
+  ) {
+    return 'A spoken `say` must be plain, nonempty text of at most 280 Unicode characters and 45 words; shorten it or leave `speak` off.';
+  }
+  return undefined;
+}
+
 /**
  * Returns what's wrong with an action's fields, if anything: the fields the relay's schema allows, a
  * `delete` that is `true`, and a `wait` that is a number. The player checks this too, so an action
@@ -140,20 +160,6 @@ export function fieldsProblem(action: object): string | undefined {
     if (unknown.length > 0) return `Unknown field ${fieldList(unknown)} in \`${kind}\`: it takes ${fieldList(fields)}.`;
   } else if (kind === 'move' || kind === 'select' || kind === 'point') {
     return `\`${kind}\` is an object: it takes ${fieldList(fields)}.`;
-  }
-  return undefined;
-}
-
-/** Largest selected narration, counted as Unicode code points. */
-const MAX_SPEECH_CHARACTERS = 280;
-/** Largest selected narration, counted as whitespace-delimited words. */
-const MAX_SPEECH_WORDS = 45;
-
-/** Returns why text cannot be used as a selected spoken unit. */
-export function speechProblem(text: unknown): string | undefined {
-  if (typeof text !== 'string' || text.trim() === '' || (text.includes('```') || text.includes('~~~')) ||
-      Array.from(text).length > MAX_SPEECH_CHARACTERS || text.trim().split(/\s+/u).length > MAX_SPEECH_WORDS) {
-    return 'A spoken `say` must be plain, nonempty text of at most 280 Unicode characters and 45 words; shorten it or leave `speak` off.';
   }
   return undefined;
 }

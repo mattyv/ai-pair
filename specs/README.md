@@ -89,6 +89,8 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `DiagnosticsPrivacy.cfg` | bounded two-event history, copy and allowlisted projection | holds | 1,598 |
 | `Timeline.cfg` | `MaxSleeps = 3` sleeps, holds, and a second sleep while one is pending | holds | 864 |
 | `PlaybackPreference.cfg` | three modes and two independent pace settings | holds | 36 |
+| `SpeechSetup.cfg` | two files; install, cancellation and rollback outcomes | holds | 42 |
+| `SpeechPage.cfg` | two page identities and two narration units | holds | 28 |
 | `PlaybackAnchor.cfg` | three-character insert, cursor marker and all bounded programmer edits | holds | 20 |
 | `PlaybackAnchor_Progress.cfg` | the same, with fair completion | holds | 20 |
 | `CodePlayback.cfg` | three atomic edits, bounded groups, two pause states and three countdown IDs | holds | 654 |
@@ -96,6 +98,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `ReadingSkip.cfg` | two countdown IDs, hold, pause, turn and suspension changes | holds | 5,840 |
 | `ReadingHold.cfg` | matching hold and release with changing pause state | holds | 444 |
 | `Narration.cfg` | two units, two page and session epochs, interruptions and independent gates | holds | 7,328 |
+| `SpeechWorker.cfg` | two jobs, cancellation, watchdog expiry and worker termination | holds | 19 |
 | `ReadingGesture.cfg` | short and long gestures across two countdown IDs | holds | 170 |
 | `ListeningHint.cfg` | status and session context | holds | 64 |
 | `SettingsAccess.cfg` | idle and active toolbar | holds | 4 |
@@ -1893,6 +1896,15 @@ violates `IneligibleKeepsReading`; an out-of-range ID violates `TypeOK`.
 | `EligibleFinishes`, `IneligibleKeepsReading` | `session.e2e.test.ts`: EligibleFinishes, IneligibleKeepsReading: finishes the requested delay without lifting a user pause |
 | `IneligibleKeepsReading` | `controller.test.ts`: IneligibleKeepsReading: forwards an ID only in an active unpaused agent turn |
 
+### `SpeechWorker`: canceled inference and bounded cleanup
+
+`SpeechWorker.tla` keeps CPU-job ownership after its visible gate is canceled.
+A separate fair watchdog transitions a stuck job to termination, and a new job
+is admitted only after completion or termination. The liveness property
+assumes worker termination eventually settles; cancellation itself resolves the
+visible gate without waiting for that settlement. Two bounded job IDs expose
+stale results and attempts to overlap work.
+
 ### `Narration`: selected speech and reading gates
 
 `Narration.tla` models one outstanding selected unit, two successive units,
@@ -2048,9 +2060,9 @@ or change mode while changing pace violate `TypeOK`, `ChoiceSaved`,
 |---|---|
 | `TypeOK` | TypeScript checks mode values; the panel and extension validate boundary values. |
 | `ChoiceSaved` | `extension.test.ts`: ChoiceSaved: reads, stores and applies the playback mode, defaulting invalid values to typing. |
-| `ChoiceApplied` | `panel.test.ts`: ChoiceApplied: sends the saved mode and accepts only valid choices; `webview/panel.test.ts`: ChoiceApplied: the pace menu updates mode separately from speed. |
+| `ChoiceApplied` | `panel.test.ts`: ChoiceApplied: sends the saved mode and accepts only valid choices; `webview/panel.test.ts`: ChoiceApplied: the code display menu updates mode separately from speed. |
 | `StableDuringChoice`, `NextActionUsesChoice` | `session.e2e.test.ts`: StableDuringChoice, NextActionUsesChoice: snapshots the mode for each typing action, while rehearsal stays instant. |
-| `PaceIndependent` | `webview/panel.test.ts`: ChoiceSaved, PaceIndependent: keeps mode in the pace label when speed and mode messages arrive in either order. |
+| `PaceIndependent` | `webview/panel.test.ts`: ChoiceSaved, PaceIndependent: keeps code display and speed independent in either message order. |
 
 ### `PlaybackAnchor`: cursor and reading target
 
@@ -2072,3 +2084,36 @@ reading, and disabling finish violate the corresponding properties below.
 | `MarkerPreserved` | `session.e2e.test.ts`: MarkerPreserved: user edits during final code reading keep the marker at the transformed position; `player.test.ts`: MarkerPreserved: transforms the final marker when a user edit arrives during editor.edit. |
 | `ReadingTargetsGroup`, `FinishedTargetsCursor` | `editor.test.ts`: ReadingTargetsGroup: follows the inserted group during reading, then returns to the cursor. |
 | `EventuallyFinished` | `session.e2e.test.ts`: StableDuringChoice, NextActionUsesChoice: snapshots the mode for each typing action, while rehearsal stays instant. |
+
+### `SpeechPage`: current-page audio
+
+This model abstracts one page's audio clip, page replacement, pause, and the
+current narration ID. A delivery attempt records its eligibility independently
+of whether playback started. TLC checked 28 states. Mutating the initial page
+outside its range violates `TypeOK`; accepting a stale ID violates
+`PlayingIsCurrent`; refusing an eligible delivery violates `AcceptedStarts`.
+
+| Property | Test |
+|---|---|
+| `TypeOK` | `speech_audio.test.ts`: rejects invalid page and unit IDs and ignores duplicate audio. |
+| `PlayingIsCurrent` | `speech_audio.test.ts`: interrupts synchronously and never resurrects the old unit; ignores stale callbacks when a page or unit changes. |
+| `AcceptedStarts` | `speech_audio.test.ts`: plays only the current page and unit, then acknowledges and releases it. |
+
+### `SpeechSetup`: verified model installation
+
+One setup downloads a fixed manifest into staging, verifies it, and replaces a
+previous directory using backup and atomic rename. `Dispatch` is the commit
+boundary: cancellation before it cannot install new files; a dispatched
+rename may finish despite cancellation. Failed rollback leaves the backup in
+place. The model abstracts file contents as valid or corrupt and filesystem
+operations as atomic successes or failures; it does not model concurrent
+setup processes. TLC checked 42 states. Mutations that bypass verification,
+install on cancellation, accept corrupt content, lose the backup, or allow a
+stuck rollback violate the corresponding safety or progress property.
+
+| Property | Test |
+|---|---|
+| `InstalledOnlyIfVerified`, `NoBadInstall` | `speech_setup.test.ts`: downloads and verifies all fixed assets before exposing the model directory; rejects a corrupt download and never exposes a partial model. |
+| `CancelledDoesNotInstall` | `speech_setup_fs.test.ts`: restores the previous directory if cancelled after backup. |
+| `NoLostPrevious` | `speech_setup_fs.test.ts`: restores the previous directory if commit rename fails; preserves the backup directory if rollback also fails. |
+| `SetupProgress` | `speech_setup.test.ts`: times out a stalled download and cleans staging. |

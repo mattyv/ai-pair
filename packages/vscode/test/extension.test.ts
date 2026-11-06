@@ -10,6 +10,7 @@ import { activate, deactivate } from '../src/extension';
 import { setTimings } from '../src/timings';
 import { watchOutside } from '../src/outside_watch';
 import { settingSpeed } from '../src/panel_html';
+import { speechRuntimeAvailable } from '../src/speech_runtime_status';
 import { builtInPassage } from '../src/passage';
 import { claudeStarter, setUpAgent, writeLauncher } from '../src/setup';
 
@@ -40,9 +41,26 @@ const fakes = vi.hoisted(() => {
     panels: [] as Array<InstanceType<typeof FakePanel>>,
     calibrations: [] as Array<InstanceType<typeof FakeCalibration>>,
     diagnostics: [] as Array<InstanceType<typeof FakeDiagnostics>>,
+    speech: [] as Array<InstanceType<typeof FakeSpeech>>,
     starting: Promise.resolve(),
     arms: true,
   };
+
+  class FakeSpeech {
+    readonly speak = vi.fn<() => Promise<void>>().mockResolvedValue();
+    readonly pause = vi.fn<() => void>();
+    readonly resume = vi.fn<() => void>();
+    readonly cancel = vi.fn<() => void>();
+    readonly dispose = vi.fn<() => void>();
+    readonly preview = vi.fn<() => Promise<void>>().mockResolvedValue();
+    readonly audioEvent = vi.fn();
+    readonly pageClosed = vi.fn();
+    constructor(
+      readonly options: { settings: () => { enabled: boolean; voice: string; speed: number }; output: unknown; localDesktop: boolean },
+    ) {
+      made.speech.push(this);
+    }
+  }
 
   class FakeDiagnostics {
     readonly record = vi.fn<(event: unknown) => void>();
@@ -77,6 +95,8 @@ const fakes = vi.hoisted(() => {
     constructor(
       readonly editor: unknown,
       readonly panel: unknown,
+      readonly config: unknown,
+      readonly narration: unknown,
     ) {
       made.controllers.push(this);
     }
@@ -135,6 +155,8 @@ const fakes = vi.hoisted(() => {
     readonly showReadingSpeed = vi.fn();
     readonly showChatOrder = vi.fn();
     readonly showCodePlayback = vi.fn();
+    readonly showSpeechSettings = vi.fn();
+    readonly refreshSpeechSupport = vi.fn();
     readonly showTerminalPreference = vi.fn();
     readonly showCalibration = vi.fn();
     readonly showTimings = vi.fn();
@@ -149,7 +171,13 @@ const fakes = vi.hoisted(() => {
       readonly selection: { current: () => unknown; ref: () => unknown },
       readonly trace: (line: string) => void,
       readonly extensionUri: unknown,
-      readonly wiring: { controller: () => unknown; calibration: () => unknown; starter: unknown; copyDiagnostics: () => Promise<void> },
+      readonly wiring: {
+        controller: () => unknown;
+        calibration: () => unknown;
+        starter: unknown;
+        copyDiagnostics: () => Promise<void>;
+        speech: { supported: () => boolean };
+      },
       readonly chatOrder: { get: () => string; set: (value: string) => void },
       readonly buildInfo: unknown,
       readonly terminalSettings: { get: () => boolean; set: (value: boolean) => void },
@@ -187,6 +215,7 @@ const fakes = vi.hoisted(() => {
     FakePanel,
     FakeCalibration,
     FakeDiagnostics,
+    FakeSpeech,
     made,
     /** The workspace's folders; none until a test says. */
     folders: undefined as Array<{ uri: { fsPath: string } }> | undefined,
@@ -198,12 +227,14 @@ const fakes = vi.hoisted(() => {
     infos: [] as string[],
     /** The button the programmer picks on the next information message. */
     answer: undefined as string | undefined,
+    remoteName: undefined as string | undefined,
     logged: [] as Array<[string, string]>,
   };
 });
 
 vi.mock('vscode', () => ({
   ConfigurationTarget: { Global: 1 },
+  UIKind: { Desktop: 1 },
   workspace: {
     get workspaceFolders() {
       return fakes.folders;
@@ -236,7 +267,13 @@ vi.mock('vscode', () => ({
     onDidChangeWindowState: fakes.event('window'),
     registerWebviewViewProvider: () => ({ dispose: () => {} }),
   },
-  env: { clipboard: { writeText: vi.fn(() => Promise.resolve()) } },
+  env: {
+    uiKind: 1,
+    get remoteName() {
+      return fakes.remoteName;
+    },
+    clipboard: { writeText: vi.fn(() => Promise.resolve()) },
+  },
   commands: {
     registerCommand: (name: string, run: () => unknown) => {
       fakes.commands.set(name, run);
@@ -254,6 +291,12 @@ vi.mock('@ai-pair/protocol', () => ({ discoveryDir: () => '/discovery' }));
 vi.mock('../src/demo', () => ({ playDemo: vi.fn(() => Promise.resolve()) }));
 vi.mock('../src/editor', () => ({ VsCodeEditor: fakes.FakeEditor }));
 vi.mock('../src/diagnostics', () => ({ Diagnostics: fakes.FakeDiagnostics }));
+vi.mock('../src/speech_runtime_status', () => ({ speechRuntimeAvailable: vi.fn(() => Promise.resolve(false)) }));
+vi.mock('../src/speech_service', () => ({ SpeechService: fakes.FakeSpeech }));
+vi.mock('../src/speech_setup', () => ({
+  installedSpeechModel: vi.fn(() => Promise.resolve(undefined)),
+  setupSpeech: vi.fn(() => Promise.resolve()),
+}));
 vi.mock('../src/outside_watch', () => ({ watchOutside: vi.fn(() => ({ outside: 'outside', disposable: { dispose: () => {} } })) }));
 vi.mock('../src/panel', () => ({ NarrationPanel: fakes.FakePanel }));
 vi.mock('../src/panel_html', () => ({ settingSpeed: vi.fn((value: unknown) => (typeof value === 'number' ? value : 1)) }));
@@ -272,6 +315,7 @@ function context(stored: Map<string, unknown> = new Map(), offered = true) {
   return {
     subscriptions: [] as Array<{ dispose: () => unknown }>,
     extensionPath: '/ext',
+    globalStorageUri: { fsPath: '/storage' },
     extensionUri: { fsPath: '/ext' },
     workspaceState: {
       get: (key: string) => stored.get(key),
@@ -446,6 +490,49 @@ describe('activate', () => {
     await h.panel.wiring.copyDiagnostics();
     expect(diagnostics.snapshot).toHaveBeenCalledOnce();
     expect(vi.mocked(vscode.env.clipboard, { deep: true }).writeText.mock.calls).toContainEqual([JSON.stringify({ safe: 'snapshot' })]);
+  });
+
+  it('wires local speech with safe defaults and stops it when disabled', () => {
+    const h = activated();
+    const speech = fakes.made.speech.at(-1);
+    if (!speech) throw new Error('Missing speech service');
+    expect(h.controller.narration).toBe(speech);
+    expect(speech.options.settings()).toEqual({ enabled: false, voice: 'af_heart', speed: 1 });
+    expect(speech.options.localDesktop).toBe(true);
+    fakes.settings.set('speech.enabled', true);
+    fakes.settings.set('speech.voice', 'bf_emma');
+    fakes.settings.set('speech.speed', 1.25);
+    expect(speech.options.settings()).toEqual({ enabled: true, voice: 'bf_emma', speed: 1.25 });
+    fakes.settings.set('speech.voice', 'invalid');
+    fakes.settings.set('speech.speed', 9);
+    expect(speech.options.settings()).toEqual({ enabled: true, voice: 'invalid', speed: 9 });
+    fakes.settings.set('speech.enabled', false);
+    changed('speech', 'speech.enabled');
+    expect(speech.cancel).toHaveBeenCalledOnce();
+  });
+
+  it('keeps setup unavailable when this package has no speech runtime', async () => {
+    vi.mocked(speechRuntimeAvailable).mockResolvedValue(false);
+    const h = activated();
+    await Promise.resolve();
+    expect(h.panel.wiring.speech.supported()).toBe(false);
+    expect(h.panel.refreshSpeechSupport.mock.calls).toEqual([[]]);
+  });
+
+  it('enables speech controls once the packaged runtime is available', async () => {
+    vi.mocked(speechRuntimeAvailable).mockResolvedValue(true);
+    const h = activated();
+    expect(h.panel.wiring.speech.supported()).toBe(false);
+    await Promise.resolve();
+    expect(h.panel.wiring.speech.supported()).toBe(true);
+    expect(h.panel.refreshSpeechSupport.mock.calls).toEqual([[]]);
+  });
+
+  it('does not enable local speech on a remote extension host', () => {
+    fakes.remoteName = 'ssh-remote';
+    activated();
+    expect(fakes.made.speech.at(-1)?.options.localDesktop).toBe(false);
+    fakes.remoteName = undefined;
   });
 
   it('reads, saves and applies automatic terminal visibility and routes a reveal by ID', () => {

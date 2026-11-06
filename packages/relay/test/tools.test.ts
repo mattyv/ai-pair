@@ -56,6 +56,8 @@ describe('selected narration', () => {
     expect(problems({ say: 'hello' })).toEqual([]);
     expect(problems({ say: 'hello', speak: false })).toEqual([]);
     expect(speechProblem).not.toHaveBeenCalled();
+    vi.mocked(speechProblem).mockReturnValue(undefined);
+    expect(problems({ say: 'hello', speak: true })).toEqual([]);
     expect(problems({ delete: true, speak: true })).not.toEqual([]);
   });
 });
