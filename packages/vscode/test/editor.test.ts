@@ -548,6 +548,17 @@ describe('the decorations', () => {
     expect(drawn(here, cursorType('typing'))).toEqual([]);
   });
 
+  it('highlights only the inserted code in its editor and clears the highlight', () => {
+    const { editor } = made();
+    const here = inView(FILE);
+    const there = inView(OTHER);
+    editor.renderCodeReading({ file: FILE, start: 1, end: 3 });
+    expect(drawn(here, at(fakes.created.types, 1))).toEqual([[pos(1), pos(3)]]);
+    expect(drawn(there, at(fakes.created.types, 1))).toEqual([]);
+    editor.renderCodeReading(undefined);
+    expect(drawn(here, at(fakes.created.types, 1))).toEqual([]);
+  });
+
   it('pulses the read cursor, dimming it every PULSE_MS, until the state changes', () => {
     const { editor } = made();
     const view = inView(FILE);
@@ -785,6 +796,18 @@ describe('follow mode: looking away', () => {
     fire('active', undefined);
     expect(controller.pause.mock.calls).toEqual([]);
     fire('active', there);
+    expect(controller.pause.mock.calls).toEqual([['away']]);
+  });
+
+  it('ReadingTargetsGroup: follows the inserted group during reading, then returns to the cursor', () => {
+    const { editor, controller } = made();
+    const view = inView(FILE);
+    editor.renderCursor({ file: FILE, offset: 1 }, 'read', 'cursor');
+    editor.renderCodeReading({ file: FILE, start: 50, end: 55 });
+    fire('visibleRanges', { textEditor: view, visibleRanges: [{ start: { line: 40 }, end: { line: 60 } }] });
+    expect(controller.pause.mock.calls).toEqual([]);
+    editor.renderCodeReading(undefined);
+    fire('visibleRanges', { textEditor: view, visibleRanges: [{ start: { line: 40 }, end: { line: 60 } }] });
     expect(controller.pause.mock.calls).toEqual([['away']]);
   });
 

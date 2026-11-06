@@ -101,11 +101,20 @@
               type="button"
               data-ui="speed"
               class="quiet speed"
+              aria-label="Playback speed: 1.0x, code: typing"
               aria-haspopup="menu"
               aria-expanded="false"
               data-tip="Playback speed"
             >1.0x</button>
-            <div data-ui="speed-menu" class="speed-menu" role="menu" aria-label="Playback speed" hidden><button type="button" role="menuitemradio" aria-checked="false" data-speed="0.4">0.4x</button><button type="button" role="menuitemradio" aria-checked="false" data-speed="0.6">0.6x</button><button type="button" role="menuitemradio" aria-checked="false" data-speed="1">1.0x</button><button type="button" role="menuitemradio" aria-checked="false" data-speed="1.5">1.5x</button><button type="button" role="menuitemradio" aria-checked="false" data-speed="2">2.0x</button><button type="button" role="menuitemradio" aria-checked="false" data-speed="3">3.0x</button></div>
+            <div data-ui="speed-menu" class="speed-menu" role="menu" aria-label="Playback speed" hidden>
+              <div role="group" aria-label="Playback speed"><button type="button" role="menuitemradio" aria-checked="false" data-speed="0.4">0.4x</button><button type="button" role="menuitemradio" aria-checked="false" data-speed="0.6">0.6x</button><button type="button" role="menuitemradio" aria-checked="false" data-speed="1">1.0x</button><button type="button" role="menuitemradio" aria-checked="false" data-speed="1.5">1.5x</button><button type="button" role="menuitemradio" aria-checked="false" data-speed="2">2.0x</button><button type="button" role="menuitemradio" aria-checked="false" data-speed="3">3.0x</button></div>
+              <div role="group" aria-label="Code playback">
+                <span class="menu-heading">Code playback</span>
+                <button type="button" role="menuitemradio" aria-checked="true" data-code-playback="typing">Typing</button>
+                <button type="button" role="menuitemradio" aria-checked="false" data-code-playback="lines">Lines</button>
+                <button type="button" role="menuitemradio" aria-checked="false" data-code-playback="blocks">Blocks</button>
+              </div>
+            </div>
           </div>
           <div class="speed-wrap">
             <button

@@ -1,7 +1,7 @@
 // The narration panel: a webview view in the secondary side bar. See "Narration panel" in DESIGN.md.
 
 import * as vscode from 'vscode';
-import type { Controller, PanelEvent, PanelPort, Ref, SharedSelection } from '@ai-pair/core';
+import type { CodePlayback, Controller, PanelEvent, PanelPort, Ref, SharedSelection } from '@ai-pair/core';
 import { panelHtml, SPEEDS } from './panel_html';
 import { timings } from './timings';
 import type { ChatOrder, FromPanel, ToPanel } from './panel_messages';
@@ -80,6 +80,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     private readonly buildInfo: { version: string; build: string },
     private readonly terminalSettings: { get: () => boolean; set: (value: boolean) => void },
     private readonly showTerminal: (id: number) => boolean,
+    private readonly codePlayback: { get: () => CodePlayback; set: (value: CodePlayback) => void },
   ) {}
 
   /** Posts to the page, if there is one. */
@@ -105,6 +106,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   /** Shows the saved history order, including changes made in VS Code settings. */
   showChatOrder(value: ChatOrder): void {
     this.send({ type: 'chatOrder', value });
+  }
+
+  /** Shows the selected code playback mode. */
+  showCodePlayback(value: CodePlayback): void {
+    this.send({ type: 'codePlayback', value });
   }
 
   showReadingSpeed(value: number): void {
@@ -202,6 +208,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         this.showTerminalPreference(this.terminalSettings.get());
         this.showSpeed(this.speed.get());
         this.showReadingSpeed(this.readingSpeed.get());
+        this.showCodePlayback(this.codePlayback.get());
         this.showSelection(this.selection.ref());
         this.showTimings();
         // The new page asks once whether a session can start: specs/Start.tla, `LoadPage`.
@@ -231,6 +238,10 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       case 'speed':
         // Only the menu's speeds: the page sends no others (#17).
         if (SPEEDS.includes(message.value)) this.speed.set(message.value);
+        return;
+      case 'codePlayback':
+        // specs/PlaybackPreference.tla, `Choose`.
+        if (message.value === 'typing' || message.value === 'lines' || message.value === 'blocks') this.codePlayback.set(message.value);
         return;
       case 'readingSpeed':
         if (SPEEDS.includes(message.value)) this.readingSpeed.set(message.value);

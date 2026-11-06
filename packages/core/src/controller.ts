@@ -255,6 +255,7 @@ export class Controller {
   private readonly pauseReasons = new Set<PauseReason>();
   private speed = 1;
   private readingSpeed = 1;
+  private codePlayback: import('./typing').CodePlayback = 'typing';
   private lastPosted = '';
   /** After any change the session's `saved` form may have: the window saves it (#25). */
   onChange?: () => void;
@@ -350,6 +351,7 @@ export class Controller {
         config: () => this.config,
         speed: () => this.speed,
         readingSpeed: () => this.readingSpeed,
+        codePlayback: () => this.codePlayback,
         render: () => {
           this.render();
         },
@@ -799,6 +801,11 @@ export class Controller {
     this.session?.player.releaseReadingHold();
   }
 
+  /** Sets the granularity used by the next typing action. */
+  setCodePlayback(mode: import('./typing').CodePlayback): void {
+    this.codePlayback = mode;
+  }
+
   setReadingSpeed(speed: number): void {
     this.readingSpeed = speed;
   }
@@ -912,7 +919,14 @@ export class Controller {
   /** Plays a batch in memory, from where the queued batches leave off, or the editor as it is (specs/Rehearsal.tla, `Submit`). */
   private rehearse(session: Session, actions: Action[]): ReturnType<typeof rehearse> {
     const from = session.queue.at(-1)?.after ?? { scene: session.scene, texts: new Map(), lines: session.lines, edits: new Set<string>() };
-    return rehearse(this.editor, this.config, from, actions, (file, line, id) => session.seen.get(file)?.get(line) === id);
+    return rehearse(
+      this.editor,
+      this.config,
+      from,
+      actions,
+      (file, line, id) => session.seen.get(file)?.get(line) === id,
+      this.codePlayback,
+    );
   }
 
   /** Reports a batch that played in memory failed, without queuing it; nothing else changes. */

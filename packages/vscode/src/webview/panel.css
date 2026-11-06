@@ -362,6 +362,13 @@ button:focus-visible {
   display: none;
 }
 
+.menu-heading {
+  color: var(--muted);
+  display: block;
+  font-size: 11px;
+  padding: 6px 8px 2px;
+}
+
 .speed-menu button {
   color: inherit;
   font-variant-numeric: tabular-nums;

@@ -46,6 +46,96 @@ describe('where the controller and the player meet', () => {
     expect(editor.cursor?.offset).toBe(3);
   });
 
+  it.each(['typing', 'lines', 'blocks'] as const)('preserves selection replacement, cursor marker and CRLF in %s mode', async (mode) => {
+    const { editor, controller } = setup({ 'a.ts': 'left OLD right\r\n' });
+    editor.crlf.add(editor.resolvePath('a.ts'));
+    controller.setCodePlayback(mode);
+    await controller.start();
+    await controller.read('a.ts');
+    const result = await controller.step([{ select: { file: 'a.ts', line: 1, text: 'OLD' } }, { type: `one\r\n  😀${CURSOR_MARKER}two` }]);
+    expect(result.rejected).toBeUndefined();
+    await until(controller.step([]));
+    expect(editor.text('a.ts')).toBe('left one\r\n  😀two right\r\n');
+    expect(editor.cursor?.offset).toBe('left one\r\n  😀'.length);
+  });
+
+  it('StableDuringChoice, NextActionUsesChoice: snapshots the mode for each typing action, while rehearsal stays instant', async () => {
+    const { editor, controller } = setup({ 'a.ts': '' });
+    controller.setCodePlayback('lines');
+    await controller.start();
+    await controller.step([
+      { move: { file: 'a.ts', line: 1, to: 'line_end' } },
+      { type: `a\nb${CURSOR_MARKER}` },
+      { type: `\nc\nd${CURSOR_MARKER}` },
+    ]);
+    await advance(120);
+    expect(editor.text('a.ts')).toBe('a\n');
+    controller.setCodePlayback('blocks');
+    await until(controller.step([]));
+    expect(editor.edits.map((edit) => edit.text)).toEqual(['a\n', 'b', '\nc\nd']);
+    expect(editor.text('a.ts')).toBe('a\nb\nc\nd');
+  });
+
+  it('PausedBlocksInsert: a paused code countdown blocks the next group', async () => {
+    const { editor, controller } = setup({ 'a.ts': '' });
+    controller.setCodePlayback('lines');
+    await controller.start();
+    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `a\nb${CURSOR_MARKER}` }]);
+    await advance(120);
+    expect(editor.text('a.ts')).toBe('a\n');
+    controller.pause();
+    await advance(2000);
+    expect(editor.text('a.ts')).toBe('a\n');
+    controller.resume();
+    await until(controller.step([]));
+    expect(editor.text('a.ts')).toBe('a\nb');
+  });
+
+  it('ReadingBlocksInsert: interrupts a code reading pause with the exact suffix', async () => {
+    const { editor, controller } = setup({ 'a.ts': '' });
+    controller.setCodePlayback('lines');
+    await controller.start();
+    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `a\nb${CURSOR_MARKER}c` }]);
+    await advance(120);
+    expect(editor.text('a.ts')).toBe('a\n');
+    controller.userInterrupt();
+    const report = await until(controller.listen());
+    expect(report.batches[0]).toMatchObject({ status: 'interrupted', unplayed: [{ type: `b${CURSOR_MARKER}c` }] });
+  });
+
+  it.each([
+    [{ offset: 0, deleteLength: 3, text: '' }, '', 0],
+    [{ offset: 0, deleteLength: 0, text: 'zz' }, 'zzx()', 4],
+    [{ offset: 2, deleteLength: 1, text: 'tail' }, 'x(tail', 2],
+  ])('MarkerPreserved: user edits during final code reading keep the marker at the transformed position', async (change, text, offset) => {
+    const { editor, controller } = setup({ 'a.ts': 'x' });
+    controller.setCodePlayback('blocks');
+    await controller.start();
+    await controller.read('a.ts');
+    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `(${CURSOR_MARKER})` }]);
+    await advance(120);
+    expect(editor.text('a.ts')).toBe('x()');
+    editor.userEdit('a.ts', change);
+    const report = await until(controller.listen());
+    expect(report.batches[0]?.unplayed).toBeUndefined();
+    expect(editor.text('a.ts')).toBe(text);
+    expect(editor.cursor?.offset).toBe(offset);
+  });
+
+  it('MarkerPreserved: transforms a marker in an earlier group across a CRLF and Unicode edit', async () => {
+    const { editor, controller } = setup({ 'a.ts': '' });
+    editor.crlf.add(editor.resolvePath('a.ts'));
+    controller.setCodePlayback('lines');
+    await controller.start();
+    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `😀${CURSOR_MARKER}\nrest` }]);
+    await advance(630);
+    expect(editor.text('a.ts')).toBe('😀\r\nrest');
+    editor.userEdit('a.ts', { offset: 0, deleteLength: 0, text: 'x' });
+    const report = await until(controller.listen());
+    expect(report.batches[0]?.unplayed).toBeUndefined();
+    expect(editor.cursor?.offset).toBe(3);
+  });
+
   it('allows an explicitly acknowledged multi-close move and subsequent edit', async () => {
     const { editor, controller } = setup({ 'a.py': 'x = call((1))\n' });
     await controller.start();

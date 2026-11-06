@@ -88,6 +88,11 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `DiagnosticsCopy.cfg` | explicit request with clipboard success or failure | holds | 3 |
 | `DiagnosticsPrivacy.cfg` | bounded two-event history, copy and allowlisted projection | holds | 1,598 |
 | `Timeline.cfg` | `MaxSleeps = 3` sleeps, holds, and a second sleep while one is pending | holds | 864 |
+| `PlaybackPreference.cfg` | three modes and two independent pace settings | holds | 36 |
+| `PlaybackAnchor.cfg` | three-character insert, cursor marker and all bounded programmer edits | holds | 20 |
+| `PlaybackAnchor_Progress.cfg` | the same, with fair completion | holds | 20 |
+| `CodePlayback.cfg` | three atomic edits, bounded groups, two pause states and three countdown IDs | holds | 654 |
+| `CodePlayback_Progress.cfg` | the same edits with fair progress and no pause or interrupt | holds | 11 |
 | `ReadingSkip.cfg` | two countdown IDs, hold, pause, turn and suspension changes | holds | 5,840 |
 | `ReadingHold.cfg` | matching hold and release with changing pause state | holds | 444 |
 | `Narration.cfg` | two units, two page and session epochs, interruptions and independent gates | holds | 7,328 |
@@ -2000,3 +2005,70 @@ an outcome, or produce both outcomes violate `OnlyOnRequest`,
 | `TypeOK` | TypeScript checks the control and outcome types |
 | `OnlyOnRequest` | `webview/panel.test.ts`: OnlyOnRequest: requests diagnostics only when the button is activated |
 | `RequestedCompletes`, `ExclusiveOutcome` | `panel.test.ts`: OnlyOnRequest and RequestedCompletes: copies only when asked and reports either outcome |
+
+### `CodePlayback`: grouped code and its reading pauses
+
+The model treats existing typing chunks as indivisible atoms. Each insertion
+chooses a contiguous, bounded group, including the exception for one oversized
+atom. A fresh countdown blocks the next insertion until it finishes; pause and
+interrupt also block insertion. A click can finish only its own live countdown.
+The progress config assumes no pause or interrupt and weak fairness.
+`Typing` separately models quote and newline/indent atoms. The model abstracts
+line/whitespace preference, text encoding, the visual highlight and panel
+rendering; tests cover those concrete details.
+
+The model mutations drop or duplicate an atom (`PrefixExact`), overflow the
+identifier (`TypeOK`), accept a stale click (`CurrentCountdown`), clear a
+rejected click (`RejectedKeepsCountdown`), bypass pause, reading, interruption
+or the group bounds (the corresponding action property), or disable insertion
+(`EventuallyComplete`). TLC found a violation for each mutation.
+
+| Property | Test |
+|---|---|
+| `TypeOK` | TypeScript checks the corresponding code types. |
+| `PrefixExact` | `typing.test.ts`: PrefixExact: groups complete lines without losing indentation or quote atoms; `player.test.ts`: PrefixExact: returns only the suffix when interrupted during reading. |
+| `CurrentCountdown`, `RejectedKeepsCountdown` | `player.test.ts`: CurrentCountdown and RejectedKeepsCountdown: scopes finish and hold to the active code ID. |
+| `PausedBlocksInsert` | `session.e2e.test.ts`: PausedBlocksInsert: a paused code countdown blocks the next group. |
+| `ReadingBlocksInsert` | `session.e2e.test.ts`: ReadingBlocksInsert: interrupts a code reading pause with the exact suffix. |
+| `InterruptedBlocksInsert` | `player.test.ts`: PrefixExact: returns only the suffix when interrupted during reading. |
+| `BoundedGroups` | `typing.test.ts`: BoundedGroups: limits blocks to four lines and 240 Unicode characters. |
+| `EventuallyComplete` | `session.e2e.test.ts`: StableDuringChoice, NextActionUsesChoice: snapshots the mode for each typing action, while rehearsal stays instant. |
+
+### `PlaybackPreference`: choosing the code display
+
+The menu saves and displays the chosen mode independently of the pace. An
+in-progress typing action keeps its captured mode; the next action takes the
+new choice. TLC checked 36 states. Mutations that write an invalid pace, fail
+to save or apply a choice, change an ongoing action, start with the wrong mode,
+or change mode while changing pace violate `TypeOK`, `ChoiceSaved`,
+`ChoiceApplied`, `StableDuringChoice`, `NextActionUsesChoice`, and
+`PaceIndependent`, respectively.
+
+| Property | Test |
+|---|---|
+| `TypeOK` | TypeScript checks mode values; the panel and extension validate boundary values. |
+| `ChoiceSaved` | `extension.test.ts`: ChoiceSaved: reads, stores and applies the playback mode, defaulting invalid values to typing. |
+| `ChoiceApplied` | `panel.test.ts`: ChoiceApplied: sends the saved mode and accepts only valid choices; `webview/panel.test.ts`: ChoiceApplied: the pace menu updates mode separately from speed. |
+| `StableDuringChoice`, `NextActionUsesChoice` | `session.e2e.test.ts`: StableDuringChoice, NextActionUsesChoice: snapshots the mode for each typing action, while rehearsal stays instant. |
+| `PaceIndependent` | `webview/panel.test.ts`: ChoiceSaved, PaceIndependent: keeps mode in the pace label when speed and mode messages arrive in either order. |
+
+### `PlaybackAnchor`: cursor and reading target
+
+The final grouped insert puts the cursor at its marker before the editor
+awaits. The `reading` phase abstracts that editor await and the following
+reading pause. An external edit transforms that live cursor; finishing leaves
+it where the edit put it. The follow target is the start of the highlighted
+group while reading, then the cursor. The model abstracts the group start as a
+fixed offset and does not model visual layout or scroll motion; `Scroll`
+models the latter.
+
+Mutations placing an anchor outside the document, applying a stale tail
+subtraction, following the cursor while reading, keeping the group target after
+reading, and disabling finish violate the corresponding properties below.
+
+| Property | Test |
+|---|---|
+| `TypeOK` | TypeScript checks code types; cursor bounds are checked by the marker regressions below. |
+| `MarkerPreserved` | `session.e2e.test.ts`: MarkerPreserved: user edits during final code reading keep the marker at the transformed position; `player.test.ts`: MarkerPreserved: transforms the final marker when a user edit arrives during editor.edit. |
+| `ReadingTargetsGroup`, `FinishedTargetsCursor` | `editor.test.ts`: ReadingTargetsGroup: follows the inserted group during reading, then returns to the cursor. |
+| `EventuallyFinished` | `session.e2e.test.ts`: StableDuringChoice, NextActionUsesChoice: snapshots the mode for each typing action, while rehearsal stays instant. |

@@ -194,6 +194,14 @@ the `aiPair.speed` setting, which takes any value from 0.25 to 4. The reading
 menu next to it scales only the reading pause: `aiPair.readingSpeed`, with the
 same range (#109).
 
+**Code playback.** The existing speed menu also offers Typing (the default),
+Lines, and Blocks. A selection takes effect at the next typing action. Lines and
+Blocks insert and highlight groups, then give each a reading pause. The main
+pace and reading speed scale these code pauses, and the reading ring can finish
+or hold one. Groups are limited to 240 Unicode code points; blocks also have at
+most four logical lines. Atomic edits remain indivisible even when one exceeds a
+group bound. Follow mode keeps the highlighted group in view during its pause.
+
 **Calibration.** *AI Pair: Calibrate Reading Speed* (or the agent's `calibrate`
 tool, with a passage of its own) announces a passage in the panel; `go` shows it
 and starts the clock, `x` stops it. The rate, elapsed time over the passage's

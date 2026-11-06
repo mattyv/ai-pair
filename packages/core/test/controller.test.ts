@@ -1438,6 +1438,9 @@ describe('settings', () => {
     const h = await started();
     h.controller.setSpeed(2);
     h.controller.setReadingSpeed(3);
+    expect(stage().codePlayback()).toBe('typing');
+    h.controller.setCodePlayback('blocks');
+    expect(stage().codePlayback()).toBe('blocks');
     h.controller.setConfirmCommands(false);
     h.controller.setTiming({ glideMs: 1 });
     h.controller.setTimeouts({ maxBlockMs: 4, absentMs: 5 });

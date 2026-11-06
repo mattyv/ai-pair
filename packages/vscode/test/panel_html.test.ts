@@ -163,6 +163,14 @@ it('offers an accessible automatic-terminal setting and a live reveal control', 
   expect(page.querySelector('[data-ui="show-terminal"]')?.textContent).toContain('Show terminal');
 });
 
+it('offers code playback modes in the playback speed menu', () => {
+  const html = panelHtml('source', 'style', 'script');
+  expect(html).toContain('aria-label="Code playback"');
+  expect(html).toContain('data-code-playback="typing"');
+  expect(html).toContain('data-code-playback="lines"');
+  expect(html).toContain('data-code-playback="blocks"');
+});
+
 it('offers an explicit diagnostics copy button in Settings', () => {
   const page = new window.DOMParser().parseFromString(panelHtml('vscode-resource:', 'panel.css', 'panel.js'), 'text/html');
   expect(page.querySelector('[data-ui="copy-diagnostics"]')?.textContent).toContain('Copy diagnostics');

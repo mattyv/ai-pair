@@ -1,6 +1,6 @@
 // The messages between the narration panel's page (webview/panel.ts) and the extension (panel.ts).
 
-import type { PanelEvent, Ref } from '@ai-pair/core';
+import type { CodePlayback, PanelEvent, Ref } from '@ai-pair/core';
 import type { CalibrationView } from './calibration';
 
 /** The order of the panel history. */
@@ -34,6 +34,7 @@ export type FromPanel =
   | { type: 'showTerminal'; id: number }
   | { type: 'speed'; value: number }
   | { type: 'readingSpeed'; value: number }
+  | { type: 'codePlayback'; value: CodePlayback }
   | { type: 'runDecision'; id: number; run: boolean; remember?: boolean };
 
 /** Messages to the page: the session's events, and the panel's own. */
@@ -48,6 +49,7 @@ export type ToPanel =
   | { type: 'showTerminals'; value: boolean }
   | { type: 'speed'; value: number }
   | { type: 'readingSpeed'; value: number }
+  | { type: 'codePlayback'; value: CodePlayback }
   /** The reading speed calibration's state, for the band (#109). */
   | { type: 'calibration'; view: CalibrationView }
   /** Whether the idle view offers Start a session: Claude Code is set up, its CLI is here, a folder is open (#107). */

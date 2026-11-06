@@ -27,6 +27,7 @@ const OFFERED_SETUP = 'aiPair.offeredSetup';
 /** The settings under `aiPair`, as `config().get` and `update` name them. */
 const SPEED = 'speed';
 const READING_SPEED = 'readingSpeed';
+const CODE_PLAYBACK = 'codePlayback';
 const TIMING = 'timing';
 const AGENT_NAME = 'agentName';
 const CONFIRM_COMMANDS = 'confirmCommands';
@@ -110,6 +111,15 @@ export function activate(context: vscode.ExtensionContext): Api {
       void config().update(READING_SPEED, value, vscode.ConfigurationTarget.Global);
     },
   };
+  const codePlayback = {
+    get: (): import('@ai-pair/core').CodePlayback => {
+      const value: unknown = config().get(CODE_PLAYBACK);
+      return value === 'lines' || value === 'blocks' ? value : 'typing';
+    },
+    set: (value: import('@ai-pair/core').CodePlayback) => {
+      void config().update(CODE_PLAYBACK, value, vscode.ConfigurationTarget.Global);
+    },
+  };
   const chatOrder = {
     get: () => (config().get<unknown>('chatOrder') === 'oldestFirst' ? ('oldestFirst' as const) : ('newestFirst' as const)),
     set: (value: 'newestFirst' | 'oldestFirst') => {
@@ -156,6 +166,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     { version: AI_PAIR_VERSION, build: AI_PAIR_BUILD_ID },
     terminalSettings,
     (id) => editor.showTerminal(id),
+    codePlayback,
   );
   controller = new Controller(editor, panel);
   controller.onDiagnostic = record;
@@ -167,6 +178,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   };
   controller.setSpeed(speed.get());
   controller.setReadingSpeed(readingSpeed.get());
+  controller.setCodePlayback(codePlayback.get());
   controller.setTiming(config().get(TIMING));
   controller.setConfirmCommands(config().get(CONFIRM_COMMANDS, true));
   // The passage the programmer or the agent chose, from the settings, or the built-in one (#109).
@@ -280,6 +292,10 @@ export function activate(context: vscode.ExtensionContext): Api {
       if (e.affectsConfiguration('aiPair.speed')) {
         controller.setSpeed(speed.get());
         panel.showSpeed(speed.get());
+      }
+      if (e.affectsConfiguration('aiPair.codePlayback')) {
+        controller.setCodePlayback(codePlayback.get());
+        panel.showCodePlayback(codePlayback.get());
       }
       if (e.affectsConfiguration('aiPair.readingSpeed')) {
         controller.setReadingSpeed(readingSpeed.get());

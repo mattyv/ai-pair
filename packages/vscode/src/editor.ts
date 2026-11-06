@@ -146,6 +146,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   private cursor: CursorView | undefined = undefined;
   private state: AgentState = 'thinking';
   private point: { file: string; start: number; end: number } | undefined = undefined;
+  private codeReading: { file: string; start: number; end: number } | undefined = undefined;
   private focus: Focus = 'cursor';
   private pulse?: ReturnType<typeof setInterval>;
   private pulseOn = true;
@@ -373,6 +374,12 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     this.redraw();
   }
 
+  /** Highlights the inserted group with the existing theme-aware point decoration. */
+  renderCodeReading(range: { file: string; start: number; end: number } | undefined): void {
+    this.codeReading = range;
+    this.redraw();
+  }
+
   reveal(): void {
     // specs/Scroll.tla, `Follow`: a pause ends in `resume`, which reveals the target.
     const target = this.target();
@@ -519,6 +526,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
 
   /** Returns what follow mode keeps in view: the agent cursor, or the start of the code it points at. */
   private target(): Target | undefined {
+    // specs/PlaybackAnchor.tla, ReadingTargetsGroup: follow the group being read.
+    if (this.codeReading) return { file: this.codeReading.file, offset: this.codeReading.start };
     if (this.focus === 'point' && this.point) return { file: this.point.file, offset: this.point.start };
     return this.cursor;
   }
@@ -689,7 +698,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
       }
       const sel = here?.selection;
       editor.setDecorations(this.selectionType, sel ? [new vscode.Range(doc.positionAt(sel.start), doc.positionAt(sel.end))] : []);
-      const point = this.point && this.point.file === file ? this.point : undefined;
+      const readingOrPoint = this.codeReading ?? this.point;
+      const point = readingOrPoint && readingOrPoint.file === file ? readingOrPoint : undefined;
       editor.setDecorations(this.pointType, point ? [new vscode.Range(doc.positionAt(point.start), doc.positionAt(point.end))] : []);
     }
   }

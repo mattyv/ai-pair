@@ -62,6 +62,7 @@ const fakes = vi.hoisted(() => {
     saved: unknown = undefined;
     readonly setSpeed = vi.fn();
     readonly setReadingSpeed = vi.fn();
+    readonly setCodePlayback = vi.fn();
     readonly setTiming = vi.fn();
     readonly setConfirmCommands = vi.fn();
     readonly pause = vi.fn();
@@ -133,6 +134,7 @@ const fakes = vi.hoisted(() => {
     readonly showSpeed = vi.fn();
     readonly showReadingSpeed = vi.fn();
     readonly showChatOrder = vi.fn();
+    readonly showCodePlayback = vi.fn();
     readonly showTerminalPreference = vi.fn();
     readonly showCalibration = vi.fn();
     readonly showTimings = vi.fn();
@@ -152,6 +154,7 @@ const fakes = vi.hoisted(() => {
       readonly buildInfo: unknown,
       readonly terminalSettings: { get: () => boolean; set: (value: boolean) => void },
       readonly showTerminal: (id: number) => boolean,
+      readonly codePlayback: { get: () => string; set: (value: string) => void },
     ) {
       made.panels.push(this);
     }
@@ -399,6 +402,22 @@ describe('activate', () => {
     expect(h.panel.selection.ref()).toBe('ref');
     h.editor.onSelection?.('a ref');
     expect(h.panel.showSelection).toHaveBeenCalledWith('a ref');
+  });
+
+  it('ChoiceSaved: reads, stores and applies the playback mode, defaulting invalid values to typing', () => {
+    const h = activated();
+    expect(h.controller.setCodePlayback).toHaveBeenCalledWith('typing');
+    expect(h.panel.codePlayback.get()).toBe('typing');
+    fakes.settings.set('codePlayback', 'blocks');
+    changed('codePlayback');
+    expect(h.controller.setCodePlayback).toHaveBeenLastCalledWith('blocks');
+    expect(h.panel.showCodePlayback).toHaveBeenLastCalledWith('blocks');
+    h.panel.codePlayback.set('lines');
+    expect(fakes.updated).toContainEqual(['codePlayback', 'lines', 1]);
+    fakes.settings.set('codePlayback', 'invalid');
+    changed('codePlayback');
+    expect(h.controller.setCodePlayback).toHaveBeenLastCalledWith('typing');
+    expect(h.panel.showCodePlayback).toHaveBeenLastCalledWith('typing');
   });
 
   it('reads, saves, and applies the chat order, defaulting invalid values to newest first', () => {

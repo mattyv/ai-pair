@@ -90,6 +90,58 @@ export function planTyping(text: string, cadence: Cadence, atLineStart: boolean,
   return result;
 }
 
+/** How code appears during a typing action. */
+export type CodePlayback = 'typing' | 'lines' | 'blocks';
+
+const BLOCK_LINES = 4;
+const BLOCK_CHARS = 240;
+
+/** Groups existing atomic edits without splitting them or changing their text. */
+export function groupTyping(atoms: Chunk[], mode: CodePlayback): Chunk[] {
+  if (mode === 'typing') return atoms;
+  const groups: Chunk[] = [];
+  let start = 0;
+  while (start < atoms.length) {
+    let end = start;
+    let chars = 0;
+    let lines = 0;
+    let lineEnd = start;
+    let whitespace = start;
+    let lineHasContent = false;
+    while (end < atoms.length) {
+      // The planner produces a dense array and end is within its bounds.
+      // oxlint-disable-next-line typescript/no-non-null-assertion -- end is in the dense plan
+      const atom = atoms[end]!;
+      const length = Array.from(atom.text).length;
+      if (end > start && chars + length > BLOCK_CHARS) break;
+      chars += length;
+      end++;
+      if (atom.text.includes('\n')) {
+        lines++;
+        lineEnd = end;
+        const blankBoundary = !lineHasContent && lines > 1;
+        lineHasContent = false;
+        if (mode === 'lines' || lines === BLOCK_LINES || blankBoundary) break;
+      } else if (/\s/u.test(atom.text)) {
+        whitespace = end;
+      } else {
+        lineHasContent = true;
+      }
+      if (chars >= BLOCK_CHARS) break;
+    }
+    // A size boundary favors a complete line, then a word boundary. Oversized
+    // indivisible atoms still make progress as a group of their own.
+    if (end < atoms.length && lines < BLOCK_LINES) {
+      if (lineEnd > start) end = lineEnd;
+      else if (whitespace > start) end = whitespace;
+    }
+    const group = atoms.slice(start, end);
+    groups.push({ text: group.map((atom) => atom.text).join(''), delay: 0 });
+    start = end;
+  }
+  return groups;
+}
+
 /** Returns the characters a text takes to read: runs of whitespace count as one, so indentation and line breaks do not. */
 export function readingChars(text: string): number {
   return text.trim().replaceAll(/\s+/g, ' ').length;

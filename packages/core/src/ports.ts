@@ -122,6 +122,8 @@ export interface EditorPort {
   save(file: string): Promise<void>;
   renderCursor(cursor: CursorView | undefined, state: AgentState, focus: Focus): void;
   renderPoint(point?: { file: string; start: number; end: number }): void;
+  /** Highlights a newly inserted code group while it is read. */
+  renderCodeReading?(range?: { file: string; start: number; end: number }): void;
   /** Brings the programmer's view back to what it follows. */
   reveal(): void;
   /** Keeps what the view follows in view, after a keystroke, move, selection or point of the agent changed it. */
@@ -141,7 +143,7 @@ export type PanelEvent =
   | { type: 'session'; active: true; task?: string; rules?: string[]; suspended?: true; resumed?: true }
   | { type: 'session'; active: false; reason: 'agent' | 'programmer' | 'disconnected'; summary?: string }
   | { type: 'say'; text: string }
-  | { type: 'reading'; ms: number; id?: number }
+  | { type: 'reading'; ms: number; id?: number; owner?: 'code' }
   | { type: 'state'; state: AgentState; turn: Turn; paused: boolean }
   | { type: 'programmer'; text: string; ref?: Ref }
   | { type: 'turn'; to: Turn; message?: string; ref?: Ref }

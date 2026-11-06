@@ -117,6 +117,10 @@ interface Harness {
   terminalSettings: { get: ReturnType<typeof vi.fn<() => boolean>>; set: ReturnType<typeof vi.fn<(value: boolean) => void>> };
   showTerminal: ReturnType<typeof vi.fn<(id: number) => boolean>>;
   copyDiagnostics: ReturnType<typeof vi.fn<() => Promise<void>>>;
+  codePlayback: {
+    get: ReturnType<typeof vi.fn<() => 'typing' | 'lines' | 'blocks'>>;
+    set: ReturnType<typeof vi.fn<(value: 'typing' | 'lines' | 'blocks') => void>>;
+  };
   onPost: ReturnType<typeof vi.fn<() => void>>;
   traced: string[];
 }
@@ -144,6 +148,10 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
   };
   const terminalSettings = { get: vi.fn(() => false), set: vi.fn<(value: boolean) => void>() };
   const showTerminal = vi.fn<(id: number) => boolean>();
+  const codePlayback = {
+    get: vi.fn<() => 'typing' | 'lines' | 'blocks'>(() => 'typing'),
+    set: vi.fn<(value: 'typing' | 'lines' | 'blocks') => void>(),
+  };
   const copyDiagnostics = vi.fn<() => Promise<void>>().mockResolvedValue();
   const controller = mock<Controller>({ turn });
   const calibration = mock<Calibration>();
@@ -165,6 +173,7 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
     buildInfo,
     terminalSettings,
     showTerminal,
+    codePlayback,
   );
   const onPost = vi.fn<() => void>();
   panel.onPost = onPost;
@@ -179,6 +188,7 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
     terminalSettings,
     showTerminal,
     copyDiagnostics,
+    codePlayback,
     onPost,
     traced,
   };
@@ -525,6 +535,7 @@ describe('receive', () => {
       { type: 'showTerminals', value: false },
       { type: 'speed', value: SPEEDS[1] },
       { type: 'readingSpeed', value: SPEEDS[2] },
+      { type: 'codePlayback', value: 'typing' },
       { type: 'selection', ref: REF },
       { type: 'timings', tipDelayMs: 7, tipWarmMs: 8 },
       { type: 'canStart', value: true },
@@ -563,6 +574,18 @@ describe('receive', () => {
     view.send({ type: 'copyDiagnostics' });
     await flush();
     expect(vi.mocked(vscode.window.showErrorMessage)).toHaveBeenCalledWith('Could not copy AI Pair diagnostics.');
+  });
+
+  it('ChoiceApplied: sends the saved mode and accepts only valid choices', () => {
+    const { panel, codePlayback } = harness();
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(view.posted).toContainEqual({ type: 'codePlayback', value: 'typing' });
+    view.send({ type: 'codePlayback', value: 'lines' });
+    view.send({ type: 'codePlayback', value: 'blocks' });
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    view.send({ type: 'codePlayback', value: 'other' } as unknown as FromPanel);
+    expect(codePlayback.set.mock.calls).toEqual([['lines'], ['blocks']]);
   });
 
   it('forwards only valid reading countdown IDs', () => {
