@@ -75,6 +75,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     private readonly extensionUri: vscode.Uri,
     private readonly wiring: PanelWiring,
     private readonly chatOrder: { get: () => ChatOrder; set: (value: ChatOrder) => void },
+    private readonly buildInfo: { version: string; build: string },
   ) {}
 
   /** Posts to the page, if there is one. */
@@ -146,7 +147,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     view.webview.options = { enableScripts: true, localResourceRoots: [dist] };
     const style = view.webview.asWebviewUri(vscode.Uri.joinPath(dist, 'panel.css')).toString();
     const script = view.webview.asWebviewUri(vscode.Uri.joinPath(dist, 'panel.js')).toString();
-    view.webview.html = panelHtml(view.webview.cspSource, style, script);
+    view.webview.html = panelHtml(view.webview.cspSource, style, script, this.buildInfo.version, this.buildInfo.build);
     // The page posts only FromPanel messages; VS Code types them `any`.
     view.webview.onDidReceiveMessage((m: FromPanel) => {
       this.receive(m);

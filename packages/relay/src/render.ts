@@ -92,6 +92,14 @@ function renderRejected(r: NonNullable<Report['rejected']>): string {
 function renderBatch(batch: BatchResult): string {
   const parts = [batch.code ? `Batch ${batch.id} ${batch.status}, in ${batch.code.file}:` : `Batch ${batch.id} ${batch.status}.`];
   if (batch.code) parts.push(renderCode(batch.code));
+  for (const warning of batch.warnings ?? []) {
+    parts.push(`Advisory: ${warning}`);
+  }
+  for (const diagnostic of batch.diagnostics ?? []) {
+    const end = diagnostic.endLine === diagnostic.line ? '' : `-${diagnostic.endLine}`;
+    const source = diagnostic.source === undefined ? '' : ` (${diagnostic.source})`;
+    parts.push(`Advisory diagnostic ${diagnostic.file}:${diagnostic.line}${end}${source}: ${diagnostic.message}`);
+  }
   for (const run of batch.runs ?? []) {
     parts.push(renderRun(run));
   }

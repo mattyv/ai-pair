@@ -26,6 +26,7 @@ import type { Change, Focus, PanelPort, PlayerEditor } from './ports';
 import { fileLines, isLineStart, lineEnd, lineText, position } from './text';
 import type { Pacing } from './timeline';
 import { planTyping, readingTime } from './typing';
+import { structuralNewline } from './structural_typing';
 
 /** A report's code longer than this skips lines in the middle. */
 const MAX_CODE_LINES = 40;
@@ -103,7 +104,9 @@ export interface Failure {
 /** The batch being played: what it touched, for saving and for its report's code. */
 interface Playing {
   touched: Set<string>;
+  editedFiles: Set<string>;
   runs: RunResult[];
+  warnings: Set<string>;
   /** The lines its report shows. */
   sightings: Sighting[];
   /** The file it names, in `move`, `select` or `point`, and whether it has edited yet. */
@@ -180,9 +183,20 @@ export class Player {
   ) {}
 
   /** Plays a batch, saves the files it edited, and says how it went, and which lines that shows. */
-  async play(id: number, actions: Action[]): Promise<{ result: BatchResult; sightings: Sighting[]; failed?: Failure }> {
+  async play(
+    id: number,
+    actions: Action[],
+  ): Promise<{ result: BatchResult; sightings: Sighting[]; editedFiles: string[]; failed?: Failure }> {
     // specs/BatchFile.tla, `EndBatch`: each batch starts with no file named and nothing edited; the cursor stays.
-    const playing: Playing = { touched: new Set(), runs: [], sightings: [], edited: false, moved: false };
+    const playing: Playing = {
+      touched: new Set(),
+      editedFiles: new Set(),
+      runs: [],
+      warnings: new Set(),
+      sightings: [],
+      edited: false,
+      moved: false,
+    };
     this.playing = playing;
     let result: BatchResult;
     try {
@@ -191,6 +205,7 @@ export class Player {
       this.playing = undefined;
     }
     if (playing.runs.length > 0) result.runs = playing.runs;
+    if (playing.warnings.size > 0) result.warnings = [...playing.warnings];
     if (result.status !== 'discarded') {
       try {
         const shown = await this.code(playing);
@@ -205,7 +220,7 @@ export class Player {
     const unsaved = await this.save(playing);
     // A `save_failed` error already names them.
     if (unsaved.length > 0 && result.error?.kind !== 'save_failed') result.unsaved = unsaved;
-    return { result, sightings: playing.sightings, failed: playing.failed };
+    return { result, sightings: playing.sightings, editedFiles: [...playing.editedFiles], failed: playing.failed };
   }
 
   /** Returns the code a batch's report shows: what it changed in `span`, or where it moved; nothing for neither. */
@@ -347,7 +362,7 @@ export class Player {
     }
     // `type` and `delete` act at the cursor, which a `point` doesn't move: it has to be in the batch's file
     // (specs/BatchFile.tla, `ActAtCursor`).
-    const atCursor = 'type' in action || 'type_fast' in action || 'delete' in action;
+    const atCursor = 'type' in action || 'type_fast' in action || 'newline' in action || 'delete' in action;
     if (atCursor && playing.named !== undefined && scene.cursor && scene.cursor.file !== playing.named) {
       return fail(
         'invalid_action',
@@ -397,9 +412,21 @@ export class Player {
       if ('kind' in where) return where;
       const { text, line } = where;
       let offset: number;
-      if (at === undefined) {
-        // moveProblem passed: without `at`, `to` is `line_end`.
+      if (move.to === 'next_close') {
+        if (scene.selection !== undefined || scene.cursor?.file !== file || !/[)\]}]/.test(text[scene.cursor.offset] ?? '')) {
+          return fail('invalid_action', '`next_close` requires one closing bracket immediately after an unselected cursor.');
+        }
+        offset = scene.cursor.offset + 1;
+      } else if (at === undefined) {
         offset = lineEnd(text, line);
+        if (
+          scene.cursor?.file === file &&
+          scene.cursor.offset <= offset &&
+          position(text, scene.cursor.offset).line === line &&
+          /^[\t ]*[)\]}](?:[\t ]*[)\]}])+[\t ]*$/.test(text.slice(scene.cursor.offset, offset))
+        ) {
+          playing.warnings.add('`line_end` crossed multiple closing brackets; use `next_close` to step over one.');
+        }
       } else {
         const r = resolveSpot(text, { at, line });
         // A spot not on its line says what the line reads.
@@ -435,6 +462,15 @@ export class Player {
       return ok;
     }
 
+    if ('newline' in action) {
+      if (scene.cursor === undefined) return fail('no_cursor', "Your cursor isn't in a file yet; `move` first.");
+      if (scene.selection !== undefined) return fail('invalid_action', '`newline` requires an unselected cursor.');
+      const text = await editor.getText(scene.cursor.file);
+      const expansion = structuralNewline(scene.cursor.file, text, scene.cursor.offset, action.newline.indent);
+      if (expansion === undefined) return fail('invalid_action', '`newline` requires an adjacent matching pair in Python or JSON code.');
+      return this.type(expansion.before, expansion.after, /* fast= */ false, playing);
+    }
+
     if ('type' in action || 'type_fast' in action) {
       const fast = 'type_fast' in action;
       const text: unknown = fast ? action.type_fast : action.type;
@@ -463,6 +499,7 @@ export class Player {
       const change = { offset: start, deleteLength: end - start, text: '' };
       this.touch(playing, file, change);
       await this.edit(file, change, { undoStopBefore: true, undoStopAfter: true });
+      playing.editedFiles.add(file);
       this.follow();
       await this.delay(timing.afterDeleteMs);
       return ok;
@@ -619,6 +656,7 @@ export class Player {
         undoStopBefore: i === 0,
         undoStopAfter: i === chunks.length - 1,
       });
+      playing.editedFiles.add(cursor.file);
       typed += chunk.text;
       this.follow();
     }

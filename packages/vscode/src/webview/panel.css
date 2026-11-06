@@ -763,8 +763,9 @@ a:hover {
 
 /* Settings stay available when there is no active session. */
 .settings-bar {
+  align-items: center;
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
 }
 
 .settings-dialog {
@@ -784,4 +785,11 @@ a:hover {
 .oldest-first .band {
   border-bottom: none;
   border-top: 1px solid var(--border);
+}
+
+/* Identifies the running bundle, including when an update awaits a reload. */
+.build-identity {
+  color: var(--fg);
+  font-size: 11px;
+  overflow-wrap: anywhere;
 }

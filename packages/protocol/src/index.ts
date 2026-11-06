@@ -9,7 +9,7 @@ import type { MoveTarget, SpanFields, ToolErrorCode } from './schemas';
 export const CURSOR_MARKER = '\u{258C}';
 
 /** The keys that name an action. An action object has exactly one of them. */
-export const ACTION_KINDS = ['say', 'move', 'select', 'type', 'type_fast', 'delete', 'point', 'run'] as const;
+export const ACTION_KINDS = ['say', 'move', 'select', 'type', 'type_fast', 'newline', 'delete', 'point', 'run'] as const;
 
 /** The fields a `move` takes. */
 const MOVE_FIELDS = ['file', 'line', 'at', 'to'];
@@ -59,7 +59,10 @@ export function moveProblem(target: Unchecked<MoveTarget>): string | undefined {
   }
   const line = lineProblem(target.line);
   if (line !== undefined) return line;
-  if (target.to !== undefined && target.to !== 'line_end') return '`to` is `"line_end"`: the end of the line.';
+  if (target.to !== undefined && target.to !== 'line_end' && target.to !== 'next_close') return '`to` is `"line_end"` or `"next_close"`.';
+  if (target.to === 'next_close' && (target.line !== undefined || target.file !== undefined)) {
+    return '`next_close` acts at the current cursor: omit `file` and `line`.';
+  }
   if (target.at !== undefined && target.to !== undefined) return 'Give one place on the line: `at`, or `to: "line_end"`, not both.';
   if (target.at === undefined && target.to === undefined) return 'Give the place on the line: `at`, or `to: "line_end"`.';
   // specs/ActionValidation.tla, `CheckAtText`: an `at` that isn't a text gets a message; `spotProblem` would throw on it.
@@ -101,6 +104,20 @@ export function fieldsProblem(action: object): string | undefined {
   const allowed = kind === 'run' ? ['run', 'wait'] : [kind];
   const extra = Object.keys(action).filter((k) => !allowed.includes(k));
   if (extra.length > 0) return `Unknown field ${fieldList(extra)} in a \`${kind}\` action: it has ${fieldList(allowed)}.`;
+  if ('newline' in action) {
+    const value = action.newline;
+    if (
+      typeof value !== 'object' ||
+      value === null ||
+      Array.isArray(value) ||
+      !('indent' in value) ||
+      typeof value.indent !== 'string' ||
+      !/^[\t ]+$/.test(value.indent) ||
+      Object.keys(value).some((key) => key !== 'indent')
+    ) {
+      return '`newline` takes a nonempty `indent` of spaces or tabs.';
+    }
+  }
   if ('delete' in action && action.delete !== true) return '`delete` is `true`: it deletes the current selection.';
   if ('wait' in action && action.wait !== undefined && typeof action.wait !== 'number') return '`wait` is a number: the seconds to wait.';
   const place: unknown = 'move' in action ? action.move : 'select' in action ? action.select : 'point' in action ? action.point : undefined;

@@ -22,7 +22,7 @@ const LINES = [undefined, 3, 0, 1.5, '3'];
 const ATS = [undefined, SPOT, 'x', `x${CURSOR_MARKER}y${CURSOR_MARKER}`, CURSOR_MARKER, 5];
 
 /** A `to` of each kind: left out, `line_end`, another text. */
-const TOS = [undefined, 'line_end', 'end'];
+const TOS = [undefined, 'line_end', 'next_close', 'end'];
 
 /** A span's `text`, `from`, or `through` of each kind: left out, code, the empty text, a number. */
 const CODES = [undefined, CODE, '', 5];
@@ -43,7 +43,10 @@ describe('ActionValidation', () => {
       ATS.flatMap((at) => TOS.flatMap((to) => [undefined, 'x'].map((before) => ({ line, at, to, before })))),
     );
     for (const { line, at, to, before } of moves) {
-      const valid = before === undefined && lineOK(line) && ((at === SPOT && to === undefined) || (at === undefined && to === 'line_end'));
+      const valid =
+        before === undefined &&
+        lineOK(line) &&
+        ((at === SPOT && to === undefined) || (at === undefined && (to === 'line_end' || (to === 'next_close' && line === undefined))));
       const place = sent({ line, at, to, before });
       expect({ place, accepted: moveProblem(place) === undefined }).toEqual({ place, accepted: valid });
     }
@@ -148,4 +151,18 @@ describe('ToolError', () => {
     expect(error).toBeInstanceOf(Error);
     expect({ code: error.code, message: error.message }).toEqual({ code: 'no_session', message: 'Call `start` first.' });
   });
+});
+
+it('accepts a relative next-close move and rejects an absolute one', () => {
+  expect(moveProblem({ to: 'next_close' })).toBeUndefined();
+  expect(moveProblem({ to: 'next_close', line: 1 })).toBeDefined();
+  expect(moveProblem({ to: 'next_close', file: 'a.py' })).toBeDefined();
+});
+
+it('validates structural newline indentation and rejects unknown fields', () => {
+  expect(fieldsProblem({ newline: { indent: '\t' } })).toBeUndefined();
+  const jsonNull: unknown = JSON.parse('null');
+  for (const newline of [undefined, jsonNull, [], {}, { indent: '' }, { indent: 'x' }, { indent: ' ', extra: true }]) {
+    expect(fieldsProblem({ newline })).toBeDefined();
+  }
 });

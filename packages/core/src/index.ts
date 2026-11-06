@@ -5,6 +5,8 @@ export type {
   Change,
   CommandOutcome,
   CursorView,
+  DiagnosticCheck,
+  EditorDiagnostic,
   EditOptions,
   EditorPort,
   Focus,

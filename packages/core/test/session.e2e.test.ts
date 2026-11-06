@@ -23,12 +23,23 @@ function reload(editor: ReturnType<typeof setup>['editor']): void {
 // With the test config, a beat is 100 ms and `type` takes 100 ms per character.
 
 describe('where the controller and the player meet', () => {
+  it('rejects malformed file-naming input at the player boundary without editing', async () => {
+    const { editor, controller } = setup({ 'a.ts': 'keep\n' });
+    await controller.start();
+    // The wire can carry malformed JSON before rehearsal validates it.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const actions = JSON.parse('[{"point":null},{"delete":true}]') as Action[];
+    const result = await until(controller.step(actions));
+    expect(result.rejected?.error.kind).toBe('invalid_action');
+    expect(editor.text('a.ts')).toBe('keep\n');
+  });
+
   it('DeletesTheSelection: replaces a selection by typing, and deletes a selection', async () => {
     const { editor, controller } = setup({ 'a.ts': 'const a = 1\n' });
     await controller.start();
     await controller.read('a.ts');
     await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { select: { text: '1' } }, { type: `2${CURSOR_MARKER}` }]);
-    await until(controller.step([{ select: { text: 'const ' } }, { delete: true }]));
+    await until(controller.step([{ select: { file: 'a.ts', text: 'const ' } }, { delete: true }]));
     await until(controller.step([]));
     expect(editor.text('a.ts')).toBe('a = 2\n');
   });
@@ -39,10 +50,10 @@ describe('where the controller and the player meet', () => {
     await controller.read('a.ts');
     await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `\nx${CURSOR_MARKER}` }]);
     // The playing batch moves `b` from line 2 to line 3.
-    const stale = await controller.step([{ move: { line: 2, to: 'line_end' } }, { type: `!${CURSOR_MARKER}` }]);
+    const stale = await controller.step([{ move: { file: 'a.ts', line: 2, to: 'line_end' } }, { type: `!${CURSOR_MARKER}` }]);
     expect(stale.rejected?.error).toMatchObject({ kind: 'line_not_seen', message: matching(/line 2 reads "x"\.$/) });
     expect((await controller.read('a.ts')).lines.map((l) => l.text)).toEqual(['a', 'x', 'b']);
-    const next = await until(controller.step([{ move: { line: 3, to: 'line_end' } }, { type: `!${CURSOR_MARKER}` }]));
+    const next = await until(controller.step([{ move: { file: 'a.ts', line: 3, to: 'line_end' } }, { type: `!${CURSOR_MARKER}` }]));
     expect(next.rejected).toBeUndefined();
     await until(controller.step([]));
     expect(editor.text('a.ts')).toBe('a\nx\nb!\n');
@@ -53,7 +64,7 @@ describe('where the controller and the player meet', () => {
     await controller.start();
     await controller.read('a.ts');
     await controller.step([{ move: { file: 'a.ts', line: 2, to: 'line_end' } }, { type: `\nc${CURSOR_MARKER}` }]);
-    const first = await until(controller.step([{ move: { line: 1, to: 'line_end' } }, { type: `\nx${CURSOR_MARKER}` }]));
+    const first = await until(controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `\nx${CURSOR_MARKER}` }]));
     const [batch] = first.batches;
     ok(batch?.code);
     expect(batch.code.lines.at(-1)).toEqual({ number: 3, text: `c${CURSOR_MARKER}` });
@@ -74,15 +85,16 @@ describe('where the controller and the player meet', () => {
     expect(report.batches[0]).toMatchObject({ status: 'interrupted', unplayed: [{ type: `${CURSOR_MARKER}{}` }] });
   });
 
-  it("EditAtCursorProp: types and deletes at the cursor in a batch that named the cursor's file, or named none", async () => {
+  it("EditAtCursorProp, EditRequiresNamed: types and deletes only after naming the cursor's file", async () => {
     const { editor, controller } = setup({ 'a.ts': 'ab\n' });
     await controller.start();
     await controller.read('a.ts');
     const named = await until(controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `c${CURSOR_MARKER}` }]));
     expect(named.rejected).toBeUndefined();
     const unnamed = await until(controller.step([{ type: `d${CURSOR_MARKER}` }]));
-    expect(unnamed.rejected).toBeUndefined();
-    const deleted = await until(controller.step([{ select: { line: 1, text: 'b' } }, { delete: true }]));
+    expect(unnamed.rejected?.error.kind).toBe('file_required');
+    await until(controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `d${CURSOR_MARKER}` }]));
+    const deleted = await until(controller.step([{ select: { file: 'a.ts', line: 1, text: 'b' } }, { delete: true }]));
     expect(deleted.rejected).toBeUndefined();
     await until(controller.step([]));
     expect(editor.text('a.ts')).toBe('acd\n');
@@ -128,7 +140,7 @@ describe('where the controller and the player meet', () => {
     expect(editor.text('b.ts')).toBe('b\n');
   });
 
-  it('DiscardedMeansNothing: discards a batch interrupted after a type with nothing to type, which changed nothing (specs/Actions.tla)', async () => {
+  it('DiscardedMeansNothing: an empty type does not edit when interrupted (specs/Actions.tla)', async () => {
     const { editor, controller } = setup({ 'a.ts': 'x\n' });
     await controller.start();
     await controller.read('a.ts');
@@ -142,9 +154,10 @@ describe('where the controller and the player meet', () => {
       if (++calls === 2) controller.userInterrupt();
       return eol(file);
     };
-    await controller.step([{ type: CURSOR_MARKER }, { say: 'Typed.' }]);
+    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: CURSOR_MARKER }, { say: 'Typed.' }]);
     const report = await until(controller.listen());
-    expect(report.batches).toMatchObject([{ status: 'discarded', unplayed: [{ say: 'Typed.' }] }]);
+    expect(report.batches).toMatchObject([{ status: 'interrupted', unplayed: [{ say: 'Typed.' }] }]);
+    expect(editor.text('a.ts')).toBe('x\n');
   });
 
   it('OnlyTalkInTheirTurn: stops a delete when the programmer takes the turn while it starts, and deletes nothing', async () => {
@@ -265,7 +278,7 @@ describe('where the controller and the player meet', () => {
     await until(controller.step([{ select: { file: 'a.ts', line: 3, text: '3' } }]));
     await until(controller.step([]));
     reload(editor);
-    await until(controller.step([{ delete: true }]));
+    await until(controller.step([{ point: { file: 'a.ts', line: 3, text: '3' } }, { delete: true }]));
     await until(controller.step([]));
     expect(editor.text('a.ts')).toBe('1\nX\n\n4\nY\n6\n');
   });
@@ -312,5 +325,39 @@ describe('where the controller and the player meet', () => {
     const first = await until(queued);
     const rest = await until(controller.step([]));
     expect([...first.batches, ...rest.batches].map((b) => b.status)).toEqual(['interrupted', 'discarded']);
+  });
+});
+
+describe('structural editing across rehearsal and playback', () => {
+  it('splits a Python pair identically in rehearsal and the editor', async () => {
+    const { editor, controller } = setup({ 'a.py': 'x = {}\n' });
+    await controller.start();
+    await controller.read('a.py');
+    const report = await until(
+      controller.step([
+        { move: { file: 'a.py', line: 1, at: `x = {${CURSOR_MARKER}}` } },
+        { newline: { indent: '    ' } },
+        { type: `"answer": 42${CURSOR_MARKER}` },
+      ]),
+    );
+    expect(report.rejected).toBeUndefined();
+    await until(controller.step([]));
+    expect(editor.text('a.py')).toBe('x = {\n    "answer": 42\n}\n');
+  });
+
+  it('steps past one nested close before typing the following comma', async () => {
+    const { editor, controller } = setup({ 'a.py': 'x = ({})\n' });
+    await controller.start();
+    await controller.read('a.py');
+    const report = await until(
+      controller.step([
+        { move: { file: 'a.py', line: 1, at: `x = ({${CURSOR_MARKER}})` } },
+        { move: { to: 'next_close' } },
+        { type: `,${CURSOR_MARKER}` },
+      ]),
+    );
+    expect(report.rejected).toBeUndefined();
+    await until(controller.step([]));
+    expect(editor.text('a.py')).toBe('x = ({},)\n');
   });
 });

@@ -130,7 +130,7 @@ interface FakeView {
 }
 
 /** Returns a panel with every collaborator a fake, the controller's turn `turn`. */
-function harness(turn: Turn = 'agent'): Harness {
+function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: 'test-build' }): Harness {
   const traced: string[] = [];
   const speed = { get: vi.fn(() => SPEEDS[1] ?? 0), set: vi.fn<(value: number) => void>() };
   const readingSpeed = { get: vi.fn(() => SPEEDS[2] ?? 0), set: vi.fn<(value: number) => void>() };
@@ -155,6 +155,7 @@ function harness(turn: Turn = 'agent'): Harness {
     vscode.Uri.file(EXTENSION),
     { controller: () => controller, calibration: () => calibration, starter },
     chatOrder,
+    buildInfo,
   );
   const onPost = vi.fn<() => void>();
   panel.onPost = onPost;
@@ -230,8 +231,19 @@ describe('resolveWebviewView', () => {
   it("gives the page scripts, the extension's dist folder, and the page from panelHtml with its style and script", () => {
     const view = open(harness().panel);
     expect(view.webview.options).toEqual({ enableScripts: true, localResourceRoots: [vscode.Uri.file('/ext/dist')] });
-    expect(vi.mocked(panelHtml).mock.calls).toEqual([[CSP, 'webview:/ext/dist/panel.css', 'webview:/ext/dist/panel.js']]);
+    expect(vi.mocked(panelHtml).mock.calls).toEqual([
+      [CSP, 'webview:/ext/dist/panel.css', 'webview:/ext/dist/panel.js', '0.10.0', 'test-build'],
+    ]);
     expect(view.webview.html).toBe('<html>');
+  });
+
+  it('ShowsRunning, ShowsNewAfterReload: each page uses its running bundle identity', () => {
+    open(harness('agent', { version: '0.9.0', build: 'old' }).panel);
+    open(harness('agent', { version: '0.10.0', build: 'new' }).panel);
+    expect(vi.mocked(panelHtml).mock.calls.map((args) => args.slice(3))).toEqual([
+      ['0.9.0', 'old'],
+      ['0.10.0', 'new'],
+    ]);
   });
 
   it('Dispose: forgets a disposed view, but not a newer one an older disposal follows', () => {

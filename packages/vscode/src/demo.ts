@@ -45,7 +45,7 @@ export const SCRIPT: Action[][] = [
   ],
   [
     { say: 'The store is just an array and a counter for ids. `createTodo` is what the routes will call.' },
-    { move: { line: 5, to: 'line_end' } },
+    { move: { file: TODOS, line: 5, to: 'line_end' } },
     { type: `\n\nconst todos: Todo[] = [];\nlet nextId = 1;\n\nexport function createTodo(${CURSOR_MARKER})` },
     { type: `title: string${CURSOR_MARKER}` },
     { move: { to: 'line_end' } },
@@ -74,7 +74,7 @@ export const SCRIPT: Action[][] = [
     { type: ` => {\n  ${CURSOR_MARKER}\n}` },
   ],
   [
-    { point: { line: 4, text: 'app.use(express.json());' } },
+    { point: { file: SERVER, line: 4, text: 'app.use(express.json());' } },
     { say: '`express.json()` up here is what parses the request body, so `req.body` is an object in our handler.' },
     { say: "We create the todo from the body's `title`, and answer 201 Created with the new todo as JSON." },
     { type: `const todo = createTodo(${CURSOR_MARKER})` },
@@ -90,7 +90,7 @@ export const SCRIPT: Action[][] = [
   ],
   [
     // As the `read` before it shows: the handler's closing line is line 9.
-    { move: { line: 9, to: 'line_end' } },
+    { move: { file: SERVER, line: 9, to: 'line_end' } },
     { type: `;${CURSOR_MARKER}` },
     { say: 'We need to import `createTodo`.' },
     { move: { line: 1, at: `import express from "express";${CURSOR_MARKER}` } },
@@ -131,7 +131,7 @@ export const SCRIPT: Action[][] = [
   ],
   [
     // As the `read` before it shows: the handler's closing line is line 14.
-    { move: { line: 14, to: 'line_end' } },
+    { move: { file: SERVER, line: 14, to: 'line_end' } },
     { type: `;${CURSOR_MARKER}` },
     { say: 'It needs the import too.' },
     { move: { line: 2, at: `import { createTodo${CURSOR_MARKER} }` } },

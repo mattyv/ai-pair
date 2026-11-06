@@ -63,6 +63,8 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 |---|---|---|---|
 | `Serialize.cfg` | `NumCalls = 2` calls, each empty or not, the session ending, an interrupt, and the socket closing at any point | holds | 3,646 |
 | `Wire.cfg` | `NumSockets = 2` sockets, `NumCalls = 2` calls | holds | 43,426 |
+| `StructuralTyping.cfg` | both operations, supported and unsupported contexts, selection and one or two closes | holds | 144 |
+| `BuildIdentity.cfg` | two builds, installing and reloading | holds | 4 |
 | `Panel.cfg` | `MaxEvents = 5`, both display orders and the settings dialog | holds | 84 |
 | `PanelScroll.cfg` | `MaxEvents = 5`, `ScrollOn = "you"`, both display orders | holds | 108 |
 | `PanelReplay.cfg` | `MaxLog = 3`, `MaxEvents = 6` | holds | 127 |
@@ -83,15 +85,16 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Resume.cfg` | 2 directories, `MaxSessions = 3` sessions, `PostOnRevive = TRUE` | holds | 56 |
 | `Timeline.cfg` | `MaxSleeps = 3` sleeps, a second sleep while one is pending | holds | 656 |
 | `Terminals.cfg` | `NumTerminals = 2` terminals, `MaxRuns = 3`, 2 directories | holds | 3,361 |
-| `Turns.cfg` | batches of up to 2 actions, `MaxTurns = 2` turn changes | holds | 1,234 |
+| `Turns.cfg` | batches of up to 2 actions, `MaxTurns = 2` turn changes | holds | 1,530 |
 | `Reload.cfg` | `NumLines = 5` lines, any of them changed on disk, a selection at a line's start or not | holds | 320 |
 | `Rehearsal.cfg` | `MaxLines = 3` lines, `MaxOthers = 2` changes by others, `MaxProgrammerEdits = 1`, `MaxBatches = 2` batches, `MaxQueued = 2` queued, either turn, `ReportWaitsForQueue = TRUE` | holds, in about 200 seconds | 6,721,044 |
-| `BatchFile.cfg` | files `sourceFile`, `destinationFile`, and `otherFile`, `MaxActions = 4` actions a batch, `FallBackToNamed = TRUE`, `CursorInNamed = TRUE`, a selection or none | holds | 369 |
-| `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await | holds | 2,294 |
+| `BatchFile.cfg` | files `sourceFile`, `destinationFile`, and `otherFile`, `MaxActions = 4` actions a batch, `FallBackToNamed = TRUE`, `CursorInNamed = TRUE`, a selection or none | holds | 330 |
+| `Diagnostics.cfg` | `MaxBatches = 3`, provider available or not, completed, interrupted, and failed batches | holds | 96 |
+| `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await | holds | 3,077 |
 | `Player.cfg` | `MaxEdits = 2` | holds | 26 |
 | `LineIdentity.cfg` | texts up to 4 characters, inserts up to 2 | holds (checked as `ASSUME`s) | |
 | `Places.cfg` | texts up to 5 characters, needles up to 3 | holds (`ASSUME`s) | |
-| `ActionValidation.cfg` | every move and span place by the kind of value in each field (180 moves, 960 spans), `CheckAtText = TRUE` | holds (`ASSUME`s) | |
+| `ActionValidation.cfg` | move and span places, including relative `next_close`, `CheckAtText = TRUE` | holds (`ASSUME`s) | |
 | `Typing.cfg` | texts up to 7 characters | holds (`ASSUME`s) | |
 | `Anchor.cfg` | `MaxBatches = 4`, `Guard = TRUE`, `DropsHeld = FALSE` | holds | 113 |
 | `Calibration.cfg` | `MaxRounds = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
@@ -125,7 +128,7 @@ comment names them.
 ### `PairDefs`: the vocabulary the specs share
 
 No config: the module holds definitions only, as 5.2 of the style guide allows,
-and the specs that `EXTENDS` it check them. `ActionKinds` is the eight kinds of
+and the specs that `EXTENDS` it check them. `ActionKinds` is the nine kinds of
 action (Actions, BatchFile, Turns); `SessionPhases` and `NoSession` a session's
 phases (Bridge, Resume); `Views` what the panel shows of a session (Resume);
 `PageStates` a webview's page, loaded or disposed (Draft, Start); `Calls` and
@@ -935,13 +938,15 @@ every sequence of up to 4 actions, each with `file` of `sourceFile`,
 file without moving the cursor, so with the cursor
 elsewhere an action without `file` looked in the cursor's file, and a `type` or
 `delete` edited it. `FallBackToNamed` and `CursorInNamed` are the fix for #58.
+Every editing batch must now name its file before the first edit (#6). The model
+refuses the edit; the controller preflights the batch before any action plays.
 
 | Spec | Code |
 |---|---|
 | `Act` | `perform`: `names`, then `fileOf` for `move`, `select` and `point`, or the cursor for `type` and `delete` |
 | `Say` | a `say` or `run`, which act in no file |
 | `ActInFile` | `move`, `select` and `point` in the file `fileOf` gives; only `move` and `select` move the cursor |
-| `ActAtCursor` | `type` and `delete` at the cursor, rejected with it outside the named file, and a `delete` with nothing selected (`no_selection`) |
+| `ActAtCursor` | `type`, `newline` and `delete` at the cursor, rejected without a named file or with the cursor outside it, and a `delete` with nothing selected (`no_selection`) |
 | `Stop` | an action that fails: two files named, a file named after an edit, `no_cursor`, the cursor outside the named file, or a `delete` with nothing selected; the other ways an action fails (a text not found, the programmer's turn) are other specs' |
 | `EndBatch` | a new `Playing` for the next batch; the cursor stays |
 
@@ -953,7 +958,7 @@ model, run in TLC and then reverted:
 | a rejected action's file is the string `"none"`, the sentinel before #148 | `TypeOK` |
 | `FallBackToNamed = FALSE`, the code before #58 | `ActsInNamedFile` |
 | `CursorInNamed = FALSE`, the code before #58 | `ActsInNamedFile` |
-| `ActAtCursor` rejects an edit in a batch that named no file | `EditAtCursorProp` |
+| `ActAtCursor` permits an edit in a batch that named no file | `EditRequiresNamed` |
 | `EditAtCursorProp` without `k = "delete" => selected`: a `delete` with nothing selected must edit | `EditAtCursorProp` |
 | `ActAtCursor` refuses a `delete` even with a selection | `EditAtCursorProp` |
 | `move` makes a selection | Nothing: no property says a `delete` after a `move` fails; `player.test.ts` does |
@@ -965,7 +970,35 @@ test's title carries its name:
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `ActsInNamedFile` | `session.e2e.test.ts`: ActsInNamedFile: looks in the file its batch named for an action without `file`, not the cursor's; ActsInNamedFile: looks in the file its batch named before the agent's cursor is in any file; ActsInNamedFile: rejects a type or delete with the cursor outside the file its batch named, editing nothing; `player.test.ts`: Act: refuses a second file in a batch, and a file named after its first edit; ActAtCursor: refuses a type or delete when the cursor is in another file than the batch's |
-| `EditAtCursorProp` | `session.e2e.test.ts`: EditAtCursorProp: types and deletes at the cursor in a batch that named the cursor's file, or named none; `player.test.ts`: EditAtCursorProp: refuses a move, select, point, or type before the cursor is anywhere, and a delete with nothing selected; `player.test.ts`: Complete: plays each action, saves the files it edited, and reports the code around its change, the cursor marked |
+| `EditAtCursorProp` | `session.e2e.test.ts`: EditAtCursorProp, EditRequiresNamed: types and deletes only after naming the cursor's file; `player.test.ts`: EditAtCursorProp: refuses a move, select, point, or type before the cursor is anywhere, and a delete with nothing selected |
+| `EditRequiresNamed` | `controller.test.ts`: EditRequiresNamed: refuses an unnamed editing batch before rehearsal, while allowing named edits and non-editing batches; `session.e2e.test.ts`: EditAtCursorProp, EditRequiresNamed: types and deletes only after naming the cursor's file |
+
+### `Diagnostics`: advisory checks after edits
+
+The controller checks only files actually edited by a batch, after playback.
+Available observations are advisory and never change its result. This model
+abstracts provider availability and outcomes; changing sessions or source text
+while a check runs is covered by tests, not modeled here.
+
+| Spec | Code |
+|---|---|
+| `Edit` | successful editor edits recorded by `Player` |
+| `Finish` | `Controller.run` collects a snapshot without changing the batch result |
+| `NextBatch` | the next batch starts with its own edited-file set |
+
+Each behavioral invariant was checked with a mutation and then restored:
+
+| Mutation | Breaks |
+|---|---|
+| observe even when no edit happened | `OnlyEdited` |
+| suppress observations from an available provider | `ObserveWhenAvailable` |
+| force a failed result regardless of playback | `OutcomeUnchanged` |
+| disable batch completion | `Advisory` |
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | TypeScript checks these types |
+| `OnlyEdited`, `ObserveWhenAvailable`, `OutcomeUnchanged`, `Advisory` | `controller.test.ts`: OnlyEdited, Advisory: reports diagnostics only for files actually edited and does not reject the batch |
 
 ### `Draft`: the reply box's pause, across the view's page
 
@@ -1662,3 +1695,56 @@ above (#163); this contract holds the relay's schema and the player to them.
 
 Nothing ties a spec to its code but the tables above. When code in one of the
 files above changes, update its spec, and run `specs/check.sh`.
+
+### `StructuralTyping`: explicit structural edits
+
+`structuralNewline` and `Player.perform` split a supported Python or JSON pair
+only in code, and `next_close` crosses one adjacent close without altering the
+text. The model abstracts the lexer result to `code` and the language to
+`supported`; the helper tests cover concrete lexical contexts.
+
+| Spec | Code |
+|---|---|
+| `SmartNewline` | the opt-in `newline` action and its lexical guard |
+| `StepClose` | the relative `next_close` move |
+| `NewlineSafe`, `RefusalSafe` | reject unsupported or unsafe contexts |
+| `NewlineActs`, `StepActs` | eligible actions take effect |
+| `StepOne` | one close is crossed, and the text stays unchanged |
+
+Each invariant was mutation-tested in TLC, then the mutation was reverted:
+
+| Mutation | Breaks |
+|---|---|
+| Set the move distance to 2 | `TypeOK`, `StepOne` |
+| Make an eligible newline a no-op | `NewlineActs` |
+| Accept an unmatched pair | `NewlineSafe` |
+| Make an eligible close step a no-op | `StepActs` |
+| Change state after refusing a newline | `RefusalSafe` |
+
+| Invariant | Test |
+|---|---|
+| `TypeOK` | The TypeScript compiler checks the types |
+| `NewlineSafe`, `RefusalSafe` | `player.test.ts`: NewlineSafe, RefusalSafe: refuses newline without a cursor, with a selection, or in an unsafe context |
+| `NewlineActs` | `player.test.ts`: NewlineActs: inserts a structural newline inside a Python pair |
+| `StepOne`, `StepActs` | `player.test.ts`: StepOne, StepActs: steps past exactly one adjacent close and refuses any other character |
+
+### `BuildIdentity`: the running bundle's label
+
+The panel displays the version and content-derived build ID compiled into the
+running extension. Installing another bundle changes the model's `installed`
+value; only a reload changes `running` and `displayed`.
+
+| Spec | Code |
+|---|---|
+| `Install`, `Reload` | VS Code installation and extension activation |
+| `ShowsRunning` | the panel receives the values compiled into its host |
+| `ShowsNewAfterReload` | activation uses the newly loaded bundle's values |
+
+TLC mutations that put an invalid value in the label, update it on install, or
+leave it stale on reload violate `TypeOK`, `ShowsRunning`, and
+`ShowsNewAfterReload`, respectively.
+
+| Invariant | Test |
+|---|---|
+| `TypeOK` | The TypeScript compiler checks the types |
+| `ShowsRunning`, `ShowsNewAfterReload` | `vscode/test/panel.test.ts`: ShowsRunning, ShowsNewAfterReload: each page uses its running bundle identity |

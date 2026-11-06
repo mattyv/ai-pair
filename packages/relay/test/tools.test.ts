@@ -129,3 +129,11 @@ describe('what is not one action', () => {
     expect(problems({ say: 'a', extra: 1 })).toEqual(['Unrecognized key: "extra"']);
   });
 });
+
+it('accepts structural actions and rejects malformed indentation', () => {
+  expect(problems({ move: { to: 'next_close' } })).toEqual([]);
+  expect(problems({ newline: { indent: '  ' } })).toEqual([]);
+  expect(problems({ newline: { indent: '' } })).not.toEqual([]);
+  expect(problems({ newline: { indent: 'x' } })).not.toEqual([]);
+  expect(problems({ newline: { indent: '  ', extra: true } })).not.toEqual([]);
+});

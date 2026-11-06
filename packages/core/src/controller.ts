@@ -35,6 +35,8 @@ import { defaultTiming, glideDuration, withOverrides } from './timing';
 
 const UNANCHORED =
   'Your previous batch was interrupted, discarded, or failed, so your cursor is where it stopped, not where that batch would have ended. `read` the file, then start this batch with a `move` or `select` that gives both `file` and `line`.';
+const FILE_REQUIRED =
+  'Name the target file in a `move`, `select`, or `point` before the first edit in each batch. The cursor can be in a different file than you expect.';
 
 interface Batch {
   id: number;
@@ -201,9 +203,30 @@ function describeReport(report: Report): string {
 /** Returns the first action at the cursor, and whether it anchors the cursor: a `move` or `select` giving both `file` and `line` (#112). */
 function cursorAnchor(actions: Action[]): CursorAnchor | undefined {
   for (const [i, action] of actions.entries()) {
+    if (typeof action !== 'object' || action === null) return undefined;
     if ('say' in action || 'run' in action || 'point' in action) continue;
     const place = 'move' in action ? action.move : 'select' in action ? action.select : undefined;
-    return { index: i + 1, action, anchored: place?.file !== undefined && place?.line !== undefined };
+    const relativeMove = 'move' in action && action.move?.to === 'next_close';
+    return { index: i + 1, action, anchored: !relativeMove && place?.file !== undefined && place?.line !== undefined };
+  }
+  return undefined;
+}
+
+/** Finds the first edit that has no explicitly named file in its batch (specs/BatchFile.tla, `EditRequiresNamed`). */
+function unnamedEdit(actions: Action[]): { index: number; action: Action } | undefined {
+  let named = false;
+  for (const [index, action] of actions.entries()) {
+    if (typeof action !== 'object' || action === null) return undefined;
+    if ('move' in action || 'select' in action || 'point' in action) {
+      const place: unknown = 'move' in action ? action.move : 'select' in action ? action.select : action.point;
+      if (typeof place !== 'object' || place === null) return undefined;
+      if ('file' in place && place.file !== undefined) {
+        if (typeof place.file !== 'string') return undefined;
+        named = true;
+      }
+    } else if ('type' in action || 'type_fast' in action || 'delete' in action || 'newline' in action) {
+      if (!named) return { index: index + 1, action };
+    }
   }
   return undefined;
 }
@@ -389,6 +412,15 @@ export class Controller {
       // report of the step discarded as stale (`TakeHeld`, #193).
       const anchor = cursorAnchor(actions);
       if (session.anchorNeeded && anchor && !anchor.anchored && session.held.length === 0) return this.rejectUnanchored(session, anchor);
+      // The target must be explicit even when no interruption was reported (specs/BatchFile.tla, `EditRequiresNamed`).
+      const unnamed = unnamedEdit(actions);
+      if (unnamed !== undefined && !session.stale && !session.ended && session.held.length === 0) {
+        const rejected = { ...unnamed, error: { kind: 'file_required' as const, message: FILE_REQUIRED } };
+        const report = { ...this.snapshot(session, /* waiting= */ false), rejected };
+        this.trace?.(`report to step: ${describeReport(report)}`);
+        this.render();
+        return this.withCursor(session, report);
+      }
       // Played in memory first, so what would fail is reported now, not when the batch plays (specs/Controller.tla, `Submit`).
       const rehearsal = session.stale || session.ended ? undefined : await this.rehearse(session, actions);
       // An interruption arriving meanwhile discards it, like any batch planned without knowing about it
@@ -1130,7 +1162,24 @@ export class Controller {
         // specs/Controller.tla: `Play`, then `Complete` once it has played.
         this.startHead(session);
         this.render();
-        const { result, sightings } = await session.player.play(batch.id, batch.actions);
+        const { result, sightings, editedFiles } = await session.player.play(batch.id, batch.actions);
+        if (this.session !== session) break;
+        // specs/Diagnostics.tla, `Finish`: inspect only files actually edited; checks remain advisory.
+        for (const file of editedFiles) {
+          try {
+            const checked = await this.editor.diagnostics(file);
+            if (this.session !== session) break;
+            if (checked.diagnostics.length > 0) {
+              result.diagnostics = [
+                ...(result.diagnostics ?? []),
+                ...checked.diagnostics.map((diagnostic) => ({ ...diagnostic, file: this.displayPath(session, file) })),
+              ];
+            }
+            if (checked.warnings.length > 0) result.warnings = [...(result.warnings ?? []), ...checked.warnings];
+          } catch {
+            result.warnings = [...(result.warnings ?? []), 'Diagnostics unavailable for an edited file.'];
+          }
+        }
         if (this.session !== session) break;
         // It played as it did in memory, so the lines it typed are the ones later batches were rehearsed with
         // (specs/Rehearsal.tla, `Play`).

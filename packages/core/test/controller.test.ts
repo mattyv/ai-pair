@@ -58,8 +58,8 @@ const fakes = vi.hoisted(() => {
   class FakePlayer {
     reading = false;
     commandRunning = false;
-    readonly play = vi.fn((id: number): Promise<{ result: BatchResult; sightings: Sighting[] }> =>
-      Promise.resolve({ result: { id, status: 'completed' }, sightings: [] }),
+    readonly play = vi.fn((id: number): Promise<{ result: BatchResult; sightings: Sighting[]; editedFiles: string[] }> =>
+      Promise.resolve({ result: { id, status: 'completed' }, sightings: [], editedFiles: [] }),
     );
     readonly transform = vi.fn();
     /** By default, the cursor's file can't be read, so a report adds no cursor. */
@@ -326,14 +326,14 @@ function statuses(h: Harness): string[] {
 
 /** Makes the next batch the Player plays wait, and returns how to finish it with `result`. */
 function holdPlay(): (result?: Partial<BatchResult>, sightings?: Sighting[]) => void {
-  const { promise, resolve } = Promise.withResolvers<{ result: BatchResult; sightings: Sighting[] }>();
+  const { promise, resolve } = Promise.withResolvers<{ result: BatchResult; sightings: Sighting[]; editedFiles: string[] }>();
   let id = 0;
   player().play.mockImplementationOnce((batch: number) => {
     id = batch;
     return promise;
   });
   return (result = {}, sightings = []) => {
-    resolve({ result: { id, status: 'completed', ...result }, sightings });
+    resolve({ result: { id, status: 'completed', ...result }, sightings, editedFiles: [] });
   };
 }
 
@@ -630,7 +630,36 @@ describe('steps and their batches', () => {
     expect((await report(h.controller.step([{ say: 'Only words.' }]))).rejected).toBeUndefined();
     await report(h.controller.step([ANCHORED]));
     await report(h.controller.step([]));
-    expect((await report(h.controller.step([type]))).rejected).toBeUndefined();
+    expect((await report(h.controller.step([type]))).rejected?.error.kind).toBe('file_required');
+  });
+
+  it('EditRequiresNamed: refuses an unnamed editing batch before rehearsal, while allowing named edits and non-editing batches', async () => {
+    const h = await started();
+    const edit: Action = { type: `x${CURSOR_MARKER}` };
+    const refused = await report(h.controller.step([{ say: 'Editing.' }, { move: { line: 1, to: 'line_end' } }, edit]));
+    expect(refused.rejected).toMatchObject({ index: 3, action: edit, error: { kind: 'file_required' } });
+    expect(rehearse).not.toHaveBeenCalled();
+    expect((await report(h.controller.step([{ say: 'Reading.' }, { point: { line: 1, text: 'x' } }]))).rejected).toBeUndefined();
+    expect((await report(h.controller.step([ANCHORED, edit]))).rejected).toBeUndefined();
+  });
+
+  it('leaves malformed file-naming actions for rehearsal to reject without throwing', async () => {
+    const h = await started();
+    for (const value of ['[null]', '[{"point":null},{"delete":true}]', '[{"point":{"file":3}},{"delete":true}]']) {
+      // Bridge input is checked by rehearsal and may contain malformed actions.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      const malformed = JSON.parse(value) as Action[];
+      await report(h.controller.step(malformed));
+    }
+    expect(vi.mocked(rehearse).mock.calls).toHaveLength(3);
+  });
+
+  it('NoMisplacedEdit: a relative next_close move cannot reanchor after an interrupted batch', async () => {
+    const h = await started();
+    h.controller.userInterrupt();
+    await report(h.controller.step(SAY));
+    const action: Action = { move: { file: 'a.ts', line: 1, to: 'next_close' } };
+    expect((await report(h.controller.step([action]))).rejected?.error.kind).toBe('unanchored');
   });
 
   it('NoRejectionLost: delivers a held rejection with the step discarded as stale before refusing an unanchored one (#193)', async () => {
@@ -711,10 +740,77 @@ describe('steps and their batches', () => {
 });
 
 describe('playing the queue', () => {
+  it('OnlyEdited, Advisory: reports diagnostics only for files actually edited and does not reject the batch', async () => {
+    const h = await started();
+    h.editor.diagnostics.mockResolvedValue({
+      diagnostics: [{ line: 3, endLine: 3, message: 'invalid syntax', source: 'Python ast' }],
+      warnings: ['VS Code diagnostics may be stale or unavailable.'],
+    });
+    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed' }, sightings: [], editedFiles: [A] });
+    await report(h.controller.step(SAY));
+    await settle();
+    const done = await report(h.controller.listen());
+    expect(h.editor.diagnostics.mock.calls).toEqual([[A]]);
+    expect(done.batches).toContainEqual({
+      id: 1,
+      status: 'completed',
+      diagnostics: [{ file: 'a.ts', line: 3, endLine: 3, message: 'invalid syntax', source: 'Python ast' }],
+      warnings: ['VS Code diagnostics may be stale or unavailable.'],
+    });
+  });
+
+  it('Advisory: an unavailable checker leaves the batch result intact', async () => {
+    const h = await started();
+    h.editor.diagnostics.mockRejectedValue(new Error('unavailable'));
+    player().play.mockResolvedValueOnce({
+      result: { id: 1, status: 'completed', warnings: ['existing'] },
+      sightings: [],
+      editedFiles: [A],
+    });
+    await report(h.controller.step(SAY));
+    await settle();
+    expect((await report(h.controller.listen())).batches).toContainEqual({
+      id: 1,
+      status: 'completed',
+      warnings: ['existing', 'Diagnostics unavailable for an edited file.'],
+    });
+  });
+
+  it('Advisory: records a checker failure when the batch had no earlier warnings', async () => {
+    const h = await started();
+    h.editor.diagnostics.mockRejectedValue(new Error('unavailable'));
+    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed' }, sightings: [], editedFiles: [A] });
+    await report(h.controller.step(SAY));
+    await settle();
+    expect((await report(h.controller.listen())).batches).toContainEqual({
+      id: 1,
+      status: 'completed',
+      warnings: ['Diagnostics unavailable for an edited file.'],
+    });
+  });
+
+  it('does not attach a completed old-session check to a replacement session', async () => {
+    const h = await started();
+    const check = Promise.withResolvers<{ diagnostics: Array<{ line: number; endLine: number; message: string }>; warnings: string[] }>();
+    h.editor.diagnostics.mockReturnValueOnce(check.promise);
+    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed' }, sightings: [], editedFiles: [A] });
+    await report(h.controller.step(SAY));
+    await settle();
+    h.controller.disconnect();
+    h.controller.endSession();
+    await h.controller.start('Replacement.');
+    check.resolve({ diagnostics: [{ line: 1, endLine: 1, message: 'old' }], warnings: [] });
+    await settle();
+    expect((await report(h.controller.listen())).batches).toEqual([]);
+  });
   it('plays each batch in order, takes the lines a completed one leaves, and records what it showed', async () => {
     const h = await started();
     const after = rehearsed();
-    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed' }, sightings: [{ file: A, text: 'x', lines: [1] }] });
+    player().play.mockResolvedValueOnce({
+      result: { id: 1, status: 'completed' },
+      sightings: [{ file: A, text: 'x', lines: [1] }],
+      editedFiles: [],
+    });
     await report(h.controller.step(SAY));
     await settle();
     expect(sessionLines().adopt).toHaveBeenCalledWith(after);
@@ -1164,7 +1260,7 @@ describe('the cursor in a report', () => {
     const cursorLine = { number: 1, text: `x${CURSOR_MARKER}` };
     const code = { file: 'a.ts', lines: [cursorLine] };
     player().codeAt.mockResolvedValue({ code, sighting: { file: A, text: 'x', lines: [1] }, cursorLine });
-    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed', code }, sightings: [] });
+    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed', code }, sightings: [], editedFiles: [] });
     await report(h.controller.step(SAY));
     await settle();
     expect((await report(h.controller.listen())).cursor).toBeUndefined();

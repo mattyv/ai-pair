@@ -25,6 +25,7 @@ export const MOVE_TO_A: Action = { move: { file: 'a.ts', line: 1, to: 'line_end'
 
 /** An editor in memory: files as strings, a cursor, and a record of what the controller asked. */
 export class FakeEditor implements EditorPort {
+  readonly diagnostics = vi.fn(() => Promise.resolve({ diagnostics: [], warnings: [] }));
   files = new Map<string, string>();
   dirty = new Set<string>();
   saved: string[] = [];

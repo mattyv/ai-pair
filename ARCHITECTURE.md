@@ -11,7 +11,7 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes 0.2.0.
+Status: describes 0.10.0.
 
 ## Components
 
@@ -132,6 +132,18 @@ paths relative to it, which may be a subfolder of the workspace.
 
 ## Sessions
 
+Each editing batch names its file before the first edit. The player refuses a
+second named file or an edit at a cursor in another file. Rehearsal runs the
+same checks before the batch is queued. An explicit structural newline splits
+an adjacent matching pair in Python or JSON code; its conservative lexical
+scanner refuses strings, comments, and ambiguous formatted-string expressions.
+It is not a Python grammar parser.
+
+After playback the editor reports advisory diagnostics for edited files. VS
+Code diagnostics can be stale or unavailable; Python files also get a syntax
+check using system `python3`, which can differ from the project interpreter.
+Warnings report limitations and failures of these checks.
+
 **One MCP connection can host many pairing sessions, one after another.** The
 programmer works in the harness as usual, starts pairing when they want to, ends
 it, goes back to the harness, and may pair again later.
@@ -211,6 +223,11 @@ extension writes a launcher at a fixed path, `~/.ai-pair/bin/pair-mcp`
 (`pair-mcp.cmd` on Windows), pointing at the current version. The launcher runs
 the relay with VS Code's own runtime (`ELECTRON_RUN_AS_NODE=1`), so the
 programmer doesn't need Node installed.
+
+GitHub Actions checks and packages the extension on Ubuntu, then uploads a VSIX
+artifact named with its version and commit. The artifact can be downloaded and
+installed on an Ubuntu host. After reloading VS Code, the runtime reports the
+bundled version and build identity, allowing the running build to be checked.
 
 ## Repository layout
 

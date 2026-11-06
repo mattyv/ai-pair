@@ -48,6 +48,19 @@ supports MCP can be connected by hand.
 **Note:** It works best with strong models; weaker ones tend to struggle with
 this way of working.
 
+## Install a build from GitHub
+
+Open the [Build VSIX workflow](https://github.com/mattyv/ai-pair/actions/workflows/build-vsix.yml),
+choose a successful run for the branch you want, and download its `.vsix`
+artifact. Copy it to the Ubuntu host running VS Code, then install it there:
+
+```sh
+code --install-extension /path/to/ai-pair-build.vsix
+```
+
+Reload the VS Code window and restart the agent after updating. The Pair panel
+shows the running version and build ID, so you can verify the loaded build.
+
 ## Set up
 
 1.  Open a project folder.

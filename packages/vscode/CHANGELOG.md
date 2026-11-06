@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.10.0
+
+-   The Pair panel shows the running version and a content-derived build ID
+    (a SHA-256 prefix) to identify the bundle currently loaded.
+
+-   Editing batches name their file before the first edit. The new `next_close`
+    move steps over one bracket, and a `line_end` that crosses multiple closes
+    includes an advisory.
+-   An optional structural newline splits adjacent bracket pairs in Python and
+    JSON code while preserving indentation. Diagnostics are advisory.
+-   The relay and extension now use protocol version 4; reload VS Code and
+    restart the agent together after updating.
+
 ## 0.9.0
 
 -   Choose oldest first in the Pair panel's Settings to put new messages and the

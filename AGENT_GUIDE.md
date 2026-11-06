@@ -181,7 +181,8 @@ too), in boilerplate, in config and markup, with `type_fast`, in every language.
     empty pair is typed whole, like `listTodos()` or `= []`, and when the text
     opens nothing, the `▌` is at its end: `"x▌"`.
 -   **Step past the close** once it's filled, with a `move` on your cursor's
-    line, without `line`: `{ to: "line_end" }` if the close is the last thing on
+    line, without `line`: `{ to: "next_close" }` to cross exactly one adjacent
+    `)`, `]` or `}`, or `{ to: "line_end" }` if the close is the last thing on
     the line, or a spot right after it, like `{ at: "'/todos'▌, " }`, if more
     code follows it on the line. A close on another line, like a block's, is
     where your batch stops: `read`, and move there in the next one.
@@ -192,6 +193,10 @@ too), in boilerplate, in config and markup, with `type_fast`, in every language.
     body's last line, and the `}` is on the line below: `to: "line_end"` goes to
     the end of the body's line, still inside the block. After `"f(▌)"` and
     `"x▌"`, the `)` is on your line, so `to: "line_end"` steps past it.
+-   **Split adjacent pairs safely when useful.** In Python and JSON,
+    `{ newline: { indent: "    " } }` splits an adjacent pair in code and puts
+    the cursor on its indented line. It refuses strings, comments, selections,
+    unsupported languages, and uncertain contexts. Use literal `type` elsewhere.
 -   **Start new lines at the end of the line above**, `"\n  ...▌"`, never at the
     start of a line with code on it: that code would slide right with every
     character you type. At the very top of a file, make an empty line first:
@@ -322,6 +327,9 @@ type_fast ";▌"
     have ended: `read`, then start the next batch with a `move` or `select` that
     gives both `file` and `line`. A batch that types or moves without them
     first is refused with `unanchored`; a batch of only `say` or `run` passes.
+-   **Name the file in every editing batch.** Before its first `type`,
+    `type_fast`, `newline`, or `delete`, give `file` in a `move`, `select`, or
+    `point`. A batch without it is refused with `file_required`.
 -   **Edit bottom-up within a batch.** An insert moves every line below it, so a
     later action's `line` is stale. Put the lowest edit first, or `read` between
     batches.

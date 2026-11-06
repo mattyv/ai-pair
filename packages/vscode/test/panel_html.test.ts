@@ -109,3 +109,9 @@ it('is the page the page tests load, test/fixtures/panel.html: run with UPDATE_F
   if (process.env.UPDATE_FIXTURE === '1') fs.writeFileSync(FIXTURE, html);
   expect(html).toBe(fs.readFileSync(FIXTURE, 'utf8'));
 });
+
+it('shows the running extension version and build in the panel', () => {
+  const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js', '0.10.0', 'abcd1234');
+  expect(html).toContain('v0.10.0');
+  expect(html).toContain('build abcd1234');
+});

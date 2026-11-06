@@ -63,8 +63,24 @@ export class MissingFile extends Error {
   }
 }
 
+/** An advisory error snapshot from an editor or a syntax checker. Lines are one-based. */
+export interface EditorDiagnostic {
+  line: number;
+  endLine: number;
+  message: string;
+  source?: string;
+}
+
+/** Diagnostics and limitations observed after an actual edit. */
+export interface DiagnosticCheck {
+  diagnostics: EditorDiagnostic[];
+  warnings: string[];
+}
+
 /** Files are absolute paths; offsets are into the document text. */
 export interface EditorPort {
+  /** Checks a file after edits; diagnostics are advisory and may be unavailable. */
+  diagnostics(file: string): Promise<DiagnosticCheck>;
   /**
    * Returns the absolute path for a path given by the agent (absolute or workspace-relative), in the same
    * canonical form the editor reports files in (e.g. VS Code lowercases the Windows drive letter).
@@ -92,7 +108,7 @@ export interface EditorPort {
 }
 
 /** What a `Player` asks of the editor: the rest of `EditorPort` is the controller's. */
-export type PlayerEditor = Omit<EditorPort, 'isDirty' | 'renderCursor' | 'reveal'>;
+export type PlayerEditor = Omit<EditorPort, 'diagnostics' | 'isDirty' | 'renderCursor' | 'reveal'>;
 
 /** Something the panel shows: a session starting or ending, a status, a word to the programmer, a report. */
 export type PanelEvent =

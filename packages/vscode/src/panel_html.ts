@@ -47,7 +47,9 @@ const ICONS = {
 };
 
 /** Renders the page. `styleUri` and `scriptUri`: dist/panel.css and dist/panel.js, built from webview/, as the webview loads them. */
-export function panelHtml(cspSource: string, styleUri: string, scriptUri: string): string {
+export function panelHtml(cspSource: string, styleUri: string, scriptUri: string, version = 'development', build = 'development'): string {
+  const safeVersion = version.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  const safeBuild = build.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
   const nonce = randomBytes(NONCE_BYTES).toString('base64');
   const speeds = SPEEDS.map(
     (s) => `<button type="button" role="menuitemradio" aria-checked="false" data-speed="${s}">${s.toFixed(1)}${SPEED_SUFFIX}</button>`,
@@ -61,6 +63,7 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
 <link rel="stylesheet" href="${styleUri}">
 <div class="app">
   <div class="settings-bar">
+    <span class="build-identity">v${safeVersion} - build ${safeBuild}</span>
     <button type="button" data-ui="settings" class="quiet" aria-label="Settings" aria-haspopup="dialog">Settings</button>
   </div>
   <dialog data-ui="settings-dialog" class="settings-dialog" aria-label="Settings">

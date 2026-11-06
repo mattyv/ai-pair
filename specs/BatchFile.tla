@@ -94,7 +94,8 @@ ActInFile(kind, namedAfter, looksIn) ==
 \* the cursor outside the file the batch named, and a `delete` with nothing
 \* selected (`no_selection`). Either edit drops the selection.
 ActAtCursor(kind, namedAfter) ==
-    IF \/ cursorFile = NoFile
+    IF \/ namedAfter = NoFile
+       \/ cursorFile = NoFile
        \/ CursorInNamed /\ namedAfter # NoFile /\ cursorFile # namedAfter
        \/ kind = "delete" /\ ~selected
     THEN Stop
@@ -151,16 +152,19 @@ Spec == Init /\ [][Next]_vars
 ActsInNamedFile == (actedIn # NoFile
                     /\ namedFile # NoFile) => (actedIn = namedFile)
 
-\* A `type` or `type_fast`, or a `delete` with a selection, with the cursor in
-\* the batch's file, or in a batch that named none, edits there. Code that
+\* A `type`, `type_fast`, `newline`, or a `delete` with a selection, with the
+\* cursor in the batch's named file, edits there. Code that
 \* rejected every edit would fail it, so it says something must happen.
 EditAtCursorProp ==
-    [][\A k \in {"type", "type_fast", "delete"} :
+    [][\A k \in {"type", "type_fast", "delete", "newline"} :
            (/\ Act(k, NoFile)
             /\ cursorFile # NoFile
-            /\ namedFile \in {cursorFile, NoFile}
+            /\ namedFile = cursorFile
             /\ k = "delete" => selected)
                => (~stopped' /\ edited' /\ actedIn' = cursorFile)]_vars
+
+\* Every edit names its target file before taking effect.
+EditRequiresNamed == edited => namedFile # NoFile
 
 \* Batches run out of actions only so that the model is finite (6.8). It
 \* prunes exactly the states a guard `actionsPlayed < MaxActions` on Act never

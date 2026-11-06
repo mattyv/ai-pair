@@ -10,6 +10,7 @@ import { mock } from 'vitest-mock-extended';
 import { MissingFile, samePath, withinFolder, type Controller } from '@ai-pair/core';
 import { LABEL_SEPARATOR } from '@ai-pair/core/constants';
 import { VsCodeEditor } from '../src/editor';
+import { pythonDiagnostic } from '../src/python_diagnostics';
 import { comfortable, glideTop, isOwnEdit, landing, row, viewport } from '../src/view';
 
 /** What the mocked modules share with the tests, made before the `vi.mock` factories run. */
@@ -180,6 +181,10 @@ const fakes = vi.hoisted(() => {
     }),
     applyEdit: vi.fn((edit: FakeWorkspaceEdit) => Promise.resolve(edit.replace.mock.calls.length > 0)),
     showTextDocument: vi.fn<(doc: FakeDocument, options: unknown) => Promise<void>>(() => Promise.resolve()),
+    diagnostics:
+      vi.fn<
+        () => Array<{ severity: number; message: string; source?: string; range: { start: { line: number }; end: { line: number } } }>
+      >(),
   };
 });
 
@@ -193,6 +198,8 @@ vi.mock('vscode', () => ({
   DecorationRangeBehavior: { ClosedClosed: 1 },
   EndOfLine: { LF: 1, CRLF: 2 },
   TextEditorRevealType: fakes.reveal,
+  DiagnosticSeverity: { Error: 0 },
+  languages: { getDiagnostics: fakes.diagnostics },
   window: {
     createTextEditorDecorationType: (options: InstanceType<typeof fakes.FakeDecorationType>['options']) => {
       const type = new fakes.FakeDecorationType(options);
@@ -248,6 +255,7 @@ vi.mock('../src/view', () => ({
   viewport: vi.fn(() => undefined),
 }));
 vi.mock('../src/terminal', () => ({ PairTerminals: fakes.FakeTerminals }));
+vi.mock('../src/python_diagnostics', () => ({ pythonDiagnostic: vi.fn() }));
 
 type FakeEditor = InstanceType<typeof fakes.FakeEditor>;
 type FakeDocument = InstanceType<typeof fakes.FakeDocument>;
@@ -387,6 +395,96 @@ afterEach(() => {
   fakes.created.edits.length = 0;
   fakes.created.terminals.length = 0;
   fakes.created.opened.length = 0;
+});
+
+describe('diagnostics', () => {
+  it('OnlyEdited, Advisory: returns bounded, deduplicated error snapshots with one-based ranges', async () => {
+    const { editor } = made();
+    const error = { severity: 0, message: 'Unexpected token', source: 'checker', range: { start: { line: 2 }, end: { line: 3 } } };
+    fakes.diagnostics.mockReturnValue([error, error, { ...error, severity: 1 }]);
+    expect(await editor.diagnostics(FILE)).toEqual({
+      diagnostics: [{ line: 3, endLine: 4, message: 'Unexpected token', source: 'checker' }],
+      warnings: ['VS Code diagnostics may be stale or unavailable.'],
+    });
+    expect(fakes.diagnostics).toHaveBeenCalledWith({ scheme: 'file', fsPath: FILE });
+    editor.dispose();
+  });
+
+  it('checks the captured Python text and discards a result when the file changes while checking', async () => {
+    const { editor } = made();
+    const doc = new fakes.FakeDocument('/project/a.py', 'old text');
+    doc.isDirty = true;
+    fakes.documents.push(doc);
+    fakes.diagnostics.mockReturnValue([]);
+    const pending = Promise.withResolvers<Awaited<ReturnType<typeof pythonDiagnostic>>>();
+    vi.mocked(pythonDiagnostic).mockReturnValueOnce(pending.promise);
+    const result = editor.diagnostics(doc.uri.fsPath);
+    await Promise.resolve();
+    await Promise.resolve();
+    doc.text = 'new text';
+    pending.resolve({ diagnostic: { line: 1, endLine: 1, message: 'old error', source: 'Python ast' } });
+    expect(await result).toEqual({
+      diagnostics: [],
+      warnings: [
+        'VS Code diagnostics may be stale or unavailable.',
+        'Python syntax check uses system python3, which may differ from the project interpreter.',
+        'Python syntax check discarded because the file changed while it ran.',
+      ],
+    });
+    editor.dispose();
+  });
+
+  it('caps the diagnostics in a report', async () => {
+    const { editor } = made();
+    fakes.diagnostics.mockReturnValue(
+      Array.from({ length: 60 }, (_, line) => ({
+        severity: 0,
+        message: String(line),
+        range: { start: { line }, end: { line } },
+      })),
+    );
+    expect((await editor.diagnostics(FILE)).diagnostics).toHaveLength(50);
+    editor.dispose();
+  });
+
+  it('still checks Python if VS Code diagnostics fail, and reports unavailable checks', async () => {
+    const { editor } = made();
+    const doc = new fakes.FakeDocument('/project/a.py', 'x = 1');
+    doc.isDirty = true;
+    fakes.documents.push(doc);
+    fakes.diagnostics.mockImplementation(() => {
+      throw new Error('provider failed');
+    });
+    vi.mocked(pythonDiagnostic).mockResolvedValueOnce({ warning: 'python unavailable' });
+    expect(await editor.diagnostics(doc.uri.fsPath)).toEqual({
+      diagnostics: [],
+      warnings: [
+        'VS Code diagnostics may be stale or unavailable.',
+        'VS Code diagnostics could not be read.',
+        'Python syntax check uses system python3, which may differ from the project interpreter.',
+        'python unavailable',
+      ],
+    });
+    editor.dispose();
+  });
+
+  it('returns Python syntax errors from an unchanged document and reports unreadable files', async () => {
+    const { editor } = made();
+    const doc = new fakes.FakeDocument('/project/a.py', 'def f(:');
+    doc.isDirty = true;
+    fakes.documents.push(doc);
+    fakes.diagnostics.mockReturnValue([]);
+    vi.mocked(pythonDiagnostic).mockResolvedValueOnce({
+      diagnostic: { line: 1, endLine: 1, message: 'invalid syntax', source: 'Python ast' },
+    });
+    expect((await editor.diagnostics(doc.uri.fsPath)).diagnostics).toEqual([
+      { line: 1, endLine: 1, message: 'invalid syntax', source: 'Python ast' },
+    ]);
+    expect((await editor.diagnostics('/project/missing.py')).warnings).toContain(
+      'Python syntax check unavailable because the file could not be read.',
+    );
+    editor.dispose();
+  });
 });
 
 describe('the decorations', () => {

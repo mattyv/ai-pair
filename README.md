@@ -96,8 +96,8 @@ session that adds a small API to an Express app, which it creates in
 agent (Claude Code, ...) ── stdio MCP ──▶ pair-mcp ── local WebSocket ──▶ VS Code extension
 ```
 
-The agent submits small batches of actions: say, move, select, type, delete,
-point, run. The extension plays them at a human pace and reports back exactly
+The agent submits small batches of actions: say, move, select, type, newline,
+delete, point, run. The extension plays them at a human pace and reports back exactly
 what happened, including everything you did in the meantime. The agent plans its
 next batch while you watch the current one, which hides most of its thinking
 time. And it's never more than one batch ahead, so your interruptions land
@@ -121,6 +121,18 @@ in the Extensions view, search for `@id:michalstrba.ai-pair`, or run:
 ```sh
 code --install-extension michalstrba.ai-pair
 ```
+
+For a build from this fork, open the [Build VSIX workflow](https://github.com/mattyv/ai-pair/actions/workflows/build-vsix.yml),
+choose a successful run for the branch you want, and download its `.vsix`
+artifact. Copy it to the Ubuntu host running VS Code and install it there:
+
+```sh
+code --install-extension /path/to/ai-pair-build.vsix
+```
+
+Reload the VS Code window and restart the agent after updating. The Pair panel
+shows the running version and build ID, so you can check what is actually
+loaded.
 
 To build it from source instead, you also need **Node.js 22.19 or newer**:
 

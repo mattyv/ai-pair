@@ -18,6 +18,9 @@ Track frustrations with the current tool and possible improvements.
     keeps making formatting mistakes while writing code and what would prevent
     them.
 
+1.  **Restore pair context after restart.** Investigate preserving and restoring
+    the pair conversation and session context across VS Code restarts.
+
 ## Future investigation: structural editing mistakes
 
 Claude's explanation of the bracket, newline and wrong-file mistakes is a

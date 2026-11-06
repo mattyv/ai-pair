@@ -13,6 +13,10 @@ import { setTimings, timings, type Timings } from './timings';
 import { Calibration } from './calibration';
 import { builtInPassage, type Passage } from './passage';
 
+/** Values compiled into this running bundle, not the extension currently on disk. */
+declare const AI_PAIR_VERSION: string;
+declare const AI_PAIR_BUILD_ID: string;
+
 /** Where a session waits across a reload, in the workspace's storage (#25). */
 const SAVED_SESSION = 'aiPair.session';
 /** Where the session's panel history waits across a reload, next to the session. */
@@ -125,6 +129,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     context.extensionUri,
     { controller: () => controller, calibration: () => calibration, starter },
     chatOrder,
+    { version: AI_PAIR_VERSION, build: AI_PAIR_BUILD_ID },
   );
   controller = new Controller(editor, panel);
   controller.trace = (line) => {

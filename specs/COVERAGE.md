@@ -24,12 +24,13 @@ Code goes without a spec for one of these reasons:
 | `snapshot`, `restore`, `withCursor`, `end`, `endSession`, `close` | `Controller`; `snapshot`'s edit events: `EditEvents`; a held rejection in `restore` and `snapshot`: `Anchor` (`Restore`, `TakeHeld`) |
 | `rehearse`, `rejectBatch`, `planned`, `saw`, `read` | `Rehearsal` |
 | `cursorAnchor`, `rejectUnanchored`, `anchorNeeded` in `step` and `snapshot` | `Anchor` |
+| `unnamedEdit` and its preflight in `step` | `BatchFile` (`EditRequiresNamed`) |
 | `interrupt`, `discard`, `interrupting`, `userInterrupt`, `userMessage` | `Controller` (`Interrupt`), `Actions` (`Interrupt`) |
 | `userEdit` | `EditorAdapter`, `Navigator` (the programmer's turn), `Player` (`TypeBefore`, `TypeAfter`: the interrupt in the agent's turn) |
 | `otherEdit`, `recordEdit` | `Reload`, `Rehearsal`, `EditEvents` |
 | `takeTurn`, `handBack`, `turn` | `Turns` |
 | `pause`, `resume`, `isPaused` | `Timeline`; `resume`'s `reveal`: `Scroll`, a stale point, and the reply's resume without one: `PointFocus` |
-| `kick`, `run`, `startHead` | `Controller` (`Play`), `Turns` (`StartHead`) |
+| `kick`, `run`, `startHead` | `Controller` (`Play`), `Turns` (`StartHead`); diagnostics after playback: `Diagnostics` (`Finish`) |
 | `confirm`, `decideRun` | `RunBox` (`Go`, `Decline`) |
 | `start`, `disconnect` | `Bridge`, `Resume` |
 | `resumeSession`, `open`, `saved`, `revive`, `isSuspended`, `onChange` | `Resume` |
@@ -114,6 +115,7 @@ Code goes without a spec for one of these reasons:
 | Functions | Spec |
 |---|---|
 | `edit`, `save`, `onChange`, `byProgrammer`, `track` | `EditorAdapter` |
+| `diagnostics` | `Diagnostics`: advisory observations; stale source and provider availability are checked in the adapter |
 | `getText`, `document`, `openDocument`, `exists`, `show`, `create`, `isDirty` | `FileText` |
 | `show`, `selfNav`, `navigating`, `onActiveEditor` | `FollowMode` |
 | `renderCursor`, `reveal`, `follow`, `keepInView`, `scroll`, `glide`, `onScroll` | `Scroll`; `onScroll`'s pause: `Timeline` |
@@ -146,6 +148,7 @@ Code goes without a spec for one of these reasons:
 | `outside.ts`, `outside_watch.ts` | all | `Outside` |
 | `terminal.ts` | all | `Terminals` |
 | `view.ts` | `comfortable`, `landing`, `glideTop` | Pure; `Scroll` models `comfortable` and `landing` |
+| `python_diagnostics.ts` | `pythonDiagnostic` | `Diagnostics`: bounded advisory check, with Python parsing source on stdin |
 | | `row`, `viewport`, `isOwnEdit` | Pure |
 | `output.ts` | `outcomeOf`, `push` | Pure: a command's output, cut to size |
 | `agents.ts` | all | Pure, Glue: agents' config files; `agents.test.ts` |

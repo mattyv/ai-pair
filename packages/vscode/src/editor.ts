@@ -13,6 +13,8 @@ import {
   type CommandOutcome,
   type Controller,
   type CursorView,
+  type DiagnosticCheck,
+  type EditorDiagnostic,
   type EditOptions,
   type EditorPort,
   type Focus,
@@ -23,6 +25,7 @@ import {
 import { timings } from './timings';
 import { comfortable, glideTop, isOwnEdit, landing, row, viewport, type Lines } from './view';
 import { PairTerminals } from './terminal';
+import { pythonDiagnostic } from './python_diagnostics';
 
 interface OwnEdit {
   offset: number;
@@ -48,6 +51,9 @@ const SOFT = 0.8;
 
 /** A shared selection is cut off here; the agent can `read` the rest. */
 const MAX_EXCERPT = 8000;
+/** Bounds diagnostics sent in a report. */
+const MAX_DIAGNOSTICS = 50;
+const MAX_DIAGNOSTIC_MESSAGE = 1000;
 
 function cursorDecoration(color: string, style: string, opacity: number) {
   return vscode.window.createTextEditorDecorationType({
@@ -81,6 +87,50 @@ const READ_TEXT = 'var(--vscode-aiPair-cursorReadForeground)';
 
 /** The controller's editor, over VS Code's API: documents, cursors, decorations, scrolling, and saves. */
 export class VsCodeEditor implements EditorPort, vscode.Disposable {
+  /** Reads current VS Code errors and checks Python syntax without executing the source. */
+  async diagnostics(file: string): Promise<DiagnosticCheck> {
+    const diagnostics: EditorDiagnostic[] = [];
+    const warnings = ['VS Code diagnostics may be stale or unavailable.'];
+    const seen = new Set<string>();
+    function add(item: EditorDiagnostic): void {
+      const bounded = { ...item, message: item.message.slice(0, MAX_DIAGNOSTIC_MESSAGE) };
+      const key = JSON.stringify(bounded);
+      if (!seen.has(key) && diagnostics.length < MAX_DIAGNOSTICS) {
+        seen.add(key);
+        diagnostics.push(bounded);
+      }
+    }
+    try {
+      for (const item of vscode.languages.getDiagnostics(vscode.Uri.file(file))) {
+        if (item.severity === vscode.DiagnosticSeverity.Error) {
+          add({
+            line: item.range.start.line + 1,
+            endLine: item.range.end.line + 1,
+            message: item.message,
+            ...(item.source === undefined ? {} : { source: item.source.slice(0, MAX_DIAGNOSTIC_MESSAGE) }),
+          });
+        }
+      }
+    } catch {
+      warnings.push('VS Code diagnostics could not be read.');
+    }
+    if (file.toLowerCase().endsWith('.py')) {
+      warnings.push('Python syntax check uses system python3, which may differ from the project interpreter.');
+      try {
+        const text = await this.getText(file);
+        const checked = await pythonDiagnostic(text);
+        if ((await this.getText(file)) !== text) {
+          warnings.push('Python syntax check discarded because the file changed while it ran.');
+        } else {
+          if (checked.diagnostic !== undefined) add(checked.diagnostic);
+          if (checked.warning !== undefined) warnings.push(checked.warning);
+        }
+      } catch {
+        warnings.push('Python syntax check unavailable because the file could not be read.');
+      }
+    }
+    return { diagnostics, warnings };
+  }
   /** The programmer's selection changed: what the panel offers to send along with a reply. */
   onSelection?: (ref: Ref | undefined) => void;
   private lastEditor?: vscode.TextEditor;

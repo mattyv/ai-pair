@@ -118,10 +118,10 @@ const actionSchema = z.union(
                 `A spot: the exact text around it, with ${CURSOR_MARKER} where your cursor goes, e.g. \`"import { ${CURSOR_MARKER}type Context"\` for right before \`type Context\`. May span lines. Enough text to fit only one place on the line.`,
               ),
             to: z
-              .enum(['line_end'])
+              .enum(['line_end', 'next_close'])
               .optional()
               .describe(
-                "Instead of a spot: `line_end`, the end of the line. Only that: it steps past a close you typed only if that close is on this line. A block's closing brace, below its body, isn't on your cursor's line.",
+                "Instead of a spot: `next_close` steps over exactly one adjacent close with no file or line; `line_end` goes to the end of the line. It steps past a close you typed only if that close is on this line. A block's closing brace, below its body, isn't on your cursor's line.",
               ),
           },
           // zod reports unrecognized keys only on an object it matched to this schema.
@@ -150,6 +150,11 @@ const actionSchema = z.union(
       type_fast: typeText.describe(
         "Like `type`, several times faster, for text the programmer doesn't need to read: imports, config, boilerplate. Only the speed changes: closes still come first.",
       ),
+    }),
+    action({
+      newline: z
+        .strictObject({ indent: z.string().regex(/^[\t ]+$/) })
+        .describe('Split an adjacent matching pair in Python or JSON code, placing the cursor on an indented new line.'),
     }),
     action({ delete: z.literal(true).describe('Delete the current selection; `select` first.') }),
     action({

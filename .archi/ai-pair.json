@@ -2,9 +2,9 @@
   "version": 1,
   "bundleId": "277c3415-7b74-4008-8be4-8c14ae6d41dd",
   "revision": {
-    "number": 3,
-    "updatedAt": "2026-10-25T01:08:41.000Z",
-    "summary": "Tour for VS Code integration views"
+    "number": 4,
+    "updatedAt": "2026-11-06T00:00:00.000Z",
+    "summary": "Structural typing safety, diagnostics, runtime identity and VSIX delivery"
   },
   "diagrams": [
     {
@@ -643,7 +643,8 @@
               "packages/core/src/timing.ts",
               "packages/core/src/typing.ts",
               "packages/core/src/text.ts",
-              "packages/core/src/ports.ts"
+              "packages/core/src/ports.ts",
+              "packages/core/src/structural_typing.ts"
             ],
             "group": "session",
             "x": 179.5,
@@ -1127,12 +1128,22 @@
               "id": "n-architecturecontroller",
               "text": "Owns the pairing session: its turn, queue of work, history, and reports. It never touches VS Code directly, so it can be tested with a fake editor.",
               "ts": 0
+            },
+            {
+              "id": "update-20261106-architecture-controller",
+              "text": "Playback fences a batch to its declared file. After edited files finish, diagnostics are advisory: VS Code errors can be stale, and Python syntax is checked with system python3, which can differ from the project interpreter.",
+              "ts": 0
             }
           ],
           "player": [
             {
               "id": "n-architectureplayer",
               "text": "Plays queued work at human pace. It also dry-runs each batch first so mistakes surface immediately.",
+              "ts": 0
+            },
+            {
+              "id": "update-20261106-architecture-player",
+              "text": "Explicit structural newline splits an adjacent matching pair only in supported Python or JSON code. The lexical scan treats strings and comments conservatively; it is not a Python grammar parser.",
               "ts": 0
             }
           ],
@@ -1903,7 +1914,8 @@
               "packages/core/src/player.ts",
               "packages/core/src/typing.ts",
               "packages/core/src/timeline.ts",
-              "packages/core/src/timing.ts"
+              "packages/core/src/timing.ts",
+              "packages/core/src/structural_typing.ts"
             ],
             "group": "play",
             "x": 757,
@@ -2155,6 +2167,11 @@
               "id": "n-batch-rehearsal-and-playbackperform",
               "text": "Actions play one by one at human pace, including typing rhythm and reading pauses.",
               "ts": 0
+            },
+            {
+              "id": "update-20261106-batch-rehearsal-and-playback-perform",
+              "text": "Explicit structural newline acts only between matching adjacent delimiters in supported code; unsafe or ambiguous lexical contexts are refused. The batch file fence prevents an action from editing another file.",
+              "ts": 0
             }
           ],
           "interrupted": [
@@ -2168,6 +2185,11 @@
             {
               "id": "n-batch-rehearsal-and-playbackfinish",
               "text": "Edited files are saved, and the resulting code is captured for the report.",
+              "ts": 0
+            },
+            {
+              "id": "update-20261106-batch-rehearsal-and-playback-finish",
+              "text": "Edited files are checked after playback. Editor diagnostics and the separate Python syntax check are advisory and can be unavailable or stale; neither is a grammar guarantee for structural newline.",
               "ts": 0
             }
           ],
@@ -8764,7 +8786,8 @@
             "id": "editorts",
             "label": "Editor adapter\nVsEditor",
             "files": [
-              "packages/vscode/src/editor.ts"
+              "packages/vscode/src/editor.ts",
+              "packages/vscode/src/python_diagnostics.ts"
             ],
             "group": "ext",
             "x": 800,
@@ -9671,6 +9694,11 @@
               "id": "c9",
               "text": "Start here: this is where VS Code switches AI Pair on and connects its parts. Activates on onStartupFinished (package.json); that event fires after * extensions finish (abstractExtensionService.ts:426). The relay finds this window by workspace folder, not through VS Code. Verified by reading both repos.",
               "ts": 1792890521753
+            },
+            {
+              "id": "update-20261106-vscode-integration-extts",
+              "text": "Activation passes the bundled version and build identity to the runtime so the running extension can be identified separately from an installed package.",
+              "ts": 0
             }
           ],
           "__diagram__": [
@@ -9678,6 +9706,13 @@
               "id": "c0",
               "text": "Design constraints from VS Code that shape AI Pair: (1) a separate extension-host process behind an RPC seam, so edits and cursor moves are async and racy with the programmer; (2) only public vscode API is used, no workbench internals; (3) the panel is a webview in the secondary sidebar and has no access to editors; (4) terminal results depend on shell integration. Verified by reading code in ../vscode-main and packages/vscode.",
               "ts": 1792890521753
+            }
+          ],
+          "editorts": [
+            {
+              "id": "update-20261106-vscode-integration-editorts",
+              "text": "Collects advisory VS Code diagnostics and a separate system-python3 syntax check after edits. The system interpreter can differ from the project interpreter; stale or unavailable checks are reported.",
+              "ts": 0
             }
           ]
         }
@@ -9779,6 +9814,94 @@
             }
           ]
         }
+      }
+    },
+    {
+      "id": "build-and-delivery",
+      "name": "Build and delivery",
+      "type": "flow",
+      "doc": {
+        "type": "flow",
+        "nodes": [
+          {
+            "id": "source",
+            "label": "GitHub source",
+            "files": [
+              ".github/workflows/build-vsix.yml"
+            ],
+            "x": 40,
+            "y": 40,
+            "step": 1
+          },
+          {
+            "id": "ci",
+            "label": "Build VSIX on CI",
+            "files": [
+              ".github/workflows/build-vsix.yml",
+              "packages/vscode/package.json"
+            ],
+            "x": 40,
+            "y": 180,
+            "step": 2
+          },
+          {
+            "id": "artifact",
+            "label": "VSIX artifact",
+            "files": [
+              ".github/workflows/build-vsix.yml"
+            ],
+            "x": 40,
+            "y": 320,
+            "step": 3
+          },
+          {
+            "id": "host",
+            "label": "Ubuntu host",
+            "files": [],
+            "x": 40,
+            "y": 460,
+            "step": 4
+          },
+          {
+            "id": "runtime",
+            "label": "Verify build ID",
+            "files": [
+              "packages/vscode/src/extension.ts"
+            ],
+            "x": 40,
+            "y": 600,
+            "step": 5
+          }
+        ],
+        "edges": [
+          {
+            "from": "source",
+            "to": "ci"
+          },
+          {
+            "from": "ci",
+            "to": "artifact"
+          },
+          {
+            "from": "artifact",
+            "to": "host",
+            "label": "download VSIX"
+          },
+          {
+            "from": "host",
+            "to": "runtime"
+          }
+        ],
+        "comments": {
+          "__diagram__": [
+            {
+              "id": "d-build-and-delivery",
+              "text": "GitHub Actions builds a VSIX on Ubuntu and uploads an artifact named with its version and commit. Download and install it on the target Ubuntu host, reload VS Code, and check the running build identity.",
+              "ts": 0
+            }
+          ]
+        },
+        "groups": []
       }
     }
   ],

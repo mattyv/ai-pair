@@ -11,3 +11,11 @@ Explain material delays or uncertainty, and do not report completion until
 implementation, review, and verification are finished.
 
 Read `CLAUDE.md` for the repository's additional development guidance.
+
+Record material technical and product choices in `DECISIONS.md`, including
+their rationale and important limitations. Update the record when a choice
+changes; do not treat it as a substitute for the issue's working notes.
+
+Keep the Archi architecture current: when a change materially affects the
+architecture, update the `.archi` source model and generated architecture
+exports in the same change, and record how they were verified.

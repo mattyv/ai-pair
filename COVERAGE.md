@@ -33,6 +33,7 @@ Last updated: css, 2026-11-06.
 | `packages/core/src/player.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 99.4% F 100.0% | - | - | - | - |
 | `packages/core/src/ports.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/rehearsal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/core/src/structural_typing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/core/src/text.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/timeline.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.7% F 100.0% | - | - | - | - |
 | `packages/core/src/timing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
@@ -46,6 +47,7 @@ Last updated: css, 2026-11-06.
 | `packages/core/test/player.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/rehearsal.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/session.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
+| `packages/core/test/structural_typing.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/core/test/text.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/timeline.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/timing.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -94,11 +96,12 @@ Last updated: css, 2026-11-06.
 | `packages/vscode/src/panel_html.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 80.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/panel_messages.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
 | `packages/vscode/src/passage.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/vscode/src/python_diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 83.8% B 84.2% F 83.3% | - | - | - | - |
 | `packages/vscode/src/terminal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.3% B 98.1% F 92.3% | - | - | - | - |
 | `packages/vscode/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/view.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 88.0% F 100.0% | - | - | - | - |
-| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 121 of 121 rules matched |
+| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 122 of 122 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/test/agents.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/calibration.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -117,6 +120,8 @@ Last updated: css, 2026-11-06.
 | `packages/vscode/test/panel.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/panel_html.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/passage.test.ts` | TypeScript | test | test | test | test | - | test |
+| `packages/vscode/test/python_diagnostics.e2e.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/python_diagnostics.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/setup.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/terminal.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/timings.test.ts` | TypeScript | test | test | test | test | - | test |
@@ -150,10 +155,14 @@ Last updated: css, 2026-11-06.
 | `specs/BatchFile.tla` | TLA+ | - | - | 4 of 4 actions | - | - | - |
 | `specs/Bridge.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Bridge.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
+| `specs/BuildIdentity.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/BuildIdentity.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/Calibration.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Calibration.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
 | `specs/Controller.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Controller.tla` | TLA+ | - | - | 17 of 17 actions | - | - | - |
+| `specs/Diagnostics.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/Diagnostics.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
 | `specs/Discovery.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Discovery.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/Discovery_InPlace.cfg` | TLC config | - | - | - | - | - | - |
@@ -204,6 +213,8 @@ Last updated: css, 2026-11-06.
 | `specs/Serialize.tla` | TLA+ | - | - | 13 of 13 actions | - | - | - |
 | `specs/Start.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Start.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
+| `specs/StructuralTyping.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/StructuralTyping.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/Terminals.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Terminals.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
 | `specs/Timeline.cfg` | TLC config | - | - | - | - | - | - |

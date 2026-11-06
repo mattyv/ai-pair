@@ -364,3 +364,32 @@ describe('every field', () => {
     }
   });
 });
+
+it('reports advisory warnings and error diagnostics without claiming the batch failed', () => {
+  const text = renderReport(
+    report({
+      batches: [
+        {
+          id: 1,
+          status: 'completed',
+          warnings: ['Multiple closing brackets were crossed.'],
+          diagnostics: [{ file: 'a.py', line: 3, endLine: 4, message: 'Expected expression', source: 'Python' }],
+        },
+      ],
+    }),
+    'step',
+  );
+  expect(text).toContain('Batch 1 completed');
+  expect(text).toContain('Multiple closing brackets were crossed.');
+  expect(text).toContain('a.py:3-4');
+  expect(text).toContain('Expected expression');
+  expect(text).toContain('Python');
+});
+
+it('renders a single-line diagnostic without a provider name', () => {
+  const text = renderReport(
+    report({ batches: [{ id: 2, status: 'completed', diagnostics: [{ file: 'a.py', line: 3, endLine: 3, message: 'Invalid syntax' }] }] }),
+    'step',
+  );
+  expect(text).toContain('a.py:3: Invalid syntax');
+});

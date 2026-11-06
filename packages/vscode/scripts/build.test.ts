@@ -6,7 +6,9 @@ import * as esbuild from 'esbuild';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 vi.mock('node:fs', () => ({ copyFileSync: vi.fn(), readFileSync: vi.fn(), rmSync: vi.fn() }));
-vi.mock('esbuild', () => ({ build: vi.fn(() => Promise.resolve({})) }));
+vi.mock('esbuild', () => ({
+  build: vi.fn(() => Promise.resolve({ outputFiles: [{ path: '/dist/extension.js', contents: Buffer.from('extension') }] })),
+}));
 
 /** Runs the script, as `npm run build` does, with `args`. */
 async function built(args: readonly string[] = []): Promise<void> {
@@ -44,8 +46,9 @@ it('bundles the extension, the page script, the page styles, and the relay, with
     logLevel: 'warning',
     mainFields: ['module', 'main'],
   };
+  const buildId = builds().at(-1)?.define?.AI_PAIR_BUILD_ID;
+  expect(buildId).toMatch(/^"[a-f0-9]{16}"$/);
   expect(builds()).toEqual([
-    { ...common, entryPoints: ['src/extension.ts'], external: ['vscode'], outfile: 'dist/extension.js' },
     {
       bundle: true,
       platform: 'browser',
@@ -65,6 +68,21 @@ it('bundles the extension, the page script, the page styles, and the relay, with
       define: { AI_PAIR_VERSION: '"1.2.3"' },
       outfile: 'dist/relay.js',
     },
+    {
+      ...common,
+      entryPoints: ['src/extension.ts'],
+      external: ['vscode'],
+      outfile: 'dist/extension.js',
+      define: { AI_PAIR_VERSION: '"1.2.3"', AI_PAIR_BUILD_ID: '"pending"' },
+      write: false,
+    },
+    {
+      ...common,
+      entryPoints: ['src/extension.ts'],
+      external: ['vscode'],
+      outfile: 'dist/extension.js',
+      define: { AI_PAIR_VERSION: '"1.2.3"', AI_PAIR_BUILD_ID: buildId },
+    },
   ]);
 });
 
@@ -83,6 +101,27 @@ it('refuses a manifest without a version string, before bundling the relay', asy
     vi.mocked(esbuild.build).mockClear();
     vi.mocked(fs.readFileSync).mockReturnValue(manifest);
     await expect(built()).rejects.toThrow('package.json has no version.');
-    expect(esbuild.build).toHaveBeenCalledTimes(3);
+    expect(esbuild.build).toHaveBeenCalledTimes(2);
   }
+});
+
+it('uses a stable build ID that changes with bundled content', async () => {
+  await built();
+  const first = builds().at(-1)?.define?.AI_PAIR_BUILD_ID;
+  vi.mocked(esbuild.build).mockClear();
+  await built();
+  expect(builds().at(-1)?.define?.AI_PAIR_BUILD_ID).toBe(first);
+  vi.mocked(esbuild.build).mockClear();
+  vi.mocked(fs.readFileSync).mockReturnValue('changed bundle bytes');
+  vi.mocked(fs.readFileSync).mockReturnValueOnce(JSON.stringify({ version: '1.2.3' }));
+  await built();
+  expect(builds().at(-1)?.define?.AI_PAIR_BUILD_ID).not.toBe(first);
+});
+
+it('distinguishes production and development builds of the same inputs', async () => {
+  await built();
+  const development = builds().at(-1)?.define?.AI_PAIR_BUILD_ID;
+  vi.mocked(esbuild.build).mockClear();
+  await built(['--production']);
+  expect(builds().at(-1)?.define?.AI_PAIR_BUILD_ID).not.toBe(development);
 });

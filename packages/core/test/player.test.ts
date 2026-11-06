@@ -12,6 +12,8 @@ import { defaultConfig, type Config } from '../src/config';
 import type { LineIds, Sighting } from '../src/lines';
 import { resolveSpan, resolveSpot, spanCandidates, spotCandidates } from '../src/places';
 import { agentPath, displayPath, Player, spanText, transformScene, type Scene, type Stage } from '../src/player';
+import { structuralNewline } from '../src/structural_typing';
+import { position } from '../src/text';
 import type { CommandOutcome, PanelEvent, PanelPort, PlayerEditor } from '../src/ports';
 import type { Pacing } from '../src/timeline';
 
@@ -77,6 +79,7 @@ vi.mock(import('@ai-pair/protocol'), async (importOriginal) => {
     withinFolder: vi.fn((folder: string, file: string) => (file.startsWith(`${folder}/`) ? file : undefined)),
   };
 });
+vi.mock('../src/structural_typing', () => ({ structuralNewline: vi.fn() }));
 vi.mock('../src/places', () => ({
   resolveSpan: vi.fn(),
   resolveSpot: vi.fn(),
@@ -910,4 +913,104 @@ describe('the batch after an interrupt', () => {
       { say: 'x' },
     ]);
   });
+});
+
+describe('structural typing', () => {
+  it('StepOne, StepActs: steps past exactly one adjacent close and refuses any other character', async () => {
+    const h = harness({ files: { 'a.ts': 'f(x))' }, scene: { cursor: { file: A, offset: 3 } } });
+    // The type is added with the protocol change; this test first runs against the old protocol.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const step = { move: { to: 'next_close' } } as unknown as Action;
+    expect((await played(h, [step])).result.status).toBe('completed');
+    expect(h.scene.cursor?.offset).toBe(4);
+    h.scene.cursor = { file: A, offset: 0 };
+    expect((await played(h, [step])).result.error?.kind).toBe('invalid_action');
+  });
+
+  it('NewlineActs: inserts a structural newline inside a Python pair', async () => {
+    const file = path.join(ROOT, 'a.py');
+    const h = harness({ files: { 'a.py': 'x = {}' }, scene: { cursor: { file, offset: 5 } } });
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const newline = { newline: { indent: '    ' } } as unknown as Action;
+    vi.mocked(structuralNewline).mockReturnValue({ before: '\n    ', after: '\n' });
+    expect((await played(h, [newline])).result.status).toBe('completed');
+    expect(h.files.get(file)).toBe('x = {\n    \n}');
+    expect(h.scene.cursor?.offset).toBe(10);
+  });
+});
+
+it('advises when line_end crosses multiple adjacent closes, without blocking it', async () => {
+  const h = harness({ files: { 'a.ts': 'f(x))' }, scene: { cursor: { file: A, offset: 3 } } });
+  const result = (await played(h, [{ move: { to: 'line_end' } }])).result;
+  expect(result.status).toBe('completed');
+  expect(result.warnings).toHaveLength(1);
+  expect(h.scene.cursor?.offset).toBe(5);
+});
+
+describe('structural action edge cases', () => {
+  it('RefusalSafe: refuses stepping without a cursor or with a selection', async () => {
+    const noCursor = harness();
+    expect((await played(noCursor, [{ move: { to: 'next_close' } }])).result.error?.kind).toBe('no_cursor');
+    const selected = harness({ files: { 'a.ts': '()' }, scene: { cursor: { file: A, offset: 1 }, selection: { start: 0, end: 1 } } });
+    expect((await played(selected, [{ move: { to: 'next_close' } }])).result.error?.kind).toBe('invalid_action');
+    expect(selected.scene.cursor?.offset).toBe(1);
+  });
+
+  it('NewlineSafe, RefusalSafe: refuses newline without a cursor, with a selection, or in an unsafe context', async () => {
+    const newline: Action = { newline: { indent: '  ' } };
+    expect((await played(harness(), [newline])).result.error?.kind).toBe('no_cursor');
+    const selected = harness({
+      files: { 'a.py': '{}' },
+      scene: { cursor: { file: path.join(ROOT, 'a.py'), offset: 1 }, selection: { start: 0, end: 1 } },
+    });
+    expect((await played(selected, [newline])).result.error?.kind).toBe('invalid_action');
+    const unsafe = harness({ files: { 'a.py': '{}' }, scene: { cursor: { file: path.join(ROOT, 'a.py'), offset: 1 } } });
+    expect((await played(unsafe, [newline])).result.error?.kind).toBe('invalid_action');
+    expect(unsafe.editor.edit).not.toHaveBeenCalled();
+  });
+
+  it('returns only the literal remainder if a structural newline is interrupted after a chunk', async () => {
+    const file = path.join(ROOT, 'a.py');
+    const h = harness({ files: { 'a.py': '{}' }, scene: { cursor: { file, offset: 1 } } });
+    vi.mocked(structuralNewline).mockReturnValue({ before: '\n  ', after: '\n' });
+    h.pacing.sleep.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    const result = (await played(h, [{ newline: { indent: '  ' } }])).result;
+    expect(result.status).toBe('interrupted');
+    expect(result.unplayed).toEqual([{ type: `  ${CURSOR_MARKER}\n` }]);
+    expect(h.files.get(file)).toBe('{\n}');
+  });
+
+  it('converts newlines to the document EOL and reports only successful edits', async () => {
+    const file = path.join(ROOT, 'a.py');
+    const h = harness({ files: { 'a.py': '{}' }, scene: { cursor: { file, offset: 1 } } });
+    h.editor.eol.mockResolvedValue('\r\n');
+    vi.mocked(structuralNewline).mockReturnValue({ before: '\n  ', after: '\n' });
+    const outcome = await h.player.play(1, [{ newline: { indent: '  ' } }]);
+    expect(h.files.get(file)).toBe('{\r\n  \r\n}');
+    expect(h.scene.cursor?.offset).toBe(5);
+    expect(outcome.editedFiles).toEqual([file]);
+  });
+
+  it('does not warn for a single close or when code follows the closes', async () => {
+    for (const text of ['f(x)', 'f(x));']) {
+      const h = harness({ files: { 'a.ts': text }, scene: { cursor: { file: A, offset: 3 } } });
+      expect((await played(h, [{ move: { to: 'line_end' } }])).result.warnings).toBeUndefined();
+    }
+  });
+});
+
+it('refuses a close step if the cursor moves to another file while resolving its position', async () => {
+  const h = harness({ files: { 'a.ts': '()' }, scene: { cursor: { file: A, offset: 1 } } });
+  vi.mocked(position).mockImplementationOnce(() => {
+    h.scene.cursor = { file: B, offset: 0 };
+    return { line: 1, column: 2 };
+  });
+  const result = await played(h, [{ move: { to: 'next_close' } }]);
+  expect(result.result.error?.kind).toBe('invalid_action');
+});
+
+it('refuses next_close at the end of a file without moving the cursor', async () => {
+  const h = harness({ files: { 'a.ts': '()' }, scene: { cursor: { file: A, offset: 2 } } });
+  expect((await played(h, [{ move: { to: 'next_close' } }])).result.error?.kind).toBe('invalid_action');
+  expect(h.scene.cursor?.offset).toBe(2);
 });
