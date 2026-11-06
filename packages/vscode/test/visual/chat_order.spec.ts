@@ -61,11 +61,21 @@ async function load(page: Page): Promise<(event: object) => Promise<void>> {
   });
   await page.goto(`${ORIGIN}/`);
   return async (event) => {
-    await page.evaluate((data) => {
-      // The browser global is the window; this file is typed without the DOM library.
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      (globalThis as unknown as { postMessage(message: unknown, origin: string): void }).postMessage(data, '*');
-    }, event);
+    await page.evaluate(
+      (data) =>
+        new Promise<void>((resolve) => {
+          // This listener runs after the panel's message listener, so awaiting it
+          // waits for delivery rather than merely scheduling postMessage.
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          const target = globalThis as unknown as {
+            addEventListener(type: string, listener: () => void, options: { once: boolean }): void;
+            postMessage(message: unknown, origin: string): void;
+          };
+          target.addEventListener('message', () => resolve(), { once: true });
+          target.postMessage(data, '*');
+        }),
+      event,
+    );
   };
 }
 
