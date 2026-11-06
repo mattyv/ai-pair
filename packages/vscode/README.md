@@ -99,7 +99,9 @@ pair on..."). In Claude Code you can also run `/mcp__pair__start`.
 -   **Look around:** scrolling or switching files pauses playback. **Resume**
     brings you back.
 -   **My turn / Hand back:** write a part yourself while the agent navigates.
--   **The speed menu (1.0x):** the pace, from 0.4x to 3.0x.
+-   **The speed menu (1.0x):** the pace, from 0.4x to 3.0x, and the code
+    display: Typing, Lines, or Blocks. The choice takes effect with the next
+    typing action. Lines and Blocks highlight each group and pause for reading.
 -   **The reading menu (read 1.0x):** the pause after each message, from 0.4x to
     3.0x. Click the reading ring to finish early, or hold it to pause the
     countdown until release. Focus it and use Space for the same behavior.
@@ -126,6 +128,8 @@ and the reply box at the bottom. Your choice is saved across reloads.
     empty, the built-in one.
 -   `aiPair.agentName`: the name on the agent's cursor.
 -   `aiPair.timing`: fine-tune any typing, pause, or glide duration.
+-   `aiPair.codePlayback`: `typing` (default), `lines`, or `blocks`; also in
+    the speed menu. Changes apply to the next typing action.
 -   `aiPair.showTerminalsAutomatically`: show command terminals automatically
     (off by default; also in Pair Settings).
 -   `aiPair.confirmCommands`: ask before each command the agent runs in the

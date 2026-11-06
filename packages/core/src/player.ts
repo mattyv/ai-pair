@@ -665,10 +665,12 @@ export class Player {
     const { timing, random } = this.stage.config();
     const scale = fast ? timing.fastFactor : 1;
     const mode = this.stage.codePlayback();
-    const chunks = groupTyping(planTyping(before + after, timing.type, isLineStart(doc, insertAt), random, scale), mode);
+    const atoms = planTyping(before + after, timing.type, isLineStart(doc, insertAt), random, scale);
+    const chunks = groupTyping(atoms, mode);
 
     if (chunks.length === 0 && scene.selection) chunks.push({ text: '', delay: 0 });
     let typed = '';
+    let atomIndex = 0;
     for (const [i, chunk] of chunks.entries()) {
       // specs/Actions.tla, `StopAtCheck`: cut after a chunk, it returns only what's left of it.
       if (!(await this.delay(chunk.delay))) {
@@ -684,15 +686,47 @@ export class Player {
       const deleteLength = scene.selection ? scene.selection.end - scene.selection.start : 0;
       // Move the cursor before awaiting, so programmer edits arriving meanwhile transform the right position.
       cursor.offset = start + insert.length;
+      if (mode !== 'typing' && i === chunks.length - 1 && after !== '') {
+        // specs/PlaybackAnchor.tla, UserEdit: the final marker is live before
+        // awaiting the edit, so programmer changes transform it in place.
+        const remainingBefore = before.length - typed.length;
+        if (remainingBefore >= 0) {
+          const prefix = chunk.text.slice(0, remainingBefore);
+          cursor.offset = start + (eol === '\n' ? prefix.length : prefix.replaceAll('\n', eol).length);
+        } else {
+          const alreadyAfter = typed.slice(before.length);
+          cursor.offset = start - (eol === '\n' ? alreadyAfter.length : alreadyAfter.replaceAll('\n', eol).length);
+        }
+      }
       scene.selection = undefined;
       const change = { offset: start, deleteLength, text: insert };
       this.touch(playing, cursor.file, change);
-      await this.edit(cursor.file, change, {
-        undoStopBefore: i === 0,
-        undoStopAfter: i === chunks.length - 1,
-      });
+      const options = { undoStopBefore: i === 0, undoStopAfter: i === chunks.length - 1 };
+      if (mode === 'typing' || chunk.text === '') {
+        await this.edit(cursor.file, change, options);
+      } else {
+        // specs/LineIdentity.tla, ApplyChange: follow the same atomic edits as typing,
+        // even though VS Code receives the whole visible group in one edit.
+        let grouped = '';
+        let offset = start;
+        let remainingDelete = deleteLength;
+        while (grouped.length < chunk.text.length) {
+          // Each group is made from consecutive atoms of this dense plan.
+          // oxlint-disable-next-line typescript/no-non-null-assertion -- the group consists of these atoms
+          const atom = atoms[atomIndex++]!;
+          const text = eol === '\n' ? atom.text : atom.text.replaceAll('\n', eol);
+          this.stage.lines.apply(cursor.file, { offset, deleteLength: remainingDelete, text });
+          offset += text.length;
+          remainingDelete = 0;
+          grouped += atom.text;
+        }
+        await editor.edit(cursor.file, start, deleteLength, insert, options);
+      }
       playing.editedFiles.add(cursor.file);
       typed += chunk.text;
+      if (mode !== 'typing' && chunk.text !== '') {
+        this.stage.editor.renderCodeReading?.({ file: cursor.file, start, end: start + insert.length });
+      }
       this.follow();
       if (mode !== 'typing' && chunk.text !== '') {
         // specs/CodePlayback.tla, Insert and Finish: read each inserted group before the next.
@@ -700,7 +734,6 @@ export class Player {
         this.reading = true;
         this.readingId = nextReadingId++;
         panelForCode(this.stage.panel, ms, this.readingId);
-        this.stage.editor.renderCodeReading?.({ file: cursor.file, start, end: start + insert.length });
         this.stage.render();
         const completed = await this.stage.pacing.sleep(ms);
         this.stage.editor.renderCodeReading?.(undefined);
@@ -709,12 +742,12 @@ export class Player {
         this.stage.render();
         if (!completed) {
           if (typed.length < before.length + after.length) {
-            const rest = typed.length <= before.length
-              ? before.slice(typed.length) + CURSOR_MARKER + after
-              : CURSOR_MARKER + after.slice(typed.length - before.length);
+            const rest =
+              typed.length <= before.length
+                ? before.slice(typed.length) + CURSOR_MARKER + after
+                : CURSOR_MARKER + after.slice(typed.length - before.length);
             return { kind: 'interrupted', rest: fast ? { type_fast: rest } : { type: rest } };
           }
-          if (after !== '') cursor.offset -= eol === '\n' ? after.length : after.replaceAll('\n', eol).length;
           return { kind: 'interrupted', consumed: true };
         }
       }
@@ -723,7 +756,7 @@ export class Player {
       // Into the pair just closed: a move within sight, so the same beat before it, and pause after,
       // as one. Interrupted, it still steps back: all of the text was typed.
       await this.delay(timing.beforeMoveMs * scale);
-      cursor.offset -= eol === '\n' ? after.length : after.replaceAll('\n', eol).length;
+      if (mode === 'typing') cursor.offset -= eol === '\n' ? after.length : after.replaceAll('\n', eol).length;
       this.follow();
       await this.delay(timing.afterMoveNearMs * scale);
     }

@@ -36,7 +36,9 @@ Init == /\ pos = 0 /\ inserted = <<>> /\ reading = 0 /\ nextId = 1
 
 Insert(n) ==
     /\ ~paused /\ ~interrupted /\ reading = 0 /\ pos < Len(Atoms)
-    /\ n \in 1..(IF MaxGroup < Len(Atoms) - pos THEN MaxGroup ELSE Len(Atoms) - pos) /\ nextId <= MaxId
+    /\ n \in 1..(IF MaxGroup < Len(Atoms) - pos
+                  THEN MaxGroup ELSE Len(Atoms) - pos)
+    /\ nextId <= MaxId
     /\ Bounded(pos + 1, n)
     /\ inserted' = inserted \o SubSeq(Atoms, pos + 1, pos + n)
     /\ pos' = pos + n /\ reading' = nextId /\ nextId' = nextId + 1
@@ -77,9 +79,8 @@ PrefixExact == inserted = SubSeq(Atoms, 1, pos)
 CurrentCountdown == accepted => /\ clicked /\ clickId = beforeReading
     /\ beforeReading # 0 /\ ~beforePaused /\ reading = 0
 RejectedKeepsCountdown == clicked /\ ~accepted => reading = beforeReading
-Completed == pos = Len(Atoms) => inserted = Atoms
 PausedBlocksInsert == [][paused => pos' = pos]_vars
 ReadingBlocksInsert == [][reading # 0 => pos' = pos]_vars
 InterruptedBlocksInsert == [][interrupted => pos' = pos]_vars
 BoundedGroups == [][pos' > pos => Bounded(pos + 1, pos' - pos)]_vars
-=============================================================================
+================================================================================

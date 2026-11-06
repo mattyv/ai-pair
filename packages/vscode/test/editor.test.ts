@@ -799,6 +799,18 @@ describe('follow mode: looking away', () => {
     expect(controller.pause.mock.calls).toEqual([['away']]);
   });
 
+  it('ReadingTargetsGroup: follows the inserted group during reading, then returns to the cursor', () => {
+    const { editor, controller } = made();
+    const view = inView(FILE);
+    editor.renderCursor({ file: FILE, offset: 1 }, 'read', 'cursor');
+    editor.renderCodeReading({ file: FILE, start: 50, end: 55 });
+    fire('visibleRanges', { textEditor: view, visibleRanges: [{ start: { line: 40 }, end: { line: 60 } }] });
+    expect(controller.pause.mock.calls).toEqual([]);
+    editor.renderCodeReading(undefined);
+    fire('visibleRanges', { textEditor: view, visibleRanges: [{ start: { line: 40 }, end: { line: 60 } }] });
+    expect(controller.pause.mock.calls).toEqual([['away']]);
+  });
+
   it('pauses as away when the programmer scrolls the target out of view, measuring the view each time', () => {
     const { editor, controller } = made();
     const view = inView(FILE);

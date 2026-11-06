@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.14.0
+
+-   Choose Typing, Lines, or Blocks in the existing playback speed menu. The
+    choice applies to the next typing action and is saved across reloads.
+-   Line and block playback highlights each inserted group and pauses for
+    reading; the reading ring can finish or hold that pause.
+
 ## 0.13.0
 
 -   Copy a bounded diagnostic snapshot from Pair Settings when troubleshooting a

@@ -1,4 +1,6 @@
 // Focused native VS Code smoke test: literal agent edits and session reconnect.
+// Set AI_PAIR_SMOKE_CODE_PACE=normal to run the three playback modes at 1x;
+// otherwise those trials use 20x for a faster compatibility check.
 import * as assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
@@ -184,6 +186,48 @@ export async function run(): Promise<void> {
         controller.endSession();
       }
     }
+
+    const modeSpeed = process.env.AI_PAIR_SMOKE_CODE_PACE === 'normal' ? 1 : 20;
+    controller.setSpeed(modeSpeed);
+    for (const mode of ['typing', 'lines', 'blocks'] as const) {
+      const startedAt = Date.now();
+      const modeFile = `native-mode-${mode}-${randomUUID()}.py`;
+      const modeUri = vscode.Uri.joinPath(workspace.uri, modeFile);
+      const prefix = 'def sample():\n    ';
+      const before = '"""first\n    second';
+      const after = '\n    """';
+      syntheticFiles.add(modeUri.toString());
+      await vscode.workspace.fs.writeFile(modeUri, Buffer.from(prefix));
+      createdFiles.push(modeUri);
+      const modeDocument = await vscode.workspace.openTextDocument(modeUri);
+      await vscode.window.showTextDocument(modeDocument);
+      controller.setCodePlayback(mode);
+      await controller.start(`Native ${mode} playback`, workspace.uri.fsPath);
+      try {
+        await controller.read(modeFile);
+        const submitted = await controller.step([
+          { move: { file: modeFile, line: 2, to: 'line_end' } },
+          { type: `${before}${CURSOR_MARKER}${after}` },
+        ]);
+        const finished = await controller.step([]);
+        assert.deepEqual(
+          [submitted, finished].flatMap((report) => report.batches.map((batch) => batch.status)),
+          ['completed'],
+        );
+        assert.equal(modeDocument.getText(), prefix + before + after);
+        assert.equal(controller.saved?.scene.cursor?.offset, prefix.length + before.length);
+        assert.equal(
+          [submitted, finished].flatMap((report) => report.events).some((event) => event.kind === 'edit' && event.by === 'programmer'),
+          false,
+        );
+        console.log(`Native ${mode} grouped playback passed at ${modeSpeed}x in ${Date.now() - startedAt} ms`);
+      } catch (error) {
+        failures.push(`${mode} playback: ${String(error)}`);
+      } finally {
+        controller.endSession();
+      }
+    }
+    controller.setCodePlayback('typing');
 
     assert.deepEqual(failures, [], 'One or more native trials failed; see synthetic event trace');
     console.log('Native smoke passed: triple quotes, cursor, event authorship, and same-root reconnect');

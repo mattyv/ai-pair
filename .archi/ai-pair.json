@@ -3757,7 +3757,7 @@
       "type": "dataflow",
       "origin": "llm",
       "generation": {
-        "focus": "Agent Batch Playback — An agent `step` call travels MCP tool schema validation, relay link, Bridge WebSocket dispatch, Controller (in-memory rehearsal, then queueing), and Player, which resolves places and types/moves/selects/runs at human pace through the VS Code editor and terminal, then returns a rendered Report to the agent."
+        "focus": "Agent Batch Playback — An agent `step` call travels MCP tool schema validation, relay link, Bridge WebSocket dispatch, Controller (in-memory rehearsal, then queueing), and Player, which groups code edits at the selected pace, shows reading countdowns and highlights, and returns a rendered Report to the agent."
       },
       "doc": {
         "type": "dataflow",
@@ -3869,6 +3869,17 @@
             "y": 1267
           },
           {
+            "id": "playback-panel",
+            "label": "Pair panel\nmode and reading control",
+            "files": [
+              "packages/vscode/src/panel.ts",
+              "packages/vscode/src/webview/panel.ts"
+            ],
+            "group": "host",
+            "x": 850,
+            "y": 1267
+          },
+          {
             "id": "term",
             "label": "Terminal Runner\nruns commands, captures output",
             "files": [
@@ -3922,9 +3933,19 @@
             "label": "queued batch"
           },
           {
+            "from": "playback-panel",
+            "to": "ctrl",
+            "label": "mode and reading controls"
+          },
+          {
+            "from": "player",
+            "to": "playback-panel",
+            "label": "reading countdown"
+          },
+          {
             "from": "player",
             "to": "editor",
-            "label": "edits, moves, selections"
+            "label": "edits and group highlights"
           },
           {
             "from": "player",

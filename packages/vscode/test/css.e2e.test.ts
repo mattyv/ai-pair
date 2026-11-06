@@ -89,6 +89,7 @@ const SCENARIO: object[] = [
   { type: 'say', text: 'Typing the test for `createTodo` in `src/todos.ts`, then a link: https://example.com.' },
   { type: 'reading', ms: 4000 },
   { type: 'state', state: 'read', turn: 'agent', paused: false },
+  { type: 'state', state: 'paused', turn: 'agent', paused: true },
   { type: 'state', state: 'thinking', turn: 'agent', paused: false },
   { type: 'state', state: 'running', turn: 'agent', paused: false },
   { type: 'state', state: 'absent', turn: 'agent', paused: false },

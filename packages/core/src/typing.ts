@@ -107,28 +107,31 @@ export function groupTyping(atoms: Chunk[], mode: CodePlayback): Chunk[] {
     let lines = 0;
     let lineEnd = start;
     let whitespace = start;
+    let lineHasContent = false;
     while (end < atoms.length) {
-      const atom = atoms[end];
-      if (atom === undefined) break;
+      // The planner produces a dense array and end is within its bounds.
+      // oxlint-disable-next-line typescript/no-non-null-assertion -- end is in the dense plan
+      const atom = atoms[end]!;
       const length = Array.from(atom.text).length;
-      if (mode === 'blocks' && end > start && chars + length > BLOCK_CHARS) break;
+      if (end > start && chars + length > BLOCK_CHARS) break;
       chars += length;
       end++;
       if (atom.text.includes('\n')) {
         lines++;
         lineEnd = end;
-        if (mode === 'lines' || lines === BLOCK_LINES) break;
+        const blankBoundary = !lineHasContent && lines > 1;
+        lineHasContent = false;
+        if (mode === 'lines' || lines === BLOCK_LINES || blankBoundary) break;
       } else if (/\s/u.test(atom.text)) {
         whitespace = end;
+      } else {
+        lineHasContent = true;
       }
-      if (mode === 'blocks' && chars >= BLOCK_CHARS) break;
+      if (chars >= BLOCK_CHARS) break;
     }
     // A size boundary favors a complete line, then a word boundary. Oversized
     // indivisible atoms still make progress as a group of their own.
-    if (mode === 'blocks' && end < atoms.length && lines < BLOCK_LINES && chars >= BLOCK_CHARS) {
-      if (lineEnd > start) end = lineEnd;
-      else if (whitespace > start) end = whitespace;
-    } else if (mode === 'blocks' && end < atoms.length && lines < BLOCK_LINES && end > start) {
+    if (end < atoms.length && lines < BLOCK_LINES) {
       if (lineEnd > start) end = lineEnd;
       else if (whitespace > start) end = whitespace;
     }

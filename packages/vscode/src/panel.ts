@@ -80,9 +80,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     private readonly buildInfo: { version: string; build: string },
     private readonly terminalSettings: { get: () => boolean; set: (value: boolean) => void },
     private readonly showTerminal: (id: number) => boolean,
-    private readonly codePlayback: { get: () => CodePlayback; set: (value: CodePlayback) => void } = {
-      get: () => 'typing', set: () => {},
-    },
+    private readonly codePlayback: { get: () => CodePlayback; set: (value: CodePlayback) => void },
   ) {}
 
   /** Posts to the page, if there is one. */
@@ -242,8 +240,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         if (SPEEDS.includes(message.value)) this.speed.set(message.value);
         return;
       case 'codePlayback':
+        // specs/PlaybackPreference.tla, `Choose`.
         if (message.value === 'typing' || message.value === 'lines' || message.value === 'blocks') this.codePlayback.set(message.value);
-        break;
+        return;
       case 'readingSpeed':
         if (SPEEDS.includes(message.value)) this.readingSpeed.set(message.value);
         return;

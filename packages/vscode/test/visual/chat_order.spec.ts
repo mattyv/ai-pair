@@ -509,3 +509,29 @@ test('Settings copies diagnostics only on request and suspended status explains 
   await expect(status).toContainText('Playing');
   await expect(status).not.toContainText('Suspended');
 });
+
+test('the pace menu chooses a code playback mode separately from speed', async ({ page }) => {
+  const post = await load(page);
+  await post({ type: 'session', active: true });
+  await post({ type: 'speed', value: 3 });
+  await post({ type: 'codePlayback', value: 'typing' });
+  const speed = page.getByRole('button', { name: 'Playback speed: 3.0x, code: typing' });
+  await speed.click();
+  const menu = page.getByRole('menu', { name: 'Playback speed' });
+  const group = menu.getByRole('group', { name: 'Code playback' });
+  const lines = group.getByRole('menuitemradio', { name: 'Lines' });
+  await lines.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Playback speed: 3.0x, code: lines' })).toBeFocused();
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return (globalThis as unknown as { messages: unknown[] }).messages;
+      }),
+    )
+    .toContainEqual({ type: 'codePlayback', value: 'lines' });
+  await post({ type: 'codePlayback', value: 'blocks' });
+  await post({ type: 'speed', value: 2 });
+  await expect(page.getByRole('button', { name: 'Playback speed: 2.0x, code: blocks' })).toBeVisible();
+});

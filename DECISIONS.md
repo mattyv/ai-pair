@@ -30,6 +30,18 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   Place one Settings gear in the toolbar, available in idle and active states.
     Explain Your move on hover or keyboard focus only while the agent listens.
 
+## Code playback
+
+-   Keep Typing as the default and place Lines and Blocks in the existing pace
+    menu. Save the choice separately from speed; apply changes at the next
+    typing action so an in-progress action keeps its mode.
+-   Show and highlight each inserted group for a reading pause. Use the existing
+    reading control for finishing or holding that pause, and the existing pace
+    and reading-speed settings to scale it. Limit both Lines and Blocks to 240
+    Unicode code points, and Blocks to four logical lines. Prefer line and
+    whitespace boundaries; preserve atomic edits, including an indivisible edit
+    that exceeds a bound. Follow the highlighted group while it is read.
+
 ## Session diagnostics
 
 -   Keep a bounded, in-memory history of allowlisted lifecycle metadata for

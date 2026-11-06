@@ -788,13 +788,13 @@ describe('the speed menus', () => {
   it.each(menus)('$type: shows the setting on its button, one decimal unless it has more, and checks it in the menu', (m) => {
     send({ type: m.type, value: 1.5 });
     expect(text(m.button)).toBe(`${m.prefix}1.5${SPEED_SUFFIX}`);
-    expect(element(m.button).getAttribute('aria-label')).toBe(`${m.name}: 1.5${SPEED_SUFFIX}`);
-    expect(element(m.menu).querySelector('[aria-checked="true"]')?.textContent).toBe(`1.5${SPEED_SUFFIX}`);
+    expect(element(m.button).getAttribute('aria-label')).toBe(`${m.name}: 1.5${SPEED_SUFFIX}${m.type === 'speed' ? ', code: typing' : ''}`);
+    expect(element(m.menu).querySelector('[data-speed][aria-checked="true"]')?.textContent).toBe(`1.5${SPEED_SUFFIX}`);
     send({ type: m.type, value: 2 });
     expect(text(m.button)).toBe(`${m.prefix}2.0${SPEED_SUFFIX}`);
     send({ type: m.type, value: 1.25 });
     expect(text(m.button)).toBe(`${m.prefix}1.25${SPEED_SUFFIX}`);
-    expect(element(m.menu).querySelector('[aria-checked="true"]')).toBeNull();
+    expect(element(m.menu).querySelector('[data-speed][aria-checked="true"]')).toBeNull();
   });
 
   it.each(menus)('$type: opens on its button with the setting focused, and posts the speed chosen', (m) => {
@@ -1624,7 +1624,7 @@ it('does not offer a terminal for an unapproved or declined command', () => {
   expect(element('history').querySelector('[data-show-terminal="81"]')).toBeNull();
 });
 
-it('ChoiceSaved: keeps mode in the pace label when speed and mode messages arrive in either order', () => {
+it('ChoiceSaved, PaceIndependent: keeps mode in the pace label when speed and mode messages arrive in either order', () => {
   start();
   send({ type: 'codePlayback', value: 'blocks' });
   send({ type: 'speed', value: 2 });
@@ -1647,4 +1647,42 @@ it('OnlyOnRequest: requests diagnostics only when the button is activated', () =
   expect(posted().filter((message) => message.type === 'copyDiagnostics')).toEqual([]);
   click(element('copy-diagnostics'));
   expect(posted().filter((message) => message.type === 'copyDiagnostics')).toEqual([{ type: 'copyDiagnostics' }]);
+});
+
+it('ChoiceApplied: the pace menu updates mode separately from speed', () => {
+  start();
+  send({ type: 'speed', value: 2 });
+  send({ type: 'codePlayback', value: 'typing' });
+  click(element('speed'));
+  const menu = element('speed-menu');
+  const lines = menu.querySelector('[data-code-playback="lines"]');
+  ok(lines);
+  click(lines);
+  expect(posted().at(-1)).toEqual({ type: 'codePlayback', value: 'lines' });
+  expect(lines.getAttribute('aria-checked')).toBe('true');
+  expect(element('speed').getAttribute('aria-label')).toBe('Playback speed: 2.0x, code: lines');
+  expect(menu.querySelector('[data-speed="2"][aria-checked="true"]')).not.toBeNull();
+  send({ type: 'codePlayback', value: 'blocks' });
+  expect(menu.querySelector('[data-code-playback="blocks"]')?.getAttribute('aria-checked')).toBe('true');
+});
+
+it('clears the code reading ring when playback leaves its reading state', () => {
+  start();
+  send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+  send({ type: 'reading', owner: 'code', ms: 5000, id: 901 });
+  expect(element('dot').classList.contains('reading')).toBe(true);
+  send({ type: 'state', state: 'typing', turn: 'agent', paused: false });
+  expect(element('dot').classList.contains('reading')).toBe(false);
+  click(element('skip-reading'));
+  expect(posted().filter((message) => message.type === 'skipReading')).toEqual([]);
+});
+
+it('keeps a reading ring during a global pause and clears it if playback then leaves reading', () => {
+  start();
+  send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+  send({ type: 'reading', owner: 'code', ms: 5000, id: 902 });
+  send({ type: 'state', state: 'paused', turn: 'agent', paused: true });
+  expect(element('dot').classList.contains('reading')).toBe(true);
+  send({ type: 'state', state: 'typing', turn: 'agent', paused: false });
+  expect(element('dot').classList.contains('reading')).toBe(false);
 });

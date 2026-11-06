@@ -114,11 +114,17 @@ it(
   EXHAUSTIVE_MS,
 );
 
+/** Returns the existing atomic plan for grouped-playback tests. */
+function atoms(text: string) {
+  return planTyping(text, CADENCE, true, () => 0.5);
+}
+
+/** Returns each grouped edit's text. */
+function groups(text: string, mode: 'lines' | 'blocks'): string[] {
+  return groupTyping(atoms(text), mode).map((chunk) => chunk.text);
+}
 
 describe('grouped code playback', () => {
-  const atoms = (text: string) => planTyping(text, CADENCE, true, () => 0.5);
-  const groups = (text: string, mode: 'lines' | 'blocks') => groupTyping(atoms(text), mode).map((chunk) => chunk.text);
-
   it('PrefixExact: groups complete lines without losing indentation or quote atoms', () => {
     expect(groups(`one\n  """two"""\nthree`, 'lines')).toEqual(['one\n  ', '"""two"""\n', 'three']);
     const text = `one\n\n  """two"""\nthree`;
@@ -129,6 +135,18 @@ describe('grouped code playback', () => {
     expect(groups('a\nb\nc\nd\ne', 'blocks')).toEqual(['a\nb\nc\nd\n', 'e']);
     const text = '😀'.repeat(241);
     expect(groups(text, 'blocks').map((part) => Array.from(part).length)).toEqual([240, 1]);
+  });
+
+  it('bounds long lines by Unicode characters and prefers whitespace', () => {
+    expect(groups('😀'.repeat(241), 'lines').map((part) => Array.from(part).length)).toEqual([240, 1]);
+    const line = `${'a'.repeat(200)} ${'b'.repeat(100)}`;
+    expect(groups(line, 'lines')).toEqual([`${'a'.repeat(200)} `, 'b'.repeat(100)]);
+    const quotes = '"'.repeat(241);
+    expect(groups(`a${quotes}b`, 'lines')).toEqual(['a', quotes, 'b']);
+  });
+
+  it('prefers a blank line as a block boundary', () => {
+    expect(groups('one\n\ntwo\nthree\nfour', 'blocks')).toEqual(['one\n\n', 'two\nthree\nfour']);
   });
 
   it('prefers whitespace when a long line crosses the size limit', () => {

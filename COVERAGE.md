@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: css, 2026-11-06.
+Last updated: tla, 2026-11-06.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -102,7 +102,7 @@ Last updated: css, 2026-11-06.
 | `packages/vscode/src/terminal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.3% B 98.1% F 92.3% | - | - | - | - |
 | `packages/vscode/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/view.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 88.0% F 100.0% | - | - | - | - |
-| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 131 of 131 rules matched |
+| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 132 of 132 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/test/agents.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/calibration.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -163,6 +163,9 @@ Last updated: css, 2026-11-06.
 | `specs/BuildIdentity.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/Calibration.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Calibration.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
+| `specs/CodePlayback.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/CodePlayback.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
+| `specs/CodePlayback_Progress.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Controller.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Controller.tla` | TLA+ | - | - | 17 of 17 actions | - | - | - |
 | `specs/Diagnostics.cfg` | TLC config | - | - | - | - | - | - |
@@ -205,6 +208,11 @@ Last updated: css, 2026-11-06.
 | `specs/PanelScroll.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
 | `specs/Places.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Places.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
+| `specs/PlaybackAnchor.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/PlaybackAnchor.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
+| `specs/PlaybackAnchor_Progress.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/PlaybackPreference.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/PlaybackPreference.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/Player.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Player.tla` | TLA+ | - | - | 7 of 7 actions | - | - | - |
 | `specs/PointFocus.cfg` | TLC config | - | - | - | - | - | - |

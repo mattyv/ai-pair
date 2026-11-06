@@ -80,9 +80,13 @@ account. While you pair:
 | stop it right now | **Interrupt**, or just edit the code: any edit interrupts |
 | look around | scroll or switch files. Playback pauses until you **Resume**, which brings you back to the agent's cursor |
 | write a part yourself | **My turn**. The agent becomes the navigator and comments as you type. **Hand back** returns the turn, with your reply if you typed one |
-| change the pace | the speed menu (**1.0x**), from 0.4x to 3.0x |
+| change the pace or code display | the speed menu (**1.0x**) sets the pace and chooses Typing, Lines, or Blocks for the next typing action |
 | manage the reading pause | click the ring to finish; hold it to pause the countdown until release. Focus it and use Space for the same behavior |
 | finish | **End**, or tell the agent you're done. You can pair again anytime |
+
+Lines and Blocks show code in groups with a reading pause and highlight for
+each group. Reading speed and the main pace adjust those pauses; click or hold
+the reading ring to finish or pause one. Typing remains the default.
 
 The status shows when playback is **Paused** or **Playing**. Reading pauses,
 command confirmations, your turn and suspended sessions remain distinct. The
@@ -201,9 +205,10 @@ and the reply box at the bottom. Your choice is saved across reloads.
 | Setting | |
 |---|---|
 | `aiPair.showTerminalsAutomatically` | Show Pair command terminals automatically (default off); also available in Pair Settings. |
+| `aiPair.codePlayback` | `typing` (default), `lines`, or `blocks`; also in the pace menu. Applies to the next typing action. |
 | `aiPair.chatOrder` | `newestFirst` (default) or `oldestFirst`; also available in the Pair panel settings. |
 | `aiPair.speed` | Overall playback speed, the follow scroll's glide included (the panel's speed menu offers 0.4x to 3.0x). |
-| `aiPair.readingSpeed` | Reading speed: divides only the pause after each of the agent's messages (the panel's reading menu offers 0.4x to 3.0x). |
+| `aiPair.readingSpeed` | Reading speed: divides the reading pauses after narration and grouped code (the panel's reading menu offers 0.4x to 3.0x). |
 | `aiPair.calibrationPassage` | The passage *AI Pair: Calibrate Reading Speed* times you on, as `{ "title": ..., "text": ..., "notice": ... }`; empty, the built-in one. The agent's `calibrate` tool writes it. |
 | `aiPair.agentName` | The name on the agent's cursor. |
 | `aiPair.timing` | Fine-tune any typing, pause, or glide duration, e.g. `{ "afterSelectMs": 900, "type": { "wordStartMs": 140 } }`. Every key is in [`timing.ts`](packages/core/src/timing.ts). |

@@ -1,7 +1,7 @@
 // The narration panel's page script, bundled for the webview as dist/panel.js (#6). The markup and
 // styles are in panel_html.ts; the messages in panel_messages.ts.
 
-import type { AgentState, PanelEvent, Ref } from '@ai-pair/core';
+import type { AgentState, CodePlayback, PanelEvent, Ref } from '@ai-pair/core';
 import type { ChatOrder, FromPanel, ToPanel } from '../panel_messages';
 import type { CalibrationView } from '../calibration';
 import { ELLIPSIS, LABEL_SEPARATOR, RANGE_DASH, RIGHT_ARROW, SPEED_SUFFIX } from '@ai-pair/core/constants';
@@ -107,6 +107,7 @@ const ui = {
 };
 
 let chatOrder: ChatOrder = 'newestFirst';
+let codePlayback: CodePlayback = 'typing';
 let followingLatest = true;
 let historyHeight = 0;
 let historyScrollHeight = 0;
@@ -515,6 +516,8 @@ function elementOf(e: Event): HTMLElement | undefined {
 // ---- The session's state ---------------------------------------------------
 
 function setState(e: Extract<PanelEvent, { type: 'state' }>): void {
+  // specs/CodePlayback.tla, `Finish` and `Interrupt`: no countdown survives playback.
+  if (e.state !== 'read' && !e.paused) reading = undefined;
   state = e.state;
   turn = e.turn;
   paused = e.paused;
@@ -543,6 +546,16 @@ function clearRun(): void {
   ui.run.removeAttribute('role');
 }
 
+/** Keeps the active mode in the pace control's accessible name and menu. */
+function setCodePlayback(value: CodePlayback): void {
+  // specs/PlaybackPreference.tla, `Choose` and `Reload`.
+  codePlayback = value;
+  for (const item of ui.speedMenu.querySelectorAll<HTMLButtonElement>('button[data-code-playback]')) {
+    item.setAttribute('aria-checked', String(item.dataset.codePlayback === value));
+  }
+  ui.speed.setAttribute('aria-label', `Playback speed: ${ui.speed.textContent}, code: ${value}`);
+}
+
 /** Wires a speed menu to its button, and returns what closes it. */
 function speedMenu(button: HTMLButtonElement, menu: HTMLElement, type: 'speed' | 'readingSpeed'): () => void {
   function close(): void {
@@ -562,8 +575,10 @@ function speedMenu(button: HTMLButtonElement, menu: HTMLElement, type: 'speed' |
     b.addEventListener('click', () => {
       close();
       button.focus();
-      if (b.dataset.codePlayback !== undefined) {
-        vscode.postMessage({ type: 'codePlayback', value: b.dataset.codePlayback });
+      const mode = b.dataset.codePlayback;
+      if (mode === 'typing' || mode === 'lines' || mode === 'blocks') {
+        setCodePlayback(mode);
+        vscode.postMessage({ type: 'codePlayback', value: mode });
         return;
       }
       vscode.postMessage({ type, value: Number(b.dataset.speed) });
@@ -604,7 +619,7 @@ function setActive(on: boolean): void {
 function showSpeed(button: HTMLButtonElement, menu: HTMLElement, name: string, prefix: string, value: number): void {
   const label = `${Number.isInteger(value * TENTHS) ? value.toFixed(1) : String(value)}${SPEED_SUFFIX}`;
   button.textContent = prefix + label;
-  button.setAttribute('aria-label', `${name}: ${label}`);
+  button.setAttribute('aria-label', `${name}: ${label}${button === ui.speed ? `, code: ${codePlayback}` : ''}`);
   for (const b of menu.querySelectorAll<HTMLButtonElement>('button[data-speed]')) {
     b.setAttribute('aria-checked', String(Math.abs(Number(b.dataset.speed) - value) < SPEED_TOLERANCE));
   }
@@ -919,11 +934,8 @@ function handle(message: ToPanel): void {
       showSpeed(ui.speed, ui.speedMenu, 'Playback speed', '', message.value);
       return;
     case 'codePlayback':
-      for (const button of ui.speedMenu.querySelectorAll<HTMLButtonElement>('button[data-code-playback]')) {
-        button.setAttribute('aria-checked', String(button.dataset.codePlayback === message.value));
-      }
-      ui.speed.setAttribute('aria-label', `Playback speed: ${ui.speed.textContent ?? ''}, code: ${message.value}`);
-      break;
+      setCodePlayback(message.value);
+      return;
     case 'readingSpeed':
       showSpeed(ui.readingSpeed, ui.readingMenu, 'Reading speed', 'read ', message.value);
       return;

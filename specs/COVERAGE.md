@@ -39,7 +39,7 @@ Code goes without a spec for one of these reasons:
 | `describeReport`, `cancelled`, `isRecorded`, `pendingEdit` | Pure, Format |
 | `render`, `cursorView` | Format: what the editor and panel draw |
 | `excerpt`, `ref`, `displayPath`, `resolvePath`, `requireSession`, `activeSession`, `isActive` | Pure |
-| `setSpeed`, `setReadingSpeed`, `setTimeouts`, `setTiming`, `setConfirmCommands`, `glideMs` | Glue: settings; `glideMs` is `glideDuration` in `timing.ts`, a duration `Scroll` does not model |
+| `setSpeed`, `setReadingSpeed`, `setCodePlayback`, `setTimeouts`, `setTiming`, `setConfirmCommands`, `glideMs` | Glue: settings; `glideMs` is `glideDuration` in `timing.ts`, a duration `Scroll` does not model |
 | `calibrate`, with the bridge's `calibrate` option, `resolveFile` | `Calibration` (`Supply`); the file read: Glue |
 
 ### `player.ts`
@@ -48,11 +48,11 @@ Code goes without a spec for one of these reasons:
 |---|---|
 | `play`, `actions`, `perform`, `stopped`, `failed`, `fail` | `Actions`, `Turns` |
 | `names`, `fileOf` | `BatchFile` |
-| `type`, `delay` | `Actions`, `Turns`; the chunks: `Typing` |
+| `type`, `delay` | `Actions`, `Turns`; atomic chunks: `Typing`; grouped chunks and reading: `CodePlayback`; final marker: `PlaybackAnchor` |
 | `edit`, `transform`, `transformScene`, `mapThrough`, `touch` | `Player`, `Reload` |
 | `unseen`, `locate`, `span` | `Rehearsal` (`Accept`); finding text: `Places` |
 | `save`, `runCommand`, `confirm` | `RunBox`, `Actions`; the save: `EditorAdapter` |
-| `follow` | `Scroll` (`Move`) |
+| `follow` | `Scroll` (`Move`); the highlighted reading target: `PlaybackAnchor` |
 | `code`, `codeAt`, `clearPoint`, `render`, `displayPath`, `resolvePath`, `agentPath`, `config`, `speed`, `readingSpeed` | Pure, Format |
 
 ### The rest of core
@@ -72,6 +72,7 @@ Code goes without a spec for one of these reasons:
 | `timeline.ts` | all | `Timeline` |
 | `places.ts` | `resolveSpot`, `resolveSpan`, and their helpers | `Places` |
 | `typing.ts` | `planTyping`, `isIndent` | `Typing` |
+| | `groupTyping` | `CodePlayback` (abstract bounded groups); concrete line and whitespace preferences: Pure |
 | | `readingTime` | Pure |
 | `diff.ts` | `lineChanges` | `Reload` (`SplitRuns`) |
 | | `fileDiff` | Format |
@@ -132,6 +133,7 @@ Code goes without a spec for one of these reasons:
 | `panel.ts` | `post`, the `ready` message | `PanelReplay` |
 | | `history`, `restoreHistory`, `onPost` | `Resume` (`Store`, `ReloadWindow`) |
 | | the `draft` and `reply` messages, `onDidDispose` | `Draft`; the `reply` lifting the pause without a reveal: `PointFocus` |
+| | mode preference messages | `PlaybackPreference` (`Choose`, `Reload`) |
 | | `receive` diagnostics-copy message | `DiagnosticsCopy` (`Click`) |
 | | `showTerminalPreference`, `receive` terminal messages | `TerminalPanel` (`SetAuto`, `Show`) |
 | | `receive`'s other messages, `send` | Glue: each calls one controller function |
@@ -139,7 +141,8 @@ Code goes without a spec for one of these reasons:
 | | `resolveWebviewView`, `reveal`, `focusReply`, `showSelection`, `showSpeed`, `showReadingSpeed`, `showTimings` | Glue |
 | | the `reply` message while a calibration runs, `showCalibration`, cancel on dispose and session end | `Calibration` |
 | | `askStart`, the `start` message, posting `startEnded` | `Start` |
-| `webview/panel.ts` | diagnostics-copy button | `DiagnosticsCopy` (`Click`) |
+| `webview/panel.ts` | pace menu mode choice | `PlaybackPreference` (`Choose`, `SetPace`) |
+| | diagnostics-copy button | `DiagnosticsCopy` (`Click`) |
 | | `setNow`, `add`, `addYou`, `addRun`, `addDivider`, `addOutside`, `fileCurrent`, `entry` | `Panel`; the scroll position: `PanelScroll` |
 | | `syncDraft`, `takeDraft` | `Draft` |
 | | `handle`'s `run` case, `clearRun`, `setOutcome`, `setActive` | `RunBox`; `setActive` and replaying: `PanelReplay` |

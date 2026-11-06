@@ -23,8 +23,14 @@ SetPace == /\ pace' \in 1..2
            /\ UNCHANGED <<saved, selected, requested, running, actionMode>>
 Reload == /\ selected' = saved
           /\ UNCHANGED <<saved, requested, running, actionMode, pace>>
-Next == (\E mode \in Modes : Choose(mode)) \/ Start \/ Finish \/ SetPace \/ Reload
+Next == (\E mode \in Modes : Choose(mode)) \/ Start \/ Finish
+        \/ SetPace \/ Reload
 Spec == Init /\ [][Next]_vars
 ChoiceSaved == selected = saved
 ChoiceApplied == selected = requested
+StableDuringChoice == [][running /\ requested' # requested =>
+                         actionMode' = actionMode]_vars
+NextActionUsesChoice == [][~running /\ running' => actionMode' = selected]_vars
+PaceIndependent == [][pace' # pace =>
+                      selected' = selected /\ actionMode' = actionMode]_vars
 ================================================================================

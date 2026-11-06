@@ -919,7 +919,14 @@ export class Controller {
   /** Plays a batch in memory, from where the queued batches leave off, or the editor as it is (specs/Rehearsal.tla, `Submit`). */
   private rehearse(session: Session, actions: Action[]): ReturnType<typeof rehearse> {
     const from = session.queue.at(-1)?.after ?? { scene: session.scene, texts: new Map(), lines: session.lines, edits: new Set<string>() };
-    return rehearse(this.editor, this.config, from, actions, (file, line, id) => session.seen.get(file)?.get(line) === id);
+    return rehearse(
+      this.editor,
+      this.config,
+      from,
+      actions,
+      (file, line, id) => session.seen.get(file)?.get(line) === id,
+      this.codePlayback,
+    );
   }
 
   /** Reports a batch that played in memory failed, without queuing it; nothing else changes. */

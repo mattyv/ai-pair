@@ -11,7 +11,7 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes 0.13.0.
+Status: describes 0.14.0.
 
 ## Components
 
@@ -45,6 +45,9 @@ Status: describes 0.13.0.
     terminals can be reused; explicit reveal uses the command ID and reports
     unavailable if its terminal has closed or been reused. Automatic visibility
     is an independent persisted preference.
+-   **Code playback** groups the existing atomic edits in the core. For line
+    and block modes, the editor adapter highlights each group while the panel
+    supplies the existing reading countdown control.
 -   **Session diagnostics** keep a bounded allowlisted lifecycle history in
     the VS Code adapter. The panel requests a snapshot explicitly; its clipboard
     export contains no chat, code, paths, command text, output, or tokens.
