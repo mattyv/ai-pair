@@ -479,3 +479,33 @@ test('terminal controls expose the saved preference and reveal the selected comm
       { type: 'showTerminal', id: 71 },
     ]);
 });
+
+test('Settings copies diagnostics only on request and suspended status explains recovery', async ({ page }) => {
+  const post = await load(page);
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const copy = page.getByRole('button', { name: 'Copy diagnostics' });
+  await expect(copy).toBeVisible();
+  await copy.focus();
+  await page.keyboard.press('Enter');
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return (globalThis as unknown as { messages: Array<{ type: string }> }).messages.filter(
+          (message) => message.type === 'copyDiagnostics',
+        );
+      }),
+    )
+    .toEqual([{ type: 'copyDiagnostics' }]);
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await post({ type: 'session', active: true, task: 'Previous' });
+  await post({ type: 'session', active: true, task: 'Previous', suspended: true });
+  const status = page.locator('[data-ui=status-text]');
+  await page.keyboard.press('Tab');
+  await status.focus();
+  await expect(page.getByRole('tooltip')).toContainText('same project');
+  await post({ type: 'session', active: true, task: 'Replacement' });
+  await post({ type: 'state', state: 'typing', turn: 'agent', paused: false });
+  await expect(status).toContainText('Playing');
+  await expect(status).not.toContainText('Suspended');
+});

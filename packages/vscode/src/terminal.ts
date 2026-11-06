@@ -3,7 +3,7 @@
 
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { samePath, type CommandOutcome, type RunOptions } from '@ai-pair/core';
+import { samePath, type CommandDiagnostic, type CommandOutcome, type RunOptions } from '@ai-pair/core';
 import { MAX_OUTPUT, outcomeOf, Tail } from './output';
 import { timings } from './timings';
 
@@ -90,7 +90,10 @@ export class PairTerminals implements vscode.Disposable {
   private readonly owned: Owned[] = [];
   private readonly disposables: vscode.Disposable[];
 
-  constructor(private readonly showAutomatically: () => boolean = () => false) {
+  constructor(
+    private readonly showAutomatically: () => boolean = () => false,
+    private readonly onDiagnostic?: (event: CommandDiagnostic) => void,
+  ) {
     this.disposables = [
       // specs/TerminalReuse.tla, ForeignStart: another extension can access a hidden terminal.
       vscode.window.onDidStartTerminalShellExecution((event) => {
@@ -106,7 +109,14 @@ export class PairTerminals implements vscode.Disposable {
   }
 
   async run(command: string, options: RunOptions): Promise<CommandOutcome> {
-    const owned = this.acquire(options.cwd, options.id);
+    this.diagnostic({ kind: 'command', id: options.id, phase: 'requested', waitMs: options.waitMs });
+    let owned: Owned;
+    try {
+      owned = this.acquire(options.cwd, options.id);
+    } catch (error) {
+      this.diagnostic({ kind: 'command', id: options.id, phase: 'failed' });
+      throw error;
+    }
     owned.busy = true;
     owned.inFlight = true;
     try {
@@ -114,8 +124,10 @@ export class PairTerminals implements vscode.Disposable {
       if (this.showAutomatically()) this.showOwned(owned);
 
       const integration = await shellIntegration(terminal, options.signal);
+      this.diagnostic({ kind: 'command', id: options.id, phase: 'integration', available: integration !== undefined });
       // specs/Terminals.tla: `AbortBeforeStart`, or `SkipAborted` when the signal fired before the run.
       if (options.signal.aborted) {
+        this.diagnostic({ kind: 'command', id: options.id, phase: 'abort' });
         owned.busy = false;
         return { output: '', notStarted: true };
       }
@@ -124,6 +136,7 @@ export class PairTerminals implements vscode.Disposable {
         // A terminal closed meanwhile makes `sendText` throw, and `run` rejects (`RejectClosed`).
         this.showOwned(owned);
         terminal.sendText(command);
+        this.diagnostic({ kind: 'command', id: options.id, phase: 'untracked' });
         return { output: '[output not captured: this terminal has no shell integration]' };
       }
 
@@ -131,6 +144,7 @@ export class PairTerminals implements vscode.Disposable {
       // listeners below are in place before it can fire.
       const execution = integration.executeCommand(command);
       owned.execution = execution;
+      this.diagnostic({ kind: 'command', id: options.id, phase: 'start' });
 
       // specs/Terminals.tla: the command ends (`End`), or the programmer closes its terminal (`CloseTerminal`), and the terminal is free.
       let exitCode: number | undefined;
@@ -146,10 +160,14 @@ export class PairTerminals implements vscode.Disposable {
           vscode.window.onDidEndTerminalShellExecution((e) => {
             if (e.execution !== execution) return;
             exitCode = e.exitCode;
+            this.diagnostic({ kind: 'command', id: options.id, phase: 'end', ...(exitCode === undefined ? {} : { exitCode }) });
             done();
           }),
           vscode.window.onDidCloseTerminal((t) => {
-            if (t === terminal) done();
+            if (t === terminal) {
+              this.diagnostic({ kind: 'command', id: options.id, phase: 'closed' });
+              done();
+            }
           }),
         );
       });
@@ -169,11 +187,24 @@ export class PairTerminals implements vscode.Disposable {
 
       const finished = await Promise.race([ended.then(() => true), stopWaiting(options.waitMs, options.signal, ended)]);
       if (finished) await Promise.race([drained, delay(timings.drainMs)]);
+      else this.diagnostic({ kind: 'command', id: options.id, phase: options.signal.aborted ? 'abort' : 'timeout' });
 
       const outcome = outcomeOf(output, { shell: terminal.state.shell, finished, exitCode: () => exitCode, ended });
       return outcome;
+    } catch (error) {
+      this.diagnostic({ kind: 'command', id: options.id, phase: 'failed' });
+      throw error;
     } finally {
       owned.inFlight = false;
+    }
+  }
+
+  /** Records diagnostics without affecting the command if an observer fails. */
+  private diagnostic(event: CommandDiagnostic): void {
+    try {
+      this.onDiagnostic?.(event);
+    } catch {
+      // Diagnostic observers cannot change command behavior.
     }
   }
 

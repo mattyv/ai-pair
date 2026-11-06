@@ -8866,6 +8866,16 @@
             "step": 1
           },
           {
+            "id": "session-diagnostics",
+            "label": "Session diagnostics",
+            "files": [
+              "packages/vscode/src/diagnostics.ts"
+            ],
+            "group": "ext",
+            "x": 1840,
+            "y": 177
+          },
+          {
             "id": "api",
             "label": "vscode API surface\nextHost.api.impl",
             "files": [],
@@ -8984,6 +8994,26 @@
           }
         ],
         "edges": [
+          {
+            "from": "extts",
+            "to": "session-diagnostics",
+            "label": "wires lifecycle signals"
+          },
+          {
+            "from": "ctrl",
+            "to": "session-diagnostics",
+            "label": "session and pause state"
+          },
+          {
+            "from": "termts",
+            "to": "session-diagnostics",
+            "label": "command lifecycle"
+          },
+          {
+            "from": "panelts",
+            "to": "session-diagnostics",
+            "label": "copy snapshot on request"
+          },
           {
             "from": "extts",
             "to": "ctrl",

@@ -29,6 +29,8 @@ export interface PanelWiring {
   calibration: () => Calibration;
   /** Starts a session from the idle view, when an agent that can be started from here is set up (#107). */
   starter: Starter;
+  /** Copies the sanitized diagnostics snapshot on explicit request. */
+  copyDiagnostics: () => Promise<void>;
 }
 
 /** How many files of a name to look for before asking which was meant. */
@@ -185,6 +187,13 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       `panel ${message.type}${message.type === 'reply' ? ` ${JSON.stringify(message.text)}` : message.type === 'draft' ? (message.empty ? ' empty' : ' typed') : ''}`,
     );
     switch (message.type) {
+      case 'copyDiagnostics':
+        // specs/DiagnosticsCopy.tla, `Click`: report both clipboard outcomes.
+        void this.wiring.copyDiagnostics().then(
+          () => vscode.window.showInformationMessage('AI Pair diagnostics copied.'),
+          () => vscode.window.showErrorMessage('Could not copy AI Pair diagnostics.'),
+        );
+        return;
       case 'ready':
         // A new page has an empty draft (#69): specs/Draft.tla, `LoadPage`.
         controller.resume('reply');

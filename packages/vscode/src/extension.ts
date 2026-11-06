@@ -1,9 +1,10 @@
 import * as os from 'node:os';
 import * as vscode from 'vscode';
-import { Bridge, Controller, isSavedSession, type PanelEvent, type SavedSession } from '@ai-pair/core';
+import { Bridge, Controller, isSavedSession, type DiagnosticEvent, type PanelEvent, type SavedSession } from '@ai-pair/core';
 import { discoveryDir } from '@ai-pair/protocol';
 import { playDemo } from './demo';
 import { VsCodeEditor } from './editor';
+import { Diagnostics } from './diagnostics';
 import type { OutsideChanges } from './outside';
 import { watchOutside } from './outside_watch';
 import { NarrationPanel } from './panel';
@@ -86,11 +87,16 @@ export function activate(context: vscode.ExtensionContext): Api {
   // from callbacks that run after activation returns.
   let controller: Controller;
   let calibration: Calibration;
+  const diagnostics = new Diagnostics({ version: AI_PAIR_VERSION, build: AI_PAIR_BUILD_ID });
+  function record(event: DiagnosticEvent): void {
+    diagnostics.record(event);
+  }
   const editor = new VsCodeEditor(
     root,
     config().get(AGENT_NAME, 'Agent'),
     () => controller,
     () => config().get<unknown>('showTerminalsAutomatically') === true,
+    record,
   );
   const speed = {
     get: () => settingSpeed(config().get<unknown>(SPEED, 1)),
@@ -138,13 +144,21 @@ export function activate(context: vscode.ExtensionContext): Api {
     },
     trace,
     context.extensionUri,
-    { controller: () => controller, calibration: () => calibration, starter },
+    {
+      controller: () => controller,
+      calibration: () => calibration,
+      starter,
+      copyDiagnostics: async () => {
+        await vscode.env.clipboard.writeText(JSON.stringify(diagnostics.snapshot()));
+      },
+    },
     chatOrder,
     { version: AI_PAIR_VERSION, build: AI_PAIR_BUILD_ID },
     terminalSettings,
     (id) => editor.showTerminal(id),
   );
   controller = new Controller(editor, panel);
+  controller.onDiagnostic = record;
   controller.trace = (line) => {
     log.info(line);
   };
@@ -215,6 +229,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   };
 
   const bridge = new Bridge(controller, {
+    onDiagnostic: record,
     dir: discoveryDir(),
     workspaceFolders: () => (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath),
     trace,

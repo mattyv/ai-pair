@@ -59,7 +59,7 @@ Code goes without a spec for one of these reasons:
 
 | File | Functions | Spec |
 |---|---|---|
-| `bridge.ts` | `start`, `accept`, `dispatch`, `dispose` | `Bridge` |
+| `bridge.ts` | `start`, `accept`, `dispatch`, `dispose` | `Bridge`; typed diagnostic events: `DiagnosticsPrivacy` |
 | | `connections` | Glue: what a test reads |
 | | `writeDiscovery`, `focused`, `file` | `Discovery` |
 | | `tokenMatches` | Pure: compares tokens in constant time |
@@ -132,13 +132,15 @@ Code goes without a spec for one of these reasons:
 | `panel.ts` | `post`, the `ready` message | `PanelReplay` |
 | | `history`, `restoreHistory`, `onPost` | `Resume` (`Store`, `ReloadWindow`) |
 | | the `draft` and `reply` messages, `onDidDispose` | `Draft`; the `reply` lifting the pause without a reveal: `PointFocus` |
+| | `receive` diagnostics-copy message | `DiagnosticsCopy` (`Click`) |
 | | `showTerminalPreference`, `receive` terminal messages | `TerminalPanel` (`SetAuto`, `Show`) |
 | | `receive`'s other messages, `send` | Glue: each calls one controller function |
 | | `openByName`, `openChange` | Glue: opens a file or its diff; `seen` for `Outside` |
 | | `resolveWebviewView`, `reveal`, `focusReply`, `showSelection`, `showSpeed`, `showReadingSpeed`, `showTimings` | Glue |
 | | the `reply` message while a calibration runs, `showCalibration`, cancel on dispose and session end | `Calibration` |
 | | `askStart`, the `start` message, posting `startEnded` | `Start` |
-| `webview/panel.ts` | `setNow`, `add`, `addYou`, `addRun`, `addDivider`, `addOutside`, `fileCurrent`, `entry` | `Panel`; the scroll position: `PanelScroll` |
+| `webview/panel.ts` | diagnostics-copy button | `DiagnosticsCopy` (`Click`) |
+| | `setNow`, `add`, `addYou`, `addRun`, `addDivider`, `addOutside`, `fileCurrent`, `entry` | `Panel`; the scroll position: `PanelScroll` |
 | | `syncDraft`, `takeDraft` | `Draft` |
 | | `handle`'s `run` case, `clearRun`, `setOutcome`, `setActive` | `RunBox`; `setActive` and replaying: `PanelReplay` |
 | | terminal setting and reveal controls | `TerminalPanel` (`SetAuto`, `Show`) |
@@ -148,11 +150,12 @@ Code goes without a spec for one of these reasons:
 | | the `canStart` and `startEnded` messages, the Start a session button, its starting note | `Start` |
 | | `esc`, `codeLink`, `refLink` | Format |
 | `outside.ts`, `outside_watch.ts` | all | `Outside` |
-| `terminal.ts` | all | `Terminals`, `QuietTerminals`, `TerminalReuse` |
+| `terminal.ts` | all | `Terminals`, `QuietTerminals`, `TerminalReuse`; typed diagnostic events: `DiagnosticsPrivacy` |
 | `view.ts` | `comfortable`, `landing`, `glideTop` | Pure; `Scroll` models `comfortable` and `landing` |
 | `python_diagnostics.ts` | `pythonDiagnostic` | `Diagnostics`: bounded advisory check, with Python parsing source on stdin |
 | | `row`, `viewport`, `isOwnEdit` | Pure |
 | `output.ts` | `outcomeOf`, `push` | Pure: a command's output, cut to size |
+| `diagnostics.ts` | all | `DiagnosticsPrivacy`: bounded allowlisted event history and independent snapshots |
 | `agents.ts` | all | Pure, Glue: agents' config files; `agents.test.ts` |
 | `setup.ts` | `claudeStarter` | `Start` (`AnswerCheck`, `Click`, `AgentExits`) |
 | | the rest | Glue |

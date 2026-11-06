@@ -66,6 +66,7 @@ const ui = {
   settingsDialog: $('settings-dialog', HTMLDialogElement),
   settingsClose: $('settings-close', HTMLButtonElement),
   chatOrder: $('chat-order', HTMLSelectElement),
+  copyDiagnostics: $('copy-diagnostics', HTMLButtonElement),
   showTerminals: $('show-terminals', HTMLInputElement),
   showTerminal: $('show-terminal', HTMLButtonElement),
   dot: $('dot', HTMLElement),
@@ -403,11 +404,35 @@ function hideTip(): void {
   tipWarmUntil = performance.now() + tipWarmMs;
 }
 
+// Under the element, centered on it, inside the panel; above it if there's no room below.
+function placeTip(target: HTMLElement): void {
+  const r = target.getBoundingClientRect();
+  const w = ui.tip.offsetWidth;
+  const h = ui.tip.offsetHeight;
+  const left = Math.max(TIP_MARGIN, Math.min(r.left + r.width / 2 - w / 2, innerWidth - w - TIP_MARGIN));
+  const top = r.bottom + TIP_GAP + h <= innerHeight - TIP_MARGIN ? r.bottom + TIP_GAP : r.top - TIP_GAP - h;
+  ui.tip.style.left = `${left}px`;
+  ui.tip.style.top = `${Math.max(TIP_MARGIN, top)}px`;
+}
+
+function setTip(el: HTMLElement, text: string): void {
+  el.dataset.tip = text;
+  if (el === tipTarget) {
+    ui.tip.textContent = text;
+    placeTip(el);
+  }
+}
+
 function syncStatus(): void {
   const showPause = active && !suspended && paused;
   const explainListening = active && !suspended && !paused && !runConfirming && turn === 'agent' && state === 'listening';
-  if (explainListening) {
-    ui.status.dataset.tip = 'The agent is listening for your reply. Answer its question, ask a question, or say continue in the reply box.';
+  if (explainListening || (active && suspended)) {
+    setTip(
+      ui.status,
+      suspended
+        ? 'Ask your agent to start pairing again in the same project, or end this session.'
+        : 'The agent is listening for your reply. You can reply, ask a question, or say continue; it may continue after waiting.',
+    );
     ui.status.tabIndex = 0;
   } else {
     if (tipTarget === ui.status || tipPending === ui.status) hideTip();
@@ -444,25 +469,6 @@ function syncStatus(): void {
 }
 
 // ---- Tooltips --------------------------------------------------------------
-
-// Under the element, centered on it, inside the panel; above it if there's no room below.
-function placeTip(target: HTMLElement): void {
-  const r = target.getBoundingClientRect();
-  const w = ui.tip.offsetWidth;
-  const h = ui.tip.offsetHeight;
-  const left = Math.max(TIP_MARGIN, Math.min(r.left + r.width / 2 - w / 2, innerWidth - w - TIP_MARGIN));
-  const top = r.bottom + TIP_GAP + h <= innerHeight - TIP_MARGIN ? r.bottom + TIP_GAP : r.top - TIP_GAP - h;
-  ui.tip.style.left = `${left}px`;
-  ui.tip.style.top = `${Math.max(TIP_MARGIN, top)}px`;
-}
-
-function setTip(el: HTMLElement, text: string): void {
-  el.dataset.tip = text;
-  if (el === tipTarget) {
-    ui.tip.textContent = text;
-    placeTip(el);
-  }
-}
 
 function showTip(el: HTMLElement): void {
   clearTimeout(tipTimer);
@@ -740,6 +746,11 @@ ui.skipReading.addEventListener('click', () => {
   syncReading();
 });
 
+// specs/DiagnosticsCopy.tla, `Click`: only an explicit request copies diagnostics.
+ui.copyDiagnostics.addEventListener('click', () => {
+  vscode.postMessage({ type: 'copyDiagnostics' });
+});
+
 // specs/Panel.tla, `OpenSettings` and `CloseSettings`.
 ui.settings.addEventListener('click', () => {
   ui.settingsDialog.showModal();
@@ -808,6 +819,8 @@ function handle(message: ToPanel): void {
           setActive(true);
           return;
         }
+        // specs/Resume.tla, `Start`: a new session replaces any old suspension.
+        suspended = false;
         fileCurrent();
         current = undefined;
         state = undefined;

@@ -162,3 +162,8 @@ it('offers an accessible automatic-terminal setting and a live reveal control', 
   expect(checkbox?.closest('label')?.textContent).toContain('Show terminals automatically');
   expect(page.querySelector('[data-ui="show-terminal"]')?.textContent).toContain('Show terminal');
 });
+
+it('offers an explicit diagnostics copy button in Settings', () => {
+  const page = new window.DOMParser().parseFromString(panelHtml('vscode-resource:', 'panel.css', 'panel.js'), 'text/html');
+  expect(page.querySelector('[data-ui="copy-diagnostics"]')?.textContent).toContain('Copy diagnostics');
+});
