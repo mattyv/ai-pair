@@ -13,7 +13,7 @@
 #include <mutex>
 #include <queue>
 #include <thread>
-#include "session.h"
+#include "runner.h"
 
 namespace {
 template<class T> class Com {
@@ -88,7 +88,7 @@ class Wasapi : public audio::Backend {
   bool pause() override { return SUCCEEDED(client_->Stop()); }
   bool resume() override { return SUCCEEDED(client_->Start()); }
   int pump() override { return write_available(); }
-  bool healthy() override { DWORD state=0; return device_.get() && SUCCEEDED(device_->GetState(&state)) && state==DEVICE_STATE_ACTIVE; }
+  bool healthy() override { DWORD state=0; UINT32 padding=0; return device_.get() && client_.get() && SUCCEEDED(device_->GetState(&state)) && state==DEVICE_STATE_ACTIVE && SUCCEEDED(client_->GetCurrentPadding(&padding)); }
   bool close() override {
     bool ok=true;
     if (client_.get()) { if (FAILED(client_->Stop())) ok=false; if (FAILED(client_->Reset())) ok=false; }
@@ -108,31 +108,14 @@ class Wasapi : public audio::Backend {
   Com<IMMDeviceEnumerator> enumer_; Com<IMMDevice> device_; Com<IAudioClient> client_; Com<IAudioRenderClient> render_;
   const unsigned char* data_=nullptr; size_t frames_=0, position_=0; UINT32 capacity_=0;
 };
-struct Input { std::mutex mutex; std::condition_variable wake; std::queue<std::string> lines; bool eof=false, invalid=false; };
-void reader(std::shared_ptr<Input> input) {
-  std::string line; char c;
-  while (std::cin.get(c)) {
-    if (c=='\n') { std::unique_lock<std::mutex> lock(input->mutex); if (input->lines.size()>=8) { input->invalid=true; input->wake.notify_one(); return; } input->lines.push(std::move(line)); line.clear(); input->wake.notify_one(); }
-    else { if (line.size()>=audio::kMaxLine) { std::lock_guard<std::mutex> lock(input->mutex); input->invalid=true; input->wake.notify_one(); return; } line+=c; }
-  }
-  std::lock_guard<std::mutex> lock(input->mutex); if (!line.empty()) input->invalid=true; else input->eof=true; input->wake.notify_one();
-}
-int play() {
-  auto input=std::make_shared<Input>(); std::thread(reader,input).detach(); Wasapi backend; uint64_t event_sequence=0;
-  audio::Session session(backend,[&](const char* event) { std::cout << "{\"version\":1,\"sequence\":" << event_sequence++ << ",\"type\":\"" << event << "\"}\n" << std::flush; });
-  while (!session.done()) {
-    std::string line; bool eof=false, invalid=false, has_line=false;
-    { std::unique_lock<std::mutex> lock(input->mutex); input->wake.wait_for(lock,std::chrono::milliseconds(10),[&]{ return !input->lines.empty() || input->eof || input->invalid; });
-      if (input->invalid) invalid=true; else if (input->eof) eof=true; else if (!input->lines.empty()) { line=std::move(input->lines.front()); input->lines.pop(); has_line=true; }
-    }
-    if (invalid) session.invalid(); else if (has_line) { audio::Command command; if (!audio::parse_command(line,command)) session.invalid(); else session.command(command); } else if (eof) session.eof();
-    session.tick();
-  }
-  return 0;
-}
+
 }
 int main(int argc, char** argv) {
   if (argc!=2 || (std::strcmp(argv[1],"--list") && std::strcmp(argv[1],"--play"))) return 2;
   if (FAILED(CoInitializeEx(nullptr,COINIT_MULTITHREADED))) return 1;
-  int result=std::strcmp(argv[1],"--list")==0 ? list() : play(); CoUninitialize(); return result;
+  Wasapi backend; int result=std::strcmp(argv[1],"--list")==0 ? list() : audio::run_session(backend); CoUninitialize();
+  // The reader may still be blocked in a pipe read after a stop command.
+  // End the process after releasing COM and flushing retired, without destroying
+  // C++ standard streams concurrently with that reader.
+  ExitProcess(static_cast<UINT>(result));
 }
