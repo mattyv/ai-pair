@@ -11,7 +11,22 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes version 0.16.0.
+Status: describes version 0.17.0.
+
+The source is `.archi/ai-pair.json`. To regenerate the page with
+Archi-Techture 1.5.1, set `ARCHI_TO_HTML` to its `out/tools/archi-to-html.js`
+path, then run:
+
+```bash
+node --input-type=module -e 'import {readFile,writeFile} from "node:fs/promises"; import {normalizeArchitecture as n} from "./scripts/normalize_architecture.ts"; const p=".archi/ai-pair.json"; await writeFile(p,await n(await readFile(p,"utf8"),"json"))'
+node "$ARCHI_TO_HTML" --title 'AI Pair architecture' .archi/ai-pair.json \
+  -o /tmp/ai-pair-archi-raw.html
+node --input-type=module -e 'import {readFile,writeFile} from "node:fs/promises"; import {normalizeArchitecture as n} from "./scripts/normalize_architecture.ts"; await writeFile("docs/ai-pair.html",await n(await readFile("/tmp/ai-pair-archi-raw.html","utf8"),"html"))'
+```
+
+The normalizer preserves the diagram data while formatting the export and
+representing Unicode with context-appropriate escapes. Validate the bundle
+with Archi's `validate-archi.js` and check the regenerated page in a browser.
 
 ## Components
 
@@ -49,7 +64,9 @@ Status: describes version 0.16.0.
     and block modes, the editor adapter highlights each group while the panel
     supplies the existing reading countdown control.
 -   **Session diagnostics** keep a bounded allowlisted lifecycle history in
-    the VS Code adapter. The panel requests a snapshot explicitly; its clipboard
+    the VS Code adapter, including speech readiness, button dispatch and fixed
+    error categories without requiring a pairing session. The panel requests a
+    snapshot explicitly; its clipboard
     export contains no chat, code, paths, command text, output, or tokens.
 -   **Selected speech** is an optional port on the session controller. One
     service owns playback, cancellation and page generations for both providers.

@@ -45,3 +45,17 @@ export interface ElevenLabsSpeechPort {
   synthesize(request: { text: string; voiceId: string; speed: number }, signal: AbortSignal): Promise<SpeechAudioResult>;
   voices(cursor: string | undefined, signal: AbortSignal): Promise<ElevenLabsVoicePage>;
 }
+
+/** Safe local worker failure categories, without exception text or paths. */
+export type LocalSpeechFailureReason =
+  | 'runtime_missing'
+  | 'model_missing'
+  | 'worker_module'
+  | 'worker_native'
+  | 'worker_permission'
+  | 'worker_error'
+  | 'worker_exit'
+  | 'model_load'
+  | 'synthesis'
+  | 'timeout'
+  | 'audio_page';

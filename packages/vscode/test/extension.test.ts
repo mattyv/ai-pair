@@ -1393,3 +1393,13 @@ it('ignores a stale failed key-status read after a newer successful read', async
   await Promise.resolve();
   expect(h.panel.showSpeechKeyStatus).not.toHaveBeenCalledWith(false);
 });
+
+it('records bounded local worker readiness and failure facts', () => {
+  activated();
+  const output = last(fakes.made.speech).options.output;
+  output.localDiagnostic?.('ready');
+  output.localDiagnostic?.('failed', 'worker_native');
+  const calls = last(fakes.made.diagnostics).record.mock.calls;
+  expect(calls).toContainEqual([{ kind: 'speech', event: 'runtime', provider: 'kokoro', phase: 'ready' }]);
+  expect(calls).toContainEqual([{ kind: 'speech', event: 'runtime', provider: 'kokoro', phase: 'failed', reason: 'worker_native' }]);
+});

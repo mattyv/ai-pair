@@ -563,6 +563,13 @@
       "functions": 100
     }
   },
+  "scripts/normalize_architecture.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "scripts/release.ts": {
     "unit": {
       "lines": 100,

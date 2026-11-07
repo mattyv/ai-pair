@@ -9,6 +9,7 @@ import {
   SPEECH_SPEEDS,
   SPEECH_VOICES,
   type ElevenLabsSpeechPort,
+  type LocalSpeechFailureReason,
   type SpeechProvider,
   type SpeechSettings,
   type SpeechVoice,
@@ -17,6 +18,8 @@ import { SPEECH_WORKER_OUTPUT } from './speech_worker_messages';
 
 /** The panel operations used by local speech; audio is never added to history. */
 export interface SpeechOutput {
+  /** Fixed, non-sensitive local worker lifecycle facts. */
+  localDiagnostic?: (phase: 'ready' | 'failed', reason?: LocalSpeechFailureReason) => void;
   /** Posts audio and returns its current page ID, or undefined when no page is ready. */
   play: (id: number, wav: Uint8Array, durationMs: number) => number | undefined;
   /** Controls only the audio belonging to the given page and generation. */
@@ -72,6 +75,15 @@ const MIN_WAV_BYTES = 44;
 const MAX_WAV_BYTES = 1_948_844;
 /** Longest waveform including its 600 ms thinking interval. */
 const MAX_DURATION_MS = 40_600;
+
+/** Classifies only Node's fixed error codes; never carries the error itself. */
+function localWorkerError(error: unknown): LocalSpeechFailureReason {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return 'worker_error';
+  if (error.code === 'ERR_MODULE_NOT_FOUND' || error.code === 'MODULE_NOT_FOUND') return 'worker_module';
+  if (error.code === 'ERR_DLOPEN_FAILED') return 'worker_native';
+  if (error.code === 'EACCES' || error.code === 'EPERM') return 'worker_permission';
+  return 'worker_error';
+}
 
 /** Coordinates one local synthesis job and one page-owned audio buffer. */
 export class SpeechService implements NarrationPort {
@@ -236,12 +248,14 @@ export class SpeechService implements NarrationPort {
       const available = await speechRuntimeAvailable(this.options.runtimeDirectory);
       if (this.current !== current) return;
       if (!available) {
+        this.localDiagnostic('failed', 'runtime_missing');
         this.fail(current, 'This installation does not include the local speech runtime.');
         return;
       }
       const modelPath = await installedSpeechModel(this.options.storageDirectory);
       if (this.current !== current) return;
       if (modelPath === undefined) {
+        this.localDiagnostic('failed', 'model_missing');
         this.fail(current, 'Download the Kokoro model in Settings to hear local narration.');
         return;
       }
@@ -250,18 +264,21 @@ export class SpeechService implements NarrationPort {
       worker.on('message', (message: unknown) => {
         this.workerMessage(worker, message);
       });
-      worker.on('error', () => {
-        this.workerFailed(worker);
+      worker.on('error', (error: unknown) => {
+        this.workerFailed(worker, localWorkerError(error));
       });
       worker.on('exit', () => {
-        this.workerFailed(worker);
+        this.workerFailed(worker, 'worker_exit');
       });
       this.armWorker(worker);
       worker.postMessage({ type: 'load', modelPath });
-    } catch {
+    } catch (error: unknown) {
       if (this.current !== current) return;
-      if (this.worker !== undefined) this.workerFailed(this.worker);
-      else this.fail(current, 'Local speech could not start. Retry setup.');
+      if (this.worker !== undefined) this.workerFailed(this.worker, localWorkerError(error));
+      else {
+        this.localDiagnostic('failed', localWorkerError(error));
+        this.fail(current, 'Local speech could not start. Retry setup.');
+      }
     }
   }
 
@@ -290,6 +307,7 @@ export class SpeechService implements NarrationPort {
       if (this.workerReady) return;
       this.clearWorkerTimer();
       this.workerReady = true;
+      this.localDiagnostic('ready');
       if (current !== undefined && current.phase === 'loading') this.synthesize(current, worker);
       return;
     }
@@ -299,8 +317,9 @@ export class SpeechService implements NarrationPort {
     }
     if (message.type === 'error') {
       if (message.id === undefined) {
-        this.workerFailed(worker);
+        this.workerFailed(worker, this.workerReady ? 'worker_error' : 'model_load');
       } else if (current?.id === message.id) {
+        this.localDiagnostic('failed', 'synthesis');
         this.fail(current, message.message);
       }
       return;
@@ -328,6 +347,7 @@ export class SpeechService implements NarrationPort {
     try {
       pageId = this.options.output.play(current.id, current.wav, current.durationMs);
     } catch {
+      if (current.provider === 'kokoro') this.localDiagnostic('failed', 'audio_page');
       this.fail(current, 'Audio could not play. Open the Pair panel and try Preview voice.');
       return;
     }
@@ -337,6 +357,7 @@ export class SpeechService implements NarrationPort {
       return;
     }
     if (pageId === undefined) {
+      if (current.provider === 'kokoro') this.localDiagnostic('failed', 'audio_page');
       this.fail(current, 'Open the Pair panel to hear speech.');
       return;
     }
@@ -352,6 +373,7 @@ export class SpeechService implements NarrationPort {
       return undefined;
     }
     if (event.event === 'failed') {
+      if (current.provider === 'kokoro') this.localDiagnostic('failed', 'audio_page');
       this.fail(current, 'Audio could not play. Use Preview voice to enable audio.');
       return 'failed';
     } else if (event.event === 'ended') {
@@ -418,7 +440,7 @@ export class SpeechService implements NarrationPort {
   private armWorker(worker: Worker): void {
     this.clearWorkerTimer();
     const timer = setTimeout(() => {
-      if (this.workerTimer === timer) this.workerFailed(worker);
+      if (this.workerTimer === timer) this.workerFailed(worker, 'timeout');
     }, START_TIMEOUT_MS);
     this.workerTimer = timer;
   }
@@ -434,8 +456,9 @@ export class SpeechService implements NarrationPort {
     current.deadline = Date.now() + ms;
     current.timer = setTimeout(() => {
       if ((current.phase === 'loading' || current.phase === 'synthesizing') && this.worker !== undefined) {
-        this.workerFailed(this.worker);
+        this.workerFailed(this.worker, 'timeout');
       } else {
+        if (current.provider === 'kokoro') this.localDiagnostic('failed', 'timeout');
         this.fail(current, 'Speech timed out; continue reading.');
       }
     }, ms);
@@ -468,7 +491,16 @@ export class SpeechService implements NarrationPort {
     current.resolve();
   }
 
-  private workerFailed(worker: Worker): void {
+  /** Diagnostics must never change speech behavior or reveal exception text. */
+  private localDiagnostic(phase: 'ready' | 'failed', reason?: LocalSpeechFailureReason): void {
+    try {
+      this.options.output.localDiagnostic?.(phase, reason);
+    } catch {
+      /* Observability is best effort. */
+    }
+  }
+
+  private workerFailed(worker: Worker, reason: LocalSpeechFailureReason = 'worker_error'): void {
     if (worker !== this.worker) return;
     this.clearWorkerTimer();
     this.worker = undefined;
@@ -481,6 +513,9 @@ export class SpeechService implements NarrationPort {
       .finally(() => {
         this.closing = false;
       });
-    if (this.current?.provider === 'kokoro') this.fail(this.current, 'Local speech stopped. Retry setup.');
+    if (this.current?.provider === 'kokoro') {
+      this.localDiagnostic('failed', reason);
+      this.fail(this.current, 'Local speech stopped. Retry setup.');
+    }
   }
 }

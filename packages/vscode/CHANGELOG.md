@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.17.1
+
+-   Identify local speech startup failures with fixed diagnostic categories for
+    worker modules, native loading, permissions, model loading and timeouts.
+-   Keep generated architecture and Pages output reproducible and compatible
+    with repository formatting and ASCII checks.
+
 ## 0.17.0
 
 -   Speech diagnostics now include bounded button, capability and request

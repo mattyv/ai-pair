@@ -161,6 +161,14 @@ Issue discussions and working notes hold the detailed evidence and history.
 
 ## Local verification and installation
 
+-   Normalize Archi 1.5.1 exports deterministically for repository formatting and
+    ASCII checks. Preserve Unicode values with context-specific JSON,
+    JavaScript, CSS and HTML escapes. This formats generated exports; it is not
+    a general HTML sanitizer. Verify generator replay, idempotence, embedded
+    script semantics and browser rendering before publishing Pages.
+-   Pin the verified TLA+ release asset by immutable asset ID and SHA-256,
+    and fail on HTTP errors. A future deletion must fail rather than execute
+    different bytes. Updating the pin requires verified upstream provenance.
 -   Build and verify the local extension before installing it for use. A local
     installation is distinct from publishing a release. This workspace runs in a
     VM: installing there does not install into the user's host VS Code. The host

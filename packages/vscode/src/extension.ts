@@ -434,6 +434,9 @@ export function activate(context: vscode.ExtensionContext): Api {
     kokoroSupported: localSpeechSupported,
     settings: speechSettings.get,
     output: {
+      localDiagnostic: (phase, reason) => {
+        diagnostics.record({ kind: 'speech', event: 'runtime', provider: 'kokoro', phase, ...(reason === undefined ? {} : { reason }) });
+      },
       play: (id, wav, durationMs) => panel.playSpeech(id, wav, durationMs),
       control: (id, pageId, action) => {
         panel.controlSpeech(id, pageId, action);

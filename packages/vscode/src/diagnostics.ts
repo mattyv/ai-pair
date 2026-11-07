@@ -1,5 +1,6 @@
 import type { DiagnosticEvent } from '@ai-pair/core';
 import type { PauseReason } from '@ai-pair/protocol';
+import type { LocalSpeechFailureReason } from './speech_types';
 
 /** Maximum number of recent lifecycle events copied in a report. */
 export const MAX_DIAGNOSTIC_EVENTS = 100;
@@ -7,13 +8,24 @@ export const MAX_DIAGNOSTIC_EVENTS = 100;
 /** Speech facts are fixed enums only; no voice IDs, text or secrets. */
 export interface SpeechDiagnosticEvent {
   kind: 'speech';
-  event: 'preview' | 'catalog' | 'setup' | 'capability';
+  event: 'preview' | 'catalog' | 'setup' | 'capability' | 'runtime';
   phase: 'received' | 'blocked' | 'dispatched' | 'ready' | 'failed';
   provider: 'kokoro' | 'elevenlabs' | 'unknown';
   reason?: SpeechDiagnosticReason;
 }
 export type SpeechDiagnosticReason =
-  'unsupported' | 'no_key' | 'no_voice' | 'not_ready' | 'auth' | 'rate' | 'network' | 'timeout' | 'invalid' | 'canceled' | 'unknown';
+  | 'unsupported'
+  | 'no_key'
+  | 'no_voice'
+  | 'not_ready'
+  | 'auth'
+  | 'rate'
+  | 'network'
+  | 'timeout'
+  | 'invalid'
+  | 'canceled'
+  | 'unknown'
+  | LocalSpeechFailureReason;
 type StoredEvent = (DiagnosticEvent | SpeechDiagnosticEvent) & { seq: number; time: number };
 type SessionState = 'active' | 'suspended' | 'ended' | 'unavailable';
 type ConnectionState = 'connected' | 'disconnected' | 'unavailable';
@@ -35,7 +47,7 @@ const CONNECTION = new Set(['connected', 'disconnected']);
 const PAUSE_REASON = new Set(['programmer', 'reply', 'away', 'calibrate']);
 const REQUEST_METHOD = new Set(['start', 'step', 'listen', 'end', 'read', 'calibrate', 'unknown']);
 const REQUEST_PHASE = new Set(['received', 'replied', 'failed', 'cancelled']);
-const SPEECH_EVENT = new Set(['preview', 'catalog', 'setup', 'capability']);
+const SPEECH_EVENT = new Set(['preview', 'catalog', 'setup', 'capability', 'runtime']);
 const SPEECH_PHASE = new Set(['received', 'blocked', 'dispatched', 'ready', 'failed']);
 const SPEECH_PROVIDER = new Set(['kokoro', 'elevenlabs', 'unknown']);
 const SPEECH_REASON = new Set([
@@ -50,6 +62,16 @@ const SPEECH_REASON = new Set([
   'invalid',
   'canceled',
   'unknown',
+  'runtime_missing',
+  'model_missing',
+  'worker_module',
+  'worker_native',
+  'worker_permission',
+  'worker_error',
+  'worker_exit',
+  'model_load',
+  'synthesis',
+  'audio_page',
 ]);
 const COMMAND_PHASE = new Set(['start', 'timeout', 'abort', 'closed', 'untracked', 'failed']);
 

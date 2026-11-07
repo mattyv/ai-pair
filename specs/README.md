@@ -86,7 +86,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Resume.cfg` | 2 directories, `MaxSessions = 3`, revive and replacement updates enabled | holds | 56 |
 | `TerminalPanel.cfg` | two command IDs and automatic visibility | holds | 61 |
 | `DiagnosticsCopy.cfg` | explicit request with clipboard success or failure | holds | 3 |
-| `DiagnosticsPrivacy.cfg` | bounded two-event history, copy and allowlisted projection | holds | 4,754 |
+| `DiagnosticsPrivacy.cfg` | bounded two-event history, copy and allowlisted projection | holds | 22,778 |
 | `DiagnosticsPrivacy_Speech.cfg` | speech-only projection without a session | holds | 38 |
 | `Timeline.cfg` | `MaxSleeps = 3` sleeps, holds, and a second sleep while one is pending | holds | 864 |
 | `PlaybackPreference.cfg` | three modes and two independent pace settings | holds | 36 |
@@ -1994,7 +1994,7 @@ an available request violates `TypeOK`, `StartRespectsPreference`, `ShowExact`,
 The recorder keeps a bounded history and constructs each event from permitted
 fields before it can be copied. The model represents an extra raw secret field,
 abstracts timestamps and lifecycle values, and checks a capacity of two. TLC
-checked 4,754 distinct states; the speech-only configuration checked 38.
+checked 22,778 distinct states; the speech-only configuration checked 38.
 Concrete tests check runtime validation, the 100-event limit, pause-reason
 bounds, speech-only events and independent snapshots.
 

@@ -1187,3 +1187,100 @@ it('ignores a stale queued cloud watchdog after its request settles', async () =
   service.cancel();
   await gate;
 });
+
+it('classifies a native worker failure by code without exposing error text', async () => {
+  const { service, output } = harness();
+  const gate = service.speak('Synthetic.');
+  await settle();
+  const worker = fake.Worker.made[0];
+  if (worker === undefined) throw new Error('No worker');
+  worker.emit('error', { code: 'ERR_DLOPEN_FAILED', message: '/private/lib secret text' });
+  await gate;
+  expect(output.localDiagnostic).toHaveBeenCalledWith('failed', 'worker_native');
+  expect(JSON.stringify(vi.mocked(output.localDiagnostic)?.mock.calls)).not.toMatch(/private|secret/);
+});
+
+it('records a local worker-ready checkpoint before synthesis', async () => {
+  const { service, output } = harness();
+  const gate = service.speak('Synthetic.');
+  await settle();
+  const worker = fake.Worker.made[0];
+  if (worker === undefined) throw new Error('No worker');
+  worker.emit('message', { type: 'ready' });
+  expect(output.localDiagnostic).toHaveBeenCalledWith('ready', undefined);
+  service.cancel();
+  await gate;
+});
+
+it.each([
+  [{ code: 'ERR_MODULE_NOT_FOUND', message: '/private/file' }, 'worker_module'],
+  [{ code: 'MODULE_NOT_FOUND', message: '/private/file' }, 'worker_module'],
+  [{ code: 'EACCES', message: '/private/file' }, 'worker_permission'],
+  [{ code: 'EPERM', message: '/private/file' }, 'worker_permission'],
+  [{ code: 'SOME_UNKNOWN_CODE', message: '/private/file' }, 'worker_error'],
+  [new Error('private detail'), 'worker_error'],
+] as const)('classifies worker errors using only allowlisted codes', async (error, reason) => {
+  const { service, output } = harness();
+  const gate = service.speak('Synthetic.');
+  await settle();
+  const worker = fake.Worker.made[0];
+  if (worker === undefined) throw new Error('No worker');
+  worker.emit('error', error);
+  await gate;
+  expect(output.localDiagnostic).toHaveBeenCalledWith('failed', reason);
+  expect(JSON.stringify(vi.mocked(output.localDiagnostic)?.mock.calls)).not.toMatch(/private|SOME_UNKNOWN/);
+});
+
+it('classifies model-load failure separately from an error after readiness', async () => {
+  const first = harness();
+  const firstGate = first.service.speak('Synthetic.');
+  await settle();
+  const firstWorker = fake.Worker.made.at(-1);
+  if (firstWorker === undefined) throw new Error('No worker');
+  firstWorker.emit('message', { type: 'error', message: 'Could not load local speech. Retry setup.' });
+  await firstGate;
+  expect(first.output.localDiagnostic).toHaveBeenCalledWith('failed', 'model_load');
+  const second = harness();
+  const secondGate = second.service.speak('Synthetic.');
+  await settle();
+  const secondWorker = fake.Worker.made.at(-1);
+  if (secondWorker === undefined) throw new Error('No worker');
+  secondWorker.emit('message', { type: 'ready' });
+  secondWorker.emit('message', { type: 'error', message: 'Invalid request.' });
+  await secondGate;
+  expect(second.output.localDiagnostic).toHaveBeenCalledWith('failed', 'worker_error');
+});
+
+it('does not let diagnostic callback failures interrupt local speech', async () => {
+  const { service, output } = harness();
+  vi.mocked(output.localDiagnostic)?.mockImplementation(() => {
+    throw new Error('private diagnostic failure');
+  });
+  const gate = service.speak('Synthetic.');
+  await settle();
+  const worker = fake.Worker.made[0];
+  if (worker === undefined) throw new Error('No worker');
+  worker.emit('message', { type: 'ready' });
+  worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+  expect(service.audioEvent({ id: 1, pageId: 7, event: 'ended' })).toBe('ended');
+  await gate;
+});
+
+it('handles cloud audio page failures without reporting local runtime failures', async () => {
+  for (const mode of ['throw', 'missing', 'failed', 'timeout'] as const) {
+    const { cloud, service, output } = cloudHarness();
+    cloud.synthesize.mockResolvedValue({ wav: new Uint8Array(44), durationMs: 1000 });
+    if (mode === 'throw') {
+      output.play.mockImplementationOnce(() => {
+        throw new Error('page');
+      });
+    }
+    if (mode === 'missing') output.play.mockReturnValueOnce(undefined);
+    const gate = service.speak('Synthetic.');
+    await settle();
+    if (mode === 'failed') service.audioEvent({ id: 1, pageId: 7, event: 'failed' });
+    if (mode === 'timeout') await vi.advanceTimersByTimeAsync(20_000);
+    await gate;
+    expect(output.localDiagnostic).not.toHaveBeenCalled();
+  }
+});

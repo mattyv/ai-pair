@@ -157,3 +157,21 @@ it('TypeOK, OnlyAllowed: rejects unrecognized speech enums and records capabilit
   expect(diagnostics.snapshot().events).toHaveLength(1);
   expect(JSON.stringify(diagnostics.snapshot())).not.toContain('private-text');
 });
+
+it('records only allowlisted local runtime failure codes', () => {
+  const diagnostics = new Diagnostics({ version: '1', build: 'b' });
+  const unsafe: unknown = {
+    kind: 'speech',
+    event: 'runtime',
+    phase: 'failed',
+    provider: 'kokoro',
+    reason: 'worker_native',
+    error: '/private/lib secret text',
+  };
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  diagnostics.record(unsafe as DiagnosticEvent);
+  expect(diagnostics.snapshot().events).toMatchObject([
+    { kind: 'speech', event: 'runtime', phase: 'failed', provider: 'kokoro', reason: 'worker_native' },
+  ]);
+  expect(JSON.stringify(diagnostics.snapshot())).not.toMatch(/private|secret/);
+});
