@@ -7,6 +7,21 @@ import Foundation
 private let maxLine = 2_600_000
 private let maxWav = 1_948_844
 private let maxDevices = 64
+
+private func validWav(_ data: Data) -> Bool {
+  guard data.count >= 46, data.count <= maxWav else { return false }
+  func word(_ offset: Int, _ count: Int) -> UInt32 {
+    var value: UInt32 = 0
+    for index in 0..<count { value |= UInt32(data[offset + index]) << (8 * index) }
+    return value
+  }
+  return data.prefix(4) == Data("RIFF".utf8) && data[8..<16] == Data("WAVEfmt ".utf8)
+    && data[36..<40] == Data("data".utf8) && word(4, 4) == UInt32(data.count - 8)
+    && word(16, 4) == 16 && word(20, 2) == 1 && word(22, 2) == 1
+    && word(24, 4) == 24_000 && word(28, 4) == 48_000 && word(32, 2) == 2
+    && word(34, 2) == 16 && word(40, 4) == UInt32(data.count - 44)
+    && (data.count - 44) % 2 == 0
+}
 private var eventSequence = 0
 private let outputLock = NSLock()
 
@@ -26,7 +41,7 @@ private func propertyString(_ object: AudioObjectID, _ selector: AudioObjectProp
   return result as String
 }
 
-private func outputs() -> ([(String, String)], String?)? {
+private func outputs() -> ([(String, String, AudioDeviceID)], String?)? {
   var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDevices, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
   var size: UInt32 = 0
   let system = AudioObjectID(kAudioObjectSystemObject)
@@ -37,7 +52,7 @@ private func outputs() -> ([(String, String)], String?)? {
   var defaultDevice: AudioDeviceID = 0
   var defaultSize = UInt32(MemoryLayout<AudioDeviceID>.size)
   let gotDefault = AudioObjectGetPropertyData(system, &defaultAddress, 0, nil, &defaultSize, &defaultDevice) == noErr
-  var devices: [(String, String)] = []
+  var devices: [(String, String, AudioDeviceID)] = []
   var defaultID: String?
   for device in ids {
     var streams = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyStreams, mScope: kAudioDevicePropertyScopeOutput, mElement: kAudioObjectPropertyElementMain)
@@ -46,7 +61,7 @@ private func outputs() -> ([(String, String)], String?)? {
       let uid = propertyString(device, kAudioDevicePropertyDeviceUID), !uid.isEmpty, uid.utf8.count <= 512,
       let label = propertyString(device, kAudioObjectPropertyName), label.utf8.count <= 256 else { continue }
     if gotDefault && device == defaultDevice { defaultID = uid }
-    if devices.count < maxDevices { devices.append((uid, label)) }
+    if devices.count < maxDevices { devices.append((uid, label, device)) }
   }
   if let id = defaultID, !devices.contains(where: { $0.0 == id }) { defaultID = nil }
   return (devices, defaultID)
@@ -82,6 +97,7 @@ private func lines(_ receive: (Data) -> Bool) {
 
 private final class Player {
   private var queue: AudioQueueRef?
+  private var selectedUID: String?
   private var sequence = 0
   private var playing = false
   private var paused = false
@@ -97,8 +113,11 @@ private final class Player {
     queue = nil
     lock.unlock()
     if let current {
-      AudioQueueStop(current, true)
-      AudioQueueDispose(current, true)
+      _ = AudioQueueStop(current, true)
+      guard AudioQueueDispose(current, true) == noErr else {
+        event("failed")
+        exit(1)
+      }
     }
     event(outcome)
     event("retired")
@@ -124,7 +143,8 @@ private final class Player {
     switch type {
     case "open":
       guard sequence == 1, json.count == 4, let uid = json["id"] as? String,
-        let (devices, _) = outputs(), devices.contains(where: { $0.0 == uid }) else { finish("failed"); return false }
+        let (devices, _) = outputs(), let selected = devices.first(where: { $0.0 == uid }) else { finish("failed"); return false }
+      selectedUID = uid
       var format = AudioStreamBasicDescription(mSampleRate: 24_000, mFormatID: kAudioFormatLinearPCM,
         mFormatFlags: kLinearPCMFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked,
         mBytesPerPacket: 2, mFramesPerPacket: 1, mBytesPerFrame: 2, mChannelsPerFrame: 1, mBitsPerChannel: 16, mReserved: 0)
@@ -138,6 +158,29 @@ private final class Player {
       queue = created
       var device = uid as CFString
       guard AudioQueueSetProperty(created, kAudioQueueProperty_CurrentDevice, &device, UInt32(MemoryLayout<CFString>.size)) == noErr else { finish("failed"); return false }
+      var aliveAddress = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyDeviceIsAlive, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+      guard AudioObjectAddPropertyListener(selected.2, &aliveAddress, { device, _, _, context in
+        guard let context else { return noErr }
+        var alive: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyDeviceIsAlive, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        let status = AudioObjectGetPropertyData(device, &address, 0, nil, &size, &alive)
+        if status != noErr || alive == 0 {
+          let player = Unmanaged<Player>.fromOpaque(context).takeUnretainedValue()
+          DispatchQueue.global().async { player.finish("failed") }
+        }
+        return noErr
+      }, context) == noErr else { finish("failed"); return false }
+      guard AudioQueueAddPropertyListener(created, kAudioQueueProperty_CurrentDevice, { context, queue, _ in
+        guard let context else { return }
+        let player = Unmanaged<Player>.fromOpaque(context).takeUnretainedValue()
+        var uid: CFString = "" as CFString
+        var size = UInt32(MemoryLayout<CFString>.size)
+        let status = AudioQueueGetProperty(queue, kAudioQueueProperty_CurrentDevice, &uid, &size)
+        if status != noErr || (uid as String) != player.selectedUID {
+          DispatchQueue.global().async { player.finish("failed") }
+        }
+      }, context) == noErr else { finish("failed"); return false }
       guard AudioQueueAddPropertyListener(created, kAudioQueueProperty_IsRunning, { context, queue, _ in
         guard let context else { return }
         let player = Unmanaged<Player>.fromOpaque(context).takeUnretainedValue()
@@ -153,8 +196,7 @@ private final class Player {
       event("ready")
     case "play":
       guard sequence == 2, json.count == 4, let encoded = json["wav"] as? String,
-        encoded.utf8.count <= 2_598_460, let wav = Data(base64Encoded: encoded), wav.count >= 44, wav.count <= maxWav,
-        String(data: wav.prefix(4), encoding: .ascii) == "RIFF", String(data: wav[8..<12], encoding: .ascii) == "WAVE",
+        encoded.utf8.count <= 2_598_460, let wav = Data(base64Encoded: encoded), validWav(wav),
         let queue else { finish("failed"); return false }
       let pcm = wav.dropFirst(44)
       guard !pcm.isEmpty else { finish("failed"); return false }
