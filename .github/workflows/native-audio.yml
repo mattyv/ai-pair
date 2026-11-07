@@ -1,0 +1,32 @@
+name: Native audio compile
+
+on:
+  push:
+    branches: [feat/17-cross-platform-audio]
+  workflow_dispatch:
+
+jobs:
+  macos:
+    name: macOS ${{ matrix.arch }} compile
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            target: x86_64-apple-macos13.0
+          - arch: arm64
+            target: arm64-apple-macos13.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile AudioQueue helper
+        run: |
+          mkdir -p native-build
+          xcrun swiftc -O -target "${{ matrix.target }}" \
+            -framework AudioToolbox -framework CoreAudio \
+            packages/audio-native/native/macos/main.swift \
+            -o "native-build/audio-darwin-${{ matrix.arch }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: audio-darwin-${{ matrix.arch }}-compile-only
+          path: native-build/audio-darwin-${{ matrix.arch }}
