@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.17.0
+
+-   Speech diagnostics now include bounded button, capability and request
+    outcomes, including safe catalog error categories, even without a pairing
+    session. They exclude keys, narration, audio and raw provider responses.
+-   Apply speech provider choices immediately while saving preferences, so a
+    following voice-load or preview action cannot use the previous provider.
+-   Replace stale catalog errors with clear loading, empty-result or success
+    feedback, and explain blocked speech actions visibly in Settings.
+
 ## 0.16.0
 
 -   Choose optional ElevenLabs cloud narration alongside local Kokoro. Configure

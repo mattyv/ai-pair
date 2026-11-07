@@ -119,3 +119,41 @@ describe('diagnostics', () => {
     expect(diagnostics.snapshot().events).toEqual([]);
   });
 });
+
+it('OnlyAllowed, Recorded: records speech lifecycle without secret extras even when no session exists', () => {
+  const diagnostics = new Diagnostics({ version: '1', build: 'b' });
+  const unsafe: unknown = {
+    kind: 'speech',
+    event: 'catalog',
+    phase: 'failed',
+    provider: 'elevenlabs',
+    reason: 'auth',
+    apiKey: 'do-not-copy',
+    voiceId: 'private-voice',
+    text: 'private-text',
+  };
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  diagnostics.record(unsafe as DiagnosticEvent);
+  expect(diagnostics.snapshot()).toMatchObject({
+    session: 'unavailable',
+    events: [{ kind: 'speech', event: 'catalog', phase: 'failed', provider: 'elevenlabs', reason: 'auth' }],
+  });
+  expect(JSON.stringify(diagnostics.snapshot())).not.toMatch(/do-not-copy|private-voice|private-text/);
+});
+
+it('TypeOK, OnlyAllowed: rejects unrecognized speech enums and records capability without a reason', () => {
+  const diagnostics = new Diagnostics({ version: '1', build: 'b' });
+  const invalid = [
+    { kind: 'speech', event: 'private-text', phase: 'received', provider: 'kokoro' },
+    { kind: 'speech', event: 'preview', phase: 'private-text', provider: 'kokoro' },
+    { kind: 'speech', event: 'preview', phase: 'received', provider: 'private-text' },
+    { kind: 'speech', event: 'preview', phase: 'received', provider: 'kokoro', reason: 'private-text' },
+  ];
+  for (const value of invalid) {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    diagnostics.record(value as unknown as DiagnosticEvent);
+  }
+  diagnostics.record({ kind: 'speech', event: 'capability', phase: 'ready', provider: 'kokoro' });
+  expect(diagnostics.snapshot().events).toHaveLength(1);
+  expect(JSON.stringify(diagnostics.snapshot())).not.toContain('private-text');
+});

@@ -4,7 +4,17 @@ import type { PauseReason } from '@ai-pair/protocol';
 /** Maximum number of recent lifecycle events copied in a report. */
 export const MAX_DIAGNOSTIC_EVENTS = 100;
 
-type StoredEvent = DiagnosticEvent & { seq: number; time: number };
+/** Speech facts are fixed enums only; no voice IDs, text or secrets. */
+export interface SpeechDiagnosticEvent {
+  kind: 'speech';
+  event: 'preview' | 'catalog' | 'setup' | 'capability';
+  phase: 'received' | 'blocked' | 'dispatched' | 'ready' | 'failed';
+  provider: 'kokoro' | 'elevenlabs' | 'unknown';
+  reason?: SpeechDiagnosticReason;
+}
+export type SpeechDiagnosticReason =
+  'unsupported' | 'no_key' | 'no_voice' | 'not_ready' | 'auth' | 'rate' | 'network' | 'timeout' | 'invalid' | 'canceled' | 'unknown';
+type StoredEvent = (DiagnosticEvent | SpeechDiagnosticEvent) & { seq: number; time: number };
 type SessionState = 'active' | 'suspended' | 'ended' | 'unavailable';
 type ConnectionState = 'connected' | 'disconnected' | 'unavailable';
 
@@ -25,6 +35,22 @@ const CONNECTION = new Set(['connected', 'disconnected']);
 const PAUSE_REASON = new Set(['programmer', 'reply', 'away', 'calibrate']);
 const REQUEST_METHOD = new Set(['start', 'step', 'listen', 'end', 'read', 'calibrate', 'unknown']);
 const REQUEST_PHASE = new Set(['received', 'replied', 'failed', 'cancelled']);
+const SPEECH_EVENT = new Set(['preview', 'catalog', 'setup', 'capability']);
+const SPEECH_PHASE = new Set(['received', 'blocked', 'dispatched', 'ready', 'failed']);
+const SPEECH_PROVIDER = new Set(['kokoro', 'elevenlabs', 'unknown']);
+const SPEECH_REASON = new Set([
+  'unsupported',
+  'no_key',
+  'no_voice',
+  'not_ready',
+  'auth',
+  'rate',
+  'network',
+  'timeout',
+  'invalid',
+  'canceled',
+  'unknown',
+]);
 const COMMAND_PHASE = new Set(['start', 'timeout', 'abort', 'closed', 'untracked', 'failed']);
 
 /** Restricts runtime identity to the build system's short identifier format. */
@@ -55,9 +81,26 @@ export class Diagnostics {
   }
 
   /** Records only the known properties of a valid lifecycle event. */
-  record(event: DiagnosticEvent): void {
-    let selected: DiagnosticEvent;
+  record(event: DiagnosticEvent | SpeechDiagnosticEvent): void {
+    let selected: DiagnosticEvent | SpeechDiagnosticEvent;
     switch (event.kind) {
+      case 'speech':
+        if (
+          !SPEECH_EVENT.has(event.event) ||
+          !SPEECH_PHASE.has(event.phase) ||
+          !SPEECH_PROVIDER.has(event.provider) ||
+          (event.reason !== undefined && !SPEECH_REASON.has(event.reason))
+        ) {
+          return;
+        }
+        selected = {
+          kind: 'speech',
+          event: event.event,
+          phase: event.phase,
+          provider: event.provider,
+          ...(event.reason === undefined ? {} : { reason: event.reason }),
+        };
+        break;
       case 'session':
         if (!SESSION.has(event.state)) return;
         selected = { kind: 'session', state: event.state };

@@ -86,7 +86,8 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Resume.cfg` | 2 directories, `MaxSessions = 3`, revive and replacement updates enabled | holds | 56 |
 | `TerminalPanel.cfg` | two command IDs and automatic visibility | holds | 61 |
 | `DiagnosticsCopy.cfg` | explicit request with clipboard success or failure | holds | 3 |
-| `DiagnosticsPrivacy.cfg` | bounded two-event history, copy and allowlisted projection | holds | 1,598 |
+| `DiagnosticsPrivacy.cfg` | bounded two-event history, copy and allowlisted projection | holds | 4,754 |
+| `DiagnosticsPrivacy_Speech.cfg` | speech-only projection without a session | holds | 38 |
 | `Timeline.cfg` | `MaxSleeps = 3` sleeps, holds, and a second sleep while one is pending | holds | 864 |
 | `PlaybackPreference.cfg` | three modes and two independent pace settings | holds | 36 |
 | `SpeechSetup.cfg` | two files; install, cancellation and rollback outcomes | holds | 42 |
@@ -94,6 +95,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `CloudNarration.cfg` | two generations, provider and credential epochs | holds | 59 |
 | `CloudNarration_Healthy.cfg` | two generations with a healthy key read | holds | 59 |
 | `SpeechSettings.cfg` | two credential reads and catalog requests | holds | 50,968 |
+| `ProviderChoice.cfg` | two ordered settings writes and credential change | holds | 122 |
 | `PlaybackAnchor.cfg` | three-character insert, cursor marker and all bounded programmer edits | holds | 20 |
 | `PlaybackAnchor_Progress.cfg` | the same, with fair completion | holds | 20 |
 | `CodePlayback.cfg` | three atomic edits, bounded groups, two pause states and three countdown IDs | holds | 654 |
@@ -1992,8 +1994,9 @@ an available request violates `TypeOK`, `StartRespectsPreference`, `ShowExact`,
 The recorder keeps a bounded history and constructs each event from permitted
 fields before it can be copied. The model represents an extra raw secret field,
 abstracts timestamps and lifecycle values, and checks a capacity of two. TLC
-checked 1,598 distinct states. Concrete tests check runtime validation, the
-100-event limit, pause-reason bounds, and independent snapshots.
+checked 4,754 distinct states; the speech-only configuration checked 38.
+Concrete tests check runtime validation, the 100-event limit, pause-reason
+bounds, speech-only events and independent snapshots.
 
 | Mutation | Breaks |
 |---|---|
@@ -2005,10 +2008,10 @@ checked 1,598 distinct states. Concrete tests check runtime validation, the
 
 | Property | Test |
 |---|---|
-| `TypeOK`, `OnlyAllowed` | `diagnostics.test.ts`: copies only allowlisted fields and rejects malformed input and unsafe identity strings; rejects malformed values rather than copying untrusted data |
+| `TypeOK`, `OnlyAllowed` | `diagnostics.test.ts`: TypeOK, OnlyAllowed: rejects unrecognized speech enums and records capability without a reason; copies only allowlisted fields and rejects malformed input and unsafe identity strings |
 | `Bounded` | `diagnostics.test.ts`: bounds its history while retaining the latest state and returns independent snapshots |
 | `CopiedExactly` | `diagnostics.test.ts`: starts with unavailable states and records typed events in order |
-| `Recorded`, `RecordsEventually` | `diagnostics.test.ts`: retains valid request, integration and completion events |
+| `Recorded`, `RecordsEventually` | `diagnostics.test.ts`: OnlyAllowed, Recorded: records speech lifecycle without secret extras even when no session exists; retains valid request, integration and completion events |
 
 The owner connection ID is local to this extension activation; request IDs are
 scoped by that ID. `replied` records that the bridge sent a response to the
@@ -2171,3 +2174,31 @@ violates `NoRetry`; it does not represent supported production behavior.
 | `IndependentGates` | Existing `Narration` gate tests cover the independent reading and approval controls; cloud transport never receives these controls. |
 | `NoRestart`, `ReadyPlays` | `speech_service.test.ts`: keeps prepared cloud speech paused until resume and rejects stale page events. |
 | `RequestSettles`, `EligibleStarts`, `EligibleDispatch` | `speech_service.test.ts`: releases a hung cloud request at its watchdog without reviving late output; `speech_elevenlabs.e2e.test.ts`: converts a real streamed PCM response to bounded playable WAV. |
+
+### `ProviderChoice`: immediate selection and ordered persistence
+
+The model separates the visible and effective provider from stored settings.
+It bounds two choices and serial write completions, including external changes,
+write failures, and a key change that clears a previously selected voice. TLC
+checked 122 distinct states; `Settlement` assumes fair completion or failure
+of each queued write. It abstracts settings values other than provider and
+the presence of an old voice.
+
+| Mutation | Breaks |
+|---|---|
+| initialize an unsupported provider | `TypeOK` |
+| retain the old effective provider after selection | `ProviderAligned` |
+| let an older success or failure replace the newer choice | `LatestHonored` |
+| leave the old voice on key change, or restore it when the reset fails | `KeyClearsVoice` |
+| disable both write success and failure | `Settlement` |
+
+The liveness negative control disables deadlock checking to expose the
+stuttering counterexample; the normal configuration checks deadlocks.
+
+| Property | Test |
+|---|---|
+| `TypeOK` | `extension.test.ts`: TypeOK: ignores workspace attempts to select the cloud provider |
+| `ProviderAligned` | `extension.test.ts`: ProviderAligned: uses a selected provider immediately while its global setting is still being saved; ProviderAligned: does not cancel a preview on delayed settings echoes or unchanged disabled state |
+| `LatestHonored` | `extension.test.ts`: LatestHonored, Settlement: keeps the latest choice when an older global write settles; LatestHonored: does not roll back a newer provider when an older write fails |
+| `KeyClearsVoice` | `extension.test.ts`: KeyClearsVoice: clears an old account voice even while a settings save is pending; KeyClearsVoice: keeps the old account voice unavailable when a key-reset write fails |
+| `Settlement` | `extension.test.ts`: Settlement: rolls back the latest provider and reports a failed settings write; LatestHonored, Settlement: keeps the latest choice when an older global write settles |

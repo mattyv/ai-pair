@@ -35,7 +35,7 @@ it('loads local CPU assets and forwards the same untruncated tokens to the model
   expect(await engine.phonemize('Hello.', 'a')).toBe('phonemes');
   const ids = engine.tokenize('phonemes');
   expect(fake.tokenize).toHaveBeenCalledWith('phonemes', { truncation: false });
-  expect(() => engine.tokenize('phonemes☃')).toThrow('unsupported');
+  expect(() => engine.tokenize('phonemes\u2603')).toThrow('unsupported');
   expect(() => engine.tokenize('$')).toThrow('unsupported');
   expect(fake.tokenize).toHaveBeenCalledTimes(1);
   expect(await engine.generate(ids, 'af_heart', 1)).toEqual({ samples: new Float32Array([0.5]), rate: 24_000 });

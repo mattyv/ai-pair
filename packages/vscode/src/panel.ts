@@ -7,6 +7,7 @@ import { timings } from './timings';
 import type { ChatOrder, FromPanel, SpeechAction, SpeechEvent, SpeechState, ToPanel } from './panel_messages';
 import { ELEVENLABS_SPEEDS, SPEECH_SPEEDS, SPEECH_VOICES, type SpeechSettings } from './speech_types';
 import type { CatalogView } from './speech_catalog';
+import type { SpeechDiagnosticEvent } from './diagnostics';
 import type { Calibration, CalibrationView } from './calibration';
 
 const MAX_LOG = 400;
@@ -34,6 +35,7 @@ export interface PanelWiring {
   /** Copies the sanitized diagnostics snapshot on explicit request. */
   copyDiagnostics: () => Promise<void>;
   speech: {
+    diagnostic: (event: SpeechDiagnosticEvent) => void;
     settings: { get: () => SpeechSettings; set: (value: SpeechSettings) => void };
     supported: () => boolean;
     installed: () => Promise<boolean>;
@@ -246,11 +248,26 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     if (!this.speechPageReady) return;
     const pageId = this.speechPageId;
     const check = ++this.speechSetupCheck;
-    this.send({ type: 'speechSupport', supported: this.wiring.speech.supported() });
-    if (this.wiring.speech.supported()) {
+    const supported = this.wiring.speech.supported();
+    this.wiring.speech.diagnostic({
+      kind: 'speech',
+      event: 'capability',
+      phase: supported ? 'ready' : 'blocked',
+      provider: 'kokoro',
+      ...(supported ? {} : { reason: 'unsupported' }),
+    });
+    this.send({ type: 'speechSupport', supported });
+    if (supported) {
       void this.wiring.speech.installed().then(
         (installed) => {
           if (this.speechPageId === pageId && this.speechSetupCheck === check) {
+            this.wiring.speech.diagnostic({
+              kind: 'speech',
+              event: 'setup',
+              phase: installed ? 'ready' : 'blocked',
+              provider: 'kokoro',
+              ...(installed ? {} : { reason: 'not_ready' }),
+            });
             this.send({
               type: 'speechSetupState',
               pending: false,
@@ -260,6 +277,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         },
         () => {
           if (this.speechPageId === pageId && this.speechSetupCheck === check) {
+            this.wiring.speech.diagnostic({ kind: 'speech', event: 'setup', phase: 'failed', provider: 'kokoro', reason: 'unknown' });
             this.send({ type: 'speechSetupState', pending: false, message: 'Local speech availability is unknown.' });
           }
         },
@@ -322,33 +340,61 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         });
         return;
       case 'speechVoicesLoad':
-      case 'speechVoicesMore':
-        if (this.wiring.speech.cloudSupported() && this.wiring.speech.settings.get().provider === 'elevenlabs') {
+      case 'speechVoicesMore': {
+        const provider = this.wiring.speech.settings.get().provider;
+        // specs/DiagnosticsPrivacy.tla, Record: only fixed speech facts are recorded.
+        this.wiring.speech.diagnostic({ kind: 'speech', event: 'catalog', phase: 'received', provider });
+        if (provider !== 'elevenlabs') {
+          this.wiring.speech.diagnostic({ kind: 'speech', event: 'catalog', phase: 'blocked', provider, reason: 'not_ready' });
+          this.send({ type: 'speechSetupState', pending: false, message: 'Select ElevenLabs to load voices.' });
+        } else if (!this.wiring.speech.cloudSupported()) {
+          this.wiring.speech.diagnostic({ kind: 'speech', event: 'catalog', phase: 'blocked', provider, reason: 'unsupported' });
+          this.send({ type: 'speechSetupState', pending: false, message: 'ElevenLabs is unsupported on this host.' });
+        } else {
+          this.wiring.speech.diagnostic({ kind: 'speech', event: 'catalog', phase: 'dispatched', provider });
           this.wiring.speech.loadVoices(message.type === 'speechVoicesMore');
         }
         return;
+      }
       case 'speechStop':
         this.wiring.speech.stop();
         return;
-      case 'speechPreview':
-        if (
-          this.wiring.speech.settings.get().provider === 'kokoro' ? !this.wiring.speech.supported() : !this.wiring.speech.cloudSupported()
-        ) {
+      case 'speechPreview': {
+        const provider = this.wiring.speech.settings.get().provider;
+        this.wiring.speech.diagnostic({ kind: 'speech', event: 'preview', phase: 'received', provider });
+        if (provider === 'kokoro' ? !this.wiring.speech.supported() : !this.wiring.speech.cloudSupported()) {
+          this.wiring.speech.diagnostic({ kind: 'speech', event: 'preview', phase: 'blocked', provider, reason: 'unsupported' });
+          this.send({
+            type: 'speechSetupState',
+            pending: false,
+            message: provider === 'kokoro' ? 'Local speech is unsupported on this host.' : 'ElevenLabs is unsupported on this host.',
+          });
           return;
         }
+        this.wiring.speech.diagnostic({ kind: 'speech', event: 'preview', phase: 'dispatched', provider });
         void this.wiring.speech.preview().catch(() => {
+          this.wiring.speech.diagnostic({ kind: 'speech', event: 'preview', phase: 'failed', provider, reason: 'unknown' });
           this.send({ type: 'speechSetupState', pending: false, message: 'Voice preview is unavailable.' });
         });
         return;
+      }
       case 'speechSetup':
-        if (!this.wiring.speech.supported()) return;
+        this.wiring.speech.diagnostic({ kind: 'speech', event: 'setup', phase: 'received', provider: 'kokoro' });
+        if (!this.wiring.speech.supported()) {
+          this.wiring.speech.diagnostic({ kind: 'speech', event: 'setup', phase: 'blocked', provider: 'kokoro', reason: 'unsupported' });
+          this.send({ type: 'speechSetupState', pending: false, message: 'Local speech is unsupported on this host.' });
+          return;
+        }
+        this.wiring.speech.diagnostic({ kind: 'speech', event: 'setup', phase: 'dispatched', provider: 'kokoro' });
         this.speechSetupCheck++;
         this.send({ type: 'speechSetupState', pending: true, message: 'Setting up local speech...' });
         void this.wiring.speech.setup().then(
           () => {
+            this.wiring.speech.diagnostic({ kind: 'speech', event: 'setup', phase: 'ready', provider: 'kokoro' });
             this.send({ type: 'speechSetupState', pending: false, message: 'Local speech is ready.' });
           },
           () => {
+            this.wiring.speech.diagnostic({ kind: 'speech', event: 'setup', phase: 'failed', provider: 'kokoro', reason: 'unknown' });
             this.send({ type: 'speechSetupState', pending: false, message: 'Speech setup did not complete.' });
           },
         );
@@ -364,7 +410,17 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         this.speechPageReady = true;
         this.send({ type: 'speechPage', pageId });
         this.showSpeechSettings(this.wiring.speech.settings.get());
-        this.send({ type: 'speechCloudSupport', supported: this.wiring.speech.cloudSupported() });
+        {
+          const supported = this.wiring.speech.cloudSupported();
+          this.wiring.speech.diagnostic({
+            kind: 'speech',
+            event: 'capability',
+            phase: supported ? 'ready' : 'blocked',
+            provider: 'elevenlabs',
+            ...(supported ? {} : { reason: 'unsupported' }),
+          });
+          this.send({ type: 'speechCloudSupport', supported });
+        }
         this.wiring.speech.keyRefresh();
         this.refreshSpeechSupport();
         // A new page has an empty draft (#69): specs/Draft.tla, `LoadPage`.

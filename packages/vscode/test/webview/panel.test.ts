@@ -2070,3 +2070,41 @@ it('switches back to Kokoro when saved inactive cloud settings are invalid', () 
     value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
   });
 });
+
+it('replaces stale catalog errors with loading, empty and successful feedback', () => {
+  send({ type: 'speechCatalog', value: { voices: [], more: false, loading: false, error: true, errorKind: 'auth' } });
+  expect(text('speech-settings-status')).toBe('ElevenLabs rejected the key or voice access. Check your key permissions.');
+  send({ type: 'speechCatalog', value: { voices: [], more: false, loading: true, error: false } });
+  expect(text('speech-settings-status')).toBe('Loading account voices...');
+  send({ type: 'speechCatalog', value: { voices: [], more: false, loading: false, error: false } });
+  expect(text('speech-settings-status')).toBe('No account voices are available. Check your ElevenLabs account.');
+  send({ type: 'speechCatalog', value: { voices: [{ id: 'voice', name: 'Voice' }], more: false, loading: false, error: false } });
+  expect(text('speech-settings-status')).toBe('Account voices loaded.');
+});
+
+it.each([
+  ['no_key', 'Add an ElevenLabs API key to load voices.'],
+  ['rate', 'ElevenLabs rate limit or quota reached. Try again later.'],
+  ['network', 'Could not connect to ElevenLabs. Check your network.'],
+  ['timeout', 'Loading account voices timed out. Try again.'],
+  ['invalid', 'ElevenLabs returned an unsupported voice list.'],
+  ['canceled', 'Loading account voices was canceled.'],
+  ['unknown', 'Could not load account voices.'],
+] as const)('maps %s catalog failures to fixed guidance', (errorKind, message) => {
+  send({ type: 'speechCatalog', value: { voices: [], more: false, loading: false, error: true, errorKind } });
+  expect(text('speech-settings-status')).toBe(message);
+});
+
+it('does not claim an invalidated catalog is empty until a load completes', () => {
+  send({ type: 'speechCatalog', value: { voices: [], more: false, loading: false, error: false } });
+  expect(text('speech-settings-status')).toBe('');
+  send({ type: 'speechCatalog', value: { voices: [], more: false, loading: true, error: false } });
+  send({ type: 'speechCatalog', value: { voices: [], more: true, loading: false, error: false } });
+  expect(text('speech-settings-status')).toBe('No voices on this page. Select Load more.');
+});
+
+it('does not report an empty result when an in-flight catalog is reset', () => {
+  send({ type: 'speechCatalog', value: { voices: [], more: false, loading: true, error: false } });
+  send({ type: 'speechCatalog', value: { voices: [], more: false, loading: false, error: false, reset: true } });
+  expect(text('speech-settings-status')).toBe('');
+});

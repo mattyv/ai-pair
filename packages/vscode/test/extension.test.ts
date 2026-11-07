@@ -13,6 +13,8 @@ import { settingSpeed } from '../src/panel_html';
 import { speechRuntimeAvailable } from '../src/speech_runtime_status';
 import type { SpeechOutput } from '../src/speech_service';
 import type { PanelWiring } from '../src/panel';
+import type { CatalogView } from '../src/speech_catalog';
+import type { SpeechSettings } from '../src/speech_types';
 import { installedSpeechModel, setupSpeech } from '../src/speech_setup';
 import { builtInPassage } from '../src/passage';
 import { claudeStarter, setUpAgent, writeLauncher } from '../src/setup';
@@ -46,6 +48,7 @@ const fakes = vi.hoisted(() => {
     diagnostics: [] as Array<InstanceType<typeof FakeDiagnostics>>,
     speech: [] as Array<InstanceType<typeof FakeSpeech>>,
     cloudClients: [] as Array<InstanceType<typeof FakeCloudClient>>,
+    catalogs: [] as Array<InstanceType<typeof FakeCatalog>>,
     starting: Promise.resolve(),
     arms: true,
   };
@@ -88,9 +91,10 @@ const fakes = vi.hoisted(() => {
   class FakeCatalog {
     constructor(
       client: unknown,
-      private readonly publish: (view: { voices: never[]; more: boolean; loading: boolean; error: boolean }) => void,
+      readonly publish: (view: CatalogView) => void,
     ) {
       void client;
+      made.catalogs.push(this);
     }
     readonly contains = vi.fn(() => false);
     readonly load = vi.fn(() => {
@@ -215,7 +219,7 @@ const fakes = vi.hoisted(() => {
     readonly showReadingSpeed = vi.fn();
     readonly showChatOrder = vi.fn();
     readonly showCodePlayback = vi.fn();
-    readonly showSpeechSettings = vi.fn();
+    readonly showSpeechSettings = vi.fn<(value: SpeechSettings) => void>();
     readonly showSpeechKeyStatus = vi.fn();
     readonly showSpeechCatalog = vi.fn();
     readonly showSpeechStatus = vi.fn();
@@ -290,6 +294,8 @@ const fakes = vi.hoisted(() => {
     folders: undefined as Array<{ uri: { fsPath: string } }> | undefined,
     /** The `aiPair` settings, by name. */
     settings: new Map<string, unknown>(),
+    delaySettings: false,
+    providerGate: undefined as Promise<void> | undefined,
     updated: [] as Array<[string, unknown, unknown]>,
     commands: new Map<string, () => unknown>(),
     errors: [] as string[],
@@ -319,7 +325,14 @@ vi.mock('vscode', () => ({
       inspect: (key: string) => ({ globalValue: fakes.settings.get(key) }),
       update: (key: string, value: unknown, target: unknown) => {
         fakes.updated.push([key, value, target]);
-        fakes.settings.set(key, value);
+        if (key === 'speech.provider' && fakes.providerGate !== undefined) {
+          const gate = fakes.providerGate;
+          fakes.providerGate = undefined;
+          return gate.then(() => {
+            fakes.settings.set(key, value);
+          });
+        }
+        if (!fakes.delaySettings) fakes.settings.set(key, value);
         return Promise.resolve();
       },
     }),
@@ -489,6 +502,8 @@ afterEach(() => {
   if (originalArch !== undefined) Object.defineProperty(process, 'arch', originalArch);
   fakes.listeners.clear();
   fakes.settings.clear();
+  fakes.delaySettings = false;
+  fakes.providerGate = undefined;
   fakes.commands.clear();
   for (const list of [fakes.made.controllers, fakes.made.bridges, fakes.made.editors, fakes.made.panels, fakes.made.calibrations]) {
     list.length = 0;
@@ -616,6 +631,76 @@ describe('activate', () => {
     expect(h.panel.showSpeechStatus).toHaveBeenCalledWith(2, 'unavailable', 'Audio could not play.');
   });
 
+  it('records only sanitized actual preview failures and panel diagnostics', async () => {
+    const h = activated();
+    const speech = last(fakes.made.speech);
+    const diagnostics = last(fakes.made.diagnostics);
+    h.panel.wiring.speech.diagnostic({ kind: 'speech', event: 'preview', phase: 'received', provider: 'kokoro' });
+    speech.preview.mockImplementationOnce(() => {
+      speech.options.output.status(8, 'unavailable', 'private provider detail');
+      return Promise.resolve();
+    });
+    await h.panel.wiring.speech.preview();
+    expect(diagnostics.record.mock.calls).toContainEqual([
+      { kind: 'speech', event: 'preview', phase: 'failed', provider: 'kokoro', reason: 'unknown' },
+    ]);
+    expect(JSON.stringify(diagnostics.record.mock.calls)).not.toContain('private provider detail');
+  });
+
+  it('reports cloud capability without exposing key material', async () => {
+    const ctx = context();
+    ctx.secrets.get.mockResolvedValue('private-key');
+    const h = activated(ctx);
+    const diagnostics = last(fakes.made.diagnostics);
+    h.panel.wiring.speech.keyRefresh();
+    await vi.waitFor(() => {
+      expect(diagnostics.record.mock.calls).toContainEqual([
+        { kind: 'speech', event: 'capability', provider: 'elevenlabs', phase: 'ready' },
+      ]);
+    });
+    expect(JSON.stringify(diagnostics.record.mock.calls)).not.toContain('private-key');
+  });
+
+  it('reports cloud capability as unsupported on remote hosts', async () => {
+    fakes.remoteName = 'remote';
+    const ctx = context();
+    ctx.secrets.get.mockResolvedValue('private-key');
+    const h = activated(ctx);
+    const diagnostics = last(fakes.made.diagnostics);
+    h.panel.wiring.speech.keyRefresh();
+    await vi.waitFor(() => {
+      expect(diagnostics.record.mock.calls).toContainEqual([
+        { kind: 'speech', event: 'capability', provider: 'elevenlabs', phase: 'blocked', reason: 'unsupported' },
+      ]);
+    });
+    fakes.remoteName = undefined;
+  });
+
+  it('keeps the newer preview diagnostic when an older preview settles late', async () => {
+    const h = activated();
+    const speech = last(fakes.made.speech);
+    const diagnostics = last(fakes.made.diagnostics);
+    const old = Promise.withResolvers<void>();
+    const current = Promise.withResolvers<void>();
+    speech.preview.mockImplementationOnce(() => {
+      speech.options.output.status(1, 'preparing');
+      return old.promise;
+    });
+    speech.preview.mockImplementationOnce(() => {
+      speech.options.output.status(2, 'preparing');
+      return current.promise;
+    });
+    const first = h.panel.wiring.speech.preview();
+    const second = h.panel.wiring.speech.preview();
+    old.resolve();
+    await first;
+    speech.options.output.status(2, 'speaking', 'private content');
+    expect(diagnostics.record.mock.calls).toContainEqual([{ kind: 'speech', event: 'preview', provider: 'kokoro', phase: 'ready' }]);
+    expect(JSON.stringify(diagnostics.record.mock.calls)).not.toContain('private content');
+    current.resolve();
+    await second;
+  });
+
   it('copies a fresh diagnostic snapshot only on request and connects lifecycle sources', async () => {
     const h = activated();
     const diagnostics = fakes.made.diagnostics.at(-1);
@@ -645,6 +730,7 @@ describe('activate', () => {
     });
     expect(speech.options.localDesktop).toBe(true);
     fakes.settings.set('speech.enabled', true);
+    changed('speech', 'speech.enabled');
     fakes.settings.set('speech.voice', 'bf_emma');
     fakes.settings.set('speech.speed', 1.25);
     expect(speech.options.settings()).toEqual({
@@ -678,6 +764,9 @@ describe('activate', () => {
     fakes.settings.set('speech.enabled', true);
     wiring.settings.set({ enabled: false, provider: 'kokoro', voice: 'bf_emma', speed: 1.25, elevenLabsVoice: '', elevenLabsSpeed: 1 });
     expect(speech.cancel).toHaveBeenCalledOnce();
+    await vi.waitFor(() => {
+      expect(fakes.updated).toContainEqual(['speech.speed', 1.25, 1]);
+    });
     expect(fakes.updated).toEqual(
       expect.arrayContaining([
         ['speech.enabled', false, 1],
@@ -759,6 +848,9 @@ describe('activate', () => {
       elevenLabsSpeed: 1.2,
     });
     expect(speech.cancel.mock.calls).toHaveLength(1);
+    await vi.waitFor(() => {
+      expect(fakes.updated).toContainEqual(['speech.elevenLabsVoice', 'voice1', 1]);
+    });
     expect(fakes.updated).toContainEqual(['speech.provider', 'elevenlabs', 1]);
     expect(fakes.updated).toContainEqual(['speech.elevenLabsVoice', 'voice1', 1]);
     fire('secrets', { key: 'unrelated' });
@@ -768,7 +860,7 @@ describe('activate', () => {
     await wiring.keyRemove();
     expect(h.context.secrets.delete.mock.calls).toEqual([['aiPair.elevenLabs.apiKey']]);
     changed('speech', 'speech.provider');
-    expect(speech.cancel.mock.calls.length).toBeGreaterThan(1);
+    expect(speech.cancel.mock.calls).toHaveLength(1);
   });
 
   it('reports key command failures without revealing errors', async () => {
@@ -781,6 +873,204 @@ describe('activate', () => {
     await command('aiPair.removeElevenLabsKey');
     expect(fakes.errors).toContain('Could not remove the ElevenLabs API key.');
     expect(JSON.stringify(fakes.errors)).not.toContain('private');
+  });
+
+  it('ProviderAligned: uses a selected provider immediately while its global setting is still being saved', () => {
+    const h = activated();
+    fakes.delaySettings = true;
+    h.panel.wiring.speech.settings.set({
+      enabled: false,
+      provider: 'elevenlabs',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+    });
+    expect(h.panel.wiring.speech.settings.get().provider).toBe('elevenlabs');
+    fakes.delaySettings = false;
+  });
+
+  it('restores only a newly selected catalog voice after the key reset is saved', async () => {
+    fakes.settings.set('speech.elevenLabsVoice', 'old');
+    const h = activated();
+    const catalog = last(fakes.made.catalogs);
+    fire('secrets', { key: 'aiPair.elevenLabs.apiKey' });
+    await vi.waitFor(() => {
+      expect(fakes.settings.get('speech.elevenLabsVoice')).toBe('');
+    });
+    catalog.contains.mockReturnValue(true);
+    h.panel.wiring.speech.settings.set({
+      enabled: false,
+      provider: 'elevenlabs',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: 'new-account-voice',
+      elevenLabsSpeed: 1,
+    });
+    await vi.waitFor(() => {
+      expect(fakes.settings.get('speech.elevenLabsVoice')).toBe('new-account-voice');
+    });
+    await vi.waitFor(() => {
+      expect(h.panel.showSpeechSettings.mock.lastCall?.[0].elevenLabsVoice).toBe('new-account-voice');
+    });
+    expect(h.panel.wiring.speech.settings.get().elevenLabsVoice).toBe('new-account-voice');
+  });
+
+  it('records only sanitized catalog completion facts and ignores reset as a success', () => {
+    const h = activated();
+    const catalog = last(fakes.made.catalogs);
+    const diagnostics = last(fakes.made.diagnostics);
+    h.panel.wiring.speech.loadVoices(false);
+    catalog.publish({ voices: [], more: false, loading: false, error: false, reset: true });
+    expect(diagnostics.record.mock.calls).not.toContainEqual([
+      { kind: 'speech', event: 'catalog', provider: 'elevenlabs', phase: 'ready', reason: 'no_voice' },
+    ]);
+    h.panel.wiring.speech.loadVoices(false);
+    catalog.publish({ voices: [], more: false, loading: false, error: true, errorKind: 'auth' });
+    expect(diagnostics.record.mock.calls).toContainEqual([
+      { kind: 'speech', event: 'catalog', provider: 'elevenlabs', phase: 'failed', reason: 'auth' },
+    ]);
+    h.panel.wiring.speech.loadVoices(false);
+    catalog.publish({ voices: [], more: false, loading: false, error: false });
+    expect(diagnostics.record.mock.calls).toContainEqual([
+      { kind: 'speech', event: 'catalog', provider: 'elevenlabs', phase: 'ready', reason: 'no_voice' },
+    ]);
+  });
+
+  it('records loaded catalogs and unknown errors only after an actual request', () => {
+    const h = activated();
+    const catalog = last(fakes.made.catalogs);
+    const diagnostics = last(fakes.made.diagnostics);
+    catalog.publish({ voices: [], more: false, loading: false, error: false });
+    h.panel.wiring.speech.loadVoices(false);
+    catalog.publish({ voices: [{ id: 'opaque', name: 'Voice' }], more: false, loading: false, error: false });
+    expect(diagnostics.record.mock.calls).toContainEqual([{ kind: 'speech', event: 'catalog', provider: 'elevenlabs', phase: 'ready' }]);
+    h.panel.wiring.speech.loadVoices(false);
+    catalog.publish({ voices: [], more: false, loading: false, error: true });
+    expect(diagnostics.record.mock.calls).toContainEqual([
+      { kind: 'speech', event: 'catalog', provider: 'elevenlabs', phase: 'failed', reason: 'unknown' },
+    ]);
+    expect(JSON.stringify(diagnostics.record.mock.calls)).not.toContain('opaque');
+  });
+
+  it('KeyClearsVoice: clears an old account voice even while a settings save is pending', async () => {
+    const h = activated();
+    const gate = Promise.withResolvers<void>();
+    fakes.providerGate = gate.promise;
+    h.panel.wiring.speech.settings.set({
+      enabled: false,
+      provider: 'elevenlabs',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: 'old-account-voice',
+      elevenLabsSpeed: 1,
+    });
+    fire('secrets', { key: 'aiPair.elevenLabs.apiKey' });
+    expect(h.panel.wiring.speech.settings.get().elevenLabsVoice).toBe('');
+    gate.resolve();
+    await vi.waitFor(() => {
+      expect(fakes.settings.get('speech.elevenLabsVoice')).toBe('');
+    });
+    expect(h.panel.wiring.speech.settings.get().elevenLabsVoice).toBe('');
+  });
+
+  it('KeyClearsVoice: keeps the old account voice unavailable when a key-reset write fails', async () => {
+    fakes.settings.set('speech.elevenLabsVoice', 'old-account-voice');
+    const h = activated();
+    const gate = Promise.withResolvers<void>();
+    fakes.providerGate = gate.promise;
+    fire('secrets', { key: 'aiPair.elevenLabs.apiKey' });
+    expect(h.panel.wiring.speech.settings.get().elevenLabsVoice).toBe('');
+    gate.reject(new Error('private'));
+    await vi.waitFor(() => {
+      expect(fakes.errors).toContain('Could not save speech settings.');
+    });
+    expect(h.panel.wiring.speech.settings.get().elevenLabsVoice).toBe('');
+  });
+
+  it('ProviderAligned: does not cancel a preview on delayed settings echoes or unchanged disabled state', async () => {
+    const h = activated();
+    const speech = last(fakes.made.speech);
+    const gate = Promise.withResolvers<void>();
+    fakes.providerGate = gate.promise;
+    h.panel.wiring.speech.settings.set({
+      enabled: false,
+      provider: 'elevenlabs',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+    });
+    expect(speech.cancel.mock.calls).toHaveLength(1);
+    changed('speech', 'speech.provider', 'speech.enabled');
+    expect(speech.cancel.mock.calls).toHaveLength(1);
+    gate.resolve();
+    await vi.waitFor(() => {
+      expect(fakes.settings.get('speech.provider')).toBe('elevenlabs');
+    });
+    changed('speech', 'speech.enabled');
+    expect(speech.cancel.mock.calls).toHaveLength(1);
+  });
+
+  it('LatestHonored, Settlement: keeps the latest choice when an older global write settles', async () => {
+    const h = activated();
+    const gate = Promise.withResolvers<void>();
+    fakes.providerGate = gate.promise;
+    const base = { enabled: false, voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 };
+    h.panel.wiring.speech.settings.set({ ...base, provider: 'elevenlabs' });
+    h.panel.wiring.speech.settings.set({ ...base, provider: 'kokoro' });
+    changed('speech', 'speech.provider');
+    expect(h.panel.wiring.speech.settings.get().provider).toBe('kokoro');
+    gate.resolve();
+    await vi.waitFor(() => {
+      expect(fakes.settings.get('speech.provider')).toBe('kokoro');
+    });
+    expect(h.panel.wiring.speech.settings.get().provider).toBe('kokoro');
+  });
+
+  it('LatestHonored: does not roll back a newer provider when an older write fails', async () => {
+    const h = activated();
+    const gate = Promise.withResolvers<void>();
+    fakes.providerGate = gate.promise;
+    const base = { enabled: false, voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 };
+    h.panel.wiring.speech.settings.set({ ...base, provider: 'elevenlabs' });
+    h.panel.wiring.speech.settings.set({ ...base, provider: 'kokoro' });
+    gate.reject(new Error('old failure'));
+    await vi.waitFor(() => {
+      expect(fakes.settings.get('speech.provider')).toBe('kokoro');
+    });
+    expect(h.panel.wiring.speech.settings.get().provider).toBe('kokoro');
+    expect(fakes.errors).not.toContain('Could not save speech settings.');
+  });
+
+  it('Settlement: rolls back the latest provider and reports a failed settings write', async () => {
+    const h = activated();
+    const gate = Promise.withResolvers<void>();
+    fakes.providerGate = gate.promise;
+    h.panel.wiring.speech.settings.set({
+      enabled: false,
+      provider: 'elevenlabs',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+    });
+    expect(h.panel.wiring.speech.settings.get().provider).toBe('elevenlabs');
+    gate.reject(new Error('private settings failure'));
+    await vi.waitFor(() => {
+      expect(fakes.errors).toContain('Could not save speech settings.');
+    });
+    expect(h.panel.wiring.speech.settings.get().provider).toBe('kokoro');
+    expect(JSON.stringify(fakes.errors)).not.toContain('private');
+  });
+
+  it('cancels on a genuine external provider change after pending writes settle', () => {
+    const h = activated();
+    const speech = last(fakes.made.speech);
+    fakes.settings.set('speech.provider', 'elevenlabs');
+    changed('speech', 'speech.provider');
+    expect(speech.cancel.mock.calls).toHaveLength(1);
+    expect(h.panel.showSpeechSettings.mock.lastCall?.[0].provider).toBe('elevenlabs');
   });
 
   it('TypeOK: ignores workspace attempts to select the cloud provider', () => {

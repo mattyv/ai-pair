@@ -132,40 +132,19 @@ export function activate(context: vscode.ExtensionContext): Api {
   let calibration: Calibration;
   let speech: SpeechService;
   let speechObservation: SpeechObservation | undefined;
+  let previewCapture = false;
+  let previewSequence = 0;
+  let previewId: number | undefined;
+  let previewProvider: 'kokoro' | 'elevenlabs' = 'kokoro';
+  let catalogRequestActive = false;
   const localSpeechSupported = speechSupported();
   let runtimeSpeechSupported = false;
   const cloudSupported = vscode.env.remoteName === undefined && vscode.env.uiKind === vscode.UIKind.Desktop;
   let keyStatusEpoch = 0;
+  let cloudVoiceInvalidated = false;
   let panel: NarrationPanel;
   let catalog: SpeechCatalog;
-  const credentials = new SpeechCredentials(
-    context.secrets,
-    () =>
-      vscode.window.showInputBox({
-        title: 'ElevenLabs API key',
-        password: true,
-        ignoreFocusOut: true,
-        prompt: 'Use a key with Text to Speech and Voices read access.',
-      }),
-    () => {
-      keyStatusEpoch++;
-      catalog.invalidate();
-      speech.invalidateCloud();
-      void config().update('speech.elevenLabsVoice', '', vscode.ConfigurationTarget.Global);
-    },
-  );
-  const cloud = new ElevenLabsClient(() => credentials.read());
-  function refreshKey(): void {
-    const epoch = ++keyStatusEpoch;
-    void credentials.hasKey().then(
-      (hasKey) => {
-        if (epoch === keyStatusEpoch) panel.showSpeechKeyStatus(hasKey);
-      },
-      () => {
-        if (epoch === keyStatusEpoch) panel.showSpeechKeyStatus(false);
-      },
-    );
-  }
+  let credentials: SpeechCredentials;
   const diagnostics = new Diagnostics({ version: AI_PAIR_VERSION, build: AI_PAIR_BUILD_ID });
   function record(event: DiagnosticEvent): void {
     diagnostics.record(event);
@@ -198,25 +177,31 @@ export function activate(context: vscode.ExtensionContext): Api {
       void config().update(CODE_PLAYBACK, value, vscode.ConfigurationTarget.Global);
     },
   };
+  let pendingSpeechSettings: SpeechSettings | undefined;
+  let speechSaveGeneration = 0;
+  let speechSaveTail: Promise<void> = Promise.resolve();
+  function storedSpeechSettings(): SpeechSettings {
+    const enabled: unknown = config().get('speech.enabled');
+    const rawVoice: unknown = config().get('speech.voice');
+    const rawSpeed: unknown = config().get('speech.speed');
+    const voice = typeof rawVoice === 'string' ? rawVoice : 'af_heart';
+    const speechRate = typeof rawSpeed === 'number' ? rawSpeed : 1;
+    const choice = config().inspect<string>('speech.provider')?.globalValue;
+    const cloudVoice: unknown = config().get('speech.elevenLabsVoice');
+    const cloudSpeed: unknown = config().get('speech.elevenLabsSpeed');
+    return {
+      enabled: enabled === true,
+      voice,
+      speed: speechRate,
+      provider: choice === 'elevenlabs' ? 'elevenlabs' : 'kokoro',
+      elevenLabsVoice: !cloudVoiceInvalidated && typeof cloudVoice === 'string' ? cloudVoice : '',
+      elevenLabsSpeed: typeof cloudSpeed === 'number' ? cloudSpeed : 1,
+    };
+  }
+  let lastSpeechProvider = storedSpeechSettings().provider;
+  let lastSpeechEnabled = storedSpeechSettings().enabled;
   const speechSettings = {
-    get: (): SpeechSettings => {
-      const enabled: unknown = config().get('speech.enabled');
-      const rawVoice: unknown = config().get('speech.voice');
-      const rawSpeed: unknown = config().get('speech.speed');
-      const voice = typeof rawVoice === 'string' ? rawVoice : 'af_heart';
-      const speechSpeed = typeof rawSpeed === 'number' ? rawSpeed : 1;
-      const choice = config().inspect<string>('speech.provider')?.globalValue;
-      const cloudVoice: unknown = config().get('speech.elevenLabsVoice');
-      const cloudSpeed: unknown = config().get('speech.elevenLabsSpeed');
-      return {
-        enabled: enabled === true,
-        voice,
-        speed: speechSpeed,
-        provider: choice === 'elevenlabs' ? 'elevenlabs' : 'kokoro',
-        elevenLabsVoice: typeof cloudVoice === 'string' ? cloudVoice : '',
-        elevenLabsSpeed: typeof cloudSpeed === 'number' ? cloudSpeed : 1,
-      };
-    },
+    get: (): SpeechSettings => pendingSpeechSettings ?? storedSpeechSettings(),
     set: (value: SpeechSettings): void => {
       const prior = speechSettings.get();
       if ((prior.enabled && !value.enabled) || prior.provider !== value.provider) {
@@ -226,15 +211,88 @@ export function activate(context: vscode.ExtensionContext): Api {
           catalog.invalidate();
         }
       }
-      void config().update('speech.enabled', value.enabled, vscode.ConfigurationTarget.Global);
-      void config().update('speech.voice', value.voice, vscode.ConfigurationTarget.Global);
-      void config().update('speech.speed', value.speed, vscode.ConfigurationTarget.Global);
-      void config().update('speech.provider', value.provider, vscode.ConfigurationTarget.Global);
-      void config().update('speech.elevenLabsVoice', value.elevenLabsVoice, vscode.ConfigurationTarget.Global);
-      void config().update('speech.elevenLabsSpeed', value.elevenLabsSpeed, vscode.ConfigurationTarget.Global);
+      // specs/ProviderChoice.tla, Select: use the latest choice before disk writes settle.
+      const restoresVoice = cloudVoiceInvalidated && value.elevenLabsVoice !== '' && catalog.contains(value.elevenLabsVoice);
+      const generation = ++speechSaveGeneration;
+      pendingSpeechSettings = { ...value };
+      lastSpeechProvider = value.provider;
+      lastSpeechEnabled = value.enabled;
+      const saveOperation = speechSaveTail.then(async () => {
+        const updates: Array<[string, unknown]> = [
+          ['speech.enabled', value.enabled],
+          ['speech.voice', value.voice],
+          ['speech.speed', value.speed],
+          ['speech.provider', value.provider],
+          ['speech.elevenLabsVoice', value.elevenLabsVoice],
+          ['speech.elevenLabsSpeed', value.elevenLabsSpeed],
+        ];
+        for (const [key, setting] of updates) {
+          await config().update(key, setting, vscode.ConfigurationTarget.Global);
+        }
+      });
+      speechSaveTail = saveOperation.catch(() => {});
+      void saveOperation.then(
+        () => {
+          // specs/ProviderChoice.tla, Success: an older write cannot replace a newer choice.
+          if (generation !== speechSaveGeneration) return;
+          pendingSpeechSettings = undefined;
+          if (restoresVoice) cloudVoiceInvalidated = false;
+          panel.showSpeechSettings(storedSpeechSettings());
+        },
+        () => {
+          // specs/ProviderChoice.tla, Failure: only the latest failed write rolls back.
+          if (generation !== speechSaveGeneration) return;
+          pendingSpeechSettings = undefined;
+          speech.cancel();
+          catalog.invalidate();
+          const restored = storedSpeechSettings();
+          lastSpeechProvider = restored.provider;
+          lastSpeechEnabled = restored.enabled;
+          panel.showSpeechSettings(restored);
+          void vscode.window.showErrorMessage('Could not save speech settings.');
+        },
+      );
     },
   };
-  let lastSpeechProvider = speechSettings.get().provider;
+  credentials = new SpeechCredentials(
+    context.secrets,
+    () =>
+      vscode.window.showInputBox({
+        title: 'ElevenLabs API key',
+        password: true,
+        ignoreFocusOut: true,
+        prompt: 'Use a key with Text to Speech and Voices read access.',
+      }),
+    () => {
+      keyStatusEpoch++;
+      catalog.invalidate();
+      speech.invalidateCloud();
+      // specs/ProviderChoice.tla, KeyChange: a queued old voice cannot revive.
+      cloudVoiceInvalidated = true;
+      speechSettings.set({ ...speechSettings.get(), elevenLabsVoice: '' });
+    },
+  );
+  const cloud = new ElevenLabsClient(() => credentials.read());
+  function refreshKey(): void {
+    const epoch = ++keyStatusEpoch;
+    void credentials.hasKey().then(
+      (hasKey) => {
+        if (epoch === keyStatusEpoch) {
+          panel.showSpeechKeyStatus(hasKey);
+          diagnostics.record({
+            kind: 'speech',
+            event: 'capability',
+            provider: 'elevenlabs',
+            phase: cloudSupported && hasKey ? 'ready' : 'blocked',
+            ...(!cloudSupported ? { reason: 'unsupported' as const } : !hasKey ? { reason: 'no_key' as const } : {}),
+          });
+        }
+      },
+      () => {
+        if (epoch === keyStatusEpoch) panel.showSpeechKeyStatus(false);
+      },
+    );
+  }
   const chatOrder = {
     get: () => (config().get<unknown>('chatOrder') === 'oldestFirst' ? ('oldestFirst' as const) : ('newestFirst' as const)),
     set: (value: 'newestFirst' | 'oldestFirst') => {
@@ -278,6 +336,9 @@ export function activate(context: vscode.ExtensionContext): Api {
       },
       speech: {
         settings: speechSettings,
+        diagnostic: (event) => {
+          diagnostics.record(event);
+        },
         cloudSupported: () => cloudSupported,
         keySet: async () => {
           await credentials.set();
@@ -293,9 +354,31 @@ export function activate(context: vscode.ExtensionContext): Api {
         },
         validCloudVoice: (id) => catalog.contains(id),
         supported: () => localSpeechSupported && runtimeSpeechSupported,
-        installed: async () => (await installedSpeechModel(context.globalStorageUri.fsPath)) !== undefined,
+        installed: async () => {
+          const available = (await installedSpeechModel(context.globalStorageUri.fsPath)) !== undefined;
+          diagnostics.record({
+            kind: 'speech',
+            event: 'capability',
+            provider: 'kokoro',
+            phase: available ? 'ready' : 'blocked',
+            ...(available ? {} : { reason: 'not_ready' as const }),
+          });
+          return available;
+        },
         setup: () => setupSpeech(context.globalStorageUri.fsPath),
-        preview: () => speech.preview(),
+        preview: () => {
+          previewProvider = speechSettings.get().provider;
+          const sequence = ++previewSequence;
+          previewId = undefined;
+          previewCapture = true;
+          try {
+            return speech.preview().finally(() => {
+              if (sequence === previewSequence) previewId = undefined;
+            });
+          } finally {
+            previewCapture = false;
+          }
+        },
         stop: () => {
           speech.cancel();
         },
@@ -318,10 +401,29 @@ export function activate(context: vscode.ExtensionContext): Api {
     codePlayback,
   );
   catalog = new SpeechCatalog(cloud, (value) => {
+    if (value.reset) catalogRequestActive = false;
+    else if (value.loading) catalogRequestActive = true;
+    else if (catalogRequestActive) {
+      catalogRequestActive = false;
+      diagnostics.record({
+        kind: 'speech',
+        event: 'catalog',
+        provider: 'elevenlabs',
+        phase: value.error ? 'failed' : 'ready',
+        ...(value.error ? { reason: value.errorKind ?? 'unknown' } : value.voices.length === 0 ? { reason: 'no_voice' } : {}),
+      });
+    }
     panel.showSpeechCatalog(value);
   });
   void speechRuntimeAvailable(path.join(context.extensionPath, 'dist', 'speech')).then((available) => {
     runtimeSpeechSupported = available;
+    diagnostics.record({
+      kind: 'speech',
+      event: 'capability',
+      provider: 'kokoro',
+      phase: localSpeechSupported && available ? 'ready' : 'blocked',
+      ...(!localSpeechSupported ? { reason: 'unsupported' as const } : !available ? { reason: 'not_ready' as const } : {}),
+    });
     panel.refreshSpeechSupport();
   });
   speech = new SpeechService({
@@ -337,6 +439,16 @@ export function activate(context: vscode.ExtensionContext): Api {
         panel.controlSpeech(id, pageId, action);
       },
       status: (id, state, message) => {
+        if (previewCapture) previewId = id;
+        if (id === previewId && (state === 'speaking' || state === 'unavailable')) {
+          diagnostics.record({
+            kind: 'speech',
+            event: 'preview',
+            provider: previewProvider,
+            phase: state === 'speaking' ? 'ready' : 'failed',
+            ...(state === 'unavailable' ? { reason: 'unknown' as const } : {}),
+          });
+        }
         const started = state === 'speaking' || (speechObservation?.id === id && speechObservation.started);
         speechObservation = { id, state, started, ...(message === undefined ? {} : { message }) };
         panel.showSpeechStatus(id, state, message);
@@ -487,17 +599,16 @@ export function activate(context: vscode.ExtensionContext): Api {
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('aiPair.speech')) {
         const current = speechSettings.get();
-        if (
-          (e.affectsConfiguration('aiPair.speech.enabled') && !current.enabled) ||
-          (e.affectsConfiguration('aiPair.speech.provider') && current.provider !== lastSpeechProvider)
-        ) {
-          speech.cancel();
+        // specs/ProviderChoice.tla, External: persistence echoes cannot undo a pending choice.
+        if (pendingSpeechSettings === undefined) {
+          if ((lastSpeechEnabled && !current.enabled) || current.provider !== lastSpeechProvider) speech.cancel();
+          if (current.provider !== lastSpeechProvider) {
+            credentials.supersede();
+            catalog.invalidate();
+          }
+          lastSpeechProvider = current.provider;
+          lastSpeechEnabled = current.enabled;
         }
-        if (current.provider !== lastSpeechProvider) {
-          credentials.supersede();
-          catalog.invalidate();
-        }
-        lastSpeechProvider = current.provider;
         panel.showSpeechSettings(current);
       }
       if (e.affectsConfiguration('aiPair.chatOrder')) panel.showChatOrder(chatOrder.get());

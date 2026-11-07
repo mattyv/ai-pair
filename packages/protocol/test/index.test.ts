@@ -112,7 +112,7 @@ describe('fieldsProblem', () => {
   it('accepts only bounded plain speech units and allows unflagged narration', () => {
     for (const action of [
       { say: 'Hello.', speak: true },
-      { say: '😀'.repeat(280), speak: true },
+      { say: '\u{1F600}'.repeat(280), speak: true },
       { say: Array.from({ length: 45 }, () => 'word').join(' '), speak: true },
       { say: ' '.repeat(300) },
       { say: '```code```', speak: false },
@@ -123,7 +123,7 @@ describe('fieldsProblem', () => {
     for (const action of [
       { say: '', speak: true },
       { say: '   ', speak: true },
-      { say: '😀'.repeat(281), speak: true },
+      { say: '\u{1F600}'.repeat(281), speak: true },
       { say: Array.from({ length: 46 }, () => 'word').join(' '), speak: true },
       { say: '```code```', speak: true },
       { say: '~~~\ncode\n~~~', speak: true },

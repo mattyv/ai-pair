@@ -1,3 +1,5 @@
+import type { SpeechDiagnosticReason } from './diagnostics';
+
 /** The nonsecret voice data shown in Settings. */
 export interface CatalogVoice {
   id: string;
@@ -17,6 +19,8 @@ export interface CatalogView {
   more: boolean;
   loading: boolean;
   error: boolean;
+  errorKind?: SpeechDiagnosticReason;
+  reset?: true;
 }
 
 const MAX_VOICES = 500;
@@ -47,7 +51,7 @@ export class SpeechCatalog {
     this.voices = [];
     this.next = undefined;
     this.cursors.clear();
-    this.publish({ voices: [], more: false, loading: false, error: false });
+    this.publish({ voices: [], more: false, loading: false, error: false, reset: true });
   }
 
   /** Loads the first page or the next page only on explicit request. */
@@ -72,9 +76,16 @@ export class SpeechCatalog {
       this.next = next !== undefined && !this.cursors.has(next) && this.voices.length < MAX_VOICES ? next : undefined;
       if (next !== undefined) this.cursors.add(next);
       this.publish({ voices: this.voices, more: this.next !== undefined, loading: false, error: false });
-    } catch {
+    } catch (error: unknown) {
       if (epoch !== this.epoch) return;
-      this.publish({ voices: this.voices, more: false, loading: false, error: true });
+      const kind = typeof error === 'object' && error !== null && 'kind' in error ? error.kind : undefined;
+      const errorKind: SpeechDiagnosticReason =
+        kind === 'key'
+          ? 'no_key'
+          : kind === 'auth' || kind === 'rate' || kind === 'network' || kind === 'timeout' || kind === 'invalid' || kind === 'canceled'
+            ? kind
+            : 'unknown';
+      this.publish({ voices: this.voices, more: false, loading: false, error: true, errorKind });
     }
   }
 }

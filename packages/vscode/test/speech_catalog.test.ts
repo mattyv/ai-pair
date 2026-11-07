@@ -63,5 +63,33 @@ it('ignores an aborted request that rejects after its catalog was invalidated', 
   catalog.invalidate();
   old.reject(new Error('aborted'));
   await request;
-  expect(publish.mock.lastCall?.[0]).toEqual({ voices: [], more: false, loading: false, error: false });
+  expect(publish.mock.lastCall?.[0]).toEqual({ voices: [], more: false, loading: false, error: false, reset: true });
+});
+
+it('retains only an allowlisted failure category for diagnostics and display', async () => {
+  const publish = vi.fn<(view: CatalogView) => void>();
+  const catalog = new SpeechCatalog({ voices: vi.fn().mockRejectedValue({ kind: 'auth', key: 'do-not-copy' }) }, publish);
+  await catalog.load(false);
+  expect(publish.mock.lastCall?.[0]).toMatchObject({ error: true, errorKind: 'auth' });
+  expect(JSON.stringify(publish.mock.calls)).not.toContain('do-not-copy');
+});
+
+it('maps missing-key and unknown errors to fixed safe categories', async () => {
+  for (const [error, expected] of [
+    [{ kind: 'key' }, 'no_key'],
+    [new Error('private detail'), 'unknown'],
+  ] as const) {
+    const publish = vi.fn<(view: CatalogView) => void>();
+    const catalog = new SpeechCatalog({ voices: vi.fn().mockRejectedValue(error) }, publish);
+    await catalog.load(false);
+    expect(publish.mock.lastCall?.[0]).toMatchObject({ error: true, errorKind: expected });
+    expect(JSON.stringify(publish.mock.calls)).not.toContain('private detail');
+  }
+});
+
+it('marks invalidation as a reset rather than a successful empty result', () => {
+  const publish = vi.fn<(view: CatalogView) => void>();
+  const catalog = new SpeechCatalog({ voices: vi.fn() }, publish);
+  catalog.invalidate();
+  expect(publish.mock.lastCall?.[0]).toMatchObject({ reset: true, voices: [], loading: false, error: false });
 });

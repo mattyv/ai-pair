@@ -11,7 +11,9 @@ It adds:
 -   Typing, Lines, or Blocks in a separate code-display dropdown and Settings.
     The existing pace and reading-speed controls still adjust playback.
 -   Quiet command terminals by default, with an option to reveal a run.
--   Copyable session diagnostics and a running version and build in Settings.
+-   Copyable session and speech diagnostics, plus a running version and build
+    in Settings. Speech diagnostics show capability, button dispatch and safe
+    failure categories without copying keys, narration or audio.
 -   Optional local Kokoro speech for narration selected by the connected coding
     agent. Speech is off by default and needs no additional API key. In Settings,
     run **Download Kokoro model** to download about 94 MB, then **Preview voice**.

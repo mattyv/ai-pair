@@ -133,12 +133,12 @@ describe('grouped code playback', () => {
 
   it('BoundedGroups: limits blocks to four lines and 240 Unicode characters', () => {
     expect(groups('a\nb\nc\nd\ne', 'blocks')).toEqual(['a\nb\nc\nd\n', 'e']);
-    const text = '😀'.repeat(241);
+    const text = '\u{1F600}'.repeat(241);
     expect(groups(text, 'blocks').map((part) => Array.from(part).length)).toEqual([240, 1]);
   });
 
   it('bounds long lines by Unicode characters and prefers whitespace', () => {
-    expect(groups('😀'.repeat(241), 'lines').map((part) => Array.from(part).length)).toEqual([240, 1]);
+    expect(groups('\u{1F600}'.repeat(241), 'lines').map((part) => Array.from(part).length)).toEqual([240, 1]);
     const line = `${'a'.repeat(200)} ${'b'.repeat(100)}`;
     expect(groups(line, 'lines')).toEqual([`${'a'.repeat(200)} `, 'b'.repeat(100)]);
     const quotes = '"'.repeat(241);

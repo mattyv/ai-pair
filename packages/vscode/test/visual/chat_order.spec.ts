@@ -701,10 +701,16 @@ test('speech provider controls are explicit and render account voices as text', 
   await post({ type: 'speechCatalog', value: { voices: [], more: false, loading: false, error: false } });
   await expect(more).toBeHidden();
   await dialog.getByRole('button', { name: 'Load voices', exact: true }).click();
+  const status = dialog.locator('[data-ui="speech-settings-status"]');
+  await post({ type: 'speechCatalog', value: { voices: [], more: false, loading: false, error: true, errorKind: 'network' } });
+  await expect(status).toHaveText('Could not connect to ElevenLabs. Check your network.');
+  await post({ type: 'speechCatalog', value: { voices: [], more: false, loading: true, error: false } });
+  await expect(status).toHaveText('Loading account voices...');
   await post({
     type: 'speechCatalog',
     value: { voices: [{ id: 'voice1', name: '<script>not markup</script>' }], more: false, loading: false, error: false },
   });
+  await expect(status).toHaveText('Account voices loaded.');
   await expect(dialog.getByRole('option', { name: '<script>not markup</script>' })).toHaveCount(1);
   await expect(dialog.locator('script')).toHaveCount(0);
   await dialog.getByLabel('Account voice').selectOption('voice1');

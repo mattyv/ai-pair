@@ -186,6 +186,8 @@ Last updated: tla, 2026-11-07.
 | `scripts/lint_tla.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/lint_web.test.ts` | TypeScript | test | test | test | test | - | test |
 | `scripts/lint_web.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `scripts/normalize_architecture.test.ts` | TypeScript | - | - | test | - | - | - |
+| `scripts/normalize_architecture.ts` | TypeScript | - | - | - | - | - | - |
 | `scripts/release.test.ts` | TypeScript | test | test | test | test | - | test |
 | `scripts/release.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/stylelint.config.ts` | TypeScript | - | - | - | - | - | - |
@@ -217,6 +219,7 @@ Last updated: tla, 2026-11-07.
 | `specs/DiagnosticsCopy.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/DiagnosticsPrivacy.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/DiagnosticsPrivacy.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
+| `specs/DiagnosticsPrivacy_Speech.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Discovery.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Discovery.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/Discovery_InPlace.cfg` | TLC config | - | - | - | - | - | - |
@@ -264,6 +267,8 @@ Last updated: tla, 2026-11-07.
 | `specs/PointFocus.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/ProjectGuide.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ProjectGuide.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
+| `specs/ProviderChoice.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/ProviderChoice.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/QuietTerminals.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/QuietTerminals.tla` | TLA+ | - | - | 7 of 7 actions | - | - | - |
 | `specs/QuietTerminals_Visible.cfg` | TLC config | - | - | - | - | - | - |

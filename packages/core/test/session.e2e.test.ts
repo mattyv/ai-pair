@@ -138,11 +138,14 @@ describe('where the controller and the player meet', () => {
     controller.setCodePlayback(mode);
     await controller.start();
     await controller.read('a.ts');
-    const result = await controller.step([{ select: { file: 'a.ts', line: 1, text: 'OLD' } }, { type: `one\r\n  😀${CURSOR_MARKER}two` }]);
+    const result = await controller.step([
+      { select: { file: 'a.ts', line: 1, text: 'OLD' } },
+      { type: `one\r\n  \u{1F600}${CURSOR_MARKER}two` },
+    ]);
     expect(result.rejected).toBeUndefined();
     await until(controller.step([]));
-    expect(editor.text('a.ts')).toBe('left one\r\n  😀two right\r\n');
-    expect(editor.cursor?.offset).toBe('left one\r\n  😀'.length);
+    expect(editor.text('a.ts')).toBe('left one\r\n  \u{1F600}two right\r\n');
+    expect(editor.cursor?.offset).toBe('left one\r\n  \u{1F600}'.length);
   });
 
   it('StableDuringChoice, NextActionUsesChoice: snapshots the mode for each typing action, while rehearsal stays instant', async () => {
@@ -213,9 +216,9 @@ describe('where the controller and the player meet', () => {
     editor.crlf.add(editor.resolvePath('a.ts'));
     controller.setCodePlayback('lines');
     await controller.start();
-    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `😀${CURSOR_MARKER}\nrest` }]);
+    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `\u{1F600}${CURSOR_MARKER}\nrest` }]);
     await advance(630);
-    expect(editor.text('a.ts')).toBe('😀\r\nrest');
+    expect(editor.text('a.ts')).toBe('\u{1F600}\r\nrest');
     editor.userEdit('a.ts', { offset: 0, deleteLength: 0, text: 'x' });
     const report = await until(controller.listen());
     expect(report.batches[0]?.unplayed).toBeUndefined();

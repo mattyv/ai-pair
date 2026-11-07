@@ -99,21 +99,21 @@ function normalize_text(text) {
   return (
     text
       // 1. Handle quotes and brackets
-      .replace(/[‘’]/g, "'")
-      .replace(/«/g, "“")
-      .replace(/»/g, "”")
-      .replace(/[“”]/g, '"')
-      .replace(/\(/g, "«")
-      .replace(/\)/g, "»")
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/\u00ab/g, "\u201c")
+      .replace(/\u00bb/g, "\u201d")
+      .replace(/[\u201c\u201d]/g, '"')
+      .replace(/\(/g, "\u00ab")
+      .replace(/\)/g, "\u00bb")
 
       // 2. Replace uncommon punctuation marks
-      .replace(/、/g, ", ")
-      .replace(/。/g, ". ")
-      .replace(/！/g, "! ")
-      .replace(/，/g, ", ")
-      .replace(/：/g, ": ")
-      .replace(/；/g, "; ")
-      .replace(/？/g, "? ")
+      .replace(/\u3001/g, ", ")
+      .replace(/\u3002/g, ". ")
+      .replace(/\uff01/g, "! ")
+      .replace(/\uff0c/g, ", ")
+      .replace(/\uff1a/g, ": ")
+      .replace(/\uff1b/g, "; ")
+      .replace(/\uff1f/g, "? ")
 
       // 3. Whitespace normalization
       .replace(/[^\S \n]/g, " ")
@@ -133,7 +133,7 @@ function normalize_text(text) {
       // 5. Handle numbers and currencies
       .replace(/\d*\.\d+|\b\d{4}s?\b|(?<!:)\b(?:[1-9]|1[0-2]):[0-5]\d\b(?!:)/g, split_num)
       .replace(/(?<=\d),(?=\d)/g, "")
-      .replace(/[$£]\d+(?:\.\d+)?(?: hundred| thousand| (?:[bm]|tr)illion)*\b|[$£]\d+\.\d\d?\b/gi, flip_money)
+      .replace(/[$\u00a3]\d+(?:\.\d+)?(?: hundred| thousand| (?:[bm]|tr)illion)*\b|[$\u00a3]\d+\.\d\d?\b/gi, flip_money)
       .replace(/\d*\.\d+/g, point_num)
       .replace(/(?<=\d)-(?=\d)/g, " to ")
       .replace(/(?<=\d)S/g, " S")
@@ -161,7 +161,7 @@ function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") // $& means the whole matched string
 }
 
-const PUNCTUATION = ';:,.!?¡¿—…"«»“”(){}[]'
+const PUNCTUATION = ';:,.!?\u00a1\u00bf\u2014\u2026"\u00ab\u00bb\u201c\u201d(){}[]'
 const PUNCTUATION_PATTERN = new RegExp(`(\\s*[${escapeRegExp(PUNCTUATION)}]+\\s*)+`, "g")
 
 /**
@@ -189,18 +189,18 @@ export async function phonemize(text, language = "a", norm = true) {
   // 4. Post-process phonemes
   let processed = ps
     // https://en.wiktionary.org/wiki/kokoro#English
-    .replace(/kəkˈoːɹoʊ/g, "kˈoʊkəɹoʊ")
-    .replace(/kəkˈɔːɹəʊ/g, "kˈəʊkəɹəʊ")
-    .replace(/ʲ/g, "j")
-    .replace(/r/g, "ɹ")
+    .replace(/k\u0259k\u02c8o\u02d0\u0279o\u028a/g, "k\u02c8o\u028ak\u0259\u0279o\u028a")
+    .replace(/k\u0259k\u02c8\u0254\u02d0\u0279\u0259\u028a/g, "k\u02c8\u0259\u028ak\u0259\u0279\u0259\u028a")
+    .replace(/\u02b2/g, "j")
+    .replace(/r/g, "\u0279")
     .replace(/x/g, "k")
-    .replace(/ɬ/g, "l")
-    .replace(/(?<=[a-zɹː])(?=hˈʌndɹɪd)/g, " ")
-    .replace(/ z(?=[;:,.!?¡¿—…"«»“” ]|$)/g, "z")
+    .replace(/\u026c/g, "l")
+    .replace(/(?<=[a-z\u0279\u02d0])(?=h\u02c8\u028cnd\u0279\u026ad)/g, " ")
+    .replace(/ z(?=[;:,.!?\u00a1\u00bf\u2014\u2026"\u00ab\u00bb\u201c\u201d ]|$)/g, "z")
 
   // 5. Additional post-processing for American English
   if (language === "a") {
-    processed = processed.replace(/(?<=nˈaɪn)ti(?!ː)/g, "di")
+    processed = processed.replace(/(?<=n\u02c8a\u026an)ti(?!\u02d0)/g, "di")
   }
   return processed.trim()
 }

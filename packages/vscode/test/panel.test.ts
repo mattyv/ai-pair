@@ -126,6 +126,7 @@ interface Harness {
       get: ReturnType<typeof vi.fn<() => import('../src/speech_types').SpeechSettings>>;
       set: ReturnType<typeof vi.fn>;
     };
+    diagnostic: ReturnType<typeof vi.fn<(event: import('../src/diagnostics').SpeechDiagnosticEvent) => void>>;
     supported: ReturnType<typeof vi.fn<() => boolean>>;
     installed: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
     setup: ReturnType<typeof vi.fn<() => Promise<void>>>;
@@ -184,6 +185,7 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
       })),
       set: vi.fn(),
     },
+    diagnostic: vi.fn<(event: import('../src/diagnostics').SpeechDiagnosticEvent) => void>(),
     cloudSupported: vi.fn(() => true),
     keySet: vi.fn<() => Promise<void>>().mockResolvedValue(),
     keyRemove: vi.fn<() => Promise<void>>().mockResolvedValue(),
@@ -1095,4 +1097,65 @@ it('reports key operation failures and respects unsupported cloud hosts', async 
   expect(speech.keyRemove.mock.calls).toEqual([]);
   expect(speech.preview.mock.calls).toEqual([]);
   expect(speech.loadVoices.mock.calls).toEqual([]);
+});
+
+it('records speech action receipt, dispatch and blocked reasons without private inputs', async () => {
+  const { panel, speech } = harness();
+  const view = open(panel);
+  speech.supported.mockReturnValue(false);
+  view.send({ type: 'speechPreview' });
+  view.send({ type: 'speechSetup' });
+  view.send({ type: 'speechVoicesLoad' });
+  expect(speech.diagnostic.mock.calls.map(([event]) => event)).toEqual([
+    { kind: 'speech', event: 'preview', phase: 'received', provider: 'kokoro' },
+    { kind: 'speech', event: 'preview', phase: 'blocked', provider: 'kokoro', reason: 'unsupported' },
+    { kind: 'speech', event: 'setup', phase: 'received', provider: 'kokoro' },
+    { kind: 'speech', event: 'setup', phase: 'blocked', provider: 'kokoro', reason: 'unsupported' },
+    { kind: 'speech', event: 'catalog', phase: 'received', provider: 'kokoro' },
+    { kind: 'speech', event: 'catalog', phase: 'blocked', provider: 'kokoro', reason: 'not_ready' },
+  ]);
+  expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Local speech is unsupported on this host.' });
+  expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Select ElevenLabs to load voices.' });
+  speech.diagnostic.mockClear();
+  speech.supported.mockReturnValue(true);
+  view.send({ type: 'speechPreview' });
+  view.send({ type: 'speechSetup' });
+  await flush();
+  expect(speech.diagnostic.mock.calls.map(([event]) => event)).toEqual([
+    { kind: 'speech', event: 'preview', phase: 'received', provider: 'kokoro' },
+    { kind: 'speech', event: 'preview', phase: 'dispatched', provider: 'kokoro' },
+    { kind: 'speech', event: 'setup', phase: 'received', provider: 'kokoro' },
+    { kind: 'speech', event: 'setup', phase: 'dispatched', provider: 'kokoro' },
+    { kind: 'speech', event: 'setup', phase: 'ready', provider: 'kokoro' },
+  ]);
+});
+
+it('records capability and local model readiness even before any action', async () => {
+  const { panel, speech } = harness();
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  await flush();
+  expect(speech.diagnostic).toHaveBeenCalledWith({ kind: 'speech', event: 'capability', phase: 'ready', provider: 'kokoro' });
+  expect(speech.diagnostic).toHaveBeenCalledWith({ kind: 'speech', event: 'capability', phase: 'ready', provider: 'elevenlabs' });
+  expect(speech.diagnostic).toHaveBeenCalledWith({
+    kind: 'speech',
+    event: 'setup',
+    phase: 'blocked',
+    provider: 'kokoro',
+    reason: 'not_ready',
+  });
+});
+
+it('records unsupported cloud capability when the page becomes ready', () => {
+  const { panel, speech } = harness();
+  speech.cloudSupported.mockReturnValue(false);
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  expect(speech.diagnostic).toHaveBeenCalledWith({
+    kind: 'speech',
+    event: 'capability',
+    phase: 'blocked',
+    provider: 'elevenlabs',
+    reason: 'unsupported',
+  });
 });

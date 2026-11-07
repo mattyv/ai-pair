@@ -95,6 +95,14 @@ Issue discussions and working notes hold the detailed evidence and history.
 
 ## Session diagnostics
 
+-   Record bounded speech capability, button dispatch and result events even
+    without a pairing session. Keep failure reasons in a fixed allowlist;
+    exclude API keys, narration, audio, voice identifiers and raw provider
+    responses. Empty catalogs and blocked actions must have visible feedback.
+-   Use the current in-memory speech choice immediately, while configuration
+    persistence completes asynchronously. Older write completions and settings
+    callbacks must not restore an earlier selection. Report persistence errors
+    rather than silently accepting a different provider for the next action.
 -   Keep a bounded, in-memory history of allowlisted lifecycle metadata for
     connection, requests, pause reasons, and commands. Exclude chat, source,
     paths, command text, output, and tokens. Copy a snapshot only on an explicit

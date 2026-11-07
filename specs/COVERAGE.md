@@ -144,6 +144,7 @@ Code goes without a spec for one of these reasons:
 | | `resolveWebviewView`, `reveal`, `focusReply`, `showSelection`, `showSpeed`, `showReadingSpeed`, `showTimings` | Glue |
 | | the `reply` message while a calibration runs, `showCalibration`, cancel on dispose and session end | `Calibration` |
 | | `askStart`, the `start` message, posting `startEnded` | `Start` |
+| `extension.ts` | effective speech preferences, queued writes and key reset | `ProviderChoice` (`Select`, `Success`, `Failure`, `External`, `KeyChange`) |
 | `speech_credentials.ts` | key prompt, storage and invalidation | `SpeechSettings` |
 | `speech_catalog.ts` | explicit catalog requests and invalidation | `SpeechSettings` |
 | `webview/speech_audio.ts` | page, unit, audio and controls | `SpeechPage` |
@@ -171,7 +172,7 @@ Code goes without a spec for one of these reasons:
 | `python_diagnostics.ts` | `pythonDiagnostic` | `Diagnostics`: bounded advisory check, with Python parsing source on stdin |
 | | `row`, `viewport`, `isOwnEdit` | Pure |
 | `output.ts` | `outcomeOf`, `push` | Pure: a command's output, cut to size |
-| `diagnostics.ts` | all | `DiagnosticsPrivacy`: bounded allowlisted event history and independent snapshots |
+| `diagnostics.ts` | all | `DiagnosticsPrivacy`: bounded allowlisted event history, speech-only events and independent snapshots |
 | `agents.ts` | all | Pure, Glue: agents' config files; `agents.test.ts` |
 | `setup.ts` | `claudeStarter` | `Start` (`AnswerCheck`, `Click`, `AgentExits`) |
 | | the rest | Glue |

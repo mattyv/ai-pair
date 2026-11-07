@@ -900,6 +900,27 @@ function selectCloudVoice(): void {
   }
   select.value = cloudVoice;
 }
+/** Maps only the host's allowlisted category to fixed account guidance. */
+function catalogFailure(reason: string | undefined): string {
+  switch (reason) {
+    case 'no_key':
+      return 'Add an ElevenLabs API key to load voices.';
+    case 'auth':
+      return 'ElevenLabs rejected the key or voice access. Check your key permissions.';
+    case 'rate':
+      return 'ElevenLabs rate limit or quota reached. Try again later.';
+    case 'network':
+      return 'Could not connect to ElevenLabs. Check your network.';
+    case 'timeout':
+      return 'Loading account voices timed out. Try again.';
+    case 'invalid':
+      return 'ElevenLabs returned an unsupported voice list.';
+    case 'canceled':
+      return 'Loading account voices was canceled.';
+    default:
+      return 'Could not load account voices.';
+  }
+}
 function syncSpeechProvider(): void {
   const cloud = speechProvider === 'elevenlabs';
   ui.speechLocal.hidden = cloud;
@@ -1036,8 +1057,17 @@ function handle(message: ToPanel): void {
       }
       selectCloudVoice();
       ui.speechVoicesMore.hidden = !message.value.more;
+      const wasLoading = cloudLoading;
       cloudLoading = message.value.loading;
-      if (message.value.error) ui.speechSettingsStatus.textContent = 'Could not load account voices.';
+      if (message.value.reset === true) ui.speechSettingsStatus.textContent = '';
+      else if (cloudLoading) ui.speechSettingsStatus.textContent = 'Loading account voices...';
+      else if (message.value.error) ui.speechSettingsStatus.textContent = catalogFailure(message.value.errorKind);
+      else if (message.value.voices.length > 0) ui.speechSettingsStatus.textContent = 'Account voices loaded.';
+      else if (wasLoading) {
+        ui.speechSettingsStatus.textContent = message.value.more
+          ? 'No voices on this page. Select Load more.'
+          : 'No account voices are available. Check your ElevenLabs account.';
+      } else ui.speechSettingsStatus.textContent = '';
       syncSpeechProvider();
       return;
     }

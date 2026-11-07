@@ -2,15 +2,17 @@
 (******************************************************************************)
 (* A bounded diagnostics history keeps only explicitly selected fields. A    *)
 (* raw event carries an extra secret to model text that must never be copied. *)
-(* Timestamps and concrete lifecycle values are abstracted to safe values.  *)
+(* Speech action, phase, provider and reason are abstracted to safe values. *)
+(* Timestamps and other lifecycle values are abstracted in the same way.    *)
 (******************************************************************************)
 EXTENDS Naturals, Sequences, FiniteSets
 
 CONSTANTS
-    Capacity, Secret
+    Capacity, Secret, SpeechOnly
 
 ASSUME Capacity \in Nat \ {0}
-Kinds == {"session", "connection", "command"}
+Kinds == IF SpeechOnly THEN {"speech"}
+         ELSE {"session", "connection", "command", "speech"}
 Values == {1, 2}
 RawEvents == [kind : Kinds, value : Values, secret : {Secret}]
 SafeEvents == [kind : Kinds, value : Values]
@@ -29,7 +31,8 @@ Init ==
     /\ history = <<>>
     /\ copied = <<>>
     /\ action = "none"
-    /\ last = [kind |-> "session", value |-> 1]
+    /\ last = [kind |-> IF SpeechOnly THEN "speech" ELSE "session",
+               value |-> 1]
 
 Record(raw) ==
     /\ raw \in RawEvents
