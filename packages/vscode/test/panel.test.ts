@@ -908,3 +908,82 @@ it('does not offer setup or preview on an unsupported host', async () => {
   expect(speech.setup).not.toHaveBeenCalled();
   expect(speech.preview).not.toHaveBeenCalled();
 });
+
+it('routes speech controls and status only to the ready current page', () => {
+  const { panel } = harness();
+  expect(panel.speechPageIsReady()).toBe(false);
+  panel.refreshSpeechSupport();
+  panel.controlSpeech(1, 1, 'pause');
+  panel.showSpeechStatus(1, 'preparing');
+  const view = open(panel);
+  expect(panel.playSpeech(1, new Uint8Array([1]), 1)).toBeUndefined();
+  view.send({ type: 'ready' });
+  expect(panel.speechPageIsReady()).toBe(true);
+  panel.controlSpeech(1, 2, 'pause');
+  panel.controlSpeech(1, 1, 'resume');
+  panel.showSpeechStatus(1, 'preparing');
+  panel.showSpeechStatus(1, 'unavailable', 'unavailable');
+  expect(view.posted).toContainEqual({ type: 'speechControl', id: 1, pageId: 1, action: 'resume' });
+  expect(view.posted).not.toContainEqual({ type: 'speechControl', id: 1, pageId: 2, action: 'pause' });
+  expect(view.posted).toContainEqual({ type: 'speechStatus', id: 1, pageId: 1, state: 'preparing' });
+  expect(view.posted).toContainEqual({ type: 'speechStatus', id: 1, pageId: 1, state: 'unavailable', message: 'unavailable' });
+  view.send({ type: 'speechPageHidden', pageId: 2 });
+  expect(panel.speechPageIsReady()).toBe(true);
+  view.send({ type: 'speechPageHidden', pageId: 1 });
+  expect(panel.speechPageIsReady()).toBe(false);
+  view.send({ type: 'speechPageVisible', pageId: 2 });
+  expect(panel.speechPageIsReady()).toBe(false);
+  view.send({ type: 'speechPageVisible', pageId: 1 });
+  expect(panel.speechPageIsReady()).toBe(true);
+});
+
+it('validates page events and preferences before forwarding speech controls', () => {
+  const { panel, speech } = harness();
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  for (const value of [
+    { type: 'speechEvent', id: 0, pageId: 1, event: 'started' },
+    { type: 'speechEvent', id: 1.5, pageId: 1, event: 'started' },
+    { type: 'speechEvent', id: 1, pageId: 2, event: 'started' },
+    { type: 'speechEvent', id: 1, pageId: 1, event: 'unknown' },
+    { type: 'speechSettings', value: undefined },
+    { type: 'speechSettings', value: { enabled: 'yes', voice: 'af_heart', speed: 1 } },
+    { type: 'speechSettings', value: { enabled: true, voice: 'invalid', speed: 1 } },
+    { type: 'speechSettings', value: { enabled: true, voice: 'af_heart', speed: 9 } },
+  ]) {
+    view.receive(value);
+  }
+  expect(speech.event.mock.calls).toEqual([]);
+  expect(speech.settings.set.mock.calls).toEqual([]);
+  view.send({ type: 'speechSettings', value: { enabled: true, voice: 'bf_emma', speed: 1.25 } });
+  view.send({ type: 'speechStop' });
+  expect(speech.settings.set.mock.calls).toEqual([[{ enabled: true, voice: 'bf_emma', speed: 1.25 }]]);
+  expect(speech.stop.mock.calls).toEqual([[]]);
+});
+
+it('reports setup and preview outcomes and ignores superseded availability checks', async () => {
+  const { panel, speech } = harness();
+  const pending = Promise.withResolvers<boolean>();
+  speech.installed.mockReturnValueOnce(pending.promise).mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('unknown'));
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  panel.refreshSpeechSupport();
+  await flush();
+  expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Local speech is ready.' });
+  pending.reject(new Error('stale'));
+  await flush();
+  expect(view.posted).not.toContainEqual({ type: 'speechSetupState', pending: false, message: 'Local speech availability is unknown.' });
+  panel.refreshSpeechSupport();
+  await flush();
+  expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Local speech availability is unknown.' });
+  speech.preview.mockRejectedValueOnce(new Error('unavailable'));
+  speech.setup.mockResolvedValueOnce().mockRejectedValueOnce(new Error('cancelled'));
+  view.send({ type: 'speechPreview' });
+  view.send({ type: 'speechSetup' });
+  await flush();
+  view.send({ type: 'speechSetup' });
+  await flush();
+  expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Voice preview is unavailable.' });
+  expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: true, message: 'Setting up local speech...' });
+  expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Speech setup did not complete.' });
+});

@@ -1,4 +1,4 @@
-import { phonemize as espeakng } from "phonemizer";
+import { phonemize as espeakng } from "phonemizer"
 
 /**
  * Helper function to split a string on a regex, but keep the delimiters.
@@ -9,22 +9,22 @@ import { phonemize as espeakng } from "phonemizer";
  * @returns {{match: boolean; text: string}[]} The split string.
  */
 function split(text, regex) {
-  const result = [];
-  let prev = 0;
+  const result = []
+  let prev = 0
   for (const match of text.matchAll(regex)) {
-    const fullMatch = match[0];
+    const fullMatch = match[0]
     if (prev < match.index) {
-      result.push({ match: false, text: text.slice(prev, match.index) });
+      result.push({ match: false, text: text.slice(prev, match.index) })
     }
     if (fullMatch.length > 0) {
-      result.push({ match: true, text: fullMatch });
+      result.push({ match: true, text: fullMatch })
     }
-    prev = match.index + fullMatch.length;
+    prev = match.index + fullMatch.length
   }
   if (prev < text.length) {
-    result.push({ match: false, text: text.slice(prev) });
+    result.push({ match: false, text: text.slice(prev) })
   }
-  return result;
+  return result
 }
 
 /**
@@ -34,31 +34,31 @@ function split(text, regex) {
  */
 function split_num(match) {
   if (match.includes(".")) {
-    return match;
+    return match
   } else if (match.includes(":")) {
-    let [h, m] = match.split(":").map(Number);
+    let [h, m] = match.split(":").map(Number)
     if (m === 0) {
-      return `${h} o'clock`;
+      return `${h} o'clock`
     } else if (m < 10) {
-      return `${h} oh ${m}`;
+      return `${h} oh ${m}`
     }
-    return `${h} ${m}`;
+    return `${h} ${m}`
   }
-  let year = parseInt(match.slice(0, 4), 10);
+  let year = parseInt(match.slice(0, 4), 10)
   if (year < 1100 || year % 1000 < 10) {
-    return match;
+    return match
   }
-  let left = match.slice(0, 2);
-  let right = parseInt(match.slice(2, 4), 10);
-  let suffix = match.endsWith("s") ? "s" : "";
+  let left = match.slice(0, 2)
+  let right = parseInt(match.slice(2, 4), 10)
+  let suffix = match.endsWith("s") ? "s" : ""
   if (year % 1000 >= 100 && year % 1000 <= 999) {
     if (right === 0) {
-      return `${left} hundred${suffix}`;
+      return `${left} hundred${suffix}`
     } else if (right < 10) {
-      return `${left} oh ${right}${suffix}`;
+      return `${left} oh ${right}${suffix}`
     }
   }
-  return `${left} ${right}${suffix}`;
+  return `${left} ${right}${suffix}`
 }
 
 /**
@@ -67,17 +67,17 @@ function split_num(match) {
  * @returns {string} The formatted currency
  */
 function flip_money(match) {
-  const bill = match[0] === "$" ? "dollar" : "pound";
+  const bill = match[0] === "$" ? "dollar" : "pound"
   if (isNaN(Number(match.slice(1)))) {
-    return `${match.slice(1)} ${bill}s`;
+    return `${match.slice(1)} ${bill}s`
   } else if (!match.includes(".")) {
-    let suffix = match.slice(1) === "1" ? "" : "s";
-    return `${match.slice(1)} ${bill}${suffix}`;
+    let suffix = match.slice(1) === "1" ? "" : "s"
+    return `${match.slice(1)} ${bill}${suffix}`
   }
-  const [b, c] = match.slice(1).split(".");
-  const d = parseInt(c.padEnd(2, "0"), 10);
-  let coins = match[0] === "$" ? (d === 1 ? "cent" : "cents") : d === 1 ? "penny" : "pence";
-  return `${b} ${bill}${b === "1" ? "" : "s"} and ${d} ${coins}`;
+  const [b, c] = match.slice(1).split(".")
+  const d = parseInt(c.padEnd(2, "0"), 10)
+  let coins = match[0] === "$" ? (d === 1 ? "cent" : "cents") : d === 1 ? "penny" : "pence"
+  return `${b} ${bill}${b === "1" ? "" : "s"} and ${d} ${coins}`
 }
 
 /**
@@ -86,8 +86,8 @@ function flip_money(match) {
  * @returns {string} The formatted number
  */
 function point_num(match) {
-  let [a, b] = match.split(".");
-  return `${a} point ${b.split("").join(" ")}`;
+  let [a, b] = match.split(".")
+  return `${a} point ${b.split("").join(" ")}`
 }
 
 /**
@@ -148,7 +148,7 @@ function normalize_text(text) {
 
       // 8. Strip leading and trailing whitespace
       .trim()
-  );
+  )
 }
 
 /**
@@ -158,11 +158,11 @@ function normalize_text(text) {
  * @returns {string} The escaped string.
  */
 function escapeRegExp(string) {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // $& means the whole matched string
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") // $& means the whole matched string
 }
 
-const PUNCTUATION = ';:,.!?¡¿—…"«»“”(){}[]';
-const PUNCTUATION_PATTERN = new RegExp(`(\\s*[${escapeRegExp(PUNCTUATION)}]+\\s*)+`, "g");
+const PUNCTUATION = ';:,.!?¡¿—…"«»“”(){}[]'
+const PUNCTUATION_PATTERN = new RegExp(`(\\s*[${escapeRegExp(PUNCTUATION)}]+\\s*)+`, "g")
 
 /**
  * Phonemize text using the eSpeak-NG phonemizer
@@ -174,15 +174,17 @@ const PUNCTUATION_PATTERN = new RegExp(`(\\s*[${escapeRegExp(PUNCTUATION)}]+\\s*
 export async function phonemize(text, language = "a", norm = true) {
   // 1. Normalize text
   if (norm) {
-    text = normalize_text(text);
+    text = normalize_text(text)
   }
 
   // 2. Split into chunks, to ensure we preserve punctuation
-  const sections = split(text, PUNCTUATION_PATTERN);
+  const sections = split(text, PUNCTUATION_PATTERN)
 
   // 3. Convert each section to phonemes
-  const lang = language === "a" ? "en-us" : "en";
-  const ps = (await Promise.all(sections.map(async ({ match, text: segment }) => (match ? segment : (await espeakng(segment, lang)).join(" "))))).join("");
+  const lang = language === "a" ? "en-us" : "en"
+  const ps = (
+    await Promise.all(sections.map(async ({ match, text: segment }) => (match ? segment : (await espeakng(segment, lang)).join(" "))))
+  ).join("")
 
   // 4. Post-process phonemes
   let processed = ps
@@ -194,11 +196,11 @@ export async function phonemize(text, language = "a", norm = true) {
     .replace(/x/g, "k")
     .replace(/ɬ/g, "l")
     .replace(/(?<=[a-zɹː])(?=hˈʌndɹɪd)/g, " ")
-    .replace(/ z(?=[;:,.!?¡¿—…"«»“” ]|$)/g, "z");
+    .replace(/ z(?=[;:,.!?¡¿—…"«»“” ]|$)/g, "z")
 
   // 5. Additional post-processing for American English
   if (language === "a") {
-    processed = processed.replace(/(?<=nˈaɪn)ti(?!ː)/g, "di");
+    processed = processed.replace(/(?<=nˈaɪn)ti(?!ː)/g, "di")
   }
-  return processed.trim();
+  return processed.trim()
 }

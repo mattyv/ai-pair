@@ -44,6 +44,7 @@ export interface SpeechObservation {
   id: number;
   state: SpeechState;
   started: boolean;
+  terminal?: 'ended' | 'failed';
   message?: string;
 }
 
@@ -229,7 +230,10 @@ export function activate(context: vscode.ExtensionContext): Api {
           speech.cancel();
         },
         event: (event) => {
-          speech.audioEvent(event);
+          const terminal = speech.audioEvent(event);
+          if (terminal !== undefined && speechObservation?.id === event.id) {
+            speechObservation = { ...speechObservation, terminal };
+          }
         },
         pageClosed: (pageId) => {
           speech.pageClosed(pageId);

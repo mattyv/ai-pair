@@ -66,6 +66,8 @@ it('rejects empty, malformed and oversized encoded audio before allocation', () 
   expect([...decodeWav('V0FW')]).toEqual([87, 65, 86]);
   expect(() => decodeWav('')).toThrow();
   expect(() => decodeWav('!')).toThrow();
+  expect(() => decodeWav('   ')).toThrow();
+  expect(() => decodeWav('A'.repeat(Math.ceil(MAX_WAV_BYTES / 3) * 4))).toThrow();
   expect(() => decodeWav('A'.repeat(Math.ceil(MAX_WAV_BYTES / 3) * 4 + 4))).toThrow();
 });
 
@@ -166,4 +168,31 @@ it('ignores an earlier play rejection after a newer resume starts', async () => 
   await Promise.resolve();
   expect(h.send.mock.calls).toEqual([[{ id: 1, pageId: 1, event: 'started' }]]);
   expect(h.revoke).not.toHaveBeenCalled();
+});
+
+it('reports media errors only for the current clip and accepts an explicit stop', () => {
+  const h = harness();
+  h.player.page(1);
+  h.player.begin(1, 1);
+  h.player.audio(1, 1, 'wav', true);
+  h.listeners.get('error')?.();
+  expect(h.send.mock.calls).toEqual([[{ id: 1, pageId: 1, event: 'failed' }]]);
+  expect(h.revoke).toHaveBeenCalledOnce();
+  h.player.begin(2, 1);
+  h.player.audio(2, 1, 'wav', true);
+  h.player.control(2, 1, 'stop');
+  expect(h.revoke).toHaveBeenCalledTimes(2);
+});
+
+it('ignores resume without a pause and handles pause before the clip arrives', async () => {
+  const h = harness();
+  h.player.page(1);
+  h.player.begin(1, 1);
+  h.player.control(1, 1, 'resume');
+  h.player.control(1, 1, 'pause');
+  h.player.control(1, 1, 'resume');
+  expect(h.audio.play).not.toHaveBeenCalled();
+  h.player.audio(1, 1, 'wav', false);
+  await Promise.resolve();
+  expect(h.send.mock.calls).toEqual([[{ id: 1, pageId: 1, event: 'started' }]]);
 });

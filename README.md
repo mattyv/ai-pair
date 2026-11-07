@@ -3,20 +3,20 @@
 ## Additions in this fork
 
 This fork builds on the original [AI Pair project](https://github.com/faiface/ai-pair).
-The changes in version 0.14 include:
+It adds:
 
--   Choose the order of the conversation and read clearer message text.
--   See clearer pause and playback status; click the reading indicator to finish
+-   A choice of conversation order and clearer message text.
+-   Clearer pause and playback status. Click the reading indicator to finish
     its timer, or hold it to pause the timer.
--   Choose typing, line, or block playback, and control its speed. In 0.14,
-    these choices are in the pace menu.
--   Keep command terminals quiet by default and reveal an available run when needed.
--   Copy session diagnostics for troubleshooting and find the running version and
-    build in Settings. GitHub Actions provides downloadable extension builds.
-
-The next release is being developed with a separate code-display dropdown,
-more readable Settings, and optional local spoken narration. These additions
-are not yet available in the 0.14.1 release.
+-   Typing, Lines, or Blocks in a separate code-display dropdown and Settings.
+    The existing pace and reading-speed controls still adjust playback.
+-   Quiet command terminals by default, with an option to reveal a run.
+-   Copyable session diagnostics and a running version and build in Settings.
+-   Optional local Kokoro speech for narration selected by the connected coding
+    agent. Speech is off by default and needs no additional API key. In Settings,
+    run **Set up local speech** to download about 94 MB, then **Preview voice**.
+    Local speech requires a supported local Linux x64 desktop with glibc, such
+    as Ubuntu; the rest of Pair works without speech.
 
 [Download a fork build from GitHub Actions](https://github.com/mattyv/ai-pair/actions)
 (run **Build VSIX**, then download its artifact). The Marketplace link in the

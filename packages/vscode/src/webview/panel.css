@@ -345,7 +345,7 @@ button:focus-visible {
 [data-ui='code-mode']::after {
   border-left: 4px solid transparent;
   border-right: 4px solid transparent;
-  border-top: 4px solid currentColor;
+  border-top: 4px solid currentcolor;
   content: '';
   display: inline-block;
   margin-left: 4px;

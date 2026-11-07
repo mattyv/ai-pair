@@ -1837,3 +1837,80 @@ it('keeps setup disabled on an unsupported host after a setup state update', () 
   send({ type: 'speechSetupState', pending: false, message: 'Unavailable.' });
   expect(element('speech-setup')).toHaveProperty('disabled', true);
 });
+
+it('reports page visibility and ignores stale speech status while controlling the current audio', async () => {
+  const pause = vi.fn<() => void>();
+  const play = vi.fn<() => Promise<void>>().mockResolvedValue();
+  class FakeAudio {
+    pause = pause;
+    play = play;
+    addEventListener(): void {}
+  }
+  vi.stubGlobal('Audio', FakeAudio);
+  vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:visible');
+  vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+  window.dispatchEvent(new window.Event('pagehide'));
+  const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
+  document.dispatchEvent(new window.Event('visibilitychange'));
+  send({ type: 'speechPage', pageId: 1 });
+  send({ type: 'speechSettings', value: { enabled: true, voice: 'af_heart', speed: 1 } });
+  send({ type: 'speechStatus', pageId: 1, id: 2, state: 'preparing' });
+  send({ type: 'speechAudio', pageId: 1, id: 2, wavBase64: 'AQI=', durationMs: 100 });
+  await Promise.resolve();
+  send({ type: 'speechControl', pageId: 1, id: 2, action: 'pause' });
+  expect(pause).toHaveBeenCalledOnce();
+  send({ type: 'speechStatus', pageId: 2, id: 3, state: 'speaking' });
+  send({ type: 'speechStatus', pageId: 1, id: 1, state: 'speaking' });
+  expect(text('speech-live-status')).toBe('Preparing speech');
+  document.dispatchEvent(new window.Event('visibilitychange'));
+  expect(posted()).toContainEqual({ type: 'speechPageVisible', pageId: 1 });
+  hidden.mockReturnValue(true);
+  document.dispatchEvent(new window.Event('visibilitychange'));
+  expect(posted()).toContainEqual({ type: 'speechPageHidden', pageId: 1 });
+  send({ type: 'speechSettings', value: { enabled: false, voice: 'af_heart', speed: 1 } });
+  send({ type: 'speechStatus', pageId: 1, id: 2, state: 'speaking' });
+  expect(text('speech-live-status')).not.toBe('Speaking');
+  send({ type: 'speechStatus', pageId: 1, id: 2, state: 'idle' });
+  expect(element('speech-live').hidden).toBe(true);
+  window.dispatchEvent(new window.Event('pagehide'));
+  expect(posted()).toContainEqual({ type: 'speechPageHidden', pageId: 1 });
+});
+
+it('validates selection controls and stops live speech when disabled', () => {
+  const voice = element('speech-voice');
+  const speed = element('speech-speed');
+  const enabled = element('speech-enabled');
+  const mode = element('settings-code-playback');
+  if (
+    !(voice instanceof window.HTMLSelectElement) ||
+    !(speed instanceof window.HTMLSelectElement) ||
+    !(enabled instanceof window.HTMLInputElement) ||
+    !(mode instanceof window.HTMLSelectElement)
+  ) {
+    throw new TypeError('Missing settings controls');
+  }
+  voice.value = '';
+  voice.dispatchEvent(new window.Event('change'));
+  voice.value = 'af_heart';
+  speed.value = '';
+  speed.dispatchEvent(new window.Event('change'));
+  expect(posted().filter((message) => message.type === 'speechSettings')).toEqual([]);
+  speed.value = '1';
+  send({ type: 'speechSettings', value: { enabled: true, voice: 'af_heart', speed: 1 } });
+  enabled.checked = false;
+  enabled.dispatchEvent(new window.Event('change'));
+  expect(posted()).toContainEqual({ type: 'speechSettings', value: { enabled: false, voice: 'af_heart', speed: 1 } });
+  mode.value = 'lines';
+  mode.dispatchEvent(new window.Event('change'));
+  mode.value = 'blocks';
+  mode.dispatchEvent(new window.Event('change'));
+  mode.value = '';
+  mode.dispatchEvent(new window.Event('change'));
+  expect(posted()).toContainEqual({ type: 'codePlayback', value: 'lines' });
+  expect(posted()).toContainEqual({ type: 'codePlayback', value: 'blocks' });
+  const invalid = element('code-mode-menu').querySelector('button');
+  if (!(invalid instanceof window.HTMLButtonElement)) throw new TypeError('Missing menu item');
+  invalid.dataset.codePlayback = 'invalid';
+  click(invalid);
+  expect(posted()).not.toContainEqual({ type: 'codePlayback', value: 'invalid' });
+});

@@ -178,7 +178,9 @@ it('offers an explicit diagnostics copy button in Settings', () => {
 
 it('offers local speech setup, preferences, preview and stop in Settings', () => {
   const page = new window.DOMParser().parseFromString(panelHtml('source', 'style', 'script'), 'text/html');
-  expect(page.querySelector('[data-ui="speech-enabled"]')?.closest('label')?.textContent).toContain('Speak selected narration automatically');
+  expect(page.querySelector('[data-ui="speech-enabled"]')?.closest('label')?.textContent).toContain(
+    'Speak selected narration automatically',
+  );
   expect(page.querySelector('[data-ui="speech-voice"]')?.querySelectorAll('option')).toHaveLength(4);
   expect(page.querySelector('[data-ui="speech-speed"]')?.querySelectorAll('option')).toHaveLength(4);
   expect(page.querySelector('[data-ui="speech-setup"]')?.textContent).toContain('Set up local speech');

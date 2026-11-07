@@ -1920,7 +1920,10 @@ speech completion, error, and cancellation from changing reading, holds,
 pause, or command approval. `AdvanceAfterGates` requires both gates, and
 `Progress` checks eventual advancement under weak fairness when a page and
 session eventually stay present and all pauses and holds eventually clear.
-The model abstracts the audio transport and the full queue implementation.
+The integration-only speech observation records `ended` or page failure only
+when the service accepts a callback for the current generation and page; idle
+after cancellation is not playback completion. The model abstracts the audio
+transport and the full queue implementation.
 
 ### `ReadingHold`: scoped timer holds
 

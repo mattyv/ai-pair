@@ -3,9 +3,24 @@
 
 import * as fs from 'node:fs';
 import * as esbuild from 'esbuild';
+import { stageSpeechRuntime } from './speech_runtime.mts';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
-vi.mock('node:fs', () => ({ copyFileSync: vi.fn(), readFileSync: vi.fn(), rmSync: vi.fn() }));
+vi.mock('node:fs', () => ({
+  copyFileSync: vi.fn(),
+  readFileSync: vi.fn(),
+  rmSync: vi.fn(),
+  readdirSync: vi.fn((directory: string) =>
+    directory === 'dist/speech'
+      ? [
+          { name: 'worker.mjs', isDirectory: () => false, isFile: () => true },
+          { name: 'node_modules', isDirectory: () => true, isFile: () => false },
+          { name: 'link', isDirectory: () => false, isFile: () => false },
+        ]
+      : [{ name: 'native.node', isDirectory: () => false, isFile: () => true }],
+  ),
+}));
+vi.mock('./speech_runtime.mts', () => ({ stageSpeechRuntime: vi.fn() }));
 vi.mock('esbuild', () => ({
   build: vi.fn(() => Promise.resolve({ outputFiles: [{ path: '/dist/extension.js', contents: Buffer.from('extension') }] })),
 }));
@@ -34,6 +49,7 @@ afterEach(() => {
 it('bundles the extension, the page script, the page styles, and the relay, with source maps and unminified', async () => {
   await built();
   expect(fs.rmSync).not.toHaveBeenCalled();
+  expect(stageSpeechRuntime).toHaveBeenCalledOnce();
   expect(fs.copyFileSync).not.toHaveBeenCalled();
   expect(fs.readFileSync).toHaveBeenCalledWith('package.json', 'utf8');
   const common = {
@@ -67,6 +83,23 @@ it('bundles the extension, the page script, the page styles, and the relay, with
       loader: { '.md': 'text' },
       define: { AI_PAIR_VERSION: '"1.2.3"' },
       outfile: 'dist/relay.js',
+    },
+    ...(process.platform === 'linux' && process.arch === 'x64'
+      ? [
+          {
+            ...common,
+            format: 'esm',
+            entryPoints: ['src/speech_phonemizer_bridge.ts'],
+            outfile: 'dist/speech/node_modules/phonemizer/index.mjs',
+          },
+        ]
+      : []),
+    {
+      ...common,
+      format: 'esm',
+      entryPoints: ['src/speech_worker.ts'],
+      external: ['kokoro-js', '@huggingface/transformers', 'phonemizer'],
+      outfile: 'dist/speech/worker.mjs',
     },
     {
       ...common,
@@ -124,4 +157,45 @@ it('distinguishes production and development builds of the same inputs', async (
   vi.mocked(esbuild.build).mockClear();
   await built(['--production']);
   expect(builds().at(-1)?.define?.AI_PAIR_BUILD_ID).not.toBe(development);
+});
+
+it('changes the build ID when a nested staged runtime file changes', async () => {
+  vi.mocked(fs.readFileSync).mockImplementation((file) =>
+    String(file) === 'dist/speech/node_modules/native.node' ? 'first native runtime' : JSON.stringify({ version: '1.2.3' }),
+  );
+  await built();
+  const first = builds().at(-1)?.define?.AI_PAIR_BUILD_ID;
+  vi.mocked(esbuild.build).mockClear();
+  vi.mocked(fs.readFileSync).mockImplementation((file) =>
+    String(file) === 'dist/speech/node_modules/native.node' ? 'changed native runtime' : JSON.stringify({ version: '1.2.3' }),
+  );
+  await built();
+  expect(builds().at(-1)?.define?.AI_PAIR_BUILD_ID).not.toBe(first);
+});
+
+it('keeps unsupported builds text-only without bundling the native bridge', async () => {
+  const realProcess = process;
+  vi.stubGlobal(
+    'process',
+    new Proxy(realProcess, {
+      get(target, key, receiver) {
+        if (key === 'platform') return 'darwin';
+        const value: unknown = Reflect.get(target, key, receiver);
+        return value;
+      },
+    }),
+  );
+  try {
+    await built();
+    expect(stageSpeechRuntime).toHaveBeenCalledOnce();
+    expect(builds().some((options) => options.outfile === 'dist/speech/node_modules/phonemizer/index.mjs')).toBe(false);
+    expect(builds().some((options) => options.outfile === 'dist/speech/worker.mjs')).toBe(true);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+it('does not read or follow a non-file entry in the staged runtime', async () => {
+  await built();
+  expect(fs.readFileSync).not.toHaveBeenCalledWith('dist/speech/link');
 });

@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: tla, 2026-11-06.
+Last updated: tla, 2026-11-07.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -82,6 +82,7 @@ Last updated: tla, 2026-11-06.
 | `packages/vscode/scripts/icon/Sources/icon/main.swift` | Swift | - | - | - | - | - | - |
 | `packages/vscode/scripts/icon/Tests/IconDrawingTests/IconDrawingTests.swift` | Swift | - | - | - | L 99.2% R 98.3% F 98.0% | - | - |
 | `packages/vscode/scripts/integration.sh` | Shell | - | - | - | - | - | - |
+| `packages/vscode/scripts/speech_runtime.mts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/scripts/vscode_bin.mts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/scripts/vscode_bin.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/src/agents.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 81.1% B 66.7% F 87.2% | - | - | - | - |
@@ -99,11 +100,24 @@ Last updated: tla, 2026-11-06.
 | `packages/vscode/src/passage.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/python_diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 83.8% B 84.2% F 83.3% | - | - | - | - |
+| `packages/vscode/src/speech_engine.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_model_manifest.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_phonemizer_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_runtime_status.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_service.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_synthesis.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_types.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_waveform.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_worker.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_worker_host.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_worker_messages.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/terminal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.3% B 98.1% F 92.3% | - | - | - | - |
 | `packages/vscode/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/view.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 88.0% F 100.0% | - | - | - | - |
-| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 132 of 132 rules matched |
+| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 147 of 147 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/webview/speech_audio.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/test/agents.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/calibration.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/css.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -126,6 +140,21 @@ Last updated: tla, 2026-11-06.
 | `packages/vscode/test/python_diagnostics.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/setup.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/smoke_integration.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_audio.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_cached_assets.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_engine.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_phonemizer_bridge.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_runtime.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_service.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_setup.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_setup_fs.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_smoke_integration.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_smoke_integration.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_synthesis.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_waveform.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_worker.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_worker_host.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_worker_messages.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/terminal.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/terminal_smoke_integration.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/timings.test.ts` | TypeScript | test | test | test | test | - | test |
@@ -133,6 +162,7 @@ Last updated: tla, 2026-11-06.
 | `packages/vscode/test/visual/chat_order.spec.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/visual/panel.spec.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/webview/panel.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/vscode/vendor/kokoro_phonemize.d.mts` | TypeScript | - | - | - | - | - | - |
 | `playwright.config.ts` | TypeScript | - | - | - | - | - | - |
 | `scripts/check_ascii.test.ts` | TypeScript | test | test | test | test | - | test |
 | `scripts/check_ascii.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -195,6 +225,8 @@ Last updated: tla, 2026-11-06.
 | `specs/ListenGrace.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/ListeningHint.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ListeningHint.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
+| `specs/Narration.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/Narration.tla` | TLA+ | - | - | 20 of 20 actions | - | - | - |
 | `specs/Navigator.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Navigator.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/Outside.cfg` | TLC config | - | - | - | - | - | - |
@@ -242,8 +274,12 @@ Last updated: tla, 2026-11-06.
 | `specs/Serialize.tla` | TLA+ | - | - | 13 of 13 actions | - | - | - |
 | `specs/SettingsAccess.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SettingsAccess.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
+| `specs/SpeechPage.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/SpeechPage.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/SpeechSetup.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/SpeechSetup.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
+| `specs/SpeechSetup.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
+| `specs/SpeechWorker.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/SpeechWorker.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/Start.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Start.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
 | `specs/StructuralTyping.cfg` | TLC config | - | - | - | - | - | - |

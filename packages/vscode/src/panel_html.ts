@@ -64,7 +64,8 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
   return /* html */ `<!doctype html>
 <html lang="en">
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource}; media-src blob:; script-src 'nonce-${nonce}';">
+<meta http-equiv="Content-Security-Policy"
+  content="default-src 'none'; style-src ${cspSource}; media-src blob:; script-src 'nonce-${nonce}';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AI Pair</title>
 <link rel="stylesheet" href="${styleUri}">

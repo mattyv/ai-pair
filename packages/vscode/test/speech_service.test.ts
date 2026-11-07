@@ -116,11 +116,12 @@ describe('SpeechService', () => {
     void gate.then(() => {
       done = true;
     });
-    service.audioEvent({ id: 1, pageId: 8, event: 'ended' });
+    expect(service.audioEvent({ id: 1, pageId: 8, event: 'ended' })).toBeUndefined();
     await settle();
     expect(done).toBe(false);
-    service.audioEvent({ id: 1, pageId: 7, event: 'started' });
-    service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+    expect(service.audioEvent({ id: 1, pageId: 7, event: 'started' })).toBeUndefined();
+    expect(service.audioEvent({ id: 1, pageId: 7, event: 'ended' })).toBe('ended');
+    expect(service.audioEvent({ id: 1, pageId: 7, event: 'ended' })).toBeUndefined();
     await gate;
     expect(done).toBe(true);
   });
@@ -382,6 +383,22 @@ describe('SpeechService lifecycle', () => {
     await vi.advanceTimersByTimeAsync(1);
     await gate;
     expect(done).toBe(true);
+  });
+
+  it.each(['cancel', 'pageClosed'] as const)('never accepts a late ended event after playback starts and %s occurs', async (reason) => {
+    const { service, output } = harness();
+    const gate = service.speak('Hello.');
+    await settle();
+    const worker = fake.Worker.made[0];
+    if (worker === undefined) throw new Error('No worker');
+    worker.emit('message', { type: 'ready' });
+    worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+    service.audioEvent({ id: 1, pageId: 7, event: 'started' });
+    if (reason === 'cancel') service.cancel();
+    else service.pageClosed(7);
+    await gate;
+    expect(output.status).toHaveBeenLastCalledWith(1, 'idle');
+    expect(service.audioEvent({ id: 1, pageId: 7, event: 'ended' })).toBeUndefined();
   });
 
   it('cancels on page closure and ignores a late page acknowledgement', async () => {
@@ -750,8 +767,8 @@ describe('SpeechService failures and races', () => {
     expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'No speakable content.');
     const next = service.speak('Two.');
     worker.emit('message', { type: 'audio', id: 2, wav: new Uint8Array(44), durationMs: 1000 });
-    service.audioEvent({ id: 1, pageId: 7, event: 'failed' });
-    service.audioEvent({ id: 2, pageId: 7, event: 'failed' });
+    expect(service.audioEvent({ id: 1, pageId: 7, event: 'failed' })).toBeUndefined();
+    expect(service.audioEvent({ id: 2, pageId: 7, event: 'failed' })).toBe('failed');
     await next;
     expect(output.status).toHaveBeenCalledWith(2, 'unavailable', expect.stringContaining('Preview'));
   });

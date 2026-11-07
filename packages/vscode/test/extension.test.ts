@@ -56,7 +56,8 @@ const fakes = vi.hoisted(() => {
     readonly cancel = vi.fn<() => void>();
     readonly dispose = vi.fn<() => void>();
     readonly preview = vi.fn<() => Promise<void>>().mockResolvedValue();
-    readonly audioEvent = vi.fn();
+    readonly audioEvent =
+      vi.fn<(event: { id: number; pageId: number; event: 'started' | 'ended' | 'failed' }) => 'ended' | 'failed' | undefined>();
     readonly pageClosed = vi.fn();
     constructor(
       readonly options: { settings: () => { enabled: boolean; voice: string; speed: number }; output: SpeechOutput; localDesktop: boolean },
@@ -387,6 +388,9 @@ function changed(...names: string[]): void {
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
 const originalArch = Object.getOwnPropertyDescriptor(process, 'arch');
 const diagnosticReport = process.report.getReport();
+if (!('header' in diagnosticReport) || typeof diagnosticReport.header !== 'object' || diagnosticReport.header === null) {
+  throw new Error('The process report has no header.');
+}
 Object.defineProperty(diagnosticReport.header, 'glibcVersionRuntime', { value: '2.35', configurable: true });
 
 beforeEach(() => {
@@ -513,8 +517,24 @@ describe('activate', () => {
     speech.options.output.status(1, 'speaking');
     speech.options.output.status(1, 'idle');
     expect(h.api.speechStatus()).toEqual({ id: 1, state: 'idle', started: true });
+    // An idle status after a cancel is not an accepted audio end.
+    speech.audioEvent.mockReturnValueOnce(undefined);
+    h.panel.wiring.speech.event({ id: 1, pageId: 7, event: 'ended' });
+    expect(h.api.speechStatus()).toEqual({ id: 1, state: 'idle', started: true });
+    speech.audioEvent.mockReturnValueOnce('ended');
+    h.panel.wiring.speech.event({ id: 1, pageId: 7, event: 'ended' });
+    expect(h.api.speechStatus()).toEqual({ id: 1, state: 'idle', started: true, terminal: 'ended' });
     speech.options.output.status(2, 'unavailable', 'Audio could not play.');
     expect(h.api.speechStatus()).toEqual({ id: 2, state: 'unavailable', started: false, message: 'Audio could not play.' });
+    speech.audioEvent.mockReturnValueOnce('failed');
+    h.panel.wiring.speech.event({ id: 2, pageId: 8, event: 'failed' });
+    expect(h.api.speechStatus()).toEqual({
+      id: 2,
+      state: 'unavailable',
+      started: false,
+      terminal: 'failed',
+      message: 'Audio could not play.',
+    });
     expect(h.panel.showSpeechStatus).toHaveBeenCalledWith(2, 'unavailable', 'Audio could not play.');
   });
 
@@ -559,9 +579,13 @@ describe('activate', () => {
     fakes.settings.set('speech.enabled', true);
     wiring.settings.set({ enabled: false, voice: 'bf_emma', speed: 1.25 });
     expect(speech.cancel).toHaveBeenCalledOnce();
-    expect(fakes.updated).toEqual(expect.arrayContaining([
-      ['speech.enabled', false, 1], ['speech.voice', 'bf_emma', 1], ['speech.speed', 1.25, 1],
-    ]));
+    expect(fakes.updated).toEqual(
+      expect.arrayContaining([
+        ['speech.enabled', false, 1],
+        ['speech.voice', 'bf_emma', 1],
+        ['speech.speed', 1.25, 1],
+      ]),
+    );
     wiring.settings.set({ enabled: true, voice: 'af_heart', speed: 1 });
     expect(speech.cancel).toHaveBeenCalledOnce();
     expect(await wiring.installed()).toBe(false);
@@ -602,7 +626,9 @@ describe('activate', () => {
   });
 
   it('disables local speech when the host platform report fails', () => {
-    vi.mocked(process.report.getReport).mockImplementationOnce(() => { throw new Error('unavailable'); });
+    vi.spyOn(process.report, 'getReport').mockImplementationOnce(() => {
+      throw new Error('unavailable');
+    });
     activated();
     expect(fakes.made.speech.at(-1)?.options.localDesktop).toBe(false);
   });

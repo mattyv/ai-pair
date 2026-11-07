@@ -1,11 +1,12 @@
 # Changelog
 
-## 0.15.0 (in development)
+## 0.15.0
 
 -   Settings has clearer sections and the code display choice has its own
     toolbar dropdown, with the same choice in Settings.
--   Optional local speech reads selected agent narration with a choice of voice
-    and speed after explicit model setup on supported Linux x64 desktop hosts.
+-   Optional local Kokoro speech reads agent-selected narration. It is off by
+    default and offers voice and speed controls plus an explicit setup download
+    and preview on supported local Linux x64 desktop hosts.
 
 ## 0.14.1
 

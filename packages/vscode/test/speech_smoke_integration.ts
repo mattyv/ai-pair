@@ -10,6 +10,8 @@ import type { Api } from '../src/extension';
 const PAGE_TIMEOUT_MS = 15_000;
 /** Maximum time for one preview or selected narration to finish. */
 const SPEECH_TIMEOUT_MS = 45_000;
+/** Bounded time for a trusted UI gesture during the diagnostic run. */
+const GESTURE_WAIT_MS = 15_000;
 /** How often the page readiness is checked. */
 const POLL_MS = 100;
 /** The selected unit sent through the same core API as an agent. */
@@ -57,18 +59,27 @@ async function waitForPage(api: Api): Promise<void> {
 }
 
 /** Reports observed playback or an explicit page playback rejection. */
-function speechOutcome(api: Api, previousId: number, label: string, elapsedMs: number): void {
+export function speechOutcome(api: Api, previousId: number, label: string, elapsedMs: number): void {
   const observation = api.speechStatus();
   assert.ok(observation !== undefined && observation.id > previousId, `${label} did not produce a new speech status`);
-  if (observation.started && observation.state === 'idle') {
+  if (observation.started && observation.terminal === 'ended' && observation.state === 'idle') {
     console.log(`NATIVE_SPEECH_${label}_COMPLETE elapsed_ms=${elapsedMs} audio_outcome=started_and_ended`);
     return;
   }
-  if (observation.state === 'unavailable' && observation.message?.includes('Audio could not play') === true) {
-    console.log(`NATIVE_SPEECH_${label}_COMPLETE elapsed_ms=${elapsedMs} audio_outcome=playback_rejected`);
+  if (observation.state === 'unavailable' && observation.terminal === 'failed') {
+    console.log(`NATIVE_SPEECH_${label}_COMPLETE elapsed_ms=${elapsedMs} audio_outcome=playback_failed`);
     return;
   }
-  assert.fail(`${label} did not start audio or report a page playback rejection: ${JSON.stringify(observation)}`);
+  assert.fail(`${label} did not end playback or report an accepted page failure: ${JSON.stringify(observation)}`);
+}
+
+/** Allows a trusted UI gesture only in the explicitly requested diagnostic run. */
+export function waitForGestureWindow(): Promise<void> {
+  if (process.env.AI_PAIR_SPEECH_UI_GESTURE !== '1') return Promise.resolve();
+  console.log('NATIVE_SPEECH_WAITING_FOR_UI_GESTURE');
+  return new Promise((resolve) => {
+    setTimeout(resolve, GESTURE_WAIT_MS);
+  });
 }
 
 /** Runs preview and selected live narration in an isolated VS Code profile. */
@@ -87,6 +98,7 @@ export async function run(): Promise<void> {
     await api.controller.start('Local narration smoke', workspace.uri.fsPath);
     await vscode.commands.executeCommand('aiPair.narration.focus');
     await waitForPage(api);
+    await waitForGestureWindow();
 
     const beforePreview = api.speechStatus()?.id ?? 0;
     const previewStart = Date.now();

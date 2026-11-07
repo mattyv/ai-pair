@@ -244,19 +244,24 @@ export class SpeechService implements NarrationPort {
   }
 
   /** Accepts page acknowledgements only for the current page and generation. */
-  audioEvent(event: SpeechAudioEvent): void {
+  audioEvent(event: SpeechAudioEvent): 'ended' | 'failed' | undefined {
     const current = this.current;
-    if (current === undefined || current.id !== event.id || current.pageId !== event.pageId || current.phase !== 'playing') return;
+    if (current === undefined || current.id !== event.id || current.pageId !== event.pageId || current.phase !== 'playing') {
+      return undefined;
+    }
     if (event.event === 'failed') {
       this.fail(current, 'Audio could not play. Use Preview voice to enable audio.');
+      return 'failed';
     } else if (event.event === 'ended') {
       this.finish(current);
+      return 'ended';
     } else {
-      if (current.started) return;
+      if (current.started) return undefined;
       current.started = true;
       current.remaining = current.durationMs + PLAYBACK_GRACE_MS;
       if (!this.paused) this.arm(current, current.remaining);
       this.options.output.status(current.id, this.paused ? 'paused' : 'speaking');
+      return undefined;
     }
   }
 
