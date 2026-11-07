@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: css, 2026-11-07.
+Last updated: tla, 2026-11-07.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -146,13 +146,13 @@ Last updated: css, 2026-11-07.
 | `packages/vscode/test/smoke_integration.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_audio.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_cached_assets.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_catalog.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_credentials.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_elevenlabs.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_elevenlabs.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_catalog.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_credentials.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_elevenlabs.e2e.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_elevenlabs.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_engine.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_pcm.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_pcm.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_pcm.e2e.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_pcm.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_phonemizer_bridge.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_runtime.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_service.test.ts` | TypeScript | test | - | test | - | - | test |
@@ -204,7 +204,7 @@ Last updated: css, 2026-11-07.
 | `specs/Calibration.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Calibration.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
 | `specs/CloudNarration.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/CloudNarration.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/CloudNarration.tla` | TLA+ | - | - | 11 of 12 actions (never: Retry) | - | - | - |
 | `specs/CloudNarration_Healthy.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/CodePlayback.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/CodePlayback.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
@@ -290,7 +290,7 @@ Last updated: css, 2026-11-07.
 | `specs/SpeechPage.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechPage.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/SpeechSettings.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/SpeechSettings.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/SpeechSettings.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/SpeechSetup.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechSetup.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
 | `specs/SpeechWorker.cfg` | TLC config | - | - | - | - | - | - |

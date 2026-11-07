@@ -2159,6 +2159,10 @@ safety properties. Disabling admission, dispatch, playback or fair timeout
 violates the respective progress property. Clearing approval on timeout and
 allowing only the first generation also produce counterexamples.
 
+`Retry` never fires in the checked configurations because `GuardRetry` is true:
+automatic retry is forbidden. The negative control disables this guard and
+violates `NoRetry`; it does not represent supported production behavior.
+
 | Property | Test |
 |---|---|
 | `SafeSend` | `speech_elevenlabs.test.ts`: sends only the selected unit to the fixed endpoint using the secret header; never calls the provider when the key or voice is missing. |
