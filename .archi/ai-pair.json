@@ -2,9 +2,9 @@
   "version": 1,
   "bundleId": "277c3415-7b74-4008-8be4-8c14ae6d41dd",
   "revision": {
-    "number": 7,
+    "number": 8,
     "updatedAt": "2026-11-07T00:00:00.000Z",
-    "summary": "Speech readiness and request diagnostics with immediate provider choices"
+    "summary": "Speech output selection, fail-closed native routing and retirement handoff"
   },
   "diagrams": [
     {
@@ -8055,7 +8055,12 @@
               "packages/vscode/src/speech_worker.ts",
               "packages/vscode/src/speech_engine.ts",
               "packages/vscode/src/speech_setup.ts",
-              "packages/vscode/src/webview/speech_audio.ts"
+              "packages/vscode/src/webview/speech_audio.ts",
+              "packages/vscode/src/speech_output_preferences.ts",
+              "packages/vscode/src/speech_output_router.ts",
+              "packages/vscode/src/speech_native_output.ts",
+              "packages/vscode/scripts/speech_runtime.mts",
+              "packages/vscode/test/speech_runtime.test.ts"
             ],
             "group": "ext",
             "x": 1830,
@@ -9024,6 +9029,13 @@
               "text": "The webview displays the message reading pause and sends its identifier when the programmer requests early completion. The controller validates eligibility and leaves independent pauses intact. A hold and release act only on the matching reading ID and preserve independent pauses; disposing the panel releases its hold.",
               "ts": 0
             }
+          ],
+          "local-speech": [
+            {
+              "id": "speech-output-note",
+              "text": "The shared service preflights each explicit native route before synthesis. The output router keeps browser and native ownership separate until the matching browser stop or page disposal and native process close.",
+              "ts": 0
+            }
           ]
         }
       }
@@ -9235,6 +9247,175 @@
           ]
         },
         "groups": []
+      }
+    },
+    {
+      "id": "speech-output-routing",
+      "name": "Speech output routing",
+      "type": "architecture",
+      "origin": "llm",
+      "generation": {
+        "focus": "Shared output selection and safe browser to native handoff"
+      },
+      "doc": {
+        "type": "architecture",
+        "autoLayoutApplied": true,
+        "nodes": [
+          {
+            "id": "output-settings",
+            "label": "Output preferences\nSystem default or named device",
+            "files": [
+              "packages/vscode/src/speech_output_preferences.ts",
+              "packages/vscode/src/speech_output_types.ts",
+              "packages/vscode/src/extension.ts"
+            ],
+            "group": "extension",
+            "x": 40,
+            "y": 75
+          },
+          {
+            "id": "speech-service",
+            "label": "Speech service\nKokoro or ElevenLabs",
+            "files": [
+              "packages/vscode/src/speech_service.ts",
+              "packages/vscode/src/speech_elevenlabs.ts",
+              "packages/vscode/src/speech_worker_host.ts"
+            ],
+            "group": "extension",
+            "x": 490,
+            "y": 75
+          },
+          {
+            "id": "output-router",
+            "label": "Output router\nAdmission and retirement",
+            "files": ["packages/vscode/src/speech_output_router.ts"],
+            "group": "extension",
+            "x": 940,
+            "y": 75
+          },
+          {
+            "id": "browser-output",
+            "label": "System default\nVS Code webview audio",
+            "files": [
+              "packages/vscode/src/webview/speech_audio.ts",
+              "packages/vscode/src/panel.ts",
+              "packages/vscode/src/panel_messages.ts"
+            ],
+            "group": "webview",
+            "x": 1450,
+            "y": 75
+          },
+          {
+            "id": "native-output",
+            "label": "Native driver\nExplicit PipeWire target",
+            "files": ["packages/vscode/src/speech_native_output.ts"],
+            "group": "extension",
+            "x": 940,
+            "y": 380
+          },
+          {
+            "id": "pipewire-player",
+            "label": "pw-play and PipeWire\nNamed local output",
+            "files": [],
+            "group": "host",
+            "x": 1450,
+            "y": 380
+          }
+        ],
+        "edges": [
+          {
+            "from": "output-settings",
+            "to": "output-router",
+            "label": "choice and refresh",
+            "vertices": [
+              {
+                "x": 240,
+                "y": 280
+              },
+              {
+                "x": 1100,
+                "y": 280
+              }
+            ]
+          },
+          {
+            "from": "speech-service",
+            "to": "output-router",
+            "label": "preflight"
+          },
+          {
+            "from": "output-router",
+            "to": "browser-output",
+            "label": "WAV"
+          },
+          {
+            "from": "browser-output",
+            "to": "output-router",
+            "label": "stop ack",
+            "vertices": [
+              {
+                "x": 1600,
+                "y": 0
+              },
+              {
+                "x": 1100,
+                "y": 0
+              }
+            ]
+          },
+          {
+            "from": "output-router",
+            "to": "native-output",
+            "label": ""
+          },
+          {
+            "from": "native-output",
+            "to": "pipewire-player",
+            "label": "named target"
+          },
+          {
+            "from": "native-output",
+            "to": "output-router",
+            "label": "owns child until close"
+          }
+        ],
+        "groups": [
+          {
+            "id": "extension",
+            "label": "AI Pair extension host"
+          },
+          {
+            "id": "webview",
+            "label": "VS Code webview"
+          },
+          {
+            "id": "host",
+            "label": "Local audio server"
+          }
+        ],
+        "comments": {
+          "output-settings": [
+            {
+              "id": "speech-pref-comment",
+              "text": "The displayed device catalog refreshes on request. Each explicit native speech unit also performs its own bounded availability preflight before synthesis. A missing saved choice stays visible.",
+              "ts": 0
+            }
+          ],
+          "output-router": [
+            {
+              "id": "speech-route-comment",
+              "text": "An unavailable named route is refused without falling back. A browser stop is acknowledged for the matching unit and page, or the owning page must actually be disposed; replacing a view alone does not retire its audio.",
+              "ts": 0
+            }
+          ],
+          "native-output": [
+            {
+              "id": "speech-native-comment",
+              "text": "The Linux PipeWire path owns the player process until it closes. Pause stops the player; buffered audio can finish briefly. Device loss stops playback rather than moving to the system default.",
+              "ts": 0
+            }
+          ]
+        }
       }
     }
   ],

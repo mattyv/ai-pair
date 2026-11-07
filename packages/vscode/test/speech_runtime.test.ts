@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -56,6 +57,10 @@ describe('speech runtime staging', () => {
       'bm_george.bin',
     ]);
     expect(await readdir(path.join(directory, 'node_modules', 'onnxruntime-node', 'bin', 'napi-v3'))).toEqual(['linux']);
+    const library = await readFile(
+      path.join(directory, 'node_modules', 'onnxruntime-node', 'bin', 'napi-v3', 'linux', 'x64', 'libstdc++.so.6'),
+    );
+    expect(createHash('sha256').update(library).digest('hex')).toBe('07897b0e78c122f6536d467bc5872b5b51e759b670db35099275f5e41a25a3da');
   });
   it('keeps the vendor phonemizer out of worker and bridge bundles', async () => {
     for (const entry of ['packages/vscode/src/speech_worker.ts', 'packages/vscode/src/speech_phonemizer_bridge.ts']) {

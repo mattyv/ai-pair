@@ -2108,3 +2108,104 @@ it('does not report an empty result when an in-flight catalog is reset', () => {
   send({ type: 'speechCatalog', value: { voices: [], more: false, loading: false, error: false, reset: true } });
   expect(text('speech-settings-status')).toBe('');
 });
+
+it('shows output choices safely and refreshes only when requested', () => {
+  const output = element('speech-output');
+  if (!(output instanceof window.HTMLSelectElement)) throw new TypeError('Missing output selector');
+  const choice = { kind: 'native' as const, backend: 'pipewire' as const, name: 'headphones' };
+  send({
+    type: 'speechOutputCatalog',
+    value: { supported: true, devices: [{ choice, label: '<b>Headphones</b>', available: true }], selected: { kind: 'default' } },
+  });
+  expect(output.options[1]?.textContent).toBe('<b>Headphones</b>');
+  expect(posted().filter((message) => message.type === 'speechOutputRefresh' || message.type === 'speechPreview')).toEqual([]);
+  output.selectedIndex = 1;
+  output.dispatchEvent(new window.Event('change'));
+  expect(posted()).toContainEqual({ type: 'speechOutputSelect', choice });
+  click(element('speech-output-refresh'));
+  expect(posted()).toContainEqual({ type: 'speechOutputRefresh' });
+});
+
+it('keeps a missing saved output visible and explains unsupported output selection', () => {
+  const output = element('speech-output');
+  if (!(output instanceof window.HTMLSelectElement)) throw new TypeError('Missing output selector');
+  send({
+    type: 'speechOutputCatalog',
+    value: { supported: false, devices: [], selected: { kind: 'native', backend: 'pipewire', name: 'saved' }, reason: 'unsupported' },
+  });
+  expect(output.selectedOptions[0]?.textContent).toBe('Saved output unavailable');
+  expect(element('speech-output-status').textContent).toContain('unavailable');
+  expect(element('speech-preview')).toHaveProperty('disabled', true);
+});
+
+it('prompts for an explicit output refresh before availability has been checked', () => {
+  send({ type: 'speechOutputCatalog', value: { supported: false, devices: [], selected: { kind: 'default' } } });
+  expect(element('speech-output-status').textContent).toBe('Select Refresh outputs to list available devices.');
+});
+
+it('renders a known selected output and blocks unavailable devices and malformed changes', () => {
+  const output = element('speech-output');
+  if (!(output instanceof window.HTMLSelectElement)) throw new TypeError('Missing output selector');
+  const choice = { kind: 'native' as const, backend: 'pipewire' as const, name: 'saved' };
+  const other = { kind: 'native' as const, backend: 'pipewire' as const, name: 'other' };
+  send({ type: 'speechSupport', supported: true });
+  send({
+    type: 'speechOutputCatalog',
+    value: {
+      supported: true,
+      devices: [
+        { choice: other, label: 'Other', available: true },
+        { choice, label: 'Saved', available: true },
+      ],
+      selected: choice,
+    },
+  });
+  expect(output.selectedOptions[0]?.textContent).toBe('Saved');
+  expect(element('speech-preview')).toHaveProperty('disabled', false);
+  send({
+    type: 'speechOutputCatalog',
+    value: { supported: true, devices: [{ choice, label: 'Saved', available: false }], selected: choice, error: 'save_failed' },
+  });
+  expect(output.options[1]?.disabled).toBe(true);
+  expect(element('speech-preview')).toHaveProperty('disabled', true);
+  expect(element('speech-output-status').textContent).toBe('Could not save the output choice.');
+  send({ type: 'speechOutputCatalog', value: { supported: true, devices: [], selected: choice } });
+  expect(element('speech-output-status').textContent).toBe('Selected output is unavailable. Refresh outputs or choose System default.');
+  output.value = 'invalid';
+  output.dispatchEvent(new window.Event('change'));
+  const invalid = document.createElement('option');
+  invalid.value = '99';
+  output.append(invalid);
+  output.value = '99';
+  output.dispatchEvent(new window.Event('change'));
+  expect(posted().filter((message) => message.type === 'speechOutputSelect')).toEqual([]);
+  send({
+    type: 'speechOutputCatalog',
+    value: { supported: false, devices: [{ choice, label: 'Saved', available: true }], selected: choice, reason: 'unavailable' },
+  });
+  expect(output.options[1]?.disabled).toBe(true);
+});
+
+it('acknowledges matching browser audio stop only after the clip is silenced', async () => {
+  const pause = vi.fn<() => void>();
+  class FakeAudio {
+    pause = pause;
+    play(): Promise<void> {
+      return Promise.resolve();
+    }
+    addEventListener(): void {}
+  }
+  vi.stubGlobal('Audio', FakeAudio);
+  vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:retire');
+  vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+  send({ type: 'speechPage', pageId: 1 });
+  send({ type: 'speechStatus', pageId: 1, id: 2, state: 'preparing' });
+  send({ type: 'speechAudio', pageId: 1, id: 2, wavBase64: 'AQI=', durationMs: 100 });
+  await Promise.resolve();
+  send({ type: 'speechControl', pageId: 2, id: 2, action: 'stop' });
+  send({ type: 'speechControl', pageId: 1, id: 3, action: 'stop' });
+  expect(posted().filter((message) => message.type === 'speechRetired')).toEqual([]);
+  send({ type: 'speechControl', pageId: 1, id: 2, action: 'stop' });
+  expect(pause).toHaveBeenCalledOnce();
+  expect(posted()).toContainEqual({ type: 'speechRetired', id: 2, pageId: 1 });
+});

@@ -4,6 +4,8 @@ import type { CodePlayback, PanelEvent, Ref } from '@ai-pair/core';
 import type { CalibrationView } from './calibration';
 import type { SpeechSettings } from './speech_types';
 import type { CatalogView } from './speech_catalog';
+import type { OutputChoice } from './speech_output_types';
+import type { OutputPreferenceView } from './speech_output_preferences';
 
 export type SpeechState = 'preparing' | 'speaking' | 'paused' | 'unavailable' | 'idle';
 export type SpeechEvent = 'started' | 'ended' | 'failed';
@@ -16,10 +18,13 @@ export type ChatOrder = 'newestFirst' | 'oldestFirst';
 export type FromPanel =
   | { type: 'ready' }
   | { type: 'copyDiagnostics' }
+  | { type: 'speechOutputRefresh' }
+  | { type: 'speechOutputSelect'; choice: OutputChoice }
   | { type: 'speechSettings'; value: SpeechSettings }
   | { type: 'speechSetup' | 'speechPreview' | 'speechStop' }
   | { type: 'speechKeySet' | 'speechKeyRemove' | 'speechVoicesLoad' | 'speechVoicesMore' }
   | { type: 'speechPageHidden' | 'speechPageVisible'; pageId: number }
+  | { type: 'speechRetired'; id: number; pageId: number }
   | { type: 'speechEvent'; id: number; pageId: number; event: SpeechEvent }
   | { type: 'skipReading'; id: number }
   | { type: 'holdReading'; id: number; held: boolean }
@@ -59,6 +64,7 @@ export type ToPanel =
   | { type: 'speechSupport'; supported: boolean }
   | { type: 'speechCloudSupport'; supported: boolean }
   | { type: 'speechSettings'; value: SpeechSettings }
+  | { type: 'speechOutputCatalog'; value: OutputPreferenceView }
   | { type: 'speechKeyStatus'; hasKey: boolean }
   | { type: 'speechCatalog'; value: CatalogView }
   | { type: 'speechSetupState'; pending: boolean; message: string }

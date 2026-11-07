@@ -15,6 +15,11 @@ package license files are in `dist/speech/node_modules` except where noted.
 -   ONNX Runtime Node and common 1.21.0, MIT:
     <https://github.com/microsoft/onnxruntime/tree/v1.21.0>. License text is in
     `third_party/ONNXRUNTIME-LICENSE.txt`.
+-   GNU libstdc++ 6.0.28, from Ubuntu core20 revision 2922, GCC runtime
+    library exception and GPL terms: `third_party/LIBSTDCXX-COPYRIGHT.txt`.
+    SHA-256: `07897b0e78c122f6536d467bc5872b5b51e759b670db35099275f5e41a25a3da`.
+    The binary comes from the `libstdc++6` package in the core20 snap; its
+    source is available at <https://launchpad.net/ubuntu/+source/gcc-10>.
 -   sharp 0.34.5 and @img/sharp-linux-x64 0.34.5, Apache-2.0:
     <https://github.com/lovell/sharp>
 -   @img/sharp-libvips-linux-x64 1.2.4: LGPL-3.0-or-later and other licenses.

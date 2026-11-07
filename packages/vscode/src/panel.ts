@@ -7,6 +7,7 @@ import { timings } from './timings';
 import type { ChatOrder, FromPanel, SpeechAction, SpeechEvent, SpeechState, ToPanel } from './panel_messages';
 import { ELEVENLABS_SPEEDS, SPEECH_SPEEDS, SPEECH_VOICES, type SpeechSettings } from './speech_types';
 import type { CatalogView } from './speech_catalog';
+import type { OutputPreferenceView } from './speech_output_preferences';
 import type { SpeechDiagnosticEvent } from './diagnostics';
 import type { Calibration, CalibrationView } from './calibration';
 
@@ -35,6 +36,12 @@ export interface PanelWiring {
   /** Copies the sanitized diagnostics snapshot on explicit request. */
   copyDiagnostics: () => Promise<void>;
   speech: {
+    outputView: () => OutputPreferenceView;
+    outputReady: () => boolean;
+    outputRetired: (id: number, pageId: number) => void;
+    outputPageRetired: (pageId: number) => void;
+    outputRefresh: () => void;
+    outputSelect: (choice: unknown) => void;
     diagnostic: (event: SpeechDiagnosticEvent) => void;
     settings: { get: () => SpeechSettings; set: (value: SpeechSettings) => void };
     supported: () => boolean;
@@ -138,6 +145,10 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     this.send({ type: 'speechKeyStatus', hasKey });
   }
 
+  showSpeechOutputCatalog(value: OutputPreferenceView): void {
+    this.send({ type: 'speechOutputCatalog', value });
+  }
+
   showSpeechCatalog(value: CatalogView): void {
     this.send({ type: 'speechCatalog', value });
   }
@@ -225,6 +236,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       if (this.view === view) this.receive(m, pageId);
     });
     view.onDidDispose(() => {
+      // specs/OutputReplacement.tla, Dispose: only destruction retires a replaced page.
+      this.wiring.speech.outputPageRetired(pageId);
       // specs/Start.tla, `Dispose`: the page goes, its button and note with it.
       if (this.view === view) {
         this.view = undefined;
@@ -241,6 +254,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   /** Whether the current page can receive live speech for integration tests. */
   speechPageIsReady(): boolean {
     return this.speechPageReady;
+  }
+
+  /** Returns the current ready page identity for output ownership. */
+  speechReadyPageId(): number | undefined {
+    return this.speechPageReady ? this.speechPageId : undefined;
   }
 
   /** Refreshes runtime availability for the currently open page only. */
@@ -309,14 +327,26 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
           this.wiring.speech.event({ id: message.id, pageId, event: message.event });
         }
         return;
+      case 'speechRetired':
+        if (message.pageId === pageId && Number.isSafeInteger(message.id) && message.id > 0) {
+          this.wiring.speech.outputRetired(message.id, pageId);
+        }
+        return;
       case 'speechPageHidden':
         if (message.pageId === pageId) {
           this.speechPageReady = false;
           this.wiring.speech.pageClosed(pageId);
+          this.wiring.speech.outputPageRetired(pageId);
         }
         return;
       case 'speechPageVisible':
         if (message.pageId === pageId) this.speechPageReady = true;
+        return;
+      case 'speechOutputRefresh':
+        this.wiring.speech.outputRefresh();
+        return;
+      case 'speechOutputSelect':
+        this.wiring.speech.outputSelect(message.choice);
         return;
       case 'speechSettings':
         if (
@@ -362,6 +392,15 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       case 'speechPreview': {
         const provider = this.wiring.speech.settings.get().provider;
         this.wiring.speech.diagnostic({ kind: 'speech', event: 'preview', phase: 'received', provider });
+        if (!this.wiring.speech.outputReady()) {
+          this.wiring.speech.diagnostic({ kind: 'speech', event: 'preview', phase: 'blocked', provider, reason: 'not_ready' });
+          this.send({
+            type: 'speechSetupState',
+            pending: false,
+            message: 'The selected speech output is unavailable. Refresh outputs or choose System default.',
+          });
+          return;
+        }
         if (provider === 'kokoro' ? !this.wiring.speech.supported() : !this.wiring.speech.cloudSupported()) {
           this.wiring.speech.diagnostic({ kind: 'speech', event: 'preview', phase: 'blocked', provider, reason: 'unsupported' });
           this.send({
@@ -410,6 +449,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         this.speechPageReady = true;
         this.send({ type: 'speechPage', pageId });
         this.showSpeechSettings(this.wiring.speech.settings.get());
+        this.showSpeechOutputCatalog(this.wiring.speech.outputView());
         {
           const supported = this.wiring.speech.cloudSupported();
           this.wiring.speech.diagnostic({

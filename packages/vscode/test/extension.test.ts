@@ -15,6 +15,8 @@ import type { SpeechOutput } from '../src/speech_service';
 import type { PanelWiring } from '../src/panel';
 import type { CatalogView } from '../src/speech_catalog';
 import type { SpeechSettings } from '../src/speech_types';
+import type { OutputPreferenceWiring } from '../src/speech_output_preferences';
+import type { SpeechOutputRouter } from '../src/speech_output_router';
 import { installedSpeechModel, setupSpeech } from '../src/speech_setup';
 import { builtInPassage } from '../src/passage';
 import { claudeStarter, setUpAgent, writeLauncher } from '../src/setup';
@@ -49,9 +51,43 @@ const fakes = vi.hoisted(() => {
     speech: [] as Array<InstanceType<typeof FakeSpeech>>,
     cloudClients: [] as Array<InstanceType<typeof FakeCloudClient>>,
     catalogs: [] as Array<InstanceType<typeof FakeCatalog>>,
+    outputs: [] as Array<InstanceType<typeof FakeOutputPreferences>>,
+    routers: [] as Array<InstanceType<typeof FakeOutputRouter>>,
     starting: Promise.resolve(),
     arms: true,
   };
+
+  class FakeNativeDriver {
+    readonly fake = true;
+  }
+  class FakeOutputRouter {
+    readonly invalidate = vi.fn();
+    readonly browserRetired = vi.fn<(id: number, pageId: number) => void>();
+    readonly pageClosed = vi.fn<(pageId: number) => void>();
+    readonly prepare = vi.fn(() => Promise.resolve(true));
+    readonly play: SpeechOutput['play'];
+    readonly control: SpeechOutput['control'];
+    readonly status: SpeechOutput['status'];
+    readonly localDiagnostic: SpeechOutput['localDiagnostic'];
+    constructor(readonly options: ConstructorParameters<typeof SpeechOutputRouter>[0]) {
+      this.play = options.defaultOutput.play;
+      this.control = options.defaultOutput.control;
+      this.status = options.defaultOutput.status;
+      this.localDiagnostic = options.defaultOutput.localDiagnostic;
+      made.routers.push(this);
+    }
+  }
+
+  class FakeOutputPreferences {
+    readonly view = vi.fn(() => ({ supported: false, devices: [], selected: { kind: 'default' as const } }));
+    readonly ready = vi.fn(() => true);
+    readonly choice = vi.fn(() => ({ kind: 'default' as const }));
+    readonly choose = vi.fn(() => Promise.resolve());
+    readonly refresh = vi.fn(() => Promise.resolve());
+    constructor(readonly wiring: OutputPreferenceWiring) {
+      made.outputs.push(this);
+    }
+  }
 
   class FakeCloudClient {
     readonly voices = vi.fn(() => Promise.resolve({ voices: [] }));
@@ -222,6 +258,8 @@ const fakes = vi.hoisted(() => {
     readonly showSpeechSettings = vi.fn<(value: SpeechSettings) => void>();
     readonly showSpeechKeyStatus = vi.fn();
     readonly showSpeechCatalog = vi.fn();
+    readonly showSpeechOutputCatalog = vi.fn();
+    readonly speechReadyPageId = vi.fn(() => 7);
     readonly showSpeechStatus = vi.fn();
     readonly playSpeech = vi.fn(() => 7);
     readonly controlSpeech = vi.fn();
@@ -287,6 +325,9 @@ const fakes = vi.hoisted(() => {
     FakeDiagnostics,
     FakeSpeech,
     FakeCloudClient,
+    FakeOutputPreferences,
+    FakeNativeDriver,
+    FakeOutputRouter,
     FakeCredentials,
     FakeCatalog,
     made,
@@ -386,6 +427,12 @@ vi.mock('../src/speech_service', () => ({ SpeechService: fakes.FakeSpeech }));
 vi.mock('../src/speech_elevenlabs', () => ({ ElevenLabsClient: fakes.FakeCloudClient }));
 vi.mock('../src/speech_credentials', () => ({ SpeechCredentials: fakes.FakeCredentials }));
 vi.mock('../src/speech_catalog', () => ({ SpeechCatalog: fakes.FakeCatalog }));
+vi.mock('../src/speech_output_preferences', () => ({ SpeechOutputPreferences: fakes.FakeOutputPreferences }));
+vi.mock('../src/speech_native_output', () => ({
+  NativeOutputDriver: fakes.FakeNativeDriver,
+  discoverOutputs: vi.fn(() => Promise.resolve({ supported: false, devices: [], reason: 'unsupported' })),
+}));
+vi.mock('../src/speech_output_router', () => ({ SpeechOutputRouter: fakes.FakeOutputRouter }));
 vi.mock('../src/speech_setup', () => ({
   installedSpeechModel: vi.fn(() => Promise.resolve(undefined)),
   setupSpeech: vi.fn(() => Promise.resolve()),
@@ -1402,4 +1449,58 @@ it('records bounded local worker readiness and failure facts', () => {
   const calls = last(fakes.made.diagnostics).record.mock.calls;
   expect(calls).toContainEqual([{ kind: 'speech', event: 'runtime', provider: 'kokoro', phase: 'ready' }]);
   expect(calls).toContainEqual([{ kind: 'speech', event: 'runtime', provider: 'kokoro', phase: 'failed', reason: 'worker_native' }]);
+});
+
+it('wires output preference actions to local state without starting speech', async () => {
+  const h = activated();
+  const output = last(fakes.made.outputs);
+  const speech = last(fakes.made.speech);
+  expect(h.panel.wiring.speech.outputView()).toEqual({ supported: false, devices: [], selected: { kind: 'default' } });
+  expect(h.panel.wiring.speech.outputReady()).toBe(true);
+  h.panel.wiring.speech.outputRefresh();
+  h.panel.wiring.speech.outputSelect({ kind: 'default' });
+  expect(output.refresh).toHaveBeenCalledOnce();
+  expect(output.choose).toHaveBeenCalledWith({ kind: 'default' });
+  expect(speech.preview).not.toHaveBeenCalled();
+  await output.wiring.write({ kind: 'default' });
+  expect(h.context.globalState.get('speechOutput')).toEqual({ kind: 'default' });
+  output.wiring.stop();
+  expect(speech.cancel).toHaveBeenCalled();
+  const state = { supported: false, devices: [], selected: { kind: 'default' as const } };
+  output.wiring.changed(state);
+  expect(h.panel.showSpeechOutputCatalog).toHaveBeenCalledWith(state);
+  expect(await output.wiring.discover()).toEqual({ supported: false, devices: [], reason: 'unsupported' });
+});
+
+it('routes speech through the output router and invalidates it before a preference change', () => {
+  const h = activated();
+  const router = last(fakes.made.routers);
+  const prefs = last(fakes.made.outputs);
+  const speech = last(fakes.made.speech);
+  expect(speech.options.output).toBe(router);
+  expect(router.options.choice()).toEqual({ kind: 'default' });
+  expect(router.options.currentPage()).toBe(7);
+  router.options.audioEvent({ id: 2, pageId: 7, event: 'started' });
+  expect(speech.audioEvent).toHaveBeenCalledWith({ id: 2, pageId: 7, event: 'started' });
+  speech.audioEvent.mockReturnValueOnce('ended');
+  router.options.audioEvent({ id: 2, pageId: 7, event: 'ended' });
+  expect(router.browserRetired).toHaveBeenCalledWith(2, 7);
+  h.panel.wiring.speech.outputRetired(3, 7);
+  expect(router.browserRetired).toHaveBeenCalledWith(3, 7);
+  h.panel.wiring.speech.pageClosed(7);
+  expect(router.pageClosed).not.toHaveBeenCalled();
+  h.panel.wiring.speech.outputPageRetired(7);
+  expect(router.pageClosed).toHaveBeenCalledWith(7);
+  prefs.wiring.stop();
+  expect(speech.cancel).toHaveBeenCalledOnce();
+  expect(router.invalidate).toHaveBeenCalledOnce();
+  expect(h.panel.wiring.speech.outputReady()).toBe(true);
+});
+
+it('never discovers native outputs on a remote host', async () => {
+  fakes.remoteName = 'ssh-remote';
+  activated();
+  const prefs = last(fakes.made.outputs);
+  expect(await prefs.wiring.discover()).toEqual({ supported: false, devices: [], reason: 'unsupported' });
+  fakes.remoteName = undefined;
 });

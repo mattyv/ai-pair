@@ -104,6 +104,17 @@ export class SpeechAudio {
     }
   }
 
+  /** Silences a named unit and confirms it cannot still be playing. */
+  retire(id: number, pageId: number): boolean {
+    // specs/OutputHandoff.tla, Ack: acknowledge only the same page and unit.
+    if (!Number.isSafeInteger(id) || id <= 0 || pageId !== this.currentPage) return false;
+    if (this.current === id) {
+      this.stop();
+      return true;
+    }
+    return this.current === 0 && id <= this.latest;
+  }
+
   /** Synchronously silences and invalidates the unit. */
   stop(): void {
     // specs/SpeechPage.tla, Interrupt and Replace: never revive stopped audio.

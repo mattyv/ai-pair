@@ -161,7 +161,11 @@ Code goes without a spec for one of these reasons:
 | | `esc`, `codeLink`, `refLink` | Format |
 | `speech_elevenlabs.ts` | cloud transport | `CloudNarration` |
 | `speech_pcm.ts` | bounded PCM conversion and thinking interval | Pure; unit and integration tests |
-| `speech_service.ts` | worker, audio and page lifecycle; pause, cancel, timeouts | `Narration`, `SpeechWorker`, `CloudNarration`; timer bounds and local platform checks: unit and integration tests |
+| `speech_service.ts` | worker, audio and page lifecycle; pause, cancel, timeouts | `Narration`, `SpeechWorker`, `CloudNarration`, `OutputAdmission`, `OutputHandoff`; timer bounds and local platform checks: unit and integration tests |
+| `speech_native_output.ts` | discovery and native process lifecycle | `AudioOutput`; isolated PipeWire integration and unit tests |
+| `speech_output_router.ts` | route reservation and playback ownership | `AudioOutput`, `OutputAdmission`, `OutputHandoff`, `OutputReplacement` |
+| `speech_output_types.ts` | route and device types | Types |
+| `speech_output_preferences.ts` | selection, discovery and ordered persistence | `OutputPreference` |
 | `speech_synthesis.ts`, `speech_waveform.ts` | complete-token and waveform bounds | `ActionValidation` (`TokenBounds`, `PhonemeCoverage`); PCM encoding: Pure |
 | `speech_engine.ts` | `loadSpeechEngine` | Glue: loads the local model, tokenizer and phonemizer; offline worker integration |
 | `speech_worker_host.ts`, `speech_worker.ts` | worker admission, validation and dispatch | `Narration`; worker isolation and concrete messages: unit and integration tests |

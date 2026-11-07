@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.18.2
+
+-   Fix local Kokoro speech startup in Snap installations with an older C runtime.
+
+## 0.18.1
+
+-   Discover Linux PipeWire outputs without requiring PulseAudio tools.
+
+## 0.18.0
+
+-   Choose a speech output independently of voice provider: keep System default,
+    or select an available local PipeWire output on Linux. Refresh outputs in
+    Settings to list devices. The choice is stored locally and is not synced.
+-   A missing or unavailable override reports an error instead of silently
+    playing through another output. Preview uses the chosen route for Kokoro
+    and ElevenLabs.
+
 ## 0.17.1
 
 -   Identify local speech startup failures with fixed diagnostic categories for

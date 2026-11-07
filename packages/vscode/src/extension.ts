@@ -6,9 +6,12 @@ import { discoveryDir } from '@ai-pair/protocol';
 import { playDemo } from './demo';
 import { VsCodeEditor } from './editor';
 import { Diagnostics } from './diagnostics';
-import { SpeechService } from './speech_service';
+import { SpeechService, type SpeechAudioEvent, type SpeechOutput } from './speech_service';
+import { NativeOutputDriver, discoverOutputs } from './speech_native_output';
+import { SpeechOutputRouter, type OutputDiscovery } from './speech_output_router';
 import { SpeechCredentials } from './speech_credentials';
 import { SpeechCatalog } from './speech_catalog';
+import { SpeechOutputPreferences } from './speech_output_preferences';
 import { ElevenLabsClient } from './speech_elevenlabs';
 import { installedSpeechModel, setupSpeech } from './speech_setup';
 import { speechRuntimeAvailable } from './speech_runtime_status';
@@ -144,6 +147,18 @@ export function activate(context: vscode.ExtensionContext): Api {
   let cloudVoiceInvalidated = false;
   let panel: NarrationPanel;
   let catalog: SpeechCatalog;
+  let outputPreferences: SpeechOutputPreferences;
+  let outputRouter: SpeechOutputRouter;
+  function discoverSpeechOutputs(): Promise<OutputDiscovery> {
+    return cloudSupported ? discoverOutputs() : Promise.resolve({ supported: false, devices: [], reason: 'unsupported' });
+  }
+  function handleSpeechEvent(event: SpeechAudioEvent): void {
+    const terminal = speech.audioEvent(event);
+    if (terminal !== undefined) {
+      outputRouter.browserRetired(event.id, event.pageId);
+      if (speechObservation?.id === event.id) speechObservation = { ...speechObservation, terminal };
+    }
+  }
   let credentials: SpeechCredentials;
   const diagnostics = new Diagnostics({ version: AI_PAIR_VERSION, build: AI_PAIR_BUILD_ID });
   function record(event: DiagnosticEvent): void {
@@ -335,6 +350,20 @@ export function activate(context: vscode.ExtensionContext): Api {
         await vscode.env.clipboard.writeText(JSON.stringify(diagnostics.snapshot()));
       },
       speech: {
+        outputView: () => outputPreferences.view(),
+        outputReady: () => outputPreferences.ready(),
+        outputRetired: (id, pageId) => {
+          outputRouter.browserRetired(id, pageId);
+        },
+        outputPageRetired: (pageId) => {
+          outputRouter.pageClosed(pageId);
+        },
+        outputRefresh: () => {
+          void outputPreferences.refresh();
+        },
+        outputSelect: (choice) => {
+          void outputPreferences.choose(choice);
+        },
         settings: speechSettings,
         diagnostic: (event) => {
           diagnostics.record(event);
@@ -382,12 +411,7 @@ export function activate(context: vscode.ExtensionContext): Api {
         stop: () => {
           speech.cancel();
         },
-        event: (event) => {
-          const terminal = speech.audioEvent(event);
-          if (terminal !== undefined && speechObservation?.id === event.id) {
-            speechObservation = { ...speechObservation, terminal };
-          }
-        },
+        event: handleSpeechEvent,
         pageClosed: (pageId) => {
           speech.pageClosed(pageId);
           catalog.invalidate();
@@ -400,6 +424,20 @@ export function activate(context: vscode.ExtensionContext): Api {
     (id) => editor.showTerminal(id),
     codePlayback,
   );
+  outputPreferences = new SpeechOutputPreferences({
+    initial: context.globalState.get<unknown>('speechOutput'),
+    write: async (choice) => {
+      await context.globalState.update('speechOutput', choice);
+    },
+    stop: () => {
+      speech.cancel();
+      outputRouter.invalidate();
+    },
+    changed: (value) => {
+      panel.showSpeechOutputCatalog(value);
+    },
+    discover: discoverSpeechOutputs,
+  });
   catalog = new SpeechCatalog(cloud, (value) => {
     if (value.reset) catalogRequestActive = false;
     else if (value.loading) catalogRequestActive = true;
@@ -426,6 +464,38 @@ export function activate(context: vscode.ExtensionContext): Api {
     });
     panel.refreshSpeechSupport();
   });
+  const defaultOutput: SpeechOutput = {
+    localDiagnostic: (phase, reason) => {
+      diagnostics.record({ kind: 'speech', event: 'runtime', provider: 'kokoro', phase, ...(reason === undefined ? {} : { reason }) });
+    },
+    play: (id, wav, durationMs) => panel.playSpeech(id, wav, durationMs),
+    control: (id, pageId, action) => {
+      panel.controlSpeech(id, pageId, action);
+    },
+    status: (id, state, message) => {
+      if (previewCapture) previewId = id;
+      if (id === previewId && (state === 'speaking' || state === 'unavailable')) {
+        diagnostics.record({
+          kind: 'speech',
+          event: 'preview',
+          provider: previewProvider,
+          phase: state === 'speaking' ? 'ready' : 'failed',
+          ...(state === 'unavailable' ? { reason: 'unknown' as const } : {}),
+        });
+      }
+      const started = state === 'speaking' || (speechObservation?.id === id && speechObservation.started);
+      speechObservation = { id, state, started, ...(message === undefined ? {} : { message }) };
+      panel.showSpeechStatus(id, state, message);
+    },
+  };
+  outputRouter = new SpeechOutputRouter({
+    driver: new NativeOutputDriver(),
+    discover: discoverSpeechOutputs,
+    choice: () => outputPreferences.choice(),
+    defaultOutput,
+    currentPage: () => panel.speechReadyPageId(),
+    audioEvent: handleSpeechEvent,
+  });
   speech = new SpeechService({
     runtimeDirectory: path.join(context.extensionPath, 'dist', 'speech'),
     cloud,
@@ -433,30 +503,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     localDesktop: cloudSupported,
     kokoroSupported: localSpeechSupported,
     settings: speechSettings.get,
-    output: {
-      localDiagnostic: (phase, reason) => {
-        diagnostics.record({ kind: 'speech', event: 'runtime', provider: 'kokoro', phase, ...(reason === undefined ? {} : { reason }) });
-      },
-      play: (id, wav, durationMs) => panel.playSpeech(id, wav, durationMs),
-      control: (id, pageId, action) => {
-        panel.controlSpeech(id, pageId, action);
-      },
-      status: (id, state, message) => {
-        if (previewCapture) previewId = id;
-        if (id === previewId && (state === 'speaking' || state === 'unavailable')) {
-          diagnostics.record({
-            kind: 'speech',
-            event: 'preview',
-            provider: previewProvider,
-            phase: state === 'speaking' ? 'ready' : 'failed',
-            ...(state === 'unavailable' ? { reason: 'unknown' as const } : {}),
-          });
-        }
-        const started = state === 'speaking' || (speechObservation?.id === id && speechObservation.started);
-        speechObservation = { id, state, started, ...(message === undefined ? {} : { message }) };
-        panel.showSpeechStatus(id, state, message);
-      },
-    },
+    output: outputRouter,
   });
   controller = new Controller(editor, panel, undefined, speech);
   controller.onDiagnostic = record;

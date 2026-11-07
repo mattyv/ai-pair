@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: tla, 2026-11-07.
+Last updated: css, 2026-11-07.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -105,6 +105,10 @@ Last updated: tla, 2026-11-07.
 | `packages/vscode/src/speech_elevenlabs.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_engine.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_model_manifest.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_native_output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_output_preferences.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_output_router.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_output_types.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_pcm.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_phonemizer_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_runtime_status.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -151,6 +155,11 @@ Last updated: tla, 2026-11-07.
 | `packages/vscode/test/speech_elevenlabs.e2e.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_elevenlabs.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_engine.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_native_output.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_native_spawn.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_output_discovery.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_output_preferences.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_output_router.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_pcm.e2e.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_pcm.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_phonemizer_bridge.test.ts` | TypeScript | test | - | test | - | - | test |
@@ -186,8 +195,9 @@ Last updated: tla, 2026-11-07.
 | `scripts/lint_tla.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/lint_web.test.ts` | TypeScript | test | test | test | test | - | test |
 | `scripts/lint_web.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `scripts/normalize_architecture.test.ts` | TypeScript | - | - | test | - | - | - |
-| `scripts/normalize_architecture.ts` | TypeScript | - | - | - | - | - | - |
+| `scripts/normalize_architecture.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
+| `scripts/normalize_architecture.test.ts` | TypeScript | test | - | test | - | - | test |
+| `scripts/normalize_architecture.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/release.test.ts` | TypeScript | test | test | test | test | - | test |
 | `scripts/release.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/stylelint.config.ts` | TypeScript | - | - | - | - | - | - |
@@ -197,6 +207,8 @@ Last updated: tla, 2026-11-07.
 | `specs/Actions.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
 | `specs/Anchor.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Anchor.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
+| `specs/AudioOutput.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/AudioOutput.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/BatchFile.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/BatchFile.tla` | TLA+ | - | - | 4 of 4 actions | - | - | - |
 | `specs/Bridge.cfg` | TLC config | - | - | - | - | - | - |
@@ -245,6 +257,14 @@ Last updated: tla, 2026-11-07.
 | `specs/Narration.tla` | TLA+ | - | - | 20 of 20 actions | - | - | - |
 | `specs/Navigator.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Navigator.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
+| `specs/OutputAdmission.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/OutputAdmission.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/OutputHandoff.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/OutputHandoff.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/OutputPreference.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/OutputPreference.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/OutputReplacement.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/OutputReplacement.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/Outside.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Outside.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/PairDefs.tla` | TLA+ | - | - | - | - | - | - |

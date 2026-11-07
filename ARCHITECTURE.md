@@ -11,7 +11,7 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes version 0.17.0.
+Status: describes version 0.18.0.
 
 The source is `.archi/ai-pair.json`. To regenerate the page with
 Archi-Techture 1.5.1, set `ARCHI_TO_HTML` to its `out/tools/archi-to-html.js`
@@ -75,8 +75,13 @@ with Archi's `validate-archi.js` and check the regenerated page in a browser.
     to its fixed HTTPS API. Its API key stays in VS Code SecretStorage and is
     read only in the extension host; the panel receives key-presence status and
     bounded voice metadata. Cloud requests have independent deadlines and byte
-    limits. Both providers produce bounded WAV audio for the current webview.
-    Page replacement and interruption invalidate the active unit. Speech and
+    limits. Both providers produce bounded WAV audio for a shared output router.
+    System default plays through the current webview. An explicit supported
+    local PipeWire device uses a named native player with no fallback; each
+    native unit is checked before synthesis. The router waits for matching
+    browser retirement or actual page disposal, and retains native process
+    ownership until close. Page replacement and interruption invalidate the
+    active unit. Speech and
     reading complete independently; speech never approves a command or releases
     a reading hold. History and diagnostics do not retain speech audio.
 -   **The narration panel** is a webview. It talks to the extension via

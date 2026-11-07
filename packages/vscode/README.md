@@ -26,6 +26,11 @@ It adds:
     account credits. Saving a key does not enable speech. Voice availability
     depends on your account; a free account may have no eligible API voices.
     Kokoro remains the local option and the default provider.
+-   A shared **Speech output** choice for both providers. Keep **System default**
+    to use VS Code's audio routing, or choose **Refresh outputs** and select a
+    specific local PipeWire device on Linux. The override needs `pw-play`,
+    `pw-dump` and `setpriv`. Its choice stays local to this installation; unavailable
+    devices report an error rather than silently switching outputs.
 
 [Download a fork build from GitHub Actions](https://github.com/mattyv/ai-pair/actions)
 (run **Build VSIX**, then download its artifact). The Marketplace link in the

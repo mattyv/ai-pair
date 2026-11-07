@@ -618,6 +618,18 @@ test('real WAV playback pauses, resumes and stops from the speech controls', asy
       }),
     )
     .toEqual([{ type: 'speechStop' }]);
+  await post({ type: 'speechControl', id: 1, pageId: 1, action: 'stop' });
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return (globalThis as unknown as { messages: Array<{ type: string; id?: number; pageId?: number }> }).messages.filter(
+          (message) => message.type === 'speechRetired',
+        );
+      }),
+    )
+    .toEqual([{ type: 'speechRetired', id: 1, pageId: 1 }]);
+  await expect.poll(async () => (await audioState()).paused).toBe(true);
 });
 
 test('real audio completion leaves the reading timer and command decision alone', async ({ page }) => {
@@ -715,4 +727,33 @@ test('speech provider controls are explicit and render account voices as text', 
   await expect(dialog.locator('script')).toHaveCount(0);
   await dialog.getByLabel('Account voice').selectOption('voice1');
   await expect(dialog.getByRole('button', { name: 'Preview voice' })).toBeEnabled();
+});
+
+test('speech output selection is explicit, independent of provider and never previews on its own', async ({ page }) => {
+  const post = await load(page);
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Settings' });
+  const output = dialog.getByLabel('Speech output');
+  await post({ type: 'speechOutputCatalog', value: { supported: false, devices: [], selected: { kind: 'default' } } });
+  await expect(dialog.getByText('Select Refresh outputs to list available devices.')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Refresh outputs' }).click();
+  const choice = { kind: 'native', backend: 'pipewire', name: 'pair_headphones' };
+  await post({
+    type: 'speechOutputCatalog',
+    value: { supported: true, devices: [{ choice, label: '<Headphones>', available: true }], selected: { kind: 'default' } },
+  });
+  await expect(output.getByRole('option', { name: '<Headphones>' })).toHaveCount(1);
+  await output.selectOption('1');
+  await dialog.getByLabel('Speech provider').selectOption('elevenlabs');
+  await expect(output).toBeVisible();
+  const messages = await page.evaluate(() => {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    return (globalThis as unknown as { messages: Array<{ type: string }> }).messages;
+  });
+  expect(messages.filter((message) => message.type === 'speechOutputRefresh')).toHaveLength(1);
+  expect(messages).toContainEqual({ type: 'speechOutputSelect', choice });
+  expect(messages.filter((message) => message.type === 'speechPreview')).toHaveLength(0);
+  await post({ type: 'speechOutputCatalog', value: { supported: false, devices: [], selected: choice, reason: 'unavailable' } });
+  await expect(output.getByRole('option', { name: 'Saved output unavailable' })).toBeAttached();
+  await expect(dialog.getByRole('button', { name: 'Preview voice' })).toBeDisabled();
 });

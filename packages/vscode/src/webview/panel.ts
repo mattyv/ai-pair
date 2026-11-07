@@ -6,6 +6,7 @@ import type { ChatOrder, FromPanel, SpeechState, ToPanel } from '../panel_messag
 import { SpeechAudio, decodeWav } from './speech_audio';
 import { ELEVENLABS_SPEEDS, SPEECH_SPEEDS, SPEECH_VOICES, type SpeechVoice } from '../speech_types';
 import type { CalibrationView } from '../calibration';
+import type { OutputChoice } from '../speech_output_types';
 import { ELLIPSIS, LABEL_SEPARATOR, RANGE_DASH, RIGHT_ARROW, SPEED_SUFFIX } from '@ai-pair/core/constants';
 
 declare function acquireVsCodeApi(): { postMessage(message: FromPanel): void };
@@ -72,6 +73,9 @@ const ui = {
   copyDiagnostics: $('copy-diagnostics', HTMLButtonElement),
   speechEnabled: $('speech-enabled', HTMLInputElement),
   speechProvider: $('speech-provider', HTMLSelectElement),
+  speechOutput: $('speech-output', HTMLSelectElement),
+  speechOutputRefresh: $('speech-output-refresh', HTMLButtonElement),
+  speechOutputStatus: $('speech-output-status', HTMLElement),
   speechLocal: $('speech-local', HTMLElement),
   speechCloud: $('speech-cloud', HTMLElement),
   speechKeyStatus: $('speech-key-status', HTMLElement),
@@ -921,6 +925,7 @@ function catalogFailure(reason: string | undefined): string {
       return 'Could not load account voices.';
   }
 }
+let outputReady = true;
 function syncSpeechProvider(): void {
   const cloud = speechProvider === 'elevenlabs';
   ui.speechLocal.hidden = cloud;
@@ -930,8 +935,19 @@ function syncSpeechProvider(): void {
   ui.speechKeyRemove.disabled = !cloudSupported || !cloudHasKey;
   ui.speechVoicesLoad.disabled = !cloudSupported || !cloudHasKey || cloudLoading;
   ui.speechVoicesMore.disabled = !cloudSupported || !cloudHasKey || cloudLoading;
-  ui.speechPreview.disabled = cloud ? !cloudSupported || !cloudHasKey || cloudVoice === '' : !speechSupported;
+  ui.speechPreview.disabled = !outputReady || (cloud ? !cloudSupported || !cloudHasKey || cloudVoice === '' : !speechSupported);
 }
+
+let outputChoices: OutputChoice[] = [{ kind: 'default' }];
+ui.speechOutput.addEventListener('change', () => {
+  if (ui.speechOutput.value === '') return;
+  const choice = outputChoices[Number(ui.speechOutput.value)];
+  if (choice === undefined) return;
+  vscode.postMessage({ type: 'speechOutputSelect', choice });
+});
+ui.speechOutputRefresh.addEventListener('click', () => {
+  vscode.postMessage({ type: 'speechOutputRefresh' });
+});
 ui.speechProvider.addEventListener('change', () => {
   const selected = ui.speechProvider.value;
   if (selected !== 'kokoro' && selected !== 'elevenlabs') return;
@@ -1038,6 +1054,54 @@ function handle(message: ToPanel): void {
       cloudSupported = message.supported;
       syncSpeechProvider();
       return;
+    case 'speechOutputCatalog': {
+      const select = ui.speechOutput;
+      const first = document.createElement('option');
+      first.value = '0';
+      first.textContent = 'System default';
+      select.replaceChildren(first);
+      outputChoices = [{ kind: 'default' }];
+      let selected = message.value.selected.kind === 'default' ? '0' : '';
+      let available = selected === '0';
+      for (const device of message.value.devices) {
+        const option = document.createElement('option');
+        outputChoices.push(device.choice);
+        option.value = String(outputChoices.length - 1);
+        option.textContent = device.label;
+        option.disabled = !message.value.supported || !device.available;
+        if (
+          message.value.selected.kind === 'native' &&
+          message.value.selected.backend === device.choice.backend &&
+          message.value.selected.name === device.choice.name
+        ) {
+          selected = option.value;
+          available = message.value.supported && device.available;
+        }
+        select.append(option);
+      }
+      if (selected === '') {
+        const missing = document.createElement('option');
+        missing.value = 'missing';
+        missing.textContent = 'Saved output unavailable';
+        missing.disabled = true;
+        select.append(missing);
+        selected = missing.value;
+      }
+      select.value = selected;
+      outputReady = available;
+      syncSpeechProvider();
+      ui.speechOutputStatus.textContent =
+        message.value.error === 'save_failed'
+          ? 'Could not save the output choice.'
+          : message.value.supported
+            ? available
+              ? ''
+              : 'Selected output is unavailable. Refresh outputs or choose System default.'
+            : message.value.reason === undefined
+              ? 'Select Refresh outputs to list available devices.'
+              : 'Output selection is unavailable on this host; System default remains available.';
+      return;
+    }
     case 'speechKeyStatus':
       cloudHasKey = message.hasKey;
       ui.speechKeyStatus.textContent = message.hasKey ? 'API key saved.' : 'No API key saved.';
@@ -1083,7 +1147,13 @@ function handle(message: ToPanel): void {
       }
       return;
     case 'speechControl':
-      speechAudio.control(message.id, message.pageId, message.action);
+      if (message.action === 'stop') {
+        if (speechAudio.retire(message.id, message.pageId)) {
+          vscode.postMessage({ type: 'speechRetired', id: message.id, pageId: message.pageId });
+        }
+      } else {
+        speechAudio.control(message.id, message.pageId, message.action);
+      }
       return;
     case 'speechStatus': {
       if (

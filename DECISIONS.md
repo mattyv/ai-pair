@@ -45,6 +45,24 @@ Issue discussions and working notes hold the detailed evidence and history.
 
 ## Spoken narration
 
+-   Share one output choice between Kokoro and ElevenLabs. System default keeps
+    the existing VS Code webview path. An explicit local Linux override uses a
+    verified PipeWire player because VS Code's webview blocks speaker selection.
+-   Stage a pinned Linux x64 libstdc++ beside ONNX Runtime's binding. Its
+    `$ORIGIN` search path then supplies a library compatible with the older
+    Snap base without changing VS Code's environment or worker lifecycle.
+    Do not request microphone permission or change the workbench iframe policy.
+-   Discover local PipeWire sinks with bounded `pw-dump` calls, without requiring
+    the PulseAudio compatibility tools. Refuse an explicit `PIPEWIRE_REMOTE`
+    because its locality is not established. Discover outputs on refresh and
+    before each explicit native speech unit. Keep a missing saved choice
+    visible, and reject an unavailable native route before synthesis. Store
+    stable native names locally without Settings Sync; exclude names and device
+    identifiers from diagnostics. Selection stops current speech immediately.
+-   Snapshot the route for each unit. Keep process ownership until close, reject
+    stale callbacks, and stop rather than fall back when the chosen output
+    disappears. Native pause stops the client; already-buffered audio can finish
+    briefly. Stop and parent-death cleanup must also work while paused.
 -   Speak only explicitly selected, bounded agent narration; default to off.
     Keep the written text visible, and do not replay speech from history.
 -   Use independent voice speed and run speech and reading timers concurrently;

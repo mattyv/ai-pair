@@ -1,6 +1,7 @@
 // Only these runtime files are shipped; never copy an entire dependency tree.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const files: Record<string, string[]> = {
   'kokoro-js': [
@@ -48,6 +49,8 @@ export function stageSpeechRuntime(
       fs.cpSync(source, target, { recursive: true });
     }
   }
+  const library = fileURLToPath(new URL('../vendor/libstdcxx/libstdc++.so.6', import.meta.url));
+  fs.copyFileSync(library, path.join(destination, 'onnxruntime-node', 'bin', 'napi-v3', 'linux', 'x64', 'libstdc++.so.6'));
   const bridge = path.join(destination, 'phonemizer');
   fs.mkdirSync(bridge, { recursive: true });
   fs.writeFileSync(path.join(bridge, 'package.json'), JSON.stringify({ name: 'phonemizer', type: 'module', exports: './index.mjs' }));

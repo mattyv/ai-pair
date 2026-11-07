@@ -104,6 +104,12 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
           <option value="elevenlabs">ElevenLabs (cloud)</option>
         </select>
       </label>
+      <label class="settings-field">Speech output
+        <select data-ui="speech-output"><option value="default">System default</option></select>
+      </label>
+      <p>System default follows VS Code audio routing. Output selection applies only to Pair speech.</p>
+      <div class="settings-actions"><button type="button" data-ui="speech-output-refresh" class="soft">Refresh outputs</button></div>
+      <p data-ui="speech-output-status" role="status"></p>
       <label class="settings-check"><input type="checkbox" data-ui="speech-enabled"> Speak selected narration automatically</label>
       <div data-ui="speech-local">
       <label class="settings-field">Voice

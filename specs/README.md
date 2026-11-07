@@ -96,6 +96,11 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `CloudNarration_Healthy.cfg` | two generations with a healthy key read | holds | 59 |
 | `SpeechSettings.cfg` | two credential reads and catalog requests | holds | 50,968 |
 | `ProviderChoice.cfg` | two ordered settings writes and credential change | holds | 122 |
+| `AudioOutput.cfg` | native jobs, route changes and retirement | holds | 3,180 |
+| `OutputAdmission.cfg` | overlapping output checks and stale completion | holds | 140 |
+| `OutputHandoff.cfg` | worker admission and acknowledged browser retirement | holds | 270 |
+| `OutputReplacement.cfg` | view replacement and old-page disposal | holds | 22 |
+| `OutputPreference.cfg` | ordered choice, discovery and failed persistence | holds | 648 |
 | `PlaybackAnchor.cfg` | three-character insert, cursor marker and all bounded programmer edits | holds | 20 |
 | `PlaybackAnchor_Progress.cfg` | the same, with fair completion | holds | 20 |
 | `CodePlayback.cfg` | three atomic edits, bounded groups, two pause states and three countdown IDs | holds | 654 |
@@ -1913,7 +1918,9 @@ A separate fair watchdog transitions a stuck job to termination, and a new job
 is admitted only after completion or termination. The liveness property
 assumes worker termination eventually settles; cancellation itself resolves the
 visible gate without waiting for that settlement. Two bounded job IDs expose
-stale results and attempts to overlap work.
+stale results and attempts to overlap work. The build stages a compatible C++
+runtime alongside the native binding; this packaging repair does not change
+the modeled worker ownership, cancellation, or watchdog behavior.
 
 ### `Narration`: selected speech and reading gates
 
@@ -2202,3 +2209,76 @@ stuttering counterexample; the normal configuration checks deadlocks.
 | `LatestHonored` | `extension.test.ts`: LatestHonored, Settlement: keeps the latest choice when an older global write settles; LatestHonored: does not roll back a newer provider when an older write fails |
 | `KeyClearsVoice` | `extension.test.ts`: KeyClearsVoice: clears an old account voice even while a settings save is pending; KeyClearsVoice: keeps the old account voice unavailable when a key-reset write fails |
 | `Settlement` | `extension.test.ts`: Settlement: rolls back the latest provider and reports a failed settings write; LatestHonored, Settlement: keeps the latest choice when an older global write settles |
+
+### `AudioOutput` and `OutputAdmission`: explicit speech routing
+
+`AudioOutput` models two immutable native job IDs, independent physical
+process ownership, output and page epochs, pause, cancellation, and the
+default route. It does not model PipeWire internals; an isolated PipeWire
+server verifies named-target behavior. `OutputAdmission` models overlapping
+discoveries, selected-route epochs, per-request reservation and timeout. The
+`pw-dump` catalog parser is outside both models; discovery changes do not alter
+the modeled admission or process ownership mechanics.
+
+The `GuardDefault`, `GuardRetire`, callback, admission and play-ID negative
+controls violate their respective safety invariants. Disabled admission or
+completion controls violate enabledness checks. Each pending discovery can
+settle through an independently fair timeout.
+
+| Property | Test |
+|---|---|
+| `NoOverlap`, `NoCrossRouteOverlap` | `speech_native_output.test.ts`: does not allow another route until the stopped process actually closes; `speech_output_router.test.ts`: blocks default synthesis and playback while a canceled native child is retiring. |
+| `NoRevival`, `NoCanceledEnd` | `speech_native_output.test.ts`: ignores callbacks retained from a retired process; keeps a timed-out child owned until close and ignores its late readiness. |
+| `NoFallback` | `speech_output_router.test.ts`: refuses an unavailable saved device before synthesis without falling back; isolated PipeWire target-loss test. |
+| `NoStartPaused` | `speech_native_output.test.ts`: freezes the startup deadline while paused; defers a readiness notification observed during pause until resume. |
+| `NoUnsafeDispatch`, `NoStalePlay` | `speech_output_router.test.ts`: does not let an older prepare replace a newer reservation; a stale play cannot consume a newer reserved route; `speech_service.test.ts`: blocks provider synthesis when output admission rejects or returns unavailable. |
+| `Settles`, `CanCheck`, `CanComplete` | `speech_service.test.ts`: times out admission and ignores its late success without sending text; ignores canceled admission success or rejection after a replacement starts. |
+
+### `OutputPreference`: route selection and persistence
+
+The model checks ordered local setting writes, immediate speech cancellation,
+stale discovery results and unavailable saved devices. TLC checked 648 states.
+Negative controls for invalid choices, stale writes or results, missing stop,
+disabled selection and missing fairness violate their corresponding properties.
+
+| Property | Test |
+|---|---|
+| `SelectionStops`, `ChoiceChangeStops` | `speech_output_preferences.test.ts`: stops speech before immediate selection and persists only the choice. |
+| `LatestHonored`, `Settlement` | `speech_output_preferences.test.ts`: serializes writes and ignores an older failed write after a newer selection; rolls back a latest failed write and exposes a fixed error. |
+| `StaleIgnored`, `EligibleSelect` | `speech_output_preferences.test.ts`: ignores stale discovery and keeps a missing saved output selected; treats a missing native choice as not ready until an available match is discovered. |
+
+### `OutputHandoff`: admission and browser retirement
+
+The model distinguishes pending output admission from a worker-ready state.
+It models two browser job IDs, two page IDs, delayed acknowledgements, native
+playback, same-page disposal and a bounded retirement timeout. Timeout reports
+the problem while retaining ownership; it cannot itself make native playback safe.
+A same-page close is trusted only because the page stops audio synchronously
+before reporting the hide, or because VS Code disposes the page. TLC checked
+270 states.
+
+Removing the worker admission gate, either acknowledgement identity check,
+the page-close identity check, or
+the native handoff guard violates `NoEarlyWorker`, `NoStaleAck`, or
+`NoCrossRouteOverlap`, respectively. Disabling timeout violates
+`RetirementReported`; disabling worker readiness violates `CanReady`. The
+model assumes a fair timeout action but does not assume an acknowledgement.
+
+| Property | Test |
+|---|---|
+| `NoEarlyWorker`, `CanReady` | `speech_service.test.ts`: does not let a canceled worker readiness bypass a newer pending output admission; starts the already-ready worker exactly once after the newer admission succeeds. |
+| `NoStaleAck`, `NoCrossRouteOverlap`, `CanAck`, `CanClose` | `speech_output_router.test.ts`: blocks native admission until the matching browser stop is acknowledged; only a requested stop or closure of the same page retires browser ownership. |
+| `RetirementReported` | `speech_service.test.ts`: times out admission and ignores its late success without sending text. |
+
+### `OutputReplacement`: preserve old-page audio ownership
+
+Replacing a view invalidates its page without proving that its browser audio
+has stopped. The model keeps the old owner until that same page is actually
+disposed, and allows immediate refusal of a native request while the owner
+remains. TLC checked 22 states. Releasing on replacement or accepting another
+page's disposal independently violates `NoPrematureRelease`.
+
+| Property | Test |
+|---|---|
+| `NoPrematureRelease`, `NoOverlap` | `panel.test.ts`: retains replaced browser-page ownership until its actual disposal; `extension.test.ts`: routes speech through the output router and invalidates it before a preference change. |
+| `CanRefuse` | `speech_output_router.test.ts`: blocks native admission until the matching browser stop is acknowledged. |

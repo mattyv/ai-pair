@@ -196,3 +196,18 @@ it('ignores resume without a pause and handles pause before the clip arrives', a
   await Promise.resolve();
   expect(h.send.mock.calls).toEqual([[{ id: 1, pageId: 1, event: 'started' }]]);
 });
+
+it('acknowledges retirement only after the named current clip is silent', () => {
+  const h = harness();
+  h.player.page(1);
+  h.player.begin(4, 1);
+  h.player.audio(4, 1, 'wav', true);
+  expect(h.player.retire(4, 2)).toBe(false);
+  expect(h.player.retire(5, 1)).toBe(false);
+  expect(h.audio.pause).not.toHaveBeenCalled();
+  expect(h.player.retire(4, 1)).toBe(true);
+  expect(h.audio.pause).toHaveBeenCalledOnce();
+  expect(h.revoke).toHaveBeenCalledOnce();
+  expect(h.player.retire(4, 1)).toBe(true);
+  expect(h.player.retire(0, 1)).toBe(false);
+});

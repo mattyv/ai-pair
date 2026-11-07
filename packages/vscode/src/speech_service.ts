@@ -18,6 +18,8 @@ import { SPEECH_WORKER_OUTPUT } from './speech_worker_messages';
 
 /** The panel operations used by local speech; audio is never added to history. */
 export interface SpeechOutput {
+  /** Checks and reserves the selected route before synthesis. */
+  prepare?: (id: number) => Promise<boolean>;
   /** Fixed, non-sensitive local worker lifecycle facts. */
   localDiagnostic?: (phase: 'ready' | 'failed', reason?: LocalSpeechFailureReason) => void;
   /** Posts audio and returns its current page ID, or undefined when no page is ready. */
@@ -54,7 +56,7 @@ interface ActiveSpeech {
   voice: SpeechVoice;
   speed: number;
   resolve(): void;
-  phase: 'loading' | 'synthesizing' | 'prepared' | 'playing';
+  phase: 'admitting' | 'loading' | 'synthesizing' | 'prepared' | 'playing';
   wav: Uint8Array;
   durationMs: number;
   pageId?: number;
@@ -67,6 +69,8 @@ interface ActiveSpeech {
 
 /** Maximum time for a worker or page to acknowledge its work. */
 const START_TIMEOUT_MS = 20_000;
+/** Maximum time to discover a selected output before provider requests. */
+const OUTPUT_TIMEOUT_MS = 5000;
 /** Extra unpaused time allowed after the waveform's duration. */
 const PLAYBACK_GRACE_MS = 5000;
 /** The fixed PCM WAV header length. */
@@ -162,7 +166,7 @@ export class SpeechService implements NarrationPort {
       voice: voice ?? 'af_heart',
       speed: provider === 'elevenlabs' ? settings.elevenLabsSpeed : settings.speed,
       resolve,
-      phase: 'loading',
+      phase: 'admitting',
       wav: new Uint8Array(),
       durationMs: 0,
       started: false,
@@ -170,13 +174,37 @@ export class SpeechService implements NarrationPort {
       remaining: START_TIMEOUT_MS,
     };
     this.current = current;
-    if (provider === 'kokoro') this.arm(current, START_TIMEOUT_MS);
     this.options.output.status(id, 'preparing');
     if (this.current === current) {
-      if (provider === 'elevenlabs') this.startCloud(current);
-      else void this.start(current);
+      if (this.options.output.prepare === undefined) this.beginProvider(current);
+      else void this.admit(current);
     }
     return promise;
+  }
+
+  private beginProvider(current: ActiveSpeech): void {
+    // specs/OutputHandoff.tla, Admit: worker readiness cannot bypass admission.
+    current.phase = 'loading';
+    if (current.provider === 'elevenlabs') this.startCloud(current);
+    else {
+      this.arm(current, START_TIMEOUT_MS);
+      void this.start(current);
+    }
+  }
+
+  private async admit(current: ActiveSpeech): Promise<void> {
+    current.timer = setTimeout(() => {
+      if (this.current === current) this.fail(current, 'Selected speech output is unavailable.');
+    }, OUTPUT_TIMEOUT_MS);
+    try {
+      const ready = await this.options.output.prepare?.(current.id);
+      if (this.current !== current) return;
+      this.clearTimer(current);
+      if (ready !== true) this.fail(current, 'Selected speech output is unavailable.');
+      else this.beginProvider(current);
+    } catch {
+      if (this.current === current) this.fail(current, 'Selected speech output is unavailable.');
+    }
   }
 
   /** CloudNarration: one request owns its slot until settlement or watchdog. */

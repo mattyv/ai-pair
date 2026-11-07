@@ -127,6 +127,12 @@ interface Harness {
       set: ReturnType<typeof vi.fn>;
     };
     diagnostic: ReturnType<typeof vi.fn<(event: import('../src/diagnostics').SpeechDiagnosticEvent) => void>>;
+    outputView: ReturnType<typeof vi.fn>;
+    outputReady: ReturnType<typeof vi.fn<() => boolean>>;
+    outputRetired: ReturnType<typeof vi.fn>;
+    outputPageRetired: ReturnType<typeof vi.fn>;
+    outputRefresh: ReturnType<typeof vi.fn>;
+    outputSelect: ReturnType<typeof vi.fn>;
     supported: ReturnType<typeof vi.fn<() => boolean>>;
     installed: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
     setup: ReturnType<typeof vi.fn<() => Promise<void>>>;
@@ -186,6 +192,12 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
       set: vi.fn(),
     },
     diagnostic: vi.fn<(event: import('../src/diagnostics').SpeechDiagnosticEvent) => void>(),
+    outputView: vi.fn(() => ({ supported: false, devices: [], selected: { kind: 'default' as const } })),
+    outputReady: vi.fn(() => true),
+    outputRetired: vi.fn(),
+    outputPageRetired: vi.fn(),
+    outputRefresh: vi.fn(),
+    outputSelect: vi.fn(),
     cloudSupported: vi.fn(() => true),
     keySet: vi.fn<() => Promise<void>>().mockResolvedValue(),
     keyRemove: vi.fn<() => Promise<void>>().mockResolvedValue(),
@@ -593,6 +605,7 @@ describe('receive', () => {
         type: 'speechSettings',
         value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
       },
+      { type: 'speechOutputCatalog', value: { supported: false, devices: [], selected: { kind: 'default' } } },
       { type: 'speechCloudSupport', supported: true },
       { type: 'speechSupport', supported: true },
       { type: 'chatOrder', value: 'newestFirst' },
@@ -613,7 +626,7 @@ describe('receive', () => {
     chatOrder.get.mockReturnValue('oldestFirst');
     const view = open(panel);
     view.send({ type: 'ready' });
-    expect(view.posted.slice(4, 6)).toEqual([
+    expect(view.posted.slice(5, 7)).toEqual([
       { type: 'chatOrder', value: 'oldestFirst' },
       { type: 'replay', events: [] },
     ]);
@@ -940,6 +953,7 @@ it('does not offer setup or preview on an unsupported host', async () => {
 it('routes speech controls and status only to the ready current page', () => {
   const { panel } = harness();
   expect(panel.speechPageIsReady()).toBe(false);
+  expect(panel.speechReadyPageId()).toBeUndefined();
   panel.refreshSpeechSupport();
   panel.controlSpeech(1, 1, 'pause');
   panel.showSpeechStatus(1, 'preparing');
@@ -947,6 +961,7 @@ it('routes speech controls and status only to the ready current page', () => {
   expect(panel.playSpeech(1, new Uint8Array([1]), 1)).toBeUndefined();
   view.send({ type: 'ready' });
   expect(panel.speechPageIsReady()).toBe(true);
+  expect(panel.speechReadyPageId()).toBe(1);
   panel.controlSpeech(1, 2, 'pause');
   panel.controlSpeech(1, 1, 'resume');
   panel.showSpeechStatus(1, 'preparing');
@@ -959,6 +974,7 @@ it('routes speech controls and status only to the ready current page', () => {
   expect(panel.speechPageIsReady()).toBe(true);
   view.send({ type: 'speechPageHidden', pageId: 1 });
   expect(panel.speechPageIsReady()).toBe(false);
+  expect(panel.speechReadyPageId()).toBeUndefined();
   view.send({ type: 'speechPageVisible', pageId: 2 });
   expect(panel.speechPageIsReady()).toBe(false);
   view.send({ type: 'speechPageVisible', pageId: 1 });
@@ -1158,4 +1174,65 @@ it('records unsupported cloud capability when the page becomes ready', () => {
     provider: 'elevenlabs',
     reason: 'unsupported',
   });
+});
+
+it('offers output state on page readiness and forwards only explicit refresh and selection', () => {
+  const { panel, speech } = harness();
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  expect(view.posted).toContainEqual({
+    type: 'speechOutputCatalog',
+    value: { supported: false, devices: [], selected: { kind: 'default' } },
+  });
+  expect(speech.outputRefresh).not.toHaveBeenCalled();
+  view.send({ type: 'speechOutputRefresh' });
+  view.send({ type: 'speechOutputSelect', choice: { kind: 'default' } });
+  expect(speech.outputRefresh).toHaveBeenCalledOnce();
+  expect(speech.outputSelect).toHaveBeenCalledWith({ kind: 'default' });
+  expect(speech.preview).not.toHaveBeenCalled();
+});
+
+it('blocks preview before synthesis when the selected output is unavailable', () => {
+  const { panel, speech } = harness();
+  const view = open(panel);
+  speech.outputReady.mockReturnValue(false);
+  view.send({ type: 'speechPreview' });
+  expect(speech.preview).not.toHaveBeenCalled();
+  expect(speech.diagnostic).toHaveBeenCalledWith({
+    kind: 'speech',
+    event: 'preview',
+    phase: 'blocked',
+    provider: 'kokoro',
+    reason: 'not_ready',
+  });
+  expect(view.posted).toContainEqual({
+    type: 'speechSetupState',
+    pending: false,
+    message: 'The selected speech output is unavailable. Refresh outputs or choose System default.',
+  });
+});
+
+it('accepts retirement acknowledgement only from its own page and valid unit', () => {
+  const { panel, speech } = harness();
+  const view = open(panel);
+  view.send({ type: 'speechRetired', id: 1, pageId: 2 });
+  view.send({ type: 'speechRetired', id: 0, pageId: 1 });
+  view.send({ type: 'speechRetired', id: 1, pageId: 1 });
+  expect(speech.outputRetired.mock.calls).toEqual([[1, 1]]);
+});
+
+it('retains replaced browser-page ownership until its actual disposal', () => {
+  const { panel, speech } = harness();
+  const first = open(panel);
+  first.send({ type: 'ready' });
+  const second = open(panel);
+  second.send({ type: 'ready' });
+  expect(speech.pageClosed).toHaveBeenCalledWith(1);
+  expect(speech.outputPageRetired).not.toHaveBeenCalled();
+  first.dispose();
+  expect(speech.outputPageRetired.mock.calls).toEqual([[1]]);
+  second.send({ type: 'speechPageHidden', pageId: 1 });
+  expect(speech.outputPageRetired.mock.calls).toEqual([[1]]);
+  second.send({ type: 'speechPageHidden', pageId: 2 });
+  expect(speech.outputPageRetired.mock.calls).toEqual([[1], [2]]);
 });
