@@ -4,6 +4,153 @@
       "lines": 100
     }
   },
+  "packages/audio-native/src/admission.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/audio-native/src/factory.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/audio-native/src/helper_backend.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/audio-native/src/helper_catalog.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/audio-native/src/helper_location.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/audio-native/src/helper_manifest.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/audio-native/src/linux_backend.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/audio-native/src/linux_default.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/audio-native/src/native_adapter.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/audio-native/src/ownership.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/audio-native/src/playback.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/audio-native/src/protocol.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/audio-native/src/stage.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/audio-native/src/verified_backend.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/audio-ui/src/attachment_gate.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/audio-ui/src/companion_narration.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/audio-ui/src/companion_output.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/audio-ui/src/companion_session.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/audio-ui/src/extension.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/audio-ui/src/local_connection.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/audio-ui/src/speech_host.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/core/src/bridge.ts": {
     "unit": {
       "lines": 100,
@@ -172,6 +319,13 @@
       "functions": 100
     }
   },
+  "packages/protocol/src/command_channel.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/protocol/src/index.ts": {
     "unit": {
       "lines": 100,
@@ -179,6 +333,41 @@
       "functions": 100
     },
     "integration": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/protocol/src/local_audio.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/protocol/src/local_diagnostics.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/protocol/src/panel_action.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/protocol/src/panel_chunks.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/protocol/src/panel_update.ts": {
+    "unit": {
       "lines": 100,
       "branches": 100,
       "functions": 100
@@ -447,6 +636,20 @@
       "functions": 0
     }
   },
+  "packages/vscode/src/panel_placement.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/panel_update_sender.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/vscode/src/passage.ts": {
     "unit": {
       "lines": 100,
@@ -454,6 +657,13 @@
       "functions": 100
     },
     "integration": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/remote_narration.ts": {
+    "unit": {
       "lines": 100,
       "branches": 100,
       "functions": 100
@@ -529,6 +739,20 @@
     }
   },
   "packages/vscode/src/webview/panel.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/workspace_panel_bridge.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/workspace_session.ts": {
     "unit": {
       "lines": 100,
       "branches": 100,

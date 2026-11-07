@@ -101,6 +101,11 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `OutputHandoff.cfg` | worker admission and acknowledged browser retirement | holds | 270 |
 | `OutputReplacement.cfg` | view replacement and old-page disposal | holds | 22 |
 | `OutputPreference.cfg` | ordered choice, discovery and failed persistence | holds | 648 |
+| `LocalAudioAdmission.cfg` | capability, device snapshot and cloud admission | holds | 624 |
+| `LocalAudioOwnership.cfg` | local ownership, directional sequences and lease loss | holds | 3,632 |
+| `PanelPlacement.cfg` | bounded prepare, irrevocable commit and fallback | holds | 10 |
+| `LocalPanelReplay.cfg` | two chunks, two epochs, bounded text and malformed frames | holds | 138 |
+| `LocalPanelReplay_Delivery.cfg` | two fair successful chunks | holds | 3 |
 | `PlaybackAnchor.cfg` | three-character insert, cursor marker and all bounded programmer edits | holds | 20 |
 | `PlaybackAnchor_Progress.cfg` | the same, with fair completion | holds | 20 |
 | `CodePlayback.cfg` | three atomic edits, bounded groups, two pause states and three countdown IDs | holds | 654 |
@@ -2284,3 +2289,95 @@ page's disposal independently violates `NoPrematureRelease`.
 |---|---|
 | `NoPrematureRelease`, `NoOverlap` | `panel.test.ts`: retains replaced browser-page ownership until its actual disposal; `extension.test.ts`: routes speech through the output router and invalidates it before a preference change. |
 | `CanRefuse` | `speech_output_router.test.ts`: blocks native admission until the matching browser stop is acknowledged. |
+
+### `LocalAudioAdmission` and `LocalAudioOwnership`: local playback bridge
+
+The admission model checks a logical snapshot of the selected output and its
+availability before provider dispatch. It does not assert that a device has
+been physically opened at that point. If the device disappears after cloud
+dispatch, provider work may already have incurred cost; playback must still
+fail without falling back to another output.
+
+The ownership model bounds two jobs, two page and connection epochs, and
+independent inbound control and outbound acknowledgement sequences. A lost
+remote link is detected by a local lease, then the adapter retires the local
+player. Parent loss likewise requests retirement; physical ownership remains
+until exit. `LeaseStops`, `RetirementStops` and `ParentLossSettles` assume fair
+detection and process retirement. Device loss cancels the selected route.
+
+The capability, admission, cloud, target, acknowledgement, control, heartbeat,
+parent and natural-end negative controls violate their safety properties.
+Disabling lease detection or retirement violates their liveness properties.
+The stale-terminal-callback control violates `NoStaleAck`. Requiring the
+current page instead of the immutable job page in `Retired` violates
+`LeaseStops`, `RetirementStops` and `ParentLossSettles` after page replacement;
+the unchanged baseline passes 3,632 states.
+
+| Property | Current test evidence |
+|---|---|
+| `NoOverlap`, `NoStaleAck` | `audio-native/test/ownership.test.ts`: holds exclusive ownership until the corresponding process has actually retired; snapshots owner identity and rejects leases after retirement or replacement. |
+| `NoStaleHeartbeat` | `audio-ui/test/local_connection.test.ts`: accepts ordered messages, rejects stale or malformed frames, and expires locally; refreshes the lease only for a valid ordered heartbeat and stops on disposal. |
+| `NoStaleAck`, sequence bounds | `audio-native/test/protocol.test.ts`: handles fragmented and coalesced event frames while rejecting stale sequences. |
+| `SafeAdmission`, `NoFallback` | `audio-native/test/adapter.test.ts`: validates and snapshots the selected route before admitting a job. |
+| `NoAbandonedReservation` | `speech_service.test.ts`: retires pending admission on cancel, timeout, and disposal before late results; `audio-native/test/adapter.test.ts`: cancels pending admission and ignores late discovery after stop. |
+| `NoOverlap`, `NoStaleAck` | `audio-ui/test/companion_output.test.ts`: keeps the route occupied until physical stop completes and ignores stale events; ignores late failures after cancellation and never releases on failed retirement. |
+| `RetirementStops`, `NoStaleAck` | `workspace_session.integration.test.ts`: retires the exact old job after a replacement page is ready; `remote_narration.test.ts`: rejects a later job acknowledgement with a reused sequence or job id. |
+| Protocol shape | `protocol/test/local_audio.test.ts`: accepts the bounded commands and terminal acknowledgements; rejects wrong versions, unknown commands, extra keys and invalid identities. |
+
+Native process retirement, parent loss, physical device routing, preflight and
+remote-host integration require further implementation-specific tests; the
+current parser and ownership tests alone do not establish those properties.
+
+### `PanelPlacement`: bounded two-phase panel ownership
+
+Prepare does not register a view. The main extension selects the companion
+irrevocably before sending commit; a lost acknowledgement cannot select legacy
+fallback. A preparation timeout expires the token and may fall back only
+before commit. A delayed prepare cannot register an extra view. TLC checked
+10 states and assumes fair timeouts before and after commit.
+
+The prepare-registration, late-registration and post-commit fallback negative
+controls violate `NoEarlyRegistration`, `NoDuplicateRegistration` and
+`NoFallbackAfterCommit`. Disabling the precommit timeout violates
+`PreparationSettles`.
+
+| Property | Test |
+|---|---|
+| `NoFallbackAfterCommit`, `CommittedSettles` | `panel_placement.test.ts`: chooses companion irrevocably before committing, including on a lost acknowledgement. |
+| `NoEarlyRegistration`, `NoDuplicateRegistration`, `PreparationSettles` | `panel_placement.test.ts`: falls back only before commit and ignores late prepare replies; uses local legacy only for a failed or invalid preparation before commit. |
+
+### `LocalPanelReplay`: ordered local panel replay
+
+One replay event is abstracted as two chunks. Frames carry a connection epoch,
+page epoch, sequence, message ID, index, count, bounded size and payload class.
+Invalid, duplicate, out-of-order and oversized frames discard a partial
+assembly; stale-page frames are rejected. Disconnect and page change clear it.
+The implementation must validate
+complete JSON and the visible-event schema before delivery. The payload classes
+abstract that validation; this model does not inspect JSON or prove that a
+particular field is nonsecret. Production bounds are 16,384 UTF-16 code units
+per chunk, 1,024 chunks and 16 MiB per message; oversize must be reported.
+Per-event messages preserve replay order without truncating the whole history.
+
+| Property | Code test |
+|---|---|
+| `NoPartialOrMixed` | `protocol/test/panel_chunks.test.ts`: reassembles a complete ordered update only for the current page; drops mixed chunk counts and invalid assembled JSON or updates. |
+| `NoStaleDelivery` | `protocol/test/panel_chunks.test.ts`: never combines fragments across page replacement or a duplicate fragment; `audio-ui/test/local_connection.test.ts`: accepts ordered messages, rejects stale or malformed frames, and expires locally. |
+| `BoundedAssembly` | `protocol/test/panel_chunks.test.ts`: discards partial, reordered, stale-page, malformed and oversized updates; `vscode/test/panel_update_sender.integration.test.ts`: reports oversized updates and stops sending after page replacement. |
+| `NoAudioOrSecrets` | `protocol/test/panel_update.test.ts`: rejects audio, speech settings, arbitrary commands, and unexpected properties. |
+| `DisconnectClears` | `protocol/test/panel_chunks.test.ts`: never combines fragments across page replacement or a duplicate fragment; `protocol/test/command_channel.test.ts`: settles active and queued sends on disposal and ignores a late rejection. Direct disconnect-to-assembler integration coverage remains pending. |
+| `CanStart`, `CanComplete`, `CanAbort` | `protocol/test/panel_chunks.test.ts`: reassembles a complete ordered update only for the current page; discards partial, reordered, stale-page, malformed and oversized updates. |
+| `PendingSettles`, `EventuallyDelivered` | `protocol/test/command_channel.test.ts`: closes on a lost acknowledgement without accepting late completion; sends one frame at a time and preserves enqueue order. |
+| Replay ordering and oversize | `vscode/test/panel_update_sender.integration.test.ts`: sends replay as ordered bounded per-event updates using the shared sequence; reports an oversized replay event and still sends later complete events. |
+
+TLC checked `LocalPanelReplay.cfg` with 51,992 generated and 138 distinct states;
+`LocalPanelReplay_Delivery.cfg` checked three distinct states under fair successful
+processing. Weak fairness of disconnect gives eventual abort in the loss model;
+the separate success model assumes both valid chunks are eventually processed.
+Disabling each of `GuardOrder`, `GuardEpoch`, `GuardBound` and `GuardPayload`
+produced a counterexample to `NoPartialOrMixed`, `NoStaleDelivery`,
+`BoundedAssembly` and `NoAudioOrSecrets`, respectively. Type and enabledness
+checks are sanity checks rather than independently mutation-tested properties.
+
+Native remote integration and real-device Windows playback verification remain
+pending; mocked or in-process tests do not establish those results.

@@ -130,3 +130,27 @@ A useful regression would hold a command open, queue a real edit, and compare
 projected `read` text, the editor buffer, and disk before and after completion or
 interruption. Preserve the documented projection contract while investigating
 an explicit projection indicator; do not infer the cause of B4 from B7 alone.
+
+## Follow-up: 0.18.2 development host report
+
+The programmer's report concerns development build
+`0.18.2-6fd7da7c0063` on 2026-11-07. The statuses below distinguish the
+reported result from a reproduced cause.
+
+| ID | Status | Latest evidence or next check |
+|---|---|---|
+| B1 | Resolved | The earlier user-verified triple-quote fix remains resolved. |
+| B2 | By design | Newline indentation remains relative to the current line. |
+| B3 | Open; historical host observation | The current automated test reproduces the interruption and discarded queue. The historical host event remains open. |
+| B4 | Watching; host retest passed | The programmer reports that an exit-1 command returned its traceback and an exit-0 command returned its output, both promptly on 0.18.2. Keep watching for recurrence before closing the earlier stall. |
+| B5 | Open; historical host observation | The reported context loss remains unconfirmed on the current build. |
+| B6 | Resolved | The programmer previously verified the newline fix. |
+| B7 | Watching | Retest the projected read while a command and later edit are pending, then compare completion and actual content. Close only if the distinction holds in the host retest. |
+| B8 | By design | The one-file batch restriction remains documented usability feedback. |
+| B9 | Open; minor | Reports label the terminal shell as `python` for some commands and `bash` for others, although every command ran in the same Bash terminal. |
+| B10 | Open; unconfirmed | Interrupt during `speak` and `type` was reported as completed with all edits. It is unclear whether the work had already finished; the report has not been reproduced. |
+
+The programmer reports that `speak: true` plays narration aloud. The 45-word
+limit and the one-spoken-message-per-batch limit were enforced, and typing
+appeared to wait for speech to finish. These observations do not establish
+the cause of B10.

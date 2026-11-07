@@ -121,3 +121,14 @@ it('treats a missing native choice as not ready until an available match is disc
   await preferences.refresh();
   expect(preferences.ready()).toBe(true);
 });
+
+it('retains a missing CoreAudio or WASAPI device without falling back', async () => {
+  for (const backend of ['coreaudio', 'wasapi']) {
+    const choice = { kind: 'native', backend, name: 'opaque-device-id' };
+    const { preferences, discover } = harness(choice);
+    discover.mockResolvedValueOnce({ supported: true, devices: [] });
+    await preferences.refresh();
+    expect(preferences.choice()).toEqual(choice);
+    expect(preferences.ready()).toBe(false);
+  }
+});

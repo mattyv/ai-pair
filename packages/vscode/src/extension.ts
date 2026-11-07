@@ -1,8 +1,17 @@
+import { randomUUID } from 'node:crypto';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { Bridge, Controller, isSavedSession, type DiagnosticEvent, type PanelEvent, type SavedSession } from '@ai-pair/core';
-import { discoveryDir } from '@ai-pair/protocol';
+import {
+  Bridge,
+  Controller,
+  isSavedSession,
+  type DiagnosticEvent,
+  type PanelEvent,
+  type SavedSession,
+  type NarrationPort,
+} from '@ai-pair/core';
+import { discoveryDir, localSpeechReport, type LocalSpeechReport } from '@ai-pair/protocol';
 import { playDemo } from './demo';
 import { VsCodeEditor } from './editor';
 import { Diagnostics } from './diagnostics';
@@ -25,6 +34,8 @@ import { claudeStarter, setUpAgent, writeLauncher } from './setup';
 import { setTimings, timings, type Timings } from './timings';
 import { Calibration } from './calibration';
 import { builtInPassage, type Passage } from './passage';
+import { PanelPlacement, type PanelOwner } from './panel_placement';
+import { WorkspaceSession } from './workspace_session';
 
 /** Values compiled into this running bundle, not the extension currently on disk. */
 declare const AI_PAIR_VERSION: string;
@@ -44,6 +55,8 @@ const TIMING = 'timing';
 const AGENT_NAME = 'agentName';
 const CONFIRM_COMMANDS = 'confirmCommands';
 const CALIBRATION_PASSAGE = 'calibrationPassage';
+/** Maximum wait for companion preparation before choosing a fallback. */
+const COMPANION_PREPARE_TIMEOUT_MS = 1500;
 
 /** The latest speech state, without narration text or audio bytes. */
 export interface SpeechObservation {
@@ -124,6 +137,18 @@ function speechSupported(): boolean {
   }
 }
 
+/** Offers local companion installation for a remote workspace. */
+function showInstallCompanion(): void {
+  void vscode.window
+    .showInformationMessage(
+      'Speech is unavailable in this remote workspace. Install the AI Pair Local Audio VSIX locally and reload the window.',
+      'Install VSIX...',
+    )
+    .then((answer) => {
+      if (answer === 'Install VSIX...') void vscode.commands.executeCommand('workbench.extensions.action.installVSIX');
+    });
+}
+
 /** Starts the extension: the controller, the editor, the panel, the bridge, and the commands; returns the API the integration test drives. */
 export function activate(context: vscode.ExtensionContext): Api {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.homedir();
@@ -146,6 +171,11 @@ export function activate(context: vscode.ExtensionContext): Api {
   let keyStatusEpoch = 0;
   let cloudVoiceInvalidated = false;
   let panel: NarrationPanel;
+  let selectedNarration: NarrationPort | undefined;
+  let owner: PanelOwner | 'pending' = 'pending';
+  let ownerReady: Promise<void>;
+  let workspaceSession: WorkspaceSession | undefined;
+  let shuttingDown = false;
   let catalog: SpeechCatalog;
   let outputPreferences: SpeechOutputPreferences;
   let outputRouter: SpeechOutputRouter;
@@ -347,7 +377,20 @@ export function activate(context: vscode.ExtensionContext): Api {
       calibration: () => calibration,
       starter,
       copyDiagnostics: async () => {
-        await vscode.env.clipboard.writeText(JSON.stringify(diagnostics.snapshot()));
+        const snapshot = diagnostics.snapshot();
+        if (owner !== 'companion') {
+          await vscode.env.clipboard.writeText(JSON.stringify(snapshot));
+          return;
+        }
+        let localSpeech: LocalSpeechReport | 'unavailable' = 'unavailable';
+        try {
+          const raw: unknown = await vscode.commands.executeCommand('aiPair.localAudio.diagnostics');
+          const parsed = localSpeechReport.safeParse(raw);
+          if (parsed.success) localSpeech = parsed.data;
+        } catch {
+          // Copy the workspace facts even when the local report is unavailable.
+        }
+        await vscode.env.clipboard.writeText(JSON.stringify({ ...snapshot, localSpeech }));
       },
       speech: {
         outputView: () => outputPreferences.view(),
@@ -505,7 +548,19 @@ export function activate(context: vscode.ExtensionContext): Api {
     settings: speechSettings.get,
     output: outputRouter,
   });
-  controller = new Controller(editor, panel, undefined, speech);
+  const narration: NarrationPort = {
+    speak: (text) => selectedNarration?.speak(text) ?? Promise.resolve(),
+    pause: () => {
+      selectedNarration?.pause();
+    },
+    resume: () => {
+      selectedNarration?.resume();
+    },
+    cancel: () => {
+      selectedNarration?.cancel();
+    },
+  };
+  controller = new Controller(editor, panel, undefined, narration);
   controller.onDiagnostic = record;
   controller.trace = (line) => {
     log.info(line);
@@ -592,8 +647,8 @@ export function activate(context: vscode.ExtensionContext): Api {
       return true;
     },
   });
-  const ready = bridge.start();
-  ready.catch((error: unknown) => {
+  const bridgeReady = bridge.start();
+  bridgeReady.catch((error: unknown) => {
     void vscode.window.showErrorMessage(`AI Pair couldn't start its local server: ${String(error)}`);
   });
   // Set Up Agent may have set Claude Code up: the idle view's button is offered again (specs/Start.tla, `FlipSetUp`).
@@ -605,27 +660,40 @@ export function activate(context: vscode.ExtensionContext): Api {
 
   context.subscriptions.push(
     context.secrets.onDidChange((event) => {
-      if (event.key === 'aiPair.elevenLabs.apiKey') {
+      if (event.key !== 'aiPair.elevenLabs.apiKey') return;
+      function refreshLegacy(): void {
+        if (owner !== 'legacy') return;
         credentials.invalidate();
         refreshKey();
       }
+      if (owner === 'pending') void ownerReady.then(refreshLegacy);
+      else refreshLegacy();
     }),
     vscode.commands.registerCommand('aiPair.setElevenLabsKey', async () => {
+      await ownerReady;
       try {
-        await credentials.set();
-        refreshKey();
+        if (owner === 'companion') await vscode.commands.executeCommand('aiPair.localAudio.keySet');
+        else if (owner === 'legacy') {
+          await credentials.set();
+          refreshKey();
+        } else showInstallCompanion();
       } catch {
         void vscode.window.showErrorMessage('Could not save the ElevenLabs API key.');
       }
     }),
     vscode.commands.registerCommand('aiPair.removeElevenLabsKey', async () => {
+      await ownerReady;
       try {
-        await credentials.remove();
-        refreshKey();
+        if (owner === 'companion') await vscode.commands.executeCommand('aiPair.localAudio.keyRemove');
+        else if (owner === 'legacy') {
+          await credentials.remove();
+          refreshKey();
+        } else showInstallCompanion();
       } catch {
         void vscode.window.showErrorMessage('Could not remove the ElevenLabs API key.');
       }
     }),
+    vscode.commands.registerCommand('aiPair.localAudio.workspace', (value: unknown) => workspaceSession?.accept(value) ?? false),
     speech,
     log,
     starter,
@@ -643,9 +711,6 @@ export function activate(context: vscode.ExtensionContext): Api {
     }),
     vscode.commands.registerCommand('aiPair.setUpAgent', setUp),
     editor,
-    vscode.window.registerWebviewViewProvider(NarrationPanel.viewId, panel, {
-      webviewOptions: { retainContextWhenHidden: true },
-    }),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('aiPair.speech')) {
         const current = speechSettings.get();
@@ -727,7 +792,53 @@ export function activate(context: vscode.ExtensionContext): Api {
       },
     },
     { dispose: save },
+    {
+      dispose: () => {
+        shuttingDown = true;
+      },
+    },
   );
+  const epoch = randomUUID();
+  const placement = new PanelPlacement({
+    epoch,
+    remote: vscode.env.remoteName !== undefined,
+    timeoutMs: COMPANION_PREPARE_TIMEOUT_MS,
+    prepare: () => Promise.resolve(vscode.commands.executeCommand('aiPair.localAudio.prepare', { version: 1, epoch })),
+    beforeCommit: () => {
+      owner = 'companion';
+      if (shuttingDown) throw new Error('Window is closing.');
+      workspaceSession = new WorkspaceSession({
+        epoch,
+        panel,
+        send: async (frame) => {
+          const accepted: unknown = await vscode.commands.executeCommand('aiPair.localAudio.frame', frame);
+          if (accepted !== true) throw new Error('Companion frame was not accepted.');
+        },
+        lost: () => {
+          void vscode.window.showWarningMessage('AI Pair lost its local audio connection. Reload the window to reconnect.');
+        },
+        unavailable: () => {
+          void vscode.window.showWarningMessage('A Pair panel update was too large or unavailable; later updates will continue.');
+        },
+      });
+      selectedNarration = workspaceSession.narration;
+      context.subscriptions.push(workspaceSession);
+    },
+    commit: (prepared) => Promise.resolve(vscode.commands.executeCommand('aiPair.localAudio.commit', prepared)),
+  });
+  ownerReady = placement.choose().then((chosen) => {
+    if (shuttingDown) return;
+    owner = chosen;
+    if (chosen === 'companion') return;
+    if (chosen === 'legacy') selectedNarration = speech;
+    context.subscriptions.push(
+      vscode.window.registerWebviewViewProvider(NarrationPanel.viewId, panel, {
+        webviewOptions: { retainContextWhenHidden: true },
+      }),
+    );
+    if (chosen === 'remote-text') showInstallCompanion();
+  });
+  const ready = Promise.all([bridgeReady, ownerReady]).then(() => {});
   if (context.globalState.get<unknown>(OFFERED_SETUP) !== true) {
     void context.globalState.update(OFFERED_SETUP, true);
     void vscode.window.showInformationMessage('AI Pair is installed. Connect it to your agent?', 'Set Up Agent').then((answer) => {
@@ -741,9 +852,15 @@ export function activate(context: vscode.ExtensionContext): Api {
     bridge,
     outside,
     playDemo: () => playDemo(controller, root),
-    previewSpeech: () => speech.preview(),
-    speechPageReady: () => panel.speechPageIsReady(),
-    speechStatus: () => (speechObservation === undefined ? undefined : { ...speechObservation }),
+    previewSpeech: async () => {
+      await ownerReady;
+      if (owner === 'companion') await vscode.commands.executeCommand('aiPair.localAudio.preview');
+      else if (owner === 'legacy') await speech.preview();
+      else showInstallCompanion();
+    },
+    speechPageReady: () =>
+      owner === 'companion' ? workspaceSession?.pageReady() === true : owner === 'legacy' && panel.speechPageIsReady(),
+    speechStatus: () => (owner !== 'legacy' || speechObservation === undefined ? undefined : { ...speechObservation }),
     launcher,
     ready,
     saved: () => {

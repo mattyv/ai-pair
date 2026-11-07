@@ -22,7 +22,7 @@
     "test:visual": "playwright test",
     "test:visual:update": "playwright test --update-snapshots",
     "test:integration": "npm run test:integration -w packages/vscode",
-    "typecheck": "tsc -p . && tsc -p packages/vscode/src/webview && tsc -p scripts && tsc -p packages/vscode/scripts",
+    "typecheck": "tsc -p . && tsc -p packages/vscode/src/webview && tsc -p scripts && tsc -p packages/vscode/scripts && tsc -p packages/audio-ui/scripts",
     "lint": "oxlint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

@@ -11,7 +11,7 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes version 0.18.0.
+Status: describes the 0.19.0 local-audio architecture on this feature branch.
 
 The source is `.archi/ai-pair.json`. To regenerate the page with
 Archi-Techture 1.5.1, set `ARCHI_TO_HTML` to its `out/tools/archi-to-html.js`
@@ -68,17 +68,22 @@ with Archi's `validate-archi.js` and check the regenerated page in a browser.
     error categories without requiring a pairing session. The panel requests a
     snapshot explicitly; its clipboard
     export contains no chat, code, paths, command text, output, or tokens.
--   **Selected speech** is an optional port on the session controller. One
-    service owns playback, cancellation and page generations for both providers.
+-   **Selected speech** is an optional port on the session controller. With the
+    local companion installed, the workspace port forwards bounded requests to
+    the UI host. One local service owns playback, cancellation and page
+    generations for both providers.
     Kokoro uses a local CPU worker after explicit model setup. The optional
     ElevenLabs client sends only selected narration or an explicit voice preview
-    to its fixed HTTPS API. Its API key stays in VS Code SecretStorage and is
-    read only in the extension host; the panel receives key-presence status and
+    to its fixed HTTPS API. Its API key stays in the local companion's VS Code
+    SecretStorage; the panel receives key-presence status and
     bounded voice metadata. Cloud requests have independent deadlines and byte
     limits. Both providers produce bounded WAV audio for a shared output router.
-    System default plays through the current webview. An explicit supported
-    local PipeWire device uses a named native player with no fallback; each
-    native unit is checked before synthesis. The router waits for matching
+    The companion resolves System default or a selected device to one concrete
+    local endpoint before synthesis. Linux uses PipeWire; macOS and Windows use
+    bundled CoreAudio and WASAPI helpers. Each physical playback rechecks the
+    captured endpoint and never substitutes another. The legacy local path
+    without a companion retains webview default audio and the PipeWire override.
+    The legacy router waits for matching
     browser retirement or actual page disposal, and retains native process
     ownership until close. Page replacement and interruption invalidate the
     active unit. Speech and
@@ -93,6 +98,39 @@ with Archi's `validate-archi.js` and check the regenerated page in a browser.
     [`webview/panel.ts`](packages/vscode/src/webview/panel.ts), bundled as
     `dist/panel.js`. The script finds the elements it updates by their `data-ui`
     attribute; the markup has no `id`s.
+
+### Local audio placement
+
+The optional `packages/audio-ui` extension declares `extensionKind: ["ui"]`.
+It owns the actual Pair view, local speech configuration, credentials and
+output devices. The main extension keeps workspace state and dispatches editor,
+file and terminal actions on the workspace host. The `Local audio placement`
+diagram shows this boundary, including an isolated SSH placement proof.
+
+`PanelPlacement` and `AttachmentGate` use prepare/commit before registering the
+view. A successful prepare does not register anything; committing selects the
+companion irrevocably for the current window. Missing companions retain the
+legacy local behavior or remote text-only behavior. Reconnection requires a
+new window attachment rather than starting another audio owner.
+
+The hosts exchange versioned allowlisted command frames with separate sequence
+numbers per direction. Ordered bounded chunks carry visible panel updates;
+keys and audio never enter those frames. A local connection lease stops audio
+after a lost workspace connection. Local reply and disposal handling retire
+audio before forwarding related workspace actions.
+
+`packages/audio-native` separates logical admission from physical ownership.
+Cancellation invalidates pending discovery; playback cannot start after that
+cancellation, and a process remains owned through actual close. A saved device
+that disappears stays unavailable. Same-graph PipeWire metadata resolves the
+Linux default, while the native macOS and Windows helpers enumerate and open
+platform endpoint identities. Their manifests contain fixed helper names and
+SHA-256 values generated during packaging.
+
+Native build tests, API-level stream tests and physical audibility are distinct
+evidence. A runner without an output reports its stream test as skipped. Local
+Kokoro runtime support remains Linux x64/glibc; the audio interface does not
+claim broader synthesis support.
 
 ### Why a relay
 

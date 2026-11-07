@@ -195,3 +195,9 @@ export class ToolError extends Error {
 export * from './wire';
 export * from './paths';
 export * from './schemas';
+export * from './local_audio';
+export * from './panel_action';
+export * from './panel_update';
+export * from './panel_chunks';
+export * from './command_channel';
+export * from './local_diagnostics';

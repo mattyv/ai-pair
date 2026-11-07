@@ -1410,3 +1410,22 @@ it('starts the already-ready worker exactly once after the newer admission succe
   service.cancel();
   await second;
 });
+
+it('retires pending admission on cancel, timeout, and disposal before late results', async () => {
+  for (const reason of ['cancel', 'timeout', 'dispose'] as const) {
+    const { cloud, output, service } = cloudHarness();
+    const pending = Promise.withResolvers<boolean>();
+    const cancelOutput = vi.fn();
+    Object.assign(output, { cancel: cancelOutput });
+    output.prepare = vi.fn(() => pending.promise);
+    const gate = service.speak('One');
+    if (reason === 'cancel') service.cancel();
+    else if (reason === 'dispose') service.dispose();
+    else await vi.advanceTimersByTimeAsync(5000);
+    await gate;
+    expect(cancelOutput).toHaveBeenCalledWith(1);
+    pending.resolve(true);
+    await settle();
+    expect(cloud.synthesize.mock.calls).toHaveLength(0);
+  }
+});

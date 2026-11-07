@@ -2,9 +2,9 @@
   "version": 1,
   "bundleId": "277c3415-7b74-4008-8be4-8c14ae6d41dd",
   "revision": {
-    "number": 8,
+    "number": 9,
     "updatedAt": "2026-11-07T00:00:00.000Z",
-    "summary": "Speech output selection, fail-closed native routing and retirement handoff"
+    "summary": "UI-local audio placement, cross-platform adapters and bounded workspace transport"
   },
   "diagrams": [
     {
@@ -9412,6 +9412,233 @@
             {
               "id": "speech-native-comment",
               "text": "The Linux PipeWire path owns the player process until it closes. Pause stops the player; buffered audio can finish briefly. Device loss stops playback rather than moving to the system default.",
+              "ts": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "local-audio-placement",
+      "name": "Local audio placement",
+      "type": "architecture",
+      "origin": "llm",
+      "generation": {
+        "focus": "Local companion and workspace boundaries"
+      },
+      "doc": {
+        "type": "architecture",
+        "autoLayoutApplied": true,
+        "nodes": [
+          {
+            "id": "workspace-session",
+            "label": "Workspace session\nController, editor and commands",
+            "files": ["packages/core/src/controller.ts", "packages/vscode/src/extension.ts"],
+            "group": "workspace",
+            "x": 40,
+            "y": 80
+          },
+          {
+            "id": "workspace-audio-proxy",
+            "label": "Narration proxy\nBounded requests and terminal acknowledgements",
+            "files": ["packages/vscode/src/remote_narration.ts", "packages/vscode/src/panel_placement.ts"],
+            "group": "workspace",
+            "x": 520,
+            "y": 80
+          },
+          {
+            "id": "local-panel",
+            "label": "Local companion panel\nLocal actions stop before forwarding",
+            "files": [
+              "packages/audio-ui/src/attachment_gate.ts",
+              "packages/audio-ui/src/local_connection.ts",
+              "packages/vscode/src/panel.ts"
+            ],
+            "group": "desktop",
+            "x": 1040,
+            "y": 80
+          },
+          {
+            "id": "local-speech-host",
+            "label": "Local speech host\nSettings, credentials and selected narration",
+            "files": [
+              "packages/audio-ui/src/speech_host.ts",
+              "packages/audio-ui/src/companion_narration.ts",
+              "packages/vscode/src/speech_service.ts"
+            ],
+            "group": "desktop",
+            "x": 1040,
+            "y": 400
+          },
+          {
+            "id": "local-output-adapter",
+            "label": "Output adapter\nExact route and physical retirement",
+            "files": [
+              "packages/audio-ui/src/companion_output.ts",
+              "packages/audio-native/src/native_adapter.ts",
+              "packages/audio-native/src/admission.ts",
+              "packages/audio-native/src/playback.ts"
+            ],
+            "group": "desktop",
+            "x": 1580,
+            "y": 400
+          },
+          {
+            "id": "native-platform-output",
+            "label": "Native platform output\nPipeWire, CoreAudio or WASAPI",
+            "files": [
+              "packages/audio-native/src/linux_backend.ts",
+              "packages/audio-native/src/helper_backend.ts",
+              "packages/audio-native/native/macos/main.swift",
+              "packages/audio-native/native/windows/main.cpp"
+            ],
+            "group": "native",
+            "x": 2130,
+            "y": 400
+          },
+          {
+            "id": "local-kokoro",
+            "label": "Local Kokoro worker\nSupported packaged runtime only",
+            "files": ["packages/vscode/src/speech_worker.ts", "packages/audio-ui/scripts/speech_runtime.mts"],
+            "group": "desktop",
+            "x": 1040,
+            "y": 730
+          },
+          {
+            "id": "cloud-provider",
+            "label": "ElevenLabs\nSelected text from the local host",
+            "files": ["packages/vscode/src/speech_elevenlabs.ts"],
+            "group": "cloud",
+            "x": 2130,
+            "y": 80
+          }
+        ],
+        "edges": [
+          {
+            "from": "workspace-session",
+            "to": "workspace-audio-proxy",
+            "label": "narration"
+          },
+          {
+            "from": "workspace-audio-proxy",
+            "to": "local-panel",
+            "label": "requests"
+          },
+          {
+            "from": "local-panel",
+            "to": "workspace-audio-proxy",
+            "label": "actions",
+            "vertices": [
+              {
+                "x": 1230,
+                "y": 280
+              },
+              {
+                "x": 710,
+                "y": 280
+              }
+            ]
+          },
+          {
+            "from": "local-panel",
+            "to": "local-speech-host",
+            "label": "speech actions"
+          },
+          {
+            "from": "local-speech-host",
+            "to": "local-output-adapter",
+            "label": "route / WAV"
+          },
+          {
+            "from": "local-speech-host",
+            "to": "local-kokoro",
+            "label": "bounded local request"
+          },
+          {
+            "from": "local-speech-host",
+            "to": "cloud-provider",
+            "label": "HTTPS / selected text",
+            "vertices": [
+              {
+                "x": 1490,
+                "y": 250
+              },
+              {
+                "x": 2320,
+                "y": 250
+              }
+            ]
+          },
+          {
+            "from": "local-output-adapter",
+            "to": "native-platform-output",
+            "label": "PCM / control"
+          },
+          {
+            "from": "native-platform-output",
+            "to": "local-output-adapter",
+            "label": "retired",
+            "vertices": [
+              {
+                "x": 2320,
+                "y": 610
+              },
+              {
+                "x": 1770,
+                "y": 610
+              }
+            ]
+          },
+          {
+            "from": "local-speech-host",
+            "to": "workspace-audio-proxy",
+            "label": "terminal ack"
+          }
+        ],
+        "groups": [
+          {
+            "id": "workspace",
+            "label": "Workspace extension host (local or remote)"
+          },
+          {
+            "id": "desktop",
+            "label": "Local VS Code UI host"
+          },
+          {
+            "id": "native",
+            "label": "Local audio system"
+          },
+          {
+            "id": "cloud",
+            "label": "Optional cloud provider"
+          }
+        ],
+        "comments": {
+          "local-panel": [
+            {
+              "id": "placement-commit",
+              "text": "Prepare cannot register a view. Commit selects one panel owner for the window; a lost acknowledgement cannot register a legacy fallback. The two-extension arrangement was demonstrated in an isolated SSH window.",
+              "ts": 0
+            }
+          ],
+          "local-speech-host": [
+            {
+              "id": "placement-privacy",
+              "text": "Speech settings, key entry, SecretStorage and output preferences stay on the UI host. Audio bytes and keys are excluded from workspace transport. Reading and command approval remain workspace-owned.",
+              "ts": 0
+            }
+          ],
+          "local-output-adapter": [
+            {
+              "id": "route-reservation",
+              "text": "Admission snapshots a concrete endpoint, including System default. Playback rechecks and opens that endpoint or fails. Unplugging after provider dispatch can still consume provider credits. Cancellation cannot release a still-live output.",
+              "ts": 0
+            }
+          ],
+          "native-platform-output": [
+            {
+              "id": "platform-verification",
+              "text": "Compilation and protocol tests are distinct from native routing and audible playback verification. Kokoro synthesis support remains limited by its separately packaged runtime.",
               "ts": 0
             }
           ]

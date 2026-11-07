@@ -20,6 +20,8 @@ import { SPEECH_WORKER_OUTPUT } from './speech_worker_messages';
 export interface SpeechOutput {
   /** Checks and reserves the selected route before synthesis. */
   prepare?: (id: number) => Promise<boolean>;
+  /** Cancels a reserved or pending route before a page has begun playback. */
+  cancel?: (id: number) => void;
   /** Fixed, non-sensitive local worker lifecycle facts. */
   localDiagnostic?: (phase: 'ready' | 'failed', reason?: LocalSpeechFailureReason) => void;
   /** Posts audio and returns its current page ID, or undefined when no page is ready. */
@@ -515,6 +517,7 @@ export class SpeechService implements NarrationPort {
     if (current.provider === 'elevenlabs' && this.cloudBusy?.id === current.id) this.cloudBusy.controller.abort();
     this.clearTimer(current);
     if (current.pageId !== undefined) this.options.output.control(current.id, current.pageId, 'stop');
+    else this.options.output.cancel?.(current.id);
     if (showIdle) this.options.output.status(current.id, 'idle');
     current.resolve();
   }

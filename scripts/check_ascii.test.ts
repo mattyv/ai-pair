@@ -92,3 +92,20 @@ it('lets a file hold the characters ALLOWED names for it, and only those', async
     '\n1 characters outside ASCII. Write each as an escape in code, an entity in markup, or a word in prose.',
   ]);
 });
+
+it('preserves only the exact bundled runtime binary and its legal notice characters', async () => {
+  const bom = String.fromCodePoint(0xfeff);
+  const copyright = String.fromCodePoint(0xa9);
+  const result = await checked({
+    'packages/vscode/vendor/libstdcxx/libstdc++.so.6': `${GRINNING_FACE}${E_ACUTE}`,
+    'packages/vscode/third_party/LIBSTDCXX-COPYRIGHT.txt': `${bom}Copyright ${copyright}`,
+    'packages/vscode/vendor/libstdcxx/other.so.6': E_ACUTE,
+    'packages/vscode/third_party/other.txt': copyright,
+  });
+  expect(result.errors).toEqual([
+    'packages/vscode/vendor/libstdcxx/other.so.6:1:1: U+00E9',
+    'packages/vscode/third_party/other.txt:1:1: U+00A9',
+    '\n2 characters outside ASCII. Write each as an escape in code, an entity in markup, or a word in prose.',
+  ]);
+  expect(result.exit).toBe(1);
+});

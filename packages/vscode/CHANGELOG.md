@@ -1,12 +1,21 @@
 # Changelog
 
+## 0.19.0
+
+-   Use the optional AI Pair Local Audio companion to keep the Pair panel,
+    speech, credentials and output selection on the local client, including in
+    remote workspaces. Install the companion locally and reload the window.
+-   Support local output selection through PipeWire, CoreAudio and WASAPI where
+    the packaged platform helper and selected device are available. Kokoro
+    synthesis remains limited to supported Linux x64 systems.
+
 ## 0.18.2
 
--   Fix local Kokoro speech startup in Snap installations with an older C runtime.
+- Fix local Kokoro speech startup in Snap installations with an older C runtime.
 
 ## 0.18.1
 
--   Discover Linux PipeWire outputs without requiring PulseAudio tools.
+- Discover Linux PipeWire outputs without requiring PulseAudio tools.
 
 ## 0.18.0
 

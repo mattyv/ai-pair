@@ -181,11 +181,47 @@ Issue discussions and working notes hold the detailed evidence and history.
 
 ## Local verification and installation
 
+-   Keep remote workspace editing separate from local audio. An optional UI
+    companion owns the panel, speech settings, credentials and device access;
+    the workspace extension retains the controller, editor and command execution.
+    Exchange bounded, versioned messages through fixed VS Code commands. Keep
+    separate monotonic sequence numbers for each direction and invalidate old
+    connection, job and page identities on reconnect.
+-   Select the panel owner once per window using a prepare/commit handshake.
+    Preparation cannot register a provider. After committing to the companion,
+    a lost acknowledgement cannot cause a second legacy provider to register.
+    Without a companion, retain the existing local experience; remote speech
+    remains unavailable rather than playing on the workspace machine.
+-   Reserve and validate a concrete local endpoint before synthesis, including
+    resolving System default for that narration unit. Recheck and open that
+    endpoint at playback; do not substitute another device. Removal after a
+    provider request can still consume provider credits even if playback fails.
+-   Share the adapter lifecycle across PipeWire, CoreAudio and WASAPI. Retain
+    physical ownership until cleanup or process exit is confirmed, including
+    cancellation during admission and while paused. Handle local interruption
+    before forwarding its workspace action; an expired connection lease stops
+    speech locally without waiting for the remote host.
+-   Package native helpers in CI for macOS Intel/Apple Silicon and Windows
+    x64/ARM64, preserving the existing Linux PipeWire path. Cross-compilation
+    proves build compatibility; it does not establish device routing or audible
+    playback. Cross-platform output support does not expand the supported
+    Kokoro synthesis runtime automatically.
+-   After local audio placement is verified, evaluate one-sentence lookahead
+    within an admitted narration unit, separate synthesis and pitch-preserving
+    playback speed, and a common warm-worker protocol. Preserve selected text,
+    independent reading pace and the speech on/off setting. Avoid speculative
+    synthesis of future cloud narration and dropping explanations to catch up.
+
 -   Normalize Archi 1.5.1 exports deterministically for repository formatting and
     ASCII checks. Preserve Unicode values with context-specific JSON,
     JavaScript, CSS and HTML escapes. This formats generated exports; it is not
     a general HTML sanitizer. Verify generator replay, idempotence, embedded
     script semantics and browser rendering before publishing Pages.
+-   Preserve the bundled libstdc++ runtime and its original legal notice byte
+    for byte. Exclude only that exact binary from the ASCII text check; permit
+    only U+FEFF and U+00A9 in its exact copyright-notice path. Neighboring
+    source and vendor files remain subject to the normal ASCII checks. The
+    runtime-staging test also verifies the library's pinned SHA-256.
 -   Pin the verified TLA+ release asset by immutable asset ID and SHA-256,
     and fail on HTTP errors. A future deletion must fail rather than execute
     different bytes. Updating the pin requires verified upstream provenance.

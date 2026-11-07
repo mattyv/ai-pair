@@ -27,15 +27,37 @@ It adds:
     account credits. Saving a key does not enable speech. Voice availability
     depends on your account; a free account may have no eligible API voices.
     Kokoro remains the local option and the default provider.
--   A shared **Speech output** choice for both providers. Keep **System default**
-    to use VS Code's audio routing, or choose **Refresh outputs** and select a
-    specific local PipeWire device on Linux. The override needs `pw-play`,
-    `pw-dump` and `setpriv`. Its choice stays local to this installation; unavailable
-    devices report an error rather than silently switching outputs.
+-   A shared **Speech output** choice for both providers, with **System default**
+    or an explicit local device. The optional **AI Pair Local Audio** companion
+    owns playback on the computer running the VS Code window, including SSH
+    workspaces. Native adapters use PipeWire on Linux, CoreAudio on macOS and
+    WASAPI on Windows. Device choices stay local; unavailable devices report an
+    error rather than silently switching outputs. Linux needs `pw-play`,
+    `pw-dump` and `setpriv`; macOS and Windows helpers ship in the companion.
 
 [Download a fork build from GitHub Actions](https://github.com/mattyv/ai-pair/actions)
 (run **Build VSIX**, then download its artifact). The Marketplace link in the
 original README below installs the upstream version without these additions.
+
+## Using the local audio companion
+
+Download both fork artifacts from the same **Build VSIX** run. Install AI Pair
+for the workspace and **AI Pair Local Audio** locally on the computer with your
+speakers, then reload the VS Code window. In an SSH or container window, the
+companion belongs on the local side. It is optional for existing local use;
+remote speech requires it.
+
+The companion keeps its own local key and model storage. Add your ElevenLabs
+key through its secure Settings prompt, or set up Kokoro there. Its model still
+requires a supported Linux x64 desktop; cross-platform playback does not make
+Kokoro available on every operating system. No key or generated audio is sent
+to the workspace extension. Speech remains off until you enable it; Preview is
+an explicit test action.
+
+Native compilation, API-level playback and physical audibility are separate
+checks. The current Windows hosted runner has no default output device, so its
+stream test is reported as skipped rather than passed. Hardware and device-loss
+verification remains necessary for each target environment.
 
 ## Original project README
 

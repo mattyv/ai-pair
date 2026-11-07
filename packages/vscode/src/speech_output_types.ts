@@ -1,5 +1,5 @@
 /** The current system output, or one explicitly named native output. */
-export type OutputChoice = { kind: 'default' } | { kind: 'native'; backend: 'pipewire'; name: string };
+export type OutputChoice = { kind: 'default' } | { kind: 'native'; backend: 'pipewire' | 'coreaudio' | 'wasapi'; name: string };
 /** A device presented to the user, with its current availability. */
 export interface OutputDevice {
   choice: Extract<OutputChoice, { kind: 'native' }>;

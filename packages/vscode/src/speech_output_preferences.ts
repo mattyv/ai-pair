@@ -25,7 +25,7 @@ function parseChoice(value: unknown): OutputChoice | undefined {
     value.kind === 'native' &&
     'backend' in value &&
     'name' in value &&
-    value.backend === 'pipewire' &&
+    (value.backend === 'pipewire' || value.backend === 'coreaudio' || value.backend === 'wasapi') &&
     typeof value.name === 'string' &&
     value.name.length > 0 &&
     value.name.length <= MAX_OUTPUT_NAME_LENGTH &&

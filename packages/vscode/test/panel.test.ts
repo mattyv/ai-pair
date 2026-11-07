@@ -106,6 +106,7 @@ const REF: Ref = { file: 'a.ts', line: 1, endLine: 2 };
 interface Harness {
   panel: NarrationPanel;
   controller: MockProxy<Controller>;
+  controllerAccessor: ReturnType<typeof vi.fn<() => MockProxy<Controller>>>;
   calibration: MockProxy<Calibration>;
   starter: MockProxy<Starter>;
   speed: { get: ReturnType<typeof vi.fn<() => number>>; set: ReturnType<typeof vi.fn<(value: number) => void>> };
@@ -213,6 +214,7 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
     pageClosed: vi.fn(),
   };
   const controller = mock<Controller>({ turn });
+  const controllerAccessor = vi.fn(() => controller);
   const calibration = mock<Calibration>();
   calibration.reply.mockReturnValue(false);
   const starter = mock<Starter>();
@@ -227,7 +229,7 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
       traced.push(line);
     },
     vscode.Uri.file(EXTENSION),
-    { controller: () => controller, calibration: () => calibration, starter, copyDiagnostics, speech },
+    { controller: controllerAccessor, calibration: () => calibration, starter, copyDiagnostics, speech },
     chatOrder,
     buildInfo,
     terminalSettings,
@@ -239,6 +241,7 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
   return {
     panel,
     controller,
+    controllerAccessor,
     calibration,
     starter,
     speed,
@@ -1235,4 +1238,94 @@ it('retains replaced browser-page ownership until its actual disposal', () => {
   expect(speech.outputPageRetired.mock.calls).toEqual([[1]]);
   second.send({ type: 'speechPageHidden', pageId: 2 });
   expect(speech.outputPageRetired.mock.calls).toEqual([[1], [2]]);
+});
+
+describe('remote panel port', () => {
+  it('sends workspace updates to the attached page and handles validated actions without touching remote speech', () => {
+    const { panel, controller, speech } = harness();
+    const send = vi.fn<(message: ToPanel) => void>();
+    panel.attachRemote(1, send);
+    panel.receiveRemote(1, { type: 'ready' });
+    expect(speech.keyRefresh).not.toHaveBeenCalled();
+    expect(speech.settings.get).not.toHaveBeenCalled();
+    panel.post({ type: 'say', text: 'Hello.' });
+    expect(send).toHaveBeenCalledWith({ type: 'say', text: 'Hello.' });
+    panel.receiveRemote(1, { type: 'reply', text: 'Continue.' });
+    expect(controller.userMessage.mock.calls.length).toBeGreaterThan(0);
+    expect(speech.stop).not.toHaveBeenCalled();
+    panel.closeRemote(1);
+    expect(controller.releaseReadingHold.mock.calls.length).toBeGreaterThan(0);
+    panel.receiveRemote(1, { type: 'pause' });
+    expect(controller.pause.mock.calls).toHaveLength(0);
+  });
+});
+
+it('routes remote interrupt, turn, end and page disposal without stopping remote speech', () => {
+  const { panel, controller, speech } = harness('programmer');
+  panel.attachRemote(1, vi.fn<(message: ToPanel) => void>());
+  panel.closeRemote(2);
+  panel.receiveRemote(1, { type: 'interrupt' });
+  panel.receiveRemote(1, { type: 'turn' });
+  panel.receiveRemote(1, { type: 'end' });
+  expect(controller.userInterrupt.mock.calls).toHaveLength(1);
+  expect(controller.handBack.mock.calls).toHaveLength(1);
+  expect(controller.endSession.mock.calls).toHaveLength(1);
+  expect(speech.stop).not.toHaveBeenCalled();
+  panel.receiveRemote(1, { type: 'pageClosed' });
+  expect(controller.releaseReadingHold.mock.calls).toHaveLength(1);
+});
+
+describe('companion panel port', () => {
+  it('keeps speech local and forwards validated workspace actions with the local page identity', () => {
+    const { panel, controller, controllerAccessor, speech } = harness();
+    const forward = vi.fn<(action: import('@ai-pair/protocol').LocalPanelAction, pageId: number) => void>();
+    const closed = vi.fn<(pageId: number) => void>();
+    panel.useCompanion({ forward, closed });
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(speech.keyRefresh).toHaveBeenCalledTimes(1);
+    expect(forward).toHaveBeenCalledWith({ type: 'ready' }, 1);
+    view.send({ type: 'reply', text: 'Continue.' });
+    expect(forward).toHaveBeenCalledWith({ type: 'reply', text: 'Continue.' }, 1);
+    expect(controller.userMessage.mock.calls).toHaveLength(0);
+    panel.showRemoteUpdate({ type: 'say', text: 'From workspace.' });
+    expect(view.posted).toContainEqual({ type: 'say', text: 'From workspace.' });
+    panel.showRemoteUpdate({ type: 'speechAudio', wavBase64: 'secret' });
+    expect(view.posted).not.toContainEqual({ type: 'speechAudio', wavBase64: 'secret' });
+    view.send({ type: 'speechStop' });
+    expect(speech.stop).toHaveBeenCalledTimes(1);
+    expect(controllerAccessor).not.toHaveBeenCalled();
+    view.receive({ type: 'command', command: 'arbitrary.exec' });
+    view.receive({ type: 'reply', text: 'x'.repeat(65_537) });
+    expect(controller.userMessage.mock.calls).toHaveLength(0);
+    expect(forward).toHaveBeenCalledTimes(2);
+    view.dispose();
+    expect(closed).toHaveBeenCalledWith(1);
+    expect(controller.releaseReadingHold.mock.calls).toHaveLength(0);
+  });
+  it('retires the old companion page before replacing its view', () => {
+    const { panel, speech } = harness();
+    const closed = vi.fn<(pageId: number) => void>();
+    panel.useCompanion({ forward: vi.fn<(action: import('@ai-pair/protocol').LocalPanelAction, page: number) => void>(), closed });
+    const old = open(panel);
+    old.send({ type: 'ready' });
+    const replacement = open(panel);
+    expect(speech.pageClosed).toHaveBeenCalledWith(1);
+    expect(closed).toHaveBeenCalledWith(1);
+    old.dispose();
+    expect(closed).toHaveBeenCalledTimes(1);
+    replacement.dispose();
+  });
+  it('ignores updates without a companion view and does not close a replaced view twice', () => {
+    const first = harness();
+    first.panel.showRemoteUpdate({ type: 'say', text: 'not shown' });
+    const closed = vi.fn<(pageId: number) => void>();
+    first.panel.useCompanion({ forward: vi.fn<(action: import('@ai-pair/protocol').LocalPanelAction, page: number) => void>(), closed });
+    first.panel.showRemoteUpdate({ type: 'say', text: 'not shown' });
+    const view = open(first.panel);
+    view.dispose();
+    expect(closed).toHaveBeenCalledTimes(1);
+    open(first.panel);
+    expect(closed).toHaveBeenCalledTimes(1);
+  });
 });

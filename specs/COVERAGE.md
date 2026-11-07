@@ -110,6 +110,26 @@ Code goes without a spec for one of these reasons:
 | | `actionKinds`, `fieldsProblem`, `typeProblem` | Pure; `validation.test.ts` |
 | `schemas.ts` | the schemas, and the types taken from them | Types: data declarations, which the parsers above apply (#163) |
 | `paths.ts` | `samePath`, `withinFolder` | Pure |
+| `local_audio.ts` | local-audio bridge schemas | Types; validated at boundaries |
+| `panel_chunks.ts` | bounded ordered local panel replay assembly | `LocalPanelReplay`; transport tests |
+
+## audio-native
+
+| File | Functions | Spec |
+|---|---|---|
+| `admission.ts` | logical route reservation and cancellation | `LocalAudioAdmission`; native device integration pending |
+| `ownership.ts` | job ownership and retirement | `LocalAudioOwnership`; process integration tests pending |
+| `playback.ts` | player lifecycle | `LocalAudioOwnership`; process integration tests pending |
+| `protocol.ts` | helper event framing and sequence checks | `LocalAudioOwnership`; protocol unit tests |
+| `index.ts` | adapter contracts | Types |
+| `helper_location.ts` | helper path resolution | Glue; helper-location unit tests |
+
+## audio-ui
+
+| File | Functions | Spec |
+|---|---|---|
+| `local_connection.ts` | ordered frames and local lease | `LocalAudioOwnership`; physical retirement integration pending |
+| `companion_output.ts` | page and job ownership | `LocalAudioAdmission`, `LocalAudioOwnership`; native integration pending |
 
 ## vscode
 
@@ -189,6 +209,7 @@ Code goes without a spec for one of these reasons:
 | `calibration.ts` | all | `Calibration` |
 | `passage.ts` | `builtInPassage` | Glue: reads the passage's media files |
 | `timings.ts` | `setTimings` | Glue: the extension's delays, one set for tests |
+| `panel_placement.ts` | panel prepare, commit and fallback | `PanelPlacement` |
 | `panel_html.ts` | `panelHtml`, `settingSpeed` | Format |
 | `webview/panel.css` | all | Look |
 | `panel_messages.ts` | | Types |

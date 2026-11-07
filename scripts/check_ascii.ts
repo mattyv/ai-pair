@@ -9,7 +9,8 @@ import * as path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 
-const SKIPPED = /^(package-lock\.json|.*\.(png|gif))$/;
+// Preserve the exact prebuilt libstdc++ binary; all other code stays checked.
+const SKIPPED = /^(package-lock\.json|.*\.(png|gif)|packages\/vscode\/vendor\/libstdcxx\/libstdc\+\+\.so\.6)$/;
 
 const ASCII_DELETE = 0x7f; // the last ASCII code point
 const HEX = 16;
@@ -27,6 +28,8 @@ const BOX_VERTICAL = 0x2502;
 const RIGHT_TRIANGLE = 0x25b6; // BLACK RIGHT-POINTING TRIANGLE
 const S_CARON = 0x0160; // LATIN CAPITAL LETTER S WITH CARON
 const EM_DASH = 0x2014;
+const BYTE_ORDER_MARK = 0xfeff;
+const COPYRIGHT_SIGN = 0x00a9;
 
 /** The characters a file may hold beyond ASCII, as code points, with why. */
 const ALLOWED: ReadonlyMap<string, readonly number[]> = new Map([
@@ -40,6 +43,8 @@ const ALLOWED: ReadonlyMap<string, readonly number[]> = new Map([
   // The dash before the quote's source, and the diagram's line and arrowhead.
   ['README.md', [EM_DASH, BOX_HORIZONTAL, RIGHT_TRIANGLE]],
   ['packages/vscode/README.md', [EM_DASH]],
+  // Preserve the bundled runtime's upstream copyright notice verbatim.
+  ['packages/vscode/third_party/LIBSTDCXX-COPYRIGHT.txt', [BYTE_ORDER_MARK, COPYRIGHT_SIGN]],
 ]);
 
 const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: ROOT, encoding: 'utf8' }).split('\0');

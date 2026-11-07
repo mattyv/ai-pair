@@ -2,6 +2,7 @@
 
 import * as vscode from 'vscode';
 import type { CodePlayback, Controller, PanelEvent, PanelPort, Ref, SharedSelection } from '@ai-pair/core';
+import { localPanelAction, localPanelUpdate, type LocalPanelAction } from '@ai-pair/protocol';
 import { panelHtml, SPEEDS } from './panel_html';
 import { timings } from './timings';
 import type { ChatOrder, FromPanel, SpeechAction, SpeechEvent, SpeechState, ToPanel } from './panel_messages';
@@ -15,6 +16,24 @@ const MAX_LOG = 400;
 
 /** The commands the panel may run: the ones its intro links to. */
 const PANEL_COMMANDS: ReadonlySet<string> = new Set(['aiPair.playDemo', 'aiPair.setUpAgent']);
+
+/** Page messages handled exclusively by the local speech service. */
+const LOCAL_SPEECH_MESSAGES: ReadonlySet<string> = new Set([
+  'speechEvent',
+  'speechRetired',
+  'speechPageHidden',
+  'speechPageVisible',
+  'speechOutputRefresh',
+  'speechOutputSelect',
+  'speechSettings',
+  'speechKeySet',
+  'speechKeyRemove',
+  'speechVoicesLoad',
+  'speechVoicesMore',
+  'speechStop',
+  'speechPreview',
+  'speechSetup',
+]);
 
 /** An agent the idle view can start a session with: whether it can right now, and how (#107). */
 export interface Starter {
@@ -60,6 +79,12 @@ export interface PanelWiring {
   };
 }
 
+/** Workspace action forwarding for a UI-local companion panel. */
+export interface CompanionPanelRouting {
+  forward: (action: LocalPanelAction, pageId: number) => void;
+  closed: (pageId: number) => void;
+}
+
 /** How many files of a name to look for before asking which was meant. */
 const MAX_FOUND = 20;
 
@@ -69,6 +94,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   /** Questions asked of the starter so far; an answer to an earlier one is dropped. */
   private asked = 0;
   private view?: vscode.WebviewView;
+  private remote?: { pageId: number; send: (message: ToPanel) => void };
+  private companion?: CompanionPanelRouting;
   private speechPageId = 0;
   private speechPageReady = false;
   private speechSetupCheck = 0;
@@ -115,7 +142,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
 
   /** Posts to the page, if there is one. */
   private send(message: ToPanel): void {
-    void this.view?.webview.postMessage(message);
+    if (this.remote !== undefined) this.remote.send(message);
+    else void this.view?.webview.postMessage(message);
   }
 
   /** Syncs the persisted terminal preference to the page. */
@@ -221,7 +249,10 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
-    if (this.speechPageId > 0) this.wiring.speech.pageClosed(this.speechPageId);
+    if (this.speechPageId > 0) {
+      this.wiring.speech.pageClosed(this.speechPageId);
+      if (this.view !== undefined) this.companion?.closed(this.speechPageId);
+    }
     this.view = view;
     this.speechPageId++;
     this.speechPageReady = false;
@@ -243,12 +274,49 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         this.view = undefined;
         this.speechPageReady = false;
         this.wiring.speech.pageClosed(pageId);
-        this.wiring.controller().releaseReadingHold();
-        // Its draft and its pause went with this view: specs/Draft.tla, `Dispose`.
-        this.wiring.controller().resume('reply');
-        this.wiring.calibration().cancel();
+        if (this.companion !== undefined) this.companion.closed(pageId);
+        else {
+          this.wiring.controller().releaseReadingHold();
+          // Its draft and its pause went with this view: specs/Draft.tla, `Dispose`.
+          this.wiring.controller().resume('reply');
+          this.wiring.calibration().cancel();
+        }
       }
     });
+  }
+
+  /** Routes workspace actions out of a UI-local companion panel. */
+  useCompanion(routing: CompanionPanelRouting): void {
+    this.companion = routing;
+  }
+
+  /** Displays a validated workspace update in the locally owned companion view. */
+  showRemoteUpdate(value: unknown): void {
+    if (this.companion === undefined || this.view === undefined) return;
+    const parsed = localPanelUpdate.safeParse(value);
+    if (parsed.success) void this.view.webview.postMessage(parsed.data);
+  }
+
+  /** Attaches the locally owned companion page without registering a second provider. */
+  attachRemote(pageId: number, send: (message: ToPanel) => void): void {
+    this.remote = { pageId, send };
+    this.speechPageId = pageId;
+  }
+
+  /** Dispatches a validated action from the currently attached companion page. */
+  receiveRemote(pageId: number, message: LocalPanelAction): void {
+    if (this.remote?.pageId !== pageId) return;
+    if (message.type === 'pageClosed') this.closeRemote(pageId);
+    else this.receive(message, pageId);
+  }
+
+  /** Retires workspace state belonging to a disposed companion page. */
+  closeRemote(pageId: number): void {
+    if (this.remote?.pageId !== pageId) return;
+    this.remote = undefined;
+    this.wiring.controller().releaseReadingHold();
+    this.wiring.controller().resume('reply');
+    this.wiring.calibration().cancel();
   }
 
   /** Whether the current page can receive live speech for integration tests. */
@@ -311,8 +379,36 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     }
   }
 
+  /** Initializes speech controls only in the host that owns the local page. */
+  private readySpeech(pageId: number): void {
+    this.speechPageReady = true;
+    this.send({ type: 'speechPage', pageId });
+    this.showSpeechSettings(this.wiring.speech.settings.get());
+    this.showSpeechOutputCatalog(this.wiring.speech.outputView());
+    const supported = this.wiring.speech.cloudSupported();
+    this.wiring.speech.diagnostic({
+      kind: 'speech',
+      event: 'capability',
+      phase: supported ? 'ready' : 'blocked',
+      provider: 'elevenlabs',
+      ...(supported ? {} : { reason: 'unsupported' }),
+    });
+    this.send({ type: 'speechCloudSupport', supported });
+    this.wiring.speech.keyRefresh();
+    this.refreshSpeechSupport();
+  }
+
   private receive(message: FromPanel, pageId: number): void {
-    const controller = this.wiring.controller();
+    if (this.companion !== undefined) {
+      const action = localPanelAction.safeParse(message);
+      if (action.success) {
+        if (action.data.type === 'ready') this.readySpeech(pageId);
+        this.companion.forward(action.data, pageId);
+        return;
+      }
+      if (typeof message !== 'object' || message === null || !LOCAL_SPEECH_MESSAGES.has(message.type)) return;
+    }
+    const controller = () => this.wiring.controller();
     this.trace(
       `panel ${message.type}${message.type === 'reply' ? ` ${JSON.stringify(message.text)}` : message.type === 'draft' ? (message.empty ? ' empty' : ' typed') : ''}`,
     );
@@ -446,25 +542,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         );
         return;
       case 'ready':
-        this.speechPageReady = true;
-        this.send({ type: 'speechPage', pageId });
-        this.showSpeechSettings(this.wiring.speech.settings.get());
-        this.showSpeechOutputCatalog(this.wiring.speech.outputView());
-        {
-          const supported = this.wiring.speech.cloudSupported();
-          this.wiring.speech.diagnostic({
-            kind: 'speech',
-            event: 'capability',
-            phase: supported ? 'ready' : 'blocked',
-            provider: 'elevenlabs',
-            ...(supported ? {} : { reason: 'unsupported' }),
-          });
-          this.send({ type: 'speechCloudSupport', supported });
-        }
-        this.wiring.speech.keyRefresh();
-        this.refreshSpeechSupport();
+        if (this.remote === undefined) this.readySpeech(pageId);
         // A new page has an empty draft (#69): specs/Draft.tla, `LoadPage`.
-        controller.resume('reply');
+        controller().resume('reply');
         this.showChatOrder(this.chatOrder.get());
         this.send({ type: 'replay', events: this.log });
         this.showTerminalPreference(this.terminalSettings.get());
@@ -491,11 +571,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         return;
       case 'holdReading':
         if (Number.isSafeInteger(message.id) && message.id > 0 && typeof message.held === 'boolean') {
-          controller.holdReading(message.id, message.held);
+          controller().holdReading(message.id, message.held);
         }
         return;
       case 'skipReading':
-        if (Number.isSafeInteger(message.id) && message.id > 0) controller.finishReading(message.id);
+        if (Number.isSafeInteger(message.id) && message.id > 0) controller().finishReading(message.id);
         return;
       case 'speed':
         // Only the menu's speeds: the page sends no others (#17).
@@ -510,52 +590,52 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         return;
       case 'reply':
         // Cancel before resume so an old generation cannot restart.
-        this.wiring.speech.stop();
+        if (this.remote === undefined) this.wiring.speech.stop();
         // Replying means "go on with this", so any pause ends. It moves no view, so the programmer's tab and
         // selection stay as they were (specs/PointFocus.tla, `SendReply`, issue 125; specs/Draft.tla,
         // `ResumeAll`).
         if (this.wiring.calibration().reply(message.text)) {
           // The box is empty now, and the page posts no `draft` for it: specs/Draft.tla, `SendToCalibration` (#191).
-          controller.resume('reply');
+          controller().resume('reply');
           return;
         }
-        controller.resume(undefined, { reveal: false });
-        controller.userMessage(message.text, message.attach === true ? this.selection.current() : undefined);
+        controller().resume(undefined, { reveal: false });
+        controller().userMessage(message.text, message.attach === true ? this.selection.current() : undefined);
         return;
       case 'draft':
         // Typing a reply pauses playback, the way a pair stops when you start talking (specs/Draft.tla, `TypeDraft`, `Clear`).
         if (message.empty) {
-          controller.resume('reply');
+          controller().resume('reply');
         } else {
-          controller.pause('reply');
+          controller().pause('reply');
         }
         return;
       case 'pause':
-        controller.pause();
+        controller().pause();
         return;
       case 'resume':
         // specs/Draft.tla, `ResumeAll`: resume() with no reason ends every pause.
-        controller.resume();
+        controller().resume();
         return;
       case 'interrupt':
-        this.wiring.speech.stop();
-        controller.userInterrupt();
+        if (this.remote === undefined) this.wiring.speech.stop();
+        controller().userInterrupt();
         return;
       case 'turn':
-        this.wiring.speech.stop();
-        controller.resume();
-        if (controller.turn === 'programmer') {
-          controller.handBack(message.message, message.attach === true ? this.selection.current() : undefined);
+        if (this.remote === undefined) this.wiring.speech.stop();
+        controller().resume();
+        if (controller().turn === 'programmer') {
+          controller().handBack(message.message, message.attach === true ? this.selection.current() : undefined);
         } else {
-          controller.takeTurn();
+          controller().takeTurn();
         }
         return;
       case 'end':
-        this.wiring.speech.stop();
-        controller.endSession();
+        if (this.remote === undefined) this.wiring.speech.stop();
+        controller().endSession();
         return;
       case 'runDecision':
-        controller.decideRun(message.id, message.run, message.remember);
+        controller().decideRun(message.id, message.run, message.remember);
         return;
       case 'open': {
         const uri = vscode.Uri.file(this.resolvePath(message.file));

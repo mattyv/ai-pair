@@ -4,6 +4,10 @@ dist/
 dist-test/
 # Copied from the root LICENSE when packaging.
 packages/vscode/LICENSE
+# Companion legal files are copied from the existing source when packaging.
+packages/audio-ui/LICENSE
+packages/audio-ui/THIRD_PARTY_NOTICES.md
+packages/audio-ui/third_party/
 # Built by `npm run package`.
 *.vsix
 coverage/

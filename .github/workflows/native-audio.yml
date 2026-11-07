@@ -1,9 +1,14 @@
+# Cross-compilation verifies SDK compatibility, not playback on that architecture.
+# Matching-runner silent smoke may skip when no output endpoint exists; device
+# loss and no-fallback behavior require separate native-device verification.
 name: Native audio compile
 
 on:
-  push:
-    branches: [feat/17-cross-platform-audio]
+  workflow_call:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   macos:

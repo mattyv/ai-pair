@@ -196,7 +196,7 @@ const fakes = vi.hoisted(() => {
       readonly editor: unknown,
       readonly panel: unknown,
       readonly config: unknown,
-      readonly narration: unknown,
+      readonly narration: import('@ai-pair/core').NarrationPort,
     ) {
       made.controllers.push(this);
     }
@@ -338,7 +338,28 @@ const fakes = vi.hoisted(() => {
     delaySettings: false,
     providerGate: undefined as Promise<void> | undefined,
     updated: [] as Array<[string, unknown, unknown]>,
-    commands: new Map<string, () => unknown>(),
+    commands: new Map<string, (value?: unknown) => unknown>(),
+    providerRegistered: vi.fn(),
+    companionAvailable: false,
+    placementChoice: undefined as Promise<import('../src/panel_placement').PanelOwner> | undefined,
+    session: undefined as
+      | {
+          narration: {
+            speak: ReturnType<typeof vi.fn>;
+            pause: ReturnType<typeof vi.fn>;
+            resume: ReturnType<typeof vi.fn>;
+            cancel: ReturnType<typeof vi.fn>;
+          };
+          accept: ReturnType<typeof vi.fn>;
+        }
+      | undefined,
+    frameAccepted: true,
+    diagnosticsInvalid: false,
+    diagnosticsReject: false,
+    placementOptions: undefined as import('../src/panel_placement').PanelPlacementOptions | undefined,
+    workspaceOptions: undefined as import('../src/workspace_session').WorkspaceSessionOptions | undefined,
+    commandCalls: [] as Array<[string, unknown]>,
+    failedCommands: new Set<string>(),
     errors: [] as string[],
     infos: [] as string[],
     /** The button the programmer picks on the next information message. */
@@ -387,6 +408,10 @@ vi.mock('vscode', () => ({
       dispose: () => {},
     }),
     showInputBox: vi.fn().mockResolvedValue(undefined),
+    showWarningMessage: (message: string) => {
+      fakes.infos.push(message);
+      return Promise.resolve();
+    },
     showErrorMessage: (message: string) => {
       fakes.errors.push(message);
       return Promise.resolve(undefined);
@@ -396,7 +421,10 @@ vi.mock('vscode', () => ({
       return Promise.resolve(fakes.answer);
     },
     onDidChangeWindowState: fakes.event('window'),
-    registerWebviewViewProvider: () => ({ dispose: () => {} }),
+    registerWebviewViewProvider: (...args: unknown[]) => {
+      fakes.providerRegistered(...args);
+      return { dispose: () => {} };
+    },
   },
   env: {
     uiKind: 1,
@@ -406,19 +434,68 @@ vi.mock('vscode', () => ({
     clipboard: { writeText: vi.fn(() => Promise.resolve()) },
   },
   commands: {
-    registerCommand: (name: string, run: () => unknown) => {
+    executeCommand: (name: string, value: unknown) => {
+      fakes.commandCalls.push([name, value]);
+      if (fakes.failedCommands.has(name)) return Promise.reject(new Error('private'));
+      if (
+        name === 'aiPair.localAudio.prepare' &&
+        fakes.companionAvailable &&
+        typeof value === 'object' &&
+        value !== null &&
+        'epoch' in value
+      ) {
+        return Promise.resolve({ version: 1, epoch: value.epoch, token: 'token' });
+      }
+      if (name === 'aiPair.localAudio.diagnostics' && fakes.companionAvailable) {
+        if (fakes.diagnosticsReject) return Promise.reject(new Error('private'));
+        return Promise.resolve(fakes.diagnosticsInvalid ? { secret: 'private' } : { version: '0.19.0', build: 'abcdef', events: [] });
+      }
+      if (name === 'aiPair.localAudio.frame' && fakes.companionAvailable) return Promise.resolve(fakes.frameAccepted);
+      if (name === 'workbench.extensions.action.installVSIX') return Promise.resolve();
+      if (name.startsWith('aiPair.localAudio.') && fakes.companionAvailable) return Promise.resolve(true);
+      return Promise.reject(new Error('missing command'));
+    },
+    registerCommand: (name: string, run: (value?: unknown) => unknown) => {
       fakes.commands.set(name, run);
       return { dispose: () => {} };
     },
   },
 }));
+vi.mock('node:crypto', () => ({ randomUUID: () => 'test-epoch' }));
 vi.mock('node:os', () => ({ homedir: () => '/home' }));
 vi.mock('@ai-pair/core', () => ({
   Bridge: fakes.FakeBridge,
   Controller: fakes.FakeController,
   isSavedSession: vi.fn(() => false),
 }));
-vi.mock('@ai-pair/protocol', () => ({ discoveryDir: () => '/discovery' }));
+vi.mock(import('@ai-pair/protocol'), async (original) => ({ ...(await original()), discoveryDir: () => '/discovery' }));
+vi.mock('../src/panel_placement', () => ({
+  PanelPlacement: class {
+    constructor(private readonly options: import('../src/panel_placement').PanelPlacementOptions) {
+      fakes.placementOptions = options;
+    }
+    choose(): Promise<'companion' | 'legacy' | 'remote-text'> {
+      if (fakes.placementChoice !== undefined) return fakes.placementChoice;
+      if (fakes.companionAvailable) {
+        this.options.beforeCommit?.();
+        return Promise.resolve('companion');
+      }
+      return Promise.resolve(this.options.remote ? 'remote-text' : 'legacy');
+    }
+  },
+}));
+vi.mock('../src/workspace_session', () => ({
+  WorkspaceSession: class {
+    narration = { speak: vi.fn(() => Promise.resolve()), pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() };
+    constructor(options: import('../src/workspace_session').WorkspaceSessionOptions) {
+      fakes.workspaceOptions = options;
+      fakes.session = this;
+    }
+    accept = vi.fn(() => true);
+    pageReady = vi.fn(() => true);
+    dispose = vi.fn();
+  },
+}));
 vi.mock('../src/demo', () => ({ playDemo: vi.fn(() => Promise.resolve()) }));
 vi.mock('../src/editor', () => ({ VsCodeEditor: fakes.FakeEditor }));
 vi.mock('../src/diagnostics', () => ({ Diagnostics: fakes.FakeDiagnostics }));
@@ -504,10 +581,10 @@ function activated(given = context()) {
 }
 
 /** Runs the command registered as `name`. */
-function command(name: string): unknown {
+function command(name: string, value?: unknown): unknown {
   const run = fakes.commands.get(name);
   if (run === undefined) throw new Error(`No command ${name}.`);
-  return run();
+  return run(value);
 }
 
 /** Fires event `name` with `value`. */
@@ -539,6 +616,17 @@ beforeEach(() => {
   fakes.made.starting = Promise.resolve();
   fakes.made.arms = true;
   fakes.answer = undefined;
+  fakes.companionAvailable = false;
+  fakes.placementChoice = undefined;
+  fakes.session = undefined;
+  fakes.frameAccepted = true;
+  fakes.diagnosticsInvalid = false;
+  fakes.diagnosticsReject = false;
+  fakes.placementOptions = undefined;
+  fakes.workspaceOptions = undefined;
+  fakes.commandCalls.length = 0;
+  fakes.failedCommands.clear();
+  fakes.providerRegistered.mockClear();
 });
 
 afterEach(() => {
@@ -548,6 +636,7 @@ afterEach(() => {
   if (originalPlatform !== undefined) Object.defineProperty(process, 'platform', originalPlatform);
   if (originalArch !== undefined) Object.defineProperty(process, 'arch', originalArch);
   fakes.listeners.clear();
+  fakes.remoteName = undefined;
   fakes.settings.clear();
   fakes.delaySettings = false;
   fakes.providerGate = undefined;
@@ -643,13 +732,15 @@ describe('activate', () => {
 
   it('exposes the same preview service and page readiness to integration tests', async () => {
     const h = activated();
+    await h.api.ready;
     expect(h.api.speechPageReady()).toBe(true);
     await h.api.previewSpeech();
     expect(fakes.made.speech.at(-1)?.preview.mock.calls).toEqual([[]]);
   });
 
-  it('exposes only the latest speech state and whether that unit started', () => {
+  it('exposes only the latest speech state and whether that unit started', async () => {
     const h = activated();
+    await h.api.ready;
     const speech = fakes.made.speech.at(-1);
     if (speech === undefined) throw new Error('Missing speech');
     expect(h.api.speechStatus()).toBeUndefined();
@@ -766,7 +857,7 @@ describe('activate', () => {
     const h = activated();
     const speech = fakes.made.speech.at(-1);
     if (!speech) throw new Error('Missing speech service');
-    expect(h.controller.narration).toBe(speech);
+    expect(h.controller.narration).toBeDefined();
     expect(speech.options.settings()).toEqual({
       enabled: false,
       provider: 'kokoro',
@@ -940,6 +1031,7 @@ describe('activate', () => {
   it('restores only a newly selected catalog voice after the key reset is saved', async () => {
     fakes.settings.set('speech.elevenLabsVoice', 'old');
     const h = activated();
+    await h.api.ready;
     const catalog = last(fakes.made.catalogs);
     fire('secrets', { key: 'aiPair.elevenLabs.apiKey' });
     await vi.waitFor(() => {
@@ -1002,6 +1094,7 @@ describe('activate', () => {
 
   it('KeyClearsVoice: clears an old account voice even while a settings save is pending', async () => {
     const h = activated();
+    await h.api.ready;
     const gate = Promise.withResolvers<void>();
     fakes.providerGate = gate.promise;
     h.panel.wiring.speech.settings.set({
@@ -1024,6 +1117,7 @@ describe('activate', () => {
   it('KeyClearsVoice: keeps the old account voice unavailable when a key-reset write fails', async () => {
     fakes.settings.set('speech.elevenLabsVoice', 'old-account-voice');
     const h = activated();
+    await h.api.ready;
     const gate = Promise.withResolvers<void>();
     fakes.providerGate = gate.promise;
     fire('secrets', { key: 'aiPair.elevenLabs.apiKey' });
@@ -1503,4 +1597,154 @@ it('never discovers native outputs on a remote host', async () => {
   const prefs = last(fakes.made.outputs);
   expect(await prefs.wiring.discover()).toEqual({ supported: false, devices: [], reason: 'unsupported' });
   fakes.remoteName = undefined;
+});
+
+it('selects the local companion without registering a workspace panel provider', async () => {
+  fakes.companionAvailable = true;
+  const h = activated();
+  await h.api.ready;
+  expect(fakes.providerRegistered).not.toHaveBeenCalled();
+  expect(fakes.commands.has('aiPair.localAudio.workspace')).toBe(true);
+  await h.api.previewSpeech();
+  expect(fakes.commandCalls.some(([name]) => name === 'aiPair.localAudio.preview')).toBe(true);
+  expect(h.api.speechPageReady()).toBe(true);
+  expect(h.api.speechStatus()).toBeUndefined();
+  await h.panel.wiring.copyDiagnostics();
+  const copied = vi.mocked(vscode.env.clipboard, { deep: true }).writeText.mock.calls.at(-1)?.[0];
+  expect(copied).toContain('localSpeech');
+  expect(copied).toContain('abcdef');
+});
+
+it('holds narration and secret changes while placement is pending, then selects legacy', async () => {
+  const choice = Promise.withResolvers<'legacy'>();
+  fakes.placementChoice = choice.promise;
+  const h = activated();
+  await h.controller.narration.speak('pending');
+  h.controller.narration.pause();
+  h.controller.narration.resume();
+  h.controller.narration.cancel();
+  fire('secrets', { key: 'aiPair.elevenLabs.apiKey' });
+  expect(fakes.providerRegistered).not.toHaveBeenCalled();
+  expect(command('aiPair.localAudio.workspace', { example: true })).toBe(false);
+  choice.resolve('legacy');
+  await h.api.ready;
+  const speech = last(fakes.made.speech);
+  await h.controller.narration.speak('legacy');
+  h.controller.narration.pause();
+  h.controller.narration.resume();
+  h.controller.narration.cancel();
+  expect(speech.speak).toHaveBeenCalledWith('legacy');
+  expect(speech.pause).toHaveBeenCalled();
+  expect(speech.resume).toHaveBeenCalled();
+  expect(speech.cancel).toHaveBeenCalled();
+  expect(fakes.providerRegistered).toHaveBeenCalledOnce();
+});
+
+it('routes companion controls, keys, frame acknowledgements and connection notices locally', async () => {
+  fakes.companionAvailable = true;
+  const h = activated();
+  await h.api.ready;
+  fire('secrets', { key: 'aiPair.elevenLabs.apiKey' });
+  const session = fakes.session;
+  const options = fakes.workspaceOptions;
+  if (session === undefined || options === undefined) throw new Error('No session');
+  await h.controller.narration.speak('hello');
+  h.controller.narration.pause();
+  h.controller.narration.resume();
+  h.controller.narration.cancel();
+  expect(session.narration.speak).toHaveBeenCalledWith('hello');
+  expect(session.narration.pause).toHaveBeenCalledOnce();
+  expect(session.narration.resume).toHaveBeenCalledOnce();
+  expect(session.narration.cancel).toHaveBeenCalledOnce();
+  expect(command('aiPair.localAudio.workspace', { example: true })).toBe(true);
+  expect(session.accept).toHaveBeenCalledWith({ example: true });
+  await command('aiPair.setElevenLabsKey');
+  await command('aiPair.removeElevenLabsKey');
+  expect(fakes.commandCalls.map(([name]) => name)).toContain('aiPair.localAudio.keySet');
+  expect(fakes.commandCalls.map(([name]) => name)).toContain('aiPair.localAudio.keyRemove');
+  const frame = { version: 1 as const, connectionEpoch: 'test-epoch', sequence: 1, type: 'heartbeat' as const };
+  await expect(options.send(frame)).resolves.toBeUndefined();
+  fakes.frameAccepted = false;
+  await expect(options.send(frame)).rejects.toThrow('not accepted');
+  options.lost();
+  options.unavailable?.();
+  expect(fakes.infos.some((message) => message.includes('lost its local audio'))).toBe(true);
+  expect(fakes.infos.some((message) => message.includes('too large'))).toBe(true);
+});
+
+it('exposes fixed prepare and commit commands and merges only valid local diagnostics', async () => {
+  fakes.companionAvailable = true;
+  const h = activated();
+  await h.api.ready;
+  const placement = fakes.placementOptions;
+  if (placement === undefined) throw new Error('No placement');
+  const prepared = { version: 1 as const, epoch: 'test-epoch', token: 'token' };
+  await expect(placement.prepare()).resolves.toEqual(prepared);
+  await expect(placement.commit(prepared)).resolves.toBe(true);
+  for (const mode of ['invalid', 'rejected']) {
+    fakes.diagnosticsInvalid = mode === 'invalid';
+    fakes.diagnosticsReject = mode === 'rejected';
+    await h.panel.wiring.copyDiagnostics();
+    const copied = vi.mocked(vscode.env.clipboard).writeText.mock.calls.at(-1)?.[0];
+    expect(copied).toBe('{"safe":"snapshot","localSpeech":"unavailable"}');
+    expect(copied).not.toContain('private');
+  }
+});
+
+it('remote text routes preview and key actions to local installation, including the chosen install action', async () => {
+  fakes.remoteName = 'ssh-remote';
+  fakes.answer = 'Install VSIX...';
+  const h = activated();
+  await h.api.ready;
+  await h.api.previewSpeech();
+  await command('aiPair.setElevenLabsKey');
+  await command('aiPair.removeElevenLabsKey');
+  expect(h.api.speechPageReady()).toBe(false);
+  expect(fakes.providerRegistered).toHaveBeenCalledOnce();
+  expect(fakes.commandCalls.some(([name]) => name === 'workbench.extensions.action.installVSIX')).toBe(true);
+});
+
+it('does not register a provider when placement resolves after shutdown', async () => {
+  const choice = Promise.withResolvers<'legacy'>();
+  fakes.placementChoice = choice.promise;
+  const h = activated();
+  for (const disposable of h.context.subscriptions) disposable.dispose();
+  choice.resolve('legacy');
+  await h.api.ready;
+  expect(fakes.providerRegistered).not.toHaveBeenCalled();
+  expect(() => fakes.placementOptions?.beforeCommit?.()).toThrow('Window is closing');
+});
+
+it('keeps companion command failures private and does not change panel ownership', async () => {
+  fakes.companionAvailable = true;
+  const h = activated();
+  await h.api.ready;
+  const placement = fakes.placementOptions;
+  if (placement === undefined) throw new Error('No placement');
+  const prepared = { version: 1 as const, epoch: 'test-epoch', token: 'token' };
+  fakes.failedCommands.add('aiPair.localAudio.prepare');
+  fakes.failedCommands.add('aiPair.localAudio.commit');
+  fakes.failedCommands.add('aiPair.localAudio.keySet');
+  fakes.failedCommands.add('aiPair.localAudio.keyRemove');
+  await expect(placement.prepare()).rejects.toThrow();
+  await expect(placement.commit(prepared)).rejects.toThrow();
+  await command('aiPair.setElevenLabsKey');
+  await command('aiPair.removeElevenLabsKey');
+  expect(fakes.errors).toContain('Could not save the ElevenLabs API key.');
+  expect(fakes.errors).toContain('Could not remove the ElevenLabs API key.');
+  expect(fakes.providerRegistered).not.toHaveBeenCalled();
+  expect(fakes.errors.join(' ')).not.toContain('private');
+});
+
+it('does not refresh workspace credentials when a pending secret change resolves to companion', async () => {
+  const choice = Promise.withResolvers<'companion'>();
+  fakes.placementChoice = choice.promise;
+  fakes.companionAvailable = true;
+  const h = activated();
+  fire('secrets', { key: 'aiPair.elevenLabs.apiKey' });
+  fakes.placementOptions?.beforeCommit?.();
+  choice.resolve('companion');
+  await h.api.ready;
+  expect(h.context.secrets.get).not.toHaveBeenCalled();
+  expect(fakes.providerRegistered).not.toHaveBeenCalled();
 });
