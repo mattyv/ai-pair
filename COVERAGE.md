@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: tla, 2026-11-07.
+Last updated: css, 2026-11-07.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -186,8 +186,9 @@ Last updated: tla, 2026-11-07.
 | `scripts/lint_tla.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/lint_web.test.ts` | TypeScript | test | test | test | test | - | test |
 | `scripts/lint_web.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `scripts/normalize_architecture.test.ts` | TypeScript | - | - | test | - | - | - |
-| `scripts/normalize_architecture.ts` | TypeScript | - | - | - | - | - | - |
+| `scripts/normalize_architecture.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
+| `scripts/normalize_architecture.test.ts` | TypeScript | test | - | test | - | - | test |
+| `scripts/normalize_architecture.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/release.test.ts` | TypeScript | test | test | test | test | - | test |
 | `scripts/release.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/stylelint.config.ts` | TypeScript | - | - | - | - | - | - |

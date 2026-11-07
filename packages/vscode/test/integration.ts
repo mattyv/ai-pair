@@ -248,11 +248,12 @@ export async function run(): Promise<void> {
   const other = await vscode.workspace.openTextDocument(file('other.txt'));
   await controller.start('other edits');
   await controller.step([{ move: { file: 'tool.txt', line: 1, to: 'line_end' } }, { type_fast: `${'x'.repeat(200)}${CURSOR_MARKER}` }]);
-  const queued = controller.step([{ type: `abc${CURSOR_MARKER}` }]);
+  const queued = controller.step([{ move: { file: 'tool.txt', to: 'line_end' } }, { type: `abc${CURSOR_MARKER}` }]);
   await sleep(1500);
   fs.writeFileSync(file('other.txt'), 'after\n');
   await until(() => other.getText() === 'after\n');
   const first = await queued;
+  assert.equal(first.rejected, undefined, JSON.stringify(first.rejected));
   assert.deepEqual(
     first.batches.map((b) => b.status),
     ['completed'],
@@ -267,8 +268,8 @@ export async function run(): Promise<void> {
   // ...and a save participant, trimming what the agent typed when its batch is saved: its change isn't
   // the programmer's, and the batch queued behind it, planned against the untrimmed text, is discarded.
   await vscode.workspace.getConfiguration('files').update('trimTrailingWhitespace', true, vscode.ConfigurationTarget.Global);
-  await controller.step([{ type: `\nend   ${CURSOR_MARKER}` }]);
-  const trimmed = await controller.step([{ type: `!${CURSOR_MARKER}` }]);
+  await controller.step([{ move: { file: 'tool.txt', to: 'line_end' } }, { type: `\nend   ${CURSOR_MARKER}` }]);
+  const trimmed = await controller.step([{ move: { file: 'tool.txt', to: 'line_end' } }, { type: `!${CURSOR_MARKER}` }]);
   const trimDone = await controller.step([]);
   await vscode.workspace.getConfiguration('files').update('trimTrailingWhitespace', undefined, vscode.ConfigurationTarget.Global);
   assert.deepEqual(
@@ -436,10 +437,15 @@ export async function run(): Promise<void> {
     { type: 'x' },
     { type: `${CURSOR_MARKER}x${CURSOR_MARKER}` },
   ];
+  fs.writeFileSync(file('refusals.txt'), 'a\n');
+  await refusing.call('read', { file: 'refusals.txt' });
   for (const action of refusals) {
+    // Name the file before an edit so this exercises action validation after the file fence.
+    const actions =
+      'delete' in action || 'type' in action ? [{ move: { file: 'refusals.txt', line: 1, to: 'line_end' } }, action] : [action];
     // The editor answers a step with a report.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const answer = (await refusing.call('step', { actions: [action] })) as Report;
+    const answer = (await refusing.call('step', { actions })) as Report;
     const expected = fieldsProblem(action) ?? ('type' in action ? typeProblem(action.type) : undefined);
     assert.equal(answer.rejected?.error.kind, 'invalid_action', JSON.stringify(action));
     if (expected !== undefined) {
@@ -794,7 +800,7 @@ export async function run(): Promise<void> {
   await controller.end();
   console.log('an interrupt while a run saves stops it, without asking');
 
-  // A batch interrupted after a type with nothing to type changed nothing, so it's discarded (specs/Actions.tla).
+  // An empty type changes no text; the named move is reported when the batch is interrupted (specs/Actions.tla).
   fs.writeFileSync(file('nothing.txt'), 'a\n');
   await controller.start('nothing');
   await controller.read('nothing.txt');
@@ -806,15 +812,17 @@ export async function run(): Promise<void> {
     if (++eols === 2) controller.userInterrupt();
     return eol(f);
   };
-  await controller.step([{ type: CURSOR_MARKER }, { say: 'Typed.' }]);
+  await controller.step([{ move: { file: 'nothing.txt', to: 'line_end' } }, { type: CURSOR_MARKER }, { say: 'Typed.' }]);
   const untyped = await controller.listen();
   api.editor.eol = eol;
   assert.deepEqual(
     untyped.batches.map((b) => b.status),
-    ['discarded'],
+    ['interrupted'],
   );
+  assert.deepEqual(untyped.batches[0]?.unplayed, [{ say: 'Typed.' }]);
+  assert.equal(await buffer('nothing.txt'), 'a\n');
   await controller.end();
-  console.log('a batch interrupted after a type with nothing to type is discarded');
+  console.log('an interrupted empty type leaves the text unchanged');
 
   // A pause holds a sleep with what is left of it, and the resume plays the rest (specs/Timeline.tla, `Pause`,
   // `Resume`). An interrupt while a move waits for its file to show cuts the move's next pause at once, and the
@@ -963,7 +971,7 @@ export async function run(): Promise<void> {
   controller.setSpeed(1);
   await controller.start('interrupt test');
   await controller.step([{ move: { file: 'scratch.ts', line: 1, to: 'line_end' } }, { type: `${alphabet}${CURSOR_MARKER}` }]);
-  const pending = controller.step([{ type: `!${CURSOR_MARKER}` }]);
+  const pending = controller.step([{ move: { file: 'scratch.ts', to: 'line_end' } }, { type: `!${CURSOR_MARKER}` }]);
   // Past the pauses around moving into a new file (~1 s), and into the typing.
   await sleep(1500);
   const doc = await vscode.workspace.openTextDocument(file('scratch.ts'));
@@ -1315,9 +1323,10 @@ export async function run(): Promise<void> {
     }
     await running;
   }
-  await vscode.env.clipboard.writeText('');
+  const clipboardBefore = 'ai-pair integration: picker was closed';
+  await vscode.env.clipboard.writeText(clipboardBefore);
   await setUpAgents([]);
-  assert.equal(await vscode.env.clipboard.readText(), '');
+  assert.equal(await vscode.env.clipboard.readText(), clipboardBefore);
   await setUpAgents([5]);
   const copied: unknown = JSON.parse(await vscode.env.clipboard.readText());
   assert.deepEqual(copied, { mcpServers: { pair: { command: api.launcher, args: [] } } });
