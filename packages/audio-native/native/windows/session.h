@@ -18,6 +18,7 @@ class Session {
  public:
   Session(Backend& backend, std::function<void(const char*)> emit) : backend_(backend), emit_(emit) {}
   bool done() const { return state_ == State::done; }
+  bool failed() const { return failed_; }
   void command(const Command& c) {
     if (done()) return;
     if (c.sequence != next_++) { finish("failed"); return; }
@@ -48,7 +49,7 @@ class Session {
   void invalid() { if (!done()) finish("failed"); }
  private:
   enum class State { initial, ready, playing, paused, done };
-  void finish(const char* outcome) { bool closed=backend_.close(); state_=State::done; emit_(closed ? outcome : "failed"); emit_("retired"); }
-  Backend& backend_; std::function<void(const char*)> emit_; State state_=State::initial; uint64_t next_=0; std::vector<unsigned char> wav_;
+  void finish(const char* outcome) { bool closed=backend_.close(); failed_=!closed || std::string(outcome)=="failed"; state_=State::done; emit_(failed_ ? "failed" : outcome); emit_("retired"); }
+  Backend& backend_; std::function<void(const char*)> emit_; State state_=State::initial; uint64_t next_=0; bool failed_=false; std::vector<unsigned char> wav_;
 };
 }

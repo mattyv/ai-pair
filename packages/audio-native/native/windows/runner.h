@@ -28,6 +28,6 @@ inline int run_session(audio::Backend& backend) {
     if (invalid) session.invalid(); else if (has_line) { audio::Command command; if (!audio::parse_command(line,command)) session.invalid(); else session.command(command); } else if (eof) session.eof();
     session.tick();
   }
-  return 0;
+  return session.failed() ? 1 : 0;
 }
 }
