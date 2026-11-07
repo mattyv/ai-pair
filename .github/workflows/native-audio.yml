@@ -36,6 +36,7 @@ jobs:
           machine="$(uname -m)"
           if [[ ( "$machine" == "x86_64" && "${{ matrix.arch }}" == "x64" ) || ( "$machine" == "arm64" && "${{ matrix.arch }}" == "arm64" ) ]]; then
             node packages/audio-native/native/macos/smoke.mjs "native-build/audio-darwin-${{ matrix.arch }}"
+            node packages/audio-native/test/native-silent-smoke.mjs "native-build/audio-darwin-${{ matrix.arch }}"
           else
             echo "Native smoke unavailable on this runner architecture; compile only."
           fi
@@ -81,4 +82,5 @@ jobs:
           protocol-test.exe || exit /b 1
           session-test.exe || exit /b 1
           python packages\audio-native\native\windows\tests\process_test.py .\process-fixture.exe || exit /b 1
-          node packages\audio-native\test\windows-smoke.mjs .\audio-win32-x64.exe
+          node packages\audio-native\test\windows-smoke.mjs .\audio-win32-x64.exe || exit /b 1
+          node packages\audio-native\test\native-silent-smoke.mjs .\audio-win32-x64.exe
