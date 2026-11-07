@@ -180,3 +180,10 @@ it('accepts an explicit multi-close acknowledgment and rejects false', () => {
   expect(STEP.parse(input)).toEqual(input);
   expect(JSON.stringify(z.toJSONSchema(STEP, { unrepresentable: 'any' }))).toContain('allow_multiple_closes');
 });
+
+it('tells the agent to select concise speech without overriding the user setting', () => {
+  const schema = JSON.stringify(z.toJSONSchema(STEP, { unrepresentable: 'any' }));
+  expect(schema).toContain('Select concise narration for speech');
+  expect(schema).toContain('when the programmer enables speech');
+  expect(schema).not.toContain('Request local speech');
+});

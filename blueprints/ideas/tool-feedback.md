@@ -108,3 +108,25 @@ after an informational message, and the agent continued after a long pause. The
 label can imply that a reply is required even when no question was asked. Clarify
 that replying is optional and the agent may continue after waiting; do not infer
 a disconnection from this status.
+
+## Follow-up: 0.18.0 host report
+
+The programmer's latest report concerns build `0.18.0-0c4255050a0a` where
+noted below. User-verified results, historical observations, and source analysis
+are distinguished; historical reports have not been reproduced on this build.
+
+| ID | Status | Report and current evidence |
+|---|---|---|
+| B1 | Resolved, user verified | Typing a docstring with triple quotes was previously misclassified as a programmer edit and interrupted. The programmer reports that it now passes on 0.18.0. |
+| B2 | Documented behavior | `newline` indentation is relative to the current line. The contract was clarified in 0.12; use the documented relative indentation. |
+| B3 | Open; verified in automated test | A programmer message interrupted typing within a token and discarded the queued batch. The current in-memory test reproduces `unknown` left as `unk`, reports `nown` as unplayed, and reports the queued batch as discarded. The historical host observation still needs a 0.18.0 host retest. |
+| B4 | Open on 0.18.0-0c4255050a0a | A `run` at the end of a batch stalled, leaving the next batch waiting. The host cause remains unconfirmed; do not treat the command or subsequent batch as completed without its report. |
+| B5 | Historical; retest needed | After `no_editor` and a new `start`, the programmer observed lost cursor, turn, and queue. Current code suspends a disconnected session and resumes it for the same directory; it deliberately discards queued work on disconnect. A different directory starts a new session. This does not establish what happened in the historical host incident. |
+| B6 | Resolved, user verified | `newline` was refused after a dict comprehension on the same line. The programmer reports that it now works on 0.18.0. |
+| B7 | Open on 0.18.0-0c4255050a0a | While the run was stalled and a later edit waited, `read` showed the queued edit although the disk did not. `read` is specified to return the projected post-queue text; its `dirty` flag describes the actual editor buffer and does not establish that projected text was applied or saved. The missing distinction in the result can make the projection look like completion evidence. |
+| B8 | By design; usability feedback | A batch is restricted to one file, including a point-only explanation. The guide states the constraint; the programmer reports friction with it. |
+
+A useful regression would hold a command open, queue a real edit, and compare
+projected `read` text, the editor buffer, and disk before and after completion or
+interruption. Preserve the documented projection contract while investigating
+an explicit projection indicator; do not infer the cause of B4 from B7 alone.

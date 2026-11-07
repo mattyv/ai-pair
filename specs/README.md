@@ -1935,7 +1935,9 @@ session eventually stay present and all pauses and holds eventually clear.
 The integration-only speech observation records `ended` or page failure only
 when the service accepts a callback for the current generation and page; idle
 after cancellation is not playback completion. The model abstracts the audio
-transport and the full queue implementation.
+transport and the full queue implementation. The agent guide now recommends
+selecting useful narration without a per-session prompt; this changes the
+instruction, not the modeled speech or reading gates.
 
 ### `ReadingHold`: scoped timer holds
 

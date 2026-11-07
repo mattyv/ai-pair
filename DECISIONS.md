@@ -63,8 +63,10 @@ Issue discussions and working notes hold the detailed evidence and history.
     stale callbacks, and stop rather than fall back when the chosen output
     disappears. Native pause stops the client; already-buffered audio can finish
     briefly. Stop and parent-death cleanup must also work while paused.
--   Speak only explicitly selected, bounded agent narration; default to off.
-    Keep the written text visible, and do not replay speech from history.
+-   Have the agent proactively select useful, bounded narration for speech; do
+    not read every message. Playback remains off by default and follows the
+    programmer's provider and speech setting. Keep text visible when disabled
+    or unavailable, and do not replay speech from history.
 -   Use independent voice speed and run speech and reading timers concurrently;
     completion waits for both. The reading control changes only the timer.
 -   Run locally on supported Linux x64 glibc desktop hosts. An explicit setup

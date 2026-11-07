@@ -100,7 +100,12 @@ const actionSchema = z.union(
         .describe(
           "Narrate right before the actions it describes: what you're doing, why, and how your code does it. It's about your code and your choices, not how the language or its libraries work (unless the programmer asked to learn them). Explain the code, don't recite it. One to three sentences; `backticks` render as code. Playback pauses so the programmer can read it.",
         ),
-      speak: z.boolean().optional().describe('Request local speech for this short narration when enabled.'),
+      speak: z
+        .boolean()
+        .optional()
+        .describe(
+          'Select concise narration for speech even if you do not know the setting. Playback occurs only when the programmer enables speech. Use at most one spoken say per batch and wait for the previous selected narration and report. The selected provider handles playback; the text remains visible when disabled.',
+        ),
     }).superRefine((narration, ctx) => {
       if (narration.speak === true) {
         const problem = speechProblem(narration.say);

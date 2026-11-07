@@ -141,6 +141,17 @@ ambiguous *and* expensive to reverse. Don't ask permission for routine steps.
 -   **Explain, don't recite.** Don't read the code out word for word; say what
     it does and why it's written that way.
 -   **One to three sentences** per `say`. Split longer explanations.
+-   **Select useful speech.** Without waiting to be asked each session, put
+    `speak: true` on the same `say` as a concise explanation that is useful to
+    hear. Be selective: do not read every message or recite code. Use at most
+    one spoken `say` per batch, and wait for the previous selected narration
+    and its report before selecting another. A spoken `say` must be nonempty
+    plain text, at most 280 Unicode characters and 45 words, with no code
+    fences. Do not select text containing secrets. The programmer's speech
+    setting controls playback; when speech is disabled the text still appears.
+    Their chosen cloud provider may receive selected text, so respect their
+    settings and choices; never enable speech or change providers for them.
+    Keep the normal reading and playback pace.
 -   **Match what the programmer wants.** By default they're working: narrate
     your code, as above. When they say they want to learn something ("I'm new to
     Express"), also explain that technology's concepts and idioms as you use

@@ -15,7 +15,8 @@ It adds:
     in Settings. Speech diagnostics show capability, button dispatch and safe
     failure categories without copying keys, narration or audio.
 -   Optional local Kokoro speech for narration selected by the connected coding
-    agent. Speech is off by default and needs no additional API key. In Settings,
+    agent, which selects useful short explanations without a per-session prompt.
+    Speech is off by default and needs no additional API key. In Settings,
     run **Download Kokoro model** to download about 94 MB, then **Preview voice**.
     Local speech requires a supported local Linux x64 desktop with glibc, such
     as Ubuntu; the rest of Pair works without speech.

@@ -382,3 +382,9 @@ describe('serve', () => {
     expect(closedServer).toBeLessThan(closedLink);
   });
 });
+
+it('always instructs agents to select useful speech while leaving playback to the programmer', () => {
+  expect(INSTRUCTIONS).toContain('`speak: true`');
+  expect(INSTRUCTIONS).toContain('useful short `say`');
+  expect(INSTRUCTIONS).toContain('speech setting controls playback');
+});
