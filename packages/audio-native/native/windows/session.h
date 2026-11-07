@@ -10,6 +10,8 @@ struct Backend {
   virtual bool resume() = 0;
   virtual int pump() = 0;
   virtual bool healthy() = 0;
+  // Always releases the stream and its resources before returning. False means
+  // a stop or reset operation failed, not that the stream remains owned.
   virtual bool close() = 0;
 };
 class Session {

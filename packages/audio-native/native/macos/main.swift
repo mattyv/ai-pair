@@ -78,17 +78,17 @@ private func list() -> Never {
 }
 
 // Strict, bounded line framing; the reader stays running while playback is paused.
-private func lines(_ receive: (Data) -> Bool) {
+private func lines(_ receive: (Data) -> Bool) -> Bool {
   var pending = Data()
   while true {
     let chunk = try? FileHandle.standardInput.read(upToCount: 4096)
-    guard let chunk, !chunk.isEmpty else { return }
+    guard let chunk, !chunk.isEmpty else { return pending.isEmpty }
     for byte in chunk {
       if byte == 10 {
-        if !receive(pending) { return }
+        if !receive(pending) { return false }
         pending.removeAll(keepingCapacity: true)
       } else {
-        if pending.count >= maxLine { return }
+        if pending.count >= maxLine { return false }
         pending.append(byte)
       }
     }
@@ -103,15 +103,13 @@ private final class Player {
   private var paused = false
   private var draining = false
   private var terminal = false
-  private let lock = NSLock()
+  private let control = DispatchQueue(label: "ai.pair.audio.control")
 
   private func finish(_ outcome: String) {
-    lock.lock()
-    guard !terminal else { lock.unlock(); return }
+    guard !terminal else { return }
     terminal = true
     let current = queue
     queue = nil
-    lock.unlock()
     if let current {
       _ = AudioQueueStop(current, true)
       guard AudioQueueDispose(current, true) == noErr else {
@@ -124,20 +122,24 @@ private final class Player {
     exit(outcome == "failed" ? 1 : 0)
   }
 
-  func stop() { finish("canceled") }
+  func stop() { control.sync { finish("canceled") } }
+  func fail() { control.sync { finish("failed") } }
 
-  private func bufferConsumed(_ queue: AudioQueueRef) {
-    lock.lock()
-    guard !terminal else { lock.unlock(); return }
-    draining = true
-    let shouldDrain = playing && !paused
-    lock.unlock()
-    if shouldDrain && AudioQueueStop(queue, false) != noErr { finish("failed") }
+  func receive(_ data: Data) -> Bool { control.sync { handle(data) } }
+
+  private func bufferConsumed(_ callbackQueue: AudioQueueRef) {
+    control.async {
+      guard !self.terminal, self.queue == callbackQueue else { return }
+      self.draining = true
+      if self.playing && !self.paused && AudioQueueStop(callbackQueue, false) != noErr { self.finish("failed") }
+    }
   }
 
-  func receive(_ data: Data) -> Bool {
+  private func handle(_ data: Data) -> Bool {
     guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-      json["version"] as? Int == 1, json["sequence"] as? Int == sequence,
+      let version = json["version"] as? NSNumber, CFGetTypeID(version) != CFBooleanGetTypeID(), version.intValue == 1, version.doubleValue == 1,
+      let ordinal = json["sequence"] as? NSNumber, CFGetTypeID(ordinal) != CFBooleanGetTypeID(),
+      ordinal.doubleValue == Double(sequence), ordinal.intValue == sequence,
       let type = json["type"] as? String else { finish("failed"); return false }
     sequence += 1
     switch type {
@@ -161,36 +163,38 @@ private final class Player {
       var aliveAddress = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyDeviceIsAlive, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
       guard AudioObjectAddPropertyListener(selected.2, &aliveAddress, { device, _, _, context in
         guard let context else { return noErr }
-        var alive: UInt32 = 0
-        var size = UInt32(MemoryLayout<UInt32>.size)
-        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyDeviceIsAlive, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
-        let status = AudioObjectGetPropertyData(device, &address, 0, nil, &size, &alive)
-        if status != noErr || alive == 0 {
-          let player = Unmanaged<Player>.fromOpaque(context).takeUnretainedValue()
-          DispatchQueue.global().async { player.finish("failed") }
+        let player = Unmanaged<Player>.fromOpaque(context).takeUnretainedValue()
+        player.control.async {
+          guard !player.terminal else { return }
+          var alive: UInt32 = 0
+          var size = UInt32(MemoryLayout<UInt32>.size)
+          var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyDeviceIsAlive, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+          let status = AudioObjectGetPropertyData(device, &address, 0, nil, &size, &alive)
+          if status != noErr || alive == 0 { player.finish("failed") }
         }
         return noErr
       }, context) == noErr else { finish("failed"); return false }
       guard AudioQueueAddPropertyListener(created, kAudioQueueProperty_CurrentDevice, { context, queue, _ in
         guard let context else { return }
         let player = Unmanaged<Player>.fromOpaque(context).takeUnretainedValue()
-        var uid: CFString = "" as CFString
-        var size = UInt32(MemoryLayout<CFString>.size)
-        let status = AudioQueueGetProperty(queue, kAudioQueueProperty_CurrentDevice, &uid, &size)
-        if status != noErr || (uid as String) != player.selectedUID {
-          DispatchQueue.global().async { player.finish("failed") }
+        player.control.async {
+          guard !player.terminal, player.queue == queue else { return }
+          var uid: CFString = "" as CFString
+          var size = UInt32(MemoryLayout<CFString>.size)
+          let status = AudioQueueGetProperty(queue, kAudioQueueProperty_CurrentDevice, &uid, &size)
+          if status != noErr || (uid as String) != player.selectedUID { player.finish("failed") }
         }
       }, context) == noErr else { finish("failed"); return false }
       guard AudioQueueAddPropertyListener(created, kAudioQueueProperty_IsRunning, { context, queue, _ in
         guard let context else { return }
         let player = Unmanaged<Player>.fromOpaque(context).takeUnretainedValue()
-        var running: UInt32 = 1
-        var size = UInt32(MemoryLayout<UInt32>.size)
-        if AudioQueueGetProperty(queue, kAudioQueueProperty_IsRunning, &running, &size) == noErr && running == 0 {
-          player.lock.lock()
-          let done = player.playing && player.draining && !player.paused && !player.terminal
-          player.lock.unlock()
-          if done { DispatchQueue.global().async { player.finish("ended") } }
+        player.control.async {
+          guard !player.terminal, player.queue == queue else { return }
+          var running: UInt32 = 1
+          var size = UInt32(MemoryLayout<UInt32>.size)
+          let status = AudioQueueGetProperty(queue, kAudioQueueProperty_IsRunning, &running, &size)
+          if status != noErr { player.finish("failed"); return }
+          if running == 0 && player.playing && player.draining && !player.paused { player.finish("ended") }
         }
       }, context) == noErr else { finish("failed"); return false }
       event("ready")
@@ -206,21 +210,26 @@ private final class Player {
       buffer.pointee.mAudioDataByteSize = UInt32(pcm.count)
       guard AudioQueueEnqueueBuffer(queue, buffer, 0, nil) == noErr, AudioQueueStart(queue, nil) == noErr else { finish("failed"); return false }
       event("started")
-      lock.lock(); playing = true; let shouldDrain = draining && !paused; lock.unlock()
+      playing = true
+      let shouldDrain = draining && !paused
       if shouldDrain && AudioQueueStop(queue, false) != noErr { finish("failed"); return false }
     case "pause":
       guard json.count == 3, let queue else { finish("failed"); return false }
-      lock.lock(); paused = true; lock.unlock()
-      guard AudioQueuePause(queue) == noErr else { finish("failed"); return false }
+      let validPause = playing && !paused && !terminal
+      if validPause { paused = true }
+      guard validPause, AudioQueuePause(queue) == noErr else { finish("failed"); return false }
       event("paused")
     case "resume":
-      guard json.count == 3, let queue, AudioQueueStart(queue, nil) == noErr else { finish("failed"); return false }
-      lock.lock(); paused = false; let shouldDrain = draining; lock.unlock()
+      guard json.count == 3, let queue else { finish("failed"); return false }
+      let validResume = playing && paused && !terminal
+      guard validResume, AudioQueueStart(queue, nil) == noErr else { finish("failed"); return false }
+      paused = false
+      let shouldDrain = draining
       event("resumed")
       if shouldDrain && AudioQueueStop(queue, false) != noErr { finish("failed"); return false }
     case "stop":
       guard json.count == 3 else { finish("failed"); return false }
-      stop()
+      finish("canceled")
     default:
       finish("failed")
       return false
@@ -232,7 +241,6 @@ private final class Player {
 if CommandLine.arguments == [CommandLine.arguments[0], "--list"] { list() }
 if CommandLine.arguments == [CommandLine.arguments[0], "--play"] {
   let player = Player()
-  lines { player.receive($0) }
-  player.stop()
+  if lines({ player.receive($0) }) { player.stop() } else { player.fail() }
 }
 exit(1)

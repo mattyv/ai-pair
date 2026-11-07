@@ -92,6 +92,7 @@ class Wasapi : public audio::Backend {
   bool close() override {
     bool ok=true;
     if (client_.get()) { if (FAILED(client_->Stop())) ok=false; if (FAILED(client_->Reset())) ok=false; }
+    // Release every COM interface even when Stop or Reset failed.
     render_.reset(); client_.reset(); device_.reset(); enumer_.reset(); data_=nullptr; return ok;
   }
  private:
