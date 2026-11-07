@@ -14,11 +14,13 @@ EXTENDS Naturals, PairDefs
 CONSTANTS
     Directories, \* the directories an agent may start from
     MaxSessions, \* how many sessions the model starts
+    ClearOnReplace, \* TRUE: a replacement session clears the old panel state
     PostOnRevive \* TRUE: `revive` tells the panel the session is suspended (the
                  \* fix of #138)
 
 ASSUME AssumeDirectories == Directories # {}
 ASSUME AssumeMaxSessions == MaxSessions \in Nat
+ASSUME AssumeClearOnReplace == ClearOnReplace \in BOOLEAN
 ASSUME AssumePostOnRevive == PostOnRevive \in BOOLEAN
 
 \* No directory: no session has started. Any value that is not a directory
@@ -130,14 +132,16 @@ Start(d) ==
     LET resumes == session = "suspended" /\ directory = d
         newId == IF resumes THEN id ELSE id + 1
         newMessage == IF resumes THEN messageWaiting ELSE FALSE
+        newShown == IF session = "suspended" /\ ~resumes /\ ~ClearOnReplace
+                    THEN shown ELSE "live"
     IN  /\ connected
         /\ session # "active"
         /\ session' = "active"
         /\ id' = newId
         /\ directory' = d
         /\ messageWaiting' = newMessage
-        /\ shown' = "live"
-        /\ Store("active", newId, d, newMessage, "live")
+        /\ shown' = newShown
+        /\ Store("active", newId, d, newMessage, newShown)
         /\ UNCHANGED connected
 
 \* The programmer ends the session from the panel. An active one ends, and its

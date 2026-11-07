@@ -27,6 +27,8 @@
   /* Secondary text. Not descriptionForeground, which some themes set equal to the text color. */
   --muted: color-mix(in srgb, var(--fg) 66%, transparent);
   --ok: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
+  --pause: var(--vscode-editorWarning-foreground, var(--fg));
+  --playing: var(--vscode-testing-iconPassed, var(--fg));
   --read: var(--vscode-aiPair-cursorRead, #facc15);
   --soft: color-mix(in srgb, var(--fg) 7%, transparent);
   --soft-hover: color-mix(in srgb, var(--fg) 13%, transparent);
@@ -156,25 +158,26 @@ button:focus-visible {
   min-height: calc(32px + var(--vscode-editor-font-size, 13px) * 3.9);
 }
 
-/* The header: the status and the controls. Without a session, the idle screen's title says it all. */
+/* The header keeps Settings available even without a session. */
 .head {
   align-items: center;
-  display: none;
+  display: flex;
   gap: 4px;
   height: 24px;
-}
-
-.active .head {
-  display: flex;
+  justify-content: flex-end;
 }
 
 .status {
   align-items: center;
-  display: flex;
+  display: none;
   flex: 1;
   font-size: 12px;
   gap: 12px;
   min-width: 0;
+}
+
+.active .status {
+  display: flex;
 }
 
 .status-text {
@@ -182,6 +185,31 @@ button:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.status-text:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.status-text.is-paused {
+  color: var(--pause);
+  font-weight: 700;
+}
+
+.status-text.is-playing {
+  color: var(--playing);
+}
+
+/* The status ring is a keyboard-accessible control during a reading pause. */
+.reading-control {
+  height: 20px;
+  min-width: 20px;
+  padding: 0;
+  width: 20px;
+}
+
+.reading-control .dot {
+  margin-left: 0;
 }
 
 /* The status dot. syncStatus in webview/panel.ts gives it a class for the agent's state. */
@@ -193,6 +221,10 @@ button:focus-visible {
   margin-left: 4px;
   position: relative;
   width: 7px;
+}
+
+.dot.paused-indicator {
+  background: var(--pause);
 }
 
 /* A message to read, or a command waiting for the programmer: the read color, pulsing. */
@@ -249,14 +281,20 @@ button:focus-visible {
   position: absolute;
 }
 
-/* The controls, shown only in a session. */
+/* Settings stays visible; session controls appear only in a session. */
 .controls {
+  align-items: center;
+  display: flex;
+  gap: 1px;
+}
+
+.session-controls {
   align-items: center;
   display: none;
   gap: 1px;
 }
 
-.active .controls {
+.active .session-controls {
   display: flex;
 }
 
@@ -286,7 +324,12 @@ button:focus-visible {
 }
 
 .end {
+  display: none;
   margin-left: 2px;
+}
+
+.active .end {
+  display: inline-flex;
 }
 
 /* The speed menus: playback speed and reading speed */
@@ -297,6 +340,16 @@ button:focus-visible {
 
 .speed {
   font-variant-numeric: tabular-nums;
+}
+
+[data-ui='code-mode']::after {
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid currentcolor;
+  content: '';
+  display: inline-block;
+  margin-left: 4px;
+  vertical-align: middle;
 }
 
 .speed-menu {
@@ -412,6 +465,10 @@ button:focus-visible {
 
 .run-box.on {
   display: block;
+}
+
+.run-box [hidden] {
+  display: none;
 }
 
 .run-label {
@@ -567,7 +624,7 @@ button:focus-visible {
   padding: 0 4px;
 }
 
-/* The history, newest first. entry() in webview/panel.ts gives each entry the class entry and its kind. */
+/* The history. entry() in webview/panel.ts gives each entry the class entry and its kind. */
 
 .history {
   color: var(--muted);
@@ -580,9 +637,19 @@ button:focus-visible {
   padding: 14px 14px 18px;
 }
 
+/* The order switch restores an explicit anchor; do not also apply browser anchoring. */
+.history.reordering {
+  overflow-anchor: none;
+}
+
 .entry {
   line-height: 1.5;
   overflow-wrap: anywhere;
+}
+
+/* The agent's messages use the theme foreground for readability. */
+.agent {
+  color: var(--fg);
 }
 
 /* you: the programmer's reply, as a bubble on the right. */
@@ -748,5 +815,137 @@ a:hover {
   .dot.read,
   .arrive {
     animation: none;
+  }
+}
+
+.settings-dialog {
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-widget-border);
+  box-sizing: border-box;
+  color: var(--fg);
+  font: inherit;
+  max-height: calc(100vh - 28px);
+  max-width: calc(100% - 28px);
+  overflow-y: auto;
+  padding: 18px;
+  width: min(480px, calc(100% - 28px));
+}
+
+/* Group the controls vertically so labels remain readable at panel widths. */
+.settings-dialog h1 {
+  font-size: 16px;
+  margin: 0 0 12px;
+}
+
+.settings-section {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.settings-section h2 {
+  font-size: 13px;
+  margin: 0;
+}
+
+.settings-section p {
+  color: var(--fg);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.settings-field {
+  display: grid;
+  gap: 4px;
+}
+
+.settings-check {
+  align-items: flex-start;
+  display: flex;
+  gap: 6px;
+}
+
+.settings-dialog select {
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, var(--border));
+  box-sizing: border-box;
+  color: var(--fg);
+  font: inherit;
+  min-height: 30px;
+  width: 100%;
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-actions button,
+.settings-footer button {
+  height: 30px;
+  padding: 0 12px;
+}
+
+.settings-actions button[hidden] {
+  display: none;
+}
+
+.settings-footer {
+  align-items: center;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding-top: 12px;
+}
+
+.oldest-first .band {
+  border-bottom: none;
+  border-top: 1px solid var(--border);
+}
+
+/* Identifies the running bundle, including when an update awaits a reload. */
+.build-identity {
+  color: var(--fg);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+/* Terminal controls */
+.run button {
+  flex: none;
+}
+
+/* Local speech */
+.speech-live:not([hidden]) {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+/* Keep controls reachable when the sidebar is narrow. */
+@media (max-width: 520px) {
+  .head {
+    flex-wrap: wrap;
+    height: auto;
+  }
+
+  .active .status {
+    flex: 1 0 100%;
+  }
+
+  .controls {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    width: 100%;
+  }
+
+  .session-controls {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    min-width: 0;
   }
 }

@@ -81,13 +81,17 @@ function send(event: object): void {
 
 /** The page's states, one message at a time; the selectors are checked after each. */
 const SCENARIO: object[] = [
+  { type: 'chatOrder', value: 'oldestFirst' },
   { type: 'canStart', value: true },
   { type: 'session', active: false, reason: 'agent', summary: 'Done: the API has its tests.' },
   { type: 'session', active: true, task: 'Add tests', rules: ['.ai-pair/GUIDE.md'] },
+  { type: 'speechPage', pageId: 1 },
+  { type: 'speechStatus', pageId: 1, id: 1, state: 'preparing' },
   { type: 'state', state: 'typing', turn: 'agent', paused: false },
   { type: 'say', text: 'Typing the test for `createTodo` in `src/todos.ts`, then a link: https://example.com.' },
   { type: 'reading', ms: 4000 },
   { type: 'state', state: 'read', turn: 'agent', paused: false },
+  { type: 'state', state: 'paused', turn: 'agent', paused: true },
   { type: 'state', state: 'thinking', turn: 'agent', paused: false },
   { type: 'state', state: 'running', turn: 'agent', paused: false },
   { type: 'state', state: 'absent', turn: 'agent', paused: false },

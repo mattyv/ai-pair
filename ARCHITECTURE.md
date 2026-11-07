@@ -11,7 +11,22 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes 0.2.0.
+Status: describes version 0.17.0.
+
+The source is `.archi/ai-pair.json`. To regenerate the page with
+Archi-Techture 1.5.1, set `ARCHI_TO_HTML` to its `out/tools/archi-to-html.js`
+path, then run:
+
+```bash
+node --input-type=module -e 'import {readFile,writeFile} from "node:fs/promises"; import {normalizeArchitecture as n} from "./scripts/normalize_architecture.ts"; const p=".archi/ai-pair.json"; await writeFile(p,await n(await readFile(p,"utf8"),"json"))'
+node "$ARCHI_TO_HTML" --title 'AI Pair architecture' .archi/ai-pair.json \
+  -o /tmp/ai-pair-archi-raw.html
+node --input-type=module -e 'import {readFile,writeFile} from "node:fs/promises"; import {normalizeArchitecture as n} from "./scripts/normalize_architecture.ts"; await writeFile("docs/ai-pair.html",await n(await readFile("/tmp/ai-pair-archi-raw.html","utf8"),"html"))'
+```
+
+The normalizer preserves the diagram data while formatting the export and
+representing Unicode with context-appropriate escapes. Validate the bundle
+with Archi's `validate-archi.js` and check the regenerated page in a browser.
 
 ## Components
 
@@ -37,9 +52,33 @@ Status: describes 0.2.0.
     editor dependencies, so it can be tested against a fake editor.
 -   **The VS Code adapter** is a thin layer over the VS Code API: apply edits
     with undo stops, report document changes, render decorations, scroll, save.
-    It tells the agent's edits apart from the programmer's by keeping a queue of
-    its own pending edits for each file, and matching each change VS Code
-    reports by its offset, deleted length, and text.
+    It identifies its own edits by keeping a queue of pending edits per file
+    and matching each change VS Code reports by offset, deleted length, and
+    text. An unmatched editor change is classified conservatively; this does
+    not establish that a person made it.
+-   **Command terminals** are owned by the VS Code adapter. Eligible idle Pair
+    terminals can be reused; explicit reveal uses the command ID and reports
+    unavailable if its terminal has closed or been reused. Automatic visibility
+    is an independent persisted preference.
+-   **Code playback** groups the existing atomic edits in the core. For line
+    and block modes, the editor adapter highlights each group while the panel
+    supplies the existing reading countdown control.
+-   **Session diagnostics** keep a bounded allowlisted lifecycle history in
+    the VS Code adapter, including speech readiness, button dispatch and fixed
+    error categories without requiring a pairing session. The panel requests a
+    snapshot explicitly; its clipboard
+    export contains no chat, code, paths, command text, output, or tokens.
+-   **Selected speech** is an optional port on the session controller. One
+    service owns playback, cancellation and page generations for both providers.
+    Kokoro uses a local CPU worker after explicit model setup. The optional
+    ElevenLabs client sends only selected narration or an explicit voice preview
+    to its fixed HTTPS API. Its API key stays in VS Code SecretStorage and is
+    read only in the extension host; the panel receives key-presence status and
+    bounded voice metadata. Cloud requests have independent deadlines and byte
+    limits. Both providers produce bounded WAV audio for the current webview.
+    Page replacement and interruption invalidate the active unit. Speech and
+    reading complete independently; speech never approves a command or releases
+    a reading hold. History and diagnostics do not retain speech audio.
 -   **The narration panel** is a webview. It talks to the extension via
     `postMessage`, with the messages typed in
     [`panel_messages.ts`](packages/vscode/src/panel_messages.ts). Its markup is
@@ -77,7 +116,7 @@ file:
   "workspaceFolders": ["/Users/me/projects/todo-app"],
   "port": 53817,
   "token": "...",             // random, per window
-  "protocolVersion": 3,
+  "protocolVersion": 5,
   "lastFocused": 1758700000000   // epoch ms, updated when the window gains focus
 }
 ```
@@ -131,6 +170,18 @@ working directory it found with `start`, and the session resolves and reports
 paths relative to it, which may be a subfolder of the workspace.
 
 ## Sessions
+
+Each editing batch names its file before the first edit. The player refuses a
+second named file or an edit at a cursor in another file. Rehearsal runs the
+same checks before the batch is queued. An explicit structural newline splits
+an adjacent matching pair in Python or JSON code; its conservative lexical
+scanner refuses strings, comments, and ambiguous formatted-string expressions.
+It is not a Python grammar parser.
+
+After playback the editor reports advisory diagnostics for edited files. VS
+Code diagnostics can be stale or unavailable; Python files also get a syntax
+check using system `python3`, which can differ from the project interpreter.
+Warnings report limitations and failures of these checks.
 
 **One MCP connection can host many pairing sessions, one after another.** The
 programmer works in the harness as usual, starts pairing when they want to, ends
@@ -211,6 +262,11 @@ extension writes a launcher at a fixed path, `~/.ai-pair/bin/pair-mcp`
 (`pair-mcp.cmd` on Windows), pointing at the current version. The launcher runs
 the relay with VS Code's own runtime (`ELECTRON_RUN_AS_NODE=1`), so the
 programmer doesn't need Node installed.
+
+GitHub Actions checks and packages the extension on Ubuntu, then uploads a VSIX
+artifact named with its version and commit. The artifact can be downloaded and
+installed on an Ubuntu host. After reloading VS Code, the runtime reports the
+bundled version and build identity, allowing the running build to be checked.
 
 ## Repository layout
 

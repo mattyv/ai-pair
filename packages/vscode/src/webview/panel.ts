@@ -1,8 +1,10 @@
 // The narration panel's page script, bundled for the webview as dist/panel.js (#6). The markup and
 // styles are in panel_html.ts; the messages in panel_messages.ts.
 
-import type { AgentState, PanelEvent, Ref } from '@ai-pair/core';
-import type { FromPanel, ToPanel } from '../panel_messages';
+import type { AgentState, CodePlayback, PanelEvent, Ref } from '@ai-pair/core';
+import type { ChatOrder, FromPanel, SpeechState, ToPanel } from '../panel_messages';
+import { SpeechAudio, decodeWav } from './speech_audio';
+import { ELEVENLABS_SPEEDS, SPEECH_SPEEDS, SPEECH_VOICES, type SpeechVoice } from '../speech_types';
 import type { CalibrationView } from '../calibration';
 import { ELLIPSIS, LABEL_SEPARATOR, RANGE_DASH, RIGHT_ARROW, SPEED_SUFFIX } from '@ai-pair/core/constants';
 
@@ -16,7 +18,7 @@ const FILE =
 const URL_PATTERN = /\bhttps?:\/\/[^\s<>"'`]*[^\s<>"'`.,;:!?)\]]/g;
 
 const STATUS: Record<AgentState, [string, string]> = {
-  typing: ['', 'Agent is typing'],
+  typing: ['', 'Playing: typing'],
   read: ['read', 'Read this'],
   running: ['', 'Running a command'],
   thinking: ['dim', 'Agent is thinking'],
@@ -37,6 +39,9 @@ let tipDelayMs = TIP_DELAY_MS;
 let tipWarmMs = TIP_WARM_MS;
 const TIP_GAP = 4;
 const TIP_MARGIN = 6;
+
+/** A press held this long pauses only the reading countdown. */
+const READING_HOLD_MS = 400;
 
 /** The tallest the reply box grows, in pixels, before it scrolls. */
 const REPLY_MAX_HEIGHT = 120;
@@ -59,7 +64,36 @@ function $<T extends HTMLElement>(name: string, type: abstract new () => T): T {
 
 const ui = {
   band: $('band', HTMLElement),
+  settings: $('settings', HTMLButtonElement),
+  settingsDialog: $('settings-dialog', HTMLDialogElement),
+  settingsClose: $('settings-close', HTMLButtonElement),
+  chatOrder: $('chat-order', HTMLSelectElement),
+  settingsCodePlayback: $('settings-code-playback', HTMLSelectElement),
+  copyDiagnostics: $('copy-diagnostics', HTMLButtonElement),
+  speechEnabled: $('speech-enabled', HTMLInputElement),
+  speechProvider: $('speech-provider', HTMLSelectElement),
+  speechLocal: $('speech-local', HTMLElement),
+  speechCloud: $('speech-cloud', HTMLElement),
+  speechKeyStatus: $('speech-key-status', HTMLElement),
+  speechKeySet: $('speech-key-set', HTMLButtonElement),
+  speechKeyRemove: $('speech-key-remove', HTMLButtonElement),
+  speechCloudVoice: $('speech-cloud-voice', HTMLSelectElement),
+  speechCloudSpeed: $('speech-cloud-speed', HTMLSelectElement),
+  speechVoicesLoad: $('speech-voices-load', HTMLButtonElement),
+  speechVoicesMore: $('speech-voices-more', HTMLButtonElement),
+  speechVoice: $('speech-voice', HTMLSelectElement),
+  speechSpeed: $('speech-speed', HTMLSelectElement),
+  speechSetup: $('speech-setup', HTMLButtonElement),
+  speechPreview: $('speech-preview', HTMLButtonElement),
+  speechStop: $('speech-stop', HTMLButtonElement),
+  speechSettingsStatus: $('speech-settings-status', HTMLElement),
+  speechLive: $('speech-live', HTMLElement),
+  speechLiveStatus: $('speech-live-status', HTMLElement),
+  speechStopLive: $('speech-stop-live', HTMLButtonElement),
+  showTerminals: $('show-terminals', HTMLInputElement),
+  showTerminal: $('show-terminal', HTMLButtonElement),
   dot: $('dot', HTMLElement),
+  skipReading: $('skip-reading', HTMLButtonElement),
   status: $('status-text', HTMLElement),
   pause: $('pause', HTMLButtonElement),
   interrupt: $('interrupt', HTMLButtonElement),
@@ -67,6 +101,8 @@ const ui = {
   turnLabel: $('turn-label', HTMLElement),
   speed: $('speed', HTMLButtonElement),
   speedMenu: $('speed-menu', HTMLElement),
+  codeMode: $('code-mode', HTMLButtonElement),
+  codeModeMenu: $('code-mode-menu', HTMLElement),
   readingSpeed: $('reading-speed', HTMLButtonElement),
   readingMenu: $('reading-menu', HTMLElement),
   passage: $('passage', HTMLElement),
@@ -95,6 +131,43 @@ const ui = {
   tip: $('tip', HTMLElement),
 };
 
+let chatOrder: ChatOrder = 'newestFirst';
+let speechPage = 0;
+let speechId = 0;
+let speechCanceled = false;
+let speechState: SpeechState = 'idle';
+let speechEnabled = false;
+let speechProvider: 'kokoro' | 'elevenlabs' = 'kokoro';
+let cloudVoice = '';
+let cloudSpeed = 1;
+let cloudSupported = false;
+let cloudHasKey = false;
+let cloudLoading = false;
+let speechSupported = false;
+const speechAudio = new SpeechAudio(
+  (base64) => {
+    const bytes = decodeWav(base64);
+    const url = URL.createObjectURL(new Blob([Uint8Array.from(bytes).buffer], { type: 'audio/wav' }));
+    try {
+      return {
+        audio: new Audio(url),
+        revoke: () => {
+          URL.revokeObjectURL(url);
+        },
+      };
+    } catch (error) {
+      URL.revokeObjectURL(url);
+      throw error;
+    }
+  },
+  (event) => {
+    vscode.postMessage({ type: 'speechEvent', ...event });
+  },
+);
+
+let followingLatest = true;
+let historyHeight = 0;
+let historyScrollHeight = 0;
 let active = false;
 let calibrating = false;
 let turn = 'agent';
@@ -117,9 +190,13 @@ let current: string | undefined = undefined;
 /** Whether the current message is in the history already. */
 let filed = false;
 /** The reading pause under way: its length, and how much of it has elapsed, as of `last`. */
-let reading: { ms: number; elapsed: number; last: number } | undefined = undefined;
+let reading: { ms: number; elapsed: number; last: number; held: boolean; id?: number } | undefined = undefined;
 /** A link to the code the agent just pointed at, shown with the message about it. */
 let pointed: HTMLAnchorElement | undefined = undefined;
+/** A physical pointer or Space gesture is bound to the ID it started on. */
+let readingGesture:
+  { id: number; timer: ReturnType<typeof setTimeout>; held: boolean; kind: 'pointer' | 'keyboard'; pointerId?: number } | undefined;
+let readingClick: { id: number; suppress: boolean } | undefined;
 let draftEmpty = true;
 let tipTarget: HTMLElement | undefined = undefined;
 let tipTimer: ReturnType<typeof setTimeout> | undefined;
@@ -155,20 +232,33 @@ function entry(cls: string, html?: string): HTMLElement {
   return el;
 }
 
-/**
- * Puts the current message into the history, once: when the next entry comes, or when it is replaced
- * (specs/Panel.tla, `WithMessageFiled`).
- */
+/** Inserts an entry at the newest edge of the history. */
+function insertHistory(el: HTMLElement): void {
+  if (chatOrder === 'newestFirst') {
+    ui.history.prepend(el);
+  } else {
+    const atEnd = ui.history.scrollHeight - ui.history.clientHeight - ui.history.scrollTop <= 1;
+    ui.history.append(el);
+    if (atEnd) ui.history.scrollTop = ui.history.scrollHeight;
+  }
+}
+
+/** Files the current message once before the next entry (specs/Panel.tla, `WithMessageFiled`). */
 function fileCurrent(): void {
-  if (current !== undefined && !filed) ui.history.prepend(entry('agent', rich(current)));
+  if (current !== undefined && !filed) {
+    const message = entry('agent', rich(current));
+    message.append(...ui.ref.childNodes);
+    insertHistory(message);
+    ui.now.textContent = '';
+  }
   filed = true;
 }
 
 function add(el: HTMLElement): HTMLElement {
-  // Newest first: the current message came before this entry, so it goes in first
-  // (specs/Panel.tla, `AddEntry`; specs/PanelScroll.tla, `AddEntry`: the scroll position stays).
+  // The current message came before this entry, so it is filed first
+  // (specs/Panel.tla, `AddEntry`; specs/PanelScroll.tla, `AddEntry`).
   fileCurrent();
-  ui.history.prepend(el);
+  insertHistory(el);
   return el;
 }
 
@@ -215,8 +305,8 @@ function addYou(text: string | undefined, ref: Ref | undefined): void {
   const el = entry('you', text === undefined ? '' : rich(text));
   if (ref) el.append(refLink(ref));
   add(el);
-  // specs/PanelScroll.tla, `AddYours`: the programmer's message scrolls the history to its top (#139).
-  ui.history.scrollTop = 0;
+  // specs/PanelScroll.tla, `AddYours`: reveal the programmer's message at the newest edge.
+  ui.history.scrollTop = chatOrder === 'newestFirst' ? 0 : ui.history.scrollHeight;
 }
 
 /** Writes how a run went into `outcome`, the span of its row `el`. */
@@ -250,6 +340,14 @@ function addRun(id: number, command: string, phase: RunPhase, exitCode: number |
   cmd.dataset.tip = command;
   const outcome = document.createElement('span');
   el.append(cmd, outcome);
+  if (phase !== 'declined') {
+    const show = document.createElement('button');
+    show.type = 'button';
+    show.className = 'quiet';
+    show.dataset.showTerminal = String(id);
+    show.textContent = 'Show terminal';
+    el.append(show);
+  }
   setOutcome(el, outcome, phase, exitCode);
   add(el);
 }
@@ -316,50 +414,25 @@ function showCalibration(view: CalibrationView): void {
 }
 
 function syncReading(): void {
-  ui.dot.classList.toggle('reading', reading !== undefined);
+  ui.dot.classList.toggle('reading', reading !== undefined && active && !suspended);
+  ui.skipReading.disabled =
+    reading?.id === undefined || !active || suspended || paused || turn !== 'agent' || state !== 'read' || runConfirming;
 }
 
-function tick(now: number): void {
-  if (!reading) return;
-  if (!paused) reading.elapsed += now - reading.last;
-  reading.last = now;
-  const f = Math.min(1, reading.elapsed / reading.ms);
-  ui.dot.style.setProperty('--progress', String(f));
-  if (f >= 1) {
-    reading = undefined;
-    syncReading();
-    return;
-  }
-  requestAnimationFrame(tick);
+/** Changes the live status only when its text changes, avoiding repeated announcements. */
+function statusText(text: string): void {
+  if (ui.status.textContent !== text) ui.status.textContent = text;
 }
 
-// The reading pause fills a ring around the status dot.
-function startReading(ms: number): void {
-  if (replaying) return;
-  reading = { ms, elapsed: 0, last: performance.now() };
-  ui.dot.style.setProperty('--progress', '0');
-  syncReading();
-  requestAnimationFrame(tick);
+function hideTip(): void {
+  clearTimeout(tipTimer);
+  tipPending = undefined;
+  if (!tipTarget) return;
+  tipTarget.removeAttribute('aria-describedby');
+  tipTarget = undefined;
+  ui.tip.hidden = true;
+  tipWarmUntil = performance.now() + tipWarmMs;
 }
-
-function syncStatus(): void {
-  if (!active) {
-    ui.dot.className = 'dot off';
-    ui.status.textContent = 'No session';
-    return;
-  }
-  if (suspended) {
-    ui.dot.className = 'dot off';
-    ui.status.textContent = 'Suspended: waiting for the agent';
-    return;
-  }
-  const [cls, text] = runConfirming ? ['read', 'Needs you'] : state ? STATUS[state] : ['', 'Session started'];
-  ui.dot.className = `dot ${cls}`;
-  syncReading();
-  ui.status.textContent = text;
-}
-
-// ---- Tooltips --------------------------------------------------------------
 
 // Under the element, centered on it, inside the panel; above it if there's no room below.
 function placeTip(target: HTMLElement): void {
@@ -380,6 +453,99 @@ function setTip(el: HTMLElement, text: string): void {
   }
 }
 
+function syncStatus(): void {
+  const showPause = active && !suspended && paused;
+  const explainListening = active && !suspended && !paused && !runConfirming && turn === 'agent' && state === 'listening';
+  if (explainListening || (active && suspended)) {
+    setTip(
+      ui.status,
+      suspended
+        ? 'Ask your agent to start pairing again in the same project, or end this session.'
+        : 'The agent is listening for your reply. You can reply, ask a question, or say continue; it may continue after waiting.',
+    );
+    ui.status.tabIndex = 0;
+  } else {
+    if (tipTarget === ui.status || tipPending === ui.status) hideTip();
+    delete ui.status.dataset.tip;
+    ui.status.removeAttribute('tabindex');
+  }
+  const playing = active && !suspended && !paused && !runConfirming && turn === 'agent' && (state === 'typing' || state === 'running');
+  ui.status.classList.toggle('is-paused', showPause);
+  ui.status.classList.toggle('is-playing', playing);
+  if (!active) {
+    ui.dot.className = 'dot off';
+    syncReading();
+    statusText('No session');
+    return;
+  }
+  if (suspended) {
+    ui.dot.className = 'dot off';
+    syncReading();
+    statusText('Suspended: waiting for the agent');
+    return;
+  }
+  if (showPause) {
+    ui.dot.className = 'dot paused-indicator';
+    syncReading();
+    statusText(
+      runConfirming ? `Paused${LABEL_SEPARATOR}Needs you` : turn === 'programmer' ? `Paused${LABEL_SEPARATOR}Your turn` : 'Paused',
+    );
+    return;
+  }
+  if (!runConfirming && turn === 'agent' && speechState === 'speaking' && reading === undefined) {
+    ui.dot.className = 'dot';
+    syncReading();
+    statusText('Speaking');
+    return;
+  }
+  const [cls, text] = runConfirming ? ['read', 'Needs you'] : state ? STATUS[state] : ['', 'Session started'];
+  ui.dot.className = `dot ${cls}`;
+  syncReading();
+  statusText(text);
+}
+
+// ---- Tooltips --------------------------------------------------------------
+
+/** Silences locally before an interruption can cross the webview boundary. */
+function stopSpeechLocally(): void {
+  speechCanceled = true;
+  speechAudio.stop();
+  if (speechState !== 'idle') {
+    speechState = 'idle';
+    ui.speechLive.hidden = true;
+    ui.speechSettingsStatus.textContent = 'Speech stopped.';
+    syncStatus();
+  }
+}
+
+function tick(now: number, countdown: NonNullable<typeof reading>): void {
+  if (reading !== countdown) return;
+  if (!paused && !countdown.held) countdown.elapsed += now - countdown.last;
+  countdown.last = now;
+  const f = Math.min(1, countdown.elapsed / countdown.ms);
+  ui.dot.style.setProperty('--progress', String(f));
+  if (f >= 1) {
+    reading = undefined;
+    syncStatus();
+    return;
+  }
+  requestAnimationFrame((time) => {
+    tick(time, countdown);
+  });
+}
+
+// The reading pause fills a ring around the status dot.
+function startReading(ms: number, id?: number): void {
+  if (replaying) return;
+  const countdown = { ms, elapsed: 0, last: performance.now(), held: false, id };
+  reading = countdown;
+  ui.dot.style.setProperty('--progress', '0');
+  syncReading();
+  requestAnimationFrame((time) => {
+    tick(time, countdown);
+  });
+}
+
 function showTip(el: HTMLElement): void {
   clearTimeout(tipTimer);
   tipPending = undefined;
@@ -389,16 +555,6 @@ function showTip(el: HTMLElement): void {
   ui.tip.hidden = false;
   el.setAttribute('aria-describedby', 'tip');
   placeTip(el);
-}
-
-function hideTip(): void {
-  clearTimeout(tipTimer);
-  tipPending = undefined;
-  if (!tipTarget) return;
-  tipTarget.removeAttribute('aria-describedby');
-  tipTarget = undefined;
-  ui.tip.hidden = true;
-  tipWarmUntil = performance.now() + tipWarmMs;
 }
 
 function hoverTip(el: HTMLElement | undefined): void {
@@ -435,6 +591,8 @@ function elementOf(e: Event): HTMLElement | undefined {
 // ---- The session's state ---------------------------------------------------
 
 function setState(e: Extract<PanelEvent, { type: 'state' }>): void {
+  // specs/CodePlayback.tla, `Finish` and `Interrupt`: no countdown survives playback.
+  if (e.state !== 'read' && !e.paused) reading = undefined;
   state = e.state;
   turn = e.turn;
   paused = e.paused;
@@ -463,8 +621,20 @@ function clearRun(): void {
   ui.run.removeAttribute('role');
 }
 
+/** Keeps the active mode in the pace control's accessible name and menu. */
+function setCodePlayback(value: CodePlayback): void {
+  // specs/PlaybackPreference.tla, `Choose` and `Reload`.
+  ui.settingsCodePlayback.value = value;
+  for (const item of ui.codeModeMenu.querySelectorAll<HTMLButtonElement>('button[data-code-playback]')) {
+    item.setAttribute('aria-checked', String(item.dataset.codePlayback === value));
+  }
+  const label = value === 'typing' ? 'Typing' : value === 'lines' ? 'Lines' : 'Blocks';
+  ui.codeMode.textContent = label;
+  ui.codeMode.setAttribute('aria-label', `Code display: ${label}`);
+}
+
 /** Wires a speed menu to its button, and returns what closes it. */
-function speedMenu(button: HTMLButtonElement, menu: HTMLElement, type: 'speed' | 'readingSpeed'): () => void {
+function speedMenu(button: HTMLButtonElement, menu: HTMLElement, type: 'speed' | 'readingSpeed' | 'codePlayback'): () => void {
   function close(): void {
     menu.hidden = true;
     button.setAttribute('aria-expanded', 'false');
@@ -482,7 +652,13 @@ function speedMenu(button: HTMLButtonElement, menu: HTMLElement, type: 'speed' |
     b.addEventListener('click', () => {
       close();
       button.focus();
-      vscode.postMessage({ type, value: Number(b.dataset.speed) });
+      const mode = b.dataset.codePlayback;
+      if (mode === 'typing' || mode === 'lines' || mode === 'blocks') {
+        setCodePlayback(mode);
+        vscode.postMessage({ type: 'codePlayback', value: mode });
+        return;
+      }
+      if (type !== 'codePlayback') vscode.postMessage({ type, value: Number(b.dataset.speed) });
     });
   }
   document.addEventListener('click', (e) => {
@@ -497,6 +673,7 @@ function speedMenu(button: HTMLButtonElement, menu: HTMLElement, type: 'speed' |
   return close;
 }
 const closeSpeedMenu = speedMenu(ui.speed, ui.speedMenu, 'speed');
+const closeCodeModeMenu = speedMenu(ui.codeMode, ui.codeModeMenu, 'codePlayback');
 const closeReadingMenu = speedMenu(ui.readingSpeed, ui.readingMenu, 'readingSpeed');
 
 function setActive(on: boolean): void {
@@ -509,6 +686,7 @@ function setActive(on: boolean): void {
     // specs/RunBox.tla, `EndSession`: the session ending clears the box.
     clearRun();
     closeSpeedMenu();
+    closeCodeModeMenu();
     closeReadingMenu();
   }
   syncStatus();
@@ -521,13 +699,427 @@ function showSpeed(button: HTMLButtonElement, menu: HTMLElement, name: string, p
   const label = `${Number.isInteger(value * TENTHS) ? value.toFixed(1) : String(value)}${SPEED_SUFFIX}`;
   button.textContent = prefix + label;
   button.setAttribute('aria-label', `${name}: ${label}`);
-  for (const b of menu.querySelectorAll('button')) {
+  for (const b of menu.querySelectorAll<HTMLButtonElement>('button[data-speed]')) {
     b.setAttribute('aria-checked', String(Math.abs(Number(b.dataset.speed) - value) < SPEED_TOLERANCE));
   }
 }
 
+/** Applies the order while preserving the view (Panel.tla and PanelScroll.tla, `SwitchOrder`). */
+function setChatOrder(value: ChatOrder): void {
+  ui.chatOrder.value = value;
+  if (value === chatOrder) return;
+  const atLatest =
+    chatOrder === 'newestFirst' ? ui.history.scrollTop <= 1 : ui.history.scrollHeight - ui.history.clientHeight - ui.history.scrollTop <= 1;
+  followingLatest = atLatest;
+  const entries = [...ui.history.children];
+  const top = ui.history.getBoundingClientRect().top;
+  const anchor = entries.find((element) => element.getBoundingClientRect().bottom > top);
+  const before = anchor === undefined ? 0 : anchor.getBoundingClientRect().top - top;
+  chatOrder = value;
+  ui.history.classList.add('reordering');
+  document.body.classList.toggle('oldest-first', value === 'oldestFirst');
+  ui.history.replaceChildren(...entries.toReversed());
+  if (value === 'oldestFirst') {
+    ui.band.before(ui.history);
+  } else {
+    ui.band.after(ui.history);
+  }
+  ui.history.setAttribute('aria-label', value === 'oldestFirst' ? 'Earlier, oldest first' : 'Earlier, newest first');
+  if (atLatest) {
+    ui.history.scrollTop = value === 'oldestFirst' ? ui.history.scrollHeight : 0;
+  } else if (anchor !== undefined) {
+    ui.history.scrollTop += anchor.getBoundingClientRect().top - ui.history.getBoundingClientRect().top - before;
+  }
+  requestAnimationFrame(() => {
+    ui.history.classList.remove('reordering');
+  });
+}
+
+// A growing composer or a resized panel must keep the newest edge in view only
+// while the reader was already following it.
+ui.history.addEventListener('scroll', () => {
+  // A resize can emit scroll before ResizeObserver; retain the prior follow state.
+  if (ui.history.clientHeight !== historyHeight) return;
+  followingLatest = ui.history.scrollHeight - ui.history.clientHeight - ui.history.scrollTop <= 1;
+  historyScrollHeight = ui.history.scrollHeight;
+});
+const historyResize = new ResizeObserver(() => {
+  historyHeight = ui.history.clientHeight;
+  historyScrollHeight = ui.history.scrollHeight;
+  if (chatOrder === 'oldestFirst' && followingLatest) ui.history.scrollTop = ui.history.scrollHeight;
+});
+historyResize.observe(ui.band);
+historyResize.observe(ui.history);
+
+// specs/Panel.tla, `OpenSettings` and `CloseSettings`.
+/** Starts a timed gesture, capturing the countdown ID before it can change. */
+function beginReadingGesture(kind: 'pointer' | 'keyboard', pointerId?: number): void {
+  if (readingGesture !== undefined || ui.skipReading.disabled || reading?.id === undefined) return;
+  readingClick = undefined;
+  const id = reading.id;
+  const gesture = {
+    id,
+    kind,
+    pointerId,
+    held: false,
+    timer: setTimeout(() => {
+      if (readingGesture !== gesture || reading?.id !== id || ui.skipReading.disabled) return;
+      const now = performance.now();
+      reading.elapsed += now - reading.last;
+      reading.last = now;
+      reading.held = true;
+      gesture.held = true;
+      vscode.postMessage({ type: 'holdReading', id, held: true });
+    }, READING_HOLD_MS),
+  };
+  readingGesture = gesture;
+}
+
+/** Releases a timed gesture without affecting an independent playback pause. */
+function endReadingGesture(cancelled: boolean): void {
+  const gesture = readingGesture;
+  if (gesture === undefined) return;
+  clearTimeout(gesture.timer);
+  if (gesture.held) {
+    if (reading?.id === gesture.id) {
+      reading.held = false;
+      reading.last = performance.now();
+    }
+    vscode.postMessage({ type: 'holdReading', id: gesture.id, held: false });
+  }
+  const click = { id: gesture.id, suppress: cancelled || gesture.held };
+  readingClick = click;
+  readingGesture = undefined;
+  // Native clicks follow release in the same task. Do not let a missing click
+  // suppress an unrelated later assistive activation.
+  setTimeout(() => {
+    if (readingClick === click) readingClick = undefined;
+  }, 0);
+}
+
+ui.skipReading.addEventListener('pointerdown', (event) => {
+  if (event.button !== 0) return;
+  beginReadingGesture('pointer', event.pointerId);
+  if (readingGesture?.kind === 'pointer') {
+    try {
+      ui.skipReading.setPointerCapture(event.pointerId);
+    } catch {
+      // A synthetic event or a lost pointer cannot be captured; window events still release it.
+    }
+  }
+});
+globalThis.addEventListener('pointerup', (event) => {
+  if (readingGesture?.kind === 'pointer' && readingGesture.pointerId === event.pointerId) endReadingGesture(false);
+});
+globalThis.addEventListener('pointercancel', (event) => {
+  if (readingGesture?.kind === 'pointer' && readingGesture.pointerId === event.pointerId) endReadingGesture(true);
+});
+ui.skipReading.addEventListener('lostpointercapture', (event) => {
+  if (readingGesture?.kind === 'pointer' && readingGesture.pointerId === event.pointerId) endReadingGesture(true);
+});
+ui.skipReading.addEventListener('keydown', (event) => {
+  if (event.key === ' ' && !event.repeat) beginReadingGesture('keyboard');
+});
+globalThis.addEventListener('keyup', (event) => {
+  if (event.key === ' ' && readingGesture?.kind === 'keyboard') endReadingGesture(false);
+});
+window.addEventListener('blur', () => {
+  endReadingGesture(true);
+});
+window.addEventListener('pagehide', () => {
+  endReadingGesture(true);
+  stopSpeechLocally();
+  if (speechPage > 0) vscode.postMessage({ type: 'speechPageHidden', pageId: speechPage });
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    endReadingGesture(true);
+    stopSpeechLocally();
+    if (speechPage > 0) vscode.postMessage({ type: 'speechPageHidden', pageId: speechPage });
+  } else if (speechPage > 0) {
+    vscode.postMessage({ type: 'speechPageVisible', pageId: speechPage });
+  }
+});
+ui.skipReading.addEventListener('click', () => {
+  const click = readingClick;
+  readingClick = undefined;
+  const id = click?.id ?? readingGesture?.id ?? reading?.id;
+  if (click?.suppress === true || readingGesture?.held === true || ui.skipReading.disabled || id === undefined || reading?.id !== id) {
+    return;
+  }
+  vscode.postMessage({ type: 'skipReading', id });
+  reading = undefined;
+  syncReading();
+});
+
+// specs/DiagnosticsCopy.tla, `Click`: only an explicit request copies diagnostics.
+ui.copyDiagnostics.addEventListener('click', () => {
+  vscode.postMessage({ type: 'copyDiagnostics' });
+});
+
+// specs/Panel.tla, `OpenSettings` and `CloseSettings`.
+ui.settings.addEventListener('click', () => {
+  ui.settingsDialog.showModal();
+  ui.chatOrder.focus();
+});
+ui.settingsClose.addEventListener('click', () => {
+  ui.settingsDialog.close();
+});
+ui.settingsDialog.addEventListener('close', () => {
+  ui.settings.focus();
+});
+function isSpeechVoice(value: string): value is SpeechVoice {
+  return SPEECH_VOICES.some((voice) => voice === value);
+}
+
+function saveSpeechSettings(): void {
+  const voice = ui.speechVoice.value;
+  const speed = Number(ui.speechSpeed.value);
+  if (!isSpeechVoice(voice) || !SPEECH_SPEEDS.some((option) => option === speed)) return;
+  if (speechEnabled && !ui.speechEnabled.checked) stopSpeechLocally();
+  speechEnabled = ui.speechEnabled.checked;
+  vscode.postMessage({
+    type: 'speechSettings',
+    value: {
+      enabled: speechEnabled,
+      voice,
+      speed,
+      provider: speechProvider,
+      elevenLabsVoice: cloudVoice,
+      elevenLabsSpeed: cloudSpeed,
+    },
+  });
+}
+function selectCloudVoice(): void {
+  const select = ui.speechCloudVoice;
+  if (cloudVoice !== '' && !Array.from(select.options).some((option) => option.value === cloudVoice)) {
+    const saved = document.createElement('option');
+    saved.value = cloudVoice;
+    saved.textContent = 'Saved voice (load voices to change)';
+    select.append(saved);
+  }
+  select.value = cloudVoice;
+}
+/** Maps only the host's allowlisted category to fixed account guidance. */
+function catalogFailure(reason: string | undefined): string {
+  switch (reason) {
+    case 'no_key':
+      return 'Add an ElevenLabs API key to load voices.';
+    case 'auth':
+      return 'ElevenLabs rejected the key or voice access. Check your key permissions.';
+    case 'rate':
+      return 'ElevenLabs rate limit or quota reached. Try again later.';
+    case 'network':
+      return 'Could not connect to ElevenLabs. Check your network.';
+    case 'timeout':
+      return 'Loading account voices timed out. Try again.';
+    case 'invalid':
+      return 'ElevenLabs returned an unsupported voice list.';
+    case 'canceled':
+      return 'Loading account voices was canceled.';
+    default:
+      return 'Could not load account voices.';
+  }
+}
+function syncSpeechProvider(): void {
+  const cloud = speechProvider === 'elevenlabs';
+  ui.speechLocal.hidden = cloud;
+  ui.speechCloud.hidden = !cloud;
+  ui.speechProvider.value = speechProvider;
+  ui.speechKeySet.disabled = !cloudSupported;
+  ui.speechKeyRemove.disabled = !cloudSupported || !cloudHasKey;
+  ui.speechVoicesLoad.disabled = !cloudSupported || !cloudHasKey || cloudLoading;
+  ui.speechVoicesMore.disabled = !cloudSupported || !cloudHasKey || cloudLoading;
+  ui.speechPreview.disabled = cloud ? !cloudSupported || !cloudHasKey || cloudVoice === '' : !speechSupported;
+}
+ui.speechProvider.addEventListener('change', () => {
+  const selected = ui.speechProvider.value;
+  if (selected !== 'kokoro' && selected !== 'elevenlabs') return;
+  if (selected !== speechProvider) stopSpeechLocally();
+  if (!ELEVENLABS_SPEEDS.some((speed) => speed === cloudSpeed)) {
+    cloudSpeed = 1;
+    ui.speechCloudSpeed.value = '1';
+  }
+  if (!isSpeechVoice(ui.speechVoice.value)) ui.speechVoice.value = 'af_heart';
+  if (!SPEECH_SPEEDS.some((speed) => speed === Number(ui.speechSpeed.value))) ui.speechSpeed.value = '1';
+  speechProvider = selected;
+  syncSpeechProvider();
+  saveSpeechSettings();
+});
+ui.speechCloudVoice.addEventListener('change', () => {
+  cloudVoice = ui.speechCloudVoice.value;
+  syncSpeechProvider();
+  saveSpeechSettings();
+});
+ui.speechCloudSpeed.addEventListener('change', () => {
+  const value = Number(ui.speechCloudSpeed.value);
+  if (!ELEVENLABS_SPEEDS.some((speed) => speed === value)) return;
+  cloudSpeed = value;
+  saveSpeechSettings();
+});
+ui.speechKeySet.addEventListener('click', () => {
+  vscode.postMessage({ type: 'speechKeySet' });
+});
+ui.speechKeyRemove.addEventListener('click', () => {
+  vscode.postMessage({ type: 'speechKeyRemove' });
+});
+ui.speechVoicesLoad.addEventListener('click', () => {
+  vscode.postMessage({ type: 'speechVoicesLoad' });
+});
+ui.speechVoicesMore.addEventListener('click', () => {
+  vscode.postMessage({ type: 'speechVoicesMore' });
+});
+ui.speechEnabled.addEventListener('change', saveSpeechSettings);
+ui.speechVoice.addEventListener('change', saveSpeechSettings);
+ui.speechSpeed.addEventListener('change', saveSpeechSettings);
+ui.speechSetup.addEventListener('click', () => {
+  vscode.postMessage({ type: 'speechSetup' });
+});
+ui.speechPreview.addEventListener('click', () => {
+  vscode.postMessage({ type: 'speechPreview' });
+});
+function stopSpeech(): void {
+  stopSpeechLocally();
+  vscode.postMessage({ type: 'speechStop' });
+}
+ui.speechStop.addEventListener('click', stopSpeech);
+ui.speechStopLive.addEventListener('click', stopSpeech);
+
+// specs/TerminalPanel.tla, `SetAuto`.
+ui.showTerminals.addEventListener('change', () => {
+  vscode.postMessage({ type: 'showTerminals', value: ui.showTerminals.checked });
+});
+ui.showTerminal.addEventListener('click', () => {
+  if (runId !== undefined && !runConfirming) vscode.postMessage({ type: 'showTerminal', id: runId });
+});
+
+ui.settingsCodePlayback.addEventListener('change', () => {
+  const mode = ui.settingsCodePlayback.value;
+  if (mode === 'typing' || mode === 'lines' || mode === 'blocks') {
+    setCodePlayback(mode);
+    vscode.postMessage({ type: 'codePlayback', value: mode });
+  }
+});
+
+ui.chatOrder.addEventListener('change', () => {
+  const value = ui.chatOrder.value === 'oldestFirst' ? 'oldestFirst' : 'newestFirst';
+  setChatOrder(value);
+  vscode.postMessage({ type: 'chatOrder', value });
+});
+
 function handle(message: ToPanel): void {
   switch (message.type) {
+    case 'speechPage':
+      speechPage = message.pageId;
+      speechId = 0;
+      speechCanceled = false;
+      speechAudio.page(message.pageId);
+      return;
+    case 'speechSupport':
+      speechSupported = message.supported;
+      ui.speechSetup.disabled = !message.supported;
+      syncSpeechProvider();
+      if (!message.supported) ui.speechSettingsStatus.textContent = 'Local speech is unavailable in this build or on this host.';
+      return;
+    case 'speechSettings':
+      if (speechEnabled && !message.value.enabled) stopSpeechLocally();
+      speechEnabled = message.value.enabled;
+      speechProvider = message.value.provider;
+      cloudVoice = message.value.elevenLabsVoice;
+      cloudSpeed = message.value.elevenLabsSpeed;
+      ui.speechCloudSpeed.value = String(cloudSpeed);
+      selectCloudVoice();
+      syncSpeechProvider();
+      ui.speechEnabled.checked = message.value.enabled;
+      ui.speechVoice.value = message.value.voice;
+      ui.speechSpeed.value = String(message.value.speed);
+      return;
+    case 'speechCloudSupport':
+      cloudSupported = message.supported;
+      syncSpeechProvider();
+      return;
+    case 'speechKeyStatus':
+      cloudHasKey = message.hasKey;
+      ui.speechKeyStatus.textContent = message.hasKey ? 'API key saved.' : 'No API key saved.';
+      syncSpeechProvider();
+      return;
+    case 'speechCatalog': {
+      const select = ui.speechCloudVoice;
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Choose a voice';
+      select.replaceChildren(placeholder);
+      for (const voice of message.value.voices) {
+        const option = document.createElement('option');
+        option.value = voice.id;
+        option.textContent = voice.name;
+        select.append(option);
+      }
+      selectCloudVoice();
+      ui.speechVoicesMore.hidden = !message.value.more;
+      const wasLoading = cloudLoading;
+      cloudLoading = message.value.loading;
+      if (message.value.reset === true) ui.speechSettingsStatus.textContent = '';
+      else if (cloudLoading) ui.speechSettingsStatus.textContent = 'Loading account voices...';
+      else if (message.value.error) ui.speechSettingsStatus.textContent = catalogFailure(message.value.errorKind);
+      else if (message.value.voices.length > 0) ui.speechSettingsStatus.textContent = 'Account voices loaded.';
+      else if (wasLoading) {
+        ui.speechSettingsStatus.textContent = message.value.more
+          ? 'No voices on this page. Select Load more.'
+          : 'No account voices are available. Check your ElevenLabs account.';
+      } else ui.speechSettingsStatus.textContent = '';
+      syncSpeechProvider();
+      return;
+    }
+    case 'speechSetupState':
+      ui.speechSetup.disabled = message.pending || !speechSupported;
+      syncSpeechProvider();
+      if (message.pending) ui.speechPreview.disabled = true;
+      ui.speechSettingsStatus.textContent = message.message;
+      return;
+    case 'speechAudio':
+      if (message.pageId === speechPage && message.id === speechId && !speechCanceled) {
+        speechAudio.audio(message.id, message.pageId, message.wavBase64, paused);
+      }
+      return;
+    case 'speechControl':
+      speechAudio.control(message.id, message.pageId, message.action);
+      return;
+    case 'speechStatus': {
+      if (
+        message.pageId !== speechPage ||
+        message.id < speechId ||
+        (message.id === speechId && speechCanceled && message.state !== 'idle')
+      ) {
+        return;
+      }
+      if (message.id > speechId) {
+        speechId = message.id;
+        speechCanceled = false;
+      }
+      if (message.state === 'preparing') speechAudio.begin(message.id, message.pageId);
+      speechState = message.state;
+      if (message.state === 'idle') speechAudio.stop();
+      const labels: Record<SpeechState, string> = {
+        preparing: 'Preparing speech',
+        speaking: 'Speaking',
+        paused: 'Speech paused',
+        unavailable: message.message ?? 'Speech unavailable',
+        idle: '',
+      };
+      ui.speechLiveStatus.textContent = labels[message.state];
+      ui.speechSettingsStatus.textContent = labels[message.state];
+      ui.speechLive.hidden = message.state === 'idle';
+      ui.speechStopLive.hidden = message.state === 'idle' || message.state === 'unavailable';
+      syncStatus();
+      return;
+    }
+    case 'showTerminals':
+      ui.showTerminals.checked = message.value;
+      return;
+    case 'chatOrder':
+      setChatOrder(message.value);
+      return;
     case 'replay':
       replaying = true;
       for (const ev of message.events) {
@@ -544,7 +1136,7 @@ function handle(message: ToPanel): void {
       ui.starting.hidden = true;
       return;
     case 'session':
-      // specs/Panel.tla, `ChangeSession`: the band is filed, and a divider goes on top.
+      // specs/Panel.tla, `ChangeSession`: the band is filed and a divider is added.
       if (message.active) {
         // specs/Start.tla, `StartSession`: a session clears the note (NoteUntilSession).
         ui.starting.hidden = true;
@@ -554,6 +1146,7 @@ function handle(message: ToPanel): void {
           current = undefined;
           const was = suspended;
           suspended = message.suspended === true;
+          if (suspended) reading = undefined;
           // A revive repeats the suspension a disconnect already showed (#138): specs/Panel.tla, `RepeatSession`,
           // with no divider; else `ChangeSession`.
           if (was !== suspended) {
@@ -562,6 +1155,8 @@ function handle(message: ToPanel): void {
           setActive(true);
           return;
         }
+        // specs/Resume.tla, `Start`: a new session replaces any old suspension.
+        suspended = false;
         fileCurrent();
         current = undefined;
         state = undefined;
@@ -588,7 +1183,7 @@ function handle(message: ToPanel): void {
       setNow(message.text);
       return;
     case 'reading':
-      startReading(message.ms);
+      startReading(message.ms, message.id);
       return;
     case 'state':
       setState(message);
@@ -615,6 +1210,7 @@ function handle(message: ToPanel): void {
       if (message.phase === 'confirm' || message.phase === 'running') {
         runId = message.id;
         runConfirming = message.phase === 'confirm';
+        ui.showTerminal.hidden = runConfirming;
         ui.run.classList.add('on');
         ui.run.classList.toggle('confirm', runConfirming);
         // A command waiting for the programmer's decision is announced at once (#16).
@@ -653,6 +1249,9 @@ function handle(message: ToPanel): void {
       return;
     case 'speed':
       showSpeed(ui.speed, ui.speedMenu, 'Playback speed', '', message.value);
+      return;
+    case 'codePlayback':
+      setCodePlayback(message.value);
       return;
     case 'readingSpeed':
       showSpeed(ui.readingSpeed, ui.readingMenu, 'Reading speed', 'read ', message.value);
@@ -701,7 +1300,10 @@ function takeAttach(): boolean {
 
 function sendReply(): void {
   const text = takeDraft();
-  if (text) vscode.postMessage({ type: 'reply', text, attach: takeAttach() });
+  if (text) {
+    stopSpeechLocally();
+    vscode.postMessage({ type: 'reply', text, attach: takeAttach() });
+  }
 }
 
 function decide(run: boolean, remember: boolean): void {
@@ -710,13 +1312,36 @@ function decide(run: boolean, remember: boolean): void {
 
 // ---- Wiring ----------------------------------------------------------------
 
+// Preserve a followed edge across a resize whose observer has not run yet,
+// while still noticing a reader scroll before its scroll event is delivered.
+function followsHistory(): boolean {
+  const { scrollHeight, clientHeight, scrollTop } = ui.history;
+  return scrollHeight - clientHeight - scrollTop <= 1 || (followingLatest && historyScrollHeight - historyHeight - scrollTop <= 1);
+}
+
 window.addEventListener('message', (m: MessageEvent) => {
   // The extension posts only ToPanel messages.
+  const follow = chatOrder === 'oldestFirst' && followsHistory();
+  if (chatOrder === 'oldestFirst') followingLatest = follow;
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   handle(m.data as ToPanel);
+  if (follow && chatOrder === 'oldestFirst') {
+    ui.history.scrollTop = ui.history.scrollHeight;
+    historyScrollHeight = ui.history.scrollHeight;
+    historyHeight = ui.history.clientHeight;
+  }
 });
 
-ui.reply.addEventListener('input', syncDraft);
+ui.reply.addEventListener('input', () => {
+  const follow = chatOrder === 'oldestFirst' && followsHistory();
+  if (chatOrder === 'oldestFirst') followingLatest = follow;
+  syncDraft();
+  if (follow) {
+    ui.history.scrollTop = ui.history.scrollHeight;
+    historyScrollHeight = ui.history.scrollHeight;
+    historyHeight = ui.history.clientHeight;
+  }
+});
 ui.reply.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
@@ -730,9 +1355,11 @@ ui.pause.addEventListener('click', () => {
   vscode.postMessage({ type: paused ? 'resume' : 'pause' });
 });
 ui.interrupt.addEventListener('click', () => {
+  stopSpeechLocally();
   vscode.postMessage({ type: 'interrupt' });
 });
 ui.turn.addEventListener('click', () => {
+  stopSpeechLocally();
   const handingBack = turn === 'programmer';
   const message = handingBack ? takeDraft() : '';
   const attach = handingBack && takeAttach();
@@ -752,6 +1379,7 @@ ui.runSkip.addEventListener('click', () => {
   decide(/* run= */ false, /* remember= */ false);
 });
 ui.end.addEventListener('click', () => {
+  stopSpeechLocally();
   vscode.postMessage({ type: 'end' });
 });
 
@@ -784,7 +1412,14 @@ window.addEventListener('blur', hideTip);
 // button, which after a click could be End; Enter still does.
 document.addEventListener('keydown', (e) => {
   if (e.key !== ' ' || e.ctrlKey || e.metaKey || e.altKey || !active) return;
-  if (e.target === ui.reply) return;
+  if (
+    e.target === ui.reply ||
+    e.target === ui.skipReading ||
+    e.target === ui.settings ||
+    (e.target instanceof Node && ui.settingsDialog.contains(e.target))
+  ) {
+    return;
+  }
   e.preventDefault();
   if (e.repeat || turn === 'programmer') return;
   vscode.postMessage({ type: paused ? 'resume' : 'pause' });
@@ -795,6 +1430,9 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('click', (e) => {
   const target = e.target instanceof Element ? e.target : undefined;
   if (target?.closest('a[href]')) e.preventDefault();
+  // specs/TerminalPanel.tla, `Show`: request this historical command's terminal.
+  const reveal = target?.closest<HTMLElement>('button[data-show-terminal]');
+  if (reveal?.dataset.showTerminal !== undefined) vscode.postMessage({ type: 'showTerminal', id: Number(reveal.dataset.showTerminal) });
   const a = target?.closest<HTMLElement>('a.file, a.url, a.command');
   if (a?.dataset.file !== undefined) vscode.postMessage({ type: 'openFile', file: a.dataset.file });
   if (a?.dataset.url !== undefined) vscode.postMessage({ type: 'openUrl', url: a.dataset.url });

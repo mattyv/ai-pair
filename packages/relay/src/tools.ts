@@ -8,6 +8,7 @@ import {
   moveProblem,
   MOVE_TARGET_SCHEMA,
   spanProblem,
+  speechProblem,
   SPAN_SCHEMA,
   SPAN_TARGET_SCHEMA,
   typeProblem,
@@ -99,6 +100,12 @@ const actionSchema = z.union(
         .describe(
           "Narrate right before the actions it describes: what you're doing, why, and how your code does it. It's about your code and your choices, not how the language or its libraries work (unless the programmer asked to learn them). Explain the code, don't recite it. One to three sentences; `backticks` render as code. Playback pauses so the programmer can read it.",
         ),
+      speak: z.boolean().optional().describe('Request local speech for this short narration when enabled.'),
+    }).superRefine((narration, ctx) => {
+      if (narration.speak === true) {
+        const problem = speechProblem(narration.say);
+        if (problem !== undefined) ctx.addIssue({ code: 'custom', message: problem });
+      }
     }),
     action({
       move: z
@@ -118,11 +125,15 @@ const actionSchema = z.union(
                 `A spot: the exact text around it, with ${CURSOR_MARKER} where your cursor goes, e.g. \`"import { ${CURSOR_MARKER}type Context"\` for right before \`type Context\`. May span lines. Enough text to fit only one place on the line.`,
               ),
             to: z
-              .enum(['line_end'])
+              .enum(['line_end', 'next_close'])
               .optional()
               .describe(
-                "Instead of a spot: `line_end`, the end of the line. Only that: it steps past a close you typed only if that close is on this line. A block's closing brace, below its body, isn't on your cursor's line.",
+                "Instead of a spot: `next_close` steps over exactly one adjacent close with no file or line; `line_end` goes to the end of the line. It steps past a close you typed only if that close is on this line. A block's closing brace, below its body, isn't on your cursor's line.",
               ),
+            allow_multiple_closes: z
+              .literal(true)
+              .optional()
+              .describe('Explicitly permit line_end to cross multiple adjacent closing brackets.'),
           },
           // zod reports unrecognized keys only on an object it matched to this schema.
           // oxlint-disable-next-line typescript/no-unsafe-type-assertion
@@ -133,7 +144,7 @@ const actionSchema = z.union(
           if (problem !== undefined) ctx.addIssue({ code: 'custom', message: problem });
         })
         .describe(
-          `Move your cursor to a spot, \`at\`: the text around it with ${CURSOR_MARKER} where your cursor goes (\`line: 3, at: "import { ${CURSOR_MARKER}type Context"\` lands right before \`type Context\`), or to the end of the line with \`to: "line_end"\`. On \`line\`, exactly: a spot that isn't on it is rejected. Without \`line\`, on your cursor's line: that's how you step past a close you just typed on your line, e.g. \`{ to: "line_end" }\`.`,
+          `Move your cursor to a spot, \`at\`: the text around it with ${CURSOR_MARKER} where your cursor goes (\`line: 3, at: "import { ${CURSOR_MARKER}type Context"\` lands right before \`type Context\`), or to the end of the line with \`to: "line_end"\`. On \`line\`, exactly: a spot that isn't on it is rejected. Without \`line\`, on your cursor's line: use \`{ to: "next_close" }\` for one adjacent closing bracket, or \`at\` to move to an exact spot after another close.`,
         ),
     }),
     action({
@@ -143,13 +154,18 @@ const actionSchema = z.union(
     }),
     action({
       type: typeText.describe(
-        `The text, with ${CURSOR_MARKER} where your cursor ends: all of it is typed at a human pace, then your cursor steps back to the ${CURSOR_MARKER}. Replaces the selection if there is one. Inserted literally: include newlines and indentation yourself; nothing is auto-closed. The default for anything the programmer should read. The programmer watches every keystroke, and every second they see an unclosed bracket, parenthesis, quote or block is a second of suffering for them, so close each one the moment you open it, always, however short: \`"f(${CURSOR_MARKER})"\` then \`"x${CURSOR_MARKER}"\`, never \`"f(x)${CURSOR_MARKER}"\`. Type left to right, except that whatever has a close gets its close first: when the text before ${CURSOR_MARKER} opens a bracket, a quote or a block (however the language spells it: \`{\`, \`begin\`, \`then\`, \`do\`, a tag, a block comment), what's after ${CURSOR_MARKER} is its close and nothing more. Fill it, step past its close (a \`move\` to the end of its line, or to a spot right after it; \`to: "line_end"\` is only the end of your cursor's line, so it doesn't step past a block's close on the line below), and type what follows there: \`"if (${CURSOR_MARKER})"\`, \`"x < 0${CURSOR_MARKER}"\`, \`to: "line_end"\`, \`" {\\n    ${CURSOR_MARKER}\\n  }"\`, then the body; \`"(${CURSOR_MARKER})"\`, \`"x + y${CURSOR_MARKER}"\`, \`to: "line_end"\`, \`" * SCALE;${CURSOR_MARKER}"\`. Nothing follows ${CURSOR_MARKER} when the text opens nothing. Start new lines at the end of the line above, never where code follows on the line: it would slide right as you type. Separate definitions with one blank line, \`"\\n\\n${ELLIPSIS}"\` at the end of the one above, and leave one newline at the end of the file.`,
+        `The text, with ${CURSOR_MARKER} where your cursor ends: all of it is typed at a human pace, then your cursor steps back to the ${CURSOR_MARKER}. Replaces the selection if there is one. Inserted literally: include newlines and indentation yourself; nothing is auto-closed. The default for anything the programmer should read. The programmer watches every keystroke, and every second they see an unclosed bracket, parenthesis, quote or block is a second of suffering for them, so close each one the moment you open it, always, however short: \`"f(${CURSOR_MARKER})"\` then \`"x${CURSOR_MARKER}"\`, never \`"f(x)${CURSOR_MARKER}"\`. Type left to right, except that whatever has a close gets its close first: when the text before ${CURSOR_MARKER} opens a bracket, a quote or a block (however the language spells it: \`{\`, \`begin\`, \`then\`, \`do\`, a tag, a block comment), what's after ${CURSOR_MARKER} is its close and nothing more. Name the file before the first edit in each batch with a \`move\`, \`select\`, or \`point\`. Fill the pair, then use \`next_close\` to cross one adjacent closing bracket, or an exact \`at\` spot for another close; \`line_end\` crosses every close remaining on the line. For Python and JSON, use the structural newline action to split an adjacent pair safely. Literal newlines remain available for other languages and contexts; include their indentation and inspect surrounding closes carefully. Nothing follows ${CURSOR_MARKER} when the text opens nothing. For literal newlines start at the end of the line above, not where code follows: that code would slide right as you type. The structural newline action intentionally splits its adjacent pair. Separate definitions with one blank line, \`"\\n\\n${ELLIPSIS}"\` at the end of the one above, and leave one newline at the end of the file.`,
       ),
     }),
     action({
       type_fast: typeText.describe(
         "Like `type`, several times faster, for text the programmer doesn't need to read: imports, config, boilerplate. Only the speed changes: closes still come first.",
       ),
+    }),
+    action({
+      newline: z
+        .strictObject({ indent: z.string().regex(/^[\t ]+$/) })
+        .describe('Split an adjacent matching pair in Python or JSON code, placing the cursor on an indented new line.'),
     }),
     action({ delete: z.literal(true).describe('Delete the current selection; `select` first.') }),
     action({
@@ -161,7 +177,7 @@ const actionSchema = z.union(
       run: z
         .string()
         .describe(
-          "Run a shell command in a terminal the programmer sees: tests, builds, starting the app. They may be asked to allow it. The exit code, the output and the terminal's shell come back in the batch's report; a nonzero exit fails the batch. Make it the last action of its batch.",
+          "Run a shell command the programmer can follow in the Pair panel: tests, builds, starting the app. They can reveal its terminal. They may be asked to allow it. The exit code, the output and the terminal's shell come back in the batch's report; a nonzero exit fails the batch. Make it the last action of its batch.",
         ),
       wait: z.number().optional().describe('Seconds to wait (default 120). For a server, a few: it keeps running.'),
     }),

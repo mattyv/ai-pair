@@ -15,7 +15,7 @@ import { boundedDiff, lineChanges } from '../src/diff';
 import { followChange, rehearse } from '../src/rehearsal';
 import type { LineIds, Sighting } from '../src/lines';
 import type { Failure, Scene, Stage } from '../src/player';
-import type { EditorPort, PanelEvent, PanelPort, SharedSelection } from '../src/ports';
+import type { DiagnosticEvent, EditorPort, NarrationPort, PanelEvent, PanelPort, SharedSelection } from '../src/ports';
 import { glideDuration, withOverrides } from '../src/timing';
 
 /** What the mocked modules share with the tests, made before the `vi.mock` factories run. */
@@ -57,9 +57,12 @@ const fakes = vi.hoisted(() => {
   /** The Player, faked: it records its scene and stage, plays each batch as a test says, and shows no cursor. */
   class FakePlayer {
     reading = false;
+    readonly finishReading = vi.fn();
+    readonly holdReading = vi.fn();
+    readonly releaseReadingHold = vi.fn();
     commandRunning = false;
-    readonly play = vi.fn((id: number): Promise<{ result: BatchResult; sightings: Sighting[] }> =>
-      Promise.resolve({ result: { id, status: 'completed' }, sightings: [] }),
+    readonly play = vi.fn((id: number): Promise<{ result: BatchResult; sightings: Sighting[]; editedFiles: string[] }> =>
+      Promise.resolve({ result: { id, status: 'completed' }, sightings: [], editedFiles: [] }),
     );
     readonly transform = vi.fn();
     /** By default, the cursor's file can't be read, so a report adds no cursor. */
@@ -204,7 +207,7 @@ type FakePlayer = InstanceType<typeof fakes.FakePlayer>;
 type FakeTimeline = InstanceType<typeof fakes.FakeTimeline>;
 
 /** Returns a controller on mocks, with `config` over CONFIG and `files` in its editor. */
-function harness(config: Partial<Config> = {}, files: Record<string, string> = {}): Harness {
+function harness(config: Partial<Config> = {}, files: Record<string, string> = {}, narration?: NarrationPort): Harness {
   const texts = new Map(Object.entries(files).map(([name, text]) => [path.join(ROOT, name), text]));
   const editor = mock<EditorPort>();
   editor.resolvePath.mockImplementation((file) => path.resolve(ROOT, file));
@@ -215,7 +218,7 @@ function harness(config: Partial<Config> = {}, files: Record<string, string> = {
   });
   editor.isDirty.mockResolvedValue(false);
   const panel = mock<PanelPort>();
-  const controller = new Controller(editor, panel, { ...CONFIG, ...config });
+  const controller = new Controller(editor, panel, { ...CONFIG, ...config }, narration);
   const traced: string[] = [];
   controller.trace = (line) => {
     traced.push(line);
@@ -326,14 +329,14 @@ function statuses(h: Harness): string[] {
 
 /** Makes the next batch the Player plays wait, and returns how to finish it with `result`. */
 function holdPlay(): (result?: Partial<BatchResult>, sightings?: Sighting[]) => void {
-  const { promise, resolve } = Promise.withResolvers<{ result: BatchResult; sightings: Sighting[] }>();
+  const { promise, resolve } = Promise.withResolvers<{ result: BatchResult; sightings: Sighting[]; editedFiles: string[] }>();
   let id = 0;
   player().play.mockImplementationOnce((batch: number) => {
     id = batch;
     return promise;
   });
   return (result = {}, sightings = []) => {
-    resolve({ result: { id, status: 'completed', ...result }, sightings });
+    resolve({ result: { id, status: 'completed', ...result }, sightings, editedFiles: [] });
   };
 }
 
@@ -386,6 +389,44 @@ describe('isSavedSession', () => {
     expect(isSavedSession({ scene: {}, finished: [] })).toBe(false);
     expect(isSavedSession(JSON.parse('null'))).toBe(false);
     expect(isSavedSession('a session')).toBe(false);
+  });
+});
+
+describe('diagnostic events', () => {
+  it('keeps session behavior unchanged if the diagnostic observer throws', async () => {
+    const h = harness();
+    h.controller.onDiagnostic = () => {
+      throw new Error('observer');
+    };
+    const result = await h.controller.start();
+    expect(result.turn).toBe('agent');
+    h.controller.pause('away');
+    h.controller.resume('away');
+    h.controller.disconnect();
+    expect(h.controller.isSuspended).toBe(true);
+  });
+
+  it('does not flood diagnostics with duplicate pause notifications', async () => {
+    const h = harness();
+    const events = vi.fn<(entry: DiagnosticEvent) => void>();
+    h.controller.onDiagnostic = events;
+    await h.controller.start();
+    for (let index = 0; index < 120; index++) h.controller.pause('reply');
+    expect(events.mock.calls.map(([event]) => event).filter((event) => event.kind === 'pause')).toHaveLength(2);
+  });
+
+  it('records session and pause states without task text', async () => {
+    const h = harness();
+    const events = vi.fn<(entry: DiagnosticEvent) => void>();
+    h.controller.onDiagnostic = events;
+    await h.controller.start('private task');
+    h.controller.pause('away');
+    h.controller.resume('away');
+    h.controller.disconnect();
+    expect(events.mock.calls.map(([event]) => event)).toContainEqual({ kind: 'session', state: 'active' });
+    expect(events.mock.calls.map(([event]) => event)).toContainEqual({ kind: 'pause', paused: true, reasons: ['away'] });
+    expect(events.mock.calls.map(([event]) => event)).toContainEqual({ kind: 'session', state: 'suspended' });
+    expect(JSON.stringify(events.mock.calls)).not.toContain('private task');
   });
 });
 
@@ -457,6 +498,11 @@ describe('a session the agent leaves, and comes back to', () => {
     expect(fakes.players).toHaveLength(2);
     expect(scene().root).toBe('/other');
     expect(h.controller.isSuspended).toBe(false);
+    expect(posted(h).filter((event) => event.type === 'session')).toEqual([
+      { type: 'session', active: true, task: 'Kept.' },
+      { type: 'session', active: true, task: 'Kept.', suspended: true },
+      { type: 'session', active: true, task: 'New.' },
+    ]);
   });
 
   it('WaitsProp: closes a suspended session at once when the programmer ends it', async () => {
@@ -531,6 +577,30 @@ describe('a session the agent leaves, and comes back to', () => {
 });
 
 describe('steps and their batches', () => {
+  it('rejects another flagged batch while selected narration is outstanding', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step([{ say: 'One.', speak: true }]));
+    const second = await report(h.controller.step([{ say: 'Two.', speak: true }]));
+    expect(second.rejected?.error.message).toContain('current narration');
+    expect(player().play).toHaveBeenCalledTimes(1);
+    finish();
+    await settle();
+  });
+
+  it('rejects two selected narrations in a single batch', async () => {
+    const h = await started();
+    const result = await report(
+      h.controller.step([
+        { say: 'One.', speak: true },
+        { say: 'Two.', speak: true },
+      ]),
+    );
+    expect(result.rejected?.index).toBe(2);
+    expect(result.rejected?.error.message).toContain('one');
+    expect(player().play).not.toHaveBeenCalled();
+  });
+
   it('BatchEnds, ReadyAtHead: returns the first step immediately and blocks the second until the first finishes', async () => {
     const h = await started();
     const finish = holdPlay();
@@ -630,7 +700,37 @@ describe('steps and their batches', () => {
     expect((await report(h.controller.step([{ say: 'Only words.' }]))).rejected).toBeUndefined();
     await report(h.controller.step([ANCHORED]));
     await report(h.controller.step([]));
-    expect((await report(h.controller.step([type]))).rejected).toBeUndefined();
+    expect((await report(h.controller.step([type]))).rejected?.error.kind).toBe('file_required');
+  });
+
+  it('EditRequiresNamed: refuses an unnamed editing batch before rehearsal, while allowing named edits and non-editing batches', async () => {
+    const h = await started();
+    const edit: Action = { type: `x${CURSOR_MARKER}` };
+    const refused = await report(h.controller.step([{ say: 'Editing.' }, { move: { line: 1, to: 'line_end' } }, edit]));
+    expect(refused.rejected).toMatchObject({ index: 3, action: edit, error: { kind: 'file_required' } });
+    expect(rehearse).not.toHaveBeenCalled();
+    expect((await report(h.controller.step([{ select: { text: 'x' } }, edit]))).rejected?.error.kind).toBe('file_required');
+    expect((await report(h.controller.step([{ say: 'Reading.' }, { point: { line: 1, text: 'x' } }]))).rejected).toBeUndefined();
+    expect((await report(h.controller.step([ANCHORED, edit]))).rejected).toBeUndefined();
+  });
+
+  it('leaves malformed file-naming actions for rehearsal to reject without throwing', async () => {
+    const h = await started();
+    for (const value of ['[null]', '[{"point":null},{"delete":true}]', '[{"point":{"file":3}},{"delete":true}]']) {
+      // Bridge input is checked by rehearsal and may contain malformed actions.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      const malformed = JSON.parse(value) as Action[];
+      await report(h.controller.step(malformed));
+    }
+    expect(vi.mocked(rehearse).mock.calls).toHaveLength(3);
+  });
+
+  it('NoMisplacedEdit: a relative next_close move cannot reanchor after an interrupted batch', async () => {
+    const h = await started();
+    h.controller.userInterrupt();
+    await report(h.controller.step(SAY));
+    const action: Action = { move: { file: 'a.ts', line: 1, to: 'next_close' } };
+    expect((await report(h.controller.step([action]))).rejected?.error.kind).toBe('unanchored');
   });
 
   it('NoRejectionLost: delivers a held rejection with the step discarded as stale before refusing an unanchored one (#193)', async () => {
@@ -711,10 +811,100 @@ describe('steps and their batches', () => {
 });
 
 describe('playing the queue', () => {
+  it('leaves an edited batch unchanged when the advisory check returns no findings', async () => {
+    const h = await started();
+    h.editor.diagnostics.mockResolvedValue({ diagnostics: [], warnings: [] });
+    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed' }, sightings: [], editedFiles: [A] });
+    await report(h.controller.step(SAY));
+    await settle();
+    expect((await report(h.controller.listen())).batches).toContainEqual({ id: 1, status: 'completed' });
+  });
+
+  it('accumulates advisory results for multiple edited files', async () => {
+    const h = await started();
+    h.editor.diagnostics.mockResolvedValue({
+      diagnostics: [{ line: 1, endLine: 1, message: 'problem' }],
+      warnings: ['warning'],
+    });
+    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed' }, sightings: [], editedFiles: [A, B] });
+    await report(h.controller.step(SAY));
+    await settle();
+    const done = await report(h.controller.listen());
+    expect(done.batches[0]?.diagnostics).toHaveLength(2);
+    expect(done.batches[0]?.warnings).toEqual(['warning', 'warning']);
+  });
+
+  it('OnlyEdited, Advisory: reports diagnostics only for files actually edited and does not reject the batch', async () => {
+    const h = await started();
+    h.editor.diagnostics.mockResolvedValue({
+      diagnostics: [{ line: 3, endLine: 3, message: 'invalid syntax', source: 'Python ast' }],
+      warnings: ['VS Code diagnostics may be stale or unavailable.'],
+    });
+    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed' }, sightings: [], editedFiles: [A] });
+    await report(h.controller.step(SAY));
+    await settle();
+    const done = await report(h.controller.listen());
+    expect(h.editor.diagnostics.mock.calls).toEqual([[A]]);
+    expect(done.batches).toContainEqual({
+      id: 1,
+      status: 'completed',
+      diagnostics: [{ file: 'a.ts', line: 3, endLine: 3, message: 'invalid syntax', source: 'Python ast' }],
+      warnings: ['VS Code diagnostics may be stale or unavailable.'],
+    });
+  });
+
+  it('Advisory: an unavailable checker leaves the batch result intact', async () => {
+    const h = await started();
+    h.editor.diagnostics.mockRejectedValue(new Error('unavailable'));
+    player().play.mockResolvedValueOnce({
+      result: { id: 1, status: 'completed', warnings: ['existing'] },
+      sightings: [],
+      editedFiles: [A],
+    });
+    await report(h.controller.step(SAY));
+    await settle();
+    expect((await report(h.controller.listen())).batches).toContainEqual({
+      id: 1,
+      status: 'completed',
+      warnings: ['existing', 'Diagnostics unavailable for an edited file.'],
+    });
+  });
+
+  it('Advisory: records a checker failure when the batch had no earlier warnings', async () => {
+    const h = await started();
+    h.editor.diagnostics.mockRejectedValue(new Error('unavailable'));
+    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed' }, sightings: [], editedFiles: [A] });
+    await report(h.controller.step(SAY));
+    await settle();
+    expect((await report(h.controller.listen())).batches).toContainEqual({
+      id: 1,
+      status: 'completed',
+      warnings: ['Diagnostics unavailable for an edited file.'],
+    });
+  });
+
+  it('does not attach a completed old-session check to a replacement session', async () => {
+    const h = await started();
+    const check = Promise.withResolvers<{ diagnostics: Array<{ line: number; endLine: number; message: string }>; warnings: string[] }>();
+    h.editor.diagnostics.mockReturnValueOnce(check.promise);
+    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed' }, sightings: [], editedFiles: [A] });
+    await report(h.controller.step(SAY));
+    await settle();
+    h.controller.disconnect();
+    h.controller.endSession();
+    await h.controller.start('Replacement.');
+    check.resolve({ diagnostics: [{ line: 1, endLine: 1, message: 'old' }], warnings: [] });
+    await settle();
+    expect((await report(h.controller.listen())).batches).toEqual([]);
+  });
   it('plays each batch in order, takes the lines a completed one leaves, and records what it showed', async () => {
     const h = await started();
     const after = rehearsed();
-    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed' }, sightings: [{ file: A, text: 'x', lines: [1] }] });
+    player().play.mockResolvedValueOnce({
+      result: { id: 1, status: 'completed' },
+      sightings: [{ file: A, text: 'x', lines: [1] }],
+      editedFiles: [],
+    });
     await report(h.controller.step(SAY));
     await settle();
     expect(sessionLines().adopt).toHaveBeenCalledWith(after);
@@ -1127,6 +1317,7 @@ describe("the programmer's input", () => {
     expect(posted(h).at(-1)).toEqual({ type: 'session', active: false, reason: 'programmer' });
     expect((await report(h.controller.listen())).events).toEqual([{ kind: 'end' }]);
     expect(h.traced).toContain('session closed');
+    expect(h.editor.cleanupIdleTerminals.mock.calls).toEqual([[]]);
     expect(h.editor.renderPoint.mock.calls).toContainEqual([undefined]);
   });
 
@@ -1164,7 +1355,7 @@ describe('the cursor in a report', () => {
     const cursorLine = { number: 1, text: `x${CURSOR_MARKER}` };
     const code = { file: 'a.ts', lines: [cursorLine] };
     player().codeAt.mockResolvedValue({ code, sighting: { file: A, text: 'x', lines: [1] }, cursorLine });
-    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed', code }, sightings: [] });
+    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed', code }, sightings: [], editedFiles: [] });
     await report(h.controller.step(SAY));
     await settle();
     expect((await report(h.controller.listen())).cursor).toBeUndefined();
@@ -1175,6 +1366,22 @@ describe('the cursor in a report', () => {
 });
 
 describe('pause and resume', () => {
+  it('pauses speech until all pause reasons clear and cancels it on a reply', async () => {
+    const narration = mock<NarrationPort>();
+    const h = harness({}, {}, narration);
+    await h.controller.start();
+    expect(stage().narration).toBe(narration);
+    h.controller.pause('programmer');
+    h.controller.pause('reply');
+    h.controller.resume('reply');
+    expect(narration.pause).toHaveBeenCalled();
+    expect(narration.resume).not.toHaveBeenCalled();
+    h.controller.resume('programmer');
+    expect(narration.resume).toHaveBeenCalledOnce();
+    h.controller.userMessage('Stop.');
+    expect(narration.cancel).toHaveBeenCalled();
+  });
+
   it('PausedMatchesReasons, NoTimerWhilePaused, ResumeContinues: holds playback until the last pause reason is gone', async () => {
     const h = await started();
     h.controller.pause('programmer');
@@ -1271,6 +1478,9 @@ describe('settings', () => {
     const h = await started();
     h.controller.setSpeed(2);
     h.controller.setReadingSpeed(3);
+    expect(stage().codePlayback()).toBe('typing');
+    h.controller.setCodePlayback('blocks');
+    expect(stage().codePlayback()).toBe('blocks');
     h.controller.setConfirmCommands(false);
     h.controller.setTiming({ glideMs: 1 });
     h.controller.setTimeouts({ maxBlockMs: 4, absentMs: 5 });
@@ -1422,4 +1632,48 @@ describe('reports', () => {
     await report(h.controller.listen());
     expect(boundedDiff).toHaveBeenCalledWith('src/a.ts', 'a', 'b');
   });
+});
+
+describe('finish reading', () => {
+  it('IneligibleKeepsReading: forwards an ID only in an active unpaused agent turn', async () => {
+    const idle = harness();
+    idle.controller.finishReading(1);
+    const h = await started();
+    const current = player();
+    h.controller.finishReading(42);
+    expect(current.finishReading).toHaveBeenCalledExactlyOnceWith(42);
+    h.controller.pause();
+    h.controller.finishReading(42);
+    expect(current.finishReading).toHaveBeenCalledTimes(1);
+    h.controller.resume();
+    h.controller.takeTurn();
+    h.controller.finishReading(42);
+    expect(current.finishReading).toHaveBeenCalledTimes(1);
+    h.controller.handBack();
+    h.controller.disconnect();
+    h.controller.finishReading(42);
+    expect(current.finishReading).toHaveBeenCalledTimes(1);
+    h.controller.endSession();
+    h.controller.finishReading(42);
+    expect(current.finishReading).toHaveBeenCalledTimes(1);
+  });
+});
+
+it('releases an existing reading hold even after a separate pause, but rejects new holds', async () => {
+  const idle = harness();
+  idle.controller.holdReading(42, true);
+  idle.controller.releaseReadingHold();
+  const h = await started();
+  const current = player();
+  h.controller.holdReading(42, true);
+  h.controller.pause();
+  h.controller.holdReading(42, true);
+  h.controller.holdReading(42, false);
+  h.controller.releaseReadingHold();
+  expect(current.holdReading.mock.calls).toEqual([
+    [42, true],
+    [42, false],
+  ]);
+  expect(current.releaseReadingHold).toHaveBeenCalledOnce();
+  expect(h.controller.isPaused).toBe(true);
 });

@@ -186,11 +186,11 @@ the closing message in the narration panel. Returns the final report.
 
 Submits a batch. Blocks as described in [Timing model](#timing-model).
 
-**A batch works in one file.** It may name a file (in `move`, `select` or
-`point`) only before its first edit, and all the files it names must be the same
-one. So every batch edits exactly one file, and its report shows one piece of
-code. A batch that breaks this is rejected, like any batch that would fail, with
-`invalid_action` at the action that names a second file.
+**A batch works in one file.** A batch that edits must name its file in a
+`move`, `select`, or `point` before its first edit. All files it names must be
+the same one. Every editing batch works in exactly one file, and its report
+shows one piece of code. A batch that names a second file is rejected with
+`invalid_action`; a batch that edits without naming one gets `file_required`.
 
 An empty batch isn't a batch: `step([])` waits for the queued batches to finish,
 without waiting for the programmer, and reports them.
@@ -239,6 +239,7 @@ type Action =
   | { select: Span }
   | { type: string }          // with one ▌: where the cursor ends
   | { type_fast: string }
+  | { newline: { indent: string } }
   | { delete: true }
   | { point: Span }
   | { run: string, wait?: number }
@@ -251,14 +252,16 @@ are separate actions, played in order.
 `move`, `select` and `point` say where they act the same way, as a [place or a
 span](#places) on a line.
 
-Each editing action (`type`, `type_fast`, `delete`) is **one undo stop** in the
+Each editing action (`type`, `type_fast`, `newline`, `delete`) is **one undo
+stop** in the
 programmer's undo stack, not one per character. If the programmer undoes an
 agent action, that is an edit like any other (and interrupts).
 
 ### `say`
 
 Shows the text as the current message in the narration panel. It stays current
-until the next `say`, then moves into the history. Inline code in backticks is
+until the next history entry or `say`,
+then moves into the history with its code link. Inline code in backticks is
 rendered as code.
 
 After a `say`, playback **pauses for a reading time** proportional to the
@@ -279,7 +282,15 @@ report shows the cursor there.
 
 A move to a `file` that doesn't exist creates it, empty. A move clears any
 selection. Without `line`, it's on the cursor's line: that's how the agent steps
-past a close it just typed without knowing its line's number.
+past a close it just typed without knowing its line's number. Use
+`{ move: { to: "next_close" } }` to move past exactly one adjacent `)`, `]`,
+or `}`. It requires an unselected cursor and accepts no `file`, `line`, or
+`at`; it does not anchor a cursor after an interrupted batch. If the rest of the
+cursor's current line contains only two or more closing brackets and spaces or
+tabs, `line_end` is refused during rehearsal unless the move also sets
+`allow_multiple_closes: true`. Use `next_close` or an exact `at` spot to stop
+earlier. The guard is a narrow suffix check, not a parser; it does not cover
+other lines or suffixes containing code or comments. Playback checks it again.
 
 ### `select`
 
@@ -314,7 +325,19 @@ and no pause.
 Text is inserted **literally**: no auto-closing brackets, no auto-indent, no
 completions. The agent must include indentation itself. Newlines are inserted as
 the document's line ending (LF or CRLF) as the editor reports it, which it does
-even for an empty file.
+even for an empty file. CRLF input is normalized to that ending; a lone carriage
+return remains literal. The cursor marker cannot divide a CRLF input sequence.
+
+### `newline`
+
+`{ newline: { indent: "    " } }` is an opt-in structural newline for Python
+(`.py`) and JSON (`.json`). With the cursor between adjacent matching brackets
+in code, it adds a line inside the pair and leaves the close on its own line.
+`indent` is a nonempty string of spaces or tabs, added to the current line's
+leading indentation. It refuses selections, strings, comments, unsupported
+languages and contexts it cannot safely identify. Use literal `type` for other
+cases. Rehearsal uses the same operation, and an interruption returns the
+remaining literal text rather than repeating the split.
 
 ### `delete`
 
@@ -340,9 +363,10 @@ a clickable reference instead.
 
 ### `run`
 
-Runs a shell command in an integrated terminal the programmer can see, in the
-agent's working directory. For commands whose outcome the programmer should
-witness: tests, builds, starting the app, a request to it. Purely mechanical
+Runs a shell command in an integrated terminal in the agent's working directory.
+The Pair panel shows the command and result; the programmer can reveal its
+terminal. For commands whose outcome the programmer should witness: tests,
+builds, starting the app, a request to it. Purely mechanical
 commands can still run in the background with the agent's native tools.
 
 -   **Confirmation.** By default the narration panel asks the programmer to
@@ -376,7 +400,8 @@ type Place = {
   file?: string
   line?: number     // the line the cursor lands on, exactly; omitted: the cursor's line
   at?: string       // a spot: the exact text around it, with one ▌ where the cursor goes; may span lines
-  to?: "line_end"   // instead of `at`: the end of the line
+  to?: "line_end" | "next_close"   // end of line, or one adjacent close
+  allow_multiple_closes?: true // acknowledge crossing multiple closes with line_end
 }
 
 type Span = {
@@ -389,8 +414,9 @@ type Span = {
 ```
 
 -   **`file`** switches to that file, only before the batch's first edit (see
-    [`step`](#stepactions-action---report)). Without it, the action is in the
-    cursor's file.
+    [`step`](#stepactions-action---report)). Without it, the action uses the
+    file already named by its batch, or the cursor's file if the batch has
+    named none.
 -   **`line`** is exact. Lines are numbered as `read` and reports show them: a
     newline at the end of a file doesn't start another line, and an empty file
     has one, line 1. A line the file doesn't have fails with `no_line`. Without
@@ -492,6 +518,13 @@ Not played:
   {"say":"Now the GET route."}
 ```
 
+Reports may include advisory diagnostics for files actually edited, including
+Python syntax checks and available language-server errors. They can reflect an
+intentionally incomplete intermediate batch or a stale provider result; they
+do not block playback. Syntax checks do not detect every semantic mistake: for
+example, a Python trailing comma can make a syntactically valid tuple. Use type
+checks and tests to check intended behavior.
+
 **What counts as played.** A `say` counts once it's shown, even if its reading
 pause is cut short. A `move` or `select` counts once the cursor has moved. A
 `run` counts once its command has started. A batch interrupted before any of its
@@ -531,6 +564,8 @@ type BatchResult = {
   code?: Code
   error?: BatchError          // for a command's failure, about its `run`; else the first unplayed action
   unplayed?: Action[]
+  warnings?: string[]         // advisory; never changes the batch status
+  diagnostics?: { file: string, line: number, endLine: number, message: string, source?: string }[]
   runs?: {                    // one per `run` that started
     command: string
     exit_code?: number        // absent while running, or if it couldn't be observed
@@ -545,7 +580,7 @@ type BatchResult = {
 type BatchError = {
   kind: "no_line" | "not_found" | "ambiguous" | "line_not_seen" | "no_selection" | "no_cursor"
       | "not_your_turn" | "invalid_action" | "command_failed" | "command_declined"
-      | "save_failed"
+      | "save_failed" | "unanchored" | "file_required"
   message: string
   candidates?: { line: number, context: string }[]
 }
@@ -577,11 +612,10 @@ type Excerpt = {              // code the programmer had selected
 ```
 
 During the agent's turn, **every event interrupts**: it stops playback and
-triggers the no-stale-plans rule. This includes any edit by the programmer,
-anywhere. The one exception is a change the programmer didn't make (an edit
-`by: "other"`) to a file no playing or queued batch edits: it's reported,
-without interrupting. (A finer rule for the programmer's edits, such as only
-edits near the agent cursor, may come later.)
+triggers the no-stale-plans rule. This includes changes attributed
+conservatively to `by: "programmer"`, anywhere. The one exception is an edit
+`by: "other"` to a file no playing or queued batch edits: it's reported
+without interrupting.
 
 -   `message`: the programmer sent a message from the narration panel. If they
     had code selected in the editor, it comes along as `selection`, unless they
@@ -589,13 +623,14 @@ edits near the agent cursor, may come later.)
 -   `interrupt`: the Interrupt button.
 -   `turn`: see [Turns](#turns).
 -   `edit`: a file changed. Edits are coalesced per file into a single diff per
-    report. `by` says whether the programmer made them, or something else did: a
-    tool or a command writing to disk (including the agent's own), or a
-    formatter when the file is saved. A diff with any edit by the programmer is
-    theirs. A change by others to a file the playing or queued batches edit
-    interrupts, since they were planned against the text before it: a formatter
-    when a batch saves, say. Changes by others to any other file don't
-    interrupt, and don't make `listen` return.
+    report. `by: "programmer"` is the conservative category for an editor
+    change whose source cannot be identified; it does not prove a person typed
+    it. `by: "other"` covers identified outside changes such as a formatter
+    during save or a disk reload. A diff containing any conservatively
+    classified change uses `"programmer"`. A change by others to a file the
+    playing or queued batches edit interrupts, since they were planned against
+    the text before it: a formatter when a batch saves, say. Changes by others
+    to any other file don't interrupt, and don't make `listen` return.
     A diff longer than 200 lines comes as its hunks' headers alone, the line
     ranges it changed, with `omitted` saying how many lines were left out: the
     agent reads the file for the text (#149).
@@ -738,7 +773,7 @@ Programmer presses "My turn".
   It's the programmer's turn: you're the navigator. ...
 -> listen
 ... programmer writes a loop, pauses typing ...
-<- The programmer edited src/server.ts:
+<- Editor text changed in src/server.ts:
   @@ -20,2 +20,4 @@
   ...
 -> read src/server.ts, from line 20: the loop is on line 21
@@ -747,7 +782,7 @@ Programmer presses "My turn".
  { "say": "Careful: `<=` will go one past the end." }]
 -> listen
 ... programmer fixes it, presses "Hand back" ...
-<- The programmer edited src/server.ts:
+<- Editor text changed in src/server.ts:
   ...
   The programmer handed the turn back to you:
   > ok, finish the handler

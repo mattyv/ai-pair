@@ -24,9 +24,13 @@ VARIABLES
     messageFiled,        \* Fix 1: the current message is already in the history
     entriesSinceMessage, \* Fix 2: how many entries were added while the current
                          \* message was current
-    history              \* the history, top first: the times of its entries
+    history,             \* newest first, independent of presentation
+    order,               \* the displayed and persisted order
+    settingsOpen,        \* whether the settings dialog is open
+    bandVisible          \* current narration is visible in the band
 
-vars == <<time, currentMessage, messageFiled, entriesSinceMessage, history>>
+vars == <<time, currentMessage, messageFiled, entriesSinceMessage, history,
+          order, settingsOpen, bandVisible>>
 
 --------------------------------------------------------------------------------
 
@@ -37,6 +41,9 @@ TypeOK ==
     /\ messageFiled \in BOOLEAN
     /\ entriesSinceMessage \in Nat
     /\ history \in Seq(Nat \ {0})
+    /\ order \in {"newest", "oldest"}
+    /\ settingsOpen \in BOOLEAN
+    /\ bandVisible \in BOOLEAN
 
 \* `s` with `x` inserted after its first `n` elements.
 InsertAfter(s, n, x) == SubSeq(s, 1, n) \o <<x>> \o SubSeq(s, n + 1, Len(s))
@@ -56,45 +63,75 @@ Init ==
     /\ messageFiled = FALSE
     /\ entriesSinceMessage = 0
     /\ history = <<>>
+    /\ order \in {"newest", "oldest"}
+    /\ settingsOpen = FALSE
+    /\ bandVisible = FALSE
 
 \* setNow: the agent's message replaces the one in the band, which is filed.
 Say ==
     /\ time' = time + 1
     /\ currentMessage' = time + 1
+    /\ bandVisible' = TRUE
     /\ messageFiled' = FALSE
     /\ entriesSinceMessage' = 0
     /\ history' = WithMessageFiled
+    /\ UNCHANGED <<order, settingsOpen>>
 
 \* add(): an entry, such as the programmer's message, a run, or a divider,
 \* goes on top; under Fix 1 the band's message is filed first.
 AddEntry ==
     /\ time' = time + 1
     /\ messageFiled' = (Fix = 1 /\ currentMessage # NoMessage)
+    /\ bandVisible' = IF Fix = 1 THEN FALSE ELSE bandVisible
     /\ entriesSinceMessage' = IF Fix = 2 THEN entriesSinceMessage + 1
                               ELSE entriesSinceMessage
     /\ history' = <<time + 1>> \o (IF Fix = 1 THEN WithMessageFiled
                                    ELSE history)
-    /\ UNCHANGED currentMessage
+    /\ UNCHANGED <<currentMessage, order, settingsOpen>>
 
 \* A session starts or ends: its divider goes on top of the filed band, and
 \* the band empties.
 ChangeSession ==
     /\ time' = time + 1
     /\ currentMessage' = NoMessage
+    /\ bandVisible' = FALSE
     /\ messageFiled' = FALSE
     /\ entriesSinceMessage' = 0
     /\ history' = <<time + 1>> \o WithMessageFiled
+    /\ UNCHANGED <<order, settingsOpen>>
 
 \* A `session` event repeating a suspension the page already shows (#138):
 \* the band is filed and empties, and no divider is added.
 RepeatSession ==
     /\ currentMessage' = NoMessage
+    /\ bandVisible' = FALSE
     /\ messageFiled' = FALSE
     /\ entriesSinceMessage' = 0
     /\ history' = WithMessageFiled
-    /\ UNCHANGED time
+    /\ UNCHANGED <<time, order, settingsOpen>>
+
+\* A setting change, in the dialog or VS Code, reverses presentation.
+SwitchOrder ==
+    /\ order' = IF order = "newest" THEN "oldest" ELSE "newest"
+    /\ UNCHANGED <<time, currentMessage, messageFiled, entriesSinceMessage,
+                   history, settingsOpen, bandVisible>>
+
+OpenSettings ==
+    /\ ~settingsOpen
+    /\ settingsOpen' = TRUE
+    /\ UNCHANGED <<time, currentMessage, messageFiled, entriesSinceMessage,
+                   history, order, bandVisible>>
+
+CloseSettings ==
+    /\ settingsOpen
+    /\ settingsOpen' = FALSE
+    /\ UNCHANGED <<time, currentMessage, messageFiled, entriesSinceMessage,
+                   history, order, bandVisible>>
 
 Next ==
+    \/ SwitchOrder
+    \/ OpenSettings
+    \/ CloseSettings
     \/ Say
     \/ AddEntry
     \/ ChangeSession
@@ -107,12 +144,25 @@ Spec == Init /\ [][Next]_vars
 \* The history is in reverse order of when things happened.
 NewestFirst == \A i \in 1..(Len(history) - 1) : history[i] > history[i + 1]
 
+\* Presentation reverses the logical history when oldest first.
+Displayed == IF order = "newest" THEN history
+             ELSE [i \in 1..Len(history) |-> history[Len(history) - i + 1]]
+DisplayOrdered == \A i \in 1..(Len(Displayed) - 1) :
+    IF order = "newest" THEN Displayed[i] > Displayed[i + 1]
+    ELSE Displayed[i] < Displayed[i + 1]
+
 \* Every event is in the band or in the history. A panel that ignored events
 \* would lose them, so this says something must happen.
 NoneLost ==
     \A k \in 1..time :
-        \/ k = currentMessage
+        \/ (bandVisible /\ k = currentMessage)
         \/ \E i \in 1..Len(history) : history[i] = k
+
+\* A filed message is no longer displayed in the band. An unfiled message
+\* must not already be in history, so each message is visible at most once.
+VisibleOnce == bandVisible =>
+    /\ currentMessage # NoMessage
+    /\ \A i \in 1..Len(history) : history[i] # currentMessage
 
 \* No entry is in the history twice.
 NoDuplicates ==

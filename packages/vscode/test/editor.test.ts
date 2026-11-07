@@ -10,6 +10,7 @@ import { mock } from 'vitest-mock-extended';
 import { MissingFile, samePath, withinFolder, type Controller } from '@ai-pair/core';
 import { LABEL_SEPARATOR } from '@ai-pair/core/constants';
 import { VsCodeEditor } from '../src/editor';
+import { pythonDiagnostic } from '../src/python_diagnostics';
 import { comfortable, glideTop, isOwnEdit, landing, row, viewport } from '../src/view';
 
 /** What the mocked modules share with the tests, made before the `vi.mock` factories run. */
@@ -140,8 +141,10 @@ const fakes = vi.hoisted(() => {
   class FakeTerminals {
     readonly run = vi.fn((command: string) => Promise.resolve({ output: `ran ${command}` }));
     readonly dispose = vi.fn();
+    readonly showTerminal = vi.fn<(id: number) => boolean>(() => true);
+    readonly cleanupIdle = vi.fn();
 
-    constructor() {
+    constructor(readonly showAutomatically: () => boolean) {
       created.terminals.push(this);
     }
   }
@@ -180,6 +183,10 @@ const fakes = vi.hoisted(() => {
     }),
     applyEdit: vi.fn((edit: FakeWorkspaceEdit) => Promise.resolve(edit.replace.mock.calls.length > 0)),
     showTextDocument: vi.fn<(doc: FakeDocument, options: unknown) => Promise<void>>(() => Promise.resolve()),
+    diagnostics:
+      vi.fn<
+        () => Array<{ severity: number; message: string; source?: string; range: { start: { line: number }; end: { line: number } } }>
+      >(),
   };
 });
 
@@ -193,6 +200,8 @@ vi.mock('vscode', () => ({
   DecorationRangeBehavior: { ClosedClosed: 1 },
   EndOfLine: { LF: 1, CRLF: 2 },
   TextEditorRevealType: fakes.reveal,
+  DiagnosticSeverity: { Error: 0 },
+  languages: { getDiagnostics: fakes.diagnostics },
   window: {
     createTextEditorDecorationType: (options: InstanceType<typeof fakes.FakeDecorationType>['options']) => {
       const type = new fakes.FakeDecorationType(options);
@@ -248,6 +257,7 @@ vi.mock('../src/view', () => ({
   viewport: vi.fn(() => undefined),
 }));
 vi.mock('../src/terminal', () => ({ PairTerminals: fakes.FakeTerminals }));
+vi.mock('../src/python_diagnostics', () => ({ pythonDiagnostic: vi.fn() }));
 
 type FakeEditor = InstanceType<typeof fakes.FakeEditor>;
 type FakeDocument = InstanceType<typeof fakes.FakeDocument>;
@@ -389,6 +399,96 @@ afterEach(() => {
   fakes.created.opened.length = 0;
 });
 
+describe('diagnostics', () => {
+  it('OnlyEdited, Advisory: returns bounded, deduplicated error snapshots with one-based ranges', async () => {
+    const { editor } = made();
+    const error = { severity: 0, message: 'Unexpected token', source: 'checker', range: { start: { line: 2 }, end: { line: 3 } } };
+    fakes.diagnostics.mockReturnValue([error, error, { ...error, severity: 1 }]);
+    expect(await editor.diagnostics(FILE)).toEqual({
+      diagnostics: [{ line: 3, endLine: 4, message: 'Unexpected token', source: 'checker' }],
+      warnings: ['VS Code diagnostics may be stale or unavailable.'],
+    });
+    expect(fakes.diagnostics).toHaveBeenCalledWith({ scheme: 'file', fsPath: FILE });
+    editor.dispose();
+  });
+
+  it('checks the captured Python text and discards a result when the file changes while checking', async () => {
+    const { editor } = made();
+    const doc = new fakes.FakeDocument('/project/a.py', 'old text');
+    doc.isDirty = true;
+    fakes.documents.push(doc);
+    fakes.diagnostics.mockReturnValue([]);
+    const pending = Promise.withResolvers<Awaited<ReturnType<typeof pythonDiagnostic>>>();
+    vi.mocked(pythonDiagnostic).mockReturnValueOnce(pending.promise);
+    const result = editor.diagnostics(doc.uri.fsPath);
+    await Promise.resolve();
+    await Promise.resolve();
+    doc.text = 'new text';
+    pending.resolve({ diagnostic: { line: 1, endLine: 1, message: 'old error', source: 'Python ast' } });
+    expect(await result).toEqual({
+      diagnostics: [],
+      warnings: [
+        'VS Code diagnostics may be stale or unavailable.',
+        'Python syntax check uses system python3, which may differ from the project interpreter.',
+        'Python syntax check discarded because the file changed while it ran.',
+      ],
+    });
+    editor.dispose();
+  });
+
+  it('caps the diagnostics in a report', async () => {
+    const { editor } = made();
+    fakes.diagnostics.mockReturnValue(
+      Array.from({ length: 60 }, (_, line) => ({
+        severity: 0,
+        message: String(line),
+        range: { start: { line }, end: { line } },
+      })),
+    );
+    expect((await editor.diagnostics(FILE)).diagnostics).toHaveLength(50);
+    editor.dispose();
+  });
+
+  it('still checks Python if VS Code diagnostics fail, and reports unavailable checks', async () => {
+    const { editor } = made();
+    const doc = new fakes.FakeDocument('/project/a.py', 'x = 1');
+    doc.isDirty = true;
+    fakes.documents.push(doc);
+    fakes.diagnostics.mockImplementation(() => {
+      throw new Error('provider failed');
+    });
+    vi.mocked(pythonDiagnostic).mockResolvedValueOnce({ warning: 'python unavailable' });
+    expect(await editor.diagnostics(doc.uri.fsPath)).toEqual({
+      diagnostics: [],
+      warnings: [
+        'VS Code diagnostics may be stale or unavailable.',
+        'VS Code diagnostics could not be read.',
+        'Python syntax check uses system python3, which may differ from the project interpreter.',
+        'python unavailable',
+      ],
+    });
+    editor.dispose();
+  });
+
+  it('returns Python syntax errors from an unchanged document and reports unreadable files', async () => {
+    const { editor } = made();
+    const doc = new fakes.FakeDocument('/project/a.py', 'def f(:');
+    doc.isDirty = true;
+    fakes.documents.push(doc);
+    fakes.diagnostics.mockReturnValue([]);
+    vi.mocked(pythonDiagnostic).mockResolvedValueOnce({
+      diagnostic: { line: 1, endLine: 1, message: 'invalid syntax', source: 'Python ast' },
+    });
+    expect((await editor.diagnostics(doc.uri.fsPath)).diagnostics).toEqual([
+      { line: 1, endLine: 1, message: 'invalid syntax', source: 'Python ast' },
+    ]);
+    expect((await editor.diagnostics('/project/missing.py')).warnings).toContain(
+      'Python syntax check unavailable because the file could not be read.',
+    );
+    editor.dispose();
+  });
+});
+
 describe('the decorations', () => {
   it('makes a cursor and a label for each state, the label naming the agent and its state, and disposes them all', () => {
     const { editor } = made();
@@ -446,6 +546,17 @@ describe('the decorations', () => {
     expect(drawn(here, at(fakes.created.types, 0))).toEqual([]);
     editor.renderCursor(undefined, 'typing', 'cursor');
     expect(drawn(here, cursorType('typing'))).toEqual([]);
+  });
+
+  it('highlights only the inserted code in its editor and clears the highlight', () => {
+    const { editor } = made();
+    const here = inView(FILE);
+    const there = inView(OTHER);
+    editor.renderCodeReading({ file: FILE, start: 1, end: 3 });
+    expect(drawn(here, at(fakes.created.types, 1))).toEqual([[pos(1), pos(3)]]);
+    expect(drawn(there, at(fakes.created.types, 1))).toEqual([]);
+    editor.renderCodeReading(undefined);
+    expect(drawn(here, at(fakes.created.types, 1))).toEqual([]);
   });
 
   it('pulses the read cursor, dimming it every PULSE_MS, until the state changes', () => {
@@ -688,6 +799,18 @@ describe('follow mode: looking away', () => {
     expect(controller.pause.mock.calls).toEqual([['away']]);
   });
 
+  it('ReadingTargetsGroup: follows the inserted group during reading, then returns to the cursor', () => {
+    const { editor, controller } = made();
+    const view = inView(FILE);
+    editor.renderCursor({ file: FILE, offset: 1 }, 'read', 'cursor');
+    editor.renderCodeReading({ file: FILE, start: 50, end: 55 });
+    fire('visibleRanges', { textEditor: view, visibleRanges: [{ start: { line: 40 }, end: { line: 60 } }] });
+    expect(controller.pause.mock.calls).toEqual([]);
+    editor.renderCodeReading(undefined);
+    fire('visibleRanges', { textEditor: view, visibleRanges: [{ start: { line: 40 }, end: { line: 60 } }] });
+    expect(controller.pause.mock.calls).toEqual([['away']]);
+  });
+
   it('pauses as away when the programmer scrolls the target out of view, measuring the view each time', () => {
     const { editor, controller } = made();
     const view = inView(FILE);
@@ -915,6 +1038,25 @@ describe('who made a change', () => {
 });
 
 describe('edit', () => {
+  it('reports a dirty unmatched combined event during an agent edit as a programmer edit', async () => {
+    const view = inView(FILE);
+    const { editor, controller } = made();
+    view.document.isDirty = true;
+    view.edit.mockImplementation((build) => {
+      build(view.builder);
+      view.document.text = '""';
+      changeOf(view.document, [{ rangeOffset: 0, rangeLength: 0, text: '""' }]);
+      return Promise.resolve(true);
+    });
+    await editor.edit(FILE, 0, 0, '"', { undoStopBefore: true, undoStopAfter: true });
+    expect(vi.mocked(isOwnEdit).mock.lastCall).toEqual([
+      [{ offset: 0, deleteLength: 0, text: '""' }],
+      { offset: 0, deleteLength: 0, text: '"' },
+    ]);
+    expect(controller.userEdit.mock.calls).toHaveLength(1);
+    expect(controller.otherEdit.mock.calls).toHaveLength(0);
+  });
+
   it('RightAuthor: edits a file in view through its editor, with its undo stops, and takes its change event for its own', async () => {
     const view = inView(FILE);
     const { editor, controller } = made();
@@ -969,10 +1111,20 @@ describe('edit', () => {
 describe('runCommand', () => {
   it("runs a command in the agent's terminals", async () => {
     const { editor } = made();
-    const options = { cwd: ROOT, waitMs: 1, signal: new AbortController().signal };
+    const options = { id: 1, cwd: ROOT, waitMs: 1, signal: new AbortController().signal };
     await expect(editor.runCommand('ls', options)).resolves.toEqual({ output: 'ran ls' });
     expect(at(fakes.created.terminals, 0).run.mock.calls).toEqual([['ls', options]]);
   });
+});
+
+it('forwards terminal reveal and cleanup to the terminal owner', () => {
+  const { editor } = made();
+  const terminals = at(fakes.created.terminals, 0);
+  expect(terminals.showAutomatically()).toBe(false);
+  expect(editor.showTerminal(42)).toBe(true);
+  editor.cleanupIdleTerminals();
+  expect(terminals.showTerminal.mock.calls).toEqual([[42]]);
+  expect(terminals.cleanupIdle).toHaveBeenCalledOnce();
 });
 
 describe('follow mode: scrolling', () => {

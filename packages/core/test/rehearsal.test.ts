@@ -128,6 +128,17 @@ describe('rehearse', () => {
     expect(played.after.texts).not.toBe(from.texts);
   });
 
+  it('uses the selected grouped planner with instant pacing', async () => {
+    fakes.play.mockResolvedValue({ result: RESULT, sightings: SIGHTINGS });
+    await rehearse(mock<EditorPort>(), defaultConfig, start().from, ACTIONS, () => true, 'blocks');
+    const built = fakes.made.at(-1);
+    // The mocked Player receives a Stage.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const stage = built?.stage as Stage;
+    expect(stage.codePlayback()).toBe('blocks');
+    expect(stage.pacing).toBe(fakes.instant);
+  });
+
   it('copies a scene with no cursor, selection, or point as one', async () => {
     const { scene } = await rehearsed(mock<EditorPort>(), start().from);
     expect([scene.cursor, scene.selection, scene.point]).toEqual([undefined, undefined, undefined]);
@@ -193,7 +204,7 @@ describe('the editor in memory', () => {
     await stage.editor.save(A);
     stage.editor.renderPoint();
     stage.editor.follow();
-    expect(await stage.editor.runCommand('npm test', { cwd: '/project', waitMs: 0, signal: new AbortController().signal })).toEqual({
+    expect(await stage.editor.runCommand('npm test', { id: 1, cwd: '/project', waitMs: 0, signal: new AbortController().signal })).toEqual({
       exitCode: 0,
       output: '',
     });

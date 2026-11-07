@@ -118,12 +118,14 @@ export async function playerPaths(api: Api, root: string): Promise<void> {
   await controller.start('paths');
 
   // Before the cursor is in a file, an action that acts at it names one (specs/BatchFile.tla).
-  await refused([{ type: `x${CURSOR_MARKER}` }], 'no_cursor');
+  await refused([{ type: `x${CURSOR_MARKER}` }], 'file_required');
   await refused([{ move: { line: 1, to: 'line_end' } }], 'no_cursor');
   await refused([{ select: { line: 1, text: 'a' } }], 'no_cursor');
   await refused([{ point: { line: 1, text: 'a' } }], 'no_cursor');
-  await refused([{ delete: true }], 'no_selection');
-  await refused([{ say: 'a', type: 'b' }], 'invalid_action', /^One action per object/);
+  await refused([{ delete: true }], 'file_required');
+  await controller.read('one.txt');
+  await refused([{ point: { file: 'one.txt', line: 1, text: 'a' } }, { delete: true }], 'no_selection');
+  await refused([{ point: { file: 'one.txt', line: 1, text: 'a' } }, { say: 'a', type: 'b' }], 'invalid_action', /^One action per object/);
   await refused([{ run: '   ' }], 'invalid_action', /needs a command/);
   // A folder can't be shown as a file: the error that comes back refuses the action, by its message.
   await refused([{ move: { file: 'folder', line: 1, to: 'line_end' } }], 'invalid_action');
@@ -170,16 +172,23 @@ export async function playerPaths(api: Api, root: string): Promise<void> {
     'invalid_action',
     /^A batch works in one file, but this one names paths\.txt and one\.txt/,
   );
-  await refused(
-    [{ type: `x${CURSOR_MARKER}` }, { move: { file: 'paths.txt', line: 1, to: 'line_end' } }],
-    'invalid_action',
-    /before the batch's first edit/,
-  );
-  // A range, pointed at in another file; the next action at the cursor brings the view back from it, far
+  await refused([{ type: `x${CURSOR_MARKER}` }, { move: { file: 'paths.txt', line: 1, to: 'line_end' } }], 'file_required');
+  // A range, pointed at in the same file; the next action at the cursor brings the view back from it
   // (specs/PointFocus.tla, `ActAtCursor`).
   assert.deepEqual(statuses(await played([{ point: { file: 'paths.txt', line: 1, from: 'beta', through: 'alpha' } }])), ['completed']);
-  assert.deepEqual(statuses(await played([{ type: `y${CURSOR_MARKER}` }])), ['completed']);
-  assert.equal((await vscode.workspace.openTextDocument(file('empty.txt'))).getText(), 'y');
+  fs.writeFileSync(file('focus.txt'), 'one\ntwo\n');
+  await controller.read('focus.txt');
+  assert.deepEqual(
+    statuses(
+      await played([
+        { move: { file: 'focus.txt', line: 1, to: 'line_end' } },
+        { point: { file: 'focus.txt', line: 2, text: 'two' } },
+        { type: `y${CURSOR_MARKER}` },
+      ]),
+    ),
+    ['completed'],
+  );
+  assert.equal((await vscode.workspace.openTextDocument(file('focus.txt'))).getText(), 'oney\ntwo\n');
 
   // A selection is replaced by what is typed, and by nothing (specs/Player.tla).
   await controller.read('paths.txt');
@@ -195,7 +204,7 @@ export async function playerPaths(api: Api, root: string): Promise<void> {
   controller.takeTurn();
   // The turn change interrupts; once a report has said so, batches are rehearsed again.
   await controller.listen();
-  await refused([{ type: `x${CURSOR_MARKER}` }], 'not_your_turn');
+  await refused([{ move: { file: 'paths.txt', line: 1, to: 'line_end' } }, { type: `x${CURSOR_MARKER}` }], 'not_your_turn');
   controller.handBack('over to you', { file: file('paths.txt'), from: { line: 1, column: 1 }, to: { line: 1, column: 6 }, text: 'alpha' });
   const handed = await controller.listen();
   assert.deepEqual(handed.events.at(-1), {
@@ -381,7 +390,7 @@ export async function playerPaths(api: Api, root: string): Promise<void> {
   await played([{ move: { file: 'far.txt', line: 1, to: 'line_end' } }]);
   await played([{ point: { file: 'far.txt', line: FAR_LINES, text: `x${FAR_LINES}` } }]);
   controller.setTiming({ afterMoveFarMs: LONG_PAUSE_MS });
-  await controller.step([{ type: `y${CURSOR_MARKER}` }]);
+  await controller.step([{ point: { file: 'far.txt', line: FAR_LINES, text: `x${FAR_LINES}` } }, { type: `y${CURSOR_MARKER}` }]);
   await sleep(INTO_PAUSE_MS);
   controller.userInterrupt();
   const farBack = await controller.listen();
@@ -421,15 +430,17 @@ export async function playerPaths(api: Api, root: string): Promise<void> {
   // A delete interrupted while its file comes into view stops before it deletes (specs/Player.tla, `StartDelete`).
   controller.setSpeed(20);
   await controller.read('pauses.txt');
-  await played([{ select: { file: 'pauses.txt', line: 1, text: 'one' } }]);
   const beforeDelete = (await vscode.workspace.openTextDocument(file('pauses.txt'))).getText();
   await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file('one.txt')));
-  const shown = vscode.window.onDidChangeActiveTextEditor((e) => {
-    if (e?.document.uri.fsPath === file('pauses.txt')) controller.userInterrupt();
-  });
-  await controller.step([{ delete: true }]);
+  const show = api.editor.show.bind(api.editor);
+  let shows = 0;
+  api.editor.show = async (name) => {
+    if (++shows === 2) controller.userInterrupt();
+    return show(name);
+  };
+  await controller.step([{ select: { file: 'pauses.txt', line: 1, text: 'one' } }, { delete: true }]);
   const kept = await controller.listen();
-  shown.dispose();
+  api.editor.show = show;
   assert.notEqual(kept.batches[0]?.status, 'completed', JSON.stringify(kept));
   assert.equal((await vscode.workspace.openTextDocument(file('pauses.txt'))).getText(), beforeDelete);
   await controller.end();

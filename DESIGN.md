@@ -44,7 +44,8 @@ the editor. Some eye travel is acceptable, since the cursor's color change and
 the reading pause lead the eye there, but the current message must be highly
 visible and nothing in the panel may move unexpectedly.
 
-Layout, top to bottom:
+A Settings button stays available above the panel. The default layout, top to
+bottom:
 
 1.  **The band**, a full-width area on the editor's background, holding
     everything about now:
@@ -71,14 +72,15 @@ Layout, top to bottom:
     -   **The reply box**, under the message. It's where the eye goes after
         reading, which is when the programmer replies. The band has room for two
         lines of message, so the reply box moves only for a longer one.
-2.  **History**, below the band, newest first. The agent's messages in muted
-    text; the programmer's replies as neutral bubbles on the right; commands as
-    soft terminal rows with their outcome (exit 0, exit 1, skipped, still
-    running, which changes to how it ended when it does); turn changes,
-    interrupts and session starts and ends as faint dividers. When the
-    programmer sends a message, the history scrolls back to its top, so the
-    message is in view; other entries leave it where the programmer scrolled it,
-    so reading back isn't cut short.
+2.  **History**, below the band, newest first by default. Agent messages use
+    the theme foreground; the programmer's replies are neutral bubbles on the
+    right; commands are soft terminal rows with their outcomes; turn changes,
+    interrupts and session boundaries are faint dividers. The Settings dialog
+    also offers oldest first: history then appears above the band, with the
+    current message and reply at the bottom. Sending a message reveals the
+    newest edge; incoming entries follow it when already there and preserve the
+    reader's place when reading older history. A message moves out of the band
+    when filed, with its code link, so it appears once in time order.
 
 Without a session, the band has no header: it says there's no session and how to
 start one, and after a session, how it ended, with the agent's summary. While a
@@ -138,6 +140,27 @@ Behavior:
 -   During the programmer's turn the band's header says *Your turn*, and the
     agent navigates: its comments appear as the current message as usual.
 
+### Optional spoken narration
+
+Speech is off by default. Settings offers Kokoro locally and ElevenLabs through
+an explicit cloud provider choice. The coding agent marks only the explanations
+it wants spoken; their written text remains visible. Voice speed is independent
+of code pace and the reading timer. Both reading and speech must finish before
+playback advances, so audio cannot rush a held reading interval.
+
+For ElevenLabs, Settings explains that selected text and previews leave the
+machine and consume account credits. Add or replace a key through VS Code's
+native masked prompt, then load account voices and choose one. No preview plays
+automatically. The key stays in SecretStorage; the panel sees only whether a key
+exists. Voice availability depends on the account and Preview may report an
+access or credit limit. Opening Settings never synthesizes audio.
+
+Reply, Stop, provider changes and key changes invalidate current cloud audio.
+An aborted request may already have consumed credits. Cloud failures leave the
+text readable and do not approve commands, finish the reading timer, or switch
+providers. Pause retains the current unit while its request deadline continues;
+late audio from a canceled unit cannot play.
+
 ## Playback
 
 ### Timing
@@ -191,6 +214,15 @@ all of it together, immediately, even mid-typing, except the reading pause. It's
 the `aiPair.speed` setting, which takes any value from 0.25 to 4. The reading
 menu next to it scales only the reading pause: `aiPair.readingSpeed`, with the
 same range (#109).
+
+**Code playback.** A separate toolbar dropdown and Settings offer Typing (the
+default), Lines, and Blocks. A selection takes effect at the next typing
+action. Lines and
+Blocks insert and highlight groups, then give each a reading pause. The main
+pace and reading speed scale these code pauses, and the reading ring can finish
+or hold one. Groups are limited to 240 Unicode code points; blocks also have at
+most four logical lines. Atomic edits remain indivisible even when one exceeds a
+group bound. Follow mode keeps the highlighted group in view during its pause.
 
 **Calibration.** *AI Pair: Calibrate Reading Speed* (or the agent's `calibrate`
 tool, with a passage of its own) announces a passage in the panel; `go` shows it

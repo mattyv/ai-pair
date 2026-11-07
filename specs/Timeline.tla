@@ -30,6 +30,7 @@ NoSleep == CHOOSE v : v \notin SleepStates
 VARIABLES
     pauseReasons, \* Controller.pauseReasons
     paused,       \* Timeline.paused
+    held,         \* a reading-only hold
     sleeping,     \* Timeline.sleeping: NoSleep, "timerStopped" (no timer), or
                   \* "armed" (timer running)
     interrupted,  \* Timeline.interrupted
@@ -39,7 +40,7 @@ VARIABLES
     unresolved,   \* the numbers of the sleeps not yet resolved
     replaced      \* the numbers of the replaced sleeps whose timer still runs
 
-vars == <<pauseReasons, paused, sleeping, interrupted, sleeps, resolved,
+vars == <<pauseReasons, paused, held, sleeping, interrupted, sleeps, resolved,
           unresolved, replaced>>
 
 --------------------------------------------------------------------------------
@@ -48,6 +49,7 @@ vars == <<pauseReasons, paused, sleeping, interrupted, sleeps, resolved,
 TypeOK ==
     /\ pauseReasons \subseteq PauseReasons
     /\ paused \in BOOLEAN
+    /\ held \in BOOLEAN
     /\ sleeping \in SleepStates \cup {NoSleep}
     /\ interrupted \in BOOLEAN
     /\ sleeps \in Nat
@@ -61,6 +63,7 @@ TypeOK ==
 Init ==
     /\ pauseReasons \in SUBSET PauseReasons
     /\ paused = (pauseReasons # {})
+    /\ held = FALSE
     /\ sleeping = NoSleep
     /\ interrupted = FALSE
     /\ sleeps = 0
@@ -71,6 +74,7 @@ Init ==
 \* sleep(ms): resolves false at once if interrupted; else waits, with a timer
 \* unless paused.
 Sleep ==
+    /\ held' = FALSE
     /\ sleeping = NoSleep
     /\ sleeping' =
            IF interrupted
@@ -86,6 +90,7 @@ Sleep ==
 \* each sleep. The new sleep replaces the pending one, whose timer, if
 \* running, runs on; a replaced sleep with no timer never resolves.
 SleepAgain ==
+    /\ held' = FALSE
     /\ sleeping # NoSleep
     /\ sleeping' = IF paused THEN "timerStopped" ELSE "armed"
     /\ sleeps' = sleeps + 1
@@ -98,9 +103,13 @@ SleepAgain ==
 Fire ==
     /\ sleeping = "armed"
     /\ sleeping' = NoSleep
+    /\ held' = FALSE
     /\ resolved' = resolved + 1
     /\ unresolved' = unresolved \ {sleeps}
     /\ UNCHANGED <<pauseReasons, paused, interrupted, sleeps, replaced>>
+
+\* The current armed reading sleep is finished early: same effect as its timer.
+FinishEarly == Fire
 
 \* A replaced sleep's timer fires: that sleep resolves true, and the pending
 \* sleep is left as it is (`this.sleeping === p` is false).
@@ -109,7 +118,7 @@ FireReplaced(n) ==
     /\ replaced' = replaced \ {n}
     /\ unresolved' = unresolved \ {n}
     /\ resolved' = resolved + 1
-    /\ UNCHANGED <<pauseReasons, paused, sleeping, interrupted, sleeps>>
+    /\ UNCHANGED <<pauseReasons, paused, held, sleeping, interrupted, sleeps>>
 
 \* Controller.pause(reason): adds the reason; Timeline.pause() stops the
 \* timer, keeping what is left.
@@ -117,7 +126,7 @@ Pause(r) ==
     /\ pauseReasons' = pauseReasons \cup {r}
     /\ paused' = TRUE
     /\ sleeping' = IF sleeping = "armed" THEN "timerStopped" ELSE sleeping
-    /\ UNCHANGED <<interrupted, sleeps, resolved, unresolved, replaced>>
+    /\ UNCHANGED <<held, interrupted, sleeps, resolved, unresolved, replaced>>
 
 \* Controller.resume(reason) removes one reason; resume() with none removes
 \* all (sending a reply, the Resume button, the turn button). Playback
@@ -128,13 +137,31 @@ Resume(rs) ==
         /\ pauseReasons' = left
         /\ paused' = IF left = {} THEN FALSE ELSE paused
         /\ sleeping' =
-               IF left = {} /\ sleeping = "timerStopped" THEN "armed"
+               IF left = {} /\ ~held /\ sleeping = "timerStopped"
+               THEN "armed"
                ELSE sleeping
-        /\ UNCHANGED <<interrupted, sleeps, resolved, unresolved, replaced>>
+        /\ UNCHANGED <<held, interrupted, sleeps, resolved, unresolved,
+                       replaced>>
+
+\* A hold stops only an armed reading sleep; release does not lift a pause.
+Hold ==
+    /\ sleeping = "armed" /\ ~paused /\ ~held
+    /\ sleeping' = "timerStopped"
+    /\ held' = TRUE
+    /\ UNCHANGED <<pauseReasons, paused, interrupted, sleeps, resolved,
+                   unresolved, replaced>>
+
+Release ==
+    /\ held
+    /\ held' = FALSE
+    /\ sleeping' = IF paused THEN "timerStopped" ELSE "armed"
+    /\ UNCHANGED <<pauseReasons, paused, interrupted, sleeps, resolved,
+                   unresolved, replaced>>
 
 \* interrupt(): the sleep resolves false, and later ones too until
 \* reset().
 Interrupt ==
+    /\ held' = FALSE
     /\ sleeping' = NoSleep
     /\ interrupted' = TRUE
     /\ resolved' = IF sleeping # NoSleep THEN resolved + 1 ELSE resolved
@@ -147,13 +174,16 @@ Reset ==
     /\ interrupted
     /\ sleeping = NoSleep
     /\ interrupted' = FALSE
-    /\ UNCHANGED <<pauseReasons, paused, sleeping, sleeps, resolved,
+    /\ UNCHANGED <<pauseReasons, paused, held, sleeping, sleeps, resolved,
                    unresolved, replaced>>
 
 Next ==
     \/ Sleep
     \/ SleepAgain
     \/ Fire
+    \/ FinishEarly
+    \/ Hold
+    \/ Release
     \/ \E n \in replaced : FireReplaced(n)
     \/ \E r \in PauseReasons : Pause(r)
     \/ \E r \in PauseReasons : Resume({r})
@@ -177,6 +207,7 @@ PausedMatchesReasons == paused <=> (pauseReasons # {})
 
 \* No timer runs while paused.
 NoTimerWhilePaused == paused => (sleeping # "armed")
+NoTimerWhileHeld == held => sleeping = "timerStopped"
 
 \* Each sleep resolves at most once.
 ResolvedOnce ==
@@ -193,7 +224,7 @@ LatestPending == (sleeps \in unresolved) => (sleeping # NoSleep)
 \* under that hypothesis (6.29). Code that never resumed a waiting sleep would
 \* fail it, so it says something must happen.
 ResumeContinues ==
-    <>[](pauseReasons = {}) => ((sleeping = "timerStopped")
+    <>[](pauseReasons = {} /\ ~held) => ((sleeping = "timerStopped")
         ~> (sleeping = NoSleep))
 
 \* Sleeps run out only so that the model is finite (6.8). It prunes exactly

@@ -1,5 +1,38 @@
 # AI Pair Programmer
 
+## Additions in this fork
+
+This fork builds on the original [AI Pair project](https://github.com/faiface/ai-pair).
+It adds:
+
+-   A choice of conversation order and clearer message text.
+-   Clearer pause and playback status. Click the reading indicator to finish
+    its timer, or hold it to pause the timer.
+-   Typing, Lines, or Blocks in a separate code-display dropdown and Settings.
+    The existing pace and reading-speed controls still adjust playback.
+-   Quiet command terminals by default, with an option to reveal a run.
+-   Copyable session and speech diagnostics, plus a running version and build
+    in Settings. Speech diagnostics show capability, button dispatch and safe
+    failure categories without copying keys, narration or audio.
+-   Optional local Kokoro speech for narration selected by the connected coding
+    agent. Speech is off by default and needs no additional API key. In Settings,
+    run **Download Kokoro model** to download about 94 MB, then **Preview voice**.
+    Local speech requires a supported local Linux x64 desktop with glibc, such
+    as Ubuntu; the rest of Pair works without speech.
+-   Optional ElevenLabs cloud speech, using the same selected narration and
+    reading controls. Choose **ElevenLabs** in Settings, add your API key through
+    the secure VS Code prompt, load your account voices, choose one and use
+    **Preview voice**. Selected text and previews go to ElevenLabs and use your
+    account credits. Saving a key does not enable speech. Voice availability
+    depends on your account; a free account may have no eligible API voices.
+    Kokoro remains the local option and the default provider.
+
+[Download a fork build from GitHub Actions](https://github.com/mattyv/ai-pair/actions)
+(run **Build VSIX**, then download its artifact). The Marketplace link in the
+original README below installs the upstream version without these additions.
+
+## Original project README
+
 **[Install it from the VS Code
 Marketplace](https://marketplace.visualstudio.com/items?itemName=michalstrba.ai-pair)**
 
@@ -76,15 +109,22 @@ account. While you pair:
 |---|---|
 | say something to the agent | type in the reply box, press Enter. Typing pauses playback. |
 | ask about some code | select it in the editor, then reply: the selection goes along (**x** leaves it out) |
-| let it run a command | the agent's tests and builds play in an *AI Pair* terminal; **Run**, **Allow for session**, or **Skip** in the panel |
+| let it run a command | **Run**, **Allow for session**, or **Skip** in the panel; **Show terminal** reveals the command's terminal |
 | stop it right now | **Interrupt**, or just edit the code: any edit interrupts |
 | look around | scroll or switch files. Playback pauses until you **Resume**, which brings you back to the agent's cursor |
 | write a part yourself | **My turn**. The agent becomes the navigator and comments as you type. **Hand back** returns the turn, with your reply if you typed one |
-| change the pace | the speed menu (**1.0x**), from 0.4x to 3.0x |
+| change the pace or code display | the speed menu (**1.0x**) sets the pace and chooses Typing, Lines, or Blocks for the next typing action |
+| manage the reading pause | click the ring to finish; hold it to pause the countdown until release. Focus it and use Space for the same behavior |
 | finish | **End**, or tell the agent you're done. You can pair again anytime |
 
-The cursor's color tells you what the agent is doing. It's yellow and pulsing
-when it's just said something and is waiting for you to read it.
+Lines and Blocks show code in groups with a reading pause and highlight for
+each group. Reading speed and the main pace adjust those pauses; click or hold
+the reading ring to finish or pause one. Typing remains the default.
+
+The status shows when playback is **Paused** or **Playing**. Reading pauses,
+command confirmations, your turn and suspended sessions remain distinct. The
+cursor is yellow and pulsing when the agent has just spoken and is waiting for
+you to read.
 
 **Try it without an agent:** *AI Pair: Play Demo Session* plays a scripted
 session that adds a small API to an Express app, which it creates in
@@ -96,12 +136,14 @@ session that adds a small API to an Express app, which it creates in
 agent (Claude Code, ...) ── stdio MCP ──▶ pair-mcp ── local WebSocket ──▶ VS Code extension
 ```
 
-The agent submits small batches of actions: say, move, select, type, delete,
-point, run. The extension plays them at a human pace and reports back exactly
+The agent submits small batches of actions: say, move, select, type, newline,
+delete, point, run. The extension plays them at a human pace and reports back exactly
 what happened, including everything you did in the meantime. The agent plans its
 next batch while you watch the current one, which hides most of its thinking
 time. And it's never more than one batch ahead, so your interruptions land
-immediately.
+immediately. Typing handles CRLF line endings consistently and preserves a
+standalone carriage return. Structural newlines and single-close moves are
+explicit choices; other typing remains literal.
 
 The design is written up in:
 
@@ -121,6 +163,25 @@ in the Extensions view, search for `@id:michalstrba.ai-pair`, or run:
 ```sh
 code --install-extension michalstrba.ai-pair
 ```
+
+For a build from this fork, open the [Build VSIX workflow](https://github.com/mattyv/ai-pair/actions/workflows/build-vsix.yml),
+choose a successful run for the branch you want, and download its `.vsix`
+artifact. Copy it to the Ubuntu host running VS Code and install it there:
+
+```sh
+code --install-extension /path/to/ai-pair-build.vsix
+```
+
+For a local development build, the VSIX can instead be taken directly from the
+shared repository folder (`/workspace/code/ai-pair` in the VM). Run the install
+command on the Ubuntu host using that folder's host path.
+
+Reload the VS Code window and restart the agent after updating. The Pair
+panel's Settings dialog shows the running version and build ID, so you can
+check what is actually loaded. For troubleshooting, **Copy diagnostics** in
+Settings copies recent connection, session, request, pause and command status
+metadata to the clipboard. It does not include chat, code, paths, command text,
+or output. Copying is explicit; timestamps and numeric IDs are included.
 
 To build it from source instead, you also need **Node.js 22.19 or newer**:
 
@@ -166,10 +227,21 @@ has it fetch the text and start the calibration with it.
 
 ## Settings
 
+Commands use quiet terminals by default; **Show terminal** reveals one. If shell
+integration is unavailable, the terminal opens so you can see the command.
+Hidden terminals are not restored when the workspace is reopened.
+
+The Pair panel's **Settings** button lets you choose the chat order. The default
+shows the newest messages at the top; choose **Oldest first** to put new messages
+and the reply box at the bottom. Your choice is saved across reloads.
+
 | Setting | |
 |---|---|
+| `aiPair.showTerminalsAutomatically` | Show Pair command terminals automatically (default off); also available in Pair Settings. |
+| `aiPair.codePlayback` | `typing` (default), `lines`, or `blocks`; also in the code display dropdown and Settings. Applies to the next typing action. |
+| `aiPair.chatOrder` | `newestFirst` (default) or `oldestFirst`; also available in the Pair panel settings. |
 | `aiPair.speed` | Overall playback speed, the follow scroll's glide included (the panel's speed menu offers 0.4x to 3.0x). |
-| `aiPair.readingSpeed` | Reading speed: divides only the pause after each of the agent's messages (the panel's reading menu offers 0.4x to 3.0x). |
+| `aiPair.readingSpeed` | Reading speed: divides the reading pauses after narration and grouped code (the panel's reading menu offers 0.4x to 3.0x). |
 | `aiPair.calibrationPassage` | The passage *AI Pair: Calibrate Reading Speed* times you on, as `{ "title": ..., "text": ..., "notice": ... }`; empty, the built-in one. The agent's `calibrate` tool writes it. |
 | `aiPair.agentName` | The name on the agent's cursor. |
 | `aiPair.timing` | Fine-tune any typing, pause, or glide duration, e.g. `{ "afterSelectMs": 900, "type": { "wordStartMs": 140 } }`. Every key is in [`timing.ts`](packages/core/src/timing.ts). |

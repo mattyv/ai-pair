@@ -1,5 +1,116 @@
 # Changelog
 
+## 0.17.1
+
+-   Identify local speech startup failures with fixed diagnostic categories for
+    worker modules, native loading, permissions, model loading and timeouts.
+-   Keep generated architecture and Pages output reproducible and compatible
+    with repository formatting and ASCII checks.
+
+## 0.17.0
+
+-   Speech diagnostics now include bounded button, capability and request
+    outcomes, including safe catalog error categories, even without a pairing
+    session. They exclude keys, narration, audio and raw provider responses.
+-   Apply speech provider choices immediately while saving preferences, so a
+    following voice-load or preview action cannot use the previous provider.
+-   Replace stale catalog errors with clear loading, empty-result or success
+    feedback, and explain blocked speech actions visibly in Settings.
+
+## 0.16.0
+
+-   Choose optional ElevenLabs cloud narration alongside local Kokoro. Configure
+    an API key through a secure native prompt, choose an account voice, and
+    preview it in Settings. Selected narration and previews use account credits;
+    voice availability depends on the account.
+-   Both providers use the existing reading, pause and stop controls. Kokoro
+    remains the default, and automatic speech remains off by default.
+
+## 0.15.0
+
+-   Settings has clearer sections and the code display choice has its own
+    toolbar dropdown, with the same choice in Settings.
+-   Optional local Kokoro speech reads agent-selected narration. It is off by
+    default and offers voice and speed controls plus an explicit setup download
+    and preview on supported local Linux x64 desktop hosts.
+
+## 0.14.1
+
+-   Allow a structural newline in safe code after a closed Python f-string
+    containing a quoted expression.
+
+## 0.14.0
+
+-   Choose Typing, Lines, or Blocks in the existing playback speed menu. The
+    choice applies to the next typing action and is saved across reloads.
+-   Line and block playback highlights each inserted group and pauses for
+    reading; the reading ring can finish or hold that pause.
+
+## 0.13.0
+
+-   Copy a bounded diagnostic snapshot from Pair Settings when troubleshooting a
+    session. It contains status and timing metadata, not chat, code, command
+    text, paths, or output, and is copied only when requested.
+-   A new session now clears an earlier session's suspended status; the
+    suspended status offers recovery guidance.
+-   Clarify that replying to a listening agent is optional.
+
+## 0.12.0
+
+-   Pair command terminals stay quiet by default. Use **Show terminal** on a
+    command or enable **Show terminals automatically** in Pair Settings.
+-   Reuse eligible Pair-owned terminals and clean up exited shells after a
+    session; live shells and terminals used for other work remain protected.
+-   Clarify that structural newline indentation is relative to the current line.
+
+## 0.11.0
+
+-   Click the reading ring to finish the current countdown, or hold it to pause
+    just that countdown until release. Space provides the same keyboard behavior;
+    other playback pauses remain in effect.
+-   The Settings gear is in the toolbar, and the Your move status explains how
+    to reply when focused or hovered.
+-   A line-end move across multiple adjacent closing brackets is rejected during
+    preflight unless explicitly allowed; exact spots and `next_close` remain
+    available.
+-   Triple-quote runs are inserted together to prevent extra closing quotes
+    from Pylance, without changing user settings.
+-   The relay and extension now use protocol version 5; reload VS Code and
+    restart the agent together after updating.
+
+## 0.10.1
+
+-   The running version and build ID now appear in the Settings dialog, which
+    stays usable at narrow panel widths.
+-   Playback uses clearer Paused and Playing status text and theme-aware colors,
+    while preserving distinct prompts, turn, suspended, idle, and reading states.
+-   Typing handles CRLF input consistently across document line endings, cursor
+    placement, and interrupted remainders. A cursor marker inside a CRLF pair
+    is rejected; standalone carriage returns are preserved.
+-   Agent guidance now describes the structural newline and single-close move.
+
+## 0.10.0
+
+-   The Pair panel shows the running version and a content-derived build ID
+    (a SHA-256 prefix) to identify the bundle currently loaded.
+
+-   Editing batches name their file before the first edit. The new `next_close`
+    move steps over one bracket, and a `line_end` that crosses multiple closes
+    includes an advisory.
+-   An optional structural newline splits adjacent bracket pairs in Python and
+    JSON code while preserving indentation. Diagnostics are advisory.
+-   The relay and extension now use protocol version 4; reload VS Code and
+    restart the agent together after updating.
+
+## 0.9.0
+
+-   Choose oldest first in the Pair panel's Settings to put new messages and the
+    reply box at the bottom. The default remains newest first. The setting is
+    saved and can also be changed in VS Code settings.
+-   Agent messages in the history use the theme text color for easier reading.
+-   A filed agent message appears once in the conversation, in time order with
+    replies; its code link stays with it.
+
 ## 0.8.1
 
 -   The TLA+ specs and the code agree again, after an audit of every spec

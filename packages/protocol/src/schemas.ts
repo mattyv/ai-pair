@@ -11,8 +11,10 @@ export const MOVE_TARGET_SCHEMA = z.object({
   line: z.number().optional(),
   /** A spot on the line: the text around it, with `CURSOR_MARKER` where the cursor goes. */
   at: z.string().optional(),
-  /** `line_end`: the end of the line. */
-  to: z.literal('line_end').optional(),
+  /** The end of the line, or one close immediately after the cursor. */
+  to: z.enum(['line_end', 'next_close']).optional(),
+  /** Explicitly allows line_end to cross multiple closing brackets. */
+  allow_multiple_closes: z.literal(true).optional(),
 });
 
 /** Checks the fields a span may have, before `spanProblem` holds them to a {@link SpanTarget}. */
@@ -31,16 +33,20 @@ export const SPAN_SCHEMA = z.union([
   SPAN_TARGET_SCHEMA.pick({ file: true, line: true }).extend({ from: z.string(), through: z.string() }),
 ]);
 
+/** Other action kinds cannot take the narration modifier. */
+const NO_SPEAK = { speak: z.never().optional() };
+
 /** Checks an {@link Action}. */
 export const ACTION_SCHEMA = z.union([
-  z.object({ say: z.string() }),
-  z.object({ move: MOVE_TARGET_SCHEMA }),
-  z.object({ select: SPAN_SCHEMA }),
-  z.object({ type: z.string() }),
-  z.object({ type_fast: z.string() }),
-  z.object({ delete: z.literal(true) }),
-  z.object({ point: SPAN_SCHEMA }),
-  z.object({ run: z.string(), wait: z.number().optional() }),
+  z.object({ say: z.string(), speak: z.boolean().optional() }),
+  z.object({ move: MOVE_TARGET_SCHEMA, ...NO_SPEAK }),
+  z.object({ select: SPAN_SCHEMA, ...NO_SPEAK }),
+  z.object({ type: z.string(), ...NO_SPEAK }),
+  z.object({ type_fast: z.string(), ...NO_SPEAK }),
+  z.object({ newline: z.object({ indent: z.string().regex(/^[\t ]+$/) }).strict(), ...NO_SPEAK }),
+  z.object({ delete: z.literal(true), ...NO_SPEAK }),
+  z.object({ point: SPAN_SCHEMA, ...NO_SPEAK }),
+  z.object({ run: z.string(), wait: z.number().optional(), ...NO_SPEAK }),
 ]);
 
 /** Checks a {@link Turn}. */
@@ -67,6 +73,7 @@ export const ERROR_KIND_SCHEMA = z.enum([
   'save_failed',
   // After a discarded or interrupted batch, the next one did not anchor the cursor with a file and line (#112).
   'unanchored',
+  'file_required',
 ]);
 
 /** Checks a {@link Candidate}. */
@@ -119,6 +126,12 @@ export const BATCH_RESULT_SCHEMA = z.object({
    */
   unplayed: z.array(ACTION_SCHEMA).optional(),
   runs: z.array(RUN_RESULT_SCHEMA).optional(),
+  /** Advisory messages about potentially surprising actions. */
+  warnings: z.array(z.string()).optional(),
+  /** Current error diagnostics for files this batch actually edited. */
+  diagnostics: z
+    .array(z.object({ file: z.string(), line: z.number(), endLine: z.number(), message: z.string(), source: z.string().optional() }))
+    .optional(),
   /** Files the batch edited that couldn't be saved: the buffer has the edits, the file on disk doesn't. */
   unsaved: z.array(z.object({ file: z.string(), error: z.string() })).optional(),
 });

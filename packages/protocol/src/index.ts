@@ -9,10 +9,10 @@ import type { MoveTarget, SpanFields, ToolErrorCode } from './schemas';
 export const CURSOR_MARKER = '\u{258C}';
 
 /** The keys that name an action. An action object has exactly one of them. */
-export const ACTION_KINDS = ['say', 'move', 'select', 'type', 'type_fast', 'delete', 'point', 'run'] as const;
+export const ACTION_KINDS = ['say', 'move', 'select', 'type', 'type_fast', 'newline', 'delete', 'point', 'run'] as const;
 
 /** The fields a `move` takes. */
-const MOVE_FIELDS = ['file', 'line', 'at', 'to'];
+const MOVE_FIELDS = ['file', 'line', 'at', 'to', 'allow_multiple_closes'];
 
 /** The fields a `select` or `point` takes. */
 const SPAN_FIELDS = ['file', 'line', 'text', 'from', 'through'];
@@ -59,7 +59,13 @@ export function moveProblem(target: Unchecked<MoveTarget>): string | undefined {
   }
   const line = lineProblem(target.line);
   if (line !== undefined) return line;
-  if (target.to !== undefined && target.to !== 'line_end') return '`to` is `"line_end"`: the end of the line.';
+  if (target.to !== undefined && target.to !== 'line_end' && target.to !== 'next_close') return '`to` is `"line_end"` or `"next_close"`.';
+  if (target.allow_multiple_closes !== undefined && (target.allow_multiple_closes !== true || target.to !== 'line_end')) {
+    return '`allow_multiple_closes` may only be `true` with `to: "line_end"`.';
+  }
+  if (target.to === 'next_close' && (target.line !== undefined || target.file !== undefined)) {
+    return '`next_close` acts at the current cursor: omit `file` and `line`.';
+  }
   if (target.at !== undefined && target.to !== undefined) return 'Give one place on the line: `at`, or `to: "line_end"`, not both.';
   if (target.at === undefined && target.to === undefined) return 'Give the place on the line: `at`, or `to: "line_end"`.';
   // specs/ActionValidation.tla, `CheckAtText`: an `at` that isn't a text gets a message; `spotProblem` would throw on it.
@@ -90,6 +96,26 @@ export function actionKinds(value: object): string[] {
   return Object.keys(value).filter((k) => (ACTION_KINDS as readonly string[]).includes(k));
 }
 
+/** Largest selected narration, counted as Unicode code points. */
+const MAX_SPEECH_CHARACTERS = 280;
+/** Largest selected narration, counted as whitespace-delimited words. */
+const MAX_SPEECH_WORDS = 45;
+
+/** Returns why text cannot be used as a selected spoken unit. */
+export function speechProblem(text: unknown): string | undefined {
+  if (
+    typeof text !== 'string' ||
+    text.trim() === '' ||
+    text.includes('```') ||
+    text.includes('~~~') ||
+    Array.from(text).length > MAX_SPEECH_CHARACTERS ||
+    text.trim().split(/\s+/u).length > MAX_SPEECH_WORDS
+  ) {
+    return 'A spoken `say` must be plain, nonempty text of at most 280 Unicode characters and 45 words; shorten it or leave `speak` off.';
+  }
+  return undefined;
+}
+
 /**
  * Returns what's wrong with an action's fields, if anything: the fields the relay's schema allows, a
  * `delete` that is `true`, and a `wait` that is a number. The player checks this too, so an action
@@ -98,9 +124,30 @@ export function actionKinds(value: object): string[] {
 export function fieldsProblem(action: object): string | undefined {
   const kind = actionKinds(action)[0];
   if (kind === undefined) return undefined;
-  const allowed = kind === 'run' ? ['run', 'wait'] : [kind];
+  const allowed = kind === 'run' ? ['run', 'wait'] : kind === 'say' ? ['say', 'speak'] : [kind];
   const extra = Object.keys(action).filter((k) => !allowed.includes(k));
   if (extra.length > 0) return `Unknown field ${fieldList(extra)} in a \`${kind}\` action: it has ${fieldList(allowed)}.`;
+  if ('speak' in action && action.speak !== undefined && typeof action.speak !== 'boolean') {
+    return '`speak` must be a boolean.';
+  }
+  if ('say' in action && 'speak' in action && action.speak === true) {
+    const problem = speechProblem(action.say);
+    if (problem !== undefined) return problem;
+  }
+  if ('newline' in action) {
+    const value = action.newline;
+    if (
+      typeof value !== 'object' ||
+      value === null ||
+      Array.isArray(value) ||
+      !('indent' in value) ||
+      typeof value.indent !== 'string' ||
+      !/^[\t ]+$/.test(value.indent) ||
+      Object.keys(value).some((key) => key !== 'indent')
+    ) {
+      return '`newline` takes a nonempty `indent` of spaces or tabs.';
+    }
+  }
   if ('delete' in action && action.delete !== true) return '`delete` is `true`: it deletes the current selection.';
   if ('wait' in action && action.wait !== undefined && typeof action.wait !== 'number') return '`wait` is a number: the seconds to wait.';
   const place: unknown = 'move' in action ? action.move : 'select' in action ? action.select : 'point' in action ? action.point : undefined;
@@ -130,6 +177,8 @@ export function typeProblem(text: unknown): string | undefined {
   if (markers > 1) {
     return `The text to type has ${markers} ${CURSOR_MARKER}, but marks one place: where your cursor ends. A literal ${CURSOR_MARKER} can't be typed.`;
   }
+  // specs/TypingEol.tla, NoSplitCRLF: a cursor cannot divide a CRLF line ending.
+  if (text.includes(`\r${CURSOR_MARKER}\n`)) return 'Place the cursor before or after the CRLF line ending, not inside it.';
   return undefined;
 }
 

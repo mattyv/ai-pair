@@ -471,6 +471,34 @@
       "functions": 66
     }
   },
+  "packages/vscode/src/speech_catalog.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/speech_credentials.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/speech_elevenlabs.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/speech_pcm.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/vscode/src/terminal.ts": {
     "unit": {
       "lines": 100,
@@ -529,6 +557,13 @@
     }
   },
   "scripts/lint_web.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "scripts/normalize_architecture.ts": {
     "unit": {
       "lines": 100,
       "branches": 100,

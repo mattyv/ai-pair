@@ -2,7 +2,7 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.8.1",
+  "version": "0.17.1",
   "publisher": "michalstrba",
   "private": true,
   "license": "MIT",
@@ -50,7 +50,8 @@
   "dependencies": {
     "@ai-pair/core": "*",
     "@ai-pair/protocol": "*",
-    "jsonc-parser": "^3.3.1"
+    "jsonc-parser": "^3.3.1",
+    "kokoro-js": "^1.2.1"
   },
   "contributes": {
     "viewsContainers": {
@@ -73,6 +74,16 @@
       ]
     },
     "commands": [
+      {
+        "command": "aiPair.setElevenLabsKey",
+        "title": "Add or Replace ElevenLabs API Key",
+        "category": "AI Pair"
+      },
+      {
+        "command": "aiPair.removeElevenLabsKey",
+        "title": "Remove ElevenLabs API Key",
+        "category": "AI Pair"
+      },
       {
         "command": "aiPair.setUpAgent",
         "title": "Set Up Agent",
@@ -157,12 +168,100 @@
     "configuration": {
       "title": "AI Pair",
       "properties": {
+        "aiPair.speech.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Speak only narration explicitly selected by the agent.",
+          "scope": "application"
+        },
+        "aiPair.speech.provider": {
+          "type": "string",
+          "enum": [
+            "kokoro",
+            "elevenlabs"
+          ],
+          "default": "kokoro",
+          "description": "Speech provider. ElevenLabs sends selected narration and previews to its service.",
+          "scope": "application"
+        },
+        "aiPair.speech.elevenLabsVoice": {
+          "type": "string",
+          "default": "",
+          "description": "Selected ElevenLabs account voice ID.",
+          "scope": "application"
+        },
+        "aiPair.speech.elevenLabsSpeed": {
+          "type": "number",
+          "enum": [
+            0.75,
+            1,
+            1.2
+          ],
+          "default": 1,
+          "description": "ElevenLabs speech speed for the next selected narration.",
+          "scope": "application"
+        },
+        "aiPair.speech.voice": {
+          "type": "string",
+          "enum": [
+            "af_heart",
+            "am_michael",
+            "bf_emma",
+            "bm_george"
+          ],
+          "default": "af_heart",
+          "description": "Local voice for the next selected narration.",
+          "scope": "application"
+        },
+        "aiPair.speech.speed": {
+          "type": "number",
+          "enum": [
+            0.75,
+            1,
+            1.25,
+            1.5
+          ],
+          "default": 1,
+          "description": "Local speech speed for the next selected narration.",
+          "scope": "application"
+        },
+        "aiPair.showTerminalsAutomatically": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show AI Pair command terminals automatically. Hidden terminals are not restored after a workspace reload; terminals without shell integration are shown.",
+          "scope": "application"
+        },
+        "aiPair.chatOrder": {
+          "type": "string",
+          "enum": [
+            "newestFirst",
+            "oldestFirst"
+          ],
+          "enumDescriptions": [
+            "Newest messages at the top.",
+            "Newest messages at the bottom."
+          ],
+          "default": "newestFirst",
+          "description": "The order of messages in the Pair panel.",
+          "scope": "application"
+        },
         "aiPair.speed": {
           "type": "number",
           "default": 1,
           "minimum": 0.25,
           "maximum": 4,
           "description": "Overall playback speed: typing, pauses, and reading time. The panel's speed menu offers 0.4x to 3x.",
+          "scope": "application"
+        },
+        "aiPair.codePlayback": {
+          "type": "string",
+          "enum": [
+            "typing",
+            "lines",
+            "blocks"
+          ],
+          "default": "typing",
+          "description": "Show code as typing, individual lines, or bounded blocks. Changes apply to the next typing action.",
           "scope": "application"
         },
         "aiPair.readingSpeed": {

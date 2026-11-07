@@ -43,6 +43,10 @@ Steps(k) ==
       [] k = "select" ->
              <<"await", "check", "await", "await", "effect", "await">>
       [] k = "point" -> <<"await", "await", "effect", "await">>
+      [] k = "newline" ->
+             <<"await", "await", "await", "await", "await", "check", "effect",
+               "await",
+               "check", "effect">>
       [] k = "type" ->
              <<"await", "await", "await", "await", "check", "effect", "await",
                "check", "effect">>

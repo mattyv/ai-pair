@@ -1,0 +1,41 @@
+name: Build VSIX
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  vsix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test:coverage
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: npx playwright test packages/vscode/test/visual/chat_order.spec.ts
+      - run: npm run package
+      - name: Name artifact
+        id: artifact
+        run: |
+          version=$(node -p "require('./packages/vscode/package.json').version")
+          sha=$(git rev-parse --short=12 HEAD)
+          artifact="ai-pair-${version}-${sha}.vsix"
+          mv "ai-pair-${version}.vsix" "$artifact"
+          echo "path=$artifact" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7
+        with:
+          path: ${{ steps.artifact.outputs.path }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 14

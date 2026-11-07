@@ -7,6 +7,7 @@
 import { ok } from 'node:assert/strict';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest';
 import type { Element, HTMLElement, Window } from 'happy-dom';
+import type { PanelEvent } from '@ai-pair/core';
 import { ELLIPSIS, LABEL_SEPARATOR, RANGE_DASH, RIGHT_ARROW, SPEED_SUFFIX } from '@ai-pair/core/constants';
 import type { ToPanel } from '../../src/panel_messages';
 import { loadPage, ui } from '../page';
@@ -38,10 +39,20 @@ type Target = Window | Window['document'] | Window['document']['documentElement'
 let targets: Array<{ target: Target; spy: MockInstance<Target['addEventListener']> }> = [];
 
 let post: Mock<(message: { type: string }) => void>;
+let resizeHistory: () => void;
 
 beforeEach(async () => {
   targets = [window, document, document.documentElement].map((target) => ({ target, spy: vi.spyOn(target, 'addEventListener') }));
   post = vi.fn<(message: { type: string }) => void>();
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(callback: () => void) {
+        resizeHistory = callback;
+      }
+      observe(): void {}
+    },
+  );
   await loadPage(post);
 });
 
@@ -53,6 +64,7 @@ afterEach(() => {
   }
   vi.useRealTimers();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 /** Dispatches a message from the extension to the page, as the webview does. */
@@ -257,6 +269,27 @@ describe('the history (specs/Panel.tla, specs/PanelScroll.tla)', () => {
     expect(text('status-text')).toBe('Session started');
   });
 
+  it.each([false, true])('ShownIsState: a replacement session clears an old suspension (replay %s)', (replay) => {
+    const events: PanelEvent[] = [
+      { type: 'session', active: true, task: 'Previous' },
+      { type: 'session', active: true, task: 'Previous', suspended: true },
+      { type: 'session', active: true, task: 'Replacement' },
+      { type: 'state', state: 'typing', turn: 'agent', paused: false },
+    ];
+    if (replay) send({ type: 'replay', events });
+    else for (const event of events) send(event);
+    expect(text('status-text')).toContain('Playing');
+    expect(text('status-text')).not.toContain('Suspended');
+  });
+
+  it('ShownIsState: late state and run events do not clear a real suspension', () => {
+    start();
+    send({ type: 'session', active: true, suspended: true });
+    send({ type: 'state', state: 'typing', turn: 'agent', paused: false });
+    send({ type: 'run', id: 40, command: 'test', phase: 'done', exitCode: 0 });
+    expect(text('status-text')).toBe('Suspended: waiting for the agent');
+  });
+
   it('ShownIsState: a session revived after a reload shows as suspended (#138)', () => {
     send({
       type: 'replay',
@@ -347,6 +380,47 @@ describe('the history (specs/Panel.tla, specs/PanelScroll.tla)', () => {
 });
 
 describe('the band', () => {
+  it('PausedMatchesReasons: distinguishes actual pause, active playback, natural reading, and turn or confirmation waits', () => {
+    start();
+    send({ type: 'state', state: 'typing', turn: 'agent', paused: false });
+    expect(text('status-text')).toBe('Playing: typing');
+    expect(element('status-text').classList.contains('is-playing')).toBe(true);
+    runPhase('confirm');
+    expect(text('status-text')).toBe('Needs you');
+    expect(element('status-text').classList.contains('is-playing')).toBe(false);
+    runPhase('running');
+    send({ type: 'state', state: 'typing', turn: 'agent', paused: true });
+    expect(text('status-text')).toBe('Paused');
+    expect(element('status-text').classList.contains('is-paused')).toBe(true);
+    expect(element('status-text').classList.contains('is-playing')).toBe(false);
+    runPhase('confirm');
+    expect(text('status-text')).toBe(`Paused${LABEL_SEPARATOR}Needs you`);
+    send({ type: 'state', state: 'navigator', turn: 'programmer', paused: true });
+    runPhase('done');
+    expect(text('status-text')).toBe(`Paused${LABEL_SEPARATOR}Your turn`);
+    send({ type: 'state', state: 'navigator', turn: 'programmer', paused: false });
+    expect(text('status-text')).toBe('Your turn');
+    send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+    expect(text('status-text')).toBe('Read this');
+    expect(element('status-text').classList.contains('is-paused')).toBe(false);
+    send({ type: 'session', active: true, suspended: true });
+    expect(text('status-text')).toBe('Suspended: waiting for the agent');
+    expect(element('status-text').classList.contains('is-playing')).toBe(false);
+    send({ type: 'session', active: false, reason: 'agent' });
+    expect(text('status-text')).toBe('No session');
+  });
+
+  it('does not announce the same status again when the status is unchanged', () => {
+    start();
+    const message = { type: 'state', state: 'typing', turn: 'agent', paused: false } as const;
+    send(message);
+    const observer = new window.MutationObserver(() => {});
+    observer.observe(element('status-text'), { childList: true, characterData: true, subtree: true });
+    send(message);
+    expect(observer.takeRecords()).toHaveLength(0);
+    observer.disconnect();
+  });
+
   it('waits for the agent when a session starts, and says there is no session before and after it', () => {
     expect(text('status-text')).toBe('No session');
     send({ type: 'say', text: 'Earlier' });
@@ -363,7 +437,7 @@ describe('the band', () => {
   });
 
   it.each([
-    ['typing', '', 'Agent is typing'],
+    ['typing', '', 'Playing: typing'],
     ['read', 'read', 'Read this'],
     ['running', '', 'Running a command'],
     ['thinking', 'dim', 'Agent is thinking'],
@@ -715,12 +789,12 @@ describe('the speed menus', () => {
     send({ type: m.type, value: 1.5 });
     expect(text(m.button)).toBe(`${m.prefix}1.5${SPEED_SUFFIX}`);
     expect(element(m.button).getAttribute('aria-label')).toBe(`${m.name}: 1.5${SPEED_SUFFIX}`);
-    expect(element(m.menu).querySelector('[aria-checked="true"]')?.textContent).toBe(`1.5${SPEED_SUFFIX}`);
+    expect(element(m.menu).querySelector('[data-speed][aria-checked="true"]')?.textContent).toBe(`1.5${SPEED_SUFFIX}`);
     send({ type: m.type, value: 2 });
     expect(text(m.button)).toBe(`${m.prefix}2.0${SPEED_SUFFIX}`);
     send({ type: m.type, value: 1.25 });
     expect(text(m.button)).toBe(`${m.prefix}1.25${SPEED_SUFFIX}`);
-    expect(element(m.menu).querySelector('[aria-checked="true"]')).toBeNull();
+    expect(element(m.menu).querySelector('[data-speed][aria-checked="true"]')).toBeNull();
   });
 
   it.each(menus)('$type: opens on its button with the setting focused, and posts the speed chosen', (m) => {
@@ -1037,4 +1111,1000 @@ describe('guards', () => {
     expect(element('tip').hidden).toBe(false);
     expect(text('tip')).toBe('');
   });
+});
+
+describe('chat order', () => {
+  it('renders events oldest first and places the current message and reply after history', () => {
+    send({ type: 'chatOrder', value: 'oldestFirst' });
+    start();
+    send({ type: 'say', text: 'First' });
+    send({ type: 'say', text: 'Second' });
+    expect(history()).toEqual(['Session started', 'First']);
+    expect(element('history').getAttribute('aria-label')).toBe('Earlier, oldest first');
+    expect(element('history').compareDocumentPosition(element('reply')) & window.Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('reorders existing entries when the setting changes and keeps the current message once', () => {
+    start();
+    send({ type: 'say', text: 'First' });
+    send({ type: 'say', text: 'Second' });
+    send({ type: 'chatOrder', value: 'oldestFirst' });
+    expect(history()).toEqual(['Session started', 'First']);
+    send({ type: 'say', text: 'Third' });
+    expect(history()).toEqual(['Session started', 'First', 'Second']);
+    send({ type: 'chatOrder', value: 'newestFirst' });
+    expect(history()).toEqual(['Second', 'First', 'Session started']);
+    expect(element('history').getAttribute('aria-label')).toBe('Earlier, newest first');
+  });
+});
+
+describe('panel settings', () => {
+  it('opens a named settings dialog, sends a changed order, and restores focus on close', () => {
+    const button = element('settings');
+    button.focus();
+    click(button);
+    const dialog = element('settings-dialog');
+    expect(dialog.getAttribute('aria-label')).toBe('Settings');
+    expect(dialog.hasAttribute('open')).toBe(true);
+    const select = element('chat-order');
+    expect(document.activeElement).toBe(select);
+    if (!(select instanceof window.HTMLSelectElement)) throw new TypeError('Expected a select');
+    select.value = 'oldestFirst';
+    select.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect(posted()).toContainEqual({ type: 'chatOrder', value: 'oldestFirst' });
+    click(element('settings-close'));
+    expect(dialog.hasAttribute('open')).toBe(false);
+    expect(document.activeElement).toBe(button);
+  });
+});
+
+describe('visible chronology', () => {
+  it.each(['newestFirst', 'oldestFirst'] as const)(
+    'VisibleOnce, NoneLost: shows each agent and programmer message once in %s order',
+    (order) => {
+      send({ type: 'chatOrder', value: order });
+      start();
+      send({ type: 'say', text: 'Agent A' });
+      send({ type: 'programmer', text: 'Programmer B' });
+      expect(text('now-text')).not.toContain('Agent A');
+      expect(history().filter((value) => value.includes('Agent A'))).toHaveLength(1);
+      expect(history().filter((value) => value.includes('Programmer B'))).toHaveLength(1);
+      send({ type: 'say', text: 'Agent C' });
+      expect(text('now-text')).toBe('Agent C');
+      const messages = history().filter((value) => value === 'Agent A' || value === 'Programmer B');
+      expect(messages).toEqual(order === 'newestFirst' ? ['Programmer B', 'Agent A'] : ['Agent A', 'Programmer B']);
+    },
+  );
+});
+
+it('keeps a pointed code link with the filed agent message', () => {
+  start();
+  send({ type: 'point', file: 'src/example.ts', line: 12 });
+  send({ type: 'say', text: 'Look here' });
+  send({ type: 'programmer', text: 'I see it' });
+  const link = element('history').querySelector('.agent a.ref');
+  expect(link?.textContent).toBe(`${RIGHT_ARROW} src/example.ts:12`);
+  if (link === null) throw new Error('Filed message has no code link');
+  click(link);
+  expect(posted()).toContainEqual({ type: 'open', file: 'src/example.ts', line: 12 });
+});
+
+describe('history position', () => {
+  it('follows the newest edge on input and resize but preserves a scrolled-away view', () => {
+    const historyElement = element('history');
+    Object.defineProperty(historyElement, 'scrollHeight', { configurable: true, value: 500 });
+    Object.defineProperty(historyElement, 'clientHeight', { configurable: true, value: 100 });
+    resizeHistory();
+    send({ type: 'chatOrder', value: 'oldestFirst' });
+    historyElement.scrollTop = 400;
+    historyElement.dispatchEvent(new window.Event('scroll'));
+    typeReply('draft');
+    expect(historyElement.scrollTop).toBe(500);
+    historyElement.scrollTop = 400;
+    resizeHistory();
+    expect(historyElement.scrollTop).toBe(500);
+    historyElement.scrollTop = 100;
+    historyElement.dispatchEvent(new window.Event('scroll'));
+    send({ type: 'say', text: 'one' });
+    send({ type: 'say', text: 'two' });
+    typeReply('other draft');
+    resizeHistory();
+    expect(historyElement.scrollTop).toBe(100);
+    Object.defineProperty(historyElement, 'clientHeight', { configurable: true, value: 90 });
+    historyElement.dispatchEvent(new window.Event('scroll'));
+    resizeHistory();
+    expect(historyElement.scrollTop).toBe(100);
+  });
+
+  it.each(['message', 'input'] as const)('KeepsPlace: observes a scroll before a pending resize when handling %s', (change) => {
+    const historyElement = element('history');
+    Object.defineProperty(historyElement, 'scrollHeight', { configurable: true, value: 500 });
+    Object.defineProperty(historyElement, 'clientHeight', { configurable: true, value: 100 });
+    resizeHistory();
+    send({ type: 'chatOrder', value: 'oldestFirst' });
+    historyElement.scrollTop = 400;
+    historyElement.dispatchEvent(new window.Event('scroll'));
+    // A user scroll can precede delivery of the browser's scroll event.
+    historyElement.scrollTop = 40;
+    if (change === 'message') send({ type: 'say', text: 'incoming' });
+    else typeReply('draft');
+    resizeHistory();
+    expect(historyElement.scrollTop).toBe(40);
+  });
+
+  it.each([500, 900])('FollowsLatest: a message during a pending viewport resize keeps the latest edge (height %i)', (newScrollHeight) => {
+    const historyElement = element('history');
+    Object.defineProperty(historyElement, 'scrollHeight', { configurable: true, value: 500 });
+    Object.defineProperty(historyElement, 'clientHeight', { configurable: true, value: 100 });
+    resizeHistory();
+    send({ type: 'chatOrder', value: 'oldestFirst' });
+    historyElement.scrollTop = 400;
+    historyElement.dispatchEvent(new window.Event('scroll'));
+    Object.defineProperty(historyElement, 'clientHeight', { configurable: true, value: 90 });
+    Object.defineProperty(historyElement, 'scrollHeight', { configurable: true, value: newScrollHeight });
+    send({ type: 'say', text: 'incoming' });
+    resizeHistory();
+    expect(historyElement.scrollTop).toBe(newScrollHeight);
+  });
+
+  it('KeepsPlace: observes a new reader scroll after following a resize', () => {
+    const historyElement = element('history');
+    Object.defineProperty(historyElement, 'scrollHeight', { configurable: true, value: 500 });
+    Object.defineProperty(historyElement, 'clientHeight', { configurable: true, value: 100 });
+    resizeHistory();
+    send({ type: 'chatOrder', value: 'oldestFirst' });
+    historyElement.scrollTop = 400;
+    historyElement.dispatchEvent(new window.Event('scroll'));
+    Object.defineProperty(historyElement, 'clientHeight', { configurable: true, value: 90 });
+    send({ type: 'say', text: 'first' });
+    // A browser clamps the followed position to the new maximum, 410.
+    historyElement.scrollTop = 405;
+    send({ type: 'say', text: 'second' });
+    resizeHistory();
+    expect(historyElement.scrollTop).toBe(405);
+  });
+
+  it('preserves a visible entry when switching away from the newest edge', () => {
+    vi.useFakeTimers();
+    start();
+    send({ type: 'say', text: 'First' });
+    send({ type: 'say', text: 'Second' });
+    const historyElement = element('history');
+    Object.defineProperty(historyElement, 'scrollHeight', { configurable: true, value: 500 });
+    Object.defineProperty(historyElement, 'clientHeight', { configurable: true, value: 100 });
+    historyElement.scrollTop = 120;
+    vi.spyOn(historyElement, 'getBoundingClientRect').mockReturnValue(new window.DOMRect(0, 10, 100, 100));
+    for (const entry of historyElement.children) {
+      vi.spyOn(entry, 'getBoundingClientRect').mockReturnValue(new window.DOMRect(0, 20, 100, 30));
+    }
+    send({ type: 'chatOrder', value: 'oldestFirst' });
+    expect(historyElement.scrollTop).toBe(120);
+    send({ type: 'chatOrder', value: 'newestFirst' });
+    expect(historyElement.scrollTop).toBe(120);
+    vi.runAllTimers();
+    expect(historyElement.classList.contains('reordering')).toBe(false);
+  });
+
+  it('sends newest first when that option is selected', () => {
+    const select = element('chat-order');
+    if (!(select instanceof window.HTMLSelectElement)) throw new TypeError('Expected a select');
+    select.value = 'newestFirst';
+    select.dispatchEvent(new window.Event('change'));
+    expect(posted()).toContainEqual({ type: 'chatOrder', value: 'newestFirst' });
+  });
+});
+
+describe('conversation ordering across replay', () => {
+  it.each(['newestFirst', 'oldestFirst'] as const)('keeps prior questions and replies in event order in %s', (order) => {
+    send({ type: 'chatOrder', value: order });
+    send({
+      type: 'replay',
+      events: [
+        { type: 'session', active: true },
+        { type: 'say', text: 'Earlier explanation' },
+        { type: 'programmer', text: 'Earlier question' },
+        { type: 'say', text: 'Which of the two goes in total_balance?' },
+      ],
+    });
+    send({ type: 'programmer', text: "Where is total_balance? I don't see it." });
+    const expected = [
+      'Earlier explanation',
+      'Earlier question',
+      'Which of the two goes in total_balance?',
+      "Where is total_balance? I don't see it.",
+    ];
+    const messages = history().filter((value) => expected.includes(value));
+    expect(messages).toEqual(order === 'oldestFirst' ? expected : expected.toReversed());
+    expect(text('now-text')).toBe('');
+    send({ type: 'say', text: 'So the question again' });
+    expect(text('now-text')).toBe('So the question again');
+    expect(history().filter((value) => expected.includes(value))).toEqual(order === 'oldestFirst' ? expected : expected.toReversed());
+  });
+});
+
+it('can switch order when a hidden or empty viewport has no visible anchor', () => {
+  const historyElement = element('history');
+  historyElement.scrollTop = 50;
+  send({ type: 'chatOrder', value: 'oldestFirst' });
+  expect(historyElement.getAttribute('aria-label')).toBe('Earlier, oldest first');
+});
+
+describe('finish reading control', () => {
+  it('offers a named button for the current countdown and posts its ID once', () => {
+    start();
+    send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+    send({ type: 'reading', ms: 5000, id: 42 });
+    const control = element('skip-reading');
+    expect(control.getAttribute('aria-label')).toBe('Finish reading pause');
+    click(control);
+    click(control);
+    expect(posted().filter((message) => message.type === 'skipReading')).toEqual([{ type: 'skipReading', id: 42 }]);
+  });
+
+  it('does not send a skip while paused or on the programmer turn', () => {
+    start();
+    send({ type: 'reading', ms: 5000, id: 43 });
+    send({ type: 'state', state: 'read', turn: 'agent', paused: true });
+    click(element('skip-reading'));
+    send({ type: 'state', state: 'navigator', turn: 'programmer', paused: false });
+    click(element('skip-reading'));
+    expect(posted().filter((message) => message.type === 'skipReading')).toEqual([]);
+  });
+});
+
+it('disables finishing the reading pause on suspension and session end', () => {
+  start();
+  send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+  send({ type: 'reading', ms: 5000, id: 99 });
+  send({ type: 'session', active: true, suspended: true });
+  click(element('skip-reading'));
+  send({ type: 'session', active: false, reason: 'agent' });
+  click(element('skip-reading'));
+  expect(posted().filter((message) => message.type === 'skipReading')).toEqual([]);
+});
+
+it('does not offer a stale countdown after playback has resumed', () => {
+  start();
+  send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+  send({ type: 'reading', ms: 5000, id: 101 });
+  send({ type: 'state', state: 'typing', turn: 'agent', paused: false });
+  click(element('skip-reading'));
+  expect(posted().filter((message) => message.type === 'skipReading')).toEqual([]);
+});
+
+it('does not treat old replayed countdowns or a command confirmation as skippable', () => {
+  start();
+  send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+  send({ type: 'reading', ms: 5000 });
+  click(element('skip-reading'));
+  send({ type: 'reading', ms: 5000, id: 102 });
+  send({ type: 'run', id: 1, command: 'npm test', phase: 'confirm' });
+  click(element('skip-reading'));
+  expect(posted().filter((message) => message.type === 'skipReading')).toEqual([]);
+});
+
+it('does not intercept Space on the reading control as a playback pause', () => {
+  start();
+  send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+  send({ type: 'reading', ms: 5000, id: 103 });
+  const control = element('skip-reading');
+  press(control, ' ');
+  expect(posted().filter((message) => message.type === 'pause')).toEqual([]);
+});
+
+it('does not let an old animation frame schedule updates for a new countdown', () => {
+  vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'performance'] });
+  start();
+  send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+  send({ type: 'reading', ms: 5000, id: 201 });
+  click(element('skip-reading'));
+  send({ type: 'reading', ms: 5000, id: 202 });
+  vi.advanceTimersByTime(16);
+  expect(vi.getTimerCount()).toBe(1);
+});
+
+describe('reading ring long press', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    start();
+    send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+    send({ type: 'reading', ms: 5000, id: 301 });
+  });
+
+  it('LongDoesNotSkip: holds, resumes on release, and suppresses the resulting click', () => {
+    const control = element('skip-reading');
+    control.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 1 }));
+    vi.advanceTimersByTime(400);
+    expect(posted()).toContainEqual({ type: 'holdReading', id: 301, held: true });
+    const progress = element('dot').style.getPropertyValue('--progress');
+    vi.advanceTimersByTime(1000);
+    expect(element('dot').style.getPropertyValue('--progress')).toBe(progress);
+    window.dispatchEvent(new window.PointerEvent('pointerup', { bubbles: true, button: 0, pointerId: 1 }));
+    click(control);
+    expect(posted()).toContainEqual({ type: 'holdReading', id: 301, held: false });
+    expect(posted().filter((message) => message.type === 'skipReading')).toEqual([]);
+    vi.advanceTimersByTime(100);
+    expect(Number(element('dot').style.getPropertyValue('--progress'))).toBeGreaterThan(Number(progress));
+  });
+
+  it('releases a hold on focus loss even if playback was separately paused', () => {
+    const control = element('skip-reading');
+    control.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 1 }));
+    vi.advanceTimersByTime(400);
+    send({ type: 'state', state: 'read', turn: 'agent', paused: true });
+    window.dispatchEvent(new window.Event('blur'));
+    expect(posted()).toContainEqual({ type: 'holdReading', id: 301, held: false });
+    expect(posted().filter((message) => message.type === 'resume')).toEqual([]);
+  });
+
+  it('NoNewerSkip: does not let an old press finish a newer countdown', () => {
+    const control = element('skip-reading');
+    control.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 1 }));
+    send({ type: 'reading', ms: 5000, id: 302 });
+    window.dispatchEvent(new window.PointerEvent('pointerup', { bubbles: true, button: 0, pointerId: 1 }));
+    click(control);
+    expect(posted().filter((message) => message.type === 'skipReading')).toEqual([]);
+  });
+});
+
+describe('reading hold cleanup and keyboard access', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    start();
+    send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+    send({ type: 'reading', ms: 5000, id: 501 });
+  });
+
+  it.each(['pointercancel', 'lostpointercapture', 'pagehide', 'visibilitychange'] as const)('releases the hold after %s', (event) => {
+    const control = element('skip-reading');
+    control.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 1 }));
+    vi.advanceTimersByTime(400);
+    if (event === 'pointercancel') {
+      window.dispatchEvent(new window.PointerEvent(event, { pointerId: 1 }));
+    } else if (event === 'lostpointercapture') {
+      control.dispatchEvent(new window.PointerEvent(event, { pointerId: 1 }));
+    } else if (event === 'pagehide') {
+      window.dispatchEvent(new window.Event(event));
+    } else {
+      vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+      document.dispatchEvent(new window.Event(event));
+    }
+    expect(posted()).toContainEqual({ type: 'holdReading', id: 501, held: true });
+    expect(posted()).toContainEqual({ type: 'holdReading', id: 501, held: false });
+    click(control);
+    expect(posted().filter((message) => message.type === 'skipReading')).toEqual([]);
+  });
+
+  it('uses Space for a hold and release without also finishing the countdown', () => {
+    const control = element('skip-reading');
+    control.dispatchEvent(new window.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    vi.advanceTimersByTime(400);
+    window.dispatchEvent(new window.KeyboardEvent('keyup', { key: ' ', bubbles: true }));
+    click(control);
+    expect(posted()).toContainEqual({ type: 'holdReading', id: 501, held: true });
+    expect(posted()).toContainEqual({ type: 'holdReading', id: 501, held: false });
+    expect(posted().filter((message) => message.type === 'skipReading')).toEqual([]);
+  });
+
+  it('ShortCurrentSkips: finishes once on a short pointer press', () => {
+    const control = element('skip-reading');
+    control.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 1 }));
+    vi.advanceTimersByTime(100);
+    window.dispatchEvent(new window.PointerEvent('pointerup', { pointerId: 1 }));
+    click(control);
+    expect(posted().filter((message) => message.type === 'skipReading')).toEqual([{ type: 'skipReading', id: 501 }]);
+    expect(posted().filter((message) => message.type === 'holdReading')).toEqual([]);
+  });
+
+  it('ignores unrelated input and stale or ineligible hold attempts', () => {
+    const control = element('skip-reading');
+    send({ type: 'state', state: 'read', turn: 'agent', paused: true });
+    control.dispatchEvent(new window.PointerEvent('pointerdown', { button: 0, pointerId: 1 }));
+    send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+    control.dispatchEvent(new window.PointerEvent('pointerdown', { button: 2, pointerId: 2 }));
+    control.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+    control.dispatchEvent(new window.KeyboardEvent('keydown', { key: ' ', repeat: true }));
+    window.dispatchEvent(new window.KeyboardEvent('keyup', { key: 'Enter' }));
+    window.dispatchEvent(new window.PointerEvent('pointerup', { pointerId: 2 }));
+    window.dispatchEvent(new window.PointerEvent('pointercancel', { pointerId: 2 }));
+    control.dispatchEvent(new window.PointerEvent('lostpointercapture', { pointerId: 2 }));
+    document.dispatchEvent(new window.Event('visibilitychange'));
+    control.dispatchEvent(new window.PointerEvent('pointerdown', { button: 0, pointerId: 1 }));
+    control.dispatchEvent(new window.PointerEvent('pointerdown', { button: 0, pointerId: 1 }));
+    window.dispatchEvent(new window.PointerEvent('pointerup', { pointerId: 2 }));
+    send({ type: 'reading', ms: 5000, id: 502 });
+    vi.advanceTimersByTime(400);
+    expect(posted().filter((message) => message.type === 'holdReading')).toEqual([]);
+    window.dispatchEvent(new window.PointerEvent('pointerup', { pointerId: 1 }));
+    vi.advanceTimersByTime(0);
+    click(control);
+    expect(posted().filter((message) => message.type === 'skipReading')).toEqual([{ type: 'skipReading', id: 502 }]);
+  });
+
+  it('releases an old hold without affecting a newer reading', () => {
+    const control = element('skip-reading');
+    control.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true, button: 0, pointerId: 1 }));
+    vi.advanceTimersByTime(400);
+    send({ type: 'reading', ms: 5000, id: 502 });
+    window.dispatchEvent(new window.PointerEvent('pointerup', { pointerId: 1 }));
+    click(control);
+    expect(posted()).toContainEqual({ type: 'holdReading', id: 501, held: false });
+    expect(posted().filter((message) => message.type === 'skipReading')).toEqual([]);
+  });
+});
+
+describe('Your move guidance', () => {
+  it('offers a focusable explanation only while the active agent is listening', () => {
+    start();
+    send({ type: 'state', state: 'listening', turn: 'agent', paused: false });
+    const status = element('status-text');
+    expect(status.textContent).toBe('Your move');
+    expect(status.getAttribute('tabindex')).toBe('0');
+    expect(status.dataset.tip).toBe(
+      'The agent is listening for your reply. You can reply, ask a question, or say continue; it may continue after waiting.',
+    );
+    send({ type: 'state', state: 'listening', turn: 'agent', paused: true });
+    expect(status.dataset.tip).toBeUndefined();
+    expect(status.hasAttribute('tabindex')).toBe(false);
+  });
+
+  it('updates a visible listening hint when the session becomes suspended', () => {
+    start();
+    send({ type: 'state', state: 'listening', turn: 'agent', paused: false });
+    element('status-text').focus();
+    expect(tip()).toContain('agent is listening');
+    send({ type: 'session', active: true, suspended: true });
+    expect(tip()).toContain('same project');
+  });
+
+  it('clears a pending or visible explanation on a status change', () => {
+    vi.useFakeTimers();
+    start();
+    send({ type: 'state', state: 'listening', turn: 'agent', paused: false });
+    hover(element('status-text'));
+    vi.advanceTimersByTime(TIP_DELAY_MS);
+    expect(tip()).toContain('agent is listening');
+    send({ type: 'state', state: 'thinking', turn: 'agent', paused: false });
+    expect(tip()).toBeUndefined();
+    expect(element('status-text').dataset.tip).toBeUndefined();
+    send({ type: 'state', state: 'listening', turn: 'agent', paused: false });
+    hover(element('status-text'));
+    send({ type: 'session', active: true, suspended: true });
+    vi.advanceTimersByTime(TIP_DELAY_MS);
+    expect(tip()).toContain('same project');
+  });
+});
+
+it('shows the Your move explanation on keyboard focus and removes it on turn change', () => {
+  start();
+  send({ type: 'state', state: 'listening', turn: 'agent', paused: false });
+  const status = element('status-text');
+  status.focus();
+  expect(tip()).toContain('agent is listening');
+  expect(status.getAttribute('aria-describedby')).toBe('tip');
+  send({ type: 'state', state: 'navigator', turn: 'programmer', paused: false });
+  expect(tip()).toBeUndefined();
+  expect(status.hasAttribute('aria-describedby')).toBe(false);
+  expect(status.dataset.tip).toBeUndefined();
+});
+
+it('AvailableShown: offers the matching terminal for running and filed commands', () => {
+  start();
+  send({ type: 'run', id: 71, command: 'npm test', phase: 'running' });
+  click(element('show-terminal'));
+  expect(posted()).toContainEqual({ type: 'showTerminal', id: 71 });
+  send({ type: 'run', id: 71, command: 'npm test', phase: 'done', exitCode: 0 });
+  const button = element('history').querySelector('[data-show-terminal="71"]');
+  ok(button);
+  click(button);
+  expect(posted().filter((message) => message.type === 'showTerminal')).toEqual([
+    { type: 'showTerminal', id: 71 },
+    { type: 'showTerminal', id: 71 },
+  ]);
+});
+
+it('persists the automatic terminal preference and reflects host changes', () => {
+  const checkbox = element('show-terminals');
+  if (!(checkbox instanceof window.HTMLInputElement)) throw new TypeError('missing checkbox');
+  expect(checkbox.checked).toBe(false);
+  send({ type: 'showTerminals', value: true });
+  expect(checkbox.checked).toBe(true);
+  checkbox.checked = false;
+  checkbox.dispatchEvent(new window.Event('change', { bubbles: true }));
+  expect(posted()).toContainEqual({ type: 'showTerminals', value: false });
+});
+
+it('does not offer a terminal for an unapproved or declined command', () => {
+  start();
+  send({ type: 'run', id: 81, command: 'npm test', phase: 'confirm' });
+  expect(element('show-terminal').hidden).toBe(true);
+  click(element('show-terminal'));
+  expect(posted().filter((message) => message.type === 'showTerminal')).toEqual([]);
+  send({ type: 'run', id: 81, command: 'npm test', phase: 'declined' });
+  expect(element('history').querySelector('[data-show-terminal="81"]')).toBeNull();
+});
+
+it('ChoiceSaved, PaceIndependent: keeps code display and speed independent in either message order', () => {
+  start();
+  send({ type: 'codePlayback', value: 'blocks' });
+  send({ type: 'speed', value: 2 });
+  expect(element('code-mode').getAttribute('aria-label')).toBe('Code display: Blocks');
+  send({ type: 'codePlayback', value: 'lines' });
+  expect(element('code-mode').getAttribute('aria-label')).toBe('Code display: Lines');
+  send({ type: 'speed', value: 3 });
+  expect(element('code-mode').getAttribute('aria-label')).toBe('Code display: Lines');
+});
+
+it('explains how to resume a suspended session and clears the hint on reconnect', () => {
+  start();
+  send({ type: 'session', active: true, suspended: true });
+  expect(element('status-text').dataset.tip).toContain('same project');
+  send({ type: 'session', active: true, resumed: true });
+  expect(element('status-text').dataset.tip).toBeUndefined();
+});
+
+it('OnlyOnRequest: requests diagnostics only when the button is activated', () => {
+  expect(posted().filter((message) => message.type === 'copyDiagnostics')).toEqual([]);
+  click(element('copy-diagnostics'));
+  expect(posted().filter((message) => message.type === 'copyDiagnostics')).toEqual([{ type: 'copyDiagnostics' }]);
+});
+
+it('ChoiceApplied: the code display menu updates mode separately from speed', () => {
+  start();
+  send({ type: 'speed', value: 2 });
+  send({ type: 'codePlayback', value: 'typing' });
+  click(element('code-mode'));
+  const menu = element('code-mode-menu');
+  const lines = menu.querySelector('[data-code-playback="lines"]');
+  ok(lines);
+  click(lines);
+  expect(posted().at(-1)).toEqual({ type: 'codePlayback', value: 'lines' });
+  expect(lines.getAttribute('aria-checked')).toBe('true');
+  expect(element('speed').getAttribute('aria-label')).toBe('Playback speed: 2.0x');
+  expect(element('speed-menu').querySelector('[data-speed="2"][aria-checked="true"]')).not.toBeNull();
+  send({ type: 'codePlayback', value: 'blocks' });
+  expect(menu.querySelector('[data-code-playback="blocks"]')?.getAttribute('aria-checked')).toBe('true');
+});
+
+it('clears the code reading ring when playback leaves its reading state', () => {
+  start();
+  send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+  send({ type: 'reading', owner: 'code', ms: 5000, id: 901 });
+  expect(element('dot').classList.contains('reading')).toBe(true);
+  send({ type: 'state', state: 'typing', turn: 'agent', paused: false });
+  expect(element('dot').classList.contains('reading')).toBe(false);
+  click(element('skip-reading'));
+  expect(posted().filter((message) => message.type === 'skipReading')).toEqual([]);
+});
+
+it('keeps a reading ring during a global pause and clears it if playback then leaves reading', () => {
+  start();
+  send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+  send({ type: 'reading', owner: 'code', ms: 5000, id: 902 });
+  send({ type: 'state', state: 'paused', turn: 'agent', paused: true });
+  expect(element('dot').classList.contains('reading')).toBe(true);
+  send({ type: 'state', state: 'typing', turn: 'agent', paused: false });
+  expect(element('dot').classList.contains('reading')).toBe(false);
+});
+
+it('shows Speaking after the reading ring ends while the voice is still playing', () => {
+  vi.useFakeTimers();
+  start();
+  send({ type: 'speechPage', pageId: 1 });
+  send({ type: 'state', state: 'read', turn: 'agent', paused: false });
+  send({ type: 'reading', ms: 100, id: 51 });
+  send({ type: 'speechStatus', id: 9, pageId: 1, state: 'preparing' });
+  send({ type: 'speechStatus', id: 9, pageId: 1, state: 'speaking' });
+  vi.advanceTimersByTime(200);
+  expect(element('dot').classList.contains('reading')).toBe(false);
+  expect(text('status-text')).toBe('Speaking');
+});
+
+it('sends explicit setup, preview, stop and validated speech preferences', () => {
+  send({ type: 'speechPage', pageId: 1 });
+  send({ type: 'speechSupport', supported: true });
+  send({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+  const voice = element('speech-voice');
+  if (!(voice instanceof window.HTMLSelectElement)) throw new TypeError('Missing voice selector');
+  voice.value = 'bf_emma';
+  voice.dispatchEvent(new window.Event('change', { bubbles: true }));
+  expect(posted()).toContainEqual({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'kokoro', voice: 'bf_emma', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+  click(element('speech-setup'));
+  click(element('speech-preview'));
+  click(element('speech-stop'));
+  expect(posted()).toContainEqual({ type: 'speechSetup' });
+  expect(posted()).toContainEqual({ type: 'speechPreview' });
+  expect(posted()).toContainEqual({ type: 'speechStop' });
+});
+
+it('silences the current audio synchronously before posting a reply and ignores late audio', async () => {
+  const pause = vi.fn<() => void>();
+  const play = vi.fn<() => Promise<void>>().mockResolvedValue();
+  class FakeAudio {
+    pause = pause;
+    play = play;
+    addEventListener(): void {}
+  }
+  vi.stubGlobal('Audio', FakeAudio);
+  vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:test');
+  vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+  start();
+  send({ type: 'speechPage', pageId: 1 });
+  send({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+  send({ type: 'speechStatus', id: 7, pageId: 1, state: 'preparing' });
+  send({ type: 'speechAudio', id: 7, pageId: 1, wavBase64: 'AQI=', durationMs: 100 });
+  await Promise.resolve();
+  expect(play).toHaveBeenCalledOnce();
+  typeReply('Continue');
+  click(element('send'));
+  const sentIndex = post.mock.calls.findIndex(([message]) => message.type === 'reply');
+  expect(sentIndex).toBeGreaterThanOrEqual(0);
+  expect(pause.mock.invocationCallOrder.at(-1)).toBeLessThan(post.mock.invocationCallOrder[sentIndex] ?? 0);
+  send({ type: 'speechAudio', id: 7, pageId: 1, wavBase64: 'AQI=', durationMs: 100 });
+  expect(play).toHaveBeenCalledOnce();
+});
+
+function unavailableAudio(): never {
+  throw new Error('unavailable');
+}
+
+it('revokes a generated audio URL when the browser cannot create its player', () => {
+  vi.stubGlobal('Audio', unavailableAudio);
+  vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:test');
+  const revoke = vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+  send({ type: 'speechPage', pageId: 1 });
+  send({ type: 'speechStatus', id: 11, pageId: 1, state: 'preparing' });
+  send({ type: 'speechAudio', id: 11, pageId: 1, wavBase64: 'AQI=', durationMs: 100 });
+  expect(revoke).toHaveBeenCalledWith('blob:test');
+  expect(posted()).toContainEqual({ type: 'speechEvent', id: 11, pageId: 1, event: 'failed' });
+});
+
+it('does not stop a preview when voice changes while automatic speech is off', async () => {
+  const pause = vi.fn<() => void>();
+  const play = vi.fn<() => Promise<void>>().mockResolvedValue();
+  class FakeAudio {
+    pause = pause;
+    play = play;
+    addEventListener(): void {}
+  }
+  vi.stubGlobal('Audio', FakeAudio);
+  vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:preview');
+  vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+  send({ type: 'speechPage', pageId: 1 });
+  send({
+    type: 'speechSettings',
+    value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+  send({ type: 'speechStatus', id: 1, pageId: 1, state: 'preparing' });
+  send({ type: 'speechAudio', id: 1, pageId: 1, wavBase64: 'AQI=', durationMs: 100 });
+  await Promise.resolve();
+  send({
+    type: 'speechSettings',
+    value: { enabled: false, provider: 'kokoro', voice: 'bf_emma', speed: 1.25, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+  expect(play).toHaveBeenCalledOnce();
+  expect(pause).not.toHaveBeenCalled();
+});
+
+it('keeps the Settings playback selector and toolbar radio choice in sync', () => {
+  start();
+  send({ type: 'codePlayback', value: 'blocks' });
+  const selector = element('settings-code-playback');
+  if (!(selector instanceof window.HTMLSelectElement)) throw new TypeError('Missing playback selector');
+  expect(selector.value).toBe('blocks');
+  selector.value = 'lines';
+  selector.dispatchEvent(new window.Event('change', { bubbles: true }));
+  expect(posted()).toContainEqual({ type: 'codePlayback', value: 'lines' });
+  expect(element('code-mode-menu').querySelector('[data-code-playback="lines"]')?.getAttribute('aria-checked')).toBe('true');
+  click(element('code-mode'));
+  const typing = element('code-mode-menu').querySelector('[data-code-playback="typing"]');
+  ok(typing);
+  click(typing);
+  expect(selector.value).toBe('typing');
+});
+
+it('offers code display in a separate toolbar menu and keeps Settings synchronized', () => {
+  start();
+  send({ type: 'codePlayback', value: 'typing' });
+  const mode = element('code-mode');
+  expect(mode.getAttribute('aria-label')).toBe('Code display: Typing');
+  click(mode);
+  const blocks = element('code-mode-menu').querySelector('[data-code-playback="blocks"]');
+  ok(blocks);
+  click(blocks);
+  expect(posted()).toContainEqual({ type: 'codePlayback', value: 'blocks' });
+  expect(mode.getAttribute('aria-label')).toBe('Code display: Blocks');
+  const selector = element('settings-code-playback');
+  if (!(selector instanceof window.HTMLSelectElement)) throw new TypeError('Missing playback selector');
+  expect(selector.value).toBe('blocks');
+  expect(element('speed').getAttribute('aria-label')).not.toContain('blocks');
+});
+
+it('starts a paused unit prepared after the page opens', async () => {
+  const play = vi.fn<() => Promise<void>>().mockResolvedValue();
+  class FakeAudio {
+    play = play;
+    pause(): void {}
+    addEventListener(): void {}
+  }
+  vi.stubGlobal('Audio', FakeAudio);
+  vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:late');
+  vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+  send({ type: 'speechPage', pageId: 1 });
+  send({ type: 'speechStatus', pageId: 1, id: 8, state: 'paused' });
+  send({ type: 'speechStatus', pageId: 1, id: 8, state: 'preparing' });
+  send({ type: 'speechAudio', pageId: 1, id: 8, wavBase64: 'AQI=', durationMs: 100 });
+  await Promise.resolve();
+  expect(play).toHaveBeenCalledOnce();
+});
+
+it('keeps setup disabled on an unsupported host after a setup state update', () => {
+  send({ type: 'speechSupport', supported: false });
+  send({ type: 'speechSetupState', pending: false, message: 'Unavailable.' });
+  expect(element('speech-setup')).toHaveProperty('disabled', true);
+});
+
+it('reports page visibility and ignores stale speech status while controlling the current audio', async () => {
+  const pause = vi.fn<() => void>();
+  const play = vi.fn<() => Promise<void>>().mockResolvedValue();
+  class FakeAudio {
+    pause = pause;
+    play = play;
+    addEventListener(): void {}
+  }
+  vi.stubGlobal('Audio', FakeAudio);
+  vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:visible');
+  vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+  window.dispatchEvent(new window.Event('pagehide'));
+  const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
+  document.dispatchEvent(new window.Event('visibilitychange'));
+  send({ type: 'speechPage', pageId: 1 });
+  send({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+  send({ type: 'speechStatus', pageId: 1, id: 2, state: 'preparing' });
+  send({ type: 'speechAudio', pageId: 1, id: 2, wavBase64: 'AQI=', durationMs: 100 });
+  await Promise.resolve();
+  send({ type: 'speechControl', pageId: 1, id: 2, action: 'pause' });
+  expect(pause).toHaveBeenCalledOnce();
+  send({ type: 'speechStatus', pageId: 2, id: 3, state: 'speaking' });
+  send({ type: 'speechStatus', pageId: 1, id: 1, state: 'speaking' });
+  expect(text('speech-live-status')).toBe('Preparing speech');
+  document.dispatchEvent(new window.Event('visibilitychange'));
+  expect(posted()).toContainEqual({ type: 'speechPageVisible', pageId: 1 });
+  hidden.mockReturnValue(true);
+  document.dispatchEvent(new window.Event('visibilitychange'));
+  expect(posted()).toContainEqual({ type: 'speechPageHidden', pageId: 1 });
+  send({
+    type: 'speechSettings',
+    value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+  send({ type: 'speechStatus', pageId: 1, id: 2, state: 'speaking' });
+  expect(text('speech-live-status')).not.toBe('Speaking');
+  send({ type: 'speechStatus', pageId: 1, id: 2, state: 'idle' });
+  expect(element('speech-live').hidden).toBe(true);
+  window.dispatchEvent(new window.Event('pagehide'));
+  expect(posted()).toContainEqual({ type: 'speechPageHidden', pageId: 1 });
+});
+
+it('validates selection controls and stops live speech when disabled', () => {
+  const voice = element('speech-voice');
+  const speed = element('speech-speed');
+  const enabled = element('speech-enabled');
+  const mode = element('settings-code-playback');
+  if (
+    !(voice instanceof window.HTMLSelectElement) ||
+    !(speed instanceof window.HTMLSelectElement) ||
+    !(enabled instanceof window.HTMLInputElement) ||
+    !(mode instanceof window.HTMLSelectElement)
+  ) {
+    throw new TypeError('Missing settings controls');
+  }
+  voice.value = '';
+  voice.dispatchEvent(new window.Event('change'));
+  voice.value = 'af_heart';
+  speed.value = '';
+  speed.dispatchEvent(new window.Event('change'));
+  expect(posted().filter((message) => message.type === 'speechSettings')).toEqual([]);
+  speed.value = '1';
+  send({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+  enabled.checked = false;
+  enabled.dispatchEvent(new window.Event('change'));
+  expect(posted()).toContainEqual({
+    type: 'speechSettings',
+    value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+  mode.value = 'lines';
+  mode.dispatchEvent(new window.Event('change'));
+  mode.value = 'blocks';
+  mode.dispatchEvent(new window.Event('change'));
+  mode.value = '';
+  mode.dispatchEvent(new window.Event('change'));
+  expect(posted()).toContainEqual({ type: 'codePlayback', value: 'lines' });
+  expect(posted()).toContainEqual({ type: 'codePlayback', value: 'blocks' });
+  const invalid = element('code-mode-menu').querySelector('button');
+  if (!(invalid instanceof window.HTMLButtonElement)) throw new TypeError('Missing menu item');
+  invalid.dataset.codePlayback = 'invalid';
+  click(invalid);
+  expect(posted()).not.toContainEqual({ type: 'codePlayback', value: 'invalid' });
+});
+
+it('switches providers explicitly and loads cloud voices only when requested', () => {
+  const provider = element('speech-provider');
+  if (!(provider instanceof window.HTMLSelectElement)) throw new TypeError('Missing provider');
+  expect(element('speech-cloud').hidden).toBe(true);
+  send({ type: 'speechCloudSupport', supported: true });
+  send({ type: 'speechKeyStatus', hasKey: true });
+  provider.value = 'elevenlabs';
+  provider.dispatchEvent(new window.Event('change'));
+  expect(element('speech-local').hidden).toBe(true);
+  expect(element('speech-cloud').hidden).toBe(false);
+  expect(posted().filter((message) => message.type === 'speechVoicesLoad')).toEqual([]);
+  click(element('speech-voices-load'));
+  click(element('speech-key-set'));
+  expect(posted()).toContainEqual({ type: 'speechVoicesLoad' });
+  expect(posted()).toContainEqual({ type: 'speechKeySet' });
+});
+
+it('shows the saved account voice after reload without fetching a catalog', () => {
+  send({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: 'saved-voice', elevenLabsSpeed: 1 },
+  });
+  send({ type: 'speechCloudSupport', supported: true });
+  send({ type: 'speechKeyStatus', hasKey: true });
+  const select = element('speech-cloud-voice');
+  if (!(select instanceof window.HTMLSelectElement)) throw new TypeError('Missing voice selector');
+  expect(select.value).toBe('saved-voice');
+  expect(select.selectedOptions[0]?.textContent).toBe('Saved voice (load voices to change)');
+  expect(posted().filter((message) => message.type === 'speechVoicesLoad')).toEqual([]);
+});
+
+it('chooses a cloud voice and speed, loads more, and keeps provider errors sanitized', () => {
+  send({ type: 'speechCloudSupport', supported: true });
+  send({ type: 'speechKeyStatus', hasKey: true });
+  send({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+  send({ type: 'speechCatalog', value: { voices: [{ id: 'id1', name: '<b>Voice</b>' }], more: true, loading: false, error: false } });
+  const voice = element('speech-cloud-voice');
+  const speed = element('speech-cloud-speed');
+  if (!(voice instanceof window.HTMLSelectElement) || !(speed instanceof window.HTMLSelectElement)) throw new TypeError('Missing controls');
+  expect(voice.options[1]?.textContent).toBe('<b>Voice</b>');
+  voice.value = 'id1';
+  voice.dispatchEvent(new window.Event('change'));
+  speed.value = '0.75';
+  speed.dispatchEvent(new window.Event('change'));
+  speed.value = '1.2';
+  speed.dispatchEvent(new window.Event('change'));
+  speed.value = '';
+  speed.dispatchEvent(new window.Event('change'));
+  expect(posted()).toContainEqual({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: 'id1', elevenLabsSpeed: 1.2 },
+  });
+  click(element('speech-voices-more'));
+  click(element('speech-key-remove'));
+  expect(posted()).toContainEqual({ type: 'speechVoicesMore' });
+  expect(posted()).toContainEqual({ type: 'speechKeyRemove' });
+  send({ type: 'speechCatalog', value: { voices: [], more: false, loading: false, error: true } });
+  expect(text('speech-settings-status')).toBe('Could not load account voices.');
+});
+
+it('keeps cloud actions disabled without a key and while setup is pending', () => {
+  send({ type: 'speechCloudSupport', supported: true });
+  send({ type: 'speechKeyStatus', hasKey: false });
+  send({
+    type: 'speechSettings',
+    value: { enabled: false, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+  expect(element('speech-key-remove')).toHaveProperty('disabled', true);
+  expect(element('speech-voices-load')).toHaveProperty('disabled', true);
+  send({ type: 'speechSetupState', pending: true, message: 'Setting up' });
+  expect(element('speech-preview')).toHaveProperty('disabled', true);
+  const provider = element('speech-provider');
+  if (!(provider instanceof window.HTMLSelectElement)) throw new TypeError('Missing provider');
+  provider.value = '';
+  provider.dispatchEvent(new window.Event('change'));
+  provider.value = 'elevenlabs';
+  provider.dispatchEvent(new window.Event('change'));
+  expect(element('speech-cloud').hidden).toBe(false);
+});
+
+it('switches to cloud even when old local voice settings are invalid', () => {
+  send({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'kokoro', voice: 'removed_voice', speed: 9, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+  send({ type: 'speechCloudSupport', supported: true });
+  const provider = element('speech-provider');
+  if (!(provider instanceof window.HTMLSelectElement)) throw new TypeError('Missing provider');
+  provider.value = 'elevenlabs';
+  provider.dispatchEvent(new window.Event('change'));
+  expect(posted()).toContainEqual({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+});
+
+it('switches to cloud with the default rate when a saved cloud rate is invalid', () => {
+  send({
+    type: 'speechSettings',
+    value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 9 },
+  });
+  const provider = element('speech-provider');
+  if (!(provider instanceof window.HTMLSelectElement)) throw new TypeError('Missing provider');
+  provider.value = 'elevenlabs';
+  provider.dispatchEvent(new window.Event('change'));
+  expect(posted()).toContainEqual({
+    type: 'speechSettings',
+    value: { enabled: false, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+});
+
+it('switches back to Kokoro when saved inactive cloud settings are invalid', () => {
+  send({
+    type: 'speechSettings',
+    value: { enabled: false, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 9 },
+  });
+  const provider = element('speech-provider');
+  if (!(provider instanceof window.HTMLSelectElement)) throw new TypeError('Missing provider');
+  provider.value = 'kokoro';
+  provider.dispatchEvent(new window.Event('change'));
+  expect(posted()).toContainEqual({
+    type: 'speechSettings',
+    value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+});
+
+it('replaces stale catalog errors with loading, empty and successful feedback', () => {
+  send({ type: 'speechCatalog', value: { voices: [], more: false, loading: false, error: true, errorKind: 'auth' } });
+  expect(text('speech-settings-status')).toBe('ElevenLabs rejected the key or voice access. Check your key permissions.');
+  send({ type: 'speechCatalog', value: { voices: [], more: false, loading: true, error: false } });
+  expect(text('speech-settings-status')).toBe('Loading account voices...');
+  send({ type: 'speechCatalog', value: { voices: [], more: false, loading: false, error: false } });
+  expect(text('speech-settings-status')).toBe('No account voices are available. Check your ElevenLabs account.');
+  send({ type: 'speechCatalog', value: { voices: [{ id: 'voice', name: 'Voice' }], more: false, loading: false, error: false } });
+  expect(text('speech-settings-status')).toBe('Account voices loaded.');
+});
+
+it.each([
+  ['no_key', 'Add an ElevenLabs API key to load voices.'],
+  ['rate', 'ElevenLabs rate limit or quota reached. Try again later.'],
+  ['network', 'Could not connect to ElevenLabs. Check your network.'],
+  ['timeout', 'Loading account voices timed out. Try again.'],
+  ['invalid', 'ElevenLabs returned an unsupported voice list.'],
+  ['canceled', 'Loading account voices was canceled.'],
+  ['unknown', 'Could not load account voices.'],
+] as const)('maps %s catalog failures to fixed guidance', (errorKind, message) => {
+  send({ type: 'speechCatalog', value: { voices: [], more: false, loading: false, error: true, errorKind } });
+  expect(text('speech-settings-status')).toBe(message);
+});
+
+it('does not claim an invalidated catalog is empty until a load completes', () => {
+  send({ type: 'speechCatalog', value: { voices: [], more: false, loading: false, error: false } });
+  expect(text('speech-settings-status')).toBe('');
+  send({ type: 'speechCatalog', value: { voices: [], more: false, loading: true, error: false } });
+  send({ type: 'speechCatalog', value: { voices: [], more: true, loading: false, error: false } });
+  expect(text('speech-settings-status')).toBe('No voices on this page. Select Load more.');
+});
+
+it('does not report an empty result when an in-flight catalog is reset', () => {
+  send({ type: 'speechCatalog', value: { voices: [], more: false, loading: true, error: false } });
+  send({ type: 'speechCatalog', value: { voices: [], more: false, loading: false, error: false, reset: true } });
+  expect(text('speech-settings-status')).toBe('');
 });

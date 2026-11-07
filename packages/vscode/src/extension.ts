@@ -1,9 +1,19 @@
 import * as os from 'node:os';
+import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { Bridge, Controller, isSavedSession, type PanelEvent, type SavedSession } from '@ai-pair/core';
+import { Bridge, Controller, isSavedSession, type DiagnosticEvent, type PanelEvent, type SavedSession } from '@ai-pair/core';
 import { discoveryDir } from '@ai-pair/protocol';
 import { playDemo } from './demo';
 import { VsCodeEditor } from './editor';
+import { Diagnostics } from './diagnostics';
+import { SpeechService } from './speech_service';
+import { SpeechCredentials } from './speech_credentials';
+import { SpeechCatalog } from './speech_catalog';
+import { ElevenLabsClient } from './speech_elevenlabs';
+import { installedSpeechModel, setupSpeech } from './speech_setup';
+import { speechRuntimeAvailable } from './speech_runtime_status';
+import type { SpeechSettings } from './speech_types';
+import type { SpeechState } from './panel_messages';
 import type { OutsideChanges } from './outside';
 import { watchOutside } from './outside_watch';
 import { NarrationPanel } from './panel';
@@ -12,6 +22,10 @@ import { claudeStarter, setUpAgent, writeLauncher } from './setup';
 import { setTimings, timings, type Timings } from './timings';
 import { Calibration } from './calibration';
 import { builtInPassage, type Passage } from './passage';
+
+/** Values compiled into this running bundle, not the extension currently on disk. */
+declare const AI_PAIR_VERSION: string;
+declare const AI_PAIR_BUILD_ID: string;
 
 /** Where a session waits across a reload, in the workspace's storage (#25). */
 const SAVED_SESSION = 'aiPair.session';
@@ -22,10 +36,20 @@ const OFFERED_SETUP = 'aiPair.offeredSetup';
 /** The settings under `aiPair`, as `config().get` and `update` name them. */
 const SPEED = 'speed';
 const READING_SPEED = 'readingSpeed';
+const CODE_PLAYBACK = 'codePlayback';
 const TIMING = 'timing';
 const AGENT_NAME = 'agentName';
 const CONFIRM_COMMANDS = 'confirmCommands';
 const CALIBRATION_PASSAGE = 'calibrationPassage';
+
+/** The latest speech state, without narration text or audio bytes. */
+export interface SpeechObservation {
+  id: number;
+  state: SpeechState;
+  started: boolean;
+  terminal?: 'ended' | 'failed';
+  message?: string;
+}
 
 /** Returned from `activate`, for integration tests. */
 export interface Api {
@@ -34,6 +58,12 @@ export interface Api {
   bridge: Bridge;
   outside: OutsideChanges;
   playDemo: () => Promise<void>;
+  /** Runs the Settings preview through the normal speech service. */
+  previewSpeech: () => Promise<void>;
+  /** Reports whether the Pair webview is ready for live speech. */
+  speechPageReady: () => boolean;
+  /** Reports the latest state and whether that unit started playback. */
+  speechStatus: () => SpeechObservation | undefined;
   launcher: string;
   ready: Promise<void>;
   /** The session as the workspace's storage holds it. */
@@ -73,6 +103,24 @@ function once<T>(f: (arg: T) => void): (arg: T) => void {
   };
 }
 
+/** The bundled runtime supports only a local Linux x64 glibc extension host. */
+function speechSupported(): boolean {
+  if (
+    vscode.env.remoteName !== undefined ||
+    vscode.env.uiKind !== vscode.UIKind.Desktop ||
+    process.platform !== 'linux' ||
+    process.arch !== 'x64'
+  ) {
+    return false;
+  }
+  try {
+    const report = process.report?.getReport();
+    return isRecord(report) && isRecord(report.header) && typeof report.header.glibcVersionRuntime === 'string';
+  } catch {
+    return false;
+  }
+}
+
 /** Starts the extension: the controller, the editor, the panel, the bridge, and the commands; returns the API the integration test drives. */
 export function activate(context: vscode.ExtensionContext): Api {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.homedir();
@@ -82,7 +130,32 @@ export function activate(context: vscode.ExtensionContext): Api {
   // from callbacks that run after activation returns.
   let controller: Controller;
   let calibration: Calibration;
-  const editor = new VsCodeEditor(root, config().get(AGENT_NAME, 'Agent'), () => controller);
+  let speech: SpeechService;
+  let speechObservation: SpeechObservation | undefined;
+  let previewCapture = false;
+  let previewSequence = 0;
+  let previewId: number | undefined;
+  let previewProvider: 'kokoro' | 'elevenlabs' = 'kokoro';
+  let catalogRequestActive = false;
+  const localSpeechSupported = speechSupported();
+  let runtimeSpeechSupported = false;
+  const cloudSupported = vscode.env.remoteName === undefined && vscode.env.uiKind === vscode.UIKind.Desktop;
+  let keyStatusEpoch = 0;
+  let cloudVoiceInvalidated = false;
+  let panel: NarrationPanel;
+  let catalog: SpeechCatalog;
+  let credentials: SpeechCredentials;
+  const diagnostics = new Diagnostics({ version: AI_PAIR_VERSION, build: AI_PAIR_BUILD_ID });
+  function record(event: DiagnosticEvent): void {
+    diagnostics.record(event);
+  }
+  const editor = new VsCodeEditor(
+    root,
+    config().get(AGENT_NAME, 'Agent'),
+    () => controller,
+    () => config().get<unknown>('showTerminalsAutomatically') === true,
+    record,
+  );
   const speed = {
     get: () => settingSpeed(config().get<unknown>(SPEED, 1)),
     set: (value: number) => {
@@ -93,6 +166,143 @@ export function activate(context: vscode.ExtensionContext): Api {
     get: () => settingSpeed(config().get<unknown>(READING_SPEED, 1)),
     set: (value: number) => {
       void config().update(READING_SPEED, value, vscode.ConfigurationTarget.Global);
+    },
+  };
+  const codePlayback = {
+    get: (): import('@ai-pair/core').CodePlayback => {
+      const value: unknown = config().get(CODE_PLAYBACK);
+      return value === 'lines' || value === 'blocks' ? value : 'typing';
+    },
+    set: (value: import('@ai-pair/core').CodePlayback) => {
+      void config().update(CODE_PLAYBACK, value, vscode.ConfigurationTarget.Global);
+    },
+  };
+  let pendingSpeechSettings: SpeechSettings | undefined;
+  let speechSaveGeneration = 0;
+  let speechSaveTail: Promise<void> = Promise.resolve();
+  function storedSpeechSettings(): SpeechSettings {
+    const enabled: unknown = config().get('speech.enabled');
+    const rawVoice: unknown = config().get('speech.voice');
+    const rawSpeed: unknown = config().get('speech.speed');
+    const voice = typeof rawVoice === 'string' ? rawVoice : 'af_heart';
+    const speechRate = typeof rawSpeed === 'number' ? rawSpeed : 1;
+    const choice = config().inspect<string>('speech.provider')?.globalValue;
+    const cloudVoice: unknown = config().get('speech.elevenLabsVoice');
+    const cloudSpeed: unknown = config().get('speech.elevenLabsSpeed');
+    return {
+      enabled: enabled === true,
+      voice,
+      speed: speechRate,
+      provider: choice === 'elevenlabs' ? 'elevenlabs' : 'kokoro',
+      elevenLabsVoice: !cloudVoiceInvalidated && typeof cloudVoice === 'string' ? cloudVoice : '',
+      elevenLabsSpeed: typeof cloudSpeed === 'number' ? cloudSpeed : 1,
+    };
+  }
+  let lastSpeechProvider = storedSpeechSettings().provider;
+  let lastSpeechEnabled = storedSpeechSettings().enabled;
+  const speechSettings = {
+    get: (): SpeechSettings => pendingSpeechSettings ?? storedSpeechSettings(),
+    set: (value: SpeechSettings): void => {
+      const prior = speechSettings.get();
+      if ((prior.enabled && !value.enabled) || prior.provider !== value.provider) {
+        speech.cancel();
+        if (prior.provider !== value.provider) {
+          credentials.supersede();
+          catalog.invalidate();
+        }
+      }
+      // specs/ProviderChoice.tla, Select: use the latest choice before disk writes settle.
+      const restoresVoice = cloudVoiceInvalidated && value.elevenLabsVoice !== '' && catalog.contains(value.elevenLabsVoice);
+      const generation = ++speechSaveGeneration;
+      pendingSpeechSettings = { ...value };
+      lastSpeechProvider = value.provider;
+      lastSpeechEnabled = value.enabled;
+      const saveOperation = speechSaveTail.then(async () => {
+        const updates: Array<[string, unknown]> = [
+          ['speech.enabled', value.enabled],
+          ['speech.voice', value.voice],
+          ['speech.speed', value.speed],
+          ['speech.provider', value.provider],
+          ['speech.elevenLabsVoice', value.elevenLabsVoice],
+          ['speech.elevenLabsSpeed', value.elevenLabsSpeed],
+        ];
+        for (const [key, setting] of updates) {
+          await config().update(key, setting, vscode.ConfigurationTarget.Global);
+        }
+      });
+      speechSaveTail = saveOperation.catch(() => {});
+      void saveOperation.then(
+        () => {
+          // specs/ProviderChoice.tla, Success: an older write cannot replace a newer choice.
+          if (generation !== speechSaveGeneration) return;
+          pendingSpeechSettings = undefined;
+          if (restoresVoice) cloudVoiceInvalidated = false;
+          panel.showSpeechSettings(storedSpeechSettings());
+        },
+        () => {
+          // specs/ProviderChoice.tla, Failure: only the latest failed write rolls back.
+          if (generation !== speechSaveGeneration) return;
+          pendingSpeechSettings = undefined;
+          speech.cancel();
+          catalog.invalidate();
+          const restored = storedSpeechSettings();
+          lastSpeechProvider = restored.provider;
+          lastSpeechEnabled = restored.enabled;
+          panel.showSpeechSettings(restored);
+          void vscode.window.showErrorMessage('Could not save speech settings.');
+        },
+      );
+    },
+  };
+  credentials = new SpeechCredentials(
+    context.secrets,
+    () =>
+      vscode.window.showInputBox({
+        title: 'ElevenLabs API key',
+        password: true,
+        ignoreFocusOut: true,
+        prompt: 'Use a key with Text to Speech and Voices read access.',
+      }),
+    () => {
+      keyStatusEpoch++;
+      catalog.invalidate();
+      speech.invalidateCloud();
+      // specs/ProviderChoice.tla, KeyChange: a queued old voice cannot revive.
+      cloudVoiceInvalidated = true;
+      speechSettings.set({ ...speechSettings.get(), elevenLabsVoice: '' });
+    },
+  );
+  const cloud = new ElevenLabsClient(() => credentials.read());
+  function refreshKey(): void {
+    const epoch = ++keyStatusEpoch;
+    void credentials.hasKey().then(
+      (hasKey) => {
+        if (epoch === keyStatusEpoch) {
+          panel.showSpeechKeyStatus(hasKey);
+          diagnostics.record({
+            kind: 'speech',
+            event: 'capability',
+            provider: 'elevenlabs',
+            phase: cloudSupported && hasKey ? 'ready' : 'blocked',
+            ...(!cloudSupported ? { reason: 'unsupported' as const } : !hasKey ? { reason: 'no_key' as const } : {}),
+          });
+        }
+      },
+      () => {
+        if (epoch === keyStatusEpoch) panel.showSpeechKeyStatus(false);
+      },
+    );
+  }
+  const chatOrder = {
+    get: () => (config().get<unknown>('chatOrder') === 'oldestFirst' ? ('oldestFirst' as const) : ('newestFirst' as const)),
+    set: (value: 'newestFirst' | 'oldestFirst') => {
+      void config().update('chatOrder', value, vscode.ConfigurationTarget.Global);
+    },
+  };
+  const terminalSettings = {
+    get: () => config().get<unknown>('showTerminalsAutomatically') === true,
+    set: (value: boolean) => {
+      void config().update('showTerminalsAutomatically', value, vscode.ConfigurationTarget.Global);
     },
   };
   // Frames and panel messages at the Trace level, which VS Code hides unless it is set, and resets
@@ -107,7 +317,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   }
   const launcher = writeLauncher(context.extensionPath);
   const starter = claudeStarter(launcher);
-  const panel = new NarrationPanel(
+  panel = new NarrationPanel(
     (file) => editor.resolvePath(file),
     speed,
     readingSpeed,
@@ -117,9 +327,139 @@ export function activate(context: vscode.ExtensionContext): Api {
     },
     trace,
     context.extensionUri,
-    { controller: () => controller, calibration: () => calibration, starter },
+    {
+      controller: () => controller,
+      calibration: () => calibration,
+      starter,
+      copyDiagnostics: async () => {
+        await vscode.env.clipboard.writeText(JSON.stringify(diagnostics.snapshot()));
+      },
+      speech: {
+        settings: speechSettings,
+        diagnostic: (event) => {
+          diagnostics.record(event);
+        },
+        cloudSupported: () => cloudSupported,
+        keySet: async () => {
+          await credentials.set();
+          refreshKey();
+        },
+        keyRemove: async () => {
+          await credentials.remove();
+          refreshKey();
+        },
+        keyRefresh: refreshKey,
+        loadVoices: (more) => {
+          void catalog.load(more);
+        },
+        validCloudVoice: (id) => catalog.contains(id),
+        supported: () => localSpeechSupported && runtimeSpeechSupported,
+        installed: async () => {
+          const available = (await installedSpeechModel(context.globalStorageUri.fsPath)) !== undefined;
+          diagnostics.record({
+            kind: 'speech',
+            event: 'capability',
+            provider: 'kokoro',
+            phase: available ? 'ready' : 'blocked',
+            ...(available ? {} : { reason: 'not_ready' as const }),
+          });
+          return available;
+        },
+        setup: () => setupSpeech(context.globalStorageUri.fsPath),
+        preview: () => {
+          previewProvider = speechSettings.get().provider;
+          const sequence = ++previewSequence;
+          previewId = undefined;
+          previewCapture = true;
+          try {
+            return speech.preview().finally(() => {
+              if (sequence === previewSequence) previewId = undefined;
+            });
+          } finally {
+            previewCapture = false;
+          }
+        },
+        stop: () => {
+          speech.cancel();
+        },
+        event: (event) => {
+          const terminal = speech.audioEvent(event);
+          if (terminal !== undefined && speechObservation?.id === event.id) {
+            speechObservation = { ...speechObservation, terminal };
+          }
+        },
+        pageClosed: (pageId) => {
+          speech.pageClosed(pageId);
+          catalog.invalidate();
+        },
+      },
+    },
+    chatOrder,
+    { version: AI_PAIR_VERSION, build: AI_PAIR_BUILD_ID },
+    terminalSettings,
+    (id) => editor.showTerminal(id),
+    codePlayback,
   );
-  controller = new Controller(editor, panel);
+  catalog = new SpeechCatalog(cloud, (value) => {
+    if (value.reset) catalogRequestActive = false;
+    else if (value.loading) catalogRequestActive = true;
+    else if (catalogRequestActive) {
+      catalogRequestActive = false;
+      diagnostics.record({
+        kind: 'speech',
+        event: 'catalog',
+        provider: 'elevenlabs',
+        phase: value.error ? 'failed' : 'ready',
+        ...(value.error ? { reason: value.errorKind ?? 'unknown' } : value.voices.length === 0 ? { reason: 'no_voice' } : {}),
+      });
+    }
+    panel.showSpeechCatalog(value);
+  });
+  void speechRuntimeAvailable(path.join(context.extensionPath, 'dist', 'speech')).then((available) => {
+    runtimeSpeechSupported = available;
+    diagnostics.record({
+      kind: 'speech',
+      event: 'capability',
+      provider: 'kokoro',
+      phase: localSpeechSupported && available ? 'ready' : 'blocked',
+      ...(!localSpeechSupported ? { reason: 'unsupported' as const } : !available ? { reason: 'not_ready' as const } : {}),
+    });
+    panel.refreshSpeechSupport();
+  });
+  speech = new SpeechService({
+    runtimeDirectory: path.join(context.extensionPath, 'dist', 'speech'),
+    cloud,
+    storageDirectory: context.globalStorageUri.fsPath,
+    localDesktop: cloudSupported,
+    kokoroSupported: localSpeechSupported,
+    settings: speechSettings.get,
+    output: {
+      localDiagnostic: (phase, reason) => {
+        diagnostics.record({ kind: 'speech', event: 'runtime', provider: 'kokoro', phase, ...(reason === undefined ? {} : { reason }) });
+      },
+      play: (id, wav, durationMs) => panel.playSpeech(id, wav, durationMs),
+      control: (id, pageId, action) => {
+        panel.controlSpeech(id, pageId, action);
+      },
+      status: (id, state, message) => {
+        if (previewCapture) previewId = id;
+        if (id === previewId && (state === 'speaking' || state === 'unavailable')) {
+          diagnostics.record({
+            kind: 'speech',
+            event: 'preview',
+            provider: previewProvider,
+            phase: state === 'speaking' ? 'ready' : 'failed',
+            ...(state === 'unavailable' ? { reason: 'unknown' as const } : {}),
+          });
+        }
+        const started = state === 'speaking' || (speechObservation?.id === id && speechObservation.started);
+        speechObservation = { id, state, started, ...(message === undefined ? {} : { message }) };
+        panel.showSpeechStatus(id, state, message);
+      },
+    },
+  });
+  controller = new Controller(editor, panel, undefined, speech);
+  controller.onDiagnostic = record;
   controller.trace = (line) => {
     log.info(line);
   };
@@ -128,6 +468,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   };
   controller.setSpeed(speed.get());
   controller.setReadingSpeed(readingSpeed.get());
+  controller.setCodePlayback(codePlayback.get());
   controller.setTiming(config().get(TIMING));
   controller.setConfirmCommands(config().get(CONFIRM_COMMANDS, true));
   // The passage the programmer or the agent chose, from the settings, or the built-in one (#109).
@@ -190,6 +531,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   };
 
   const bridge = new Bridge(controller, {
+    onDiagnostic: record,
     dir: discoveryDir(),
     workspaceFolders: () => (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath),
     trace,
@@ -215,6 +557,29 @@ export function activate(context: vscode.ExtensionContext): Api {
   }
 
   context.subscriptions.push(
+    context.secrets.onDidChange((event) => {
+      if (event.key === 'aiPair.elevenLabs.apiKey') {
+        credentials.invalidate();
+        refreshKey();
+      }
+    }),
+    vscode.commands.registerCommand('aiPair.setElevenLabsKey', async () => {
+      try {
+        await credentials.set();
+        refreshKey();
+      } catch {
+        void vscode.window.showErrorMessage('Could not save the ElevenLabs API key.');
+      }
+    }),
+    vscode.commands.registerCommand('aiPair.removeElevenLabsKey', async () => {
+      try {
+        await credentials.remove();
+        refreshKey();
+      } catch {
+        void vscode.window.showErrorMessage('Could not remove the ElevenLabs API key.');
+      }
+    }),
+    speech,
     log,
     starter,
     outsideWatch,
@@ -235,9 +600,29 @@ export function activate(context: vscode.ExtensionContext): Api {
       webviewOptions: { retainContextWhenHidden: true },
     }),
     vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('aiPair.speech')) {
+        const current = speechSettings.get();
+        // specs/ProviderChoice.tla, External: persistence echoes cannot undo a pending choice.
+        if (pendingSpeechSettings === undefined) {
+          if ((lastSpeechEnabled && !current.enabled) || current.provider !== lastSpeechProvider) speech.cancel();
+          if (current.provider !== lastSpeechProvider) {
+            credentials.supersede();
+            catalog.invalidate();
+          }
+          lastSpeechProvider = current.provider;
+          lastSpeechEnabled = current.enabled;
+        }
+        panel.showSpeechSettings(current);
+      }
+      if (e.affectsConfiguration('aiPair.chatOrder')) panel.showChatOrder(chatOrder.get());
+      if (e.affectsConfiguration('aiPair.showTerminalsAutomatically')) panel.showTerminalPreference(terminalSettings.get());
       if (e.affectsConfiguration('aiPair.speed')) {
         controller.setSpeed(speed.get());
         panel.showSpeed(speed.get());
+      }
+      if (e.affectsConfiguration('aiPair.codePlayback')) {
+        controller.setCodePlayback(codePlayback.get());
+        panel.showCodePlayback(codePlayback.get());
       }
       if (e.affectsConfiguration('aiPair.readingSpeed')) {
         controller.setReadingSpeed(readingSpeed.get());
@@ -309,6 +694,9 @@ export function activate(context: vscode.ExtensionContext): Api {
     bridge,
     outside,
     playDemo: () => playDemo(controller, root),
+    previewSpeech: () => speech.preview(),
+    speechPageReady: () => panel.speechPageIsReady(),
+    speechStatus: () => (speechObservation === undefined ? undefined : { ...speechObservation }),
     launcher,
     ready,
     saved: () => {

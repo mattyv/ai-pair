@@ -58,7 +58,7 @@ describe('reports', () => {
     expect(text).toMatch(/submit the whole batch again/);
   });
 
-  it('says whether the programmer made an edit, or something else did', () => {
+  it('reports an unclassified editor change without attributing it to a person', () => {
     const text = renderReport(
       report({
         events: [
@@ -68,7 +68,8 @@ describe('reports', () => {
       }),
       'listen',
     );
-    expect(text).toMatch(/The programmer edited a\.ts:\n@@/);
+    expect(text).toMatch(/Editor text changed in a\.ts:\n@@/);
+    expect(text).not.toContain('The programmer edited a.ts');
     expect(text).toMatch(/package\.json was changed, not by the programmer.*:\n@@/);
   });
 
@@ -209,7 +210,7 @@ describe('edits with no net change', () => {
       turn: 'agent',
     };
     expect(renderReport(undone, 'listen')).toBe(
-      'The programmer edited a.ts, then changed it back: no net change.\n\nA tool, a formatter, or something on disk edited b.ts, then changed it back: no net change.',
+      'Editor changes left a.ts unchanged overall.\n\nA tool, a formatter, or something on disk edited b.ts, then changed it back: no net change.',
     );
   });
 
@@ -246,6 +247,21 @@ describe('the variants each part can take', () => {
     expect(unknown).toMatch(/exit code unknown/);
   });
 
+  it('suggests checking the terminal when a still-running command has no output', () => {
+    const run = { command: 'ruff format', output: '', running: true as const };
+    const text = renderReport(report({ batches: [{ id: 1, status: 'completed', runs: [run] }] }), 'step');
+    expect(text).toContain('may be waiting for input');
+    expect(text).toContain('check the terminal');
+    expect(text).not.toContain('exited with');
+  });
+
+  it('does not suggest terminal input after an empty command has exited', () => {
+    const run = { command: 'ruff format', output: '', exit_code: 0 };
+    const text = renderReport(report({ batches: [{ id: 1, status: 'completed', runs: [run] }] }), 'step');
+    expect(text).toContain('exited with 0, no output');
+    expect(text).not.toContain('waiting for input');
+  });
+
   it("names a tool for another's long edit, and shows a turn handed back without a message, with a selection", () => {
     const selection = { file: 'a.ts', from: { line: 1, column: 1 }, to: { line: 1, column: 2 }, text: 'x' };
     const events: Report['events'] = [
@@ -257,9 +273,9 @@ describe('the variants each part can take', () => {
     expect(text).toContain('handed the turn back to you.\nAbout the code they had selected, a.ts line 1:');
   });
 
-  it("names the programmer for their own long edit, and shows a rejected batch's error without code it has none of", () => {
+  it("reports an unclassified long edit, and shows a rejected batch's error without code it has none of", () => {
     const edit = { kind: 'edit', file: 'a.ts', diff: '@@ -1,900 +1,900 @@', by: 'programmer', omitted: 1800 } as const;
-    expect(renderReport(report({ events: [edit] }), 'listen')).toMatch(/^The programmer changed a\.ts in these places, too much to show/);
+    expect(renderReport(report({ events: [edit] }), 'listen')).toMatch(/^Editor activity changed a\.ts in these places, too much to show/);
     const rejected = { index: 1, action: { say: 'x' }, error: { kind: 'no_line', message: 'No line 9.' } } as const;
     const text = renderReport(report({ rejected }), 'step');
     expect(text).toContain('no_line: No line 9.\nNothing of it was queued.');
@@ -349,7 +365,7 @@ describe('every field', () => {
       'cut off here',
       'edited.ts',
       'diff-1',
-      'The programmer edited',
+      'Editor text changed in',
       'other.ts',
       'diff-2',
       'not by the programmer',
@@ -363,4 +379,33 @@ describe('every field', () => {
       expect(text, value).toContain(value);
     }
   });
+});
+
+it('reports advisory warnings and error diagnostics without claiming the batch failed', () => {
+  const text = renderReport(
+    report({
+      batches: [
+        {
+          id: 1,
+          status: 'completed',
+          warnings: ['Multiple closing brackets were crossed.'],
+          diagnostics: [{ file: 'a.py', line: 3, endLine: 4, message: 'Expected expression', source: 'Python' }],
+        },
+      ],
+    }),
+    'step',
+  );
+  expect(text).toContain('Batch 1 completed');
+  expect(text).toContain('Multiple closing brackets were crossed.');
+  expect(text).toContain('a.py:3-4');
+  expect(text).toContain('Expected expression');
+  expect(text).toContain('Python');
+});
+
+it('renders a single-line diagnostic without a provider name', () => {
+  const text = renderReport(
+    report({ batches: [{ id: 2, status: 'completed', diagnostics: [{ file: 'a.py', line: 3, endLine: 3, message: 'Invalid syntax' }] }] }),
+    'step',
+  );
+  expect(text).toContain('a.py:3: Invalid syntax');
 });

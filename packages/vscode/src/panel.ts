@@ -1,10 +1,13 @@
 // The narration panel: a webview view in the secondary side bar. See "Narration panel" in DESIGN.md.
 
 import * as vscode from 'vscode';
-import type { Controller, PanelEvent, PanelPort, Ref, SharedSelection } from '@ai-pair/core';
+import type { CodePlayback, Controller, PanelEvent, PanelPort, Ref, SharedSelection } from '@ai-pair/core';
 import { panelHtml, SPEEDS } from './panel_html';
 import { timings } from './timings';
-import type { FromPanel, ToPanel } from './panel_messages';
+import type { ChatOrder, FromPanel, SpeechAction, SpeechEvent, SpeechState, ToPanel } from './panel_messages';
+import { ELEVENLABS_SPEEDS, SPEECH_SPEEDS, SPEECH_VOICES, type SpeechSettings } from './speech_types';
+import type { CatalogView } from './speech_catalog';
+import type { SpeechDiagnosticEvent } from './diagnostics';
 import type { Calibration, CalibrationView } from './calibration';
 
 const MAX_LOG = 400;
@@ -29,6 +32,25 @@ export interface PanelWiring {
   calibration: () => Calibration;
   /** Starts a session from the idle view, when an agent that can be started from here is set up (#107). */
   starter: Starter;
+  /** Copies the sanitized diagnostics snapshot on explicit request. */
+  copyDiagnostics: () => Promise<void>;
+  speech: {
+    diagnostic: (event: SpeechDiagnosticEvent) => void;
+    settings: { get: () => SpeechSettings; set: (value: SpeechSettings) => void };
+    supported: () => boolean;
+    installed: () => Promise<boolean>;
+    setup: () => Promise<void>;
+    preview: () => Promise<void>;
+    stop: () => void;
+    event: (value: { id: number; pageId: number; event: SpeechEvent }) => void;
+    pageClosed: (pageId: number) => void;
+    cloudSupported: () => boolean;
+    keySet: () => Promise<void>;
+    keyRemove: () => Promise<void>;
+    keyRefresh: () => void;
+    loadVoices: (more: boolean) => void;
+    validCloudVoice: (id: string) => boolean;
+  };
 }
 
 /** How many files of a name to look for before asking which was meant. */
@@ -40,6 +62,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   /** Questions asked of the starter so far; an answer to an earlier one is dropped. */
   private asked = 0;
   private view?: vscode.WebviewView;
+  private speechPageId = 0;
+  private speechPageReady = false;
+  private speechSetupCheck = 0;
   /** Everything posted so far, replayed when the view is (re)created. */
   private readonly log: PanelEvent[] = [];
   /** After each post: the window saves the history with a session, for a reload (#25). */
@@ -74,11 +99,51 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     /** The extension's folder, which holds the page's dist/panel.css and dist/panel.js. */
     private readonly extensionUri: vscode.Uri,
     private readonly wiring: PanelWiring,
+    private readonly chatOrder: { get: () => ChatOrder; set: (value: ChatOrder) => void },
+    private readonly buildInfo: { version: string; build: string },
+    private readonly terminalSettings: { get: () => boolean; set: (value: boolean) => void },
+    private readonly showTerminal: (id: number) => boolean,
+    private readonly codePlayback: { get: () => CodePlayback; set: (value: CodePlayback) => void },
   ) {}
 
   /** Posts to the page, if there is one. */
   private send(message: ToPanel): void {
     void this.view?.webview.postMessage(message);
+  }
+
+  /** Syncs the persisted terminal preference to the page. */
+  showTerminalPreference(value: boolean): void {
+    this.send({ type: 'showTerminals', value });
+  }
+
+  /** Sends audio only to a ready page, never to the history log. */
+  playSpeech(id: number, wav: Uint8Array, durationMs: number): number | undefined {
+    if (!this.view || !this.speechPageReady) return undefined;
+    const pageId = this.speechPageId;
+    this.send({ type: 'speechAudio', id, pageId, wavBase64: Buffer.from(wav).toString('base64'), durationMs });
+    return pageId;
+  }
+
+  controlSpeech(id: number, pageId: number, action: SpeechAction): void {
+    if (this.speechPageReady && pageId === this.speechPageId) this.send({ type: 'speechControl', id, pageId, action });
+  }
+
+  showSpeechStatus(id: number, state: SpeechState, message?: string): void {
+    if (this.speechPageReady) {
+      this.send({ type: 'speechStatus', id, pageId: this.speechPageId, state, ...(message === undefined ? {} : { message }) });
+    }
+  }
+
+  showSpeechKeyStatus(hasKey: boolean): void {
+    this.send({ type: 'speechKeyStatus', hasKey });
+  }
+
+  showSpeechCatalog(value: CatalogView): void {
+    this.send({ type: 'speechCatalog', value });
+  }
+
+  showSpeechSettings(value: SpeechSettings): void {
+    this.send({ type: 'speechSettings', value });
   }
 
   /** Shows the programmer's selection, which changed. Not logged: only the current one matters. */
@@ -89,6 +154,16 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   /** Shows the speed setting, which changed. Not logged: only the current value matters. */
   showSpeed(value: number): void {
     this.send({ type: 'speed', value });
+  }
+
+  /** Shows the saved history order, including changes made in VS Code settings. */
+  showChatOrder(value: ChatOrder): void {
+    this.send({ type: 'chatOrder', value });
+  }
+
+  /** Shows the selected code playback mode. */
+  showCodePlayback(value: CodePlayback): void {
+    this.send({ type: 'codePlayback', value });
   }
 
   showReadingSpeed(value: number): void {
@@ -135,23 +210,79 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
+    if (this.speechPageId > 0) this.wiring.speech.pageClosed(this.speechPageId);
     this.view = view;
+    this.speechPageId++;
+    this.speechPageReady = false;
+    const pageId = this.speechPageId;
     const dist = vscode.Uri.joinPath(this.extensionUri, 'dist');
     view.webview.options = { enableScripts: true, localResourceRoots: [dist] };
     const style = view.webview.asWebviewUri(vscode.Uri.joinPath(dist, 'panel.css')).toString();
     const script = view.webview.asWebviewUri(vscode.Uri.joinPath(dist, 'panel.js')).toString();
-    view.webview.html = panelHtml(view.webview.cspSource, style, script);
+    view.webview.html = panelHtml(view.webview.cspSource, style, script, this.buildInfo.version, this.buildInfo.build);
     // The page posts only FromPanel messages; VS Code types them `any`.
     view.webview.onDidReceiveMessage((m: FromPanel) => {
-      this.receive(m);
+      if (this.view === view) this.receive(m, pageId);
     });
     view.onDidDispose(() => {
       // specs/Start.tla, `Dispose`: the page goes, its button and note with it.
-      if (this.view === view) this.view = undefined;
-      // Its draft went with it, and so does the pause the draft asked for (#69): specs/Draft.tla, `Dispose`.
-      this.wiring.controller().resume('reply');
-      this.wiring.calibration().cancel();
+      if (this.view === view) {
+        this.view = undefined;
+        this.speechPageReady = false;
+        this.wiring.speech.pageClosed(pageId);
+        this.wiring.controller().releaseReadingHold();
+        // Its draft and its pause went with this view: specs/Draft.tla, `Dispose`.
+        this.wiring.controller().resume('reply');
+        this.wiring.calibration().cancel();
+      }
     });
+  }
+
+  /** Whether the current page can receive live speech for integration tests. */
+  speechPageIsReady(): boolean {
+    return this.speechPageReady;
+  }
+
+  /** Refreshes runtime availability for the currently open page only. */
+  refreshSpeechSupport(): void {
+    if (!this.speechPageReady) return;
+    const pageId = this.speechPageId;
+    const check = ++this.speechSetupCheck;
+    const supported = this.wiring.speech.supported();
+    this.wiring.speech.diagnostic({
+      kind: 'speech',
+      event: 'capability',
+      phase: supported ? 'ready' : 'blocked',
+      provider: 'kokoro',
+      ...(supported ? {} : { reason: 'unsupported' }),
+    });
+    this.send({ type: 'speechSupport', supported });
+    if (supported) {
+      void this.wiring.speech.installed().then(
+        (installed) => {
+          if (this.speechPageId === pageId && this.speechSetupCheck === check) {
+            this.wiring.speech.diagnostic({
+              kind: 'speech',
+              event: 'setup',
+              phase: installed ? 'ready' : 'blocked',
+              provider: 'kokoro',
+              ...(installed ? {} : { reason: 'not_ready' }),
+            });
+            this.send({
+              type: 'speechSetupState',
+              pending: false,
+              message: installed ? 'Local speech is ready.' : 'Local speech is not set up.',
+            });
+          }
+        },
+        () => {
+          if (this.speechPageId === pageId && this.speechSetupCheck === check) {
+            this.wiring.speech.diagnostic({ kind: 'speech', event: 'setup', phase: 'failed', provider: 'kokoro', reason: 'unknown' });
+            this.send({ type: 'speechSetupState', pending: false, message: 'Local speech availability is unknown.' });
+          }
+        },
+      );
+    }
   }
 
   private reveal(preserveFocus = true): void {
@@ -162,31 +293,184 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     }
   }
 
-  private receive(message: FromPanel): void {
+  private receive(message: FromPanel, pageId: number): void {
     const controller = this.wiring.controller();
     this.trace(
       `panel ${message.type}${message.type === 'reply' ? ` ${JSON.stringify(message.text)}` : message.type === 'draft' ? (message.empty ? ' empty' : ' typed') : ''}`,
     );
     switch (message.type) {
+      case 'speechEvent':
+        if (
+          message.pageId === pageId &&
+          Number.isSafeInteger(message.id) &&
+          message.id > 0 &&
+          (message.event === 'started' || message.event === 'ended' || message.event === 'failed')
+        ) {
+          this.wiring.speech.event({ id: message.id, pageId, event: message.event });
+        }
+        return;
+      case 'speechPageHidden':
+        if (message.pageId === pageId) {
+          this.speechPageReady = false;
+          this.wiring.speech.pageClosed(pageId);
+        }
+        return;
+      case 'speechPageVisible':
+        if (message.pageId === pageId) this.speechPageReady = true;
+        return;
+      case 'speechSettings':
+        if (
+          typeof message.value?.enabled === 'boolean' &&
+          SPEECH_VOICES.some((voice) => voice === message.value.voice) &&
+          SPEECH_SPEEDS.some((speed) => speed === message.value.speed) &&
+          (message.value.provider === 'kokoro' || message.value.provider === 'elevenlabs') &&
+          (message.value.elevenLabsVoice === '' ||
+            this.wiring.speech.validCloudVoice(message.value.elevenLabsVoice) ||
+            message.value.elevenLabsVoice === this.wiring.speech.settings.get().elevenLabsVoice) &&
+          ELEVENLABS_SPEEDS.some((speed) => speed === message.value.elevenLabsSpeed)
+        ) {
+          this.wiring.speech.settings.set(message.value);
+        }
+        return;
+      case 'speechKeySet':
+      case 'speechKeyRemove':
+        if (!this.wiring.speech.cloudSupported()) return;
+        void (message.type === 'speechKeySet' ? this.wiring.speech.keySet() : this.wiring.speech.keyRemove()).catch(() => {
+          this.send({ type: 'speechSetupState', pending: false, message: 'Could not update the API key.' });
+        });
+        return;
+      case 'speechVoicesLoad':
+      case 'speechVoicesMore': {
+        const provider = this.wiring.speech.settings.get().provider;
+        // specs/DiagnosticsPrivacy.tla, Record: only fixed speech facts are recorded.
+        this.wiring.speech.diagnostic({ kind: 'speech', event: 'catalog', phase: 'received', provider });
+        if (provider !== 'elevenlabs') {
+          this.wiring.speech.diagnostic({ kind: 'speech', event: 'catalog', phase: 'blocked', provider, reason: 'not_ready' });
+          this.send({ type: 'speechSetupState', pending: false, message: 'Select ElevenLabs to load voices.' });
+        } else if (!this.wiring.speech.cloudSupported()) {
+          this.wiring.speech.diagnostic({ kind: 'speech', event: 'catalog', phase: 'blocked', provider, reason: 'unsupported' });
+          this.send({ type: 'speechSetupState', pending: false, message: 'ElevenLabs is unsupported on this host.' });
+        } else {
+          this.wiring.speech.diagnostic({ kind: 'speech', event: 'catalog', phase: 'dispatched', provider });
+          this.wiring.speech.loadVoices(message.type === 'speechVoicesMore');
+        }
+        return;
+      }
+      case 'speechStop':
+        this.wiring.speech.stop();
+        return;
+      case 'speechPreview': {
+        const provider = this.wiring.speech.settings.get().provider;
+        this.wiring.speech.diagnostic({ kind: 'speech', event: 'preview', phase: 'received', provider });
+        if (provider === 'kokoro' ? !this.wiring.speech.supported() : !this.wiring.speech.cloudSupported()) {
+          this.wiring.speech.diagnostic({ kind: 'speech', event: 'preview', phase: 'blocked', provider, reason: 'unsupported' });
+          this.send({
+            type: 'speechSetupState',
+            pending: false,
+            message: provider === 'kokoro' ? 'Local speech is unsupported on this host.' : 'ElevenLabs is unsupported on this host.',
+          });
+          return;
+        }
+        this.wiring.speech.diagnostic({ kind: 'speech', event: 'preview', phase: 'dispatched', provider });
+        void this.wiring.speech.preview().catch(() => {
+          this.wiring.speech.diagnostic({ kind: 'speech', event: 'preview', phase: 'failed', provider, reason: 'unknown' });
+          this.send({ type: 'speechSetupState', pending: false, message: 'Voice preview is unavailable.' });
+        });
+        return;
+      }
+      case 'speechSetup':
+        this.wiring.speech.diagnostic({ kind: 'speech', event: 'setup', phase: 'received', provider: 'kokoro' });
+        if (!this.wiring.speech.supported()) {
+          this.wiring.speech.diagnostic({ kind: 'speech', event: 'setup', phase: 'blocked', provider: 'kokoro', reason: 'unsupported' });
+          this.send({ type: 'speechSetupState', pending: false, message: 'Local speech is unsupported on this host.' });
+          return;
+        }
+        this.wiring.speech.diagnostic({ kind: 'speech', event: 'setup', phase: 'dispatched', provider: 'kokoro' });
+        this.speechSetupCheck++;
+        this.send({ type: 'speechSetupState', pending: true, message: 'Setting up local speech...' });
+        void this.wiring.speech.setup().then(
+          () => {
+            this.wiring.speech.diagnostic({ kind: 'speech', event: 'setup', phase: 'ready', provider: 'kokoro' });
+            this.send({ type: 'speechSetupState', pending: false, message: 'Local speech is ready.' });
+          },
+          () => {
+            this.wiring.speech.diagnostic({ kind: 'speech', event: 'setup', phase: 'failed', provider: 'kokoro', reason: 'unknown' });
+            this.send({ type: 'speechSetupState', pending: false, message: 'Speech setup did not complete.' });
+          },
+        );
+        return;
+      case 'copyDiagnostics':
+        // specs/DiagnosticsCopy.tla, `Click`: report both clipboard outcomes.
+        void this.wiring.copyDiagnostics().then(
+          () => vscode.window.showInformationMessage('AI Pair diagnostics copied.'),
+          () => vscode.window.showErrorMessage('Could not copy AI Pair diagnostics.'),
+        );
+        return;
       case 'ready':
+        this.speechPageReady = true;
+        this.send({ type: 'speechPage', pageId });
+        this.showSpeechSettings(this.wiring.speech.settings.get());
+        {
+          const supported = this.wiring.speech.cloudSupported();
+          this.wiring.speech.diagnostic({
+            kind: 'speech',
+            event: 'capability',
+            phase: supported ? 'ready' : 'blocked',
+            provider: 'elevenlabs',
+            ...(supported ? {} : { reason: 'unsupported' }),
+          });
+          this.send({ type: 'speechCloudSupport', supported });
+        }
+        this.wiring.speech.keyRefresh();
+        this.refreshSpeechSupport();
         // A new page has an empty draft (#69): specs/Draft.tla, `LoadPage`.
         controller.resume('reply');
+        this.showChatOrder(this.chatOrder.get());
         this.send({ type: 'replay', events: this.log });
+        this.showTerminalPreference(this.terminalSettings.get());
         this.showSpeed(this.speed.get());
         this.showReadingSpeed(this.readingSpeed.get());
+        this.showCodePlayback(this.codePlayback.get());
         this.showSelection(this.selection.ref());
         this.showTimings();
         // The new page asks once whether a session can start: specs/Start.tla, `LoadPage`.
         this.askStart();
         return;
+      case 'chatOrder':
+        if (message.value === 'newestFirst' || message.value === 'oldestFirst') this.chatOrder.set(message.value);
+        return;
+      case 'showTerminals':
+        // specs/TerminalPanel.tla, `SetAuto`.
+        if (typeof message.value === 'boolean') this.terminalSettings.set(message.value);
+        return;
+      case 'showTerminal':
+        // specs/TerminalPanel.tla, `Show`: unavailable never creates a replacement.
+        if (Number.isSafeInteger(message.id) && message.id > 0 && !this.showTerminal(message.id)) {
+          void vscode.window.showInformationMessage('That terminal is no longer available.');
+        }
+        return;
+      case 'holdReading':
+        if (Number.isSafeInteger(message.id) && message.id > 0 && typeof message.held === 'boolean') {
+          controller.holdReading(message.id, message.held);
+        }
+        return;
+      case 'skipReading':
+        if (Number.isSafeInteger(message.id) && message.id > 0) controller.finishReading(message.id);
+        return;
       case 'speed':
         // Only the menu's speeds: the page sends no others (#17).
         if (SPEEDS.includes(message.value)) this.speed.set(message.value);
+        return;
+      case 'codePlayback':
+        // specs/PlaybackPreference.tla, `Choose`.
+        if (message.value === 'typing' || message.value === 'lines' || message.value === 'blocks') this.codePlayback.set(message.value);
         return;
       case 'readingSpeed':
         if (SPEEDS.includes(message.value)) this.readingSpeed.set(message.value);
         return;
       case 'reply':
+        // Cancel before resume so an old generation cannot restart.
+        this.wiring.speech.stop();
         // Replying means "go on with this", so any pause ends. It moves no view, so the programmer's tab and
         // selection stay as they were (specs/PointFocus.tla, `SendReply`, issue 125; specs/Draft.tla,
         // `ResumeAll`).
@@ -214,9 +498,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         controller.resume();
         return;
       case 'interrupt':
+        this.wiring.speech.stop();
         controller.userInterrupt();
         return;
       case 'turn':
+        this.wiring.speech.stop();
         controller.resume();
         if (controller.turn === 'programmer') {
           controller.handBack(message.message, message.attach === true ? this.selection.current() : undefined);
@@ -225,6 +511,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         }
         return;
       case 'end':
+        this.wiring.speech.stop();
         controller.endSession();
         return;
       case 'runDecision':
