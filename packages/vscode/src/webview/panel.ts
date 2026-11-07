@@ -4,7 +4,7 @@
 import type { AgentState, CodePlayback, PanelEvent, Ref } from '@ai-pair/core';
 import type { ChatOrder, FromPanel, SpeechState, ToPanel } from '../panel_messages';
 import { SpeechAudio, decodeWav } from './speech_audio';
-import { SPEECH_SPEEDS, SPEECH_VOICES, type SpeechVoice } from '../speech_types';
+import { ELEVENLABS_SPEEDS, SPEECH_SPEEDS, SPEECH_VOICES, type SpeechVoice } from '../speech_types';
 import type { CalibrationView } from '../calibration';
 import { ELLIPSIS, LABEL_SEPARATOR, RANGE_DASH, RIGHT_ARROW, SPEED_SUFFIX } from '@ai-pair/core/constants';
 
@@ -71,6 +71,16 @@ const ui = {
   settingsCodePlayback: $('settings-code-playback', HTMLSelectElement),
   copyDiagnostics: $('copy-diagnostics', HTMLButtonElement),
   speechEnabled: $('speech-enabled', HTMLInputElement),
+  speechProvider: $('speech-provider', HTMLSelectElement),
+  speechLocal: $('speech-local', HTMLElement),
+  speechCloud: $('speech-cloud', HTMLElement),
+  speechKeyStatus: $('speech-key-status', HTMLElement),
+  speechKeySet: $('speech-key-set', HTMLButtonElement),
+  speechKeyRemove: $('speech-key-remove', HTMLButtonElement),
+  speechCloudVoice: $('speech-cloud-voice', HTMLSelectElement),
+  speechCloudSpeed: $('speech-cloud-speed', HTMLSelectElement),
+  speechVoicesLoad: $('speech-voices-load', HTMLButtonElement),
+  speechVoicesMore: $('speech-voices-more', HTMLButtonElement),
   speechVoice: $('speech-voice', HTMLSelectElement),
   speechSpeed: $('speech-speed', HTMLSelectElement),
   speechSetup: $('speech-setup', HTMLButtonElement),
@@ -127,6 +137,12 @@ let speechId = 0;
 let speechCanceled = false;
 let speechState: SpeechState = 'idle';
 let speechEnabled = false;
+let speechProvider: 'kokoro' | 'elevenlabs' = 'kokoro';
+let cloudVoice = '';
+let cloudSpeed = 1;
+let cloudSupported = false;
+let cloudHasKey = false;
+let cloudLoading = false;
 let speechSupported = false;
 const speechAudio = new SpeechAudio(
   (base64) => {
@@ -862,8 +878,76 @@ function saveSpeechSettings(): void {
   if (!isSpeechVoice(voice) || !SPEECH_SPEEDS.some((option) => option === speed)) return;
   if (speechEnabled && !ui.speechEnabled.checked) stopSpeechLocally();
   speechEnabled = ui.speechEnabled.checked;
-  vscode.postMessage({ type: 'speechSettings', value: { enabled: speechEnabled, voice, speed } });
+  vscode.postMessage({
+    type: 'speechSettings',
+    value: {
+      enabled: speechEnabled,
+      voice,
+      speed,
+      provider: speechProvider,
+      elevenLabsVoice: cloudVoice,
+      elevenLabsSpeed: cloudSpeed,
+    },
+  });
 }
+function selectCloudVoice(): void {
+  const select = ui.speechCloudVoice;
+  if (cloudVoice !== '' && !Array.from(select.options).some((option) => option.value === cloudVoice)) {
+    const saved = document.createElement('option');
+    saved.value = cloudVoice;
+    saved.textContent = 'Saved voice (load voices to change)';
+    select.append(saved);
+  }
+  select.value = cloudVoice;
+}
+function syncSpeechProvider(): void {
+  const cloud = speechProvider === 'elevenlabs';
+  ui.speechLocal.hidden = cloud;
+  ui.speechCloud.hidden = !cloud;
+  ui.speechProvider.value = speechProvider;
+  ui.speechKeySet.disabled = !cloudSupported;
+  ui.speechKeyRemove.disabled = !cloudSupported || !cloudHasKey;
+  ui.speechVoicesLoad.disabled = !cloudSupported || !cloudHasKey || cloudLoading;
+  ui.speechVoicesMore.disabled = !cloudSupported || !cloudHasKey || cloudLoading;
+  ui.speechPreview.disabled = cloud ? !cloudSupported || !cloudHasKey || cloudVoice === '' : !speechSupported;
+}
+ui.speechProvider.addEventListener('change', () => {
+  const selected = ui.speechProvider.value;
+  if (selected !== 'kokoro' && selected !== 'elevenlabs') return;
+  if (selected !== speechProvider) stopSpeechLocally();
+  if (!ELEVENLABS_SPEEDS.some((speed) => speed === cloudSpeed)) {
+    cloudSpeed = 1;
+    ui.speechCloudSpeed.value = '1';
+  }
+  if (!isSpeechVoice(ui.speechVoice.value)) ui.speechVoice.value = 'af_heart';
+  if (!SPEECH_SPEEDS.some((speed) => speed === Number(ui.speechSpeed.value))) ui.speechSpeed.value = '1';
+  speechProvider = selected;
+  syncSpeechProvider();
+  saveSpeechSettings();
+});
+ui.speechCloudVoice.addEventListener('change', () => {
+  cloudVoice = ui.speechCloudVoice.value;
+  syncSpeechProvider();
+  saveSpeechSettings();
+});
+ui.speechCloudSpeed.addEventListener('change', () => {
+  const value = Number(ui.speechCloudSpeed.value);
+  if (!ELEVENLABS_SPEEDS.some((speed) => speed === value)) return;
+  cloudSpeed = value;
+  saveSpeechSettings();
+});
+ui.speechKeySet.addEventListener('click', () => {
+  vscode.postMessage({ type: 'speechKeySet' });
+});
+ui.speechKeyRemove.addEventListener('click', () => {
+  vscode.postMessage({ type: 'speechKeyRemove' });
+});
+ui.speechVoicesLoad.addEventListener('click', () => {
+  vscode.postMessage({ type: 'speechVoicesLoad' });
+});
+ui.speechVoicesMore.addEventListener('click', () => {
+  vscode.postMessage({ type: 'speechVoicesMore' });
+});
 ui.speechEnabled.addEventListener('change', saveSpeechSettings);
 ui.speechVoice.addEventListener('change', saveSpeechSettings);
 ui.speechSpeed.addEventListener('change', saveSpeechSettings);
@@ -913,19 +997,54 @@ function handle(message: ToPanel): void {
     case 'speechSupport':
       speechSupported = message.supported;
       ui.speechSetup.disabled = !message.supported;
-      ui.speechPreview.disabled = !message.supported;
+      syncSpeechProvider();
       if (!message.supported) ui.speechSettingsStatus.textContent = 'Local speech is unavailable in this build or on this host.';
       return;
     case 'speechSettings':
       if (speechEnabled && !message.value.enabled) stopSpeechLocally();
       speechEnabled = message.value.enabled;
+      speechProvider = message.value.provider;
+      cloudVoice = message.value.elevenLabsVoice;
+      cloudSpeed = message.value.elevenLabsSpeed;
+      ui.speechCloudSpeed.value = String(cloudSpeed);
+      selectCloudVoice();
+      syncSpeechProvider();
       ui.speechEnabled.checked = message.value.enabled;
       ui.speechVoice.value = message.value.voice;
       ui.speechSpeed.value = String(message.value.speed);
       return;
+    case 'speechCloudSupport':
+      cloudSupported = message.supported;
+      syncSpeechProvider();
+      return;
+    case 'speechKeyStatus':
+      cloudHasKey = message.hasKey;
+      ui.speechKeyStatus.textContent = message.hasKey ? 'API key saved.' : 'No API key saved.';
+      syncSpeechProvider();
+      return;
+    case 'speechCatalog': {
+      const select = ui.speechCloudVoice;
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Choose a voice';
+      select.replaceChildren(placeholder);
+      for (const voice of message.value.voices) {
+        const option = document.createElement('option');
+        option.value = voice.id;
+        option.textContent = voice.name;
+        select.append(option);
+      }
+      selectCloudVoice();
+      ui.speechVoicesMore.hidden = !message.value.more;
+      cloudLoading = message.value.loading;
+      if (message.value.error) ui.speechSettingsStatus.textContent = 'Could not load account voices.';
+      syncSpeechProvider();
+      return;
+    }
     case 'speechSetupState':
       ui.speechSetup.disabled = message.pending || !speechSupported;
-      ui.speechPreview.disabled = message.pending || !speechSupported;
+      syncSpeechProvider();
+      if (message.pending) ui.speechPreview.disabled = true;
       ui.speechSettingsStatus.textContent = message.message;
       return;
     case 'speechAudio':

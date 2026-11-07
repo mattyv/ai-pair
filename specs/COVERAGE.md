@@ -144,6 +144,8 @@ Code goes without a spec for one of these reasons:
 | | `resolveWebviewView`, `reveal`, `focusReply`, `showSelection`, `showSpeed`, `showReadingSpeed`, `showTimings` | Glue |
 | | the `reply` message while a calibration runs, `showCalibration`, cancel on dispose and session end | `Calibration` |
 | | `askStart`, the `start` message, posting `startEnded` | `Start` |
+| `speech_credentials.ts` | key prompt, storage and invalidation | `SpeechSettings` |
+| `speech_catalog.ts` | explicit catalog requests and invalidation | `SpeechSettings` |
 | `webview/speech_audio.ts` | page, unit, audio and controls | `SpeechPage` |
 | `webview/panel.ts` | toolbar and Settings mode choice | `PlaybackPreference` (`Choose`, `SetPace`) |
 | | diagnostics-copy button | `DiagnosticsCopy` (`Click`) |
@@ -156,7 +158,9 @@ Code goes without a spec for one of these reasons:
 | | `showCalibration` | Look |
 | | the `canStart` and `startEnded` messages, the Start a session button, its starting note | `Start` |
 | | `esc`, `codeLink`, `refLink` | Format |
-| `speech_service.ts` | worker, audio and page lifecycle; pause, cancel, timeouts | `Narration`, `SpeechWorker`; timer bounds and local platform checks: unit and integration tests |
+| `speech_elevenlabs.ts` | cloud transport | `CloudNarration` |
+| `speech_pcm.ts` | bounded PCM conversion and thinking interval | Pure; unit and integration tests |
+| `speech_service.ts` | worker, audio and page lifecycle; pause, cancel, timeouts | `Narration`, `SpeechWorker`, `CloudNarration`; timer bounds and local platform checks: unit and integration tests |
 | `speech_synthesis.ts`, `speech_waveform.ts` | complete-token and waveform bounds | `ActionValidation` (`TokenBounds`, `PhonemeCoverage`); PCM encoding: Pure |
 | `speech_engine.ts` | `loadSpeechEngine` | Glue: loads the local model, tokenizer and phonemizer; offline worker integration |
 | `speech_worker_host.ts`, `speech_worker.ts` | worker admission, validation and dispatch | `Narration`; worker isolation and concrete messages: unit and integration tests |

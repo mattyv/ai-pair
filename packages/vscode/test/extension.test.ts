@@ -45,22 +45,78 @@ const fakes = vi.hoisted(() => {
     calibrations: [] as Array<InstanceType<typeof FakeCalibration>>,
     diagnostics: [] as Array<InstanceType<typeof FakeDiagnostics>>,
     speech: [] as Array<InstanceType<typeof FakeSpeech>>,
+    cloudClients: [] as Array<InstanceType<typeof FakeCloudClient>>,
     starting: Promise.resolve(),
     arms: true,
   };
+
+  class FakeCloudClient {
+    readonly voices = vi.fn(() => Promise.resolve({ voices: [] }));
+    constructor(readonly readKey: () => Promise<string | undefined>) {
+      made.cloudClients.push(this);
+    }
+  }
+
+  class FakeCredentials {
+    constructor(
+      private readonly storage: {
+        get(key: string): Promise<string | undefined>;
+        store(key: string, value: string): Promise<void>;
+        delete(key: string): Promise<void>;
+      },
+      private readonly prompt: () => Promise<string | undefined>,
+      private readonly onCredentialChange: () => void,
+    ) {}
+    readonly read = vi.fn(() => this.storage.get('aiPair.elevenLabs.apiKey'));
+    readonly hasKey = vi.fn(async () => (await this.read()) !== undefined);
+    readonly set = vi.fn(async () => {
+      const key = await this.prompt();
+      if (key === undefined || key.length === 0) return;
+      this.onCredentialChange();
+      await this.storage.store('aiPair.elevenLabs.apiKey', key);
+    });
+    readonly remove = vi.fn(async () => {
+      this.onCredentialChange();
+      await this.storage.delete('aiPair.elevenLabs.apiKey');
+    });
+    readonly invalidate = vi.fn(() => {
+      this.onCredentialChange();
+    });
+    readonly supersede = vi.fn();
+  }
+
+  class FakeCatalog {
+    constructor(
+      client: unknown,
+      private readonly publish: (view: { voices: never[]; more: boolean; loading: boolean; error: boolean }) => void,
+    ) {
+      void client;
+    }
+    readonly contains = vi.fn(() => false);
+    readonly load = vi.fn(() => {
+      this.publish({ voices: [], more: false, loading: true, error: false });
+      return Promise.resolve();
+    });
+    readonly invalidate = vi.fn();
+  }
 
   class FakeSpeech {
     readonly speak = vi.fn<() => Promise<void>>().mockResolvedValue();
     readonly pause = vi.fn<() => void>();
     readonly resume = vi.fn<() => void>();
     readonly cancel = vi.fn<() => void>();
+    readonly invalidateCloud = vi.fn<() => void>();
     readonly dispose = vi.fn<() => void>();
     readonly preview = vi.fn<() => Promise<void>>().mockResolvedValue();
     readonly audioEvent =
       vi.fn<(event: { id: number; pageId: number; event: 'started' | 'ended' | 'failed' }) => 'ended' | 'failed' | undefined>();
     readonly pageClosed = vi.fn();
     constructor(
-      readonly options: { settings: () => { enabled: boolean; voice: string; speed: number }; output: SpeechOutput; localDesktop: boolean },
+      readonly options: {
+        settings: () => { enabled: boolean; provider: string; voice: string; speed: number };
+        output: SpeechOutput;
+        localDesktop: boolean;
+      },
     ) {
       made.speech.push(this);
     }
@@ -160,6 +216,8 @@ const fakes = vi.hoisted(() => {
     readonly showChatOrder = vi.fn();
     readonly showCodePlayback = vi.fn();
     readonly showSpeechSettings = vi.fn();
+    readonly showSpeechKeyStatus = vi.fn();
+    readonly showSpeechCatalog = vi.fn();
     readonly showSpeechStatus = vi.fn();
     readonly playSpeech = vi.fn(() => 7);
     readonly controlSpeech = vi.fn();
@@ -224,6 +282,9 @@ const fakes = vi.hoisted(() => {
     FakeCalibration,
     FakeDiagnostics,
     FakeSpeech,
+    FakeCloudClient,
+    FakeCredentials,
+    FakeCatalog,
     made,
     /** The workspace's folders; none until a test says. */
     folders: undefined as Array<{ uri: { fsPath: string } }> | undefined,
@@ -236,6 +297,7 @@ const fakes = vi.hoisted(() => {
     /** The button the programmer picks on the next information message. */
     answer: undefined as string | undefined,
     remoteName: undefined as string | undefined,
+    workspaceProvider: undefined as string | undefined,
     logged: [] as Array<[string, string]>,
   };
 });
@@ -248,7 +310,13 @@ vi.mock('vscode', () => ({
       return fakes.folders;
     },
     getConfiguration: () => ({
-      get: (key: string, fallback?: unknown) => (fakes.settings.has(key) ? fakes.settings.get(key) : fallback),
+      get: (key: string, fallback?: unknown) =>
+        key === 'speech.provider' && fakes.workspaceProvider !== undefined
+          ? fakes.workspaceProvider
+          : fakes.settings.has(key)
+            ? fakes.settings.get(key)
+            : fallback,
+      inspect: (key: string) => ({ globalValue: fakes.settings.get(key) }),
       update: (key: string, value: unknown, target: unknown) => {
         fakes.updated.push([key, value, target]);
         fakes.settings.set(key, value);
@@ -264,6 +332,7 @@ vi.mock('vscode', () => ({
       trace: (line: string) => fakes.logged.push(['trace', line]),
       dispose: () => {},
     }),
+    showInputBox: vi.fn().mockResolvedValue(undefined),
     showErrorMessage: (message: string) => {
       fakes.errors.push(message);
       return Promise.resolve(undefined);
@@ -301,6 +370,9 @@ vi.mock('../src/editor', () => ({ VsCodeEditor: fakes.FakeEditor }));
 vi.mock('../src/diagnostics', () => ({ Diagnostics: fakes.FakeDiagnostics }));
 vi.mock('../src/speech_runtime_status', () => ({ speechRuntimeAvailable: vi.fn(() => Promise.resolve(false)) }));
 vi.mock('../src/speech_service', () => ({ SpeechService: fakes.FakeSpeech }));
+vi.mock('../src/speech_elevenlabs', () => ({ ElevenLabsClient: fakes.FakeCloudClient }));
+vi.mock('../src/speech_credentials', () => ({ SpeechCredentials: fakes.FakeCredentials }));
+vi.mock('../src/speech_catalog', () => ({ SpeechCatalog: fakes.FakeCatalog }));
 vi.mock('../src/speech_setup', () => ({
   installedSpeechModel: vi.fn(() => Promise.resolve(undefined)),
   setupSpeech: vi.fn(() => Promise.resolve()),
@@ -324,6 +396,12 @@ function context(stored: Map<string, unknown> = new Map(), offered = true) {
     subscriptions: [] as Array<{ dispose: () => unknown }>,
     extensionPath: '/ext',
     globalStorageUri: { fsPath: '/storage' },
+    secrets: {
+      get: vi.fn().mockResolvedValue(undefined),
+      store: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+      onDidChange: fakes.event('secrets'),
+    },
     extensionUri: { fsPath: '/ext' },
     workspaceState: {
       get: (key: string) => stored.get(key),
@@ -557,15 +635,36 @@ describe('activate', () => {
     const speech = fakes.made.speech.at(-1);
     if (!speech) throw new Error('Missing speech service');
     expect(h.controller.narration).toBe(speech);
-    expect(speech.options.settings()).toEqual({ enabled: false, voice: 'af_heart', speed: 1 });
+    expect(speech.options.settings()).toEqual({
+      enabled: false,
+      provider: 'kokoro',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+    });
     expect(speech.options.localDesktop).toBe(true);
     fakes.settings.set('speech.enabled', true);
     fakes.settings.set('speech.voice', 'bf_emma');
     fakes.settings.set('speech.speed', 1.25);
-    expect(speech.options.settings()).toEqual({ enabled: true, voice: 'bf_emma', speed: 1.25 });
+    expect(speech.options.settings()).toEqual({
+      enabled: true,
+      provider: 'kokoro',
+      voice: 'bf_emma',
+      speed: 1.25,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+    });
     fakes.settings.set('speech.voice', 'invalid');
     fakes.settings.set('speech.speed', 9);
-    expect(speech.options.settings()).toEqual({ enabled: true, voice: 'invalid', speed: 9 });
+    expect(speech.options.settings()).toEqual({
+      enabled: true,
+      provider: 'kokoro',
+      voice: 'invalid',
+      speed: 9,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+    });
     fakes.settings.set('speech.enabled', false);
     changed('speech', 'speech.enabled');
     expect(speech.cancel).toHaveBeenCalledOnce();
@@ -577,7 +676,7 @@ describe('activate', () => {
     if (speech === undefined) throw new Error('Missing speech');
     const wiring = h.panel.wiring.speech;
     fakes.settings.set('speech.enabled', true);
-    wiring.settings.set({ enabled: false, voice: 'bf_emma', speed: 1.25 });
+    wiring.settings.set({ enabled: false, provider: 'kokoro', voice: 'bf_emma', speed: 1.25, elevenLabsVoice: '', elevenLabsSpeed: 1 });
     expect(speech.cancel).toHaveBeenCalledOnce();
     expect(fakes.updated).toEqual(
       expect.arrayContaining([
@@ -586,7 +685,7 @@ describe('activate', () => {
         ['speech.speed', 1.25, 1],
       ]),
     );
-    wiring.settings.set({ enabled: true, voice: 'af_heart', speed: 1 });
+    wiring.settings.set({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 });
     expect(speech.cancel).toHaveBeenCalledOnce();
     expect(await wiring.installed()).toBe(false);
     vi.mocked(installedSpeechModel).mockResolvedValueOnce('/verified/model');
@@ -629,8 +728,66 @@ describe('activate', () => {
     vi.spyOn(process.report, 'getReport').mockImplementationOnce(() => {
       throw new Error('unavailable');
     });
+    const h = activated();
+    expect(h.panel.wiring.speech.supported()).toBe(false);
+  });
+
+  it('NoSecret: uses the native masked prompt and does not put a key in settings or logs', async () => {
+    const h = activated();
+    vi.mocked(vscode.window.showInputBox).mockResolvedValueOnce('test-secret');
+    await h.panel.wiring.speech.keySet();
+    expect(vi.mocked(vscode.window.showInputBox).mock.calls.at(-1)?.[0]).toMatchObject({ password: true });
+    expect(h.context.secrets.store.mock.calls).toEqual([['aiPair.elevenLabs.apiKey', 'test-secret']]);
+    expect(JSON.stringify(fakes.updated)).not.toContain('test-secret');
+    expect(JSON.stringify(fakes.logged)).not.toContain('test-secret');
+    expect(JSON.stringify(h.panel.history)).not.toContain('test-secret');
+  });
+
+  it('cancels active speech when provider or credentials change and keeps settings separate', async () => {
+    const h = activated();
+    const speech = last(fakes.made.speech);
+    const wiring = h.panel.wiring.speech;
+    expect(wiring.cloudSupported()).toBe(true);
+    expect(wiring.validCloudVoice('missing')).toBe(false);
+    wiring.loadVoices(true);
+    wiring.settings.set({
+      enabled: true,
+      provider: 'elevenlabs',
+      voice: 'bf_emma',
+      speed: 1.25,
+      elevenLabsVoice: 'voice1',
+      elevenLabsSpeed: 1.2,
+    });
+    expect(speech.cancel.mock.calls).toHaveLength(1);
+    expect(fakes.updated).toContainEqual(['speech.provider', 'elevenlabs', 1]);
+    expect(fakes.updated).toContainEqual(['speech.elevenLabsVoice', 'voice1', 1]);
+    fire('secrets', { key: 'unrelated' });
+    expect(speech.invalidateCloud.mock.calls).toEqual([]);
+    fire('secrets', { key: 'aiPair.elevenLabs.apiKey' });
+    expect(speech.invalidateCloud.mock.calls).toEqual([[]]);
+    await wiring.keyRemove();
+    expect(h.context.secrets.delete.mock.calls).toEqual([['aiPair.elevenLabs.apiKey']]);
+    changed('speech', 'speech.provider');
+    expect(speech.cancel.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it('reports key command failures without revealing errors', async () => {
+    const h = activated();
+    h.context.secrets.store.mockRejectedValueOnce(new Error('private'));
+    vi.mocked(vscode.window.showInputBox).mockResolvedValueOnce('test-secret');
+    await command('aiPair.setElevenLabsKey');
+    expect(fakes.errors).toContain('Could not save the ElevenLabs API key.');
+    h.context.secrets.delete.mockRejectedValueOnce(new Error('private'));
+    await command('aiPair.removeElevenLabsKey');
+    expect(fakes.errors).toContain('Could not remove the ElevenLabs API key.');
+    expect(JSON.stringify(fakes.errors)).not.toContain('private');
+  });
+
+  it('TypeOK: ignores workspace attempts to select the cloud provider', () => {
+    fakes.workspaceProvider = 'elevenlabs';
     activated();
-    expect(fakes.made.speech.at(-1)?.options.localDesktop).toBe(false);
+    expect(fakes.made.speech.at(-1)?.options.settings().provider).toBe('kokoro');
+    fakes.workspaceProvider = undefined;
   });
 
   it('does not enable local speech on a remote extension host', () => {
@@ -905,4 +1062,44 @@ describe('deactivate', () => {
       deactivate();
     }).not.toThrow();
   });
+});
+
+it('passes a host-only key reader to the cloud client', async () => {
+  const given = context();
+  given.secrets.get.mockResolvedValue('synthetic-key');
+  activated(given);
+  expect(await last(fakes.made.cloudClients).readKey()).toBe('synthetic-key');
+});
+
+it('reports unavailable key status on a failed read and after successful commands', async () => {
+  const given = context();
+  given.secrets.get.mockRejectedValueOnce(new Error('private'));
+  const h = activated(given);
+  h.panel.wiring.speech.keyRefresh();
+  await vi.waitFor(() => {
+    expect(h.panel.showSpeechKeyStatus).toHaveBeenCalledWith(false);
+  });
+  vi.mocked(vscode.window.showInputBox).mockResolvedValueOnce('synthetic-key');
+  await command('aiPair.setElevenLabsKey');
+  await command('aiPair.removeElevenLabsKey');
+  expect(given.secrets.store).toHaveBeenCalledOnce();
+  expect(given.secrets.delete).toHaveBeenCalledOnce();
+  expect(JSON.stringify(fakes.logged)).not.toContain('synthetic-key');
+});
+
+it('ignores a stale failed key-status read after a newer successful read', async () => {
+  const given = context();
+  const stale = Promise.withResolvers<string | undefined>();
+  given.secrets.get.mockReturnValueOnce(stale.promise).mockResolvedValueOnce('synthetic-key');
+  const h = activated(given);
+  h.panel.wiring.speech.keyRefresh();
+  h.panel.wiring.speech.keyRefresh();
+  await vi.waitFor(() => {
+    expect(h.panel.showSpeechKeyStatus).toHaveBeenCalledWith(true);
+  });
+  stale.reject(new Error('private'));
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(h.panel.showSpeechKeyStatus).not.toHaveBeenCalledWith(false);
 });

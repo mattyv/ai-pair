@@ -1703,12 +1703,18 @@ it('shows Speaking after the reading ring ends while the voice is still playing'
 it('sends explicit setup, preview, stop and validated speech preferences', () => {
   send({ type: 'speechPage', pageId: 1 });
   send({ type: 'speechSupport', supported: true });
-  send({ type: 'speechSettings', value: { enabled: true, voice: 'af_heart', speed: 1 } });
+  send({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
   const voice = element('speech-voice');
   if (!(voice instanceof window.HTMLSelectElement)) throw new TypeError('Missing voice selector');
   voice.value = 'bf_emma';
   voice.dispatchEvent(new window.Event('change', { bubbles: true }));
-  expect(posted()).toContainEqual({ type: 'speechSettings', value: { enabled: true, voice: 'bf_emma', speed: 1 } });
+  expect(posted()).toContainEqual({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'kokoro', voice: 'bf_emma', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
   click(element('speech-setup'));
   click(element('speech-preview'));
   click(element('speech-stop'));
@@ -1730,7 +1736,10 @@ it('silences the current audio synchronously before posting a reply and ignores 
   vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
   start();
   send({ type: 'speechPage', pageId: 1 });
-  send({ type: 'speechSettings', value: { enabled: true, voice: 'af_heart', speed: 1 } });
+  send({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
   send({ type: 'speechStatus', id: 7, pageId: 1, state: 'preparing' });
   send({ type: 'speechAudio', id: 7, pageId: 1, wavBase64: 'AQI=', durationMs: 100 });
   await Promise.resolve();
@@ -1771,11 +1780,17 @@ it('does not stop a preview when voice changes while automatic speech is off', a
   vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:preview');
   vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
   send({ type: 'speechPage', pageId: 1 });
-  send({ type: 'speechSettings', value: { enabled: false, voice: 'af_heart', speed: 1 } });
+  send({
+    type: 'speechSettings',
+    value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
   send({ type: 'speechStatus', id: 1, pageId: 1, state: 'preparing' });
   send({ type: 'speechAudio', id: 1, pageId: 1, wavBase64: 'AQI=', durationMs: 100 });
   await Promise.resolve();
-  send({ type: 'speechSettings', value: { enabled: false, voice: 'bf_emma', speed: 1.25 } });
+  send({
+    type: 'speechSettings',
+    value: { enabled: false, provider: 'kokoro', voice: 'bf_emma', speed: 1.25, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
   expect(play).toHaveBeenCalledOnce();
   expect(pause).not.toHaveBeenCalled();
 });
@@ -1853,7 +1868,10 @@ it('reports page visibility and ignores stale speech status while controlling th
   const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
   document.dispatchEvent(new window.Event('visibilitychange'));
   send({ type: 'speechPage', pageId: 1 });
-  send({ type: 'speechSettings', value: { enabled: true, voice: 'af_heart', speed: 1 } });
+  send({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
   send({ type: 'speechStatus', pageId: 1, id: 2, state: 'preparing' });
   send({ type: 'speechAudio', pageId: 1, id: 2, wavBase64: 'AQI=', durationMs: 100 });
   await Promise.resolve();
@@ -1867,7 +1885,10 @@ it('reports page visibility and ignores stale speech status while controlling th
   hidden.mockReturnValue(true);
   document.dispatchEvent(new window.Event('visibilitychange'));
   expect(posted()).toContainEqual({ type: 'speechPageHidden', pageId: 1 });
-  send({ type: 'speechSettings', value: { enabled: false, voice: 'af_heart', speed: 1 } });
+  send({
+    type: 'speechSettings',
+    value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
   send({ type: 'speechStatus', pageId: 1, id: 2, state: 'speaking' });
   expect(text('speech-live-status')).not.toBe('Speaking');
   send({ type: 'speechStatus', pageId: 1, id: 2, state: 'idle' });
@@ -1896,10 +1917,16 @@ it('validates selection controls and stops live speech when disabled', () => {
   speed.dispatchEvent(new window.Event('change'));
   expect(posted().filter((message) => message.type === 'speechSettings')).toEqual([]);
   speed.value = '1';
-  send({ type: 'speechSettings', value: { enabled: true, voice: 'af_heart', speed: 1 } });
+  send({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
   enabled.checked = false;
   enabled.dispatchEvent(new window.Event('change'));
-  expect(posted()).toContainEqual({ type: 'speechSettings', value: { enabled: false, voice: 'af_heart', speed: 1 } });
+  expect(posted()).toContainEqual({
+    type: 'speechSettings',
+    value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
   mode.value = 'lines';
   mode.dispatchEvent(new window.Event('change'));
   mode.value = 'blocks';
@@ -1913,4 +1940,133 @@ it('validates selection controls and stops live speech when disabled', () => {
   invalid.dataset.codePlayback = 'invalid';
   click(invalid);
   expect(posted()).not.toContainEqual({ type: 'codePlayback', value: 'invalid' });
+});
+
+it('switches providers explicitly and loads cloud voices only when requested', () => {
+  const provider = element('speech-provider');
+  if (!(provider instanceof window.HTMLSelectElement)) throw new TypeError('Missing provider');
+  expect(element('speech-cloud').hidden).toBe(true);
+  send({ type: 'speechCloudSupport', supported: true });
+  send({ type: 'speechKeyStatus', hasKey: true });
+  provider.value = 'elevenlabs';
+  provider.dispatchEvent(new window.Event('change'));
+  expect(element('speech-local').hidden).toBe(true);
+  expect(element('speech-cloud').hidden).toBe(false);
+  expect(posted().filter((message) => message.type === 'speechVoicesLoad')).toEqual([]);
+  click(element('speech-voices-load'));
+  click(element('speech-key-set'));
+  expect(posted()).toContainEqual({ type: 'speechVoicesLoad' });
+  expect(posted()).toContainEqual({ type: 'speechKeySet' });
+});
+
+it('shows the saved account voice after reload without fetching a catalog', () => {
+  send({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: 'saved-voice', elevenLabsSpeed: 1 },
+  });
+  send({ type: 'speechCloudSupport', supported: true });
+  send({ type: 'speechKeyStatus', hasKey: true });
+  const select = element('speech-cloud-voice');
+  if (!(select instanceof window.HTMLSelectElement)) throw new TypeError('Missing voice selector');
+  expect(select.value).toBe('saved-voice');
+  expect(select.selectedOptions[0]?.textContent).toBe('Saved voice (load voices to change)');
+  expect(posted().filter((message) => message.type === 'speechVoicesLoad')).toEqual([]);
+});
+
+it('chooses a cloud voice and speed, loads more, and keeps provider errors sanitized', () => {
+  send({ type: 'speechCloudSupport', supported: true });
+  send({ type: 'speechKeyStatus', hasKey: true });
+  send({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+  send({ type: 'speechCatalog', value: { voices: [{ id: 'id1', name: '<b>Voice</b>' }], more: true, loading: false, error: false } });
+  const voice = element('speech-cloud-voice');
+  const speed = element('speech-cloud-speed');
+  if (!(voice instanceof window.HTMLSelectElement) || !(speed instanceof window.HTMLSelectElement)) throw new TypeError('Missing controls');
+  expect(voice.options[1]?.textContent).toBe('<b>Voice</b>');
+  voice.value = 'id1';
+  voice.dispatchEvent(new window.Event('change'));
+  speed.value = '0.75';
+  speed.dispatchEvent(new window.Event('change'));
+  speed.value = '1.2';
+  speed.dispatchEvent(new window.Event('change'));
+  speed.value = '';
+  speed.dispatchEvent(new window.Event('change'));
+  expect(posted()).toContainEqual({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: 'id1', elevenLabsSpeed: 1.2 },
+  });
+  click(element('speech-voices-more'));
+  click(element('speech-key-remove'));
+  expect(posted()).toContainEqual({ type: 'speechVoicesMore' });
+  expect(posted()).toContainEqual({ type: 'speechKeyRemove' });
+  send({ type: 'speechCatalog', value: { voices: [], more: false, loading: false, error: true } });
+  expect(text('speech-settings-status')).toBe('Could not load account voices.');
+});
+
+it('keeps cloud actions disabled without a key and while setup is pending', () => {
+  send({ type: 'speechCloudSupport', supported: true });
+  send({ type: 'speechKeyStatus', hasKey: false });
+  send({
+    type: 'speechSettings',
+    value: { enabled: false, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+  expect(element('speech-key-remove')).toHaveProperty('disabled', true);
+  expect(element('speech-voices-load')).toHaveProperty('disabled', true);
+  send({ type: 'speechSetupState', pending: true, message: 'Setting up' });
+  expect(element('speech-preview')).toHaveProperty('disabled', true);
+  const provider = element('speech-provider');
+  if (!(provider instanceof window.HTMLSelectElement)) throw new TypeError('Missing provider');
+  provider.value = '';
+  provider.dispatchEvent(new window.Event('change'));
+  provider.value = 'elevenlabs';
+  provider.dispatchEvent(new window.Event('change'));
+  expect(element('speech-cloud').hidden).toBe(false);
+});
+
+it('switches to cloud even when old local voice settings are invalid', () => {
+  send({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'kokoro', voice: 'removed_voice', speed: 9, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+  send({ type: 'speechCloudSupport', supported: true });
+  const provider = element('speech-provider');
+  if (!(provider instanceof window.HTMLSelectElement)) throw new TypeError('Missing provider');
+  provider.value = 'elevenlabs';
+  provider.dispatchEvent(new window.Event('change'));
+  expect(posted()).toContainEqual({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+});
+
+it('switches to cloud with the default rate when a saved cloud rate is invalid', () => {
+  send({
+    type: 'speechSettings',
+    value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 9 },
+  });
+  const provider = element('speech-provider');
+  if (!(provider instanceof window.HTMLSelectElement)) throw new TypeError('Missing provider');
+  provider.value = 'elevenlabs';
+  provider.dispatchEvent(new window.Event('change'));
+  expect(posted()).toContainEqual({
+    type: 'speechSettings',
+    value: { enabled: false, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+});
+
+it('switches back to Kokoro when saved inactive cloud settings are invalid', () => {
+  send({
+    type: 'speechSettings',
+    value: { enabled: false, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 9 },
+  });
+  const provider = element('speech-provider');
+  if (!(provider instanceof window.HTMLSelectElement)) throw new TypeError('Missing provider');
+  provider.value = 'kokoro';
+  provider.dispatchEvent(new window.Event('change'));
+  expect(posted()).toContainEqual({
+    type: 'speechSettings',
+    value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
 });

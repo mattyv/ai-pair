@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: tla, 2026-11-07.
+Last updated: css, 2026-11-07.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -100,8 +100,12 @@ Last updated: tla, 2026-11-07.
 | `packages/vscode/src/passage.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/python_diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 83.8% B 84.2% F 83.3% | - | - | - | - |
+| `packages/vscode/src/speech_catalog.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_credentials.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_elevenlabs.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_engine.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_model_manifest.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_pcm.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_phonemizer_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_runtime_status.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_service.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -115,7 +119,7 @@ Last updated: tla, 2026-11-07.
 | `packages/vscode/src/terminal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.3% B 98.1% F 92.3% | - | - | - | - |
 | `packages/vscode/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/view.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 88.0% F 100.0% | - | - | - | - |
-| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 147 of 147 rules matched |
+| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 148 of 148 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/speech_audio.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/test/agents.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -142,7 +146,13 @@ Last updated: tla, 2026-11-07.
 | `packages/vscode/test/smoke_integration.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_audio.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_cached_assets.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_catalog.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_credentials.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_elevenlabs.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_elevenlabs.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_engine.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_pcm.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_pcm.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_phonemizer_bridge.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_runtime.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_service.test.ts` | TypeScript | test | - | test | - | - | test |
@@ -193,6 +203,9 @@ Last updated: tla, 2026-11-07.
 | `specs/BuildIdentity.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/Calibration.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Calibration.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
+| `specs/CloudNarration.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/CloudNarration.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/CloudNarration_Healthy.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/CodePlayback.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/CodePlayback.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/CodePlayback_Progress.cfg` | TLC config | - | - | - | - | - | - |
@@ -276,6 +289,8 @@ Last updated: tla, 2026-11-07.
 | `specs/SettingsAccess.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/SpeechPage.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechPage.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
+| `specs/SpeechSettings.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/SpeechSettings.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/SpeechSetup.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechSetup.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
 | `specs/SpeechWorker.cfg` | TLC config | - | - | - | - | - | - |

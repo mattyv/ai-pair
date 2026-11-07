@@ -14,9 +14,16 @@ It adds:
 -   Copyable session diagnostics and a running version and build in Settings.
 -   Optional local Kokoro speech for narration selected by the connected coding
     agent. Speech is off by default and needs no additional API key. In Settings,
-    run **Set up local speech** to download about 94 MB, then **Preview voice**.
+    run **Download Kokoro model** to download about 94 MB, then **Preview voice**.
     Local speech requires a supported local Linux x64 desktop with glibc, such
     as Ubuntu; the rest of Pair works without speech.
+-   Optional ElevenLabs cloud speech, using the same selected narration and
+    reading controls. Choose **ElevenLabs** in Settings, add your API key through
+    the secure VS Code prompt, load your account voices, choose one and use
+    **Preview voice**. Selected text and previews go to ElevenLabs and use your
+    account credits. Saving a key does not enable speech. Voice availability
+    depends on your account; a free account may have no eligible API voices.
+    Kokoro remains the local option and the default provider.
 
 [Download a fork build from GitHub Actions](https://github.com/mattyv/ai-pair/actions)
 (run **Build VSIX**, then download its artifact). The Marketplace link in the

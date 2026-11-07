@@ -183,8 +183,18 @@ it('offers local speech setup, preferences, preview and stop in Settings', () =>
   );
   expect(page.querySelector('[data-ui="speech-voice"]')?.querySelectorAll('option')).toHaveLength(4);
   expect(page.querySelector('[data-ui="speech-speed"]')?.querySelectorAll('option')).toHaveLength(4);
-  expect(page.querySelector('[data-ui="speech-setup"]')?.textContent).toContain('Set up local speech');
+  expect(page.querySelector('[data-ui="speech-setup"]')?.textContent).toContain('Download Kokoro model');
   expect(page.querySelector('[data-ui="speech-preview"]')?.textContent).toContain('Preview voice');
   expect(page.querySelector('[data-ui="speech-stop"]')?.textContent).toContain('Stop speech');
   expect(page.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute('content')).toContain('media-src blob:');
+});
+
+it('offers explicit cloud controls without exposing a key input', () => {
+  const markup = panelHtml('vscode-resource:', 'panel.css', 'panel.js');
+  expect(markup).toContain('data-ui="speech-provider"');
+  expect(markup).toContain('data-ui="speech-key-set"');
+  expect(markup).toContain('data-ui="speech-key-remove"');
+  expect(markup).toContain('data-ui="speech-voices-load"');
+  expect(markup).toContain('Selected narration and voice previews are sent to ElevenLabs');
+  expect(markup).not.toContain('type="password"');
 });

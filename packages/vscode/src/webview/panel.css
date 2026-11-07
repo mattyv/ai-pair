@@ -888,6 +888,10 @@ a:hover {
   padding: 0 12px;
 }
 
+.settings-actions button[hidden] {
+  display: none;
+}
+
 .settings-footer {
   align-items: center;
   border-top: 1px solid var(--border);

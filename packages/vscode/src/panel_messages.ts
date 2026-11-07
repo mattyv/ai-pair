@@ -3,6 +3,7 @@
 import type { CodePlayback, PanelEvent, Ref } from '@ai-pair/core';
 import type { CalibrationView } from './calibration';
 import type { SpeechSettings } from './speech_types';
+import type { CatalogView } from './speech_catalog';
 
 export type SpeechState = 'preparing' | 'speaking' | 'paused' | 'unavailable' | 'idle';
 export type SpeechEvent = 'started' | 'ended' | 'failed';
@@ -17,6 +18,7 @@ export type FromPanel =
   | { type: 'copyDiagnostics' }
   | { type: 'speechSettings'; value: SpeechSettings }
   | { type: 'speechSetup' | 'speechPreview' | 'speechStop' }
+  | { type: 'speechKeySet' | 'speechKeyRemove' | 'speechVoicesLoad' | 'speechVoicesMore' }
   | { type: 'speechPageHidden' | 'speechPageVisible'; pageId: number }
   | { type: 'speechEvent'; id: number; pageId: number; event: SpeechEvent }
   | { type: 'skipReading'; id: number }
@@ -55,7 +57,10 @@ export type ToPanel =
   | { type: 'selection'; ref: Ref | undefined }
   | { type: 'speechPage'; pageId: number }
   | { type: 'speechSupport'; supported: boolean }
+  | { type: 'speechCloudSupport'; supported: boolean }
   | { type: 'speechSettings'; value: SpeechSettings }
+  | { type: 'speechKeyStatus'; hasKey: boolean }
+  | { type: 'speechCatalog'; value: CatalogView }
   | { type: 'speechSetupState'; pending: boolean; message: string }
   | { type: 'speechAudio'; id: number; pageId: number; wavBase64: string; durationMs: number }
   | { type: 'speechControl'; id: number; pageId: number; action: SpeechAction }

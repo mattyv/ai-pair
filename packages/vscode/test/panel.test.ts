@@ -123,7 +123,7 @@ interface Harness {
   };
   speech: {
     settings: {
-      get: ReturnType<typeof vi.fn<() => { enabled: boolean; voice: 'af_heart'; speed: number }>>;
+      get: ReturnType<typeof vi.fn<() => import('../src/speech_types').SpeechSettings>>;
       set: ReturnType<typeof vi.fn>;
     };
     supported: ReturnType<typeof vi.fn<() => boolean>>;
@@ -133,6 +133,12 @@ interface Harness {
     stop: ReturnType<typeof vi.fn<() => void>>;
     event: ReturnType<typeof vi.fn>;
     pageClosed: ReturnType<typeof vi.fn>;
+    cloudSupported: ReturnType<typeof vi.fn<() => boolean>>;
+    keySet: ReturnType<typeof vi.fn<() => Promise<void>>>;
+    keyRemove: ReturnType<typeof vi.fn<() => Promise<void>>>;
+    keyRefresh: ReturnType<typeof vi.fn<() => void>>;
+    loadVoices: ReturnType<typeof vi.fn<(more: boolean) => void>>;
+    validCloudVoice: ReturnType<typeof vi.fn<(id: string) => boolean>>;
   };
   onPost: ReturnType<typeof vi.fn<() => void>>;
   traced: string[];
@@ -167,7 +173,23 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
   };
   const copyDiagnostics = vi.fn<() => Promise<void>>().mockResolvedValue();
   const speech = {
-    settings: { get: vi.fn(() => ({ enabled: false, voice: 'af_heart' as const, speed: 1 })), set: vi.fn() },
+    settings: {
+      get: vi.fn<() => import('../src/speech_types').SpeechSettings>(() => ({
+        enabled: false,
+        provider: 'kokoro',
+        voice: 'af_heart',
+        speed: 1,
+        elevenLabsVoice: '',
+        elevenLabsSpeed: 1,
+      })),
+      set: vi.fn(),
+    },
+    cloudSupported: vi.fn(() => true),
+    keySet: vi.fn<() => Promise<void>>().mockResolvedValue(),
+    keyRemove: vi.fn<() => Promise<void>>().mockResolvedValue(),
+    keyRefresh: vi.fn<() => void>(),
+    loadVoices: vi.fn<(more: boolean) => void>(),
+    validCloudVoice: vi.fn<(id: string) => boolean>(),
     supported: vi.fn(() => true),
     installed: vi.fn<() => Promise<boolean>>().mockResolvedValue(false),
     setup: vi.fn<() => Promise<void>>().mockResolvedValue(),
@@ -565,7 +587,11 @@ describe('receive', () => {
     expect(controller.resume.mock.calls).toEqual([['reply']]);
     expect(view.posted).toEqual([
       { type: 'speechPage', pageId: 1 },
-      { type: 'speechSettings', value: { enabled: false, voice: 'af_heart', speed: 1 } },
+      {
+        type: 'speechSettings',
+        value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+      },
+      { type: 'speechCloudSupport', supported: true },
       { type: 'speechSupport', supported: true },
       { type: 'chatOrder', value: 'newestFirst' },
       { type: 'replay', events: [{ type: 'say', text: 'hi' }] },
@@ -585,7 +611,7 @@ describe('receive', () => {
     chatOrder.get.mockReturnValue('oldestFirst');
     const view = open(panel);
     view.send({ type: 'ready' });
-    expect(view.posted.slice(3, 5)).toEqual([
+    expect(view.posted.slice(4, 6)).toEqual([
       { type: 'chatOrder', value: 'oldestFirst' },
       { type: 'replay', events: [] },
     ]);
@@ -948,16 +974,27 @@ it('validates page events and preferences before forwarding speech controls', ()
     { type: 'speechEvent', id: 1, pageId: 1, event: 'unknown' },
     { type: 'speechSettings', value: undefined },
     { type: 'speechSettings', value: { enabled: 'yes', voice: 'af_heart', speed: 1 } },
-    { type: 'speechSettings', value: { enabled: true, voice: 'invalid', speed: 1 } },
-    { type: 'speechSettings', value: { enabled: true, voice: 'af_heart', speed: 9 } },
+    {
+      type: 'speechSettings',
+      value: { enabled: true, provider: 'kokoro', voice: 'invalid', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    },
+    {
+      type: 'speechSettings',
+      value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 9, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    },
   ]) {
     view.receive(value);
   }
   expect(speech.event.mock.calls).toEqual([]);
   expect(speech.settings.set.mock.calls).toEqual([]);
-  view.send({ type: 'speechSettings', value: { enabled: true, voice: 'bf_emma', speed: 1.25 } });
+  view.send({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'kokoro', voice: 'bf_emma', speed: 1.25, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
   view.send({ type: 'speechStop' });
-  expect(speech.settings.set.mock.calls).toEqual([[{ enabled: true, voice: 'bf_emma', speed: 1.25 }]]);
+  expect(speech.settings.set.mock.calls).toEqual([
+    [{ enabled: true, provider: 'kokoro', voice: 'bf_emma', speed: 1.25, elevenLabsVoice: '', elevenLabsSpeed: 1 }],
+  ]);
   expect(speech.stop.mock.calls).toEqual([[]]);
 });
 
@@ -986,4 +1023,76 @@ it('reports setup and preview outcomes and ignores superseded availability check
   expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Voice preview is unavailable.' });
   expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: true, message: 'Setting up local speech...' });
   expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Speech setup did not complete.' });
+});
+
+it('NoSecret, TypeOK: forwards only nonsecret key actions and validated cloud selections', async () => {
+  const { panel, speech } = harness();
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  view.send({ type: 'speechKeySet' });
+  view.send({ type: 'speechKeyRemove' });
+  await flush();
+  expect(speech.keySet.mock.calls).toEqual([[]]);
+  expect(speech.keyRemove.mock.calls).toEqual([[]]);
+  panel.showSpeechKeyStatus(true);
+  expect(view.posted).toContainEqual({ type: 'speechKeyStatus', hasKey: true });
+  const choice = {
+    enabled: false,
+    provider: 'elevenlabs' as const,
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: 'account-voice',
+    elevenLabsSpeed: 1,
+  };
+  view.send({ type: 'speechSettings', value: choice });
+  expect(speech.settings.set.mock.calls).toEqual([]);
+  speech.validCloudVoice.mockReturnValue(true);
+  view.send({ type: 'speechSettings', value: choice });
+  expect(speech.settings.set.mock.calls).toEqual([[choice]]);
+  expect(JSON.stringify(view.posted)).not.toContain('secret-key');
+});
+
+it('requests voice pages only for a selected supported cloud provider', () => {
+  const { panel, speech } = harness();
+  const view = open(panel);
+  view.send({ type: 'speechVoicesLoad' });
+  expect(speech.loadVoices.mock.calls).toEqual([]);
+  speech.settings.get.mockReturnValue({
+    enabled: false,
+    provider: 'elevenlabs',
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: '',
+    elevenLabsSpeed: 1,
+  });
+  view.send({ type: 'speechVoicesLoad' });
+  view.send({ type: 'speechVoicesMore' });
+  expect(speech.loadVoices.mock.calls).toEqual([[false], [true]]);
+});
+
+it('reports key operation failures and respects unsupported cloud hosts', async () => {
+  const { panel, speech } = harness();
+  const view = open(panel);
+  speech.keySet.mockRejectedValueOnce(new Error('private'));
+  view.send({ type: 'speechKeySet' });
+  await flush();
+  expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Could not update the API key.' });
+  expect(JSON.stringify(view.posted)).not.toContain('private');
+  panel.showSpeechCatalog({ voices: [], more: false, loading: false, error: false });
+  expect(view.posted).toContainEqual({ type: 'speechCatalog', value: { voices: [], more: false, loading: false, error: false } });
+  speech.cloudSupported.mockReturnValue(false);
+  speech.settings.get.mockReturnValue({
+    enabled: false,
+    provider: 'elevenlabs',
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: '',
+    elevenLabsSpeed: 1,
+  });
+  view.send({ type: 'speechKeyRemove' });
+  view.send({ type: 'speechPreview' });
+  view.send({ type: 'speechVoicesLoad' });
+  expect(speech.keyRemove.mock.calls).toEqual([]);
+  expect(speech.preview.mock.calls).toEqual([]);
+  expect(speech.loadVoices.mock.calls).toEqual([]);
 });

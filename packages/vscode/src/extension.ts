@@ -7,6 +7,9 @@ import { playDemo } from './demo';
 import { VsCodeEditor } from './editor';
 import { Diagnostics } from './diagnostics';
 import { SpeechService } from './speech_service';
+import { SpeechCredentials } from './speech_credentials';
+import { SpeechCatalog } from './speech_catalog';
+import { ElevenLabsClient } from './speech_elevenlabs';
 import { installedSpeechModel, setupSpeech } from './speech_setup';
 import { speechRuntimeAvailable } from './speech_runtime_status';
 import type { SpeechSettings } from './speech_types';
@@ -131,6 +134,38 @@ export function activate(context: vscode.ExtensionContext): Api {
   let speechObservation: SpeechObservation | undefined;
   const localSpeechSupported = speechSupported();
   let runtimeSpeechSupported = false;
+  const cloudSupported = vscode.env.remoteName === undefined && vscode.env.uiKind === vscode.UIKind.Desktop;
+  let keyStatusEpoch = 0;
+  let panel: NarrationPanel;
+  let catalog: SpeechCatalog;
+  const credentials = new SpeechCredentials(
+    context.secrets,
+    () =>
+      vscode.window.showInputBox({
+        title: 'ElevenLabs API key',
+        password: true,
+        ignoreFocusOut: true,
+        prompt: 'Use a key with Text to Speech and Voices read access.',
+      }),
+    () => {
+      keyStatusEpoch++;
+      catalog.invalidate();
+      speech.invalidateCloud();
+      void config().update('speech.elevenLabsVoice', '', vscode.ConfigurationTarget.Global);
+    },
+  );
+  const cloud = new ElevenLabsClient(() => credentials.read());
+  function refreshKey(): void {
+    const epoch = ++keyStatusEpoch;
+    void credentials.hasKey().then(
+      (hasKey) => {
+        if (epoch === keyStatusEpoch) panel.showSpeechKeyStatus(hasKey);
+      },
+      () => {
+        if (epoch === keyStatusEpoch) panel.showSpeechKeyStatus(false);
+      },
+    );
+  }
   const diagnostics = new Diagnostics({ version: AI_PAIR_VERSION, build: AI_PAIR_BUILD_ID });
   function record(event: DiagnosticEvent): void {
     diagnostics.record(event);
@@ -170,15 +205,36 @@ export function activate(context: vscode.ExtensionContext): Api {
       const rawSpeed: unknown = config().get('speech.speed');
       const voice = typeof rawVoice === 'string' ? rawVoice : 'af_heart';
       const speechSpeed = typeof rawSpeed === 'number' ? rawSpeed : 1;
-      return { enabled: enabled === true, voice, speed: speechSpeed };
+      const choice = config().inspect<string>('speech.provider')?.globalValue;
+      const cloudVoice: unknown = config().get('speech.elevenLabsVoice');
+      const cloudSpeed: unknown = config().get('speech.elevenLabsSpeed');
+      return {
+        enabled: enabled === true,
+        voice,
+        speed: speechSpeed,
+        provider: choice === 'elevenlabs' ? 'elevenlabs' : 'kokoro',
+        elevenLabsVoice: typeof cloudVoice === 'string' ? cloudVoice : '',
+        elevenLabsSpeed: typeof cloudSpeed === 'number' ? cloudSpeed : 1,
+      };
     },
     set: (value: SpeechSettings): void => {
-      if (speechSettings.get().enabled && !value.enabled) speech.cancel();
+      const prior = speechSettings.get();
+      if ((prior.enabled && !value.enabled) || prior.provider !== value.provider) {
+        speech.cancel();
+        if (prior.provider !== value.provider) {
+          credentials.supersede();
+          catalog.invalidate();
+        }
+      }
       void config().update('speech.enabled', value.enabled, vscode.ConfigurationTarget.Global);
       void config().update('speech.voice', value.voice, vscode.ConfigurationTarget.Global);
       void config().update('speech.speed', value.speed, vscode.ConfigurationTarget.Global);
+      void config().update('speech.provider', value.provider, vscode.ConfigurationTarget.Global);
+      void config().update('speech.elevenLabsVoice', value.elevenLabsVoice, vscode.ConfigurationTarget.Global);
+      void config().update('speech.elevenLabsSpeed', value.elevenLabsSpeed, vscode.ConfigurationTarget.Global);
     },
   };
+  let lastSpeechProvider = speechSettings.get().provider;
   const chatOrder = {
     get: () => (config().get<unknown>('chatOrder') === 'oldestFirst' ? ('oldestFirst' as const) : ('newestFirst' as const)),
     set: (value: 'newestFirst' | 'oldestFirst') => {
@@ -203,7 +259,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   }
   const launcher = writeLauncher(context.extensionPath);
   const starter = claudeStarter(launcher);
-  const panel = new NarrationPanel(
+  panel = new NarrationPanel(
     (file) => editor.resolvePath(file),
     speed,
     readingSpeed,
@@ -222,6 +278,20 @@ export function activate(context: vscode.ExtensionContext): Api {
       },
       speech: {
         settings: speechSettings,
+        cloudSupported: () => cloudSupported,
+        keySet: async () => {
+          await credentials.set();
+          refreshKey();
+        },
+        keyRemove: async () => {
+          await credentials.remove();
+          refreshKey();
+        },
+        keyRefresh: refreshKey,
+        loadVoices: (more) => {
+          void catalog.load(more);
+        },
+        validCloudVoice: (id) => catalog.contains(id),
         supported: () => localSpeechSupported && runtimeSpeechSupported,
         installed: async () => (await installedSpeechModel(context.globalStorageUri.fsPath)) !== undefined,
         setup: () => setupSpeech(context.globalStorageUri.fsPath),
@@ -237,6 +307,7 @@ export function activate(context: vscode.ExtensionContext): Api {
         },
         pageClosed: (pageId) => {
           speech.pageClosed(pageId);
+          catalog.invalidate();
         },
       },
     },
@@ -246,14 +317,19 @@ export function activate(context: vscode.ExtensionContext): Api {
     (id) => editor.showTerminal(id),
     codePlayback,
   );
+  catalog = new SpeechCatalog(cloud, (value) => {
+    panel.showSpeechCatalog(value);
+  });
   void speechRuntimeAvailable(path.join(context.extensionPath, 'dist', 'speech')).then((available) => {
     runtimeSpeechSupported = available;
     panel.refreshSpeechSupport();
   });
   speech = new SpeechService({
     runtimeDirectory: path.join(context.extensionPath, 'dist', 'speech'),
+    cloud,
     storageDirectory: context.globalStorageUri.fsPath,
-    localDesktop: localSpeechSupported,
+    localDesktop: cloudSupported,
+    kokoroSupported: localSpeechSupported,
     settings: speechSettings.get,
     output: {
       play: (id, wav, durationMs) => panel.playSpeech(id, wav, durationMs),
@@ -366,6 +442,28 @@ export function activate(context: vscode.ExtensionContext): Api {
   }
 
   context.subscriptions.push(
+    context.secrets.onDidChange((event) => {
+      if (event.key === 'aiPair.elevenLabs.apiKey') {
+        credentials.invalidate();
+        refreshKey();
+      }
+    }),
+    vscode.commands.registerCommand('aiPair.setElevenLabsKey', async () => {
+      try {
+        await credentials.set();
+        refreshKey();
+      } catch {
+        void vscode.window.showErrorMessage('Could not save the ElevenLabs API key.');
+      }
+    }),
+    vscode.commands.registerCommand('aiPair.removeElevenLabsKey', async () => {
+      try {
+        await credentials.remove();
+        refreshKey();
+      } catch {
+        void vscode.window.showErrorMessage('Could not remove the ElevenLabs API key.');
+      }
+    }),
     speech,
     log,
     starter,
@@ -389,7 +487,17 @@ export function activate(context: vscode.ExtensionContext): Api {
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('aiPair.speech')) {
         const current = speechSettings.get();
-        if (e.affectsConfiguration('aiPair.speech.enabled') && !current.enabled) speech.cancel();
+        if (
+          (e.affectsConfiguration('aiPair.speech.enabled') && !current.enabled) ||
+          (e.affectsConfiguration('aiPair.speech.provider') && current.provider !== lastSpeechProvider)
+        ) {
+          speech.cancel();
+        }
+        if (current.provider !== lastSpeechProvider) {
+          credentials.supersede();
+          catalog.invalidate();
+        }
+        lastSpeechProvider = current.provider;
         panel.showSpeechSettings(current);
       }
       if (e.affectsConfiguration('aiPair.chatOrder')) panel.showChatOrder(chatOrder.get());

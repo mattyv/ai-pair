@@ -43,7 +43,7 @@ Issue discussions and working notes hold the detailed evidence and history.
     whitespace boundaries; preserve atomic edits, including an indivisible edit
     that exceeds a bound. Follow the highlighted group while it is read.
 
-## Local spoken narration
+## Spoken narration
 
 -   Speak only explicitly selected, bounded agent narration; default to off.
     Keep the written text visible, and do not replay speech from history.
@@ -60,6 +60,38 @@ Issue discussions and working notes hold the detailed evidence and history.
     model. The embedded eSpeak NG revision in that upstream executable is not
     identified by its published package. This delivery choice does not establish
     corresponding source provenance or certify license compliance.
+-   Keep Kokoro as the default. Offer ElevenLabs only through an explicit,
+    application-scoped provider choice with a cloud and account-credit notice.
+    Saving a key does not enable speech, change providers or play a preview.
+    Never switch providers automatically after a failure.
+-   Store the ElevenLabs API key only in VS Code SecretStorage, entered through
+    a native masked prompt. The panel, preferences, session history and
+    diagnostics receive no key. Removing or replacing it cancels cloud work and
+    invalidates the voice catalog.
+-   Fetch account voices instead of hard-coding a default voice or promising
+    free eligibility. Preview checks whether the chosen voice works for that
+    account. Free plans have credit and voice-access limits; a new account may
+    have no usable API voices.
+-   Send the exact selected text to the fixed ElevenLabs HTTPS API with
+    Multilingual v2 and 24 kHz PCM output. Keep cloud voice speeds at 0.75, 1
+    and 1.2, independently of code pace and reading speed. Preserve local voice
+    settings. No extra LLM, transcript context or project data is sent.
+-   Bound each cloud synthesis to 20 seconds and 40 seconds of audio; append the
+    same 600 ms thinking interval used locally. Use no automatic retry or audio
+    backlog. Cancellation stops local playback and aborts the request; it
+    cannot promise cancellation of remote work or a credit refund. Cloud errors
+    resolve only the speech gate and leave written narration available.
+-   Keep initial cloud support on local desktop extension hosts. It does not
+    require Kokoro's Linux runtime; remote and web hosts remain unavailable.
+-   Investigate optional Kokoro GPU acceleration separately from the ElevenLabs
+    integration. The user's target is Ubuntu with AMD Radeon or integrated AMD
+    graphics; its exact GPU model is not yet known. The shipped engine explicitly
+    selects CPU. Standard ONNX Runtime Node binaries do not provide AMD GPU
+    acceleration, so a GPU setting must not claim support before a compatible
+    runtime and end-to-end hardware test exist. Keep CPU available and show the
+    actual execution device. See the
+    [Node runtime support matrix](https://onnxruntime.ai/docs/get-started/with-javascript/node.html)
+    and [AMD execution provider](https://onnxruntime.ai/docs/execution-providers/MIGraphX-ExecutionProvider.html).
 
 ## Session diagnostics
 

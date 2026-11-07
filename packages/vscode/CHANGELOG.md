@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.16.0
+
+-   Choose optional ElevenLabs cloud narration alongside local Kokoro. Configure
+    an API key through a secure native prompt, choose an account voice, and
+    preview it in Settings. Selected narration and previews use account credits;
+    voice availability depends on the account.
+-   Both providers use the existing reading, pause and stop controls. Kokoro
+    remains the default, and automatic speech remains off by default.
+
 ## 0.15.0
 
 -   Settings has clearer sections and the code display choice has its own

@@ -3,7 +3,16 @@ import { Worker } from 'node:worker_threads';
 import type { NarrationPort } from '@ai-pair/core';
 import { installedSpeechModel } from './speech_setup';
 import { speechRuntimeAvailable } from './speech_runtime_status';
-import { SPEECH_PREVIEW_TEXT, SPEECH_SPEEDS, SPEECH_VOICES, type SpeechSettings, type SpeechVoice } from './speech_types';
+import {
+  ELEVENLABS_SPEEDS,
+  SPEECH_PREVIEW_TEXT,
+  SPEECH_SPEEDS,
+  SPEECH_VOICES,
+  type ElevenLabsSpeechPort,
+  type SpeechProvider,
+  type SpeechSettings,
+  type SpeechVoice,
+} from './speech_types';
 import { SPEECH_WORKER_OUTPUT } from './speech_worker_messages';
 
 /** The panel operations used by local speech; audio is never added to history. */
@@ -21,6 +30,8 @@ export interface SpeechServiceOptions {
   runtimeDirectory: string;
   storageDirectory: string;
   localDesktop: boolean;
+  kokoroSupported?: boolean;
+  cloud?: ElevenLabsSpeechPort;
   output: SpeechOutput;
   settings(): SpeechSettings;
 }
@@ -35,6 +46,8 @@ export interface SpeechAudioEvent {
 interface ActiveSpeech {
   id: number;
   text: string;
+  provider: SpeechProvider;
+  cloudVoice: string;
   voice: SpeechVoice;
   speed: number;
   resolve(): void;
@@ -69,6 +82,7 @@ export class SpeechService implements NarrationPort {
   private workerReady = false;
   private workerBusyId?: number;
   private workerTimer?: ReturnType<typeof setTimeout>;
+  private cloudBusy?: { id: number; controller: AbortController; timer: ReturnType<typeof setTimeout> };
   private closing = false;
   private disposed = false;
 
@@ -90,25 +104,51 @@ export class SpeechService implements NarrationPort {
     if (this.current !== undefined || this.disposed) return Promise.resolve();
     const id = this.nextId++;
     const settings = this.options.settings();
-    if (!this.options.localDesktop || process.platform !== 'linux' || process.arch !== 'x64') {
-      this.options.output.status(id, 'unavailable', 'Local speech is available on a local Linux x64 desktop using glibc.');
+    if (!this.options.localDesktop) {
+      this.options.output.status(
+        id,
+        'unavailable',
+        settings.provider === 'elevenlabs'
+          ? 'Cloud speech is available only on a local desktop.'
+          : 'Local speech is available on a local Linux x64 desktop using glibc.',
+      );
+      return Promise.resolve();
+    }
+    const provider = settings.provider ?? 'kokoro';
+    if (provider !== 'kokoro' && provider !== 'elevenlabs') {
+      this.options.output.status(id, 'unavailable', 'Choose a supported speech provider.');
       return Promise.resolve();
     }
     const voice = SPEECH_VOICES.find((candidate) => candidate === settings.voice);
-    if (voice === undefined || !SPEECH_SPEEDS.some((speed) => speed === settings.speed)) {
+    if (provider === 'kokoro' && (this.options.kokoroSupported === false || process.platform !== 'linux' || process.arch !== 'x64')) {
+      this.options.output.status(id, 'unavailable', 'Local speech is available on a local Linux x64 desktop using glibc.');
+      return Promise.resolve();
+    }
+    if (provider === 'kokoro' && (voice === undefined || !SPEECH_SPEEDS.some((speed) => speed === settings.speed))) {
       this.options.output.status(id, 'unavailable', 'Choose a supported speech voice and speed.');
       return Promise.resolve();
     }
-    if (this.workerBusyId !== undefined || this.closing) {
-      this.options.output.status(id, 'unavailable', 'Local speech is still finishing; try again shortly.');
+    if (
+      provider === 'elevenlabs' &&
+      (this.options.cloud === undefined ||
+        settings.elevenLabsVoice.length === 0 ||
+        !ELEVENLABS_SPEEDS.some((speed) => speed === settings.elevenLabsSpeed))
+    ) {
+      this.options.output.status(id, 'unavailable', 'Choose an available ElevenLabs voice and speed.');
+      return Promise.resolve();
+    }
+    if (this.workerBusyId !== undefined || this.closing || this.cloudBusy !== undefined) {
+      this.options.output.status(id, 'unavailable', 'Speech is still finishing; try again shortly.');
       return Promise.resolve();
     }
     const { promise, resolve } = Promise.withResolvers<void>();
     const current: ActiveSpeech = {
       id,
       text,
-      voice,
-      speed: settings.speed,
+      provider,
+      cloudVoice: settings.elevenLabsVoice,
+      voice: voice ?? 'af_heart',
+      speed: provider === 'elevenlabs' ? settings.elevenLabsSpeed : settings.speed,
       resolve,
       phase: 'loading',
       wav: new Uint8Array(),
@@ -118,10 +158,72 @@ export class SpeechService implements NarrationPort {
       remaining: START_TIMEOUT_MS,
     };
     this.current = current;
-    this.arm(current, START_TIMEOUT_MS);
+    if (provider === 'kokoro') this.arm(current, START_TIMEOUT_MS);
     this.options.output.status(id, 'preparing');
-    if (this.current === current) void this.start(current);
+    if (this.current === current) {
+      if (provider === 'elevenlabs') this.startCloud(current);
+      else void this.start(current);
+    }
     return promise;
+  }
+
+  /** CloudNarration: one request owns its slot until settlement or watchdog. */
+  private startCloud(current: ActiveSpeech): void {
+    const cloud = this.options.cloud;
+    if (cloud === undefined) {
+      this.fail(current, 'Cloud speech is unavailable. Check your key, voice and account.');
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      if (this.cloudBusy?.id !== current.id) return;
+      controller.abort();
+      this.cloudBusy = undefined;
+      if (this.current === current) this.fail(current, 'Cloud speech timed out; continue reading.');
+    }, START_TIMEOUT_MS);
+    this.cloudBusy = { id: current.id, controller, timer };
+    current.phase = 'synthesizing';
+    const release = (): void => {
+      if (this.cloudBusy?.id !== current.id) return;
+      clearTimeout(timer);
+      this.cloudBusy = undefined;
+    };
+    try {
+      void cloud.synthesize({ text: current.text, voiceId: current.cloudVoice, speed: current.speed }, controller.signal).then(
+        (audio) => {
+          release();
+          if (this.current !== current || controller.signal.aborted) return;
+          if (
+            audio.wav.length < MIN_WAV_BYTES ||
+            audio.wav.length > MAX_WAV_BYTES ||
+            !Number.isFinite(audio.durationMs) ||
+            audio.durationMs <= 0 ||
+            audio.durationMs > MAX_DURATION_MS
+          ) {
+            this.fail(current, 'Generated speech was invalid; continue reading.');
+            return;
+          }
+          current.wav = audio.wav;
+          current.durationMs = audio.durationMs;
+          current.phase = 'prepared';
+          if (this.paused) this.options.output.status(current.id, 'paused');
+          else this.play(current);
+        },
+        () => {
+          release();
+          if (this.current === current) this.fail(current, 'Cloud speech is unavailable. Check your key, voice and account.');
+        },
+      );
+    } catch {
+      release();
+      this.fail(current, 'Cloud speech is unavailable. Check your key, voice and account.');
+    }
+  }
+
+  /** A credential change invalidates current cloud audio and pending requests. */
+  invalidateCloud(): void {
+    this.cloudBusy?.controller.abort();
+    if (this.current?.provider === 'elevenlabs') this.cancel();
   }
 
   private async start(current: ActiveSpeech): Promise<void> {
@@ -140,7 +242,7 @@ export class SpeechService implements NarrationPort {
       const modelPath = await installedSpeechModel(this.options.storageDirectory);
       if (this.current !== current) return;
       if (modelPath === undefined) {
-        this.fail(current, 'Set up local speech to hear selected narration.');
+        this.fail(current, 'Download the Kokoro model in Settings to hear local narration.');
         return;
       }
       const worker = new Worker(path.join(this.options.runtimeDirectory, 'worker.mjs'), { workerData: { modelPath } });
@@ -359,6 +461,7 @@ export class SpeechService implements NarrationPort {
   private finish(current: ActiveSpeech, showIdle = true): void {
     if (this.current !== current) return;
     this.current = undefined;
+    if (current.provider === 'elevenlabs' && this.cloudBusy?.id === current.id) this.cloudBusy.controller.abort();
     this.clearTimer(current);
     if (current.pageId !== undefined) this.options.output.control(current.id, current.pageId, 'stop');
     if (showIdle) this.options.output.status(current.id, 'idle');
@@ -378,6 +481,6 @@ export class SpeechService implements NarrationPort {
       .finally(() => {
         this.closing = false;
       });
-    if (this.current !== undefined) this.fail(this.current, 'Local speech stopped. Retry setup.');
+    if (this.current?.provider === 'kokoro') this.fail(this.current, 'Local speech stopped. Retry setup.');
   }
 }

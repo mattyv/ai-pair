@@ -665,7 +665,7 @@ test('Settings stays readable and operable in a narrow panel', async ({ page }) 
   await page.getByRole('button', { name: 'Settings' }).click();
   const dialog = page.getByRole('dialog', { name: 'Settings' });
   await expect(dialog).toBeVisible();
-  for (const title of ['Conversation', 'Playback', 'Commands', 'Local speech', 'Diagnostics']) {
+  for (const title of ['Conversation', 'Playback', 'Commands', 'Speech', 'Diagnostics']) {
     await expect(dialog.getByRole('heading', { name: title })).toBeAttached();
   }
   await expect(dialog.getByRole('combobox', { name: 'Code display' })).toHaveValue('lines');
@@ -683,4 +683,30 @@ test('Settings stays readable and operable in a narrow panel', async ({ page }) 
     return [doc.documentElement.scrollWidth, doc.documentElement.clientWidth];
   });
   expect(widths[0]).toBeLessThanOrEqual(widths[1] ?? 0);
+});
+
+test('speech provider controls are explicit and render account voices as text', async ({ page }) => {
+  const post = await load(page);
+  await post({ type: 'speechCloudSupport', supported: true });
+  await post({ type: 'speechKeyStatus', hasKey: true });
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Settings' });
+  await dialog.getByLabel('Speech provider').selectOption('elevenlabs');
+  await expect(dialog.getByText('Selected narration and voice previews are sent to ElevenLabs', { exact: false })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Download Kokoro model' })).toBeHidden();
+  const more = dialog.getByRole('button', { name: 'Load more', includeHidden: true });
+  await expect(more).toBeHidden();
+  await post({ type: 'speechCatalog', value: { voices: [], more: true, loading: false, error: false } });
+  await expect(more).toBeVisible();
+  await post({ type: 'speechCatalog', value: { voices: [], more: false, loading: false, error: false } });
+  await expect(more).toBeHidden();
+  await dialog.getByRole('button', { name: 'Load voices', exact: true }).click();
+  await post({
+    type: 'speechCatalog',
+    value: { voices: [{ id: 'voice1', name: '<script>not markup</script>' }], more: false, loading: false, error: false },
+  });
+  await expect(dialog.getByRole('option', { name: '<script>not markup</script>' })).toHaveCount(1);
+  await expect(dialog.locator('script')).toHaveCount(0);
+  await dialog.getByLabel('Account voice').selectOption('voice1');
+  await expect(dialog.getByRole('button', { name: 'Preview voice' })).toBeEnabled();
 });

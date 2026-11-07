@@ -91,6 +91,9 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `PlaybackPreference.cfg` | three modes and two independent pace settings | holds | 36 |
 | `SpeechSetup.cfg` | two files; install, cancellation and rollback outcomes | holds | 42 |
 | `SpeechPage.cfg` | two page identities and two narration units | holds | 28 |
+| `CloudNarration.cfg` | two generations, provider and credential epochs | holds | 59 |
+| `CloudNarration_Healthy.cfg` | two generations with a healthy key read | holds | 59 |
+| `SpeechSettings.cfg` | two credential reads and catalog requests | holds | 50,968 |
 | `PlaybackAnchor.cfg` | three-character insert, cursor marker and all bounded programmer edits | holds | 20 |
 | `PlaybackAnchor_Progress.cfg` | the same, with fair completion | holds | 20 |
 | `CodePlayback.cfg` | three atomic edits, bounded groups, two pause states and three countdown IDs | holds | 654 |
@@ -2125,3 +2128,42 @@ stuck rollback violate the corresponding safety or progress property.
 | `CancelledDoesNotInstall` | `speech_setup_fs.test.ts`: restores the previous directory if cancelled after backup. |
 | `NoLostPrevious` | `speech_setup_fs.test.ts`: restores the previous directory if commit rename fails; preserves the backup directory if rollback also fails. |
 | `SetupProgress` | `speech_setup.test.ts`: times out a stalled download and cleans staging. |
+
+### `SpeechSettings`: credentials and account voices
+
+The model captures two immutable catalog request identities and credential
+reads. Provider, key and page changes invalidate old results. Explicit refresh
+requests and delivered current replies progress under weak fairness. TLC checks
+50,968 states. Negative controls detect invalid types, retaining a catalog
+across a provider change, accepting an old response after a new request,
+accepting a stale key read, changing a canceled prompt's key, disclosing a
+secret, refusing request dispatch, and refusing a current response.
+
+| Property | Test |
+|---|---|
+| `TypeOK` | `panel.test.ts`: NoSecret, TypeOK: forwards only nonsecret key actions and validated cloud selections. |
+| `CatalogSafe`, `AcceptedSafe`, `RequestProgress`, `ReplyProgress` | `speech_catalog.test.ts`: CatalogSafe, AcceptedSafe, RequestProgress, ReplyProgress: loads only on request and ignores stale results. |
+| `ReadSafe` | `speech_credentials.test.ts`: ReadSafe: waits for replacement and rejects a stale read after an external change. |
+| `PromptSafe` | `speech_credentials.test.ts`: PromptSafe: stores only a prompted key and preserves it when a prompt is canceled. |
+| `NoSecret` | `extension.test.ts`: NoSecret: uses the native masked prompt and does not put a key in settings or logs. |
+
+### `CloudNarration`: provider, cancellation and gates
+
+The model separates admission, asynchronous key reading, dispatch and response.
+It bounds two generations and credential changes; cancellation retains request
+ownership until settlement or timeout. The healthy-key configuration makes
+forward dispatch observable without assuming the network succeeds. Both
+configurations checked 59 states. Mutations disabling provider, key, epoch,
+single-request, gate, cancellation and retry guards violate the corresponding
+safety properties. Disabling admission, dispatch, playback or fair timeout
+violates the respective progress property. Clearing approval on timeout and
+allowing only the first generation also produce counterexamples.
+
+| Property | Test |
+|---|---|
+| `SafeSend` | `speech_elevenlabs.test.ts`: sends only the selected unit to the fixed endpoint using the secret header; never calls the provider when the key or voice is missing. |
+| `NoStale` | `speech_service.test.ts`: cancels cloud work when credentials change and discards the late response; aborts a canceled request and ignores its late output without queuing a successor. |
+| `NoOverlap`, `NoRetry` | `speech_service.test.ts`: aborts a canceled request and ignores its late output without queuing a successor; `speech_elevenlabs.test.ts`: times out a stalled request without retrying. |
+| `IndependentGates` | Existing `Narration` gate tests cover the independent reading and approval controls; cloud transport never receives these controls. |
+| `NoRestart`, `ReadyPlays` | `speech_service.test.ts`: keeps prepared cloud speech paused until resume and rejects stale page events. |
+| `RequestSettles`, `EligibleStarts`, `EligibleDispatch` | `speech_service.test.ts`: releases a hung cloud request at its watchdog without reviving late output; `speech_elevenlabs.e2e.test.ts`: converts a real streamed PCM response to bounded playable WAV. |

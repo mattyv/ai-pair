@@ -2,7 +2,7 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "publisher": "michalstrba",
   "private": true,
   "license": "MIT",
@@ -74,6 +74,16 @@
       ]
     },
     "commands": [
+      {
+        "command": "aiPair.setElevenLabsKey",
+        "title": "Add or Replace ElevenLabs API Key",
+        "category": "AI Pair"
+      },
+      {
+        "command": "aiPair.removeElevenLabsKey",
+        "title": "Remove ElevenLabs API Key",
+        "category": "AI Pair"
+      },
       {
         "command": "aiPair.setUpAgent",
         "title": "Set Up Agent",
@@ -161,7 +171,34 @@
         "aiPair.speech.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Speak only narration explicitly selected by the agent after local speech is set up.",
+          "description": "Speak only narration explicitly selected by the agent.",
+          "scope": "application"
+        },
+        "aiPair.speech.provider": {
+          "type": "string",
+          "enum": [
+            "kokoro",
+            "elevenlabs"
+          ],
+          "default": "kokoro",
+          "description": "Speech provider. ElevenLabs sends selected narration and previews to its service.",
+          "scope": "application"
+        },
+        "aiPair.speech.elevenLabsVoice": {
+          "type": "string",
+          "default": "",
+          "description": "Selected ElevenLabs account voice ID.",
+          "scope": "application"
+        },
+        "aiPair.speech.elevenLabsSpeed": {
+          "type": "number",
+          "enum": [
+            0.75,
+            1,
+            1.2
+          ],
+          "default": 1,
+          "description": "ElevenLabs speech speed for the next selected narration.",
           "scope": "application"
         },
         "aiPair.speech.voice": {

@@ -140,6 +140,27 @@ Behavior:
 -   During the programmer's turn the band's header says *Your turn*, and the
     agent navigates: its comments appear as the current message as usual.
 
+### Optional spoken narration
+
+Speech is off by default. Settings offers Kokoro locally and ElevenLabs through
+an explicit cloud provider choice. The coding agent marks only the explanations
+it wants spoken; their written text remains visible. Voice speed is independent
+of code pace and the reading timer. Both reading and speech must finish before
+playback advances, so audio cannot rush a held reading interval.
+
+For ElevenLabs, Settings explains that selected text and previews leave the
+machine and consume account credits. Add or replace a key through VS Code's
+native masked prompt, then load account voices and choose one. No preview plays
+automatically. The key stays in SecretStorage; the panel sees only whether a key
+exists. Voice availability depends on the account and Preview may report an
+access or credit limit. Opening Settings never synthesizes audio.
+
+Reply, Stop, provider changes and key changes invalidate current cloud audio.
+An aborted request may already have consumed credits. Cloud failures leave the
+text readable and do not approve commands, finish the reading timer, or switch
+providers. Pause retains the current unit while its request deadline continues;
+late audio from a canceled unit cannot play.
+
 ## Playback
 
 ### Timing

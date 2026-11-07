@@ -5,7 +5,8 @@ import type { CodePlayback, Controller, PanelEvent, PanelPort, Ref, SharedSelect
 import { panelHtml, SPEEDS } from './panel_html';
 import { timings } from './timings';
 import type { ChatOrder, FromPanel, SpeechAction, SpeechEvent, SpeechState, ToPanel } from './panel_messages';
-import { SPEECH_SPEEDS, SPEECH_VOICES, type SpeechSettings } from './speech_types';
+import { ELEVENLABS_SPEEDS, SPEECH_SPEEDS, SPEECH_VOICES, type SpeechSettings } from './speech_types';
+import type { CatalogView } from './speech_catalog';
 import type { Calibration, CalibrationView } from './calibration';
 
 const MAX_LOG = 400;
@@ -41,6 +42,12 @@ export interface PanelWiring {
     stop: () => void;
     event: (value: { id: number; pageId: number; event: SpeechEvent }) => void;
     pageClosed: (pageId: number) => void;
+    cloudSupported: () => boolean;
+    keySet: () => Promise<void>;
+    keyRemove: () => Promise<void>;
+    keyRefresh: () => void;
+    loadVoices: (more: boolean) => void;
+    validCloudVoice: (id: string) => boolean;
   };
 }
 
@@ -123,6 +130,14 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     if (this.speechPageReady) {
       this.send({ type: 'speechStatus', id, pageId: this.speechPageId, state, ...(message === undefined ? {} : { message }) });
     }
+  }
+
+  showSpeechKeyStatus(hasKey: boolean): void {
+    this.send({ type: 'speechKeyStatus', hasKey });
+  }
+
+  showSpeechCatalog(value: CatalogView): void {
+    this.send({ type: 'speechCatalog', value });
   }
 
   showSpeechSettings(value: SpeechSettings): void {
@@ -289,16 +304,38 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         if (
           typeof message.value?.enabled === 'boolean' &&
           SPEECH_VOICES.some((voice) => voice === message.value.voice) &&
-          SPEECH_SPEEDS.some((speed) => speed === message.value.speed)
+          SPEECH_SPEEDS.some((speed) => speed === message.value.speed) &&
+          (message.value.provider === 'kokoro' || message.value.provider === 'elevenlabs') &&
+          (message.value.elevenLabsVoice === '' ||
+            this.wiring.speech.validCloudVoice(message.value.elevenLabsVoice) ||
+            message.value.elevenLabsVoice === this.wiring.speech.settings.get().elevenLabsVoice) &&
+          ELEVENLABS_SPEEDS.some((speed) => speed === message.value.elevenLabsSpeed)
         ) {
           this.wiring.speech.settings.set(message.value);
+        }
+        return;
+      case 'speechKeySet':
+      case 'speechKeyRemove':
+        if (!this.wiring.speech.cloudSupported()) return;
+        void (message.type === 'speechKeySet' ? this.wiring.speech.keySet() : this.wiring.speech.keyRemove()).catch(() => {
+          this.send({ type: 'speechSetupState', pending: false, message: 'Could not update the API key.' });
+        });
+        return;
+      case 'speechVoicesLoad':
+      case 'speechVoicesMore':
+        if (this.wiring.speech.cloudSupported() && this.wiring.speech.settings.get().provider === 'elevenlabs') {
+          this.wiring.speech.loadVoices(message.type === 'speechVoicesMore');
         }
         return;
       case 'speechStop':
         this.wiring.speech.stop();
         return;
       case 'speechPreview':
-        if (!this.wiring.speech.supported()) return;
+        if (
+          this.wiring.speech.settings.get().provider === 'kokoro' ? !this.wiring.speech.supported() : !this.wiring.speech.cloudSupported()
+        ) {
+          return;
+        }
         void this.wiring.speech.preview().catch(() => {
           this.send({ type: 'speechSetupState', pending: false, message: 'Voice preview is unavailable.' });
         });
@@ -327,6 +364,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         this.speechPageReady = true;
         this.send({ type: 'speechPage', pageId });
         this.showSpeechSettings(this.wiring.speech.settings.get());
+        this.send({ type: 'speechCloudSupport', supported: this.wiring.speech.cloudSupported() });
+        this.wiring.speech.keyRefresh();
         this.refreshSpeechSupport();
         // A new page has an empty draft (#69): specs/Draft.tla, `LoadPage`.
         controller.resume('reply');

@@ -11,7 +11,7 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes the 0.15.0 work in progress.
+Status: describes version 0.16.0.
 
 ## Components
 
@@ -51,11 +51,17 @@ Status: describes the 0.15.0 work in progress.
 -   **Session diagnostics** keep a bounded allowlisted lifecycle history in
     the VS Code adapter. The panel requests a snapshot explicitly; its clipboard
     export contains no chat, code, paths, command text, output, or tokens.
--   **Local speech** is an optional port on the session controller. The VS Code
-    service starts a local CPU worker for explicitly selected narration after
-    model setup; the current webview plays bounded WAV data and reports its
-    lifecycle. Page replacement and interruption invalidate the active unit.
-    History and diagnostics do not retain speech audio.
+-   **Selected speech** is an optional port on the session controller. One
+    service owns playback, cancellation and page generations for both providers.
+    Kokoro uses a local CPU worker after explicit model setup. The optional
+    ElevenLabs client sends only selected narration or an explicit voice preview
+    to its fixed HTTPS API. Its API key stays in VS Code SecretStorage and is
+    read only in the extension host; the panel receives key-presence status and
+    bounded voice metadata. Cloud requests have independent deadlines and byte
+    limits. Both providers produce bounded WAV audio for the current webview.
+    Page replacement and interruption invalidate the active unit. Speech and
+    reading complete independently; speech never approves a command or releases
+    a reading hold. History and diagnostics do not retain speech audio.
 -   **The narration panel** is a webview. It talks to the extension via
     `postMessage`, with the messages typed in
     [`panel_messages.ts`](packages/vscode/src/panel_messages.ts). Its markup is

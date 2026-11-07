@@ -2,9 +2,9 @@
   "version": 1,
   "bundleId": "277c3415-7b74-4008-8be4-8c14ae6d41dd",
   "revision": {
-    "number": 5,
-    "updatedAt": "2026-11-06T00:00:00.000Z",
-    "summary": "Multi-close preflight, reading controls, and development delivery"
+    "number": 6,
+    "updatedAt": "2026-11-07T00:00:00.000Z",
+    "summary": "Optional ElevenLabs provider, secure credentials and shared narration playback"
   },
   "diagrams": [
     {
@@ -8898,7 +8898,7 @@
           },
           {
             "id": "local-speech",
-            "label": "Local speech service",
+            "label": "Speech service\nShared playback and cancellation",
             "files": [
               "packages/vscode/src/speech_service.ts",
               "packages/vscode/src/speech_worker_host.ts",
@@ -9027,6 +9027,35 @@
             "x": 1923,
             "y": 1108,
             "step": 15
+          },
+          {
+            "id": "elevenlabs-client",
+            "label": "ElevenLabs client\nBounded HTTPS synthesis and account voices",
+            "files": [
+              "packages/vscode/src/speech_elevenlabs.ts",
+              "packages/vscode/src/speech_pcm.ts",
+              "packages/vscode/src/speech_catalog.ts"
+            ],
+            "group": "ext",
+            "x": 2140,
+            "y": 342
+          },
+          {
+            "id": "speech-credentials",
+            "label": "Speech credentials\nNative key prompt and SecretStorage",
+            "files": [
+              "packages/vscode/src/speech_credentials.ts"
+            ],
+            "group": "ext",
+            "x": 2140,
+            "y": 177
+          },
+          {
+            "id": "elevenlabs-api",
+            "label": "ElevenLabs cloud API\nSelected text and preview only",
+            "files": [],
+            "x": 2440,
+            "y": 342
           }
         ],
         "edges": [
@@ -9043,7 +9072,7 @@
           {
             "from": "extts",
             "to": "local-speech",
-            "label": "wires local runtime"
+            "label": "wires local and cloud providers"
           },
           {
             "from": "extts",
@@ -9702,6 +9731,26 @@
                 "y": 0
               }
             }
+          },
+          {
+            "from": "local-speech",
+            "to": "elevenlabs-client",
+            "label": "explicit cloud provider only"
+          },
+          {
+            "from": "elevenlabs-client",
+            "to": "elevenlabs-api",
+            "label": "fixed HTTPS, bounded PCM"
+          },
+          {
+            "from": "extts",
+            "to": "speech-credentials",
+            "label": "masked key entry"
+          },
+          {
+            "from": "elevenlabs-client",
+            "to": "speech-credentials",
+            "label": "host-only key reader"
           }
         ],
         "groups": [

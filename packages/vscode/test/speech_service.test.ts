@@ -3,6 +3,7 @@ import { mock } from 'vitest-mock-extended';
 import { installedSpeechModel } from '../src/speech_setup';
 import { speechRuntimeAvailable } from '../src/speech_runtime_status';
 import { SpeechService, type SpeechOutput } from '../src/speech_service';
+import type { ElevenLabsSpeechPort } from '../src/speech_types';
 
 const fake = vi.hoisted(() => {
   class Worker {
@@ -58,7 +59,7 @@ function harness(enabled = true) {
     storageDirectory: '/storage',
     localDesktop: true,
     output,
-    settings: () => ({ enabled, voice: 'af_heart', speed: 1 }),
+    settings: () => ({ enabled, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
   });
   return { service, output };
 }
@@ -420,7 +421,7 @@ describe('SpeechService lifecycle', () => {
     const missing = harness();
     vi.mocked(installedSpeechModel).mockResolvedValueOnce(undefined);
     await missing.service.speak('Hello.');
-    expect(missing.output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('Set up'));
+    expect(missing.output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('Download the Kokoro model'));
     const noPage = harness();
     noPage.output.play.mockReturnValue(undefined);
     const gate = noPage.service.speak('Hello.');
@@ -441,8 +442,8 @@ describe('SpeechService lifecycle', () => {
 describe('SpeechService failures and races', () => {
   it('falls back for an invalid persisted voice or speed', async () => {
     for (const settings of [
-      { enabled: true, voice: 'invalid', speed: 1 },
-      { enabled: true, voice: 'af_heart', speed: 3 },
+      { enabled: true, provider: 'kokoro' as const, voice: 'invalid', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+      { enabled: true, provider: 'kokoro' as const, voice: 'af_heart', speed: 3, elevenLabsVoice: '', elevenLabsSpeed: 1 },
     ]) {
       const output = mock<SpeechOutput>();
       const service = new SpeechService({
@@ -481,7 +482,7 @@ describe('SpeechService failures and races', () => {
       storageDirectory: '/storage',
       localDesktop: true,
       output,
-      settings: () => ({ enabled: true, voice: 'af_heart', speed: 1 }),
+      settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
     });
     await service.speak('Hello.');
     expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('local Linux'));
@@ -495,7 +496,7 @@ describe('SpeechService failures and races', () => {
       storageDirectory: '/storage',
       localDesktop: false,
       output,
-      settings: () => ({ enabled: true, voice: 'af_heart', speed: 1 }),
+      settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
     });
     await service.speak('Hello.');
     expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('local Linux'));
@@ -818,4 +819,371 @@ describe('SpeechService failures and races', () => {
     await service.speak('Later.');
     expect(fake.Worker.made).toHaveLength(1);
   });
+});
+
+describe('cloud narration', () => {
+  it('sends the selected text once, and accepts only the current page ending', async () => {
+    const cloud = mock<ElevenLabsSpeechPort>();
+    cloud.synthesize.mockResolvedValue({ wav: new Uint8Array(44), durationMs: 1000 });
+    const output = mock<SpeechOutput>();
+    output.play.mockReturnValue(7);
+    const service = new SpeechService({
+      runtimeDirectory: '',
+      storageDirectory: '',
+      localDesktop: true,
+      output,
+      cloud,
+      settings: () => ({
+        enabled: true,
+        provider: 'elevenlabs',
+        voice: 'af_heart',
+        speed: 1,
+        elevenLabsVoice: 'voice-id',
+        elevenLabsSpeed: 1.2,
+      }),
+    });
+    const gate = service.speak('Exact selected text.');
+    await settle();
+    expect(cloud.synthesize.mock.calls).toHaveLength(1);
+    expect(cloud.synthesize.mock.calls[0]?.[0]).toEqual({ text: 'Exact selected text.', voiceId: 'voice-id', speed: 1.2 });
+    expect(output.play).toHaveBeenCalledWith(1, new Uint8Array(44), 1000);
+    expect(service.audioEvent({ id: 1, pageId: 7, event: 'ended' })).toBe('ended');
+    await gate;
+  });
+
+  it('aborts a canceled request and ignores its late output without queuing a successor', async () => {
+    const cloud = mock<ElevenLabsSpeechPort>();
+    const pending = Promise.withResolvers<{ wav: Uint8Array; durationMs: number }>();
+    cloud.synthesize.mockReturnValue(pending.promise);
+    const output = mock<SpeechOutput>();
+    const service = new SpeechService({
+      runtimeDirectory: '',
+      storageDirectory: '',
+      localDesktop: true,
+      output,
+      cloud,
+      settings: () => ({
+        enabled: true,
+        provider: 'elevenlabs',
+        voice: 'af_heart',
+        speed: 1,
+        elevenLabsVoice: 'voice-id',
+        elevenLabsSpeed: 1,
+      }),
+    });
+    const gate = service.speak('First.');
+    const signal = cloud.synthesize.mock.calls[0]?.[1];
+    service.cancel();
+    await gate;
+    expect(signal?.aborted).toBe(true);
+    await service.speak('Second.');
+    expect(cloud.synthesize.mock.calls).toHaveLength(1);
+    pending.resolve({ wav: new Uint8Array(44), durationMs: 1000 });
+    await settle();
+    expect(output.play).not.toHaveBeenCalled();
+  });
+});
+
+/** A cloud-only fixture with an explicitly selected nonsecret voice. */
+function cloudHarness() {
+  const cloud = mock<ElevenLabsSpeechPort>();
+  const output = mock<SpeechOutput>();
+  output.play.mockReturnValue(7);
+  const settings = {
+    enabled: true,
+    provider: 'elevenlabs' as const,
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: 'voice-id',
+    elevenLabsSpeed: 1,
+  };
+  const service = new SpeechService({
+    runtimeDirectory: '',
+    storageDirectory: '',
+    localDesktop: true,
+    output,
+    cloud,
+    settings: () => settings,
+  });
+  return { cloud, output, service, settings };
+}
+
+it('supports cloud on macOS without requiring the local runtime', async () => {
+  Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+  const { cloud, service } = cloudHarness();
+  cloud.synthesize.mockResolvedValue({ wav: new Uint8Array(44), durationMs: 1000 });
+  const gate = service.speak('Hello.');
+  await settle();
+  expect(fake.Worker.made).toHaveLength(0);
+  expect(service.audioEvent({ id: 1, pageId: 7, event: 'ended' })).toBe('ended');
+  await gate;
+});
+
+it('never invokes cloud when disabled or no cloud voice is selected', async () => {
+  const { cloud, service, settings, output } = cloudHarness();
+  settings.enabled = false;
+  await service.speak('No send.');
+  settings.enabled = true;
+  settings.elevenLabsVoice = '';
+  await service.speak('No voice.');
+  expect(cloud.synthesize.mock.calls).toHaveLength(0);
+  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('voice'));
+});
+
+it('keeps prepared cloud speech paused until resume and rejects stale page events', async () => {
+  const { cloud, service, output } = cloudHarness();
+  const pending = Promise.withResolvers<{ wav: Uint8Array; durationMs: number }>();
+  cloud.synthesize.mockReturnValue(pending.promise);
+  const gate = service.speak('Hello.');
+  service.pause();
+  pending.resolve({ wav: new Uint8Array(44), durationMs: 1000 });
+  await settle();
+  expect(output.play).not.toHaveBeenCalled();
+  service.resume();
+  expect(output.play).toHaveBeenCalledOnce();
+  expect(service.audioEvent({ id: 1, pageId: 8, event: 'ended' })).toBeUndefined();
+  expect(service.audioEvent({ id: 1, pageId: 7, event: 'ended' })).toBe('ended');
+  await gate;
+});
+
+it('cancels cloud work when credentials change and discards the late response', async () => {
+  const { cloud, service, output } = cloudHarness();
+  const pending = Promise.withResolvers<{ wav: Uint8Array; durationMs: number }>();
+  cloud.synthesize.mockReturnValue(pending.promise);
+  const gate = service.speak('Hello.');
+  const signal = cloud.synthesize.mock.calls[0]?.[1];
+  service.invalidateCloud();
+  await gate;
+  expect(signal?.aborted).toBe(true);
+  pending.resolve({ wav: new Uint8Array(44), durationMs: 1000 });
+  await settle();
+  expect(output.play).not.toHaveBeenCalled();
+});
+
+it('releases a hung cloud request at its watchdog without reviving late output', async () => {
+  const { cloud, service, output } = cloudHarness();
+  const pending = Promise.withResolvers<{ wav: Uint8Array; durationMs: number }>();
+  cloud.synthesize.mockReturnValue(pending.promise);
+  const gate = service.speak('Hello.');
+  await vi.advanceTimersByTimeAsync(20_000);
+  await gate;
+  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('timed out'));
+  pending.resolve({ wav: new Uint8Array(44), durationMs: 1000 });
+  await settle();
+  expect(output.play).not.toHaveBeenCalled();
+});
+
+it('falls back safely for invalid cloud audio and sanitized provider failures', async () => {
+  const { cloud, service, output } = cloudHarness();
+  cloud.synthesize.mockResolvedValueOnce({ wav: new Uint8Array(2), durationMs: 1000 });
+  await service.speak('First.');
+  cloud.synthesize.mockRejectedValueOnce(new Error('secret provider response'));
+  await service.speak('Second.');
+  expect(output.play).not.toHaveBeenCalled();
+  expect(output.status).toHaveBeenCalledWith(2, 'unavailable', expect.not.stringContaining('secret'));
+});
+
+it('rejects unknown providers without falling back or starting a request', async () => {
+  const { cloud, service, settings, output } = cloudHarness();
+  Object.assign(settings, { provider: 'unknown' });
+  await service.speak('Do not send.');
+  expect(cloud.synthesize.mock.calls).toHaveLength(0);
+  expect(fake.Worker.made).toHaveLength(0);
+  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('provider'));
+});
+
+it('never sends cloud speech from a remote extension host', async () => {
+  const cloud = mock<ElevenLabsSpeechPort>();
+  const output = mock<SpeechOutput>();
+  const service = new SpeechService({
+    runtimeDirectory: '',
+    storageDirectory: '',
+    localDesktop: false,
+    output,
+    cloud,
+    settings: () => ({ enabled: true, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: 'voice', elevenLabsSpeed: 1 }),
+  });
+  await service.speak('Do not send.');
+  expect(cloud.synthesize.mock.calls).toHaveLength(0);
+  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('local desktop'));
+});
+
+it('keeps cloud audio independent of an invalid saved local voice', async () => {
+  const { cloud, service, settings } = cloudHarness();
+  settings.voice = 'old-invalid-local-voice';
+  cloud.synthesize.mockResolvedValue({ wav: new Uint8Array(44), durationMs: 1000 });
+  const gate = service.speak('Cloud.');
+  await settle();
+  expect(service.audioEvent({ id: 1, pageId: 7, event: 'ended' })).toBe('ended');
+  await gate;
+});
+
+it('sanitizes synchronous provider failures', async () => {
+  const { cloud, service, output } = cloudHarness();
+  cloud.synthesize.mockImplementationOnce(() => {
+    throw new Error('private');
+  });
+  await service.speak('Hello.');
+  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.not.stringContaining('private'));
+});
+
+it('allows an existing local speech unit to survive a cloud key change', async () => {
+  const { service } = harness();
+  const gate = service.speak('Local.');
+  await settle();
+  service.invalidateCloud();
+  const worker = fake.Worker.made[0];
+  if (worker === undefined) throw new Error('No worker');
+  worker.emit('message', { type: 'ready' });
+  worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+  expect(service.audioEvent({ id: 1, pageId: 7, event: 'ended' })).toBe('ended');
+  await gate;
+});
+
+it('does not report a late rejected cloud request after cancellation', async () => {
+  const { cloud, service, output } = cloudHarness();
+  const pending = Promise.withResolvers<{ wav: Uint8Array; durationMs: number }>();
+  cloud.synthesize.mockReturnValue(pending.promise);
+  const gate = service.speak('Hello.');
+  service.cancel();
+  await gate;
+  output.status.mockClear();
+  pending.reject(new Error('late'));
+  await settle();
+  expect(output.status).not.toHaveBeenCalled();
+});
+
+it('expires a canceled request that ignores abort, without another status update', async () => {
+  const { cloud, service, output } = cloudHarness();
+  const pending = Promise.withResolvers<{ wav: Uint8Array; durationMs: number }>();
+  cloud.synthesize.mockReturnValue(pending.promise);
+  const gate = service.speak('Hello.');
+  service.cancel();
+  await gate;
+  output.status.mockClear();
+  await vi.advanceTimersByTimeAsync(20_000);
+  expect(output.status).not.toHaveBeenCalled();
+});
+
+it('does not let an idle local worker failure interrupt an active cloud unit', async () => {
+  const output = mock<SpeechOutput>();
+  output.play.mockReturnValue(7);
+  const cloud = mock<ElevenLabsSpeechPort>();
+  const pending = Promise.withResolvers<{ wav: Uint8Array; durationMs: number }>();
+  cloud.synthesize.mockReturnValue(pending.promise);
+  const settings = {
+    enabled: true,
+    provider: 'kokoro' as 'kokoro' | 'elevenlabs',
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: 'voice',
+    elevenLabsSpeed: 1,
+  };
+  const service = new SpeechService({
+    runtimeDirectory: '',
+    storageDirectory: '',
+    localDesktop: true,
+    output,
+    cloud,
+    settings: () => settings,
+  });
+  const localGate = service.speak('Local.');
+  await settle();
+  const worker = fake.Worker.made[0];
+  if (worker === undefined) throw new Error('No worker');
+  worker.emit('message', { type: 'ready' });
+  worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+  await localGate;
+  settings.provider = 'elevenlabs';
+  const cloudGate = service.speak('Cloud.');
+  worker.emit('error', new Error('old local worker stopped'));
+  pending.resolve({ wav: new Uint8Array(44), durationMs: 1000 });
+  await settle();
+  expect(service.audioEvent({ id: 2, pageId: 7, event: 'ended' })).toBe('ended');
+  await cloudGate;
+});
+
+it('resolves the speech gate if cloud service disappears during the preparing callback', async () => {
+  const cloud = mock<ElevenLabsSpeechPort>();
+  const output = mock<SpeechOutput>();
+  const options = {
+    runtimeDirectory: '',
+    storageDirectory: '',
+    localDesktop: true,
+    output,
+    cloud: cloud as ElevenLabsSpeechPort | undefined,
+    settings: () => ({
+      enabled: true,
+      provider: 'elevenlabs' as const,
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: 'voice',
+      elevenLabsSpeed: 1,
+    }),
+  };
+  output.status.mockImplementation(() => {
+    options.cloud = undefined;
+  });
+  const service = new SpeechService(options);
+  await service.speak('Hello.');
+  expect(cloud.synthesize.mock.calls).toHaveLength(0);
+});
+
+it('blocks local speech on a non-glibc host while leaving cloud available', async () => {
+  const cloud = mock<ElevenLabsSpeechPort>();
+  cloud.synthesize.mockResolvedValue({ wav: new Uint8Array(44), durationMs: 1000 });
+  const output = mock<SpeechOutput>();
+  output.play.mockReturnValue(7);
+  const settings = {
+    enabled: true,
+    provider: 'kokoro' as 'kokoro' | 'elevenlabs',
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: 'voice',
+    elevenLabsSpeed: 1,
+  };
+  const service = new SpeechService({
+    runtimeDirectory: '',
+    storageDirectory: '',
+    localDesktop: true,
+    kokoroSupported: false,
+    output,
+    cloud,
+    settings: () => settings,
+  });
+  await service.speak('Local.');
+  expect(fake.Worker.made).toHaveLength(0);
+  settings.provider = 'elevenlabs';
+  const cloudGate = service.speak('Cloud.');
+  await settle();
+  expect(service.audioEvent({ id: 2, pageId: 7, event: 'ended' })).toBe('ended');
+  await cloudGate;
+});
+
+it('uses local defaults for a preference saved before providers existed', async () => {
+  const output = mock<SpeechOutput>();
+  const settings = { enabled: true, provider: 'kokoro' as const, voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 };
+  Reflect.deleteProperty(settings, 'provider');
+  const service = new SpeechService({ runtimeDirectory: '', storageDirectory: '', localDesktop: true, output, settings: () => settings });
+  const gate = service.speak('Local.');
+  await settle();
+  expect(fake.Worker.made).toHaveLength(1);
+  service.cancel();
+  await gate;
+});
+
+it('ignores a stale queued cloud watchdog after its request settles', async () => {
+  const { cloud, service, output } = cloudHarness();
+  const spy = vi.spyOn(globalThis, 'setTimeout');
+  cloud.synthesize.mockResolvedValue({ wav: new Uint8Array(44), durationMs: 1000 });
+  const gate = service.speak('Hello.');
+  const callback: unknown = spy.mock.calls[0]?.[0];
+  await settle();
+  output.status.mockClear();
+  if (!isTimerCallback(callback)) throw new Error('No watchdog');
+  callback();
+  expect(output.status).not.toHaveBeenCalled();
+  service.cancel();
+  await gate;
 });

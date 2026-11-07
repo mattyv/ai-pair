@@ -97,8 +97,15 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
       <label class="settings-check"><input type="checkbox" data-ui="show-terminals"> Show terminals automatically</label>
     </section>
     <section class="settings-section">
-      <h2>Local speech</h2>
+      <h2>Speech</h2>
+      <label class="settings-field">Speech provider
+        <select data-ui="speech-provider">
+          <option value="kokoro">Kokoro (local)</option>
+          <option value="elevenlabs">ElevenLabs (cloud)</option>
+        </select>
+      </label>
       <label class="settings-check"><input type="checkbox" data-ui="speech-enabled"> Speak selected narration automatically</label>
+      <div data-ui="speech-local">
       <label class="settings-field">Voice
         <select data-ui="speech-voice">
           <option value="af_heart">Heart</option>
@@ -117,7 +124,32 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
       </label>
       <p>Optional setup downloads a local voice model of about 94 MB.</p>
       <div class="settings-actions">
-        <button type="button" data-ui="speech-setup" class="soft" disabled>Set up local speech</button>
+        <button type="button" data-ui="speech-setup" class="soft" disabled>Download Kokoro model</button>
+      </div>
+      </div>
+      <div data-ui="speech-cloud" hidden>
+        <p>Selected narration and voice previews are sent to ElevenLabs and use your account credits.
+          Your normal session history stays in Pair.
+          <a href="#" class="url" data-url="https://elevenlabs.io/privacy-policy">Privacy policy</a>.</p>
+        <p>Voice availability depends on your account. Use a key with Text to Speech and Voices read access.</p>
+        <p data-ui="speech-key-status" role="status"></p>
+        <div class="settings-actions">
+          <button type="button" data-ui="speech-key-set" class="soft">Add or replace API key</button>
+          <button type="button" data-ui="speech-key-remove" class="soft">Remove API key</button>
+        </div>
+        <label class="settings-field">Account voice
+          <select data-ui="speech-cloud-voice"><option value="">Choose a voice</option></select>
+        </label>
+        <div class="settings-actions">
+          <button type="button" data-ui="speech-voices-load" class="soft">Load voices</button>
+          <button type="button" data-ui="speech-voices-more" class="soft" hidden>Load more</button>
+        </div>
+        <label class="settings-field">Speech speed
+          <select data-ui="speech-cloud-speed">
+            <option value="0.75">0.75x</option><option value="1" selected>1.0x</option>
+            <option value="1.2">1.2x</option>
+          </select>
+        </label>
       </div>
       <p>Preview: ${SPEECH_PREVIEW_TEXT}</p>
       <div class="settings-actions">
