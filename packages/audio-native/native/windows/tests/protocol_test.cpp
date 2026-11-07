@@ -10,7 +10,7 @@ int main() {
   assert(!parse_command(R"({"version":1,"sequence":0,"type":"open","id":"x","id":"y"})", c));
   assert(!parse_command(R"({"version":1,"sequence":0,"type":"stop","id":"x"})", c));
   assert(!parse_command(R"({"version":1,"sequence":01,"type":"stop"})", c));
-  assert(!parse_command(R"({"version":1,"sequence":0,"type":"open","id":"\ud800"})", c));
+  assert(!parse_command(std::string(R"({"version":1,"sequence":0,"type":"open","id":")") + char(92) + "ud800" + R"("})", c));
   assert(!parse_command(std::string("{\"version\":1,\"sequence\":0,\"type\":\"open\",\"id\":\"") + std::string(513,'a') + "\"}", c));
   std::vector<unsigned char> bytes;
   assert(decode_base64("AAEC/w==", bytes) && bytes == std::vector<unsigned char>({0,1,2,255}));
