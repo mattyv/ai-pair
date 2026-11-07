@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { spawnSync } from "node:child_process"
+import { spawn, spawnSync } from "node:child_process"
 
 // This test enumerates devices and exercises an invalid endpoint only; it plays no audio.
 const binary = process.argv[2]
@@ -49,3 +49,29 @@ for (const badInput of ['{"version":true,"sequence":0,"type":"open","id":"x"}\n'
     ],
   )
 }
+
+// A short command must be processed while the parent keeps the input pipe open.
+const interactive = spawn(binary, ["--play"], { stdio: ["pipe", "pipe", "ignore"] })
+let interactiveOutput = ""
+interactive.stdout.setEncoding("utf8")
+interactive.stdout.on("data", (chunk) => {
+  interactiveOutput += chunk
+})
+const interactiveTimer = setTimeout(() => interactive.kill(), 5000)
+const interactiveClosed = new Promise((resolve, reject) => {
+  interactive.once("error", reject)
+  interactive.once("close", resolve)
+})
+interactive.stdin.write(`${JSON.stringify({ version: 1, sequence: 0, type: "open", id: "ai-pair-missing-device-test-00000000" })}\n`)
+assert.notEqual(await interactiveClosed, 0)
+clearTimeout(interactiveTimer)
+assert.deepEqual(
+  interactiveOutput
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line)),
+  [
+    { version: 1, sequence: 0, type: "failed" },
+    { version: 1, sequence: 1, type: "retired" },
+  ],
+)

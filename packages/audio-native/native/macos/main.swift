@@ -80,10 +80,17 @@ private func list() -> Never {
 // Strict, bounded line framing; the reader stays running while playback is paused.
 private func lines(_ receive: (Data) -> Bool) -> Bool {
   var pending = Data()
+  var buffer = [UInt8](repeating: 0, count: 4096)
   while true {
-    let chunk = try? FileHandle.standardInput.read(upToCount: 4096)
-    guard let chunk, !chunk.isEmpty else { return pending.isEmpty }
-    for byte in chunk {
+    let count = buffer.withUnsafeMutableBytes { bytes in
+      Darwin.read(STDIN_FILENO, bytes.baseAddress, bytes.count)
+    }
+    if count == 0 { return pending.isEmpty }
+    if count < 0 {
+      if errno == EINTR { continue }
+      return false
+    }
+    for byte in buffer.prefix(count) {
       if byte == 10 {
         if !receive(pending) { return false }
         pending.removeAll(keepingCapacity: true)

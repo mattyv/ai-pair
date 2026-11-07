@@ -64,7 +64,7 @@ int list() {
     if (entries.size()+entry.size()+1024>65536) break;
     if (accepted++) entries+=','; entries+=entry; if (id==default_id) found_default=true;
   }
-  std::cout << "{\"version\":1,\"devices\":[" << entries << "],\"defaultId\":" << (found_default ? quote(default_id) : "null") << "}\n"; return std::cout ? 0 : 1;
+  std::cout << "{\"version\":1,\"devices\":[" << entries << "],\"defaultId\":" << (found_default ? quote(default_id) : "null") << "}\n" << std::flush; return std::cout ? 0 : 1;
 }
 class Wasapi : public audio::Backend {
  public:
