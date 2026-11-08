@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mock } from 'vitest-mock-extended';
+import { LOCAL_PROTOCOL_VERSION, LOCAL_REQUEST } from '../src/speech_local_protocol';
 import { installedSpeechModel } from '../src/speech_setup';
 import { speechRuntimeAvailable } from '../src/speech_runtime_status';
 import { SpeechService, type SpeechOutput } from '../src/speech_service';
@@ -82,6 +83,8 @@ class LocalDouble {
       this.phase = 'loading';
     });
     this.port.synthesize.mockImplementation((request) => {
+      // The fake accepts only what the real client's protocol would send.
+      LOCAL_REQUEST.parse({ type: 'synthesize', version: LOCAL_PROTOCOL_VERSION, epoch: 1, ...request });
       const outcome = Promise.withResolvers<LocalSynthesisOutcome>();
       this.calls.push({ request, settle: outcome.resolve, returned: false, canceled: false });
       return outcome.promise;
@@ -249,7 +252,7 @@ describe('SpeechService', () => {
     expect(output.play).not.toHaveBeenCalled();
   });
 
-  it('TruthfulUnavailable: a retired worker ends its unit with a fixed reason and its late output is ignored', async () => {
+  it('a retired worker ends its unit with a fixed reason and a late output changes nothing', async () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
@@ -1538,7 +1541,7 @@ it('NoPausedDispatch: SentencePipeline holds first synthesis while paused during
   await gate;
 });
 
-it('CorrectDelivery: SentencePipeline ignores a stale part result without releasing the current inference', async () => {
+it('SentencePipeline ignores a repeated part result without releasing the current inference', async () => {
   const { service, output } = harness();
   output.parts = true;
   const gate = service.speak('First. Second.');

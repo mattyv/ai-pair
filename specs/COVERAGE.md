@@ -181,14 +181,18 @@ Code goes without a spec for one of these reasons:
 | | `esc`, `codeLink`, `refLink` | Format |
 | `speech_elevenlabs.ts` | cloud transport | `CloudNarration` |
 | `speech_pcm.ts` | bounded PCM conversion and thinking interval | Pure; unit and integration tests |
-| `speech_service.ts` | worker, audio and page lifecycle; pause, cancel, timeouts | `Narration`, `SpeechWorker`, `CloudNarration`, `OutputAdmission`, `OutputHandoff`; timer bounds and local platform checks: unit and integration tests |
+| `speech_service.ts` | worker, audio and page lifecycle; pause, cancel, timeouts | `Narration`, `SpeechWorker`, `WarmSynthesisWorker`, `SpeechTempo`, `SentencePipeline`, `CloudNarration`, `OutputAdmission`, `OutputHandoff`; timer bounds and local platform checks: unit and integration tests |
 | `speech_native_output.ts` | discovery and native process lifecycle | `AudioOutput`; isolated PipeWire integration and unit tests |
 | `speech_output_router.ts` | route reservation and playback ownership | `AudioOutput`, `OutputAdmission`, `OutputHandoff`, `OutputReplacement` |
 | `speech_output_types.ts` | route and device types | Types |
 | `speech_output_preferences.ts` | selection, discovery and ordered persistence | `OutputPreference` |
 | `speech_synthesis.ts`, `speech_waveform.ts` | complete-token and waveform bounds | `ActionValidation` (`TokenBounds`, `PhonemeCoverage`); PCM encoding: Pure |
+| `speech_segments.ts` | sentence planning with exact source ranges | `SentencePipeline`; unit tests |
+| `speech_tempo.ts`, `speech_tempo_pcm.ts` | pitch-preserving time stretch and PCM framing | `SpeechTempo` (ownership, bounds, tail); the signal processing itself: unit tests and synthetic signals, not listening quality |
+| `speech_tempo_client.ts`, `speech_tempo_messages.ts`, `speech_tempo_worker.ts`, `speech_tempo_worker_host.ts` | tempo worker ownership, messages and bootstrap | `SpeechTempo`; unit and real-worker tests |
 | `speech_engine.ts` | `loadSpeechEngine` | Glue: loads the local model, tokenizer and phonemizer; offline worker integration |
-| `speech_worker_host.ts`, `speech_worker.ts` | worker admission, validation and dispatch | `Narration`; worker isolation and concrete messages: unit and integration tests |
+| `speech_local_client.ts` | worker epoch, ownership, cancellation and retirement until exit | `WarmSynthesisWorker`; unit and composed tests |
+| `speech_worker_host.ts`, `speech_worker.ts` | worker admission, validation and dispatch | `WarmSynthesisWorker`; worker isolation and concrete messages: unit and integration tests |
 | `speech_local_protocol.ts`, `speech_types.ts` | schemas and settings types | Types; validated at boundaries |
 | `outside.ts`, `outside_watch.ts` | all | `Outside` |
 | `terminal.ts` | all | `Terminals`, `QuietTerminals`, `TerminalReuse`; typed diagnostic events: `DiagnosticsPrivacy` |

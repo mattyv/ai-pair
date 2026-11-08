@@ -1931,6 +1931,11 @@ violates `IneligibleKeepsReading`; an out-of-range ID violates `TypeOK`.
 
 ### `SpeechWorker`: canceled inference and bounded cleanup
 
+> The `LocalSynthesisClient` of `WarmSynthesisWorker` now owns the worker
+> lifecycle this model describes; this model remains the record of the
+> service-level cleanup it checked, and the client's own invariants are in the
+> `WarmSynthesisWorker` section.
+
 `SpeechWorker.tla` keeps CPU-job ownership after its visible gate is canceled.
 A separate fair watchdog transitions a stuck job to termination, and a new job
 is admitted only after completion or termination. The liveness property
@@ -2526,7 +2531,7 @@ FALSE` models a dispatch that still names the previous unit.
 | `TypeOK` | Sanity check of the declared variable ranges. |
 | `OneEngine` | `LocalSynthesisClient` (`speech_local_client.ts`) spawns one worker per epoch and refuses a second load, a second inference, and any replacement while the retiring worker has not exited. `SpeechWorkerHost` loads once and answers a concurrent request `busy`. Tests: `speech_local_client.test.ts` "OneEngine: ..." (one load, one inference, slot kept until the actual exit whatever `terminate` reports), `speech_worker_host.test.ts` "OneEngine: ...", `speech_service.test.ts` "OneEngine: refuses a new unit while a retired worker has not exited", `speech_local.e2e.test.ts` "NoCanceledResume: ..." (reuse after a canceled inference). |
 | `ValidReady` | The client accepts `ready` only if its capabilities equal the host constants (`LOCAL_CAPABILITIES`) and its epoch is the current one; anything else retires the worker. Tests: `speech_local_client.test.ts` "ValidReady: ...", `speech_local_protocol.test.ts` "accepts ready only with the exact capabilities of the host constants". |
-| `CorrectDelivery` | Results and failures are strict schemas; a stale epoch, unit or part, a duplicate after settlement and a result with no inference owed change nothing, and an oversized or malformed result retires the worker before it is buffered. Tests: `speech_local_client.test.ts` "CorrectDelivery: ...", `speech_worker_host.test.ts` "CorrectDelivery: ...", `speech_local_protocol.test.ts` "accepts a bounded result and rejects an oversized, undersized or malformed one before buffering", `speech_service.test.ts` "CorrectDelivery: SentencePipeline ignores a stale part result ...". |
+| `CorrectDelivery` | Results and failures are strict schemas; a stale epoch, unit or part, a duplicate after settlement and a result with no inference owed change nothing, and an oversized or malformed result retires the worker before it is buffered. Tests: `speech_local_client.test.ts` "CorrectDelivery: ...", `speech_worker_host.test.ts` "CorrectDelivery: ...", `speech_local_protocol.test.ts` "accepts a bounded result and rejects an oversized, undersized or malformed one before buffering". |
 | `NoPausedDispatch` | Pause is the service's: `SpeechService.synthesize` does not dispatch a multi-part unit while paused. Test: `speech_service.test.ts` "NoPausedDispatch: SentencePipeline holds first synthesis while paused during model loading". |
 | `NoReplay` | A request is dispatched once with its own unit and part, and a failed or retired unit is never re-sent. Tests: `speech_local_client.test.ts` "NoReplay: a dispatch names exactly the requested unit and part, once", `speech_service.test.ts` "NoReplay: after a failure the next explicit request sends only its own text". |
 | `NoCanceledResume` | `cancel()` settles the unit's result at once and the discarded result never resumes it; nothing further is posted. Tests: `speech_local_client.test.ts` "NoCanceledResume: ...", `speech_service.test.ts` "NoCanceledResume: SentencePipeline cancels a delayed lookahead on reply and ignores its result" and "NoCanceledResume: a unit canceled during model loading ...", `speech_local.e2e.test.ts` "NoCanceledResume: a canceled inference keeps the worker owned ...". |
@@ -2537,8 +2542,10 @@ FALSE` models a dispatch that still names the previous unit.
 
 Action mapping in the code (comments name the spec and action): `Load`, `Ready`,
 `Dispatch`/`NextPart`, `Result`/`DiscardResult`, `LateResult`, `Cancel`,
-`Retire` and `Exit` in `speech_local_client.ts`; `Load` and `Retire` in
-`speech_service.ts`. The synthesis protocol (`speech_local_protocol.ts`) is
+`Retire` and `Exit` in `speech_local_client.ts`; `Load`, `Retire` and `Cancel` in
+`speech_service.ts`. The model forbids any dispatch while paused; the service
+holds only multi-part units while paused (a single-part unit is dispatched and
+its audio waits), so `NoPausedDispatch` is mapped for multi-part units only. The synthesis protocol (`speech_local_protocol.ts`) is
 transport neutral; the shipped Kokoro engine keeps its Node worker thread.
 
 | Mutation | Breaks |
