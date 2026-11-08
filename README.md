@@ -24,6 +24,17 @@ It adds:
     first sentence can play while one following part is prepared. The complete
     selected text, reading countdown and output device stay fixed for the unit.
     ElevenLabs continues to use one synthesis request per selected narration.
+-   An experimental **Listening speed** setting (0.75, 1, 1.25 or 1.5; default 1)
+    that changes how fast the narration plays without changing its pitch. It is
+    separate from each provider's voice speed and from the reading and code
+    pace, is applied on your computer to the next narration or preview, and
+    never makes another cloud request. At 1 the audio is untouched. The stretch
+    has been checked with synthetic signals only; nobody has validated how
+    speech sounds at 0.75, 1.25 or 1.5, so treat those rates as a trial.
+-   The local Kokoro engine now runs behind one versioned worker protocol. The
+    model loads once and stays loaded between narrations; a canceled or failed
+    narration is never replayed, and a replacement worker waits until the old
+    one has really exited. No new engine, download or key is involved.
 -   Optional ElevenLabs cloud speech, using the same selected narration and
     reading controls. Choose **ElevenLabs** in Settings, add your API key through
     the secure VS Code prompt, load your account voices, choose one and use

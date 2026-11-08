@@ -198,3 +198,29 @@ a supported backend.
 The experiment scripts and raw evidence are temporary local artifacts under
 `/tmp/duck-private/`. All private test processes were cleaned up. No production
 backend or settings capability was added from these rejected approaches.
+
+## Private PipeWire study, 2026-11-08
+
+A loopback virtual sink study ran only on a private PipeWire 1.4.2,
+WirePlumber 0.5.8 and pipewire-pulse stack with null sinks, never on the user's
+audio. Results that held: independent multiplicative gain (a 0.3 duck times a
+60 percent Pulse volume gave 0.3 x 0.216 of the baseline RMS, not the
+`softVolumes` failure), stream volume, mute and balance unchanged and identical
+after a helper kill, fail-open return of eligible streams, explicit-target
+streams never moved, a user move to another output respected, and the
+playback side following a default-sink change only when it has no fixed target.
+
+Eligibility needs a node without `target.object` and no default-metadata
+`target.node` or `target.object` (or -1), and exclusion of AI Pair's own
+stream by process identity. A unique virtual sink name per helper is required:
+a fixed name let a stale persisted WirePlumber target capture a later stream,
+including AI Pair's own speech.
+
+Blocking findings: moving a stream persists a target in the user's WirePlumber
+state and a crash leaves stale entries; a user's concurrent move can be
+overridden in a window of milliseconds; glitch on move is unmeasured; the
+subscribe or poll loop was never built; stock distribution configuration, real
+hardware, Bluetooth, Pulse-only servers, macOS and Windows are untested or have
+no mechanism. The feature remains deferred. The raw scripts and numbers were
+kept under `/tmp/duck-scope` on the build machine and are not part of the
+repository.

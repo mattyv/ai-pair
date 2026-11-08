@@ -266,3 +266,52 @@ Issue discussions and working notes hold the detailed evidence and history.
     actual resulting duration for output bounds. No extra cloud request is
     needed. Offline corpus metrics complement, but do not replace, listening
     validation.
+
+## Speech increments 2 and 3 and the ducking decision, 2026-11-08
+
+-   Implement listening speed as a local overlap-add stretch with
+    correlation-aligned frames, a final frame anchored at the exact output end,
+    and a re-placement around an isolated transient in any source gap the
+    aligned frames skip. Inputs under 3,072 samples (about 128 ms) are returned
+    unchanged: they are within one analysis window of every target length, and
+    real parts are whole sentences. Exact lengths and no sample loss at the
+    anchor are tested with impulse sweeps; this is not a claim of speech
+    quality. The offered rates (0.75, 1.25, 1.5) stay labeled experimental until
+    people have listened to both voices. The transform runs in a one-shot worker
+    that is terminated after each result; cancellation is that termination, so
+    no cooperative cancellation callback exists in the DSP.
+-   A narration whose listening rate is not 1 is refused with the usual "still
+    finishing" message while the previous transform worker has not exited.
+    Units at rate 1 are not delayed by a retiring transform worker.
+-   Move the local Kokoro worker lifecycle into one client over a strict,
+    versioned protocol (init, ready with capabilities, synthesize, result,
+    failure, shutdown) that carries epoch, unit and part. The worker still runs
+    in a Node worker thread; the protocol is transport neutral but no second
+    transport or engine was added. Behavior changes: a malformed or oversized
+    worker result now retires the worker (the shipped engine cannot produce one,
+    so it means the worker is not the shipped code), and a host synthesis error
+    shows one fixed message instead of free worker text. A retired worker holds
+    its slot until its actual exit event; if the platform never reports exit, new
+    narrations are refused until the window reloads, where the old code reopened
+    when termination settled. This follows the approved model, which assumes a
+    fair exit.
+-   Do not ship music ducking in this release. A private PipeWire study
+    (loopback virtual sink, unique sink name, playback following the default
+    sink, ducking by the loopback's own volume) kept stream volume, mute and
+    balance exactly, multiplied independently with user volume (0.3 x 0.216 for
+    a 60 percent Pulse volume), failed open when the helper was killed and
+    ignored explicitly routed streams. It also showed what is not acceptable
+    yet: moving a stream makes WirePlumber persist a routing target in the
+    user's state, a crash leaves stale entries (inert only with unique names),
+    the user's own concurrent move can be overridden in a window of
+    milliseconds with no atomic compare-and-move, audible glitches on move
+    were not measured, the follow-up subscribe loop was never built, and stock
+    distribution configuration, real hardware, Pulse-only servers, macOS and
+    Windows are untested or have no mechanism. Narration must never depend on
+    ducking, so the feature stays deferred rather than shipping a setting that
+    may change the user's routing. Evidence summary:
+    `blueprints/ideas/local-music-ducking.md`.
+-   Delegated implementation used Claude Code (`claude -p`): Sonnet workers with
+    exclusive file ownership wrote code and tests, Fable reviewed the models and
+    sources before they were committed. Reviewer approvals are recorded in the
+    commit history and PR; they are not proofs of listening quality.

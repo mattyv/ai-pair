@@ -6,6 +6,16 @@
     one displayed message, reading clock and concrete output route. Hold unit
     completion until the final playback process retires. ElevenLabs retains
     one synthesis request per narration.
+-   Add an experimental **Listening speed** (0.75 to 1.5, default 1) that changes
+    narration tempo without changing pitch, independently of the provider voice
+    speed, the reading pace and the code pace. It is sampled once per narration,
+    applies to the next narration or preview, needs no extra cloud request, and
+    leaves the audio byte for byte unchanged at 1. Listening quality at other
+    rates has not been validated by people.
+-   Run local Kokoro behind a versioned warm-worker protocol and one client:
+    the model stays loaded between narrations, stale or late worker responses
+    are rejected, a canceled narration is never replayed, and a replacement
+    worker starts only after the previous one has exited.
 
 ## 0.19.0
 
