@@ -1411,7 +1411,7 @@ interrupted head, and fairness of Return makes enabled reports eventual.
 |---|---|
 | `TypeOK` | TypeScript checks types |
 | `Conservation`, `PromptRunReady` | `controller.test.ts`: command result delivery tests; `integration_command_delivery.ts`: real listen and empty step return a command result once while later work plays |
-| `NoQuietWake` | `controller.test.ts`: a completed batch without a command leaves listen pending |
+| `NoQuietWake` | `controller.test.ts`: a completed batch without a command leaves listen pending; `integration_command_delivery.ts`: an empty step waits for later work after quiet completion |
 | `NoEarlyEnd` | `controller.test.ts`: command news does not let end return before later work finishes |
 | `NoEarlyDiscarded` | `controller.test.ts`: command news does not let a discarded step return before the interrupted head |
 | `NoInterruptedReturn` | `controller.test.ts`: command news waits until the interrupted head settles |

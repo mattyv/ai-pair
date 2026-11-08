@@ -88,6 +88,39 @@ export async function commandDeliveryPaths(api: Api): Promise<void> {
       }
       await waitFor(() => vscode.window.terminals.every((terminal) => originalTerminals.has(terminal)), 'test terminals did not close');
     }
+    // A quiet completed batch is not command news: an empty step must wait for later work.
+    traces.length = 0;
+    await controller.start('quiet delivery');
+    const first = await controller.step([{ say: 'The first quiet explanation is still playing.' }]);
+    assert.equal(first.submitted?.status, 'playing');
+    const abort = new AbortController();
+    const queued = controller.step(
+      [{ say: 'The later quiet explanation remains visible while the empty step is waiting. '.repeat(2) }],
+      abort.signal,
+    );
+    await waitFor(() => traces.some((line) => line.startsWith('batch 2 queued:')), 'later quiet batch was not accepted');
+    abort.abort();
+    await assert.rejects(queued, /cancel/i);
+    await waitFor(() => traces.includes('batch 2 playing'), 'later quiet batch did not start');
+    assert.ok(!traces.includes('batch 2 completed'), 'later quiet batch already completed');
+    let returned = false;
+    const empty = controller.step([]).then((report) => {
+      returned = true;
+      return report;
+    });
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 100);
+    });
+    assert.equal(returned, false, 'quiet completion incorrectly woke the empty step');
+    const report = await within(empty, 'quiet batches did not finish', 20_000);
+    assert.deepEqual(
+      report.batches.map((batch) => batch.id),
+      [1, 2],
+    );
+    assert.ok(report.batches.every((batch) => batch.status === 'completed' && batch.runs === undefined));
+    await controller.end();
+    console.log('CommandDelivery NoQuietWake: empty step waited for later work after quiet completion');
+
     console.log('CommandDelivery: listen and empty step deliver command output once while later work plays');
   } catch (error) {
     console.error('CommandDelivery trace:', JSON.stringify(traces));
