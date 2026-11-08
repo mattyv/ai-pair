@@ -12,7 +12,7 @@ import { speechRuntimeAvailable } from '../../vscode/src/speech_runtime_status';
 import { localSpeechPlatform } from '../../vscode/src/speech_platform';
 import { SpeechService } from '../../vscode/src/speech_service';
 import { SpeechTempoClient } from '../../vscode/src/speech_tempo_client';
-import { installedSpeechModel, setupSpeech } from '../../vscode/src/speech_setup';
+import { installedSpeechModel, setupSpeech, speechModelStatus } from '../../vscode/src/speech_setup';
 import { speechListeningRate, type SpeechSettings } from '../../vscode/src/speech_types';
 import { CompanionOutput } from './companion_output';
 
@@ -343,6 +343,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     validCloudVoice: (id) => catalog.contains(id),
     supported: () => platform && runtimeAvailable,
     installed: async () => (await installedSpeechModel(context.globalStorageUri.fsPath)) !== undefined,
+    modelStatus: () => speechModelStatus(context.globalStorageUri.fsPath),
     setup: () => setupSpeech(context.globalStorageUri.fsPath),
     preview: () => {
       previewProvider = settings.get().provider;

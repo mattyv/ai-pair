@@ -90,6 +90,7 @@ const ui = {
   speechSpeed: $('speech-speed', HTMLSelectElement),
   speechListeningSpeed: $('speech-listening-speed', HTMLSelectElement),
   speechSetup: $('speech-setup', HTMLButtonElement),
+  speechModelStatus: $('speech-model-status', HTMLElement),
   speechPreview: $('speech-preview', HTMLButtonElement),
   speechStop: $('speech-stop', HTMLButtonElement),
   speechSettingsStatus: $('speech-settings-status', HTMLElement),
@@ -1147,6 +1148,9 @@ function handle(message: ToPanel): void {
       syncSpeechProvider();
       return;
     }
+    case 'speechModelStatus':
+      ui.speechModelStatus.textContent = `${message.value.download === 'missing' ? 'Not downloaded' : message.value.download === 'unknown' ? 'Download status unknown' : message.value.verified ? 'Downloaded and verified' : 'Downloaded; verification failed'}. Local path: ${message.value.path}. Pinned source: ${message.value.source} (revision ${message.value.revision}).`;
+      return;
     case 'speechSetupState':
       ui.speechSetup.disabled = message.pending || !speechSupported;
       syncSpeechProvider();

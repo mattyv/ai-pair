@@ -90,6 +90,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `DiagnosticsPrivacy_Speech.cfg` | speech-only projection without a session | holds | 38 |
 | `Timeline.cfg` | `MaxSleeps = 3` sleeps, holds, and a second sleep while one is pending | holds | 864 |
 | `PlaybackPreference.cfg` | three modes and two independent pace settings | holds | 36 |
+| `ModelStatus.cfg` | installed and missing model, verification and changes | holds | 4 |
 | `SpeechSetup.cfg` | two files; install, cancellation and rollback outcomes | holds | 42 |
 | `SpeechPage.cfg` | two page identities and two narration units | holds | 28 |
 | `CloudNarration.cfg` | two generations, provider and credential epochs | holds | 59 |
@@ -2653,3 +2654,17 @@ TLC checked `RecoveryBatchIds.cfg` with `MaxId = 3`: 11 generated and 8
 distinct states, no violation. Setting `PreserveCounter` to `FALSE` makes
 `Unique` fail after one allocation and a reload. Disabling `Allocate` while
 retaining its fairness condition makes `Progress` fail.
+
+## Model status
+
+`ModelStatus` abstracts verification and external changes to the installed
+model. A check reports verified only for a verified installation; a change
+invalidates the displayed result. The real implementation reports the result
+of a check, not a continuously watched guarantee.
+
+| Property | Code test |
+|---|---|
+| `TypeOK` | `reports the pinned source, local path and verification result` |
+| `VerifiedIsInstalled` | `reports the pinned source, local path and verification result` |
+| `StatusProgress` | `reports the pinned source, local path and verification result` |
+

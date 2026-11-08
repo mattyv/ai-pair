@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import type { Controller, PanelEvent, Ref } from '@ai-pair/core';
 import { EXCERPT_SCHEMA, type Turn } from '@ai-pair/protocol';
 import type { Calibration } from '../src/calibration';
-import { NarrationPanel, type Starter } from '../src/panel';
+import { NarrationPanel, type PanelWiring, type Starter } from '../src/panel';
 import { panelHtml, SPEEDS } from '../src/panel_html';
 import type { FromPanel, ToPanel } from '../src/panel_messages';
 
@@ -136,6 +136,7 @@ interface Harness {
     outputSelect: ReturnType<typeof vi.fn>;
     supported: ReturnType<typeof vi.fn<() => boolean>>;
     installed: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
+    modelStatus: ReturnType<typeof vi.fn<PanelWiring['speech']['modelStatus']>>;
     setup: ReturnType<typeof vi.fn<() => Promise<void>>>;
     preview: ReturnType<typeof vi.fn<() => Promise<void>>>;
     stop: ReturnType<typeof vi.fn<() => void>>;
@@ -207,6 +208,7 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
     validCloudVoice: vi.fn<(id: string) => boolean>(),
     supported: vi.fn(() => true),
     installed: vi.fn<() => Promise<boolean>>().mockResolvedValue(false),
+    modelStatus: vi.fn<PanelWiring['speech']['modelStatus']>().mockResolvedValue({ path: '/model', source: 'https://example.test', revision: 'abc', verified: false, download: 'missing' }),
     setup: vi.fn<() => Promise<void>>().mockResolvedValue(),
     preview: vi.fn<() => Promise<void>>().mockResolvedValue(),
     stop: vi.fn<() => void>(),
@@ -619,6 +621,7 @@ describe('receive', () => {
       { type: 'codePlayback', value: 'typing' },
       { type: 'selection', ref: REF },
       { type: 'timings', tipDelayMs: 7, tipWarmMs: 8 },
+      { type: 'speechModelStatus', value: { path: '/model', source: 'https://example.test', revision: 'abc', verified: false, download: 'missing' } },
       { type: 'speechSetupState', pending: false, message: 'Local speech is not set up.' },
       { type: 'canStart', value: true },
     ]);

@@ -1,3 +1,4 @@
+import type { SpeechModelStatus } from './speech_setup';
 // The narration panel: a webview view in the secondary side bar. See "Narration panel" in DESIGN.md.
 
 import * as vscode from 'vscode';
@@ -66,6 +67,7 @@ export interface PanelWiring {
     settings: { get: () => SpeechSettings; set: (value: SpeechSettings) => void };
     supported: () => boolean;
     installed: () => Promise<boolean>;
+    modelStatus: () => Promise<SpeechModelStatus>;
     setup: () => Promise<void>;
     preview: () => Promise<void>;
     stop: () => void;
@@ -344,6 +346,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       ...(supported ? {} : { reason: 'unsupported' }),
     });
     this.send({ type: 'speechSupport', supported });
+    void this.wiring.speech.modelStatus().then((value) => {
+      if (this.speechPageId === pageId && this.speechSetupCheck === check) this.send({ type: 'speechModelStatus', value });
+    }).catch(() => {});
     if (supported) {
       void this.wiring.speech.installed().then(
         (installed) => {
@@ -542,6 +547,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
           () => {
             this.wiring.speech.diagnostic({ kind: 'speech', event: 'setup', phase: 'ready', provider: 'kokoro' });
             this.send({ type: 'speechSetupState', pending: false, message: 'Local speech is ready.' });
+            this.refreshSpeechSupport();
           },
           () => {
             this.wiring.speech.diagnostic({ kind: 'speech', event: 'setup', phase: 'failed', provider: 'kokoro', reason: 'unknown' });

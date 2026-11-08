@@ -3,6 +3,7 @@
 import type { CodePlayback, PanelEvent, Ref } from '@ai-pair/core';
 import type { CalibrationView } from './calibration';
 import type { SpeechSettings } from './speech_types';
+import type { SpeechModelStatus } from './speech_setup';
 import type { CatalogView } from './speech_catalog';
 import type { OutputChoice } from './speech_output_types';
 import type { OutputPreferenceView } from './speech_output_preferences';
@@ -62,6 +63,7 @@ export type ToPanel =
   | { type: 'selection'; ref: Ref | undefined }
   | { type: 'speechPage'; pageId: number }
   | { type: 'speechSupport'; supported: boolean }
+  | { type: 'speechModelStatus'; value: SpeechModelStatus }
   | { type: 'speechCloudSupport'; supported: boolean }
   | { type: 'speechSettings'; value: SpeechSettings }
   | { type: 'speechOutputCatalog'; value: OutputPreferenceView }

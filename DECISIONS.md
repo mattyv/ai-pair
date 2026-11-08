@@ -242,6 +242,14 @@ Issue discussions and working notes hold the detailed evidence and history.
     extension bundle lacked the current post-interruption anchor guard. This does
     not establish the host's version or what caused any particular editing incident.
 
+## Model status, 2026-11-08
+
+-   Show the model's fixed local path, upstream revision and source in speech
+    settings. Verify every pinned asset with the installer's existing size and
+    SHA-256 checks before labeling it verified. A directory may exist but fail
+    verification; an inaccessible directory has unknown download status. The
+    result describes the last check and does not promise later file integrity.
+
 ## Speech follow-up implementation, 2026-11-08
 
 -   Implement the authorized speech improvements in order: bounded Kokoro

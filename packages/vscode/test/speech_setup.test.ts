@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/require-await, unicorn/no-null -- Async and Response mocks match the real APIs. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { installedSpeechModel, setupSpeech } from '../src/speech_setup';
+import { installedSpeechModel, setupSpeech, speechModelStatus } from '../src/speech_setup';
 
 const fakes = vi.hoisted(() => ({
   files: new Map<string, Uint8Array>(),
@@ -64,7 +64,8 @@ vi.mock('node:fs/promises', () => ({
   stat: vi.fn(async (file: string) => {
     fakes.statHook?.(file);
     const data = fakes.files.get(file);
-    if (data === undefined) throw new Error('missing');
+    if (data === undefined && [...fakes.files.keys()].some((entry) => entry.startsWith(`${file}/`))) return { size: 0, isFile: () => false };
+    if (data === undefined) throw Object.assign(new Error('missing'), { code: 'ENOENT' });
     return { size: data.length, isFile: () => !fakes.invalidFile };
   }),
   open: vi.fn(async (file: string) => ({
@@ -115,6 +116,18 @@ function download(): void {
 }
 
 describe('speech setup', () => {
+  it('reports the pinned source, local path and verification result', async () => {
+    expect(await speechModelStatus('/storage')).toEqual({
+      path: '/storage/speech/revision', source: 'https://huggingface.co/fixed/revision',
+      revision: 'revision', verified: false, download: 'missing',
+    });
+    download();
+    await setupSpeech('/storage');
+    expect(await speechModelStatus('/storage')).toMatchObject({ verified: true, download: 'installed' });
+    fakes.files.set('/storage/speech/revision/config.json', new TextEncoder().encode('broken'));
+    expect(await speechModelStatus('/storage')).toMatchObject({ verified: false, download: 'installed' });
+  });
+
   it('downloads and verifies all fixed assets before exposing the model directory', async () => {
     download();
     expect(await installedSpeechModel('/storage')).toBeUndefined();

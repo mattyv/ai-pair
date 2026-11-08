@@ -1700,6 +1700,14 @@ it('shows Speaking after the reading ring ends while the voice is still playing'
   expect(text('status-text')).toBe('Speaking');
 });
 
+it('shows the local model status, path and pinned source', () => {
+  send({ type: 'speechModelStatus', value: { path: '/storage/model', source: 'https://example.test/model', revision: 'abc', verified: true, download: 'installed' } });
+  expect(text('speech-model-status')).toContain('verified');
+  expect(text('speech-model-status')).toContain('/storage/model');
+  expect(text('speech-model-status')).toContain('https://example.test/model');
+  expect(text('speech-model-status')).toContain('abc');
+});
+
 it('sends explicit setup, preview, stop and validated speech preferences', () => {
   send({ type: 'speechPage', pageId: 1 });
   send({ type: 'speechSupport', supported: true });

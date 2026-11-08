@@ -133,7 +133,7 @@ vi.mock('../../vscode/src/speech_output_preferences', () => ({
   },
 }));
 vi.mock('../../vscode/src/speech_runtime_status', () => ({ speechRuntimeAvailable: fakes.runtime }));
-vi.mock('../../vscode/src/speech_setup', () => ({ installedSpeechModel: fakes.installed, setupSpeech: fakes.setup }));
+vi.mock('../../vscode/src/speech_setup', () => ({ installedSpeechModel: fakes.installed, speechModelStatus: vi.fn().mockResolvedValue({ path: '/model', source: 'https://example.test', revision: 'abc', verified: false, download: 'missing' }), setupSpeech: fakes.setup }));
 vi.mock('../src/companion_output', () => ({
   CompanionOutput: class {
     constructor(wiring: NonNullable<typeof fakes.outputWiring>) {

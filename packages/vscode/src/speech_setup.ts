@@ -61,15 +61,40 @@ async function verified(directory: string): Promise<boolean> {
   }
 }
 
+/** Identifies a missing file error without exposing paths or exception text. */
+function missing(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
+}
+
+/** The pinned model location and its latest verification result. */
+export interface SpeechModelStatus {
+  path: string;
+  source: string;
+  revision: string;
+  verified: boolean;
+  download: 'installed' | 'missing' | 'unknown';
+}
+
+/** Reports the fixed model location, pinned source, and current verification result. */
+export async function speechModelStatus(storageDirectory: string): Promise<SpeechModelStatus> {
+  const directory = path.join(storageDirectory, 'speech', MODEL_REVISION);
+  // specs/ModelStatus.tla, Check: report verification only after checking every asset.
+  const isVerified = await verified(directory);
+  let download: SpeechModelStatus['download'] = 'installed';
+  if (!isVerified) {
+    try {
+      await fs.stat(directory);
+    } catch (error) {
+      download = missing(error) ? 'missing' : 'unknown';
+    }
+  }
+  return { path: directory, source: MODEL_URL, revision: MODEL_REVISION, verified: isVerified, download };
+}
+
 /** Returns the fixed installed model path only when every asset verifies. */
 export async function installedSpeechModel(storageDirectory: string): Promise<string | undefined> {
   const directory = path.join(storageDirectory, 'speech', MODEL_REVISION);
   return (await verified(directory)) ? directory : undefined;
-}
-
-/** Identifies a missing file error without exposing paths or exception text. */
-function missing(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
 }
 
 /** Downloads a fixed asset to staging while enforcing its exact size and digest. */

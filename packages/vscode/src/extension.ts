@@ -23,7 +23,7 @@ import { SpeechCredentials } from './speech_credentials';
 import { SpeechCatalog } from './speech_catalog';
 import { SpeechOutputPreferences } from './speech_output_preferences';
 import { ElevenLabsClient } from './speech_elevenlabs';
-import { installedSpeechModel, setupSpeech } from './speech_setup';
+import { installedSpeechModel, setupSpeech, speechModelStatus } from './speech_setup';
 import { speechRuntimeAvailable } from './speech_runtime_status';
 import { localSpeechPlatform } from './speech_platform';
 import { speechListeningRate, type SpeechSettings } from './speech_types';
@@ -433,6 +433,7 @@ export function activate(context: vscode.ExtensionContext): Api {
           });
           return available;
         },
+        modelStatus: () => speechModelStatus(context.globalStorageUri.fsPath),
         setup: () => setupSpeech(context.globalStorageUri.fsPath),
         preview: () => {
           previewProvider = speechSettings.get().provider;
