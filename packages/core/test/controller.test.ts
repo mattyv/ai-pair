@@ -35,6 +35,9 @@ const fakes = vi.hoisted(() => {
     private abort = new AbortController();
     readonly pause = vi.fn();
     readonly resume = vi.fn();
+    readonly finish = vi.fn();
+    readonly hold = vi.fn();
+    readonly release = vi.fn();
     readonly sleep = vi.fn(() => Promise.resolve(true));
     readonly interrupt = vi.fn(() => {
       this.isInterrupted = true;
@@ -57,9 +60,8 @@ const fakes = vi.hoisted(() => {
   /** The Player, faked: it records its scene and stage, plays each batch as a test says, and shows no cursor. */
   class FakePlayer {
     reading = false;
-    readonly finishReading = vi.fn();
-    readonly holdReading = vi.fn();
-    readonly releaseReadingHold = vi.fn();
+    readonly isCurrentReading = vi.fn<(id: number) => boolean>();
+    readonly hasCurrentReading = vi.fn<() => boolean>();
     commandRunning = false;
     readonly play = vi.fn((id: number): Promise<{ result: BatchResult; sightings: Sighting[]; editedFiles: string[] }> =>
       Promise.resolve({ result: { id, status: 'completed' }, sightings: [], editedFiles: [] }),
@@ -1635,27 +1637,26 @@ describe('reports', () => {
 });
 
 describe('finish reading', () => {
-  it('IneligibleKeepsReading: forwards an ID only in an active unpaused agent turn', async () => {
+  it('IneligibleKeepsReading: finishes only the current reading in an active unpaused agent turn', async () => {
     const idle = harness();
     idle.controller.finishReading(1);
     const h = await started();
     const current = player();
+    const clock = timeline();
+    current.isCurrentReading.mockImplementation((id) => id === 42);
     h.controller.finishReading(42);
-    expect(current.finishReading).toHaveBeenCalledExactlyOnceWith(42);
+    expect(clock.finish).toHaveBeenCalledOnce();
     h.controller.pause();
     h.controller.finishReading(42);
-    expect(current.finishReading).toHaveBeenCalledTimes(1);
     h.controller.resume();
     h.controller.takeTurn();
     h.controller.finishReading(42);
-    expect(current.finishReading).toHaveBeenCalledTimes(1);
     h.controller.handBack();
     h.controller.disconnect();
     h.controller.finishReading(42);
-    expect(current.finishReading).toHaveBeenCalledTimes(1);
     h.controller.endSession();
     h.controller.finishReading(42);
-    expect(current.finishReading).toHaveBeenCalledTimes(1);
+    expect(clock.finish).toHaveBeenCalledOnce();
   });
 });
 
@@ -1665,15 +1666,56 @@ it('releases an existing reading hold even after a separate pause, but rejects n
   idle.controller.releaseReadingHold();
   const h = await started();
   const current = player();
+  const clock = timeline();
+  current.isCurrentReading.mockReturnValue(true);
+  current.hasCurrentReading.mockReturnValue(true);
   h.controller.holdReading(42, true);
   h.controller.pause();
   h.controller.holdReading(42, true);
   h.controller.holdReading(42, false);
   h.controller.releaseReadingHold();
-  expect(current.holdReading.mock.calls).toEqual([
-    [42, true],
-    [42, false],
-  ]);
-  expect(current.releaseReadingHold).toHaveBeenCalledOnce();
+  expect(clock.hold).toHaveBeenCalledOnce();
+  expect(clock.release).toHaveBeenCalledTimes(2);
   expect(h.controller.isPaused).toBe(true);
 });
+
+it('ScopedHold: controls only the current reading and releases while globally paused', async () => {
+  const h = await started();
+  const current = player();
+  const clock = timeline();
+  current.isCurrentReading.mockImplementation((id) => id === 42);
+  current.hasCurrentReading.mockReturnValue(true);
+  h.controller.finishReading(41);
+  h.controller.holdReading(41, true);
+  expect(clock.finish).not.toHaveBeenCalled();
+  expect(clock.hold).not.toHaveBeenCalled();
+  h.controller.finishReading(42);
+  h.controller.holdReading(42, true);
+  expect(clock.finish).toHaveBeenCalledOnce();
+  expect(clock.hold).toHaveBeenCalledOnce();
+  h.controller.pause();
+  h.controller.holdReading(42, true);
+  h.controller.holdReading(42, false);
+  h.controller.releaseReadingHold();
+  expect(clock.hold).toHaveBeenCalledOnce();
+  expect(clock.release).toHaveBeenCalledTimes(2);
+  expect(h.controller.isPaused).toBe(true);
+});
+
+it.each(['programmer', 'suspended', 'ended'] as const)(
+  'releases a matching reading in the %s state while rejecting new holds',
+  async (state) => {
+    const h = await started();
+    const current = player();
+    const clock = timeline();
+    current.isCurrentReading.mockImplementation((id) => id === 42);
+    if (state === 'programmer') h.controller.takeTurn();
+    if (state === 'suspended') h.controller.disconnect();
+    if (state === 'ended') h.controller.endSession();
+    h.controller.holdReading(42, true);
+    h.controller.holdReading(41, false);
+    h.controller.holdReading(42, false);
+    expect(clock.hold).not.toHaveBeenCalled();
+    expect(clock.release).toHaveBeenCalledOnce();
+  },
+);

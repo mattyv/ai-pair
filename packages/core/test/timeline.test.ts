@@ -134,9 +134,6 @@ describe('timeline', () => {
 
 describe('instant', () => {
   it('never waits, and is never interrupted', async () => {
-    instant.hold();
-    instant.release();
-    instant.finish();
     expect(await instant.sleep(1000)).toBe(true);
     expect(instant.isInterrupted).toBe(false);
     expect(instant.signal.aborted).toBe(false);

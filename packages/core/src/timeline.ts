@@ -1,14 +1,11 @@
 // Delays for playback that can be paused, and interrupted for good.
 
 /** What playback waits with. */
-export type Pacing = Pick<Timeline, 'sleep' | 'finish' | 'hold' | 'release' | 'isInterrupted' | 'signal'>;
+export type Pacing = Pick<Timeline, 'sleep' | 'isInterrupted' | 'signal'>;
 
 /** No waiting at all, and never interrupted. */
 export const instant: Pacing = {
   sleep: () => Promise.resolve(true),
-  finish: () => {},
-  hold: () => {},
-  release: () => {},
   isInterrupted: false,
   signal: new AbortController().signal,
 };

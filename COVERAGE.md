@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: integration, 2026-11-07.
+Last updated: css, 2026-11-08.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -214,6 +214,7 @@ Last updated: integration, 2026-11-07.
 | `packages/vscode/test/editor.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/extension.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/integration.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/vscode/test/integration_code_playback.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/integration_paths.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/launcher.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/output.test.ts` | TypeScript | test | test | test | test | test | test |

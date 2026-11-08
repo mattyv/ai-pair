@@ -66,6 +66,8 @@ export async function codePlaybackPaths(api: Api, root: string): Promise<void> {
       assert.notEqual(firstId, undefined, `${mode}: no code reading event`);
       if (firstId === undefined) throw new Error('Missing code reading ID');
       if (mode === 'lines') {
+        controller.finishReading(firstId + 1);
+        controller.holdReading(firstId + 1, true);
         controller.holdReading(firstId, true);
         const document = await vscode.workspace.openTextDocument(filename);
         const heldText = document.getText();
@@ -75,7 +77,12 @@ export async function codePlaybackPaths(api: Api, root: string): Promise<void> {
         await sleep(800);
         assert.equal(document.getText(), heldText, 'a held reading must not advance to the next code group');
         assert.equal(done, false, 'playback must remain unsettled during the hold');
+        controller.pause();
         controller.holdReading(firstId, false);
+        await sleep(800);
+        assert.equal(document.getText(), heldText, 'releasing a hold must not release the separate pause');
+        assert.equal(done, false, 'playback must remain unsettled while globally paused');
+        controller.resume();
         controller.holdReading(firstId, true);
         controller.releaseReadingHold();
       }

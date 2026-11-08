@@ -640,8 +640,8 @@ away (`editor.ts`).
 | Spec | Code |
 |---|---|
 | `Sleep`, `Fire` | `sleep(ms)` and its timer |
-| `FinishEarly` | `finish()` completes an armed sleep without interrupting playback |
-| `Hold`, `Release` | `hold()` freezes the remaining delay; `release()` resumes only if globally unpaused |
+| `FinishEarly` | `Controller.finishReading` checks the live player's current reading ID, then the live `Timeline.finish()` completes that sleep without interrupting playback |
+| `Hold`, `Release` | `Controller.holdReading` checks the live player's current reading ID, then the live `Timeline.hold()` or `Timeline.release()` freezes or resumes the delay; release respects a separate global pause |
 | `Pause`, `Resume` | `Controller.pause(reason)` with `Timeline.pause()`; `Controller.resume(reason)`, or with no reason all of them, then `Timeline.resume()` |
 | `Interrupt`, `Reset` | `interrupt()`; `reset()` for the next batch |
 | `SleepAgain`, `FireReplaced` | `sleep(ms)` with a sleep pending, which no caller makes; the replaced sleep's timer in `arm`, which leaves `sleeping` alone (#174) |
@@ -1894,15 +1894,16 @@ leave it stale on reload violate `TypeOK`, `ShowsRunning`, and
 ### `ReadingSkip`: finishing a message's reading delay
 
 The panel sends an ID for the selected message countdown. The controller checks
-the session and pause state, and the Player matches the ID before the timeline
-finishes its active sleep. IDs absent from older replay events do not enable the
-control. The model abstracts the timeline to one pending countdown.
+the session and pause state, queries the live Player for the current ID, then
+asks the session Timeline to finish its active sleep. IDs absent from older
+replay events do not enable the control. The model abstracts the timeline to
+one pending countdown.
 
 | Spec | Code |
 |---|---|
 | `Start`, `Finish` | a `say` starts and ends its reading delay |
 | `ChangeContext` | pause, turn or session suspension changes |
-| `Click` | the panel request and Controller/Player guards |
+| `Click` | the panel request, Controller guards and live Player identity query before the Timeline operation |
 
 Each property was checked by a mutation in a temporary model: accepting the
 wrong ID or an explicit pause violates `OnlyCurrent`; ignoring an eligible
@@ -1912,7 +1913,7 @@ violates `IneligibleKeepsReading`; an out-of-range ID violates `TypeOK`.
 | Invariant | Test |
 |---|---|
 | `TypeOK` | The TypeScript compiler checks types |
-| `OnlyCurrent` | `player.test.ts`: OnlyCurrent: only finishes the currently pending say and rejects stale IDs |
+| `OnlyCurrent` | `controller.test.ts`: only the current live reading ID can finish the session Timeline |
 | `EligibleFinishes`, `IneligibleKeepsReading` | `session.e2e.test.ts`: EligibleFinishes, IneligibleKeepsReading: finishes the requested delay without lifting a user pause |
 | `IneligibleKeepsReading` | `controller.test.ts`: IneligibleKeepsReading: forwards an ID only in an active unpaused agent turn |
 
@@ -1951,13 +1952,20 @@ clears the matching hold even if another pause arose meanwhile; it never clears
 that separate pause. Mutations accepting a stale ID, clearing global pause,
 ignoring eligible holds, or refusing a matching release while paused violate
 `StaleDoesNothing`, `ReleaseKeepsPause`, `EligibleHold`, and `EligibleRelease`.
-An unscoped hold violates `ScopedHold`.
+An unscoped hold violates `ScopedHold`. The player exposes the current reading
+identity; the controller applies matching live hold, release and finish to the
+session's `Timeline`. Only a new hold checks ended, suspended, turn and global
+pause eligibility. A matching release may still clear the local hold while any
+of those states apply, and `Timeline.release` preserves a separate global pause.
+The rehearsal has an immediate pacing clock and no programmer-addressable
+reading controls. Stale page-disposal safety is enforced separately by the
+panel's page-identity guard; a current-reading query alone does not establish it.
 
 | Invariant | Test |
 |---|---|
 | `TypeOK` | The TypeScript compiler checks types |
-| `ScopedHold`, `StaleDoesNothing`, `EligibleHold` | `player.test.ts`: ScopedHold, StaleDoesNothing, EligibleHold: holds only the matching reading timer |
-| `ReleaseKeepsPause`, `EligibleRelease` | `timeline.test.ts`: ReleaseKeepsPause, EligibleRelease: does not release a separate playback pause when the hold ends |
+| `ScopedHold`, `StaleDoesNothing`, `EligibleHold` | `controller.test.ts`: matching live reading IDs alone accept eligible holds; `integration_code_playback.ts`: held real code reading remains incomplete and unsettled |
+| `ReleaseKeepsPause`, `EligibleRelease` | `controller.test.ts`: matching release is forwarded even while globally paused; `timeline.test.ts`: ReleaseKeepsPause, EligibleRelease: does not release a separate playback pause when the hold ends |
 
 ### `ReadingGesture`: binding a press to its countdown
 
@@ -2067,7 +2075,7 @@ or the group bounds (the corresponding action property), or disable insertion
 |---|---|
 | `TypeOK` | TypeScript checks the corresponding code types. |
 | `PrefixExact` | `typing.test.ts`: PrefixExact: groups complete lines without losing indentation or quote atoms; `player.test.ts`: PrefixExact: returns only the suffix when interrupted during reading. |
-| `CurrentCountdown`, `RejectedKeepsCountdown` | `player.test.ts`: CurrentCountdown and RejectedKeepsCountdown: scopes finish and hold to the active code ID. |
+| `CurrentCountdown`, `RejectedKeepsCountdown` | `controller.test.ts`: ScopedHold: controls only the current reading and releases while globally paused; `integration_code_playback.ts`: holds and finishes real grouped-code readings. |
 | `PausedBlocksInsert` | `session.e2e.test.ts`: PausedBlocksInsert: a paused code countdown blocks the next group. |
 | `ReadingBlocksInsert` | `session.e2e.test.ts`: ReadingBlocksInsert: interrupts a code reading pause with the exact suffix. |
 | `InterruptedBlocksInsert` | `player.test.ts`: PrefixExact: returns only the suffix when interrupted during reading. |
