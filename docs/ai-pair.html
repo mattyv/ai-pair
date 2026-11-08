@@ -35478,7 +35478,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                   },
                   {
                     id: "update-20261106-architecture-controller",
-                    text: "Playback fences a batch to its declared file. After edited files finish, diagnostics are advisory: VS Code errors can be stale, and Python syntax is checked with system python3, which can differ from the project interpreter.",
+                    text: "Playback fences a batch to its declared file. After edited files finish, diagnostics are advisory: VS Code errors are snapshots whose freshness is not confirmed, and Python syntax is checked with system python3, which can differ from the project interpreter.",
                     ts: 0,
                   },
                 ],
@@ -36172,7 +36172,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                   },
                   {
                     id: "update-20261106-batch-rehearsal-and-playback-finish",
-                    text: "Edited files are checked after playback. Editor diagnostics and the separate Python syntax check are advisory and can be unavailable or stale; neither is a grammar guarantee for structural newline.",
+                    text: "Edited files are checked after playback. Editor diagnostics are snapshots whose freshness is not confirmed; they and the separate Python syntax check are advisory and can be unavailable or stale; neither is a grammar guarantee for structural newline.",
                     ts: 0,
                   },
                 ],
@@ -38303,8 +38303,8 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
               ],
               edges: [
                 { from: "agent", to: "server", label: "start tool call with task and working directory" },
-                { from: "server", to: "server", label: "collect candidate folders: given cwd, harness roots, relay cwd" },
-                { from: "server", to: "link", label: "locate window for the first folder that is open" },
+                { from: "server", to: "server", label: "validate explicit cwd; otherwise collect harness roots and relay cwd" },
+                { from: "server", to: "link", label: "locate explicit cwd only, or first discovered folder that is open" },
                 { from: "link", to: "disc", label: "read discovery files, validate against schema, keep windows with live pid" },
                 { from: "disc", to: "link", label: "windows with port and token, best match first" },
                 { from: "server", to: "link", label: "resolve workspace folder and root of best window" },
@@ -40077,7 +40077,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 editorts: [
                   {
                     id: "update-20261106-vscode-integration-editorts",
-                    text: "Collects advisory VS Code diagnostics and a separate system-python3 syntax check after edits. The system interpreter can differ from the project interpreter; stale or unavailable checks are reported.",
+                    text: "Collects advisory VS Code diagnostic snapshots of unconfirmed freshness and a separate system-python3 syntax check after edits. The system interpreter can differ from the project interpreter; stale or unavailable checks are reported.",
                     ts: 0,
                   },
                 ],
