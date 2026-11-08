@@ -29,6 +29,7 @@ import { runLegacySpeechPaths } from './integration_legacy_speech_paths';
 import { installTerminalCleanup } from './integration_terminal_cleanup';
 import { playerFaults } from './integration_player_faults';
 import { exerciseStartup } from './integration_startup_paths';
+import { modelStatusPaths } from './integration_model_status';
 import { invalidCalibration } from './integration_invalid_calibration';
 import { badSpeechSettings } from './integration_bad_speech_settings';
 
@@ -239,6 +240,7 @@ export async function run(): Promise<void> {
   }
   assert.ok(isApi(exported), 'the extension exported something other than its Api');
   const api = exported;
+  await modelStatusPaths();
   const folder = vscode.workspace.workspaceFolders?.[0];
   assert.ok(folder, 'no workspace folder is open');
   const root = folder.uri.fsPath;

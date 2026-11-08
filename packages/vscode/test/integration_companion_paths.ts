@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import { localSpeechReport } from '@ai-pair/protocol';
 import type { Api } from '../src/extension';
 import { prepareRecovery, verifyRecovery } from './integration_recovery_restart';
+import { unavailableSpeechReminder } from './integration_speech_reminder';
 
 async function until(condition: () => boolean, description: string): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt++) {
@@ -39,6 +40,7 @@ export async function run(): Promise<void> {
       'the workspace did not restore the visible session history',
     );
     await verifyRecovery(api);
+    await unavailableSpeechReminder(api);
     await api.controller.end();
     console.log('the restarted companion restored the suspended session and its visible history');
     return;
