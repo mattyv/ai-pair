@@ -2540,12 +2540,13 @@ FALSE` models a dispatch that still names the previous unit.
 | `CancellationProgress` | A canceled inference either returns and is discarded, or the watchdog retires the worker. Test: `speech_local_client.test.ts` "CancellationProgress: retires a canceled inference that never returns ...". |
 | `RetirementProgress` | A retired worker returns the slot to cold exactly once, at its exit. Test: `speech_local_client.test.ts` "RetirementProgress: ...". |
 
-Action mapping in the code (comments name the spec and action): `Load`, `Ready`,
-`Dispatch`/`NextPart`, `Result`/`DiscardResult`, `LateResult`, `Cancel`,
-`Retire` and `Exit` in `speech_local_client.ts`; `Load`, `Retire` and `Cancel` in
-`speech_service.ts`. The model forbids any dispatch while paused; the service
-holds only multi-part units while paused (a single-part unit is dispatched and
-its audio waits), so `NoPausedDispatch` is mapped for multi-part units only. The synthesis protocol (`speech_local_protocol.ts`) is
+Action mapping in the code (comments name the spec and action): `Load`,
+`Ready`, `Dispatch`/`NextPart`, `Result`/`DiscardResult`, `LateResult`,
+`Cancel`, `Retire` and `Exit` in `speech_local_client.ts`; `Load`, `Retire`
+and `Cancel` in `speech_service.ts`. The model forbids any dispatch while
+paused; the service holds only multi-part units while paused (a single-part
+unit is dispatched and its audio waits), so `NoPausedDispatch` is mapped for
+multi-part units only. The synthesis protocol (`speech_local_protocol.ts`) is
 transport neutral; the shipped Kokoro engine keeps its Node worker thread.
 
 | Mutation | Breaks |
