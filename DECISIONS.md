@@ -498,3 +498,21 @@ closed with update, reload, and reconnect guidance. Successful starts report
 these identities and the editor build. Hashes identify local builds; they do not
 attest to trust. Relays already running from older releases cannot perform this
 check and may need to be restarted after every window is updated.
+
+## Selective upstream PR 17 adoption, 2026-11-08
+
+Adopt prompt completed-command delivery and honest working, ready and approval
+status first, preserving queue depth and selected-speech policy. The acceptance
+criteria are recorded in [the PR 17 acceptance document](docs/upstream-17-acceptance.md).
+Existing working-directory, runtime-identity and recovery safety verification
+must finish before feature integration.
+
+Defer concurrent explanation/edit beats. The current player serializes `say`
+and edits on a single tracked Timeline sleeper. Replacing a sleeper leaves
+pause, hold, skip and interruption unable to control both waits; already-armed
+old timers can continue, while replaced held waits can remain unresolved.
+Supporting concurrent reading, speech and edits safely requires independently
+owned completion and cancellation gates, including line/block reading and
+existing deferred-reply boundaries. Human comfort also requires a later user
+trial. Deeper queuing is deferred pending evidence that it removes meaningful
+idle gaps beyond the current preparation/playback overlap.
