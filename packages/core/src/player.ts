@@ -193,21 +193,14 @@ export class Player {
     private readonly stage: Stage,
   ) {}
 
-  /** Completes the matching say's reading delay, leaving other waits alone. */
-  finishReading(id: number): void {
-    if (this.readingId === id) this.stage.pacing.finish();
+  /** Whether this ID owns the current reading countdown. */
+  isCurrentReading(id: number): boolean {
+    return this.readingId === id;
   }
 
-  /** Changes a hold only for the matching live reading countdown. */
-  holdReading(id: number, held: boolean): void {
-    if (this.readingId !== id) return;
-    if (held) this.stage.pacing.hold();
-    else this.stage.pacing.release();
-  }
-
-  /** Releases a current reading hold when its view disappears. */
-  releaseReadingHold(): void {
-    if (this.readingId !== undefined) this.stage.pacing.release();
+  /** Whether a reading countdown currently exists. */
+  hasCurrentReading(): boolean {
+    return this.readingId !== undefined;
   }
 
   /** Plays a batch, saves the files it edited, and says how it went, and which lines that shows. */

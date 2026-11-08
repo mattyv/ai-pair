@@ -813,7 +813,7 @@ export class Controller {
   finishReading(id: number): void {
     const session = this.activeSession();
     if (session === undefined || session.suspended || session.scene.turn !== 'agent' || this.pauseReasons.size > 0) return;
-    session.player.finishReading(id);
+    if (session.player.isCurrentReading(id)) session.timeline.finish();
   }
 
   /** Holds or releases only the matching reading delay, preserving pauses. */
@@ -821,12 +821,15 @@ export class Controller {
     const session = this.session;
     if (session === undefined) return;
     if (held && (session.ended || session.suspended || session.scene.turn !== 'agent' || this.pauseReasons.size > 0)) return;
-    session.player.holdReading(id, held);
+    if (!session.player.isCurrentReading(id)) return;
+    if (held) session.timeline.hold();
+    else session.timeline.release();
   }
 
   /** Releases a reading hold belonging to a disposed panel. */
   releaseReadingHold(): void {
-    this.session?.player.releaseReadingHold();
+    const session = this.session;
+    if (session !== undefined && session.player.hasCurrentReading()) session.timeline.release();
   }
 
   /** Sets the granularity used by the next typing action. */

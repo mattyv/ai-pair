@@ -127,9 +127,9 @@ class FakePacing implements Pacing {
   isInterrupted = false;
   readonly abort = new AbortController();
   /** Resolves true, or false once interrupted. */
-  readonly finish = vi.fn<Pacing['finish']>();
-  readonly hold = vi.fn<Pacing['hold']>();
-  readonly release = vi.fn<Pacing['release']>();
+  readonly finish = vi.fn<() => void>();
+  readonly hold = vi.fn<() => void>();
+  readonly release = vi.fn<() => void>();
   readonly sleep = vi.fn<Pacing['sleep']>(() => Promise.resolve(!this.isInterrupted));
 
   get signal(): AbortSignal {
@@ -569,7 +569,7 @@ describe('selected speech', () => {
     expect(speak).toHaveBeenCalledTimes(1);
   });
 
-  it.each(['throw', 'reject'] as const)('keeps held reading and command approval after speech %s', async (failure) => {
+  it.each(['throw', 'reject'] as const)('keeps reading and command approval after speech %s', async (failure) => {
     const h = harness({ config: { confirmCommands: true } });
     const readingGate = Promise.withResolvers<boolean>();
     h.pacing.sleep.mockReturnValueOnce(readingGate.promise);
@@ -584,9 +584,9 @@ describe('selected speech', () => {
     });
     const reading = posted(h).find((event) => event.type === 'reading');
     if (reading?.type !== 'reading' || reading.id === undefined) throw new Error('No reading ID');
-    h.player.holdReading(reading.id, true);
+    expect(h.player.isCurrentReading(reading.id)).toBe(true);
     await Promise.resolve();
-    expect(h.pacing.hold).toHaveBeenCalledOnce();
+    expect(h.pacing.hold).not.toHaveBeenCalled();
     expect(h.pacing.release).not.toHaveBeenCalled();
     expect(h.pacing.finish).not.toHaveBeenCalled();
     expect(h.confirm).not.toHaveBeenCalled();
@@ -1119,50 +1119,24 @@ it('refuses next_close at the end of a file without moving the cursor', async ()
   expect(h.scene.cursor?.offset).toBe(2);
 });
 
-describe('finish reading', () => {
-  it('OnlyCurrent: only finishes the currently pending say and rejects stale IDs', async () => {
-    const h = harness();
-    const pending = Promise.withResolvers<boolean>();
-    h.pacing.sleep.mockReturnValueOnce(pending.promise);
-    const playing = h.player.play(1, [{ say: 'Read this.' }]);
-    await vi.waitFor(() => {
-      expect(posted(h).some((event) => event.type === 'reading')).toBe(true);
-    });
-    const event = posted(h).find((entry) => entry.type === 'reading');
-    if (event?.type !== 'reading' || event.id === undefined) throw new Error('No reading event ID');
-    h.player.finishReading(event.id + 1);
-    expect(h.pacing.finish).not.toHaveBeenCalled();
-    h.player.finishReading(event.id);
-    expect(h.pacing.finish).toHaveBeenCalledTimes(1);
-    pending.resolve(true);
-    await playing;
-    h.player.finishReading(event.id);
-    expect(h.pacing.finish).toHaveBeenCalledTimes(1);
-  });
-});
-
-it('ScopedHold, StaleDoesNothing, EligibleHold: holds only the matching reading timer', async () => {
+it('OnlyCurrent: identifies a live say reading and rejects stale IDs', async () => {
   const h = harness();
   const pending = Promise.withResolvers<boolean>();
   h.pacing.sleep.mockReturnValueOnce(pending.promise);
-  h.player.releaseReadingHold();
+  expect(h.player.hasCurrentReading()).toBe(false);
   const playing = h.player.play(1, [{ say: 'Read this.' }]);
   await vi.waitFor(() => {
     expect(posted(h).some((event) => event.type === 'reading')).toBe(true);
   });
   const event = posted(h).find((entry) => entry.type === 'reading');
   if (event?.type !== 'reading' || event.id === undefined) throw new Error('No reading event ID');
-  h.player.holdReading(event.id + 1, true);
-  expect(h.pacing.hold).not.toHaveBeenCalled();
-  h.player.holdReading(event.id, true);
-  h.player.holdReading(event.id, false);
-  h.player.releaseReadingHold();
-  expect(h.pacing.hold).toHaveBeenCalledTimes(1);
-  expect(h.pacing.release).toHaveBeenCalledTimes(2);
+  expect(h.player.isCurrentReading(event.id + 1)).toBe(false);
+  expect(h.player.isCurrentReading(event.id)).toBe(true);
+  expect(h.player.hasCurrentReading()).toBe(true);
   pending.resolve(true);
   await playing;
-  h.player.releaseReadingHold();
-  expect(h.pacing.release).toHaveBeenCalledTimes(2);
+  expect(h.player.isCurrentReading(event.id)).toBe(false);
+  expect(h.player.hasCurrentReading()).toBe(false);
 });
 
 describe('grouped playback', () => {
@@ -1179,7 +1153,7 @@ describe('grouped playback', () => {
     ]);
   });
 
-  it('CurrentCountdown and RejectedKeepsCountdown: scopes finish and hold to the active code ID', async () => {
+  it('CurrentCountdown: identifies the active code reading ID', async () => {
     const h = harness({ files: { 'a.ts': '' }, scene: { cursor: { file: A, offset: 0 } } });
     h.stage.codePlayback = () => 'lines';
     const pending = Promise.withResolvers<boolean>();
@@ -1190,20 +1164,13 @@ describe('grouped playback', () => {
     });
     const event = posted(h).find((entry) => entry.type === 'reading' && entry.owner === 'code');
     if (event?.type !== 'reading' || event.id === undefined) throw new Error('No code reading ID');
-    h.player.finishReading(event.id + 1);
-    h.player.holdReading(event.id + 1, true);
-    expect(h.pacing.finish).not.toHaveBeenCalled();
-    expect(h.pacing.hold).not.toHaveBeenCalled();
-    h.player.holdReading(event.id, true);
-    h.player.holdReading(event.id, false);
-    h.player.finishReading(event.id);
-    expect(h.pacing.hold).toHaveBeenCalledTimes(1);
-    expect(h.pacing.release).toHaveBeenCalledTimes(1);
-    expect(h.pacing.finish).toHaveBeenCalledTimes(1);
+    expect(h.player.isCurrentReading(event.id + 1)).toBe(false);
+    expect(h.player.isCurrentReading(event.id)).toBe(true);
+    expect(h.player.hasCurrentReading()).toBe(true);
     pending.resolve(true);
     await playing;
-    h.player.finishReading(event.id);
-    expect(h.pacing.finish).toHaveBeenCalledTimes(1);
+    expect(h.player.isCurrentReading(event.id)).toBe(false);
+    expect(h.player.hasCurrentReading()).toBe(false);
   });
 
   it('ReadingTargetsGroup: sets the group highlight before asking the editor to follow', async () => {
