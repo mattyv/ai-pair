@@ -405,3 +405,13 @@ Issue discussions and working notes hold the detailed evidence and history.
     dependency; skipping the unused CUDA download avoids an external GPU
     artifact dependency during CI. This setting applies to CI only and does
     not change developer installations or ONNX Runtime versions.
+
+## CI resilience and model selection, 2026-11-08
+
+-   Use current GitHub-maintained Node 24 action releases and retry transient
+    download failures, retaining the pinned release asset IDs and SHA-256
+    verification. Exhausted retries and checksum mismatches still fail CI.
+-   Keep the specs job present on every run. Only a pull request whose nonempty
+    diff contains exclusively recognized test files skips TLC; source, model,
+    workflow and unknown changes, an unavailable base, and push events run
+    every model. Disabling rename detection checks both paths of a move.
