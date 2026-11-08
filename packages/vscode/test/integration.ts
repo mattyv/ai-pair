@@ -19,6 +19,7 @@ import type { Api } from '../src/extension';
 import { DEFAULT_TIMINGS } from '../src/timings';
 import { controllerPaths, extensionPaths, playerPaths } from './integration_paths';
 import { codePlaybackPaths } from './integration_code_playback';
+import { corePaths } from './integration_core_paths';
 
 const EXPECTED_TODOS = `export interface Todo {
   id: number;
@@ -1128,6 +1129,9 @@ export async function run(): Promise<void> {
     { select: { text: 'a', extra: 1 } },
     { type_fast: 5 },
     { type_fast: 'x' },
+    { say: 'Look: ```code```', speak: true },
+    { say: 'a', speak: 'yes' },
+    { newline: { indent: '' } },
   ];
   for (const action of schemaRefusals) {
     const refused = await agent.callTool({ name: 'step', arguments: { actions: [action] } });
@@ -1343,6 +1347,7 @@ export async function run(): Promise<void> {
   await codePlaybackPaths(api, root);
   await playerPaths(api, root);
   await controllerPaths(api, root);
+  await corePaths(api, root);
   await extensionPaths(api, root);
 
   // The window's file and its sockets go with it, at exit: here the file is gone already, and a socket is still open
