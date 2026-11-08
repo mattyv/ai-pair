@@ -86,6 +86,47 @@ describe('companion audio output', () => {
     expect(stop).toHaveBeenCalledTimes(1);
   });
 
+  it('retires a failed part even when its event observer throws', async () => {
+    const { output, stop, event, send } = fixture();
+    const retired = Promise.withResolvers<void>();
+    stop.mockReturnValue(retired.promise);
+    event.mockImplementation(() => {
+      throw new Error('private observer failure');
+    });
+    expect(await output.prepare(7)).toBe(true);
+    expect(output.play(7, new Uint8Array(44), 1000, 0)).toBe(4);
+    const owner: AudioOwner = { connectionEpoch: 'connection', jobId: '7', pageEpoch: 4 };
+    expect(() => {
+      send({ owner, sequence: 1, part: 0, type: 'failed' });
+    }).not.toThrow();
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(await output.prepare(8)).toBe(false);
+    retired.resolve();
+    await vi.waitFor(async () => {
+      expect(await output.prepare(8)).toBe(true);
+    });
+  });
+
+  it('retires a rejected play even when its event observer throws', async () => {
+    const { output, play, stop, event } = fixture();
+    const retired = Promise.withResolvers<void>();
+    stop.mockReturnValue(retired.promise);
+    play.mockRejectedValueOnce(new Error('private player failure'));
+    event.mockImplementation(() => {
+      throw new Error('private observer failure');
+    });
+    expect(await output.prepare(7)).toBe(true);
+    expect(output.play(7, new Uint8Array(44), 1000, 0)).toBe(4);
+    await vi.waitFor(() => {
+      expect(stop).toHaveBeenCalledTimes(1);
+    });
+    expect(await output.prepare(8)).toBe(false);
+    retired.resolve();
+    await vi.waitFor(async () => {
+      expect(await output.prepare(8)).toBe(true);
+    });
+  });
+
   it('invalidates a pending admission before a late success can dispatch playback', async () => {
     const { admit, play, stop, output } = fixture();
     const pending = Promise.withResolvers<AudioLease>();

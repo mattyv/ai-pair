@@ -92,7 +92,7 @@ export class CompanionOutput implements SpeechOutput {
     void this.options.adapter.play(request.lease, wav, part).catch(() => {
       if (this.current !== request || request.canceled || request.part !== part) return;
       request.canceled = true;
-      this.options.event({ id, pageId: request.owner.pageEpoch, event: 'failed', part });
+      this.notify({ id, pageId: request.owner.pageEpoch, event: 'failed', part });
       void this.retire(request);
     });
     return request.owner.pageEpoch;
@@ -165,13 +165,22 @@ export class CompanionOutput implements SpeechOutput {
     } else if (event.type !== 'started') {
       request.canceled = true;
     }
-    this.options.event({
+    this.notify({
       id: request.id,
       pageId: request.owner.pageEpoch,
       event: event.type === 'canceled' ? 'failed' : event.type,
       part: event.part,
     });
     if (event.type !== 'started' && event.type !== 'ended') void this.retire(request);
+  }
+
+  /** Observer failures must not prevent physical retirement. */
+  private notify(event: SpeechAudioEvent): void {
+    try {
+      this.options.event(event);
+    } catch {
+      // A failed observer cannot retain the output lease indefinitely.
+    }
   }
 
   /** Keeps the slot closed until the adapter confirms physical retirement. */
