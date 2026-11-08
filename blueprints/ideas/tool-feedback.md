@@ -171,3 +171,39 @@ branches after required verification. Terra implements and Astra reviews.
 
 Ducking is not yet an advertised capability. The rejected experiments and their
 limits are recorded in `blueprints/ideas/local-music-ducking.md`.
+
+## Night checkpoint, 2026-11-08
+
+Unreleased work is checkpointed for issues #24, #25 and #26. The reply timing
+control is a Settings dropdown. Explicit working directories are authoritative,
+and the generic diagnostic-snapshot caveat is deduplicated per session.
+
+The exact packaged 0.21.2 relay rejects an outside-workspace directory correctly.
+The reported workspace diagnostics identified an active 0.21.1 backend. A separate
+isolated reproduction demonstrated that an older window can overwrite the shared
+launcher with an older relay. The user's active relay version was not established.
+
+Additional checkpoint code resets fresh-session batch numbering while preserving
+resume, checks workspace/relay runtime identity, and adds an actual-launcher MCP
+regression fixture. These latest combined changes are not release-approved.
+Remaining work: independent runtime-guard review, combined coverage, architecture
+updates for runtime identity, and a new packaged MCP green run after the version
+is bumped. No new package is claimed ready by this checkpoint.
+
+### Candidates for later discussion
+
+-   Optional review gate after a logical code block; begin with Accept and Ask
+    for changes before adding rollback or locks.
+-   A review record/export of accepted changes, explanations and decisions.
+-   Explicit Reject and safe rollback, preserving the programmer's edits.
+-   Locks on accepted code, with deliberate reopen and formatter handling.
+-   Human-selected block boundaries and review during the programmer's turn.
+-   Session summary/export to help re-establish context after restart; distinguish
+    tool state from the coding agent's own conversation history.
+-   The separate command-ID collision after reload (#11).
+-   Optional AMD Kokoro acceleration (#14), after measuring its practical benefit.
+-   The deferred user-routed virtual music output and ducking design.
+
+Chat order, line/block playback, selected narration, sentence pipelining,
+listening speed, warm worker reuse, output selection and model status have
+implementation already. Their older planning notes are not a new-work list.
