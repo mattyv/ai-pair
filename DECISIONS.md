@@ -374,3 +374,21 @@ Issue discussions and working notes hold the detailed evidence and history.
     negative controls. The verified unreachable branch removal leaves its
     reachable state count unchanged; the native integration case still checks
     the public late-name rejection.
+
+## Release integration boundaries, 2026-11-08
+
+-   Verify session restoration with installed main and companion extensions in
+    two normal VS Code launches sharing one disposable profile and workspace.
+    Extension-test mode uses in-memory storage, so it cannot establish restart
+    persistence. Require both stage results and a real workspace database.
+-   Keep rare failure tests at named public editor or VS Code boundaries, with
+    the real bundled controller, playback, terminal and reports around them.
+    Restore descriptors, verify the failed outcome, and verify healthy recovery.
+    These are controlled fault injections, not reproduced operating-system faults.
+-   Isolate application and shared storage for native tests. Linux synthetic-key
+    tests also use the basic password backend, send no cloud request, and remove
+    the synthetic key unconditionally. The inspected runtime routes AI Pair
+    secrets to application storage; its shared-secret allowlist is unrelated.
+-   The restart harness bounds the launcher wait and requires the actual Code
+    binary. Its timeout watchdog does not promise descendant cleanup for
+    arbitrary CLI wrappers. Normal successful runs close their own windows.

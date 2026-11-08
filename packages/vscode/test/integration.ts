@@ -24,6 +24,9 @@ import { gapPaths } from './integration_gap_paths';
 import { codePlaybackPaths } from './integration_code_playback';
 import { corePaths } from './integration_core_paths';
 import { playerGapPaths } from './integration_player_gap_paths';
+import { runLegacySpeechPaths } from './integration_legacy_speech_paths';
+import { installTerminalCleanup } from './integration_terminal_cleanup';
+import { playerFaults } from './integration_player_faults';
 
 const EXPECTED_TODOS = `export interface Todo {
   id: number;
@@ -216,9 +219,19 @@ function fakeWindow(name: string, folders: string[], port: number, changes: { pi
 
 /** Runs every scenario inside VS Code; the extension host exits with its result. */
 export async function run(): Promise<void> {
+  const cleanup = installTerminalCleanup();
   const ext = vscode.extensions.getExtension('michalstrba.ai-pair');
   assert.ok(ext, 'extension not found');
-  const exported: unknown = await ext.activate();
+  assert.equal(ext.isActive, false, 'main activated before the cleanup observer');
+  let exported: unknown;
+  try {
+    exported = await ext.activate();
+    assert.ok(isApi(exported), 'the extension exported something other than its Api');
+    await exported.ready;
+    await cleanup.run(exported);
+  } finally {
+    cleanup.dispose();
+  }
   assert.ok(isApi(exported), 'the extension exported something other than its Api');
   const api = exported;
   const folder = vscode.workspace.workspaceFolders?.[0];
@@ -1419,16 +1432,29 @@ export async function run(): Promise<void> {
   assert.match(fs.readFileSync(path.join(agents, 'codex', 'config.toml'), 'utf8'), /\[mcp_servers\.pair\]/);
   // Opened again, it lists Codex as set up; from the run's own config files, so the same on every machine.
   await setUpAgents([]);
-  console.log('Set Up Agent: closed, copied for another agent, and set up Codex past a broken Claude Code file');
+  // A multi-agent choice writes both isolated configurations from scratch.
+  fs.rmSync(path.join(agents, 'codex'), { recursive: true, force: true });
+  await setUpAgents([1, 2]);
+  const openCodeFile = path.join(agents, 'xdg', 'opencode', 'opencode.json');
+  const openCode = z
+    .object({ mcp: z.object({ pair: z.object({ type: z.literal('local'), command: z.tuple([z.string()]), enabled: z.literal(true) }) }) })
+    .parse(JSON.parse(fs.readFileSync(openCodeFile, 'utf8')));
+  assert.equal(openCode.mcp.pair.command[0], api.launcher);
+  const codexConfig = fs.readFileSync(path.join(agents, 'codex', 'config.toml'), 'utf8');
+  assert.match(codexConfig, /\[mcp_servers\.pair\]/);
+  assert.ok(codexConfig.includes(api.launcher), 'Codex did not receive the current launcher');
+  console.log('Set Up Agent: closed, copied, and configured multiple agents in the isolated profile');
 
   // Last, since they change the playback's settings: the player's and the controller's paths (#176).
   await codePlaybackPaths(api, root);
   await playerGapPaths(api, root);
+  await playerFaults(api, root);
   await playerPaths(api, root);
   await controllerPaths(api, root);
   await corePaths(api, root);
   await extensionPaths(api, root);
   await panelPaths(api);
+  await runLegacySpeechPaths(api);
   await gapPaths(api);
 
   // The window's file and its sockets go with it, at exit: here the file is gone already, and a socket is still open

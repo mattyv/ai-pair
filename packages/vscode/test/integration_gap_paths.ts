@@ -105,6 +105,371 @@ async function interruptedTerminalStart(api: Api): Promise<void> {
   }
 }
 
+/** An injected failure at VS Code's terminal API must be reported and recoverable. */
+async function terminalCreationFailure(api: Api): Promise<void> {
+  const { controller } = api;
+  const original = Object.getOwnPropertyDescriptor(vscode.window, 'createTerminal');
+  assert.ok(original, 'VS Code did not expose createTerminal');
+  let attempts = 0;
+  controller.setConfirmCommands(false);
+  controller.setSpeed(20);
+  await closeTerminals();
+  try {
+    await controller.start('terminal creation failure');
+    Object.defineProperty(vscode.window, 'createTerminal', {
+      ...original,
+      value: () => {
+        attempts++;
+        throw new Error('injected terminal creation failure');
+      },
+    });
+    try {
+      await controller.step([{ run: 'printf should-not-start', wait: 1 }]);
+      const result = await Promise.race([controller.step([]), sleep(INTERRUPT_WAIT_MS).then(() => undefined)]);
+      assert.ok(result, 'the failed terminal creation left the session pending');
+      assert.equal(attempts, 1, 'the injected VS Code boundary was not reached');
+      assert.ok(
+        result.batches.some(
+          (batch) => batch.status === 'failed' && batch.error?.message.includes('injected terminal creation failure') === true,
+        ),
+        JSON.stringify(result),
+      );
+    } finally {
+      Object.defineProperty(vscode.window, 'createTerminal', original);
+    }
+    controller.endSession();
+    await controller.start('terminal recovery after injected failure');
+    const recovery = 'printf terminal-recovered';
+    await controller.step([{ run: recovery, wait: 5 }]);
+    const recovered = await Promise.race([controller.step([]), sleep(INTERRUPT_WAIT_MS).then(() => undefined)]);
+    assert.ok(recovered, 'terminal recovery did not complete');
+    assert.ok(
+      recovered.batches.some((batch) => batch.status === 'completed'),
+      JSON.stringify(recovered),
+    );
+    await runEnded(api, recovery);
+    console.log('an injected VS Code terminal-creation failure is reported and the next run recovers');
+  } finally {
+    Object.defineProperty(vscode.window, 'createTerminal', original);
+    controller.endSession();
+    await closeTerminals();
+  }
+}
+
+/** Inject a rejected read on one real shell execution and verify the session recovers. */
+async function terminalOutputReadFailure(api: Api): Promise<void> {
+  const { controller } = api;
+  controller.setConfirmCommands(false);
+  controller.setSpeed(20);
+  await closeTerminals();
+  try {
+    await controller.start('terminal read failure');
+    await controller.step([{ run: 'printf terminal-ready', wait: 5 }]);
+    const initial = await controller.step([]);
+    assert.ok(
+      initial.batches.some((batch) => batch.status === 'completed'),
+      JSON.stringify(initial),
+    );
+    const terminal = vscode.window.terminals.at(-1);
+    assert.ok(terminal?.shellIntegration, 'the reusable terminal has no shell integration');
+    const integration = terminal.shellIntegration;
+    const execute = Object.getOwnPropertyDescriptor(integration, 'executeCommand');
+    assert.ok(execute && typeof execute.value === 'function', 'executeCommand is not a writable method');
+    const originalExecute = integration.executeCommand.bind(integration);
+    let reads = 0;
+    let executionWithRead: vscode.TerminalShellExecution | undefined;
+    let readDescriptor: PropertyDescriptor | undefined;
+    Object.defineProperty(integration, 'executeCommand', {
+      ...execute,
+      value: (command: string) => {
+        const execution = originalExecute(command);
+        const read = Object.getOwnPropertyDescriptor(execution, 'read');
+        assert.ok(read, 'the shell execution has no read method');
+        executionWithRead = execution;
+        readDescriptor = read;
+        Object.defineProperty(execution, 'read', {
+          ...read,
+          value: () => {
+            reads++;
+            return { [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(new Error('injected output read failure')) }) };
+          },
+        });
+        return execution;
+      },
+    });
+    try {
+      await controller.step([{ run: 'printf terminal-read-injection', wait: 5 }]);
+      const result = await Promise.race([controller.step([]), sleep(INTERRUPT_WAIT_MS).then(() => undefined)]);
+      assert.ok(result, 'the failed output read left the session pending');
+      assert.equal(reads, 1, 'the injected real execution read was not reached');
+      assert.ok(
+        result.batches.some((batch) => batch.status === 'completed'),
+        JSON.stringify(result),
+      );
+    } finally {
+      if (executionWithRead !== undefined && readDescriptor !== undefined) Object.defineProperty(executionWithRead, 'read', readDescriptor);
+      Object.defineProperty(integration, 'executeCommand', execute);
+    }
+    await controller.step([{ run: 'printf terminal-read-recovered', wait: 5 }]);
+    const recovered = await Promise.race([controller.step([]), sleep(INTERRUPT_WAIT_MS).then(() => undefined)]);
+    assert.ok(
+      recovered !== undefined && recovered.batches.some((batch) => batch.status === 'completed'),
+      'the terminal did not recover after restoring its read',
+    );
+    assert.ok(
+      recovered.batches.some((batch) => batch.runs?.some((run) => run.output.includes('terminal-read-recovered')) === true),
+      'the recovered shell output was not captured',
+    );
+    console.log('an injected shell output-read failure does not hang the run and the next command recovers');
+  } finally {
+    controller.endSession();
+    await closeTerminals();
+  }
+}
+
+/** Closing a terminal after execution starts must complete the real run. */
+async function closedRunningTerminal(api: Api): Promise<void> {
+  const { controller } = api;
+  const command = "printf 'ai-pair-terminal-started\\n'; sleep 10";
+  const started = Promise.withResolvers<vscode.Terminal>();
+  const listener = vscode.window.onDidStartTerminalShellExecution((event) => {
+    if (event.execution.commandLine.value === command) started.resolve(event.terminal);
+  });
+  controller.setConfirmCommands(false);
+  controller.setSpeed(20);
+  try {
+    await closeTerminals();
+    await controller.start('close a running terminal');
+    await controller.step([{ run: command, wait: 10 }]);
+    const report = controller.step([]);
+    const terminal = await Promise.race([started.promise, sleep(INTERRUPT_WAIT_MS).then(() => undefined)]);
+    assert.ok(terminal, 'the command never started in an integrated shell');
+    terminal.dispose();
+    const completed = await Promise.race([report, sleep(INTERRUPT_WAIT_MS).then(() => undefined)]);
+    assert.ok(completed, 'closing the terminal left the batch pending');
+    assert.ok(
+      completed.batches.some((batch) => batch.status === 'completed'),
+      JSON.stringify(completed),
+    );
+    assert.equal(vscode.window.terminals.includes(terminal), false, 'the closed terminal remained open');
+    console.log('closing a running terminal completes the command without hanging the session');
+  } finally {
+    listener.dispose();
+    controller.endSession();
+    await closeTerminals();
+  }
+}
+
+/** An unrelated terminal's end event must not finish a running Pair command. */
+async function unrelatedTerminalEnd(api: Api): Promise<void> {
+  const { controller } = api;
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  assert.ok(folder, 'workspace not found');
+  const releaseFile = path.join(folder.uri.fsPath, 'integration-terminal-release.flag');
+  fs.rmSync(releaseFile, { force: true });
+  const command = 'while [ ! -e integration-terminal-release.flag ]; do sleep 0.1; done';
+  controller.setConfirmCommands(false);
+  controller.setSpeed(20);
+  await closeTerminals();
+  const foreign = vscode.window.createTerminal({ name: 'Pair integration foreign terminal' });
+  foreign.show(true);
+  const started = Promise.withResolvers<void>();
+  const startedListener = vscode.window.onDidStartTerminalShellExecution((event) => {
+    if (event.execution.commandLine.value === command) started.resolve();
+  });
+  try {
+    for (let i = 0; i < POLLS && foreign.shellIntegration === undefined; i++) await sleep(POLL_MS);
+    assert.ok(foreign.shellIntegration, 'the foreign shell did not become ready');
+    await controller.start('unrelated terminal end');
+    await controller.step([{ run: command, wait: 10 }]);
+    let complete = false;
+    const pending = controller.step([]);
+    void pending.finally(() => {
+      complete = true;
+    });
+    await Promise.race([
+      started.promise,
+      sleep(INTERRUPT_WAIT_MS).then(() => {
+        throw new Error('Pair command did not start');
+      }),
+    ]);
+    const execution = foreign.shellIntegration.executeCommand('printf foreign-finished');
+    const ended = Promise.withResolvers<void>();
+    const endListener = vscode.window.onDidEndTerminalShellExecution((event) => {
+      if (event.execution === execution) ended.resolve();
+    });
+    try {
+      await Promise.race([
+        ended.promise,
+        sleep(INTERRUPT_WAIT_MS).then(() => {
+          throw new Error('foreign command did not end');
+        }),
+      ]);
+    } finally {
+      endListener.dispose();
+    }
+    await sleep(500);
+    assert.equal(complete, false, 'an unrelated command ended the Pair wait');
+    fs.writeFileSync(releaseFile, '');
+    const report = await Promise.race([pending, sleep(INTERRUPT_WAIT_MS).then(() => undefined)]);
+    assert.ok(report, 'Pair did not finish after the release file appeared');
+    assert.ok(
+      report.batches.some((batch) => batch.status === 'completed'),
+      JSON.stringify(report),
+    );
+    console.log('an unrelated terminal completion does not finish a running Pair command');
+  } finally {
+    fs.rmSync(releaseFile, { force: true });
+    startedListener.dispose();
+    foreign.dispose();
+    controller.endSession();
+    await closeTerminals();
+  }
+}
+
+/** Interrupting an already-running command stops waiting without killing it. */
+async function interruptRunningCommand(api: Api): Promise<void> {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  assert.ok(folder, 'workspace not found');
+  const marker = path.join(folder.uri.fsPath, 'integration-running-started.flag');
+  const release = path.join(folder.uri.fsPath, 'integration-running-release.flag');
+  fs.rmSync(marker, { force: true });
+  fs.rmSync(release, { force: true });
+  const command = 'printf started > integration-running-started.flag; while [ ! -e integration-running-release.flag ]; do sleep 0.1; done';
+  const { controller } = api;
+  controller.setConfirmCommands(false);
+  controller.setSpeed(20);
+  await closeTerminals();
+  let started = false;
+  let background = false;
+  try {
+    await controller.start('interrupt an already-running command');
+    await controller.step([{ run: command, wait: 10 }]);
+    for (let i = 0; i < POLLS && !fs.existsSync(marker); i++) await sleep(POLL_MS);
+    assert.ok(fs.existsSync(marker), 'the shell command did not actually start');
+    started = true;
+    const pending = controller.step([]);
+    controller.userInterrupt();
+    const report = await Promise.race([pending, sleep(INTERRUPT_WAIT_MS).then(() => undefined)]);
+    assert.ok(report, 'interrupting the running command left the session pending');
+    assert.ok(
+      report.batches.some(
+        (batch) => batch.status === 'interrupted' && batch.runs?.some((run) => run.command === command && run.running === true) === true,
+      ),
+      JSON.stringify(report),
+    );
+    background = true;
+    fs.writeFileSync(release, '');
+    await runShown(api, command, 'exited');
+    console.log('interrupting an active command stops waiting while the command runs to exit');
+  } finally {
+    try {
+      if (started && !fs.existsSync(release)) fs.writeFileSync(release, '');
+      if (background) await runShown(api, command, 'exited');
+    } finally {
+      controller.endSession();
+      await closeTerminals();
+      fs.rmSync(marker, { force: true });
+      fs.rmSync(release, { force: true });
+    }
+  }
+}
+
+/** A shell whose reported cwd is unavailable reuses its last known directory. */
+async function terminalWithoutReportedCwd(api: Api): Promise<void> {
+  const { controller } = api;
+  controller.setConfirmCommands(false);
+  controller.setSpeed(20);
+  await closeTerminals();
+  try {
+    await controller.start('terminal without reported cwd');
+    await controller.step([{ run: 'printf cwd-before', wait: 5 }]);
+    const initial = await controller.step([]);
+    assert.ok(
+      initial.batches.some((batch) => batch.status === 'completed'),
+      JSON.stringify(initial),
+    );
+    const terminal = vscode.window.terminals.at(-1);
+    assert.ok(terminal?.shellIntegration, 'the reusable terminal has no shell integration');
+    const integration = terminal.shellIntegration;
+    const own = Object.getOwnPropertyDescriptor(integration, 'cwd');
+    let reads = 0;
+    Object.defineProperty(integration, 'cwd', {
+      configurable: true,
+      get: () => {
+        reads++;
+        return undefined;
+      },
+    });
+    try {
+      await controller.step([{ run: 'printf cwd-fallback-reused', wait: 5 }]);
+      const report = await controller.step([]);
+      assert.ok(
+        report.batches.some((batch) => batch.runs?.some((run) => run.output.includes('cwd-fallback-reused')) === true),
+        JSON.stringify(report),
+      );
+      assert.ok(reads > 0, 'the injected missing cwd was not read');
+      assert.deepEqual(vscode.window.terminals, [terminal], 'the terminal was not reused');
+    } finally {
+      if (own === undefined) Reflect.deleteProperty(integration, 'cwd');
+      else Object.defineProperty(integration, 'cwd', own);
+    }
+    console.log('a terminal without a reported cwd is reused at its last known directory');
+  } finally {
+    controller.endSession();
+    await closeTerminals();
+  }
+}
+
+/** A foreign shell execution protects its terminal from reuse by Pair. */
+async function foreignTerminalExecution(api: Api): Promise<void> {
+  const { controller } = api;
+  controller.setConfirmCommands(false);
+  controller.setSpeed(20);
+  await closeTerminals();
+  try {
+    await controller.start('foreign terminal execution');
+    await controller.step([{ run: 'printf pair-initial', wait: 5 }]);
+    const initial = await controller.step([]);
+    assert.ok(
+      initial.batches.some((batch) => batch.status === 'completed'),
+      JSON.stringify(initial),
+    );
+    const terminal = vscode.window.terminals.at(-1);
+    assert.ok(terminal?.shellIntegration, 'Pair terminal has no shell integration');
+    const foreign = terminal.shellIntegration.executeCommand('printf foreign-terminal-command');
+    const ended = Promise.withResolvers<void>();
+    const listener = vscode.window.onDidEndTerminalShellExecution((event) => {
+      if (event.execution === foreign) ended.resolve();
+    });
+    try {
+      await Promise.race([
+        ended.promise,
+        sleep(INTERRUPT_WAIT_MS).then(() => {
+          throw new Error('foreign shell command did not end');
+        }),
+      ]);
+    } finally {
+      listener.dispose();
+    }
+    await controller.step([{ run: 'printf pair-after-foreign', wait: 5 }]);
+    const after = await controller.step([]);
+    assert.ok(
+      after.batches.some((batch) => batch.status === 'completed'),
+      JSON.stringify(after),
+    );
+    assert.ok(vscode.window.terminals.includes(terminal), 'the foreign terminal was closed');
+    assert.ok(
+      vscode.window.terminals.some((other) => other !== terminal),
+      'Pair reused the foreign terminal',
+    );
+    console.log('a foreign terminal execution keeps its terminal separate from the next Pair run');
+  } finally {
+    controller.endSession();
+    await closeTerminals();
+  }
+}
+
 /** Diagnostic observers cannot disrupt an actual session when they throw. */
 async function diagnosticObserverFailure(api: Api): Promise<void> {
   const { controller } = api;
@@ -128,6 +493,215 @@ async function diagnosticObserverFailure(api: Api): Promise<void> {
     controller.endSession();
   }
   console.log('a throwing diagnostic observer does not change the session');
+}
+
+/** A synchronous speech-settings failure must not prevent the real reading. */
+async function narrationSettingsFailure(api: Api): Promise<void> {
+  const { controller } = api;
+  const original = Object.getOwnPropertyDescriptor(vscode.workspace, 'getConfiguration');
+  assert.ok(original, 'VS Code did not expose getConfiguration');
+  const getConfiguration = vscode.workspace.getConfiguration.bind(vscode.workspace);
+  const text = 'Read this despite an injected settings failure.';
+  let failures = 0;
+  const inspected: string[] = [];
+  controller.setSpeed(20);
+  try {
+    await controller.start('narration settings failure');
+    Object.defineProperty(vscode.workspace, 'getConfiguration', {
+      ...original,
+      value: (section?: string, scope?: vscode.ConfigurationScope) => {
+        const settings = getConfiguration(section, scope);
+        if (section !== 'aiPair') return settings;
+        return new Proxy(
+          {},
+          {
+            get(target, key) {
+              void target;
+              if (key !== 'get') {
+                const member: unknown = Reflect.get(settings, key);
+                if (typeof member === 'function') {
+                  const bound: unknown = member.bind(settings);
+                  return bound;
+                }
+                return member;
+              }
+              const read = settings.get.bind(settings);
+              return (...args: unknown[]) => {
+                if (typeof args[0] === 'string') inspected.push(args[0]);
+                if (
+                  args[0] === 'speech.enabled' &&
+                  failures === 0 &&
+                  api.history().some((event) => event.type === 'say' && event.text === text)
+                ) {
+                  failures++;
+                  throw new Error('injected speech settings failure');
+                }
+                const value: unknown = Reflect.apply(read, undefined, args);
+                return value;
+              };
+            },
+          },
+        );
+      },
+    });
+    try {
+      await controller.step([{ say: text, speak: true }]);
+      const report = await Promise.race([controller.step([]), sleep(INTERRUPT_WAIT_MS).then(() => undefined)]);
+      assert.ok(report, 'the narration failure left the session pending');
+      assert.equal(
+        failures,
+        1,
+        `the injected speech settings boundary was not reached; reads=${JSON.stringify(inspected)} report=${JSON.stringify(report)}`,
+      );
+      assert.ok(
+        report.batches.some((batch) => batch.status === 'completed'),
+        JSON.stringify(report),
+      );
+      assert.ok(
+        api.history().some((event) => event.type === 'say' && event.text === text),
+        'the reading was not displayed',
+      );
+    } finally {
+      Object.defineProperty(vscode.workspace, 'getConfiguration', original);
+    }
+    const after = 'Reading still works after restoring the settings API.';
+    await controller.step([{ say: after, speak: true }]);
+    const recovered = await Promise.race([controller.step([]), sleep(INTERRUPT_WAIT_MS).then(() => undefined)]);
+    assert.ok(
+      recovered !== undefined && recovered.batches.some((batch) => batch.status === 'completed'),
+      'the following reading did not complete',
+    );
+    assert.ok(api.history().some((event) => event.type === 'say' && event.text === after));
+    console.log('an injected synchronous speech-settings failure leaves reading and the next say usable');
+  } finally {
+    Object.defineProperty(vscode.workspace, 'getConfiguration', original);
+    controller.endSession();
+  }
+}
+
+/** An injected EditorPort diagnostics rejection is advisory and the next check recovers. */
+async function editorDiagnosticsFailure(api: Api): Promise<void> {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  assert.ok(folder, 'workspace not found');
+  const name = 'integration-diagnostics-failure.txt';
+  const filename = path.join(folder.uri.fsPath, name);
+  fs.writeFileSync(filename, 'a\n');
+  const { controller, editor } = api;
+  const original = Object.getOwnPropertyDescriptor(editor, 'diagnostics');
+  let checks = 0;
+  controller.setSpeed(20);
+  try {
+    await controller.start('editor diagnostic failure');
+    await controller.read(name);
+    Object.defineProperty(editor, 'diagnostics', {
+      configurable: true,
+      writable: true,
+      value: () => {
+        checks++;
+        return Promise.reject(new Error('injected editor diagnostics failure'));
+      },
+    });
+    try {
+      await controller.step([{ move: { file: name, line: 1, to: 'line_end' } }, { type_fast: `x${CURSOR_MARKER}` }]);
+      const report = await controller.step([]);
+      assert.equal(checks, 1, 'the injected EditorPort boundary was not reached');
+      assert.ok(
+        report.batches.some(
+          (batch) => batch.status === 'completed' && batch.warnings?.includes('Diagnostics unavailable for an edited file.') === true,
+        ),
+        JSON.stringify(report),
+      );
+      assert.equal(fs.readFileSync(filename, 'utf8'), 'ax\n');
+    } finally {
+      if (original === undefined) Reflect.deleteProperty(editor, 'diagnostics');
+      else Object.defineProperty(editor, 'diagnostics', original);
+    }
+    await controller.step([{ move: { file: name, line: 1, to: 'line_end' } }, { type_fast: `y${CURSOR_MARKER}` }]);
+    const recovered = await controller.step([]);
+    assert.ok(
+      recovered.batches.some((batch) => batch.status === 'completed'),
+      JSON.stringify(recovered),
+    );
+    assert.ok(recovered.batches.every((batch) => batch.warnings?.includes('Diagnostics unavailable for an edited file.') !== true));
+    assert.equal(fs.readFileSync(filename, 'utf8'), 'axy\n');
+    console.log('an injected EditorPort diagnostics failure remains advisory and the next check recovers');
+  } finally {
+    if (original === undefined) Reflect.deleteProperty(editor, 'diagnostics');
+    else Object.defineProperty(editor, 'diagnostics', original);
+    controller.endSession();
+  }
+}
+
+/** A late EditorPort diagnostic cannot attach an old edit to a replacement session. */
+async function delayedDiagnosticsAfterReplacement(api: Api): Promise<void> {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  assert.ok(folder, 'workspace not found');
+  const name = 'integration-diagnostics-replaced.txt';
+  const filename = path.join(folder.uri.fsPath, name);
+  fs.writeFileSync(filename, 'a\n');
+  const { controller, editor } = api;
+  const own = Object.getOwnPropertyDescriptor(editor, 'diagnostics');
+  const diagnostics = editor.diagnostics.bind(editor);
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const settled = Promise.withResolvers<void>();
+  controller.setSpeed(20);
+  try {
+    await controller.start('old diagnostic session');
+    await controller.read(name);
+    Object.defineProperty(editor, 'diagnostics', {
+      configurable: true,
+      writable: true,
+      value: async (file: string) => {
+        entered.resolve();
+        await release.promise;
+        try {
+          return await diagnostics(file);
+        } finally {
+          settled.resolve();
+        }
+      },
+    });
+    const first = await controller.step([{ move: { file: name, line: 1, to: 'line_end' } }, { type_fast: `x${CURSOR_MARKER}` }]);
+    const oldId = first.submitted?.id;
+    assert.notEqual(oldId, undefined, 'the old edit did not start');
+    await Promise.race([
+      entered.promise,
+      sleep(INTERRUPT_WAIT_MS).then(() => {
+        throw new Error('old diagnostic did not enter');
+      }),
+    ]);
+    controller.endSession();
+    const replacement = await controller.start('replacement diagnostic session');
+    assert.deepEqual(replacement.batches, []);
+    if (own === undefined) Reflect.deleteProperty(editor, 'diagnostics');
+    else Object.defineProperty(editor, 'diagnostics', own);
+    release.resolve();
+    await Promise.race([
+      settled.promise,
+      sleep(INTERRUPT_WAIT_MS).then(() => {
+        throw new Error('old diagnostic did not settle');
+      }),
+    ]);
+    await controller.read(name);
+    const submission = await controller.step([{ move: { file: name, line: 1, to: 'line_end' } }, { type_fast: `y${CURSOR_MARKER}` }]);
+    const report = await controller.step([]);
+    assert.ok(
+      report.batches.some((batch) => batch.status === 'completed'),
+      JSON.stringify(report),
+    );
+    assert.ok(
+      [...submission.batches, ...report.batches].every((batch) => batch.id !== oldId),
+      'the old batch reached the replacement session',
+    );
+    assert.equal(fs.readFileSync(filename, 'utf8'), 'axy\n');
+    console.log('late diagnostics from an ended session do not affect its replacement');
+  } finally {
+    release.resolve();
+    if (own === undefined) Reflect.deleteProperty(editor, 'diagnostics');
+    else Object.defineProperty(editor, 'diagnostics', own);
+    controller.endSession();
+  }
 }
 
 /** Interrupts normal typing after it passes the marker, preserving its exact unplayed suffix. */
@@ -199,6 +773,16 @@ export async function gapPaths(api: Api): Promise<void> {
   controller.endSession();
   console.log('the terminals: one shown by the setting and again from the panel');
   await interruptedTerminalStart(api);
+  await terminalCreationFailure(api);
+  await terminalOutputReadFailure(api);
+  await closedRunningTerminal(api);
+  await unrelatedTerminalEnd(api);
+  await interruptRunningCommand(api);
+  await terminalWithoutReportedCwd(api);
+  await foreignTerminalExecution(api);
   await diagnosticObserverFailure(api);
+  await narrationSettingsFailure(api);
+  await editorDiagnosticsFailure(api);
+  await delayedDiagnosticsAfterReplacement(api);
   await interruptedTypingAfterMarker(api);
 }

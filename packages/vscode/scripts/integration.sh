@@ -24,13 +24,10 @@ readonly coverage
 readonly CODE="${VSCODE_BIN:-${MAC_CODE}}"
 TMP="$(mktemp -d)"
 readonly TMP
-# Code's temporary files, its sockets among them, and the test's: Code and the
-# extension host take them as TMPDIR. A socket's path must fit in 104
-# characters, so this folder is short.
+# Keep the temporary path short enough for Code's sockets.
 TMP_FILES="$(mktemp -d /tmp/ai-pair.XXXXXX)"
 readonly TMP_FILES
-# The run's workspace, user data, extensions, home, and temporary files go when
-# it ends, passed or failed (#176).
+# Temporary data is removed after success or failure (#176).
 trap 'rm -rf "${TMP}" "${TMP_FILES}"' EXIT
 mkdir -p "${TMP}/workspace"
 # Keep discovery files and the launcher out of the real ~/.ai-pair.
@@ -45,10 +42,13 @@ npx esbuild test/integration.ts --bundle --platform=node --format=cjs \
 # VSCODE_ARGS: more flags, like the ones a CI machine needs (--no-sandbox),
 # split on spaces.
 read -r -a CODE_ARGS <<<"${VSCODE_ARGS:-}"
+PLATFORM="$(uname -s)"
+readonly PLATFORM
+if [[ "${PLATFORM}" == Linux ]]; then
+  CODE_ARGS+=(--password-store=basic)
+fi
 readonly CODE_ARGS
-# A terminal inside VS Code, Claude Code's for one, can set
-# ELECTRON_RUN_AS_NODE, which runs the Code binary as plain Node: it would
-# reject every flag below (#152).
+# Code must run as Electron, even when launched from a Node terminal (#152).
 unset ELECTRON_RUN_AS_NODE
 # Set Up Agent writes agents' configurations: Claude Code's, Codex's, and
 # OpenCode's go to the run's folder, by the variables they honor, and only the
@@ -56,37 +56,20 @@ unset ELECTRON_RUN_AS_NODE
 # on macOS, Code finds its keychain by it (#176).
 TMPDIR="${TMP_FILES}" CLAUDE_CONFIG_DIR="${TMP}/agents/claude" \
   CODEX_HOME="${TMP}/agents/codex" XDG_CONFIG_HOME="${TMP}/agents/xdg" \
+  PULSE_SERVER='unix:/nonexistent' \
+  PIPEWIRE_REMOTE='ai-pair-integration-no-audio' \
   PATH='/usr/bin:/bin:/usr/sbin:/sbin' \
   "${CODE}" "${CODE_ARGS[@]}" \
   --user-data-dir="${TMP}/user" \
+  --shared-data-dir="${TMP}/shared" \
   --extensions-dir="${TMP}/extensions" \
   --disable-workspace-trust --skip-welcome --skip-release-notes \
   --extensionDevelopmentPath="${EXTENSION_PATH}" \
   --extensionTestsPath="${PWD}/dist-test/integration.js" \
   "${TMP}/workspace"
-# The companion needs its own profile and workspace. Install the real package
-# before main activation and retain source maps for c8.
-(cd "${ROOT}" && npm run build --workspace=packages/audio-ui --silent)
-mkdir -p "${TMP}/companion-extensions" "${TMP}/companion-workspace"
-ln -s "${ROOT}/packages/audio-ui" \
-  "${TMP}/companion-extensions/michalstrba.ai-pair-local-audio"
-npx esbuild test/integration_companion_paths.ts --bundle --platform=node \
-  --format=cjs --target=node22 --external:vscode \
-  --outfile=dist-test/integration_companion_paths.js --log-level=warning
-TMPDIR="${TMP_FILES}" AI_PAIR_HOME="${TMP}/companion-home" \
-  CLAUDE_CONFIG_DIR="${TMP}/companion-agents/claude" \
-  CODEX_HOME="${TMP}/companion-agents/codex" \
-  XDG_CONFIG_HOME="${TMP}/companion-agents/xdg" \
-  PULSE_SERVER='unix:/nonexistent' \
-  PIPEWIRE_REMOTE='ai-pair-integration-no-audio' \
-  PATH='/usr/bin:/bin:/usr/sbin:/sbin' \
-  "${CODE}" "${CODE_ARGS[@]}" \
-  --user-data-dir="${TMP}/companion-user" \
-  --extensions-dir="${TMP}/companion-extensions" \
-  --disable-workspace-trust --skip-welcome --skip-release-notes \
-  --extensionDevelopmentPath="${EXTENSION_PATH}" \
-  --extensionTestsPath="${PWD}/dist-test/integration_companion_paths.js" \
-  "${TMP}/companion-workspace"
+# The companion's normal-window restart uses the same coverage output.
+bash scripts/integration_companion.sh "${ROOT}" "${TMP}" "${TMP_FILES}" \
+  "${CODE}" "${EXTENSION_PATH}" "${CODE_ARGS[@]}"
 if ((coverage)); then
   # c8 resolves bundled coverage through the source maps from the root.
   (
