@@ -17,7 +17,7 @@ export const TEMPO_REQUEST = z.strictObject({ type: z.literal('transform'), ...i
 /** Strict, bounded result or fixed failure from a local PCM tempo worker. */
 export const TEMPO_RESPONSE = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('result'), ...identity, pcm }),
-  z.strictObject({ type: z.literal('failed'), ...identity, reason: z.enum(['invalid', 'failed']) }),
+  z.strictObject({ type: z.literal('failed'), ...identity, reason: z.literal('failed') }),
 ]);
 /** A validated request accepted by the tempo worker. */
 export type TempoRequest = z.infer<typeof TEMPO_REQUEST>;

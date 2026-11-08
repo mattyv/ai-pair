@@ -8,5 +8,5 @@ export const TEMPO_REQUEST = z.strictObject({ type: z.literal('transform'), ...o
 /** A test double for the local worker response validator. */
 export const TEMPO_RESPONSE = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('result'), ...owner, pcm }),
-  z.strictObject({ type: z.literal('failed'), ...owner, reason: z.enum(['invalid', 'failed']) }),
+  z.strictObject({ type: z.literal('failed'), ...owner, reason: z.literal('failed') }),
 ]);

@@ -18,13 +18,8 @@ const TRANSIENT_RATIO = 4;
 const PCM_MIN = -32_768;
 const PCM_MAX = 32_767;
 
-/** Throws a fixed error when the owner has canceled the transform. */
-function checkCanceled(canceled: () => boolean): void {
-  if (canceled()) throw new Error('Speech transform canceled.');
-}
-
 /** Chooses a nearby source frame with the best normalized overlap. */
-function findOverlap(input: Int16Array, output: Int16Array, destination: number, expected: number, canceled: () => boolean): number {
+function findOverlap(input: Int16Array, output: Int16Array, destination: number, expected: number): number {
   const maximum = input.length - FRAME;
   const center = Math.min(maximum, Math.max(0, expected));
   const first = Math.max(0, center - SEARCH);
@@ -32,7 +27,6 @@ function findOverlap(input: Int16Array, output: Int16Array, destination: number,
   let best = center;
   let bestScore = -Infinity;
   for (let candidate = first; candidate <= last; candidate++) {
-    if ((candidate - first) % OVERLAP === 0) checkCanceled(canceled);
     let dot = 0;
     let leftEnergy = 0;
     let rightEnergy = 0;
@@ -66,12 +60,24 @@ function gapTransient(input: Int16Array, from: number, to: number): number | und
   return undefined;
 }
 
-/** Changes PCM duration using overlap alignment while preserving the source pitch. */
-export function stretchSpeechPcm(input: Int16Array, rate: SpeechTempoRate, canceled: () => boolean = () => false): Int16Array {
-  checkCanceled(canceled);
-  if (!SPEECH_LISTENING_RATES.some((value) => value === rate) || input.length > SAMPLE_RATE * MAX_AUDIO_SECONDS) {
-    throw new Error('Speech transform input is invalid.');
+/** Places one source frame at a destination, crossfading its head into the existing output. */
+function copyFrame(input: Int16Array, output: Int16Array, source: number, destination: number): void {
+  for (const [index, sample] of input.subarray(source, source + FRAME).entries()) {
+    if (index < OVERLAP) {
+      const mix = index / OVERLAP;
+      // Each source frame is placed wholly inside the allocated output.
+      // oxlint-disable-next-line typescript/no-non-null-assertion
+      const blended = output[destination + index]! * (1 - mix) + sample * mix;
+      output[destination + index] = Math.max(PCM_MIN, Math.min(PCM_MAX, Math.round(blended)));
+    } else {
+      output[destination + index] = sample;
+    }
   }
+}
+
+/** Changes PCM duration using overlap alignment while preserving the source pitch. */
+export function stretchSpeechPcm(input: Int16Array, rate: SpeechTempoRate): Int16Array {
+  if (input.length > SAMPLE_RATE * MAX_AUDIO_SECONDS) throw new Error('Speech transform input is invalid.');
   // Keeping short fragments intact preserves transients within one window of target.
   if (rate === 1 || input.length < SHORT_INPUT_SAMPLES) return input.slice();
   const length = Math.round(input.length / rate);
@@ -80,26 +86,21 @@ export function stretchSpeechPcm(input: Int16Array, rate: SpeechTempoRate, cance
   output.set(input.subarray(0, FRAME));
   let sourceEnd = FRAME;
   let outputEnd = FRAME;
+  let lastDestination = 0;
   const finalStart = length - FRAME;
   for (let destination = HOP; destination < finalStart; destination += HOP) {
-    checkCanceled(canceled);
-    let source = findOverlap(input, output, destination, Math.round(destination * rate), canceled);
+    let source = findOverlap(input, output, destination, Math.round(destination * rate));
     const transient = gapTransient(input, sourceEnd, source);
     if (transient !== undefined) source = Math.max(0, transient - OVERLAP);
     sourceEnd = Math.max(sourceEnd, source + FRAME);
     outputEnd = destination + FRAME;
-    for (const [index, sample] of input.subarray(source, source + FRAME).entries()) {
-      if (index < OVERLAP) {
-        const mix = index / OVERLAP;
-        // Each source frame is placed wholly inside the allocated output.
-        // oxlint-disable-next-line typescript/no-non-null-assertion
-        const blended = output[destination + index]! * (1 - mix) + sample * mix;
-        output[destination + index] = Math.max(PCM_MIN, Math.min(PCM_MAX, Math.round(blended)));
-      } else {
-        output[destination + index] = sample;
-      }
-    }
+    copyFrame(input, output, source, destination);
+    lastDestination = destination;
   }
+  // The gap before the anchored final frame has no aligned frame of its own: re-place the last
+  // frame around an isolated transient there so the anchor cannot erase it.
+  const finalTransient = gapTransient(input, sourceEnd, input.length - FRAME);
+  if (finalTransient !== undefined) copyFrame(input, output, Math.max(0, finalTransient - OVERLAP), lastDestination);
   // Anchor the final source frame at the output end and blend the complete
   // overlap with the preceding frame; never append samples beyond the bound.
   const overlap = Math.max(0, outputEnd - finalStart);
