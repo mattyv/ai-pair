@@ -23,6 +23,21 @@ function reload(editor: ReturnType<typeof setup>['editor']): void {
 // With the test config, a beat is 100 ms and `type` takes 100 ms per character.
 
 describe('where the controller and the player meet', () => {
+  it('reminds after three accepted unspoken batches only while speech is ready', async () => {
+    const ready = vi.fn().mockResolvedValue(false);
+    const narration = { ready, speak: vi.fn().mockResolvedValue(undefined), pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() };
+    const { controller } = setup({}, {}, narration);
+    await controller.start();
+    expect((await until(controller.step([{ say: 'One.' }]))).speechReminder).toBeUndefined();
+    expect((await until(controller.step([{ say: 'Two.' }]))).speechReminder).toBeUndefined();
+    expect((await until(controller.step([{ say: 'Three.' }]))).speechReminder).toBeUndefined();
+    ready.mockResolvedValue(true);
+    expect((await until(controller.step([{ say: 'Four.' }]))).speechReminder).toBe(true);
+    expect((await until(controller.step([{ say: 'Five.' }]))).speechReminder).toBeUndefined();
+    await until(controller.step([{ say: 'Selected.', speak: true }]));
+    expect((await until(controller.step([{ say: 'Six.' }]))).speechReminder).toBeUndefined();
+  });
+
   it('waits for selected speech after reading before playing the next edit', async () => {
     const { promise, resolve } = Promise.withResolvers<void>();
     const narration = {

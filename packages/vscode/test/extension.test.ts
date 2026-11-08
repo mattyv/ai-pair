@@ -20,6 +20,7 @@ import { setTimings } from '../src/timings';
 import { watchOutside } from '../src/outside_watch';
 import { settingSpeed } from '../src/panel_html';
 import { speechRuntimeAvailable } from '../src/speech_runtime_status';
+import { speechReady } from '../src/speech_readiness';
 import { localSpeechPlatform } from '../src/speech_platform';
 import type { SpeechOutput } from '../src/speech_service';
 import type { PanelWiring } from '../src/panel';
@@ -70,6 +71,7 @@ const fakes = vi.hoisted(() => {
 
   class FakeNativeDriver {
     readonly fake = true;
+    readonly available = vi.fn().mockReturnValue(true);
   }
   class FakeOutputRouter {
     readonly invalidate = vi.fn();
@@ -512,6 +514,7 @@ vi.mock('../src/demo', () => ({ playDemo: vi.fn(() => Promise.resolve()) }));
 vi.mock('../src/editor', () => ({ VsCodeEditor: fakes.FakeEditor }));
 vi.mock('../src/diagnostics', () => ({ Diagnostics: fakes.FakeDiagnostics }));
 vi.mock('../src/speech_runtime_status', () => ({ speechRuntimeAvailable: vi.fn(() => Promise.resolve(false)) }));
+vi.mock('../src/speech_readiness', () => ({ speechReady: vi.fn().mockResolvedValue(false) }));
 vi.mock('../src/speech_service', () => ({ SpeechService: fakes.FakeSpeech }));
 vi.mock('../src/speech_elevenlabs', () => ({ ElevenLabsClient: fakes.FakeCloudClient }));
 vi.mock('../src/speech_credentials', () => ({ SpeechCredentials: fakes.FakeCredentials }));
@@ -1648,6 +1651,8 @@ it('holds narration and secret changes while placement is pending, then selects 
   choice.resolve('legacy');
   await h.api.ready;
   const speech = last(fakes.made.speech);
+  expect(await h.controller.narration.ready?.()).toBe(false);
+  expect(speechReady).toHaveBeenCalledOnce();
   await h.controller.narration.speak('legacy');
   h.controller.narration.pause();
   h.controller.narration.resume();
@@ -1667,6 +1672,11 @@ it('routes companion controls, keys, frame acknowledgements and connection notic
   const session = fakes.session;
   const options = fakes.workspaceOptions;
   if (session === undefined || options === undefined) throw new Error('No session');
+  expect(await h.controller.narration.ready?.()).toBe(true);
+  expect(fakes.commandCalls).toContainEqual(['aiPair.localAudio.ready', 'test-epoch']);
+  session.pageReady.mockReturnValue(false);
+  expect(await h.controller.narration.ready?.()).toBe(false);
+  session.pageReady.mockReturnValue(true);
   await h.controller.narration.speak('hello');
   h.controller.narration.pause();
   h.controller.narration.resume();

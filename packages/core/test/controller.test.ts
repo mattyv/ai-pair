@@ -106,6 +106,7 @@ const fakes = vi.hoisted(() => {
       fork: vi.fn(),
       forget: vi.fn(),
     }),
+    reminder: { batch: vi.fn(), due: vi.fn<() => boolean>(), report: vi.fn<(ready: boolean) => boolean>() },
     FakeTimeline,
     FakePlayer,
     FakeMissingFile,
@@ -140,6 +141,11 @@ const SAY: Action[] = [{ say: 'Hi.' }];
 /** A move that anchors the cursor, with its file and line. */
 const ANCHORED: Action = { move: { file: 'a.ts', line: 1, to: 'line_end' } };
 
+vi.mock('../src/speech_reminder', () => ({
+  SpeechReminder: vi.fn(function () {
+    return fakes.reminder;
+  }),
+}));
 vi.mock('../src/diagnostic_delivery', () => ({
   reportDiagnostic: vi.fn((observer: ((event: unknown) => void) | undefined, event: unknown, receiver: unknown) =>
     observer?.call(receiver, event),
@@ -609,29 +615,32 @@ describe('a session the agent leaves, and comes back to', () => {
 });
 
 describe('speech reminders', () => {
-  it('nudges on the third accepted unspoken batch only while speech is ready', async () => {
+  it('passes accepted batch selections and readiness to the reminder', async () => {
     const narration = mock<NarrationPort>();
     narration.ready = vi.fn().mockResolvedValue(true);
+    fakes.reminder.due.mockReturnValue(true);
+    fakes.reminder.report.mockReturnValue(true);
+    const h = harness({}, {}, narration);
+    await h.controller.start('A task.');
+    const result = await report(h.controller.step([{ say: 'One.' }]));
+    expect(fakes.reminder.batch).toHaveBeenCalledWith(false);
+    expect(narration.ready).toHaveBeenCalledOnce();
+    expect(fakes.reminder.report).toHaveBeenCalledWith(true);
+    expect(result.speechReminder).toBe(true);
+    fakes.reminder.due.mockReturnValue(false);
+    await report(h.controller.step([{ say: 'Selected.', speak: true }]));
+    expect(fakes.reminder.batch).toHaveBeenLastCalledWith(true);
+  });
+
+  it('does not query readiness until the counter is due', async () => {
+    const narration = mock<NarrationPort>();
+    narration.ready = vi.fn().mockResolvedValue(true);
+    fakes.reminder.due.mockReturnValue(false);
     const h = harness({}, {}, narration);
     await h.controller.start('A task.');
     expect((await report(h.controller.step([{ say: 'One.' }]))).speechReminder).toBeUndefined();
-    expect((await report(h.controller.step([{ say: 'Two.' }]))).speechReminder).toBeUndefined();
-    expect((await report(h.controller.step([{ say: 'Three.' }]))).speechReminder).toBe(true);
+    expect(narration.ready).not.toHaveBeenCalled();
   });
-});
-
-it('withholds reminders when speech is unavailable and resets after selected speech', async () => {
-  const narration = mock<NarrationPort>();
-  const ready = vi.fn().mockResolvedValue(false);
-  narration.ready = ready;
-  const h = harness({}, {}, narration);
-  await h.controller.start('A task.');
-  for (let index = 0; index < 3; index++) {
-    expect((await report(h.controller.step([{ say: 'Text.' }]))).speechReminder).toBeUndefined();
-  }
-  ready.mockResolvedValue(true);
-  await report(h.controller.step([{ say: 'Selected.', speak: true }]));
-  expect((await report(h.controller.step([{ say: 'Text.' }]))).speechReminder).toBeUndefined();
 });
 
 describe('steps and their batches', () => {
