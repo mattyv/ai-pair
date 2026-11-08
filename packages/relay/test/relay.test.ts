@@ -17,6 +17,11 @@ import { FakeEditor, FakePanel, testConfig } from '../../core/test/fake';
 import { EditorLink, findWindows } from '../src/link';
 import { createServer, serve } from '../src/server';
 
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return { ...actual, statSync: (file: fs.PathLike) => (file === '/project/src' ? { isDirectory: () => true } : actual.statSync(file)) };
+});
+
 const fast = {
   ...testConfig,
   timing: {
@@ -496,8 +501,8 @@ describe('relay', () => {
   it('explains when no editor has the project open', async () => {
     const client = await connect('/elsewhere');
     expect((await call(client, 'start')).text).toMatch(/^no_editor: No VS Code window has \/elsewhere open/);
-    const given = await call(client, 'start', { cwd: '/also/elsewhere' });
-    expect(given.text).toMatch(/^no_editor: No VS Code window has \/also\/elsewhere open/);
+    const given = await call(client, 'start', { cwd: dir });
+    expect(given.text).toMatch(/^no_editor: No VS Code window has /);
   });
 
   it('works in the folder the agent gives, when the harness started the relay somewhere else', async () => {
@@ -508,15 +513,17 @@ describe('relay', () => {
     expect(editor.text('src/a.ts')).toBe('hi');
   });
 
-  it("works in the harness's root, and in the relay's folder when the agent's isn't open", async () => {
+  it('uses the harness root when no working directory is given, and rejects an unmatched explicit directory', async () => {
     const rooted = await connect('/', ['file:///elsewhere', 'file:///project/src']);
     expect((await call(rooted, 'start')).error).toBe(false);
     expect((await call(rooted, 'read', { file: 'a.ts' })).error).toBe(false);
     await call(rooted, 'end');
 
     const client = await connect('/project/src');
-    expect((await call(client, 'start', { cwd: '/elsewhere' })).error).toBe(false);
-    expect((await call(client, 'read', { file: 'a.ts' })).error).toBe(false);
+    const rejected = await call(client, 'start', { cwd: dir });
+    expect(rejected.error).toBe(true);
+    expect(rejected.text).toMatch(/^no_editor:/);
+    expect((await call(client, 'read', { file: 'a.ts' })).error).toBe(true);
   });
 
   it('ExitsAfterShutdown: serves until stdin ends, then closes the server and the link (#163)', async () => {

@@ -4,6 +4,7 @@
 
 import { ok } from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
+import * as fs from 'node:fs';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { CallToolResult, JSONRPCMessage, RequestId } from '@modelcontextprotocol/sdk/types.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -98,6 +99,7 @@ const fakes = vi.hoisted(() => {
   return { FakeMcpServer, FakeEditorLink, FakeRelayError };
 });
 
+vi.mock('node:fs', () => ({ statSync: vi.fn(() => ({ isDirectory: () => true })) }));
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({ McpServer: fakes.FakeMcpServer }));
 vi.mock('../src/link', () => ({ EditorLink: fakes.FakeEditorLink, RelayError: fakes.FakeRelayError }));
 vi.mock('../src/guide', () => ({ readGuides: vi.fn(() => []), renderGuides: vi.fn(() => 'the rules') }));
@@ -239,8 +241,8 @@ describe('createServer', () => {
     const signal = new AbortController().signal;
     const result = await call(sdk, 'start', { cwd: '/given', task: 'a todos API' }, { signal });
     expect(texts(result)).toEqual(['the report', '# Pairing guide\n\nTHE GUIDE', 'the rules']);
-    expect(sdk.server.listRoots).toHaveBeenCalledWith(undefined, { timeout: 2000 });
-    expect(link.locate).toHaveBeenCalledWith(['/given', '/root/a', '/project/src']);
+    expect(sdk.server.listRoots).not.toHaveBeenCalled();
+    expect(link.locate).toHaveBeenCalledWith(['/given']);
     expect(readGuides).toHaveBeenCalledWith('/home/me/.ai-pair', '/given', '/given');
     expect(link.call).toHaveBeenCalledWith('start', { task: 'a todos API', cwd: '/given', rules: ['~/.ai-pair/GUIDE.md'] }, signal);
     const [shown, show] = vi.mocked(renderGuides).mock.lastCall ?? [];
@@ -248,13 +250,25 @@ describe('createServer', () => {
     expect(show?.('/elsewhere/GUIDE.md')).toBe('/elsewhere/GUIDE.md');
   });
 
+  it('rejects missing and non-directory explicit paths before contacting the editor', async () => {
+    const { sdk, link } = build();
+    vi.mocked(fs.statSync).mockImplementationOnce(() => {
+      throw new Error('missing');
+    });
+    expect((await call(sdk, 'start', { cwd: '/missing' })).isError).toBe(true);
+    vi.mocked(fs.statSync).mockReturnValueOnce({ isDirectory: () => false } as fs.Stats);
+    expect((await call(sdk, 'start', { cwd: '/file' })).isError).toBe(true);
+    expect(link.locate).not.toHaveBeenCalled();
+    expect(link.call).not.toHaveBeenCalled();
+  });
+
   it('leaves out a folder that is not absolute, the roots of a harness that has none or fails to list them, and rules with no guides', async () => {
     const { sdk, link } = build();
     vi.mocked(link.locate).mockReturnValue('/project/src');
     vi.mocked(link.workspace).mockReturnValue({ folder: '/project/src', root: '/project' });
     vi.mocked(link.call).mockResolvedValue(EMPTY_REPORT);
-    expect(texts(await call(sdk, 'start', { cwd: 'relative' }))).toEqual(['the report', '# Pairing guide\n\nTHE GUIDE']);
-    expect(link.locate).toHaveBeenLastCalledWith(['/project/src']);
+    expect((await call(sdk, 'start', { cwd: 'relative' })).isError).toBe(true);
+    expect(link.locate).not.toHaveBeenCalled();
     sdk.server.getClientCapabilities.mockReturnValueOnce({ roots: {} });
     sdk.server.listRoots.mockRejectedValueOnce(new Error('no roots today'));
     await call(sdk, 'start');

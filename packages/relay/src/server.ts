@@ -1,3 +1,4 @@
+import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -53,8 +54,8 @@ function shownPath(file: string): string {
 
 /**
  * Creates the MCP server. `cwd` is the relay's working directory. The agent's paths are relative to its own, which `start`
- * finds as the first of these that a VS Code window has open: the one the agent gives, the harness's
- * roots, and `cwd`. Some harnesses start MCP servers in `/` or in their own install folder.
+ * takes from an explicit directory, or finds in the harness's roots and `cwd` when none is supplied.
+ * Some harnesses start MCP servers in `/` or in their own install folder.
  */
 export function createServer(link: EditorLink, guide: string, cwd: string): McpServer {
   const server = new McpServer({ name: 'ai-pair', version: AI_PAIR_VERSION }, { instructions: INSTRUCTIONS });
@@ -106,7 +107,16 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
 
   server.registerTool('start', TOOLS.start, ({ cwd: given, ...args }, extra) =>
     run('start', args, extra, async () => {
-      const folders = [...(given !== undefined && path.isAbsolute(given) ? [given] : []), ...(await roots()), cwd];
+      // specs/StartDirectory.tla, `Start`: an explicit directory never falls back.
+      if (given !== undefined) {
+        if (!path.isAbsolute(given)) throw new RelayError('invalid_cwd', 'The working directory must be an absolute path.');
+        try {
+          if (!fs.statSync(given).isDirectory()) throw new Error('not a directory');
+        } catch {
+          throw new RelayError('invalid_cwd', `The working directory is not an existing directory: ${given}`);
+        }
+      }
+      const folders = given === undefined ? [...(await roots()), cwd] : [given];
       const located = link.locate(folders);
       const { folder, root } = link.workspace(located);
       guides = readGuides(aiPairHome(), folder, root);

@@ -464,3 +464,12 @@ Reply timing is a persistent Settings choice, defaulting to immediate interrupti
 The alternative waits for the current action boundary, which can delay a reply
 during a long command. Stop remains immediate. The workspace and local companion
 share the existing panel protocol and workspace configuration for this choice.
+
+## Explicit session working directories
+
+An explicit `start.cwd` is authoritative: it must name an existing absolute
+directory inside an open editor workspace, or start fails before contacting the
+editor. The relay searches client roots and its own working directory only when
+`cwd` is omitted. This avoids silently applying relative edits and commands in
+an unintended folder. A directory outside all open workspaces must be opened in
+an editor before it can be used; this does not add external workspace support.

@@ -1328,7 +1328,7 @@ export async function run(): Promise<void> {
   }
   const fooled = await relayAgent(relayEnv());
   const fooledStart = await called(fooled, 'start', { task: 'fakes', cwd: '/no/such/folder' });
-  assert.equal(fooledStart.failed, false, fooledStart.text);
+  assert.ok(fooledStart.failed && fooledStart.text.startsWith('invalid_cwd:'), fooledStart.text);
   // Another folder of the window: the relay closes its socket and finds the window again (specs/Wire.tla, `CloseSocket`).
   fs.mkdirSync(file('sub'), { recursive: true });
   const relocated = await called(fooled, 'start', { task: 'moved', cwd: file('sub') });

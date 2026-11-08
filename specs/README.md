@@ -2718,3 +2718,16 @@ its counter cap permits the count to leave its declared range.
 | Configuration | Bounds | Distinct states | Result |
 | --- | --- | ---: | --- |
 | `SpeechReminder.cfg` | Three batches; Boolean readiness and selection | 11 | Pass |
+
+### `StartDirectory`: choosing the session directory
+
+`server.ts` validates an explicit directory and selects only it; omitted
+directories use client roots and the relay directory. The model abstracts
+filesystem and editor matching as booleans. TLC checks 32 distinct states with
+`StartDirectory.cfg`. `Strict = FALSE` produces an `Authoritative` violation.
+
+| Property | Test |
+| --- | --- |
+| `Authoritative` | `relay.test.ts`: uses the harness root when no working directory is given, and rejects an unmatched explicit directory; `server.test.ts`: rejects missing and non-directory explicit paths before contacting the editor |
+| `RejectedWithoutSelection` | `server.test.ts`: rejects missing and non-directory explicit paths before contacting the editor |
+| `Finishes` | `relay.test.ts`: uses the harness root when no working directory is given, and rejects an unmatched explicit directory |
