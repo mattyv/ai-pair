@@ -412,7 +412,8 @@ Issue discussions and working notes hold the detailed evidence and history.
     download failures, retaining the pinned release asset IDs and SHA-256
     verification. Exhausted retries and checksum mismatches still fail CI.
 -   Keep the specs job present on every run. Only a pull request whose nonempty
-    diff contains exclusively recognized test files skips TLC; source, model,
+    diff contains exclusively recognized test files or the explicitly named VS
+    Code integration harness files skips TLC; source, model,
     workflow and unknown changes, an unavailable base, and push events run
     every model. Disabling rename detection checks both paths of a move.
 

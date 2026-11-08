@@ -7,7 +7,7 @@ setup() {
   git init -q
   git config user.email test@example.com
   git config user.name Test
-  mkdir -p packages/demo/test packages/demo/src specs
+  mkdir -p packages/demo/test packages/demo/src packages/vscode/test specs
   echo before >packages/demo/test/demo.test.ts
   echo before >packages/demo/src/demo.ts
   echo before >specs/Demo.tla
@@ -24,8 +24,17 @@ setup() {
   [ "${output}" = false ]
 }
 
+@test "skips the known VS Code integration harness files" {
+  echo test >packages/vscode/test/integration.ts
+  echo test >packages/vscode/test/integration_preserved_playback.ts
+  git add . && git commit -qm integration
+  run bash "${ROOT}/scripts/specs_needed.sh" "${BASE}" HEAD
+  [ "${status}" -eq 0 ]
+  [ "${output}" = false ]
+}
+
 @test "runs for source, spec and unknown changes independently" {
-  for path in packages/demo/src/demo.ts specs/Demo.tla README.md; do
+  for path in packages/demo/src/demo.ts specs/Demo.tla README.md packages/vscode/test/integration_unknown.ts; do
     git reset --hard -q "${BASE}"
     echo after >"${path}"
     git add . && git commit -qm change

@@ -12,7 +12,9 @@ if [[ -z "${changes}" ]]; then
 fi
 while IFS= read -r path; do
   case "${path}" in
-    packages/*/test/*.test.ts | packages/*/test/*.test.mts | scripts/test/*.bats)
+    packages/*/test/*.test.ts | packages/*/test/*.test.mts | scripts/test/*.bats | \
+      packages/vscode/test/integration.ts | \
+      packages/vscode/test/integration_preserved_playback.ts)
       ;;
     *)
       echo true
