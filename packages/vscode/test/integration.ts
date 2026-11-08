@@ -1137,7 +1137,7 @@ export async function run(): Promise<void> {
     cwd: root,
     env: relayEnv(),
   });
-  const agent = new Client({ name: 'integration', version: '0' });
+  let agent = new Client({ name: 'integration', version: '0' });
   await agent.connect(transport);
   const tools = await agent.listTools();
   assert.deepEqual(tools.tools.map((t) => t.name).toSorted(), ['calibrate', 'end', 'listen', 'read', 'start', 'step']);
@@ -1191,6 +1191,18 @@ export async function run(): Promise<void> {
   assert.match(repeated, /may repeat/);
   console.log('a report canceled after it was taken comes again, marked');
   await tool('end', { summary: 'Bye.' });
+  // Fresh sessions restart their batch numbers; reconnecting resumes the existing sequence.
+  await tool('start', { task: 'batch identity' });
+  await tool('step', { actions: [{ say: 'First batch in a fresh session.' }] });
+  assert.match(await tool('step', { actions: [] }), /Batch 1 completed/);
+  await agent.close();
+  await sleep(300);
+  agent = new Client({ name: 'integration', version: '0' });
+  await agent.connect(new StdioClientTransport({ command: api.launcher, cwd: root, env: relayEnv() }));
+  assert.match(await tool('start', { task: 'resume batch identity' }), /session has resumed/i);
+  await tool('step', { actions: [{ say: 'Second batch after reconnecting.' }] });
+  assert.match(await tool('step', { actions: [] }), /Batch 2 completed/);
+  await tool('end', { summary: 'Identity checked.' });
   // Two rejections cancelled after the agent took them come back, each in a report marked as one
   // that may repeat, and a session the programmer ends stays until both are out (specs/Controller.tla).
   await toolAll('start', { task: 'held' });
