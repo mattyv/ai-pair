@@ -933,6 +933,42 @@ describe('playing the queue', () => {
     });
   });
 
+  it('reports Pylance diagnostics on every batch but the snapshot caveat only once per session', async () => {
+    const h = await started();
+    h.editor.diagnostics.mockResolvedValue({
+      diagnostics: [{ line: 1, endLine: 1, message: '"add" is not defined', source: 'Pylance' }],
+      warnings: ['VS Code diagnostics are snapshots; freshness is not confirmed.'],
+    });
+    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed' }, sightings: [], editedFiles: [A] });
+    await report(h.controller.step(SAY));
+    await settle();
+    const first = await report(h.controller.listen());
+    expect(first.batches[0]?.warnings).toEqual(['VS Code diagnostics are snapshots; freshness is not confirmed.']);
+    player().play.mockResolvedValueOnce({ result: { id: 2, status: 'completed' }, sightings: [], editedFiles: [A] });
+    await report(h.controller.step(SAY));
+    await settle();
+    const second = await report(h.controller.listen());
+    expect(second.batches[0]?.diagnostics).toEqual([
+      { file: 'a.ts', line: 1, endLine: 1, message: '"add" is not defined', source: 'Pylance' },
+    ]);
+    expect(second.batches[0]?.warnings).toBeUndefined();
+  });
+
+  it('keeps specific diagnostic failures after the snapshot caveat has been reported', async () => {
+    const h = await started();
+    const caveat = 'VS Code diagnostics are snapshots; freshness is not confirmed.';
+    h.editor.diagnostics.mockResolvedValueOnce({ diagnostics: [], warnings: [caveat] });
+    h.editor.diagnostics.mockResolvedValueOnce({ diagnostics: [], warnings: [caveat, 'VS Code diagnostics could not be read.'] });
+    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed' }, sightings: [], editedFiles: [A] });
+    await report(h.controller.step(SAY));
+    await settle();
+    await report(h.controller.listen());
+    player().play.mockResolvedValueOnce({ result: { id: 2, status: 'completed' }, sightings: [], editedFiles: [A] });
+    await report(h.controller.step(SAY));
+    await settle();
+    expect((await report(h.controller.listen())).batches[0]?.warnings).toEqual(['VS Code diagnostics could not be read.']);
+  });
+
   it('Advisory: an unavailable checker leaves the batch result intact', async () => {
     const h = await started();
     h.editor.diagnostics.mockRejectedValue(new Error('unavailable'));

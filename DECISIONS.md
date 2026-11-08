@@ -473,3 +473,11 @@ editor. The relay searches client roots and its own working directory only when
 `cwd` is omitted. This avoids silently applying relative edits and commands in
 an unintended folder. A directory outside all open workspaces must be opened in
 an editor before it can be used; this does not add external workspace support.
+
+## Editor diagnostic snapshots
+
+-   Report VS Code's snapshot-freshness caveat once per session, while retaining
+    each file's diagnostic findings and specific check failures in every batch.
+    VS Code does not confirm that a snapshot reflects the latest edit, even when
+    it contains a diagnostic. A restarted or reloaded session may repeat the
+    caveat.

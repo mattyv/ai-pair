@@ -140,7 +140,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Reload.cfg` | `NumLines = 5` lines, any of them changed on disk, a selection at a line's start or not | holds | 320 |
 | `Rehearsal.cfg` | `MaxLines = 3` lines, `MaxOthers = 2` changes by others, `MaxProgrammerEdits = 1`, `MaxBatches = 2` batches, `MaxQueued = 2` queued, either turn, `ReportWaitsForQueue = TRUE` | holds, in about 200 seconds | 6,721,044 |
 | `BatchFile.cfg` | files `sourceFile`, `destinationFile`, and `otherFile`, `MaxActions = 4` actions a batch, `FallBackToNamed = TRUE`, `CursorInNamed = TRUE`, a selection or none | holds | 330 |
-| `Diagnostics.cfg` | `MaxBatches = 3`, provider available or not, completed, interrupted, and failed batches | holds | 96 |
+| `Diagnostics.cfg` | `MaxBatches = 3`, provider available or not, completed, interrupted, and failed batches | holds | 168 |
 | `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await | holds | 3,077 |
 | `Player.cfg` | `MaxEdits = 2` | holds | 26 |
 | `LineIdentity.cfg` | texts up to 4 characters, inserts up to 2 | holds (checked as `ASSUME`s) | |
@@ -1040,7 +1040,9 @@ result; the public late-name rejection remains covered by `integration_paths.ts`
 ### `Diagnostics`: advisory checks after edits
 
 The controller checks only files actually edited by a batch, after playback.
-Available observations are advisory and never change its result. This model
+Available observations are advisory and never change its result. The general
+VS Code snapshot caveat is reported once per session; specific failures are not
+suppressed. This model
 abstracts provider availability and outcomes; changing sessions or source text
 while a check runs is covered by tests, not modeled here.
 
@@ -1058,11 +1060,16 @@ Each behavioral invariant was checked with a mutation and then restored:
 | suppress observations from an available provider | `ObserveWhenAvailable` |
 | force a failed result regardless of playback | `OutcomeUnchanged` |
 | disable batch completion | `Advisory` |
+| issue the caveat without an edit | `CaveatNeedsEdit` |
+| fail to record a sent caveat | `CaveatRecorded` |
+| issue the caveat after every edited batch | `CaveatOnce` |
+| never record the first edited batch | `CaveatOnFirstEdit` (checked with `CaveatRecorded` disabled) |
 
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | TypeScript checks these types |
 | `OnlyEdited`, `ObserveWhenAvailable`, `OutcomeUnchanged`, `Advisory` | `controller.test.ts`: OnlyEdited, Advisory: reports diagnostics only for files actually edited and does not reject the batch |
+| `CaveatNeedsEdit`, `CaveatRecorded`, `CaveatOnce`, `CaveatOnFirstEdit` | `controller.test.ts`: reports Pylance diagnostics on every batch but the snapshot caveat only once per session |
 
 ### `Draft`: the reply box's pause, across the view's page
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.21.2
+
+-   Route pairing requests only to the VS Code workspace matching their working
+    directory, and report a mismatch instead of selecting another workspace.
+-   Report the VS Code diagnostic snapshot caveat once per session while still
+    reporting each diagnostic and any specific check failures.
+
 ## 0.21.1
 
 -   Move reply timing into Settings as a persistent choice, with immediate

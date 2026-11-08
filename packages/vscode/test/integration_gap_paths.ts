@@ -629,6 +629,39 @@ async function narrationSettingsFailure(api: Api): Promise<void> {
   }
 }
 
+/** VS Code diagnostics remain visible on each edit while the snapshot caveat appears once. */
+async function diagnosticSnapshotCaveat(api: Api): Promise<void> {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  assert.ok(folder, 'workspace not found');
+  const name = 'integration-diagnostic-snapshot.txt';
+  const filename = path.join(folder.uri.fsPath, name);
+  const uri = vscode.Uri.file(filename);
+  const collection = vscode.languages.createDiagnosticCollection('integration-snapshot');
+  fs.writeFileSync(filename, 'add\n');
+  const diagnostic = new vscode.Diagnostic(new vscode.Range(0, 0, 0, 3), '"add" is not defined', vscode.DiagnosticSeverity.Error);
+  diagnostic.source = 'Pylance';
+  collection.set(uri, [diagnostic]);
+  const { controller } = api;
+  const caveat = 'VS Code diagnostics are snapshots; freshness is not confirmed.';
+  controller.setSpeed(20);
+  try {
+    await controller.start('diagnostic snapshots');
+    await controller.read(name);
+    for (let index = 0; index < 2; index++) {
+      await controller.step([{ move: { file: name, line: 1, to: 'line_end' } }, { type_fast: `x${CURSOR_MARKER}` }]);
+      const report = await controller.step([]);
+      const batch = report.batches.find((item) => item.status === 'completed');
+      assert.ok(batch, JSON.stringify(report));
+      assert.ok(batch.diagnostics?.some((item) => item.message === '"add" is not defined' && item.source === 'Pylance') === true);
+      assert.equal(batch.warnings?.includes(caveat) === true, index === 0);
+    }
+  } finally {
+    collection.dispose();
+    controller.endSession();
+    fs.rmSync(filename, { force: true });
+  }
+}
+
 /** An injected EditorPort diagnostics rejection is advisory and the next check recovers. */
 async function editorDiagnosticsFailure(api: Api): Promise<void> {
   const folder = vscode.workspace.workspaceFolders?.[0];
@@ -834,6 +867,7 @@ export async function gapPaths(api: Api): Promise<void> {
   await foreignTerminalExecution(api);
   await diagnosticObserverFailure(api);
   await narrationSettingsFailure(api);
+  await diagnosticSnapshotCaveat(api);
   await editorDiagnosticsFailure(api);
   await delayedDiagnosticsAfterReplacement(api);
   await interruptedTypingAfterMarker(api);
