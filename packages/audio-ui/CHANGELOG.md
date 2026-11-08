@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.22.0
+
+-   Show queued work alongside the current pairing status.
+-   Require a matching AI Pair extension for the private panel and audio
+    connection. Update both extensions and reload after upgrading.
+
 ## 0.20.1
 
 -   Verify local Kokoro platform support using bounded evidence from the running

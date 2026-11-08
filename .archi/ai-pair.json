@@ -2,9 +2,9 @@
   "version": 1,
   "bundleId": "277c3415-7b74-4008-8be4-8c14ae6d41dd",
   "revision": {
-    "number": 17,
+    "number": 18,
     "updatedAt": "2026-11-08T00:00:00.000Z",
-    "summary": "Match relay and editor runtime identity before starting a session"
+    "summary": "Preserve runtime identity and show queued work across compatible companion versions"
   },
   "diagrams": [
     {

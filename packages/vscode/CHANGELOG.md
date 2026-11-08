@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.22.0
+
+-   Deliver completed command output to a waiting agent promptly, including
+    while later work is queued.
+-   Show queued work and waiting, approval, and playback states in the panel.
+-   Require matching AI Pair and Local Audio companion versions; update both
+    and reload when their private connection is incompatible.
+
 ## 0.21.3
 
 -   Reject a relay whose version or packaged runtime differs from the running

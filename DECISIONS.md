@@ -499,9 +499,10 @@ these identities and the editor build. Hashes identify local builds; they do not
 attest to trust. Relays already running from older releases cannot perform this
 check and may need to be restarted after every window is updated.
 
-Archi revision 17 records this boundary and its older-relay limitation. Its
-source passed Archi 1.5.1 validation; the regenerated standalone HTML opened
-in Chromium without page errors and displayed its diagrams.
+Archi revision 18 retains revision 17's runtime identity boundary and adds
+the companion status and compatibility change. Its source passed Archi 1.5.1
+validation; the regenerated standalone HTML opened in Chromium without page
+errors and displayed its diagrams.
 
 The packaged MCP harness is a test fixture: it has no production callers and
 exercises an installed VSIX through the SDK. Keep it under the VS Code test

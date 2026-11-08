@@ -264,6 +264,7 @@ Last updated: css, 2026-11-08.
 | `packages/vscode/test/page.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/panel.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/panel_html.test.ts` | TypeScript | test | test | test | test | - | test |
+| `packages/vscode/test/panel_placement.integration.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/panel_placement.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/panel_update_sender.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/panel_update_sender.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -340,7 +341,6 @@ Last updated: css, 2026-11-08.
 | `scripts/normalize_architecture.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `scripts/normalize_architecture.test.ts` | TypeScript | test | test | test | - | - | test |
 | `scripts/normalize_architecture.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `scripts/packaged_mcp_check.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
 | `scripts/release.test.ts` | TypeScript | test | test | test | test | - | test |
 | `scripts/release.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/specs_needed.sh` | Shell | - | - | - | - | - | - |
