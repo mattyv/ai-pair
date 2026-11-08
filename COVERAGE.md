@@ -240,6 +240,7 @@ Last updated: css, 2026-11-08.
 | `packages/vscode/test/integration_code_playback.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_companion_faults.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_companion_paths.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_companion_version.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/integration_core_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_deferred_settlement.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/integration_gap_paths.ts` | TypeScript | test | test | test | - | - | test |
@@ -247,6 +248,7 @@ Last updated: css, 2026-11-08.
 | `packages/vscode/test/integration_legacy_speech_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_model_status.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/integration_no_workspace.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_notification.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/integration_panel_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_paths.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/integration_player_faults.ts` | TypeScript | test | test | test | - | - | test |
@@ -258,6 +260,7 @@ Last updated: css, 2026-11-08.
 | `packages/vscode/test/integration_speech_reminder.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/integration_startup_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_terminal_cleanup.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_workspace_incompatible.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/launcher.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/output.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/outside.test.ts` | TypeScript | test | test | test | test | test | test |

@@ -2421,7 +2421,7 @@ forbidden. The negative control disables this guard and violates
 
 | Property | Test |
 |---|---|
-| `RejectInstalled` | `panel_placement.test.ts`: rejects an installed incompatible companion before selecting any panel owner. |
+| `RejectInstalled` | `panel_placement.test.ts`: rejects an installed incompatible companion before selecting any panel owner; `integration_workspace_incompatible.ts`: a synthetic companion refusal shows the warning without committing or previewing. |
 | `NoFallbackAfterCommit`, `CommittedSettles` | `panel_placement.test.ts`: chooses companion irrevocably before committing, including on a lost acknowledgement. |
 | `NoEarlyRegistration`, `NoDuplicateRegistration`, `PreparationSettles` | `panel_placement.test.ts`: falls back only before commit and ignores late prepare replies; uses local legacy only for a failed or invalid preparation before commit. |
 

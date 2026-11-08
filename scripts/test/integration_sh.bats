@@ -34,6 +34,10 @@ for arg in "$@"; do
       RECORD="${RECORD}.speech.catalog"; ENV_RECORD="${ENV_RECORD}.speech.catalog" ;;
     --extensionTestsPath=*integration_companion_faults.js)
       RECORD="${RECORD}.speech.companion"; ENV_RECORD="${ENV_RECORD}.speech.companion" ;;
+    --extensionTestsPath=*integration_companion_version.js)
+      RECORD="${RECORD}.speech.version"; ENV_RECORD="${ENV_RECORD}.speech.version" ;;
+    --extensionTestsPath=*integration_workspace_incompatible.js)
+      RECORD="${RECORD}.speech.incompatible"; ENV_RECORD="${ENV_RECORD}.speech.incompatible" ;;
     --extensionTestsPath=*integration_no_workspace.js)
       RECORD="${RECORD}.speech.empty"; ENV_RECORD="${ENV_RECORD}.speech.empty" ;;
     --extensionTestsPath=*integration_restricted_runtime.js)
