@@ -74,6 +74,13 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
     <h1>Settings</h1>
     <section class="settings-section">
       <h2>Conversation</h2>
+      <label class="settings-field">When I send a reply
+        <select data-ui="reply-behavior">
+          <option value="interrupt">Interrupt immediately</option>
+          <option value="finishAction">Finish current action first</option>
+        </select>
+      </label>
+      <p>Long commands can delay a reply until they finish. Stop always interrupts immediately.</p>
       <label class="settings-field">Chat order
         <select data-ui="chat-order">
           <option value="newestFirst">Newest first</option>
@@ -331,7 +338,6 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
           data-tip="Don't send the selection"
         >x</button>
       </div>
-      <label><input type="checkbox" data-ui="defer-reply"> Finish current action before sending</label>
       <div class="compose-row">
         <textarea
           data-ui="reply"

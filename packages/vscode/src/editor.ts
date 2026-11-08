@@ -3,7 +3,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { LABEL_SEPARATOR } from '@ai-pair/core/constants';
+import { DIAGNOSTIC_SNAPSHOT_WARNING, LABEL_SEPARATOR } from '@ai-pair/core/constants';
 import {
   MissingFile,
   samePath,
@@ -91,7 +91,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   /** Reads current VS Code errors and checks Python syntax without executing the source. */
   async diagnostics(file: string): Promise<DiagnosticCheck> {
     const diagnostics: EditorDiagnostic[] = [];
-    const warnings = ['VS Code diagnostics may be stale or unavailable.'];
+    const warnings = [DIAGNOSTIC_SNAPSHOT_WARNING];
     const seen = new Set<string>();
     function add(item: EditorDiagnostic): void {
       const bounded = { ...item, message: item.message.slice(0, MAX_DIAGNOSTIC_MESSAGE) };

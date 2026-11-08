@@ -2,7 +2,7 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.21.0",
+  "version": "0.21.3",
   "publisher": "michalstrba",
   "private": true,
   "license": "MIT",
@@ -244,6 +244,16 @@
           "type": "boolean",
           "default": false,
           "description": "Show AI Pair command terminals automatically. Hidden terminals are not restored after a workspace reload; terminals without shell integration are shown.",
+          "scope": "application"
+        },
+        "aiPair.replyBehavior": {
+          "type": "string",
+          "enum": [
+            "interrupt",
+            "finishAction"
+          ],
+          "default": "interrupt",
+          "description": "Choose whether replies interrupt immediately or wait for the current action to finish. Stop always interrupts immediately.",
           "scope": "application"
         },
         "aiPair.chatOrder": {

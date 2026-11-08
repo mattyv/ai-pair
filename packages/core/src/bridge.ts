@@ -27,6 +27,8 @@ export interface BridgeOptions {
   /** Where discovery files live; see `discoveryDir()`. */
   dir: string;
   workspaceFolders: () => string[];
+  /** Identifies the extension and its shipped relay. */
+  runtime: NonNullable<Discovery['runtime']>;
   /** Called with a line for each frame sent or received, for diagnosing deliveries (#27). */
   trace?: (line: string) => void;
   /** Receives allowlisted owner-connection and request lifecycle facts. */
@@ -158,6 +160,7 @@ export class Bridge {
       port: this.port,
       token: this.token,
       protocolVersion: PROTOCOL_VERSION,
+      runtime: this.options.runtime,
       lastFocused: this.lastFocused,
     };
     // Reported, not thrown: it runs on every focus, and the server works without it (#9).

@@ -38,7 +38,8 @@ export async function codePlaybackPaths(api: Api, root: string): Promise<void> {
       fs.writeFileSync(filename, 'head\n');
       await controller.read(name);
       controller.setCodePlayback(mode);
-      const before = api.history().length;
+      // The panel caps history, so its length is not a stable cursor.
+      const before = new Set(api.history());
       const text = `  value = (1 + ${CURSOR_MARKER}2)\n  triple = """hello"""\n\n  end = 3`;
       const actions: Action[] = [{ move: { file: name, line: 1, to: 'line_end' } }, { type: `\n${text}` }];
       let done = false;
@@ -58,7 +59,7 @@ export async function codePlaybackPaths(api: Api, root: string): Promise<void> {
       for (let attempt = 0; attempt < 200 && firstId === undefined; attempt++) {
         const event = api
           .history()
-          .slice(before)
+          .filter((item) => !before.has(item))
           .find((item) => item.type === 'reading' && item.owner === 'code' && item.id !== undefined);
         if (event?.type === 'reading') firstId = event.id;
         if (firstId === undefined) await sleep(10);
@@ -90,7 +91,7 @@ export async function codePlaybackPaths(api: Api, root: string): Promise<void> {
         if (done) break;
         const event = api
           .history()
-          .slice(before)
+          .filter((item) => !before.has(item))
           .findLast((item) => item.type === 'reading' && item.owner === 'code' && item.id !== undefined);
         if (event?.type === 'reading' && event.id !== undefined) controller.finishReading(event.id);
         await sleep(10);
@@ -110,7 +111,7 @@ export async function codePlaybackPaths(api: Api, root: string): Promise<void> {
     await controller.read(longName);
     controller.setCodePlayback('blocks');
     const longText = `    ${'x'.repeat(235)}"""${' word'.repeat(60)}`;
-    const prior = api.history().length;
+    const prior = new Set(api.history());
     let longDone = false;
     const longPlay = (async () => {
       await controller.step([{ move: { file: longName, line: 2, to: 'line_end' } }, { type: `${longText}${CURSOR_MARKER}` }]);
@@ -128,7 +129,7 @@ export async function codePlaybackPaths(api: Api, root: string): Promise<void> {
       if (longDone) break;
       const event = api
         .history()
-        .slice(prior)
+        .filter((item) => !prior.has(item))
         .findLast((item) => item.type === 'reading' && item.owner === 'code' && item.id !== undefined);
       if (event?.type === 'reading' && event.id !== undefined) controller.finishReading(event.id);
       await sleep(10);
@@ -148,13 +149,13 @@ export async function codePlaybackPaths(api: Api, root: string): Promise<void> {
       const filename = path.join(root, name);
       fs.writeFileSync(filename, 'head\n');
       await controller.read(name);
-      const before = api.history().length;
+      const before = new Set(api.history());
       const pending = controller.step([{ move: { file: name, line: 1, to: 'line_end' } }, { type: marked }]);
       let reading = false;
       for (let attempt = 0; attempt < 200; attempt++) {
         reading = api
           .history()
-          .slice(before)
+          .filter((item) => !before.has(item))
           .some((item) => item.type === 'reading' && item.owner === 'code');
         if (reading) break;
         await sleep(10);

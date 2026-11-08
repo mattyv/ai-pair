@@ -11,7 +11,7 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes the 0.21.0 implementation on this feature branch.
+Status: describes the 0.21.2 implementation on this feature branch.
 
 The source is `.archi/ai-pair.json`. To regenerate the page with
 Archi-Techture 1.5.1, set `ARCHI_TO_HTML` to its `out/tools/archi-to-html.js`
@@ -176,17 +176,21 @@ The file is removed on deactivation.
 **The relay finds its window lazily**, when a session starts, not at launch. The
 editor may be opened after the harness. To find the window it:
 
-1.  Reads all discovery files and drops stale ones (the process is gone).
-2.  Finds the agent's working directory: the first of these that a window's
-    workspace folder contains. Harnesses don't all start MCP servers in the
-    project (Codex's app and IDE extension start them in `/` or in their own
-    install folder), so the relay's own working directory comes last:
-    - the `cwd` the agent passes to `start`,
-    - the harness's roots, if it supports MCP roots,
-    - the relay's working directory.
+1.  If `start` supplies a working directory, validates that it is an existing
+    absolute directory and selects it alone. Otherwise, gathers the harness's
+    MCP roots and the relay's working directory as candidates.
+2.  Reads discovery files, drops stale ones (the process is gone), and finds
+    the first candidate contained in an open window. An explicit directory
+    never falls back to another candidate.
 3.  Picks the window whose workspace folder contains it (the longest match). On
     a tie, it picks the most recently focused.
-4.  Connects and authenticates with the token and protocol version.
+4.  Checks the selected window's extension version and relay digest against
+    the running relay. Missing or mismatched identity fails with update and
+    reconnect guidance before forwarding a call.
+5.  Connects and authenticates with the token and protocol version.
+
+Older relays already running cannot enforce the identity check; restart them
+after updating and reloading every window.
 
 If no window matches, `start` fails with a clear message: "Open
 `/Users/me/projects/todo-app` in VS Code with the extension installed."
@@ -229,8 +233,9 @@ scanner refuses strings, comments, and ambiguous formatted-string expressions.
 It is not a Python grammar parser.
 
 After playback the editor reports advisory diagnostics for edited files. VS
-Code diagnostics can be stale or unavailable; Python files also get a syntax
-check using system `python3`, which can differ from the project interpreter.
+Code diagnostics are snapshots with unconfirmed freshness and can be
+unavailable. Python files also get a syntax check using system `python3`,
+which can differ from the project interpreter.
 Warnings report limitations and failures of these checks.
 
 **One MCP connection can host many pairing sessions, one after another.** The

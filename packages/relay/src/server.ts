@@ -1,3 +1,4 @@
+import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +29,7 @@ export interface ServeOptions {
   cwd: string;
   dir: string;
   stdin: NodeJS.ReadableStream;
+  runtime?: { version: string; relayHash: string };
 }
 
 /** Returns the agent-facing part of AGENT_GUIDE.md: everything after the first horizontal rule. */
@@ -53,8 +55,8 @@ function shownPath(file: string): string {
 
 /**
  * Creates the MCP server. `cwd` is the relay's working directory. The agent's paths are relative to its own, which `start`
- * finds as the first of these that a VS Code window has open: the one the agent gives, the harness's
- * roots, and `cwd`. Some harnesses start MCP servers in `/` or in their own install folder.
+ * takes from an explicit directory, or finds in the harness's roots and `cwd` when none is supplied.
+ * Some harnesses start MCP servers in `/` or in their own install folder.
  */
 export function createServer(link: EditorLink, guide: string, cwd: string): McpServer {
   const server = new McpServer({ name: 'ai-pair', version: AI_PAIR_VERSION }, { instructions: INSTRUCTIONS });
@@ -94,6 +96,12 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
       // that doesn't fit its schema throws, and reaches the agent as an internal error.
       const text = tool === 'read' ? renderFile(FILE_CONTENT_SCHEMA.parse(result)) : renderReport(REPORT_SCHEMA.parse(result), tool);
       const content: CallToolResult['content'] = [{ type: 'text', text }];
+      if (tool === 'start' && link.activeRuntime !== undefined) {
+        content.push({
+          type: 'text',
+          text: `Runtime: relay ${AI_PAIR_VERSION}; editor ${link.activeRuntime.version} (build ${link.activeRuntime.build}); relay SHA-256 ${link.activeRuntime.relayHash}.`,
+        });
+      }
       if (tool === 'start') content.push({ type: 'text', text: `# Pairing guide\n\n${guide}` });
       if (tool === 'start' && guides.length > 0) content.push({ type: 'text', text: renderGuides(guides, shownPath) });
       return { content };
@@ -106,7 +114,16 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
 
   server.registerTool('start', TOOLS.start, ({ cwd: given, ...args }, extra) =>
     run('start', args, extra, async () => {
-      const folders = [...(given !== undefined && path.isAbsolute(given) ? [given] : []), ...(await roots()), cwd];
+      // specs/StartDirectory.tla, `Start`: an explicit directory never falls back.
+      if (given !== undefined) {
+        if (!path.isAbsolute(given)) throw new RelayError('invalid_cwd', 'The working directory must be an absolute path.');
+        try {
+          if (!fs.statSync(given).isDirectory()) throw new Error('not a directory');
+        } catch {
+          throw new RelayError('invalid_cwd', `The working directory is not an existing directory: ${given}`);
+        }
+      }
+      const folders = given === undefined ? [...(await roots()), cwd] : [given];
       const located = link.locate(folders);
       const { folder, root } = link.workspace(located);
       guides = readGuides(aiPairHome(), folder, root);
@@ -158,8 +175,8 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
  * signals two seconds later), and closes the server and the link. The process then exits normally, so V8 writes its
  * coverage in the integration run (#163).
  */
-export async function serve({ transport, guide, cwd, dir, stdin }: ServeOptions): Promise<void> {
-  const link = new EditorLink(cwd, dir);
+export async function serve({ transport, guide, cwd, dir, stdin, runtime }: ServeOptions): Promise<void> {
+  const link = new EditorLink(cwd, dir, runtime);
   const server = createServer(link, guide, cwd);
   await server.connect(transport);
   await new Promise<void>((resolve) => {

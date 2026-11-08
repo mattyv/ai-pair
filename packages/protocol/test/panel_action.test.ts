@@ -23,6 +23,8 @@ describe('cross-host panel actions', () => {
       { type: 'command', command: 'aiPair.playDemo' },
       { type: 'start' },
       { type: 'copyDiagnostics' },
+      { type: 'replyBehavior', value: 'interrupt' },
+      { type: 'replyBehavior', value: 'finishAction' },
       { type: 'chatOrder', value: 'newestFirst' },
       { type: 'showTerminals', value: true },
       { type: 'showTerminal', id: 1 },
@@ -37,6 +39,8 @@ describe('cross-host panel actions', () => {
 
   it('rejects speech settings, arbitrary commands, unknown keys, and oversized text', () => {
     for (const action of [
+      { type: 'replyBehavior', value: 'invalid' },
+      { type: 'replyBehavior', value: 'interrupt', extra: true },
       { type: 'speechKeySet' },
       { type: 'command', command: 'arbitrary.exec' },
       { type: 'reply', text: 'Hello', secret: 'key' },

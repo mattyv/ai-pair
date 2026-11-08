@@ -13,7 +13,16 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import * as vscode from 'vscode';
 import { WebSocket, WebSocketServer } from 'ws';
 import { z } from 'zod';
-import { CURSOR_MARKER, discoveryDir, fieldsProblem, PROTOCOL_VERSION, typeProblem, type Report, type ToolName } from '@ai-pair/protocol';
+import {
+  CURSOR_MARKER,
+  DISCOVERY_SCHEMA,
+  discoveryDir,
+  fieldsProblem,
+  PROTOCOL_VERSION,
+  typeProblem,
+  type Report,
+  type ToolName,
+} from '@ai-pair/protocol';
 import { LEFT_ARROW } from '@ai-pair/core/constants';
 import { EditorLink, findWindows } from '../../relay/src/link';
 import type { Api } from '../src/extension';
@@ -33,6 +42,7 @@ import { exerciseStartup } from './integration_startup_paths';
 import { modelStatusPaths } from './integration_model_status';
 import { invalidCalibration } from './integration_invalid_calibration';
 import { badSpeechSettings } from './integration_bad_speech_settings';
+import { runtimeIdentityPaths } from './integration_runtime_identity';
 
 const EXPECTED_TODOS = `export interface Todo {
   id: number;
@@ -208,6 +218,9 @@ async function fakeEditor(answer: (socket: WebSocket) => void): Promise<{ server
 /** Writes the discovery file of a window that isn't this one, open on `folders`, and returns its path. */
 function fakeWindow(name: string, folders: string[], port: number, changes: { pid?: number; lastFocused?: number } = {}): string {
   const written = path.join(discoveryDir(), `${name}.json`);
+  const current: unknown = JSON.parse(fs.readFileSync(path.join(discoveryDir(), `${process.pid}.json`), 'utf8'));
+  const runtime = DISCOVERY_SCHEMA.parse(current).runtime;
+  assert.ok(runtime, 'the active editor must advertise its runtime');
   fs.writeFileSync(
     written,
     JSON.stringify({
@@ -216,6 +229,7 @@ function fakeWindow(name: string, folders: string[], port: number, changes: { pi
       port,
       token: name,
       protocolVersion: PROTOCOL_VERSION,
+      runtime,
       lastFocused: Date.now(),
       ...changes,
     }),
@@ -274,6 +288,22 @@ export async function run(): Promise<void> {
     }
     assert.ok(done(), 'timed out');
   }
+  // The actual panel handler persists reply timing in global VS Code settings.
+  const replySettings = vscode.workspace.getConfiguration('aiPair');
+  const previousReplyBehavior = replySettings.inspect('replyBehavior')?.globalValue;
+  try {
+    await replySettings.update('replyBehavior', undefined, vscode.ConfigurationTarget.Global);
+    assert.equal(replySettings.get('replyBehavior'), 'interrupt');
+    api.panelMessage({ type: 'replyBehavior', value: 'finishAction' });
+    await until(() => vscode.workspace.getConfiguration('aiPair').get('replyBehavior') === 'finishAction');
+    api.panelMessage({ type: 'replyBehavior', value: 'invalid' });
+    assert.equal(vscode.workspace.getConfiguration('aiPair').get('replyBehavior'), 'finishAction');
+    api.panelMessage({ type: 'replyBehavior', value: 'interrupt' });
+    await until(() => vscode.workspace.getConfiguration('aiPair').get('replyBehavior') === 'interrupt');
+  } finally {
+    await replySettings.update('replyBehavior', previousReplyBehavior, vscode.ConfigurationTarget.Global);
+  }
+
   // A panel reply may wait for a currently typing action without cutting its token.
   fs.writeFileSync(file('deferred.txt'), '');
   const deferred = await vscode.workspace.openTextDocument(file('deferred.txt'));
@@ -1121,7 +1151,7 @@ export async function run(): Promise<void> {
     cwd: root,
     env: relayEnv(),
   });
-  const agent = new Client({ name: 'integration', version: '0' });
+  let agent = new Client({ name: 'integration', version: '0' });
   await agent.connect(transport);
   const tools = await agent.listTools();
   assert.deepEqual(tools.tools.map((t) => t.name).toSorted(), ['calibrate', 'end', 'listen', 'read', 'start', 'step']);
@@ -1175,6 +1205,18 @@ export async function run(): Promise<void> {
   assert.match(repeated, /may repeat/);
   console.log('a report canceled after it was taken comes again, marked');
   await tool('end', { summary: 'Bye.' });
+  // Fresh sessions restart their batch numbers; reconnecting resumes the existing sequence.
+  await tool('start', { task: 'batch identity' });
+  await tool('step', { actions: [{ say: 'First batch in a fresh session.' }] });
+  assert.match(await tool('step', { actions: [] }), /Batch 1 completed/);
+  await agent.close();
+  await sleep(300);
+  agent = new Client({ name: 'integration', version: '0' });
+  await agent.connect(new StdioClientTransport({ command: api.launcher, cwd: root, env: relayEnv() }));
+  assert.match(await tool('start', { task: 'resume batch identity' }), /session has resumed/i);
+  await tool('step', { actions: [{ say: 'Second batch after reconnecting.' }] });
+  assert.match(await tool('step', { actions: [] }), /Batch 2 completed/);
+  await tool('end', { summary: 'Identity checked.' });
   // Two rejections cancelled after the agent took them come back, each in a report marked as one
   // that may repeat, and a session the programmer ends stays until both are out (specs/Controller.tla).
   await toolAll('start', { task: 'held' });
@@ -1285,6 +1327,7 @@ export async function run(): Promise<void> {
   // port nothing answers, one that rejects its hello, and one that answers with something not a message; a folder that
   // doesn't exist is no folder to look for (specs/Discovery.tla, `Start`, `Try`; specs/Wire.tla, `RejectHello`,
   // `SendGarbage`). The windows that aren't hold this window's folder, focused later, so they come first.
+  await runtimeIdentityPaths(api, root);
   const refused = await fakeEditor(() => undefined);
   refused.server.close();
   const rejecting = await fakeEditor((socket) => {
@@ -1312,13 +1355,17 @@ export async function run(): Promise<void> {
   }
   const fooled = await relayAgent(relayEnv());
   const fooledStart = await called(fooled, 'start', { task: 'fakes', cwd: '/no/such/folder' });
-  assert.equal(fooledStart.failed, false, fooledStart.text);
+  assert.ok(fooledStart.failed && fooledStart.text.startsWith('invalid_cwd:'), fooledStart.text);
   // Another folder of the window: the relay closes its socket and finds the window again (specs/Wire.tla, `CloseSocket`).
   fs.mkdirSync(file('sub'), { recursive: true });
   const relocated = await called(fooled, 'start', { task: 'moved', cwd: file('sub') });
   assert.equal(relocated.failed, false, relocated.text);
   // A folder only a window that isn't one holds: every window fails, and the first failure is the answer.
   const outsider = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-pair-outsider-'));
+  const outsideStart = await called(fooled, 'start', { task: 'outside workspace', cwd: outsider });
+  assert.ok(outsideStart.failed && outsideStart.text.startsWith('no_editor:'), outsideStart.text);
+  assert.ok(outsideStart.text.includes(outsider), outsideStart.text);
+  assert.deepEqual(fs.readdirSync(outsider), []);
   fakes.push(fakeWindow('outside', [outsider], refused.port));
   const nowhere = await called(fooled, 'start', { task: 'outside', cwd: outsider });
   assert.ok(nowhere.failed && nowhere.text.startsWith("no_editor: Couldn't connect to the editor: "), nowhere.text);

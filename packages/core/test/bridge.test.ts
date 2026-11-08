@@ -212,6 +212,7 @@ async function started(options: Partial<BridgeOptions> = {}): Promise<{ bridge: 
   const bridge = new Bridge(controller, {
     dir: DIR,
     workspaceFolders: () => ['/project'],
+    runtime: { version: 'test', build: 'test-build', relayHash: 'test-hash' },
     trace: (line) => {
       traced.push(line);
     },
@@ -367,13 +368,19 @@ describe('start', () => {
       port: fakes.port,
       token: TOKEN,
       protocolVersion: PROTOCOL_VERSION,
+      runtime: { version: 'test', build: 'test-build', relayHash: 'test-hash' },
       lastFocused: startedAt,
     });
     expect(renameSync).toHaveBeenCalledWith(`${FILE}.tmp`, FILE);
   });
 
   it('fails to start when its server cannot listen', async () => {
-    const bridge = new Bridge(controller, { dir: DIR, workspaceFolders: () => [], calibrate: arm });
+    const bridge = new Bridge(controller, {
+      dir: DIR,
+      workspaceFolders: () => [],
+      calibrate: arm,
+      runtime: { version: 'test', build: 'test-build', relayHash: 'test-hash' },
+    });
     lastServer().fail(new Error('EADDRINUSE'));
     await expect(bridge.start()).rejects.toThrow('EADDRINUSE');
   });

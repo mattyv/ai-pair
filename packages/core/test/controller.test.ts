@@ -505,9 +505,23 @@ describe('a session the agent leaves, and comes back to', () => {
     expect(posted(h).at(-1)).toEqual({ type: 'session', active: true, task: 'Kept.', resumed: true });
   });
 
+  it('RecoveryBatchIds FreshStartsAtOne: starts numbering again after ending a session', async () => {
+    const h = await started();
+    await report(h.controller.step(SAY));
+    expect(h.controller.saved?.nextBatchId).toBe(2);
+    await report(h.controller.end());
+    await h.controller.start();
+    expect(h.controller.saved?.nextBatchId).toBe(1);
+    await report(h.controller.step(SAY));
+    expect(player().play).toHaveBeenCalledWith(1, SAY);
+  });
+
   it('RecoveryBatchIds Unique: keeps the next batch ID after saving and reviving a session', async () => {
     const first = await started();
     await report(first.controller.step([{ say: 'First.' }]));
+    first.controller.disconnect();
+    await first.controller.start();
+    expect(first.controller.saved?.nextBatchId).toBe(2);
     const saved = first.controller.saved;
     expect(saved).toBeDefined();
     const second = harness();
@@ -532,8 +546,10 @@ describe('a session the agent leaves, and comes back to', () => {
   it('WaitsProp: starts a new session from another directory, ending the suspended one', async () => {
     const h = harness();
     await h.controller.start('Kept.', ROOT);
+    await report(h.controller.step(SAY));
     h.controller.disconnect();
     await h.controller.start('New.', '/other');
+    expect(h.controller.saved?.nextBatchId).toBe(1);
     expect(fakes.players).toHaveLength(2);
     expect(scene().root).toBe('/other');
     expect(h.controller.isSuspended).toBe(false);
@@ -542,6 +558,18 @@ describe('a session the agent leaves, and comes back to', () => {
       { type: 'session', active: true, task: 'Kept.', suspended: true },
       { type: 'session', active: true, task: 'New.' },
     ]);
+  });
+
+  it('keeps a late result from the old session out of the new session with the same batch ID', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    h.controller.disconnect();
+    await h.controller.start('New.', '/other');
+    await report(h.controller.step(SAY));
+    finish({ status: 'failed' });
+    await settle();
+    expect(h.controller.saved?.finished).toEqual([{ id: 1, status: 'completed' }]);
   });
 
   it('WaitsProp: closes a suspended session at once when the programmer ends it', async () => {
@@ -931,6 +959,61 @@ describe('playing the queue', () => {
       diagnostics: [{ file: 'a.ts', line: 3, endLine: 3, message: 'invalid syntax', source: 'Python ast' }],
       warnings: ['VS Code diagnostics may be stale or unavailable.'],
     });
+  });
+
+  it('reports Pylance diagnostics on every batch but the snapshot caveat only once per session', async () => {
+    const h = await started();
+    h.editor.diagnostics.mockResolvedValue({
+      diagnostics: [{ line: 1, endLine: 1, message: '"add" is not defined', source: 'Pylance' }],
+      warnings: ['VS Code diagnostics are snapshots; freshness is not confirmed.'],
+    });
+    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed' }, sightings: [], editedFiles: [A] });
+    await report(h.controller.step(SAY));
+    await settle();
+    const first = await report(h.controller.listen());
+    expect(first.batches[0]?.warnings).toEqual(['VS Code diagnostics are snapshots; freshness is not confirmed.']);
+    player().play.mockResolvedValueOnce({ result: { id: 2, status: 'completed' }, sightings: [], editedFiles: [A] });
+    await report(h.controller.step(SAY));
+    await settle();
+    const second = await report(h.controller.listen());
+    expect(second.batches[0]?.diagnostics).toEqual([
+      { file: 'a.ts', line: 1, endLine: 1, message: '"add" is not defined', source: 'Pylance' },
+    ]);
+    expect(second.batches[0]?.warnings).toBeUndefined();
+  });
+
+  it('retains the caveat in a restored report and repeats it in a new session', async () => {
+    const h = await started();
+    const caveat = 'VS Code diagnostics are snapshots; freshness is not confirmed.';
+    h.editor.diagnostics.mockResolvedValue({ diagnostics: [], warnings: [caveat] });
+    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed' }, sightings: [], editedFiles: [A, B] });
+    await report(h.controller.step(SAY));
+    await settle();
+    const first = await report(h.controller.listen());
+    expect(first.batches[0]?.warnings).toEqual([caveat]);
+    h.controller.restore(first);
+    expect((await report(h.controller.listen())).batches[0]?.warnings).toEqual([caveat]);
+    h.controller.endSession();
+    await h.controller.start('Another session.');
+    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed' }, sightings: [], editedFiles: [A] });
+    await report(h.controller.step(SAY));
+    await settle();
+    expect((await report(h.controller.listen())).batches[0]?.warnings).toEqual([caveat]);
+  });
+
+  it('keeps specific diagnostic failures after the snapshot caveat has been reported', async () => {
+    const h = await started();
+    const caveat = 'VS Code diagnostics are snapshots; freshness is not confirmed.';
+    h.editor.diagnostics.mockResolvedValueOnce({ diagnostics: [], warnings: [caveat] });
+    h.editor.diagnostics.mockResolvedValueOnce({ diagnostics: [], warnings: [caveat, 'VS Code diagnostics could not be read.'] });
+    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed' }, sightings: [], editedFiles: [A] });
+    await report(h.controller.step(SAY));
+    await settle();
+    await report(h.controller.listen());
+    player().play.mockResolvedValueOnce({ result: { id: 2, status: 'completed' }, sightings: [], editedFiles: [A] });
+    await report(h.controller.step(SAY));
+    await settle();
+    expect((await report(h.controller.listen())).batches[0]?.warnings).toEqual(['VS Code diagnostics could not be read.']);
   });
 
   it('Advisory: an unavailable checker leaves the batch result intact', async () => {

@@ -46,6 +46,7 @@ export type FromPanel =
   | { type: 'command'; command: string }
   /** The Start a session button: Claude Code's CLI starts with the prompt in a hidden terminal (#107, #115). */
   | { type: 'start' }
+  | { type: 'replyBehavior'; value: 'interrupt' | 'finishAction' }
   | { type: 'chatOrder'; value: ChatOrder }
   | { type: 'showTerminals'; value: boolean }
   | { type: 'showTerminal'; id: number }
@@ -75,6 +76,7 @@ export type ToPanel =
   | { type: 'speechControl'; id: number; pageId: number; action: SpeechAction }
   | { type: 'speechStatus'; id: number; pageId: number; state: SpeechState; message?: string }
   | { type: 'focusReply' }
+  | { type: 'replyBehavior'; value: 'interrupt' | 'finishAction' }
   | { type: 'chatOrder'; value: ChatOrder }
   | { type: 'showTerminals'; value: boolean }
   | { type: 'speed'; value: number }

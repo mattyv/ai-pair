@@ -411,7 +411,7 @@ describe('diagnostics', () => {
     fakes.diagnostics.mockReturnValue([error, error, { ...error, severity: 1 }]);
     expect(await editor.diagnostics(FILE)).toEqual({
       diagnostics: [{ line: 3, endLine: 4, message: 'Unexpected token', source: 'checker' }],
-      warnings: ['VS Code diagnostics may be stale or unavailable.'],
+      warnings: ['VS Code diagnostics are snapshots; freshness is not confirmed.'],
     });
     expect(fakes.diagnostics).toHaveBeenCalledWith({ scheme: 'file', fsPath: FILE });
     editor.dispose();
@@ -433,7 +433,7 @@ describe('diagnostics', () => {
     expect(await result).toEqual({
       diagnostics: [],
       warnings: [
-        'VS Code diagnostics may be stale or unavailable.',
+        'VS Code diagnostics are snapshots; freshness is not confirmed.',
         'Python syntax check uses system python3, which may differ from the project interpreter.',
         'Python syntax check discarded because the file changed while it ran.',
       ],
@@ -466,7 +466,7 @@ describe('diagnostics', () => {
     expect(await editor.diagnostics(doc.uri.fsPath)).toEqual({
       diagnostics: [],
       warnings: [
-        'VS Code diagnostics may be stale or unavailable.',
+        'VS Code diagnostics are snapshots; freshness is not confirmed.',
         'VS Code diagnostics could not be read.',
         'Python syntax check uses system python3, which may differ from the project interpreter.',
         'python unavailable',

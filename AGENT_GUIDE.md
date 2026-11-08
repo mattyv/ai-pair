@@ -408,7 +408,11 @@ the Rainbow Passage for the calibration"):
 ### Starting and ending
 
 -   **Start** with `start`, giving a short task description and your working
-    directory, as an absolute path. A session starts fresh: re-read any files
+    directory, as an absolute path to an existing directory inside an open
+    editor workspace. If no editor has it open, ask the programmer to open or
+    add that folder to a workspace, then retry. When `cwd` is omitted, the relay
+    discovers a directory from the client roots or its own directory. A session
+    starts fresh: re-read any files
     you need, even if you read them earlier in the conversation, because the
     programmer may have changed them since.
 -   **If `start` says the session resumed,** the programmer's window kept it

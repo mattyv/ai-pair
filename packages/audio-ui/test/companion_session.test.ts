@@ -233,6 +233,15 @@ it('forwards panel controls only after local retirement and clears pause reasons
   current.dispose();
 });
 
+it('forwards a reply behavior change to the workspace', () => {
+  const current = session();
+  routing().forward({ type: 'replyBehavior', value: 'finishAction' }, 7);
+  expect(fake.send).toHaveBeenCalledWith(
+    expect.objectContaining({ type: 'panelAction', pageEpoch: 7, action: { type: 'replyBehavior', value: 'finishAction' } }),
+  );
+  current.dispose();
+});
+
 it('forwards a deferred reply without canceling local narration', () => {
   const current = session();
   const panel = routing();
@@ -364,6 +373,8 @@ it('provides safe local-only panel settings and refuses workspace operations', a
   expect(invoke(args[10])).toBe(false);
   expect(invoke(field(args[11], 'get'))).toBe('typing');
   invoke(field(args[11], 'set'), 'lines');
+  expect(invoke(field(args[12], 'get'))).toBe('interrupt');
+  invoke(field(args[12], 'set'), 'finishAction');
   current.dispose();
 });
 

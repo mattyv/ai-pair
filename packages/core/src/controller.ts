@@ -14,6 +14,7 @@ import {
   type Report,
   type Turn,
 } from '@ai-pair/protocol';
+import { DIAGNOSTIC_SNAPSHOT_WARNING } from './constants';
 import { reportDiagnostic } from './diagnostic_delivery';
 import { boundedDiff, lineChanges } from './diff';
 import { LineIds, type Sighting } from './lines';
@@ -111,6 +112,8 @@ interface Session {
   queue: QueuedBatch[];
   /** Finished batches not yet reported. */
   finished: BatchResult[];
+  /** Whether this session has already attached the diagnostic snapshot caveat. */
+  diagnosticSnapshotWarned: boolean;
   events: PendingEvent[];
   /** Messages waiting for the current action to finish. */
   deferredMessages: PendingEvent[];
@@ -375,6 +378,7 @@ export class Controller {
       }),
       queue: [],
       finished: [],
+      diagnosticSnapshotWarned: false,
       events: [],
       deferredMessages: [],
       stale: false,
@@ -390,6 +394,8 @@ export class Controller {
       lines,
       seen: new Map(),
     };
+    // specs/RecoveryBatchIds.tla, `Fresh`: each new session starts its own batch sequence.
+    this.nextBatchId = 1;
     this.session = s;
     this.closed = undefined;
     this.lastPosted = '';
@@ -1312,7 +1318,14 @@ export class Controller {
                 ...checked.diagnostics.map((diagnostic) => ({ ...diagnostic, file: this.displayPath(session, file) })),
               ];
             }
-            if (checked.warnings.length > 0) result.warnings = [...(result.warnings ?? []), ...checked.warnings];
+            // specs/Diagnostics.tla, `Finish`: the general snapshot caveat is sent once per session.
+            const warnings = checked.warnings.filter((warning) => {
+              if (warning !== DIAGNOSTIC_SNAPSHOT_WARNING) return true;
+              if (session.diagnosticSnapshotWarned) return false;
+              session.diagnosticSnapshotWarned = true;
+              return true;
+            });
+            if (warnings.length > 0) result.warnings = [...(result.warnings ?? []), ...warnings];
           } catch {
             result.warnings = [...(result.warnings ?? []), 'Diagnostics unavailable for an edited file.'];
           }

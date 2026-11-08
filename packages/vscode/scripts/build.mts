@@ -55,6 +55,8 @@ await esbuild.build({
   outfile: 'dist/relay.js',
 });
 
+const relayHash = createHash('sha256').update(fs.readFileSync('dist/relay.js')).digest('hex');
+
 // The worker resolves only the explicitly staged, offline CPU runtime.
 stageSpeechRuntime();
 if (process.platform === 'linux' && process.arch === 'x64') {
@@ -88,7 +90,11 @@ const extensionOptions: esbuild.BuildOptions = {
   entryPoints: ['src/extension.ts'],
   external: ['vscode'],
   outfile: 'dist/extension.js',
-  define: { AI_PAIR_VERSION: JSON.stringify(manifest.version), AI_PAIR_BUILD_ID: JSON.stringify('pending') },
+  define: {
+    AI_PAIR_VERSION: JSON.stringify(manifest.version),
+    AI_PAIR_BUILD_ID: JSON.stringify('pending'),
+    AI_PAIR_RELAY_HASH: JSON.stringify(relayHash),
+  },
 };
 const preliminary = await esbuild.build({ ...extensionOptions, write: false });
 const hash = createHash('sha256');
@@ -134,5 +140,9 @@ addDirectory('dist/speech');
 const buildId = hash.digest('hex').slice(0, BUILD_ID_LENGTH);
 await esbuild.build({
   ...extensionOptions,
-  define: { AI_PAIR_VERSION: JSON.stringify(manifest.version), AI_PAIR_BUILD_ID: JSON.stringify(buildId) },
+  define: {
+    AI_PAIR_VERSION: JSON.stringify(manifest.version),
+    AI_PAIR_BUILD_ID: JSON.stringify(buildId),
+    AI_PAIR_RELAY_HASH: JSON.stringify(relayHash),
+  },
 });

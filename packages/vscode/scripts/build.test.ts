@@ -63,6 +63,7 @@ it('bundles the extension, the page script, the page styles, and the relay, with
     logLevel: 'warning',
     mainFields: ['module', 'main'],
   };
+  const relayHash = '"6752cea788aba4230b054a6bef39be6d6bc8f806f28763eff8ced8b28b917fa2"';
   const buildId = builds().at(-1)?.define?.AI_PAIR_BUILD_ID;
   expect(buildId).toMatch(/^"[a-f0-9]{16}"$/);
   expect(builds()).toEqual([
@@ -113,7 +114,7 @@ it('bundles the extension, the page script, the page styles, and the relay, with
       entryPoints: ['src/extension.ts'],
       external: ['vscode'],
       outfile: 'dist/extension.js',
-      define: { AI_PAIR_VERSION: '"1.2.3"', AI_PAIR_BUILD_ID: '"pending"' },
+      define: { AI_PAIR_VERSION: '"1.2.3"', AI_PAIR_BUILD_ID: '"pending"', AI_PAIR_RELAY_HASH: relayHash },
       write: false,
     },
     {
@@ -121,7 +122,7 @@ it('bundles the extension, the page script, the page styles, and the relay, with
       entryPoints: ['src/extension.ts'],
       external: ['vscode'],
       outfile: 'dist/extension.js',
-      define: { AI_PAIR_VERSION: '"1.2.3"', AI_PAIR_BUILD_ID: buildId },
+      define: { AI_PAIR_VERSION: '"1.2.3"', AI_PAIR_BUILD_ID: buildId, AI_PAIR_RELAY_HASH: relayHash },
     },
   ]);
 });

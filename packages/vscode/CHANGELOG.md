@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.21.3
+
+-   Reject a relay whose version or packaged runtime differs from the running
+    editor, with guidance to restart pairing.
+-   Restart batch numbering for a fresh session while preserving it on resume.
+
+## 0.21.2
+
+-   Route pairing requests only to the VS Code workspace matching their working
+    directory, and report a mismatch instead of selecting another workspace.
+-   Report the VS Code diagnostic snapshot caveat once per session while still
+    reporting each diagnostic and any specific check failures.
+
+## 0.21.1
+
+-   Move reply timing into Settings as a persistent choice, with immediate
+    interruption as the default.
+
 ## 0.21.0
 
 -   Show the local Kokoro model's download and verification status, local

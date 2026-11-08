@@ -10,6 +10,13 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   GPT-6.1 Terra agents write code and tests; GPT-6 Astra agents review them.
     Resolve findings and verify the resulting changes before reporting completion.
 
+## Session batch IDs
+
+-   Number batches from one within each fresh session; resuming a saved or
+    suspended session retains its next number. History belongs to its session,
+    and pending playback is guarded by session identity. A crash before the
+    asynchronous save can still reuse an ID within a resumed session.
+
 ## Conversation panel
 
 -   Offer newest-first and oldest-first chat order, retaining newest-first as the
@@ -457,3 +464,68 @@ replay interrupted work and does not address terminal command IDs (issue #11).
 -   Try TLC's official named release URL before the pinned asset API URL, after
     repeated API 504 responses. Both must match the same pinned SHA-256; the
     named release can change, so a mismatch falls back and never runs TLC.
+
+## Reply timing preference
+
+Reply timing is a persistent Settings choice, defaulting to immediate interruption.
+The alternative waits for the current action boundary, which can delay a reply
+during a long command. Stop remains immediate. The workspace and local companion
+share the existing panel protocol and workspace configuration for this choice.
+
+## Explicit session working directories
+
+An explicit `start.cwd` is authoritative: it must name an existing absolute
+directory inside an open editor workspace, or start fails before contacting the
+editor. The relay searches client roots and its own working directory only when
+`cwd` is omitted. This avoids silently applying relative edits and commands in
+an unintended folder. A directory outside all open workspaces must be opened in
+an editor before it can be used; this does not add external workspace support.
+
+## Editor diagnostic snapshots
+
+-   Report VS Code's snapshot-freshness caveat once per session, while retaining
+    each file's diagnostic findings and specific check failures in every batch.
+    VS Code does not confirm that a snapshot reflects the latest edit, even when
+    it contains a diagnostic. A restarted or reloaded session may repeat the
+    caveat.
+
+## Relay and editor runtime identity
+
+A new relay checks the selected window's extension version and the SHA-256 of
+its shipped relay against the version and actual relay bundle running in the
+MCP process before opening a connection. Missing or different identities fail
+closed with update, reload, and reconnect guidance. Successful starts report
+these identities and the editor build. Hashes identify local builds; they do not
+attest to trust. Relays already running from older releases cannot perform this
+check and may need to be restarted after every window is updated.
+
+Archi revision 17 records this boundary and its older-relay limitation. Its
+source passed Archi 1.5.1 validation; the regenerated standalone HTML opened
+in Chromium without page errors and displayed its diagrams.
+
+The packaged MCP harness is a test fixture: it has no production callers and
+exercises an installed VSIX through the SDK. Keep it under the VS Code test
+tree and typecheck it with the rest of that tree.
+
+## Selective upstream PR 17 adoption, 2026-11-08
+
+Adopt prompt completed-command delivery and honest working, ready and approval
+status first, preserving queue depth and selected-speech policy. The acceptance
+criteria are recorded in [the PR 17 acceptance document](docs/upstream-17-acceptance.md).
+Existing working-directory, runtime-identity and recovery safety verification
+must finish before feature integration.
+
+Defer concurrent explanation/edit beats. The current player serializes `say`
+and edits on a single tracked Timeline sleeper. Replacing a sleeper leaves
+pause, hold, skip and interruption unable to control both waits; already-armed
+old timers can continue, while replaced held waits can remain unresolved.
+Supporting concurrent reading, speech and edits safely requires independently
+owned completion and cancellation gates, including line/block reading and
+existing deferred-reply boundaries. Human comfort also requires a later user
+trial. Deeper queuing is deferred pending evidence that it removes meaningful
+idle gaps beyond the current preparation/playback overlap.
+
+The current editor always provides runtime identity to its bridge. The only
+production constructor supplies it, so the bridge requires it instead of
+offering an unreachable omission. The discovery schema still accepts legacy
+records without identity so a new relay can reject them with recovery guidance.

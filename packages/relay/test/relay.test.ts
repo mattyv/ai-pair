@@ -12,10 +12,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 import { Bridge, Controller, type BridgeOptions } from '@ai-pair/core';
 import { LEFT_ARROW, RIGHT_ARROW } from '@ai-pair/core/constants';
-import { CURSOR_MARKER, PROTOCOL_VERSION } from '@ai-pair/protocol';
+import { CURSOR_MARKER, DISCOVERY_SCHEMA, PROTOCOL_VERSION } from '@ai-pair/protocol';
 import { FakeEditor, FakePanel, testConfig } from '../../core/test/fake';
 import { EditorLink, findWindows } from '../src/link';
 import { createServer, serve } from '../src/server';
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return { ...actual, statSync: (file: fs.PathLike) => (file === '/project/src' ? { isDirectory: () => true } : actual.statSync(file)) };
+});
 
 const fast = {
   ...testConfig,
@@ -53,6 +58,7 @@ beforeEach(async () => {
   bridge = new Bridge(controller, {
     dir,
     workspaceFolders: () => ['/project'],
+    runtime: { version: 'test', build: 'build-one', relayHash: 'abc' },
     trace: (line) => {
       lines.push(line);
     },
@@ -70,9 +76,9 @@ afterEach(async () => {
 });
 
 /** Connects a client to a new relay server over an in-memory transport; `roots`: the harness's roots, as file URLs, if it has them. */
-async function connect(cwd = '/project/src', roots?: string[]): Promise<Client> {
+async function connect(cwd = '/project/src', roots?: string[], runtime?: { version: string; relayHash: string }): Promise<Client> {
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
-  const server = createServer(new EditorLink(cwd, dir), 'THE GUIDE', cwd);
+  const server = createServer(new EditorLink(cwd, dir, runtime), 'THE GUIDE', cwd);
   await server.connect(serverSide);
   const client = new Client({ name: 'test', version: '0' }, { capabilities: roots === undefined ? {} : { roots: {} } });
   if (roots !== undefined) client.setRequestHandler(ListRootsRequestSchema, () => ({ roots: roots.map((uri) => ({ uri })) }));
@@ -113,6 +119,35 @@ async function call(client: Client, name: string, args: Record<string, unknown> 
 }
 
 describe('relay', () => {
+  it('RuntimeIdentity Safe: refuses a legacy window before starting a session', async () => {
+    const file = bridge.file;
+    const discovery: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const legacy = DISCOVERY_SCHEMA.parse(discovery);
+    const { runtime: _runtime, ...withoutRuntime } = legacy;
+    fs.writeFileSync(file, JSON.stringify(withoutRuntime));
+    const client = await connect('/project/src', undefined, { version: 'new', relayHash: 'abc' });
+    const result = await call(client, 'start', {});
+    expect(result.error).toBe(true);
+    expect(result.text).toContain('runtime_mismatch');
+    expect(controller.isActive).toBe(false);
+  });
+
+  it('RuntimeIdentity Settles: starts with matching identity and reports active versions', async () => {
+    bridge.dispose();
+    bridge = new Bridge(controller, {
+      dir,
+      workspaceFolders: () => ['/project'],
+      calibrate: () => true,
+      runtime: { version: 'test', build: 'build-one', relayHash: 'abc' },
+    });
+    await bridge.start();
+    const client = await connect('/project/src', undefined, { version: 'test', relayHash: 'abc' });
+    const result = await call(client, 'start', {});
+    expect(result.error).toBe(false);
+    expect(JSON.stringify(result.content)).toContain('editor test (build build-one)');
+    expect(JSON.stringify(result.content)).toContain('relay SHA-256 abc');
+  });
+
   it('lists the tools and the prompt, with short instructions', async () => {
     const client = await connect();
     const tools = await client.listTools();
@@ -152,7 +187,7 @@ describe('relay', () => {
     const started = await call(client, 'start', { task: 'test' });
     expect(started.error).toBe(false);
     expect(started.text).toMatch(/started/);
-    const guide = started.content[1];
+    const guide = started.content.find((part) => part.text.includes('THE GUIDE'));
     ok(guide);
     expect(guide.text).toContain('THE GUIDE');
 
@@ -183,7 +218,7 @@ describe('relay', () => {
     try {
       const client = await connect();
       const started = await call(client, 'start');
-      const rules = started.content[2];
+      const rules = started.content.find((part) => part.text.startsWith('# Project rules\n'));
       ok(rules);
       expect(rules.text).toMatch(/^# Project rules\n/);
       expect(rules.text).toContain(`## From ${path.join(home, 'GUIDE.md')}\n\nAlways say hello.`);
@@ -496,8 +531,8 @@ describe('relay', () => {
   it('explains when no editor has the project open', async () => {
     const client = await connect('/elsewhere');
     expect((await call(client, 'start')).text).toMatch(/^no_editor: No VS Code window has \/elsewhere open/);
-    const given = await call(client, 'start', { cwd: '/also/elsewhere' });
-    expect(given.text).toMatch(/^no_editor: No VS Code window has \/also\/elsewhere open/);
+    const given = await call(client, 'start', { cwd: dir });
+    expect(given.text).toMatch(/^no_editor: No VS Code window has /);
   });
 
   it('works in the folder the agent gives, when the harness started the relay somewhere else', async () => {
@@ -508,15 +543,28 @@ describe('relay', () => {
     expect(editor.text('src/a.ts')).toBe('hi');
   });
 
-  it("works in the harness's root, and in the relay's folder when the agent's isn't open", async () => {
+  it('uses the harness root when no working directory is given, and rejects an unmatched explicit directory', async () => {
     const rooted = await connect('/', ['file:///elsewhere', 'file:///project/src']);
     expect((await call(rooted, 'start')).error).toBe(false);
     expect((await call(rooted, 'read', { file: 'a.ts' })).error).toBe(false);
     await call(rooted, 'end');
 
     const client = await connect('/project/src');
-    expect((await call(client, 'start', { cwd: '/elsewhere' })).error).toBe(false);
-    expect((await call(client, 'read', { file: 'a.ts' })).error).toBe(false);
+    const rejected = await call(client, 'start', { cwd: dir });
+    expect(rejected.error).toBe(true);
+    expect(rejected.text).toMatch(/^no_editor:/);
+    expect((await call(client, 'read', { file: 'a.ts' })).error).toBe(true);
+  });
+
+  it('keeps the active session when a second start requests an unmatched directory', async () => {
+    const client = await connect();
+    expect((await call(client, 'start')).error).toBe(false);
+    const rejected = await call(client, 'start', { cwd: dir });
+    expect(rejected.error).toBe(true);
+    expect(rejected.text).toContain(dir);
+    await call(client, 'step', { actions: [{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `hi${CURSOR_MARKER}` }] });
+    await call(client, 'step', { actions: [] });
+    expect(editor.text('src/a.ts')).toBe('hi');
   });
 
   it('ExitsAfterShutdown: serves until stdin ends, then closes the server and the link (#163)', async () => {

@@ -26,3 +26,6 @@ const SECONDS_PER_MINUTE = 60;
 
 /** Milliseconds in a minute. */
 export const MS_PER_MINUTE = SECONDS_PER_MINUTE * MS_PER_SECOND;
+
+/** Reminds the agent that VS Code does not confirm diagnostic freshness. */
+export const DIAGNOSTIC_SNAPSHOT_WARNING = 'VS Code diagnostics are snapshots; freshness is not confirmed.';

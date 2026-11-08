@@ -121,10 +121,13 @@ export class EditorLink {
   /** The socket each report came over, for `handBack`. */
   private readonly answeredOn = new WeakMap<object, WebSocket>();
   private folder: string;
+  /** The selected window's identity, exposed in a successful start. */
+  activeRuntime: Discovery['runtime'];
 
   constructor(
     cwd: string,
     private readonly dir: string,
+    private readonly runtime?: { version: string; relayHash: string },
   ) {
     this.folder = cwd;
   }
@@ -236,6 +239,7 @@ export class EditorLink {
       try {
         return await this.openWindow(window);
       } catch (error) {
+        if (error instanceof RelayError && error.code === 'runtime_mismatch') throw error;
         first ??= error;
       }
     }
@@ -243,6 +247,21 @@ export class EditorLink {
   }
 
   private openWindow(window: Discovery): Promise<Connection> {
+    // specs/RuntimeIdentity.tla, `Start`: never forward to a different runtime.
+    if (
+      this.runtime !== undefined &&
+      (window.runtime === undefined ||
+        window.runtime.version !== this.runtime.version ||
+        window.runtime.relayHash !== this.runtime.relayHash)
+    ) {
+      const editor = window.runtime === undefined ? 'unknown' : `${window.runtime.version} (build ${window.runtime.build})`;
+      return Promise.reject(
+        new RelayError(
+          'runtime_mismatch',
+          `Runtime mismatch: relay ${this.runtime.version}, editor ${editor}. Update and reload all AI Pair windows, then reconnect the MCP server.`,
+        ),
+      );
+    }
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(`ws://127.0.0.1:${window.port}`, { handshakeTimeout: RELAY_TIMINGS.handshakeMs });
       let welcomed = false;
@@ -279,6 +298,7 @@ export class EditorLink {
           // specs/Wire.tla, `Welcome`: calls go out on this socket.
           welcomed = true;
           this.connection = connection;
+          this.activeRuntime = window.runtime;
           resolve(connection);
         } else if (message.type === 'rejected') {
           // specs/Wire.tla, `RejectHello`: the editor refused the hello, and closes its end.

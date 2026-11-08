@@ -115,6 +115,10 @@ interface Harness {
     get: ReturnType<typeof vi.fn<() => 'newestFirst' | 'oldestFirst'>>;
     set: ReturnType<typeof vi.fn<(value: 'newestFirst' | 'oldestFirst') => void>>;
   };
+  replyBehavior: {
+    get: ReturnType<typeof vi.fn<() => 'interrupt' | 'finishAction'>>;
+    set: ReturnType<typeof vi.fn<(value: 'interrupt' | 'finishAction') => void>>;
+  };
   terminalSettings: { get: ReturnType<typeof vi.fn<() => boolean>>; set: ReturnType<typeof vi.fn<(value: boolean) => void>> };
   showTerminal: ReturnType<typeof vi.fn<(id: number) => boolean>>;
   copyDiagnostics: ReturnType<typeof vi.fn<() => Promise<void>>>;
@@ -173,6 +177,10 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
   const chatOrder = {
     get: vi.fn<() => 'newestFirst' | 'oldestFirst'>(() => 'newestFirst'),
     set: vi.fn<(value: 'newestFirst' | 'oldestFirst') => void>(),
+  };
+  const replyBehavior = {
+    get: vi.fn<() => 'interrupt' | 'finishAction'>(() => 'interrupt'),
+    set: vi.fn<(value: 'interrupt' | 'finishAction') => void>(),
   };
   const terminalSettings = { get: vi.fn(() => false), set: vi.fn<(value: boolean) => void>() };
   const showTerminal = vi.fn<(id: number) => boolean>();
@@ -239,6 +247,7 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
     terminalSettings,
     showTerminal,
     codePlayback,
+    replyBehavior,
   );
   const onPost = vi.fn<() => void>();
   panel.onPost = onPost;
@@ -251,6 +260,7 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
     speed,
     readingSpeed,
     chatOrder,
+    replyBehavior,
     terminalSettings,
     showTerminal,
     copyDiagnostics,
@@ -616,6 +626,7 @@ describe('receive', () => {
       { type: 'speechCloudSupport', supported: true },
       { type: 'speechSupport', supported: true },
       { type: 'chatOrder', value: 'newestFirst' },
+      { type: 'replyBehavior', value: 'interrupt' },
       { type: 'replay', events: [{ type: 'say', text: 'hi' }] },
       { type: 'showTerminals', value: false },
       { type: 'speed', value: SPEEDS[1] },
@@ -637,8 +648,9 @@ describe('receive', () => {
     chatOrder.get.mockReturnValue('oldestFirst');
     const view = open(panel);
     view.send({ type: 'ready' });
-    expect(view.posted.slice(5, 7)).toEqual([
+    expect(view.posted.slice(5, 8)).toEqual([
       { type: 'chatOrder', value: 'oldestFirst' },
+      { type: 'replyBehavior', value: 'interrupt' },
       { type: 'replay', events: [] },
     ]);
     view.send({ type: 'chatOrder', value: 'newestFirst' });
@@ -649,6 +661,20 @@ describe('receive', () => {
     expect(chatOrder.set).toHaveBeenCalledTimes(1);
     panel.showChatOrder('oldestFirst');
     expect(view.posted).toContainEqual({ type: 'chatOrder', value: 'oldestFirst' });
+  });
+
+  it('restores and validates the reply behavior', () => {
+    const { panel, replyBehavior } = harness();
+    replyBehavior.get.mockReturnValue('finishAction');
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(view.posted).toContainEqual({ type: 'replyBehavior', value: 'finishAction' });
+    view.send({ type: 'replyBehavior', value: 'interrupt' });
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    view.send({ type: 'replyBehavior', value: 'invalid' } as unknown as FromPanel);
+    expect(replyBehavior.set.mock.calls).toEqual([['interrupt']]);
+    panel.showReplyBehavior('finishAction');
+    expect(view.posted).toContainEqual({ type: 'replyBehavior', value: 'finishAction' });
   });
 
   it('receiveFromPage: handles an object with a string type as the page would, and drops anything else', () => {

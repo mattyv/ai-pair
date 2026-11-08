@@ -55,6 +55,7 @@ export const localPanelUpdate = z.union([
   z.strictObject({ type: z.literal('replay'), events: z.array(panelEvent).max(MAX_REPLAY_EVENTS) }),
   z.strictObject({ type: z.literal('selection'), ref: reference.optional() }),
   z.strictObject({ type: z.literal('focusReply') }),
+  z.strictObject({ type: z.literal('replyBehavior'), value: z.enum(['interrupt', 'finishAction']) }),
   z.strictObject({ type: z.literal('chatOrder'), value: z.enum(['newestFirst', 'oldestFirst']) }),
   z.strictObject({ type: z.literal('showTerminals'), value: z.boolean() }),
   z.strictObject({ type: z.literal('speed'), value: number }),

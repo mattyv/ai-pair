@@ -140,7 +140,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Reload.cfg` | `NumLines = 5` lines, any of them changed on disk, a selection at a line's start or not | holds | 320 |
 | `Rehearsal.cfg` | `MaxLines = 3` lines, `MaxOthers = 2` changes by others, `MaxProgrammerEdits = 1`, `MaxBatches = 2` batches, `MaxQueued = 2` queued, either turn, `ReportWaitsForQueue = TRUE` | holds, in about 200 seconds | 6,721,044 |
 | `BatchFile.cfg` | files `sourceFile`, `destinationFile`, and `otherFile`, `MaxActions = 4` actions a batch, `FallBackToNamed = TRUE`, `CursorInNamed = TRUE`, a selection or none | holds | 330 |
-| `Diagnostics.cfg` | `MaxBatches = 3`, provider available or not, completed, interrupted, and failed batches | holds | 96 |
+| `Diagnostics.cfg` | `MaxBatches = 3`, provider available or not, completed, interrupted, and failed batches | holds | 168 |
 | `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await | holds | 3,077 |
 | `Player.cfg` | `MaxEdits = 2` | holds | 26 |
 | `LineIdentity.cfg` | texts up to 4 characters, inserts up to 2 | holds (checked as `ASSUME`s) | |
@@ -1040,7 +1040,9 @@ result; the public late-name rejection remains covered by `integration_paths.ts`
 ### `Diagnostics`: advisory checks after edits
 
 The controller checks only files actually edited by a batch, after playback.
-Available observations are advisory and never change its result. This model
+Available observations are advisory and never change its result. The general
+VS Code snapshot caveat is reported once per session; specific failures are not
+suppressed. This model
 abstracts provider availability and outcomes; changing sessions or source text
 while a check runs is covered by tests, not modeled here.
 
@@ -1058,11 +1060,16 @@ Each behavioral invariant was checked with a mutation and then restored:
 | suppress observations from an available provider | `ObserveWhenAvailable` |
 | force a failed result regardless of playback | `OutcomeUnchanged` |
 | disable batch completion | `Advisory` |
+| issue the caveat without an edit | `CaveatNeedsEdit` |
+| fail to record a sent caveat | `CaveatRecorded` |
+| issue the caveat after every edited batch | `CaveatOnce` |
+| never record the first edited batch | `CaveatOnFirstEdit` (checked with `CaveatRecorded` disabled) |
 
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | TypeScript checks these types |
 | `OnlyEdited`, `ObserveWhenAvailable`, `OutcomeUnchanged`, `Advisory` | `controller.test.ts`: OnlyEdited, Advisory: reports diagnostics only for files actually edited and does not reject the batch |
+| `CaveatNeedsEdit`, `CaveatRecorded`, `CaveatOnce`, `CaveatOnFirstEdit` | `controller.test.ts`: reports Pylance diagnostics on every batch but the snapshot caveat only once per session |
 
 ### `Draft`: the reply box's pause, across the view's page
 
@@ -2640,9 +2647,11 @@ All three mutations were discarded.
 
 ### `RecoveryBatchIds`: saved batch allocation
 
-`RecoveryBatchIds` models allocation and a reload from the latest successfully
-saved snapshot. It assumes each allocation is saved before reload; the actual
-workspace storage is asynchronous and a crash before that save can reuse an ID.
+`RecoveryBatchIds` models allocation within a session, a fresh session, and a
+reload from the latest successfully saved snapshot. A fresh session starts at
+one; a resumed session retains its saved counter. It assumes each allocation is
+saved before reload; the actual workspace storage is asynchronous and a crash
+before that save can reuse an ID.
 Legacy snapshots cannot recover IDs already reported and removed from the saved
 results. The model does not cover command IDs or queue replay.
 
@@ -2650,10 +2659,12 @@ results. The model does not cover command IDs or queue replay.
 |---|---|
 | `TypeOK` | The saved counter and restored batch IDs are checked by the recovery tests below; the model also checks their types. |
 | `Unique` | `controller.test.ts`: RecoveryBatchIds Unique: keeps the next batch ID after saving and reviving a session; derives a safe counter from legacy or invalid saved value. `session.e2e.test.ts`: RecoveryBatchIds Unique: keeps IDs distinct when a saved session is resumed. |
+| `FreshStartsAtOne` | `controller.test.ts`: RecoveryBatchIds FreshStartsAtOne: starts numbering again after ending a session. |
 | `Progress` | `session.e2e.test.ts`: RecoveryBatchIds Unique: keeps IDs distinct when a saved session is resumed. |
 
-TLC checked `RecoveryBatchIds.cfg` with `MaxId = 3`: 11 generated and 8
-distinct states, no violation. Setting `PreserveCounter` to `FALSE` makes
+TLC checked `RecoveryBatchIds.cfg` with `MaxId = 3`: 29 generated and 16
+distinct states, no violation. Retaining the prior counter in `Fresh` violates
+`FreshStartsAtOne`. Setting `PreserveCounter` to `FALSE` makes
 `Unique` fail after one allocation and a reload. Initializing `nextId` to zero
 violates `TypeOK`. Disabling `Allocate` while
 retaining its fairness condition makes `Progress` fail.
@@ -2679,6 +2690,8 @@ fairness for the check violates `StatusProgress`.
 `DeferredMessage` checks one deferred reply, the current action and an urgent
 stop. The real queue can hold multiple replies; urgent input flushes them in
 order. `Resume` also treats a deferred reply as a waiting message when stored.
+The Settings reply preference selects whether the existing deferred action is
+requested; it does not change the modeled queue or urgent-stop semantics.
 
 | Property | Code test |
 |---|---|
@@ -2716,3 +2729,47 @@ its counter cap permits the count to leave its declared range.
 | Configuration | Bounds | Distinct states | Result |
 | --- | --- | ---: | --- |
 | `SpeechReminder.cfg` | Three batches; Boolean readiness and selection | 11 | Pass |
+
+### `StartDirectory`: choosing the session directory
+
+`server.ts` validates an explicit directory and selects only it; omitted
+directories use client roots and the relay directory. The model abstracts
+filesystem and editor matching as booleans. TLC checks 32 distinct states with
+`StartDirectory.cfg`. `Strict = FALSE` produces an `Authoritative` violation.
+Changing a rejected selection to `fallback` violates
+`RejectedWithoutSelection`. That invariant abstracts selection; the unit tests
+also check that discovery, guide reads, and editor calls never happen on invalid
+input. Setting a successful request phase to `unknown` violates `TypeOK`;
+this checks the model's bounded state types rather than a production enum.
+
+| Property | Test |
+| --- | --- |
+| `TypeOK` | `server.test.ts`: rejects missing and non-directory explicit paths before contacting the editor; `relay.test.ts`: works in the folder the agent gives, when the harness started the relay somewhere else (these exercise valid and invalid inputs, not a production phase enum) |
+| `Authoritative` | `relay.test.ts`: uses the harness root when no working directory is given, and rejects an unmatched explicit directory; `server.test.ts`: rejects missing and non-directory explicit paths before contacting the editor |
+| `RejectedWithoutSelection` | `server.test.ts`: rejects missing and non-directory explicit paths before contacting the editor |
+| `Finishes` | `relay.test.ts`: uses the harness root when no working directory is given, and rejects an unmatched explicit directory |
+
+### `RuntimeIdentity`: matching the relay and editor
+
+The current editor always advertises its runtime identity; older discovery
+records may omit it. A new relay forwards a start only when the selected editor
+advertises the same
+version and shipped relay hash. Missing identity is a mismatch. The model
+abstracts the comparison into `Match`; it does not model the older relays that
+lack this guard or prove the authenticity of the discovery file.
+
+| Configuration | Result | Distinct states |
+| --- | --- | ---: |
+| `RuntimeIdentity.cfg` | holds, matching | 2 |
+| `RuntimeIdentity_Mismatch.cfg` | holds, mismatching | 2 |
+
+| Property | Test |
+| --- | --- |
+| `TypeOK` | No direct code test: the model phase is an abstraction, not a runtime value. |
+| `Safe` | `link.test.ts` and `relay.test.ts`: RuntimeIdentity Safe; `integration_runtime_identity.ts`: refuses missing, different-version and different-digest identities before connecting |
+| `Settles` | `link.test.ts`: RuntimeIdentity Settles; `relay.test.ts`: RuntimeIdentity Settles |
+
+Changing the initial phase to an unrecognized value violates `TypeOK`; changing
+the mismatch result to `forwarded` violates `Safe`; disabling `Start` violates
+`Settles`. The terminal states intentionally have no outgoing action,
+so both configurations disable deadlock checking.

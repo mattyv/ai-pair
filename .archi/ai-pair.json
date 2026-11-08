@@ -2,9 +2,9 @@
   "version": 1,
   "bundleId": "277c3415-7b74-4008-8be4-8c14ae6d41dd",
   "revision": {
-    "number": 15,
+    "number": 17,
     "updatedAt": "2026-11-08T00:00:00.000Z",
-    "summary": "Verified model status, action-boundary replies and companion speech readiness"
+    "summary": "Match relay and editor runtime identity before starting a session"
   },
   "diagrams": [
     {
@@ -1111,7 +1111,7 @@
             },
             {
               "id": "update-20261106-architecture-controller",
-              "text": "Playback fences a batch to its declared file. After edited files finish, diagnostics are advisory: VS Code errors can be stale, and Python syntax is checked with system python3, which can differ from the project interpreter.",
+              "text": "Playback fences a batch to its declared file. After edited files finish, diagnostics are advisory: VS Code errors are snapshots whose freshness is not confirmed, and Python syntax is checked with system python3, which can differ from the project interpreter.",
               "ts": 0
             }
           ],
@@ -2124,7 +2124,7 @@
             },
             {
               "id": "update-20261106-batch-rehearsal-and-playback-finish",
-              "text": "Edited files are checked after playback. Editor diagnostics and the separate Python syntax check are advisory and can be unavailable or stale; neither is a grammar guarantee for structural newline.",
+              "text": "Edited files are checked after playback. Editor diagnostics are snapshots whose freshness is not confirmed; they and the separate Python syntax check are advisory and can be unavailable or stale; neither is a grammar guarantee for structural newline.",
               "ts": 0
             }
           ],
@@ -3071,7 +3071,7 @@
       "type": "dataflow",
       "origin": "llm",
       "generation": {
-        "focus": "Session Startup and Window Discovery \u2014 The agent harness launches the relay (pair-mcp via a launcher written by the extension), which reads the bridge's per-window discovery files, picks the best live VS Code window by workspace folder, opens an authenticated WebSocket (hello/token/version handshake), and calls `start`, which also loads project guides and begins or resumes a Controller session."
+        "focus": "Session Startup and Window Discovery \u2014 The agent harness launches the relay (pair-mcp via a launcher written by the extension), which reads the bridge's per-window discovery files, picks the best live VS Code window by workspace folder, opens an authenticated WebSocket (hello/token/version handshake), and calls `start`, which also loads project guides and begins or resumes a Controller session. The relay requires the selected editor version and relay SHA-256 to match before forwarding a start; a missing or mismatched identity fails with recovery guidance. Already-running older relays cannot enforce this check."
       },
       "doc": {
         "type": "dataflow",
@@ -3123,7 +3123,7 @@
           },
           {
             "id": "link",
-            "label": "Editor Link\nWebSocket handshake and calls",
+            "label": "Editor Link\nChecks runtime identity before calls",
             "files": ["packages/relay/src/link.ts", "packages/relay/src/timings.ts"],
             "group": "relay",
             "x": 457,
@@ -3131,7 +3131,7 @@
           },
           {
             "id": "disc",
-            "label": "Discovery Files\nPer-window port, token, folders",
+            "label": "Discovery Files\nPort, token, folders, runtime identity",
             "files": ["packages/core/src/bridge.ts", "packages/protocol/src/wire.ts", "packages/protocol/src/schemas.ts"],
             "group": "editor",
             "x": 133,
@@ -5710,12 +5710,12 @@
           {
             "from": "server",
             "to": "server",
-            "label": "collect candidate folders: given cwd, harness roots, relay cwd"
+            "label": "validate explicit cwd; otherwise collect harness roots and relay cwd"
           },
           {
             "from": "server",
             "to": "link",
-            "label": "locate window for the first folder that is open"
+            "label": "locate explicit cwd only, or first discovered folder that is open"
           },
           {
             "from": "link",
@@ -9020,7 +9020,7 @@
           "editorts": [
             {
               "id": "update-20261106-vscode-integration-editorts",
-              "text": "Collects advisory VS Code diagnostics and a separate system-python3 syntax check after edits. The system interpreter can differ from the project interpreter; stale or unavailable checks are reported.",
+              "text": "Collects advisory VS Code diagnostic snapshots of unconfirmed freshness and a separate system-python3 syntax check after edits. The system interpreter can differ from the project interpreter; stale or unavailable checks are reported.",
               "ts": 0
             }
           ],
