@@ -3,7 +3,7 @@ import { speechSegments } from '../src/speech_segments';
 
 describe('speechSegments', () => {
   it('preserves every source character while grouping excess sentences into a fourth part', () => {
-    const text = 'Dr. Smith paid 3.14. \u201cReady?\u201d Yes! Next. Last.  ';
+    const text = 'Dr. Smith paid 3.14. \u201CReady?\u201D Yes! Next. Last.  ';
     const parts = speechSegments(text);
     expect(parts.length).toBeGreaterThan(1);
     expect(parts.length).toBeLessThanOrEqual(4);
@@ -12,8 +12,8 @@ describe('speechSegments', () => {
   });
 
   it('keeps one sentence and Unicode without rewriting it', () => {
-    expect(speechSegments('\u3053\u3093\u306b\u3061\u306f\u4e16\u754c\u3002')).toEqual([
-      '\u3053\u3093\u306b\u3061\u306f\u4e16\u754c\u3002',
+    expect(speechSegments('\u3053\u3093\u306B\u3061\u306F\u4E16\u754C\u3002')).toEqual([
+      '\u3053\u3093\u306B\u3061\u306F\u4E16\u754C\u3002',
     ]);
     expect(speechSegments('Use const x = 2.')).toEqual(['Use const x = 2.']);
   });
