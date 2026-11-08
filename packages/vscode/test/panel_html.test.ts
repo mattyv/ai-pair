@@ -109,3 +109,99 @@ it('is the page the page tests load, test/fixtures/panel.html: run with UPDATE_F
   if (process.env.UPDATE_FIXTURE === '1') fs.writeFileSync(FIXTURE, html);
   expect(html).toBe(fs.readFileSync(FIXTURE, 'utf8'));
 });
+
+it('shows the running extension version and build in the panel', () => {
+  const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js', '0.10.0', 'abcd1234');
+  const page = new window.DOMParser().parseFromString(html, 'text/html');
+  const identity = page.querySelector('.build-identity');
+  ok(identity);
+  expect(identity.textContent).toBe('v0.10.0 - build abcd1234');
+  expect(identity.closest('[data-ui="settings-dialog"]')).not.toBeNull();
+  expect(page.querySelector('.controls .build-identity')).toBeNull();
+});
+
+it('escapes the running version and build as text in Settings', () => {
+  const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js', '<version>', 'id&more');
+  const page = new window.DOMParser().parseFromString(html, 'text/html');
+  const identity = page.querySelector('[data-ui="settings-dialog"] .build-identity');
+  ok(identity);
+  expect(identity.textContent).toBe('v<version> - build id&more');
+  expect(identity.children).toHaveLength(0);
+});
+
+it('explains how to click or hold the reading timer', () => {
+  const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js');
+  const page = new window.DOMParser().parseFromString(html, 'text/html');
+  const control = page.querySelector('[data-ui="skip-reading"]');
+  ok(control instanceof window.HTMLElement);
+  expect(control.dataset.tip).toBe('Click to finish; hold to pause the timer');
+});
+
+it('places one icon-only Settings control in the toolbar before End', () => {
+  const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js');
+  const page = new window.DOMParser().parseFromString(html, 'text/html');
+  const buttons = page.querySelectorAll('[data-ui="settings"]');
+  expect(buttons).toHaveLength(1);
+  const control = buttons[0];
+  ok(control);
+  expect(control.getAttribute('aria-label')).toBe('Settings');
+  expect(control.querySelector('svg')).not.toBeNull();
+  expect(control.textContent?.trim()).toBe('');
+  expect(control.closest('.controls')).not.toBeNull();
+  const next = control.nextElementSibling;
+  ok(next instanceof window.HTMLElement);
+  expect(next.dataset.ui).toBe('end');
+  expect(page.querySelector('.settings-bar')).toBeNull();
+});
+
+it('offers an accessible automatic-terminal setting and a live reveal control', () => {
+  const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js');
+  const page = new window.DOMParser().parseFromString(html, 'text/html');
+  const checkbox = page.querySelector('[data-ui="show-terminals"]');
+  expect(checkbox?.getAttribute('type')).toBe('checkbox');
+  expect(checkbox?.closest('label')?.textContent).toContain('Show terminals automatically');
+  expect(page.querySelector('[data-ui="show-terminal"]')?.textContent).toContain('Show terminal');
+});
+
+it('offers code playback modes in a separate toolbar menu', () => {
+  const html = panelHtml('source', 'style', 'script');
+  expect(html).toContain('aria-label="Code display"');
+  expect(html).toContain('data-code-playback="typing"');
+  expect(html).toContain('data-code-playback="lines"');
+  expect(html).toContain('data-code-playback="blocks"');
+});
+
+it('offers an explicit diagnostics copy button in Settings', () => {
+  const page = new window.DOMParser().parseFromString(panelHtml('vscode-resource:', 'panel.css', 'panel.js'), 'text/html');
+  expect(page.querySelector('[data-ui="copy-diagnostics"]')?.textContent).toContain('Copy diagnostics');
+});
+
+it('offers local speech setup, preferences, preview and stop in Settings', () => {
+  const page = new window.DOMParser().parseFromString(panelHtml('source', 'style', 'script'), 'text/html');
+  expect(page.querySelector('[data-ui="speech-enabled"]')?.closest('label')?.textContent).toContain(
+    'Speak selected narration automatically',
+  );
+  expect(page.querySelector('[data-ui="speech-voice"]')?.querySelectorAll('option')).toHaveLength(4);
+  expect(page.querySelector('[data-ui="speech-speed"]')?.querySelectorAll('option')).toHaveLength(4);
+  expect(page.querySelector('[data-ui="speech-setup"]')?.textContent).toContain('Download Kokoro model');
+  expect(page.querySelector('[data-ui="speech-preview"]')?.textContent).toContain('Preview voice');
+  expect(page.querySelector('[data-ui="speech-stop"]')?.textContent).toContain('Stop speech');
+  expect(page.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute('content')).toContain('media-src blob:');
+});
+
+it('offers explicit cloud controls without exposing a key input', () => {
+  const markup = panelHtml('vscode-resource:', 'panel.css', 'panel.js');
+  expect(markup).toContain('data-ui="speech-provider"');
+  expect(markup).toContain('data-ui="speech-key-set"');
+  expect(markup).toContain('data-ui="speech-key-remove"');
+  expect(markup).toContain('data-ui="speech-voices-load"');
+  expect(markup).toContain('Selected narration and voice previews are sent to ElevenLabs');
+  expect(markup).not.toContain('type="password"');
+});
+
+it('marks listening speed experimental in the visible settings', () => {
+  const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js');
+  const page = new window.DOMParser().parseFromString(html, 'text/html');
+  const label = page.querySelector('[data-ui="speech-listening-speed"]')?.closest('label');
+  expect(label?.textContent).toContain('Listening speed (experimental)');
+});

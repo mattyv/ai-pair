@@ -1,0 +1,46 @@
+{
+  "name": "ai-pair-local-audio",
+  "displayName": "AI Pair Local Audio",
+  "description": "Local panel and audio companion for AI Pair.",
+  "version": "0.20.1",
+  "publisher": "michalstrba",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.106.0"
+  },
+  "extensionKind": [
+    "ui"
+  ],
+  "api": "none",
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onCommand:aiPair.localAudio.prepare"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "aiPair.localAudio.prepare",
+        "title": "AI Pair Local Audio: Prepare"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "aiPair.localAudio.prepare",
+          "when": "false"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mts",
+    "vscode:prepublish": "node scripts/build.mts --production",
+    "package": "vsce package --no-dependencies --out ../.."
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/faiface/ai-pair.git",
+    "directory": "packages/audio-ui"
+  }
+}

@@ -7,10 +7,12 @@ import { z } from 'zod';
 import {
   ACTION_KINDS,
   actionKinds,
+  CURSOR_MARKER,
   MOVE_TARGET_SCHEMA,
   moveProblem,
   SPAN_TARGET_SCHEMA,
   spanProblem,
+  speechProblem,
   typeProblem,
 } from '@ai-pair/protocol';
 import { TOOLS } from '../src/tools';
@@ -20,11 +22,19 @@ vi.mock(import('@ai-pair/protocol'), async (importOriginal) => ({
   actionKinds: vi.fn(),
   moveProblem: vi.fn(),
   spanProblem: vi.fn(),
+  speechProblem: vi.fn(),
   typeProblem: vi.fn(),
 }));
 
 /** The `step` tool's arguments, as the MCP server checks them. */
 const STEP = z.object(TOOLS.step.inputSchema);
+
+it('guides agents toward safe structural edits and a named file', () => {
+  const schema = JSON.stringify(z.toJSONSchema(STEP, { unrepresentable: 'any' }));
+  expect(schema).toContain('next_close');
+  expect(schema).toContain('structural newline');
+  expect(schema).toContain('Name the file before the first edit');
+});
 
 /** Returns the messages the `step` schema gives for a batch of this one action; none if it passes. */
 function problems(action: unknown): string[] {
@@ -34,6 +44,22 @@ function problems(action: unknown): string[] {
 
 afterEach(() => {
   vi.resetAllMocks();
+});
+
+describe('selected narration', () => {
+  it('checks flagged text and leaves unflagged narration alone', () => {
+    vi.mocked(actionKinds).mockReturnValue(['say']);
+    vi.mocked(speechProblem).mockReturnValue('shorten the narration');
+    expect(problems({ say: 'hello', speak: true })).toEqual(['shorten the narration']);
+    expect(speechProblem).toHaveBeenCalledWith('hello');
+    vi.mocked(speechProblem).mockClear();
+    expect(problems({ say: 'hello' })).toEqual([]);
+    expect(problems({ say: 'hello', speak: false })).toEqual([]);
+    expect(speechProblem).not.toHaveBeenCalled();
+    vi.mocked(speechProblem).mockReturnValue(undefined);
+    expect(problems({ say: 'hello', speak: true })).toEqual([]);
+    expect(problems({ delete: true, speak: true })).not.toEqual([]);
+  });
 });
 
 describe('a move', () => {
@@ -105,6 +131,14 @@ describe.each(['type', 'type_fast'] as const)('a %s', (kind) => {
     expect(problems({ [kind]: 5 })).toEqual(['Mark where your cursor ends']);
     expect(typeProblem).toHaveBeenLastCalledWith(5);
   });
+
+  it('forwards the CRLF cursor boundary refusal', () => {
+    vi.mocked(actionKinds).mockReturnValue([kind]);
+    vi.mocked(typeProblem).mockReturnValue('Place the cursor before or after the CRLF line ending, not inside it.');
+    const text = `a\r${CURSOR_MARKER}\nb`;
+    expect(problems({ [kind]: text })).toEqual(['Place the cursor before or after the CRLF line ending, not inside it.']);
+    expect(typeProblem).toHaveBeenCalledWith(text);
+  });
 });
 
 describe('what is not one action', () => {
@@ -128,4 +162,28 @@ describe('what is not one action', () => {
     expect(problems({ say: 3 })).toEqual(['Invalid input']);
     expect(problems({ say: 'a', extra: 1 })).toEqual(['Unrecognized key: "extra"']);
   });
+});
+
+it('accepts structural actions and rejects malformed indentation', () => {
+  expect(problems({ move: { to: 'next_close' } })).toEqual([]);
+  expect(problems({ newline: { indent: '  ' } })).toEqual([]);
+  expect(problems({ newline: { indent: '' } })).not.toEqual([]);
+  expect(problems({ newline: { indent: 'x' } })).not.toEqual([]);
+  expect(problems({ newline: { indent: '  ', extra: true } })).not.toEqual([]);
+});
+
+it('accepts an explicit multi-close acknowledgment and rejects false', () => {
+  vi.mocked(actionKinds).mockReturnValue(['move']);
+  expect(problems({ move: { to: 'line_end', allow_multiple_closes: true } })).toEqual([]);
+  expect(problems({ move: { to: 'line_end', allow_multiple_closes: false } })).not.toEqual([]);
+  const input = { actions: [{ move: { to: 'line_end', allow_multiple_closes: true } }] };
+  expect(STEP.parse(input)).toEqual(input);
+  expect(JSON.stringify(z.toJSONSchema(STEP, { unrepresentable: 'any' }))).toContain('allow_multiple_closes');
+});
+
+it('tells the agent to select concise speech without overriding the user setting', () => {
+  const schema = JSON.stringify(z.toJSONSchema(STEP, { unrepresentable: 'any' }));
+  expect(schema).toContain('Select concise narration for speech');
+  expect(schema).toContain('when the programmer enables speech');
+  expect(schema).not.toContain('Request local speech');
 });

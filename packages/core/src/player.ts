@@ -22,10 +22,11 @@ import { MS_PER_SECOND } from './constants';
 import { resolveSpan, resolveSpot, spanCandidates, spotCandidates, type Resolution } from './places';
 import type { Config } from './config';
 import type { LineIds, Sighting } from './lines';
-import type { Change, Focus, PanelPort, PlayerEditor } from './ports';
+import type { Change, Focus, NarrationPort, PanelPort, PlayerEditor } from './ports';
 import { fileLines, isLineStart, lineEnd, lineText, position } from './text';
 import type { Pacing } from './timeline';
-import { planTyping, readingTime } from './typing';
+import { groupTyping, planTyping, readingTime, type CodePlayback } from './typing';
+import { structuralNewline } from './structural_typing';
 
 /** A report's code longer than this skips lines in the middle. */
 const MAX_CODE_LINES = 40;
@@ -38,6 +39,8 @@ const nothing: Outcome = { kind: 'ok', nothing: true };
 
 /** Shared by all players, so the panel never sees two commands with one id. */
 let nextRunId = 1;
+/** Unique per extension host, so delayed clicks cannot skip a later message. */
+let nextReadingId = 1;
 
 /** What playback reads and changes. */
 export interface Scene {
@@ -64,6 +67,10 @@ export interface Stage {
   speed(): number;
   /** Divides only a say's reading pause; `speed` paces everything else. */
   readingSpeed(): number;
+  /** Returns the granularity for the next typing action. */
+  codePlayback(): CodePlayback;
+  /** Live narration only; omitted for rehearsal. */
+  narration?: NarrationPort;
   /** Shows the agent cursor and state after a change. */
   render(): void;
   /** Waits for the programmer to allow or decline a command. */
@@ -103,12 +110,12 @@ export interface Failure {
 /** The batch being played: what it touched, for saving and for its report's code. */
 interface Playing {
   touched: Set<string>;
+  editedFiles: Set<string>;
   runs: RunResult[];
   /** The lines its report shows. */
   sightings: Sighting[];
-  /** The file it names, in `move`, `select` or `point`, and whether it has edited yet. */
+  /** The file it names, in `move`, `select` or `point`. */
   named?: string;
-  edited: boolean;
   /** The text its edits changed, tracked through later edits. */
   span?: Range;
   moved: boolean;
@@ -166,6 +173,11 @@ export function transformScene(s: Scene, file: string, change: Change): void {
   if (s.point?.file === file) s.point = { file, start: map(s.point.start), end: map(s.point.end) };
 }
 
+/** Posts a code reading countdown on the existing panel clock. */
+function panelForCode(panel: PanelPort, ms: number, id: number): void {
+  panel.post({ type: 'reading', owner: 'code', ms, id });
+}
+
 /** Plays one batch's actions in the editor at a human pace: moves, typing, saying, running commands. */
 export class Player {
   /** In a reading pause, or waiting for the programmer to allow a command. */
@@ -173,16 +185,36 @@ export class Player {
   /** A `run` whose command is executing. */
   commandRunning = false;
   private playing?: Playing;
+  private readingId?: number;
 
   constructor(
     readonly scene: Scene,
     private readonly stage: Stage,
   ) {}
 
+  /** Whether this ID owns the current reading countdown. */
+  isCurrentReading(id: number): boolean {
+    return this.readingId === id;
+  }
+
+  /** Whether a reading countdown currently exists. */
+  hasCurrentReading(): boolean {
+    return this.readingId !== undefined;
+  }
+
   /** Plays a batch, saves the files it edited, and says how it went, and which lines that shows. */
-  async play(id: number, actions: Action[]): Promise<{ result: BatchResult; sightings: Sighting[]; failed?: Failure }> {
+  async play(
+    id: number,
+    actions: Action[],
+  ): Promise<{ result: BatchResult; sightings: Sighting[]; editedFiles: string[]; failed?: Failure }> {
     // specs/BatchFile.tla, `EndBatch`: each batch starts with no file named and nothing edited; the cursor stays.
-    const playing: Playing = { touched: new Set(), runs: [], sightings: [], edited: false, moved: false };
+    const playing: Playing = {
+      touched: new Set(),
+      editedFiles: new Set(),
+      runs: [],
+      sightings: [],
+      moved: false,
+    };
     this.playing = playing;
     let result: BatchResult;
     try {
@@ -205,7 +237,7 @@ export class Player {
     const unsaved = await this.save(playing);
     // A `save_failed` error already names them.
     if (unsaved.length > 0 && result.error?.kind !== 'save_failed') result.unsaved = unsaved;
-    return { result, sightings: playing.sightings, failed: playing.failed };
+    return { result, sightings: playing.sightings, editedFiles: [...playing.editedFiles], failed: playing.failed };
   }
 
   /** Returns the code a batch's report shows: what it changed in `span`, or where it moved; nothing for neither. */
@@ -336,7 +368,7 @@ export class Player {
         `One action per object, got ${kinds.map((k) => `\`${k}\``).join(' and ')}: make them separate actions, in order.`,
       );
     }
-    // specs/BatchFile.tla, `Act`: naming a second file, or a file after the first edit, is a `Stop`.
+    // specs/BatchFile.tla, `Act`: naming a second file is a `Stop`.
     const named = this.names(action, playing);
     if (typeof named === 'object') return named;
     const fields = fieldsProblem(action);
@@ -347,7 +379,7 @@ export class Player {
     }
     // `type` and `delete` act at the cursor, which a `point` doesn't move: it has to be in the batch's file
     // (specs/BatchFile.tla, `ActAtCursor`).
-    const atCursor = 'type' in action || 'type_fast' in action || 'delete' in action;
+    const atCursor = 'type' in action || 'type_fast' in action || 'newline' in action || 'delete' in action;
     if (atCursor && playing.named !== undefined && scene.cursor && scene.cursor.file !== playing.named) {
       return fail(
         'invalid_action',
@@ -374,14 +406,32 @@ export class Player {
     if ('say' in action) {
       // specs/BatchFile.tla, `Say`: it acts in no file.
       panel.post({ type: 'say', text: action.say });
+      // Speech is independent of the single reading timeline and starts only after display.
+      const narration = action.speak === true ? this.stage.narration : undefined;
+      let speech = Promise.resolve();
+      if (narration !== undefined) {
+        try {
+          speech = narration.speak(action.say).catch(() => {});
+        } catch {
+          // A broken optional speech port cannot prevent reading the message.
+        }
+      }
       // specs/Calibration.tla, `StartSay`: timed with the rate in force now; the sleep's end is `EndSay`.
       const ms = readingTime(action.say, timing.reading) / this.stage.readingSpeed();
       this.reading = true;
-      panel.post({ type: 'reading', ms });
+      this.readingId = nextReadingId++;
+      panel.post({ type: 'reading', ms, id: this.readingId });
       this.stage.render();
-      await this.stage.pacing.sleep(ms);
+      const read = await this.stage.pacing.sleep(ms);
+      this.readingId = undefined;
       this.reading = false;
       this.stage.render();
+      if (narration !== undefined) {
+        await speech;
+        // The speech gate can finish while globally paused; reuse the now-idle timeline.
+        const unpaused = read && (await this.stage.pacing.sleep(0));
+        if (!unpaused || this.stage.pacing.isInterrupted) return { kind: 'interrupted', consumed: true };
+      }
       return ok;
     }
 
@@ -397,9 +447,26 @@ export class Player {
       if ('kind' in where) return where;
       const { text, line } = where;
       let offset: number;
-      if (at === undefined) {
-        // moveProblem passed: without `at`, `to` is `line_end`.
+      if (move.to === 'next_close') {
+        if (scene.selection !== undefined || scene.cursor?.file !== file || !/[)\]}]/.test(text[scene.cursor.offset] ?? '')) {
+          return fail('invalid_action', '`next_close` requires one closing bracket immediately after an unselected cursor.');
+        }
+        offset = scene.cursor.offset + 1;
+      } else if (at === undefined) {
         offset = lineEnd(text, line);
+        if (
+          scene.cursor?.file === file &&
+          move.allow_multiple_closes !== true &&
+          scene.cursor.offset <= offset &&
+          position(text, scene.cursor.offset).line === line &&
+          /^[\t ]*[)\]}](?:[\t ]*[)\]}])+[\t ]*$/.test(text.slice(scene.cursor.offset, offset))
+        ) {
+          // specs/LineEndGuard.tla, Rehearse and Play: require intent before crossing several closes.
+          return fail(
+            'invalid_action',
+            '`line_end` would cross multiple closing brackets. Use `next_close`, an exact `at` spot, or set `allow_multiple_closes: true`.',
+          );
+        }
       } else {
         const r = resolveSpot(text, { at, line });
         // A spot not on its line says what the line reads.
@@ -435,6 +502,15 @@ export class Player {
       return ok;
     }
 
+    if ('newline' in action) {
+      if (scene.cursor === undefined) return fail('no_cursor', "Your cursor isn't in a file yet; `move` first.");
+      if (scene.selection !== undefined) return fail('invalid_action', '`newline` requires an unselected cursor.');
+      const text = await editor.getText(scene.cursor.file);
+      const expansion = structuralNewline(scene.cursor.file, text, scene.cursor.offset, action.newline.indent);
+      if (expansion === undefined) return fail('invalid_action', '`newline` requires an adjacent matching pair in Python or JSON code.');
+      return this.type(expansion.before, expansion.after, /* fast= */ false, playing);
+    }
+
     if ('type' in action || 'type_fast' in action) {
       const fast = 'type_fast' in action;
       const text: unknown = fast ? action.type_fast : action.type;
@@ -456,13 +532,13 @@ export class Player {
       // read the selection only now (#49): specs/Turns.tla, `TakeEffect`, and specs/Player.tla, `Finish`.
       if (this.stage.pacing.isInterrupted) return { kind: 'interrupted' };
       const { start, end } = scene.selection;
-      playing.edited = true;
       this.clearPoint();
       scene.cursor.offset = start;
       scene.selection = undefined;
       const change = { offset: start, deleteLength: end - start, text: '' };
       this.touch(playing, file, change);
       await this.edit(file, change, { undoStopBefore: true, undoStopAfter: true });
+      playing.editedFiles.add(file);
       this.follow();
       await this.delay(timing.afterDeleteMs);
       return ok;
@@ -540,7 +616,7 @@ export class Player {
     // specs/RunBox.tla, `FinishCommand`: done or background when it ran, declined when it never started or threw.
     let outcome;
     try {
-      outcome = await editor.runCommand(command, { cwd: scene.root ?? editor.resolvePath('.'), waitMs, signal });
+      outcome = await editor.runCommand(command, { id, cwd: scene.root ?? editor.resolvePath('.'), waitMs, signal });
     } catch (error) {
       panel.post({ type: 'run', id, command, phase: 'declined' });
       throw error;
@@ -578,12 +654,14 @@ export class Player {
   }
 
   /** Types `before`, then `after`, then steps back to between them: to where the text had its `CURSOR_MARKER`. */
-  private async type(before: string, after: string, fast: boolean, playing: Playing): Promise<Outcome> {
+  private async type(rawBefore: string, rawAfter: string, fast: boolean, playing: Playing): Promise<Outcome> {
+    // specs/TypingEol.tla, CorrectEol and SuffixSafe: normalize before planning and tracking the remainder.
+    const before = rawBefore.replaceAll('\r\n', '\n');
+    const after = rawAfter.replaceAll('\r\n', '\n');
     const scene = this.scene;
     const { editor } = this.stage;
     if (!scene.cursor) return fail('no_cursor', "Your cursor isn't in a file yet; `move` first.");
     const cursor = scene.cursor;
-    playing.edited = true;
     await editor.show(cursor.file);
     this.clearPoint();
 
@@ -593,10 +671,13 @@ export class Player {
     const insertAt = scene.selection ? scene.selection.start : cursor.offset;
     const { timing, random } = this.stage.config();
     const scale = fast ? timing.fastFactor : 1;
-    const chunks = planTyping(before + after, timing.type, isLineStart(doc, insertAt), random, scale);
+    const mode = this.stage.codePlayback();
+    const atoms = planTyping(before + after, timing.type, isLineStart(doc, insertAt), random, scale);
+    const chunks = groupTyping(atoms, mode);
 
     if (chunks.length === 0 && scene.selection) chunks.push({ text: '', delay: 0 });
     let typed = '';
+    let atomIndex = 0;
     for (const [i, chunk] of chunks.entries()) {
       // specs/Actions.tla, `StopAtCheck`: cut after a chunk, it returns only what's left of it.
       if (!(await this.delay(chunk.delay))) {
@@ -612,21 +693,77 @@ export class Player {
       const deleteLength = scene.selection ? scene.selection.end - scene.selection.start : 0;
       // Move the cursor before awaiting, so programmer edits arriving meanwhile transform the right position.
       cursor.offset = start + insert.length;
+      if (mode !== 'typing' && i === chunks.length - 1 && after !== '') {
+        // specs/PlaybackAnchor.tla, UserEdit: the final marker is live before
+        // awaiting the edit, so programmer changes transform it in place.
+        const remainingBefore = before.length - typed.length;
+        if (remainingBefore >= 0) {
+          const prefix = chunk.text.slice(0, remainingBefore);
+          cursor.offset = start + (eol === '\n' ? prefix.length : prefix.replaceAll('\n', eol).length);
+        } else {
+          const alreadyAfter = typed.slice(before.length);
+          cursor.offset = start - (eol === '\n' ? alreadyAfter.length : alreadyAfter.replaceAll('\n', eol).length);
+        }
+      }
       scene.selection = undefined;
       const change = { offset: start, deleteLength, text: insert };
       this.touch(playing, cursor.file, change);
-      await this.edit(cursor.file, change, {
-        undoStopBefore: i === 0,
-        undoStopAfter: i === chunks.length - 1,
-      });
+      const options = { undoStopBefore: i === 0, undoStopAfter: i === chunks.length - 1 };
+      if (mode === 'typing' || chunk.text === '') {
+        await this.edit(cursor.file, change, options);
+      } else {
+        // specs/LineIdentity.tla, ApplyChange: follow the same atomic edits as typing,
+        // even though VS Code receives the whole visible group in one edit.
+        let grouped = '';
+        let offset = start;
+        let remainingDelete = deleteLength;
+        while (grouped.length < chunk.text.length) {
+          // Each group is made from consecutive atoms of this dense plan.
+          // oxlint-disable-next-line typescript/no-non-null-assertion -- the group consists of these atoms
+          const atom = atoms[atomIndex++]!;
+          const text = eol === '\n' ? atom.text : atom.text.replaceAll('\n', eol);
+          this.stage.lines.apply(cursor.file, { offset, deleteLength: remainingDelete, text });
+          offset += text.length;
+          remainingDelete = 0;
+          grouped += atom.text;
+        }
+        await editor.edit(cursor.file, start, deleteLength, insert, options);
+      }
+      playing.editedFiles.add(cursor.file);
       typed += chunk.text;
+      if (mode !== 'typing' && chunk.text !== '') {
+        this.stage.editor.renderCodeReading?.({ file: cursor.file, start, end: start + insert.length });
+      }
       this.follow();
+      if (mode !== 'typing' && chunk.text !== '') {
+        // specs/CodePlayback.tla, Insert and Finish: read each inserted group before the next.
+        const ms = (readingTime(chunk.text, timing.reading) * scale) / this.stage.readingSpeed() / this.stage.speed();
+        this.reading = true;
+        this.readingId = nextReadingId++;
+        panelForCode(this.stage.panel, ms, this.readingId);
+        this.stage.render();
+        const completed = await this.stage.pacing.sleep(ms);
+        this.stage.editor.renderCodeReading?.(undefined);
+        this.readingId = undefined;
+        this.reading = false;
+        this.stage.render();
+        if (!completed) {
+          if (typed.length < before.length + after.length) {
+            const rest =
+              typed.length <= before.length
+                ? before.slice(typed.length) + CURSOR_MARKER + after
+                : CURSOR_MARKER + after.slice(typed.length - before.length);
+            return { kind: 'interrupted', rest: fast ? { type_fast: rest } : { type: rest } };
+          }
+          return { kind: 'interrupted', consumed: true };
+        }
+      }
     }
     if (after !== '') {
       // Into the pair just closed: a move within sight, so the same beat before it, and pause after,
       // as one. Interrupted, it still steps back: all of the text was typed.
       await this.delay(timing.beforeMoveMs * scale);
-      cursor.offset -= eol === '\n' ? after.length : after.replaceAll('\n', eol).length;
+      if (mode === 'typing') cursor.offset -= eol === '\n' ? after.length : after.replaceAll('\n', eol).length;
       this.follow();
       await this.delay(timing.afterMoveNearMs * scale);
     }
@@ -662,12 +799,6 @@ export class Player {
       return fail(
         'invalid_action',
         `A batch works in one file, but this one names ${this.displayPath(playing.named)} and ${this.displayPath(path)}. Start a new batch where it switches files.`,
-      );
-    }
-    if (playing.named === undefined && playing.edited) {
-      return fail(
-        'invalid_action',
-        "A batch works in one file: name it (in `move`, `select` or `point`) before the batch's first edit. Start a new batch where it switches files.",
       );
     }
     playing.named = path;

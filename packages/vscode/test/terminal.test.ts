@@ -3,7 +3,7 @@
 // handing back what it was given.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { samePath } from '@ai-pair/core';
+import { reportDiagnostic, samePath } from '@ai-pair/core';
 import { outcomeOf, Tail } from '../src/output';
 import { PairTerminals } from '../src/terminal';
 
@@ -29,6 +29,7 @@ const fakes = vi.hoisted(() => {
   /** A terminal, faked: whether it has shell integration, and what it was asked to run. */
   class FakeTerminal {
     readonly show = vi.fn();
+    readonly dispose = vi.fn();
     readonly sendText = vi.fn();
     readonly state: { shell: string | undefined } = { shell: 'zsh' };
     exitStatus: { code: number } | undefined = undefined;
@@ -36,7 +37,7 @@ const fakes = vi.hoisted(() => {
     readonly executions: FakeExecution[] = [];
 
     constructor(
-      readonly options: { cwd: string },
+      readonly options: { cwd: string; hideFromUser?: boolean },
       integrated: boolean,
     ) {
       this.shellIntegration = integrated ? this.integration() : undefined;
@@ -59,6 +60,7 @@ const fakes = vi.hoisted(() => {
     FakeExecution,
     /** Whether the next terminal has shell integration from the start. */
     integrated: true,
+    failCreate: false,
     terminals: [] as FakeTerminal[],
     /** The listeners each event has, by its name. */
     listeners: new Map<string, Set<(value: unknown) => void>>(),
@@ -94,16 +96,23 @@ vi.mock('vscode', () => ({
   },
   window: {
     onDidCloseTerminal: event('close'),
+    onDidStartTerminalShellExecution: event('start'),
     onDidChangeTerminalShellIntegration: event('integration'),
     onDidEndTerminalShellExecution: event('end'),
-    createTerminal: (options: { cwd: string }) => {
+    createTerminal: (options: { cwd: string; hideFromUser?: boolean }) => {
+      if (fakes.failCreate) throw new Error('private creation error');
       const terminal = new fakes.FakeTerminal(options, fakes.integrated);
       fakes.terminals.push(terminal);
       return terminal;
     },
   },
 }));
-vi.mock('@ai-pair/core', () => ({ samePath: vi.fn((a: string, b: string) => a === b) }));
+vi.mock('@ai-pair/core', () => ({
+  samePath: vi.fn((a: string, b: string) => a === b),
+  reportDiagnostic: vi.fn((observer: ((diagnosticEvent: unknown) => void) | undefined, diagnosticEvent: unknown, receiver: unknown) =>
+    observer?.call(receiver, diagnosticEvent),
+  ),
+}));
 vi.mock('../src/output', () => ({
   MAX_OUTPUT: 10,
   Tail: vi.fn(
@@ -155,7 +164,7 @@ function given(): {
 
 /** Runs `command` in `cwd`, and returns the promise of its outcome. */
 function runIn(terminals: PairTerminals, command: string, signal = new AbortController().signal, cwd = '/p'): Promise<unknown> {
-  return terminals.run(command, { cwd, waitMs: WAIT_MS, signal });
+  return terminals.run(command, { id: 1, cwd, waitMs: WAIT_MS, signal });
 }
 
 beforeEach(() => {
@@ -166,19 +175,217 @@ afterEach(() => {
   fakes.terminals.length = 0;
   fakes.listeners.clear();
   fakes.integrated = true;
+  fakes.failCreate = false;
   vi.useRealTimers();
   vi.clearAllMocks();
 });
 
 describe('run', () => {
+  it('records terminal creation failure without its error text', async () => {
+    fakes.failCreate = true;
+    const events: unknown[] = [];
+    const terminals = new PairTerminals(
+      () => false,
+      (entry) => {
+        events.push(entry);
+      },
+    );
+    await expect(runIn(terminals, 'private command')).rejects.toThrow('private creation error');
+    expect(events).toContainEqual({ kind: 'command', id: 1, phase: 'failed' });
+    expect(JSON.stringify(events)).not.toContain('private');
+  });
+
+  it('records timeout and a later end without inventing an exit code', async () => {
+    const events: unknown[] = [];
+    const terminals = new PairTerminals(
+      () => false,
+      (entry) => {
+        events.push(entry);
+      },
+    );
+    const result = runIn(terminals, 'slow');
+    await vi.advanceTimersByTimeAsync(WAIT_MS);
+    await result;
+    expect(events).toContainEqual({ kind: 'command', id: 1, phase: 'timeout' });
+    fire('end', { execution: lastExecution(), exitCode: undefined });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(events).toContainEqual({ kind: 'command', id: 1, phase: 'end' });
+  });
+
+  it('records execution failures without changing the thrown error', async () => {
+    const events: unknown[] = [];
+    const terminals = new PairTerminals(
+      () => false,
+      (entry) => {
+        events.push(entry);
+      },
+    );
+    const result = runIn(terminals, 'private command');
+    const integration = lastTerminal().shellIntegration;
+    if (!integration) throw new Error('Missing integration');
+    integration.executeCommand = () => {
+      throw new Error('private error');
+    };
+    await expect(result).rejects.toThrow('private error');
+    expect(events).toContainEqual({ kind: 'command', id: 1, phase: 'failed' });
+    expect(JSON.stringify(events)).not.toContain('private');
+  });
+
+  it('delegates diagnostics with its observer and terminal owner as receiver', async () => {
+    let terminals: PairTerminals;
+    const observer = vi.fn(function (this: PairTerminals) {
+      expect(this).toBe(terminals);
+    });
+    terminals = new PairTerminals(() => false, observer);
+    const result = runIn(terminals, 'printf ok');
+    await vi.advanceTimersByTimeAsync(0);
+    fire('end', { execution: lastExecution(), exitCode: 0 });
+    await vi.advanceTimersByTimeAsync(DRAIN_MS);
+    await expect(result).resolves.toMatchObject({ output: 'outcome' });
+    expect(reportDiagnostic).toHaveBeenCalledWith(observer, expect.anything(), terminals);
+  });
+
+  it('emits typed command start and end without command text', async () => {
+    const events: unknown[] = [];
+    const terminals = new PairTerminals(
+      () => false,
+      (entry) => {
+        events.push(entry);
+      },
+    );
+    const result = runIn(terminals, 'private command');
+    await vi.advanceTimersByTimeAsync(0);
+    fire('end', { execution: lastExecution(), exitCode: 3 });
+    await vi.advanceTimersByTimeAsync(DRAIN_MS);
+    await result;
+    expect(events).toEqual([
+      { kind: 'command', id: 1, phase: 'requested', waitMs: WAIT_MS },
+      { kind: 'command', id: 1, phase: 'integration', available: true },
+      { kind: 'command', id: 1, phase: 'start' },
+      { kind: 'command', id: 1, phase: 'end', exitCode: 3 },
+    ]);
+  });
+
+  it('runs quietly and reveals only the owned terminal on request', async () => {
+    const terminals = new PairTerminals(() => false);
+    const outcome = runIn(terminals, 'printf ok');
+    await vi.advanceTimersByTimeAsync(0);
+    const terminal = lastTerminal();
+    expect(terminal.show).not.toHaveBeenCalled();
+    expect(terminal.options.hideFromUser).toBe(true);
+    expect(terminals.showTerminal(1)).toBe(true);
+    expect(terminal.show).toHaveBeenCalledWith(true);
+    expect(terminals.showTerminal(99)).toBe(false);
+    fire('end', { execution: lastExecution(), exitCode: 0 });
+    await vi.advanceTimersByTimeAsync(DRAIN_MS);
+    await outcome;
+  });
+
+  it('protects a terminal if another execution starts, while recognizing its own execution', async () => {
+    const terminals = new PairTerminals(() => false);
+    const first = runIn(terminals, 'one');
+    await vi.advanceTimersByTimeAsync(0);
+    const owned = lastTerminal();
+    const execution = lastExecution();
+    fire('start', { terminal: new fakes.FakeTerminal({ cwd: '/elsewhere' }, true), execution: new fakes.FakeExecution() });
+    fire('start', { terminal: owned, execution });
+    fire('end', { execution, exitCode: 0 });
+    await vi.advanceTimersByTimeAsync(DRAIN_MS);
+    await first;
+    const second = runIn(terminals, 'two');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fakes.terminals).toHaveLength(1);
+    fire('start', { terminal: owned, execution: new fakes.FakeExecution() });
+    fire('end', { execution: lastExecution(), exitCode: 0 });
+    await vi.advanceTimersByTimeAsync(DRAIN_MS);
+    await second;
+    void runIn(terminals, 'three');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fakes.terminals).toHaveLength(2);
+  });
+
+  it('pending output drain prevents reuse', async () => {
+    const terminals = new PairTerminals(() => false);
+    const first = runIn(terminals, 'one');
+    await vi.advanceTimersByTimeAsync(0);
+    fire('end', { execution: lastExecution(), exitCode: 0 });
+    await vi.advanceTimersByTimeAsync(0);
+    const second = runIn(terminals, 'two');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fakes.terminals).toHaveLength(2);
+    fire('end', { execution: lastExecution(), exitCode: 0 });
+    await vi.advanceTimersByTimeAsync(DRAIN_MS);
+    await Promise.all([first, second]);
+  });
+
+  it('StartRespectsPreference: reveals commands when automatic display is enabled', async () => {
+    const terminals = new PairTerminals(() => true);
+    const run = runIn(terminals, 'npm test');
+    await vi.advanceTimersByTimeAsync(0);
+    const visible = lastTerminal();
+    expect(visible.show).toHaveBeenCalledWith(true);
+    fire('end', { execution: lastExecution(), exitCode: 0 });
+    await vi.advanceTimersByTimeAsync(DRAIN_MS);
+    await run;
+    void runIn(terminals, 'next');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fakes.terminals).toHaveLength(2);
+  });
+
+  it('ShowExact: invalidates the old command ID when a hidden terminal is reused', async () => {
+    const terminals = new PairTerminals(() => false);
+    const first = terminals.run('one', { id: 41, cwd: '/p', waitMs: WAIT_MS, signal: new AbortController().signal });
+    await vi.advanceTimersByTimeAsync(0);
+    fire('end', { execution: lastExecution(), exitCode: 0 });
+    await vi.advanceTimersByTimeAsync(DRAIN_MS);
+    await first;
+    const second = terminals.run('two', { id: 42, cwd: '/p', waitMs: WAIT_MS, signal: new AbortController().signal });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fakes.terminals).toHaveLength(1);
+    expect(terminals.showTerminal(41)).toBe(false);
+    expect(terminals.showTerminal(42)).toBe(true);
+    fire('end', { execution: lastExecution(), exitCode: 0 });
+    await vi.advanceTimersByTimeAsync(DRAIN_MS);
+    await second;
+    fire('close', lastTerminal());
+    expect(terminals.showTerminal(42)).toBe(false);
+  });
+
+  it('cleans up exited owned terminals while preserving live, running and untracked shells', async () => {
+    const terminals = new PairTerminals(() => false);
+    const ended = runIn(terminals, 'printf ok');
+    await vi.advanceTimersByTimeAsync(0);
+    const idle = lastTerminal();
+    fire('end', { execution: lastExecution(), exitCode: 0 });
+    await vi.advanceTimersByTimeAsync(DRAIN_MS);
+    await ended;
+    const running = runIn(terminals, 'sleep 5', undefined, '/other');
+    await vi.advanceTimersByTimeAsync(WAIT_MS);
+    await running;
+    const busy = lastTerminal();
+    terminals.cleanupIdle();
+    expect(idle.dispose).not.toHaveBeenCalled();
+    expect(busy.dispose).not.toHaveBeenCalled();
+    idle.exitStatus = { code: 0 };
+    terminals.cleanupIdle();
+    expect(idle.dispose).toHaveBeenCalledOnce();
+    fakes.integrated = false;
+    const untracked = runIn(terminals, 'read x', undefined, '/untracked');
+    await vi.advanceTimersByTimeAsync(SHELL_INTEGRATION_MS);
+    await untracked;
+    const unknown = lastTerminal();
+    expect(unknown.show).toHaveBeenCalledWith(true);
+    terminals.cleanupIdle();
+    expect(unknown.dispose).not.toHaveBeenCalled();
+  });
   it("RunReturns, SkipAborted: doesn't wait for shell integration once playback is interrupted, and starts nothing", async () => {
-    expect(await runIn(new PairTerminals(), 'npm test', AbortSignal.abort())).toEqual({ output: '', notStarted: true });
+    expect(await runIn(new PairTerminals(() => false), 'npm test', AbortSignal.abort())).toEqual({ output: '', notStarted: true });
     expect(lastTerminal().executions).toEqual([]);
-    expect(lastTerminal().show).toHaveBeenCalledWith(/* preserveFocus= */ true);
+    expect(lastTerminal().show).not.toHaveBeenCalled();
   });
 
   it('RunReturns, ExecuteCommand, End: runs the command, reads its output, and reports how it ended, with its shell', async () => {
-    const outcome = runIn(new PairTerminals(), 'npm test');
+    const outcome = runIn(new PairTerminals(() => false), 'npm test');
     await vi.advanceTimersByTimeAsync(0);
     lastExecution().output = ['ok', '\n'];
     fire('end', { execution: new fakes.FakeExecution(), exitCode: 9 });
@@ -192,7 +399,7 @@ describe('run', () => {
   });
 
   it('drains the output after the command ends, for at most DRAIN_MS, and takes a read the closing terminal cut short', async () => {
-    const terminals = new PairTerminals();
+    const terminals = new PairTerminals(() => false);
     const outcome = runIn(terminals, 'npm test');
     await vi.advanceTimersByTimeAsync(0);
     const first = lastExecution();
@@ -206,7 +413,7 @@ describe('run', () => {
   });
 
   it('RunReturns, StopWaiting: returns with the command still running when the wait is over, or playback is interrupted', async () => {
-    const terminals = new PairTerminals();
+    const terminals = new PairTerminals(() => false);
     const waited = runIn(terminals, 'npm run watch');
     await vi.advanceTimersByTimeAsync(WAIT_MS);
     await waited;
@@ -220,7 +427,7 @@ describe('run', () => {
   });
 
   it('RunReturns, CloseTerminal: ends the wait when the programmer closes the terminal, and not for another terminal', async () => {
-    const outcome = runIn(new PairTerminals(), 'npm test');
+    const outcome = runIn(new PairTerminals(() => false), 'npm test');
     await vi.advanceTimersByTimeAsync(0);
     fire('close', new fakes.FakeTerminal({ cwd: '/' }, true));
     fire('close', lastTerminal());
@@ -231,7 +438,7 @@ describe('run', () => {
 
   it('RunReturns, SendText: waits for shell integration to come, for this terminal only, and types the command in without it', async () => {
     fakes.integrated = false;
-    const terminals = new PairTerminals();
+    const terminals = new PairTerminals(() => false);
     const late = runIn(terminals, 'npm test');
     await vi.advanceTimersByTimeAsync(0);
     const waiting = lastTerminal();
@@ -250,7 +457,7 @@ describe('run', () => {
   it('AbortBeforeStart: starts nothing when playback is interrupted while it waits for shell integration', async () => {
     fakes.integrated = false;
     const abort = new AbortController();
-    const outcome = runIn(new PairTerminals(), 'npm test', abort.signal);
+    const outcome = runIn(new PairTerminals(() => false), 'npm test', abort.signal);
     await vi.advanceTimersByTimeAsync(0);
     abort.abort();
     expect(await outcome).toEqual({ output: '', notStarted: true });
@@ -259,7 +466,7 @@ describe('run', () => {
 
 describe('acquire', () => {
   it("NoReuseWhileBusy: gives a second command a new terminal while the first one's command still runs", async () => {
-    const terminals = new PairTerminals();
+    const terminals = new PairTerminals(() => false);
     const first = runIn(terminals, 'npm run watch');
     await vi.advanceTimersByTimeAsync(WAIT_MS);
     await first;
@@ -270,7 +477,7 @@ describe('acquire', () => {
   });
 
   it("FreedAfterEnd, Exit: reuses a terminal once its command ends, in the folder it's in, and not one whose shell exited", async () => {
-    const terminals = new PairTerminals();
+    const terminals = new PairTerminals(() => false);
     const first = runIn(terminals, 'npm run build');
     await vi.advanceTimersByTimeAsync(0);
     fire('end', { execution: lastExecution(), exitCode: 0 });
@@ -300,7 +507,7 @@ describe('acquire', () => {
   });
 
   it('CloseTerminal: forgets a terminal the programmer closes, and ignores the close of one it never made', async () => {
-    const terminals = new PairTerminals();
+    const terminals = new PairTerminals(() => false);
     const first = runIn(terminals, 'npm run build');
     await vi.advanceTimersByTimeAsync(0);
     fire('end', { execution: lastExecution(), exitCode: 0 });
@@ -314,7 +521,7 @@ describe('acquire', () => {
   });
 
   it('disposes of its listener for closed terminals', () => {
-    const terminals = new PairTerminals();
+    const terminals = new PairTerminals(() => false);
     expect(fakes.listeners.get('close')?.size).toBe(1);
     terminals.dispose();
     expect(fakes.listeners.get('close')?.size).toBe(0);

@@ -26,13 +26,14 @@ AtKinds ==
     {"missing", "spot", "unmarked", "twoMarkers", "markerOnly", "number"}
 
 \* A `move`'s `to`: none, `line_end`, or another text.
-ToKinds == {"missing", "line_end", "otherText"}
+ToKinds == {"missing", "line_end", "next_close", "otherText"}
 
 \* A field a `move` does not take but the check names: absent, or `before`.
 MoveOldKinds == {"missing", "before"}
 
 \* Every `move` place, by the kind of value in each field.
-Moves == [line : LineKinds, at : AtKinds, to : ToKinds, old : MoveOldKinds]
+Moves == [line : LineKinds, at : AtKinds, to : ToKinds, old : MoveOldKinds,
+          file : {"missing", "named"}, allow : {"missing", "true", "other"}]
 
 \* A span's `text`, `from`, or `through`: none, code, the empty text, or a
 \* number.
@@ -50,7 +51,8 @@ Spans ==
 \* Everything a check can answer when something is wrong, each named for its
 \* problem.
 Problems ==
-    {"oldSpot", "line", "to", "bothPlaces", "noPlace", "atIsText", "unmarked",
+    {"oldSpot", "line", "to", "allow", "bothPlaces", "noPlace", "relativeClose",
+     "atIsText", "unmarked",
      "twoMarkers", "markerOnly", "nearLine", "rangeEnd", "bothForms",
      "rangeTexts", "noCode", "emptyCode"}
 
@@ -81,6 +83,11 @@ MoveProblem(p) ==
     IF p.old = "before" THEN "oldSpot"
     ELSE IF ~LineOK(p.line) THEN "line"
     ELSE IF p.to = "otherText" THEN "to"
+    ELSE IF p.allow # "missing" /\
+            (p.allow # "true" \/ p.to # "line_end") THEN "allow"
+    ELSE IF p.to = "next_close" /\
+            (p.line # "missing" \/ p.file # "missing")
+         THEN "relativeClose"
     ELSE IF p.at # "missing" /\ p.to # "missing" THEN "bothPlaces"
     ELSE IF p.at = "missing" /\ p.to = "missing" THEN "noPlace"
     ELSE IF p.at = "number" /\ CheckAtText THEN "atIsText"
@@ -92,8 +99,11 @@ MoveProblem(p) ==
 ValidMove(p) ==
     /\ p.old = "missing"
     /\ LineOK(p.line)
+    /\ (p.allow = "missing" \/ (p.allow = "true" /\ p.to = "line_end"))
     /\ \/ p.at = "spot" /\ p.to = "missing"
        \/ p.at = "missing" /\ p.to = "line_end"
+       \/ p.at = "missing" /\ p.to = "next_close" /\ p.line = "missing" /\
+          p.file = "missing"
 
 \* A span's field holds a text: code, or the empty text.
 IsText(k) == k \in {"code", "empty"}
@@ -137,5 +147,38 @@ ASSUME SpanExactly ==
 ASSUME NeverThrows ==
     /\ \A p \in Moves : MoveProblem(p) # Throws
     /\ \A p \in Spans : SpanProblem(p) # Throws
+
+\* A selected spoken unit accepts only plain, nonempty text within both bounds.
+SpeechTextKinds == {"empty", "fence", "within", "tooLong", "tooManyWords"}
+SpeechFlags == {"missing", "false", "true", "other"}
+SpeechProblem(text, flag) ==
+    IF flag = "other" THEN TRUE
+    ELSE IF flag # "true" THEN FALSE
+    ELSE text # "within"
+ValidSpeech(text, flag) ==
+    flag \in {"missing", "false"} \/ (flag = "true" /\ text = "within")
+ASSUME SpeechExactly ==
+    \A text \in SpeechTextKinds, flag \in SpeechFlags :
+        ~SpeechProblem(text, flag) <=> ValidSpeech(text, flag)
+
+\* The engine accepts at least one and at most 510 phoneme content tokens.
+ContentCounts == {0, 1, 510, 511}
+TokensAccepted(n) == n > 0 /\ n <= 510
+ASSUME TokenBounds ==
+    /\ ~TokensAccepted(0) /\ TokensAccepted(1)
+    /\ TokensAccepted(510) /\ ~TokensAccepted(511)
+
+\* Never let the tokenizer silently erase an unsupported phoneme.
+PhonemeKinds == {"supported", "unsupported"}
+PhonemesAccepted(kind) == kind = "supported"
+ASSUME PhonemeCoverage ==
+    /\ PhonemesAccepted("supported") /\ ~PhonemesAccepted("unsupported")
+
+\* Only a say action may carry the speak modifier, even when false.
+SpeechModifierAllowed(kind, present) == ~present \/ kind = "say"
+ASSUME SpeechModifierScope ==
+    /\ SpeechModifierAllowed("say", TRUE)
+    /\ ~SpeechModifierAllowed("move", TRUE)
+    /\ SpeechModifierAllowed("move", FALSE)
 
 ================================================================================

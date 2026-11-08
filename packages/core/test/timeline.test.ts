@@ -139,3 +139,130 @@ describe('instant', () => {
     expect(instant.signal.aborted).toBe(false);
   });
 });
+
+describe('finishing a reading countdown', () => {
+  it('FinishEarly: completes the current timer once without interrupting later sleeps', async () => {
+    vi.useFakeTimers();
+    try {
+      const timeline = new Timeline(false);
+      timeline.finish();
+      const first = timeline.sleep(1000);
+      timeline.finish();
+      expect(await first).toBe(true);
+      expect(timeline.isInterrupted).toBe(false);
+      const second = timeline.sleep(50);
+      await vi.advanceTimersByTimeAsync(50);
+      expect(await second).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('NoTimerWhilePaused: does not finish a timer held by a pause', async () => {
+    vi.useFakeTimers();
+    try {
+      const timeline = new Timeline(true);
+      let finished = false;
+      void timeline.sleep(100).then(() => {
+        finished = true;
+      });
+      timeline.finish();
+      await vi.advanceTimersByTimeAsync(100);
+      expect(finished).toBe(false);
+      timeline.resume();
+      await vi.advanceTimersByTimeAsync(100);
+      expect(finished).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('holding a reading timer', () => {
+  it('NoTimerWhileHeld: holds only the remaining time and resumes it on release', async () => {
+    vi.useFakeTimers();
+    try {
+      const timeline = new Timeline(false);
+      let completed = false;
+      void timeline.sleep(1000).then(() => {
+        completed = true;
+      });
+      await vi.advanceTimersByTimeAsync(200);
+      timeline.hold();
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(completed).toBe(false);
+      timeline.release();
+      await vi.advanceTimersByTimeAsync(799);
+      expect(completed).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(completed).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('ReleaseKeepsPause, EligibleRelease: does not release a separate playback pause when the hold ends', async () => {
+    vi.useFakeTimers();
+    try {
+      const timeline = new Timeline(false);
+      let completed = false;
+      void timeline.sleep(100).then(() => {
+        completed = true;
+      });
+      timeline.hold();
+      timeline.pause();
+      timeline.release();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(completed).toBe(false);
+      timeline.resume();
+      await vi.advanceTimersByTimeAsync(100);
+      expect(completed).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+it('keeps a reading hold through a playback pause and ignores finish until released', async () => {
+  vi.useFakeTimers();
+  try {
+    const timeline = new Timeline(false);
+    const sleep = timeline.sleep(100);
+    let completed = false;
+    void sleep.then(() => {
+      completed = true;
+    });
+    timeline.hold();
+    timeline.hold();
+    timeline.pause();
+    timeline.resume();
+    timeline.finish();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(completed).toBe(false);
+    timeline.release();
+    timeline.release();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await sleep).toBe(true);
+    timeline.hold();
+    timeline.release();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('drops a reading hold on interruption before a later sleep', async () => {
+  vi.useFakeTimers();
+  try {
+    const timeline = new Timeline(false);
+    const interrupted = timeline.sleep(100);
+    timeline.hold();
+    timeline.interrupt();
+    expect(await interrupted).toBe(false);
+    timeline.reset();
+    const next = timeline.sleep(100);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await next).toBe(true);
+  } finally {
+    vi.useRealTimers();
+  }
+});

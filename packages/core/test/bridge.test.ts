@@ -16,8 +16,10 @@ import {
   ToolError,
   type EditorMessage,
 } from '@ai-pair/protocol';
+import { reportDiagnostic } from '../src/diagnostic_delivery';
 import { Bridge, type BridgeController, type BridgeOptions } from '../src/bridge';
 import { LEFT_ARROW, RIGHT_ARROW } from '../src/constants';
+import type { DiagnosticEvent } from '../src/ports';
 
 /** What the mocked modules share with the tests, made before the `vi.mock` factories run. */
 const fakes = vi.hoisted(() => {
@@ -140,6 +142,11 @@ const FILE_CONTENT = FILE_CONTENT_SCHEMA.parse({
   end: { final_newline: true },
 });
 
+vi.mock('../src/diagnostic_delivery', () => ({
+  reportDiagnostic: vi.fn((observer: ((event: unknown) => void) | undefined, event: unknown, receiver: unknown) =>
+    observer?.call(receiver, event),
+  ),
+}));
 vi.mock('ws', () => ({ WebSocketServer: fakes.FakeServer }));
 vi.mock('node:fs', () => ({
   mkdirSync: vi.fn(),
@@ -273,6 +280,73 @@ afterEach(() => {
   fakes.FakeServer.made.length = 0;
   vi.useRealTimers();
   vi.clearAllMocks();
+});
+
+describe('diagnostic events', () => {
+  it('does not claim a reply was sent after the owner socket closed', async () => {
+    const events = vi.fn<(entry: DiagnosticEvent) => void>();
+    const { server } = await started({ onDiagnostic: events });
+    const socket = await owner(server);
+    const { promise, resolve } = Promise.withResolvers<typeof REPORT>();
+    vi.mocked(controller.step).mockReturnValueOnce(promise);
+    socket.receive({ type: 'call', id: 9, tool: 'step', args: { actions: [] } });
+    socket.closed();
+    resolve(REPORT);
+    await settle();
+    const all = events.mock.calls.map(([event]) => event);
+    expect(all).toContainEqual({ kind: 'request', connectionId: 1, id: 9, method: 'step', phase: 'cancelled' });
+    expect(all).not.toContainEqual({ kind: 'request', connectionId: 1, id: 9, method: 'step', phase: 'replied' });
+  });
+
+  it('delegates diagnostics with the current observer and options receiver', async () => {
+    const second = vi.fn<(event: DiagnosticEvent) => void>();
+    const first = vi.fn(function (this: BridgeOptions) {
+      expect(this.dir).toBe(DIR);
+      this.onDiagnostic = second;
+    });
+    const { server } = await started({ onDiagnostic: first });
+    await owner(server);
+    expect(first).toHaveBeenCalledOnce();
+    expect(second).toHaveBeenCalled();
+    expect(reportDiagnostic).toHaveBeenCalledWith(second, expect.anything(), expect.objectContaining({ dir: DIR }));
+  });
+
+  it('clears the old owner diagnostic if a replacement start closes mid-flight', async () => {
+    const events = vi.fn<(entry: DiagnosticEvent) => void>();
+    const { server } = await started({ onDiagnostic: events });
+    await owner(server);
+    controller.isActive = false;
+    const next = welcomed(server);
+    const { promise, resolve } = Promise.withResolvers<typeof REPORT>();
+    vi.mocked(controller.start).mockReturnValueOnce(promise);
+    next.receive({ type: 'call', id: 7, tool: 'start', args: {} });
+    next.closed();
+    resolve(REPORT);
+    await settle();
+    expect(events.mock.calls.map(([event]) => event)).toContainEqual({ kind: 'connection', state: 'disconnected', connectionId: 1 });
+  });
+
+  it('tracks only owner connection and safe request lifecycle, ignoring non-owner close', async () => {
+    const events = vi.fn<(entry: DiagnosticEvent) => void>();
+    const { server } = await started({ onDiagnostic: events });
+    const socket = await owner(server);
+    expect(events.mock.calls.map(([event]) => event)).toContainEqual({ kind: 'connection', state: 'connected', connectionId: 1 });
+    const stranger = welcomed(server);
+    stranger.closed();
+    expect(events.mock.calls.map(([event]) => event)).not.toContainEqual({ kind: 'connection', state: 'disconnected', connectionId: 1 });
+    await call(socket, 8, 'secret custom method', { command: 'private command' });
+    expect(events.mock.calls.map(([event]) => event)).toContainEqual({
+      kind: 'request',
+      connectionId: 1,
+      id: 8,
+      method: 'unknown',
+      phase: 'received',
+    });
+    expect(JSON.stringify(events.mock.calls)).not.toContain('private');
+    expect(JSON.stringify(events.mock.calls)).not.toContain('secret custom method');
+    socket.closed();
+    expect(events.mock.calls.map(([event]) => event)).toContainEqual({ kind: 'connection', state: 'disconnected', connectionId: 1 });
+  });
 });
 
 describe('start', () => {

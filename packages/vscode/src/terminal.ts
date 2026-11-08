@@ -3,7 +3,7 @@
 
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { samePath, type CommandOutcome, type RunOptions } from '@ai-pair/core';
+import { reportDiagnostic, samePath, type CommandDiagnostic, type CommandOutcome, type RunOptions } from '@ai-pair/core';
 import { MAX_OUTPUT, outcomeOf, Tail } from './output';
 import { timings } from './timings';
 
@@ -14,6 +14,10 @@ interface Owned {
   terminal: vscode.Terminal;
   cwd: string;
   busy: boolean;
+  inFlight: boolean;
+  exposed: boolean;
+  runId: number;
+  execution?: vscode.TerminalShellExecution;
 }
 
 function shellIntegration(terminal: vscode.Terminal, signal: AbortSignal): Promise<vscode.TerminalShellIntegration | undefined> {
@@ -86,8 +90,16 @@ export class PairTerminals implements vscode.Disposable {
   private readonly owned: Owned[] = [];
   private readonly disposables: vscode.Disposable[];
 
-  constructor() {
+  constructor(
+    private readonly showAutomatically: () => boolean,
+    private readonly onDiagnostic?: (event: CommandDiagnostic) => void,
+  ) {
     this.disposables = [
+      // specs/TerminalReuse.tla, ForeignStart: another extension can access a hidden terminal.
+      vscode.window.onDidStartTerminalShellExecution((event) => {
+        const owned = this.owned.find((item) => item.terminal === event.terminal);
+        if (owned && event.execution !== owned.execution) owned.exposed = true;
+      }),
       // specs/Terminals.tla, `CloseTerminal`: a terminal the programmer closes is forgotten.
       vscode.window.onDidCloseTerminal((t) => {
         const i = this.owned.findIndex((o) => o.terminal === t);
@@ -97,82 +109,148 @@ export class PairTerminals implements vscode.Disposable {
   }
 
   async run(command: string, options: RunOptions): Promise<CommandOutcome> {
-    const owned = this.acquire(options.cwd);
+    this.diagnostic({ kind: 'command', id: options.id, phase: 'requested', waitMs: options.waitMs });
+    let owned: Owned;
+    try {
+      owned = this.acquire(options.cwd, options.id);
+    } catch (error) {
+      this.diagnostic({ kind: 'command', id: options.id, phase: 'failed' });
+      throw error;
+    }
     owned.busy = true;
-    const { terminal } = owned;
-    terminal.show(/* preserveFocus= */ true);
+    owned.inFlight = true;
+    try {
+      const { terminal } = owned;
+      if (this.showAutomatically()) this.showOwned(owned);
 
-    const integration = await shellIntegration(terminal, options.signal);
-    // specs/Terminals.tla: `AbortBeforeStart`, or `SkipAborted` when the signal fired before the run.
-    if (options.signal.aborted) {
-      owned.busy = false;
-      return { output: '', notStarted: true };
-    }
-    if (!integration) {
-      // Without shell integration we can't tell when it ends, so the terminal is never reused (specs/Terminals.tla, `SendText`).
-      // A terminal closed meanwhile makes `sendText` throw, and `run` rejects (`RejectClosed`).
-      terminal.sendText(command);
-      return { output: '[output not captured: this terminal has no shell integration]' };
-    }
+      const integration = await shellIntegration(terminal, options.signal);
+      this.diagnostic({ kind: 'command', id: options.id, phase: 'integration', available: integration !== undefined });
+      // specs/Terminals.tla: `AbortBeforeStart`, or `SkipAborted` when the signal fired before the run.
+      if (options.signal.aborted) {
+        this.diagnostic({ kind: 'command', id: options.id, phase: 'abort' });
+        owned.busy = false;
+        return { output: '', notStarted: true };
+      }
+      if (!integration) {
+        // Without shell integration we can't tell when it ends, so the terminal is never reused (specs/Terminals.tla, `SendText`).
+        // A terminal closed meanwhile makes `sendText` throw, and `run` rejects (`RejectClosed`).
+        this.showOwned(owned);
+        terminal.sendText(command);
+        this.diagnostic({ kind: 'command', id: options.id, phase: 'untracked' });
+        return { output: '[output not captured: this terminal has no shell integration]' };
+      }
 
-    // specs/Terminals.tla, `ExecuteCommand`. Its end event comes through VS Code's event loop, so the
-    // listeners below are in place before it can fire.
-    const execution = integration.executeCommand(command);
+      // specs/Terminals.tla, `ExecuteCommand`. Its end event comes through VS Code's event loop, so the
+      // listeners below are in place before it can fire.
+      const execution = integration.executeCommand(command);
+      owned.execution = execution;
+      this.diagnostic({ kind: 'command', id: options.id, phase: 'start' });
 
-    // specs/Terminals.tla: the command ends (`End`), or the programmer closes its terminal (`CloseTerminal`), and the terminal is free.
-    let exitCode: number | undefined;
-    const ended = new Promise<void>((resolve) => {
-      const listeners: vscode.Disposable[] = [];
-      function done(): void {
-        for (const listener of listeners) {
-          listener.dispose();
+      // specs/Terminals.tla: the command ends (`End`), or the programmer closes its terminal (`CloseTerminal`), and the terminal is free.
+      let exitCode: number | undefined;
+      const ended = new Promise<void>((resolve) => {
+        const listeners: vscode.Disposable[] = [];
+        function done(): void {
+          for (const listener of listeners) {
+            listener.dispose();
+          }
+          resolve();
         }
-        resolve();
-      }
-      listeners.push(
-        vscode.window.onDidEndTerminalShellExecution((e) => {
-          if (e.execution !== execution) return;
-          exitCode = e.exitCode;
-          done();
-        }),
-        vscode.window.onDidCloseTerminal((t) => {
-          if (t === terminal) done();
-        }),
-      );
-    });
-    void ended.then(() => {
-      owned.busy = false;
-    });
+        listeners.push(
+          vscode.window.onDidEndTerminalShellExecution((e) => {
+            if (e.execution !== execution) return;
+            exitCode = e.exitCode;
+            this.diagnostic({ kind: 'command', id: options.id, phase: 'end', ...(exitCode === undefined ? {} : { exitCode }) });
+            done();
+          }),
+          vscode.window.onDidCloseTerminal((t) => {
+            if (t === terminal) {
+              this.diagnostic({ kind: 'command', id: options.id, phase: 'closed' });
+              done();
+            }
+          }),
+        );
+      });
+      void ended.then(() => {
+        owned.busy = false;
+        delete owned.execution;
+      });
 
-    const output = new Tail(MAX_OUTPUT * TAIL_SLACK);
-    const drained = (async () => {
-      for await (const data of execution.read()) {
-        output.push(data);
-      }
-    })().catch(() => {
-      // The read ends with the terminal; `ended` reports how.
-    });
+      const output = new Tail(MAX_OUTPUT * TAIL_SLACK);
+      const drained = (async () => {
+        for await (const data of execution.read()) {
+          output.push(data);
+        }
+      })().catch(() => {
+        // The read ends with the terminal; `ended` reports how.
+      });
 
-    const finished = await Promise.race([ended.then(() => true), stopWaiting(options.waitMs, options.signal, ended)]);
-    if (finished) await Promise.race([drained, delay(timings.drainMs)]);
+      const finished = await Promise.race([ended.then(() => true), stopWaiting(options.waitMs, options.signal, ended)]);
+      if (finished) await Promise.race([drained, delay(timings.drainMs)]);
+      else this.diagnostic({ kind: 'command', id: options.id, phase: options.signal.aborted ? 'abort' : 'timeout' });
 
-    return outcomeOf(output, { shell: terminal.state.shell, finished, exitCode: () => exitCode, ended });
+      const outcome = outcomeOf(output, { shell: terminal.state.shell, finished, exitCode: () => exitCode, ended });
+      return outcome;
+    } catch (error) {
+      this.diagnostic({ kind: 'command', id: options.id, phase: 'failed' });
+      throw error;
+    } finally {
+      owned.inFlight = false;
+    }
   }
 
-  // specs/Terminals.tla, `Acquire`: a terminal that isn't busy, whose shell is alive (`Exit`), in the directory, else a new one.
-  private acquire(cwd: string): Owned {
+  /** Reports diagnostics without allowing an observer to affect the command. */
+  private diagnostic(event: CommandDiagnostic): void {
+    reportDiagnostic(this.onDiagnostic, event, this);
+  }
+
+  /** Shows the terminal associated with a current command, if available. */
+  showTerminal(id: number): boolean {
+    const owned = this.owned.find((item) => item.runId === id);
+    if (!owned) return false;
+    this.showOwned(owned);
+    return true;
+  }
+
+  /** Shows and protects an owned terminal without moving focus. */
+  private showOwned(owned: Owned): void {
+    owned.exposed = true;
+    owned.terminal.show(/* preserveFocus= */ true);
+  }
+
+  /** Removes exited hidden terminals without closing any live shell. */
+  cleanupIdle(): void {
+    // specs/QuietTerminals.tla, Cleanup: live and exposed terminals are kept.
+    for (const owned of this.owned.slice()) {
+      if (owned.busy || owned.inFlight || owned.exposed || owned.terminal.exitStatus === undefined) continue;
+      this.owned.splice(this.owned.indexOf(owned), 1);
+      owned.terminal.dispose();
+    }
+  }
+
+  // specs/Terminals.tla, Acquire; specs/TerminalReuse.tla, Attempt: only reuse an eligible shell.
+  private acquire(cwd: string, id: number): Owned {
     const idle = this.owned.find((o) => {
       const at = o.terminal.shellIntegration?.cwd?.fsPath ?? o.cwd;
-      return !o.busy && o.terminal.exitStatus === undefined && samePath(path.resolve(at), path.resolve(cwd));
+      return !o.busy && !o.inFlight && !o.exposed && o.terminal.exitStatus === undefined && samePath(path.resolve(at), path.resolve(cwd));
     });
-    if (idle) return idle;
-    const terminal = vscode.window.createTerminal({ name: 'AI Pair', cwd, iconPath: new vscode.ThemeIcon('comment-discussion') });
-    const owned: Owned = { terminal, cwd, busy: false };
+    if (idle) {
+      idle.runId = id;
+      return idle;
+    }
+    const terminal = vscode.window.createTerminal({
+      name: 'AI Pair',
+      cwd,
+      iconPath: new vscode.ThemeIcon('comment-discussion'),
+      hideFromUser: true,
+    });
+    const owned: Owned = { terminal, cwd, busy: false, inFlight: false, exposed: false, runId: id };
     this.owned.push(owned);
     return owned;
   }
 
   dispose(): void {
+    this.cleanupIdle();
     for (const d of this.disposables) {
       d.dispose();
     }

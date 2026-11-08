@@ -1,0 +1,15 @@
+{
+  "name": "companion-restart-probe",
+  "publisher": "proof",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.106.0"
+  },
+  "extensionKind": [
+    "ui"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "*"
+  ]
+}

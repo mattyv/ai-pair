@@ -17,7 +17,9 @@ import {
   type Passage,
   type RelayMessage,
 } from '@ai-pair/protocol';
+import { reportDiagnostic } from './diagnostic_delivery';
 import type { Controller } from './controller';
+import type { DiagnosticEvent } from './ports';
 import { LEFT_ARROW, RIGHT_ARROW } from './constants';
 
 /** What a bridge needs from its window: the discovery folder, the workspace folders, and where to report. */
@@ -27,10 +29,29 @@ export interface BridgeOptions {
   workspaceFolders: () => string[];
   /** Called with a line for each frame sent or received, for diagnosing deliveries (#27). */
   trace?: (line: string) => void;
+  /** Receives allowlisted owner-connection and request lifecycle facts. */
+  onDiagnostic?: (event: DiagnosticEvent) => void;
   /** Called when the discovery file can't be written, so relays won't find this window (#9). */
   failed?: (error: unknown) => void;
   /** Hands an agent's passage to the editor's reading speed calibration; false while one is under way (#109). */
   calibrate: (passage: Passage) => boolean;
+}
+
+type DiagnosticMethod = Extract<DiagnosticEvent, { kind: 'request' }>['method'];
+
+/** Restricts the logged method to the known tool names. */
+function diagnosticMethod(tool: string): DiagnosticMethod {
+  switch (tool) {
+    case 'start':
+    case 'step':
+    case 'listen':
+    case 'end':
+    case 'read':
+    case 'calibrate':
+      return tool;
+    default:
+      return 'unknown';
+  }
 }
 
 /** What a bridge calls on the controller: the pair tools, and whether a session runs. */
@@ -96,6 +117,7 @@ export class Bridge {
   private lastFocused = Date.now();
   /** The relay connection whose agent started the current (or last) session. */
   private owner: WebSocket | undefined = undefined;
+  private ownerConnectionId: number | undefined = undefined;
   /** Sockets accepted so far, to tell them apart in `trace`. */
   private accepted = 0;
 
@@ -170,15 +192,21 @@ export class Bridge {
     this.server.close();
   }
 
+  /** Reports diagnostics without allowing an observer to affect the operation. */
+  private diagnostic(event: DiagnosticEvent): void {
+    reportDiagnostic(this.options.onDiagnostic, event, this.options);
+  }
+
   private accept(ws: WebSocket): void {
     let authenticated = false;
-    const calls = new Map<number, AbortController>();
+    const calls = new Map<number, { abort: AbortController; method: DiagnosticMethod }>();
     const socket = ++this.accepted;
     const trace = this.options.trace;
-    function send(m: EditorMessage): void {
+    function send(m: EditorMessage): boolean {
       const open = ws.readyState === ws.OPEN;
       trace?.(`socket ${socket} ${RIGHT_ARROW} ${describe(m)}${open ? '' : ' (not sent: closed)'}`);
       if (open) ws.send(JSON.stringify(m));
+      return open;
     }
 
     // ws hands over each frame as one Buffer, as no binaryType is set (#180).
@@ -205,19 +233,28 @@ export class Bridge {
         return;
       }
       if (message.type === 'cancel') {
-        calls.get(message.id)?.abort();
+        const call = calls.get(message.id);
+        if (call) {
+          this.diagnostic({ kind: 'request', connectionId: socket, id: message.id, method: call.method, phase: 'cancelled' });
+          call.abort.abort();
+        }
       } else if (message.type === 'return') {
         // specs/Bridge.tla, `Restore`: only the owner's socket brings its session's report back.
         if (this.owner === ws) this.controller.restore(message.report, message.mayRepeat === true);
       } else if (message.type === 'call') {
         const abort = new AbortController();
-        calls.set(message.id, abort);
-        this.dispatch(ws, message.tool, message.args ?? {}, abort.signal)
+        const method = diagnosticMethod(message.tool);
+        calls.set(message.id, { abort, method });
+        this.diagnostic({ kind: 'request', connectionId: socket, id: message.id, method, phase: 'received' });
+        this.dispatch(ws, message.tool, message.args ?? {}, abort.signal, socket)
           .then(
             (result) => {
-              send({ type: 'result', id: message.id, result });
+              if (send({ type: 'result', id: message.id, result })) {
+                this.diagnostic({ kind: 'request', connectionId: socket, id: message.id, method, phase: 'replied' });
+              }
             },
             (error: unknown) => {
+              this.diagnostic({ kind: 'request', connectionId: socket, id: message.id, method, phase: 'failed' });
               send({
                 type: 'error',
                 id: message.id,
@@ -238,17 +275,26 @@ export class Bridge {
       trace?.(`socket ${socket} closed`);
       // specs/Bridge.tla and specs/Serialize.tla, `CloseSocket`: the socket's calls are aborted, then the owner's
       // socket gone, the session is suspended, or closed if it ended.
-      for (const abort of calls.values()) {
-        abort.abort();
+      for (const [id, call] of calls) {
+        this.diagnostic({ kind: 'request', connectionId: socket, id, method: call.method, phase: 'cancelled' });
+        call.abort.abort();
       }
       if (this.owner === ws) {
         this.owner = undefined;
+        this.ownerConnectionId = undefined;
+        this.diagnostic({ kind: 'connection', state: 'disconnected', connectionId: socket });
         this.controller.disconnect();
       }
     });
   }
 
-  private async dispatch(ws: WebSocket, tool: string, args: Record<string, unknown>, signal: AbortSignal): Promise<unknown> {
+  private async dispatch(
+    ws: WebSocket,
+    tool: string,
+    args: Record<string, unknown>,
+    signal: AbortSignal,
+    connectionId: number,
+  ): Promise<unknown> {
     const controller = this.controller;
     if (tool === 'start') {
       // specs/Bridge.tla, `BeginStart`: refused while another socket's session is active.
@@ -261,10 +307,18 @@ export class Bridge {
       // cleared too: a socket that owned an ended session the start replaced must not drive the suspended one.
       if (ws.readyState !== ws.OPEN) {
         this.owner = undefined;
+        const disconnected = this.ownerConnectionId ?? connectionId;
+        this.ownerConnectionId = undefined;
+        this.diagnostic({ kind: 'connection', state: 'disconnected', connectionId: disconnected });
         controller.disconnect();
         throw new ToolError('no_session', 'The connection closed while the session started.');
       }
+      if (this.ownerConnectionId !== undefined && this.ownerConnectionId !== connectionId) {
+        this.diagnostic({ kind: 'connection', state: 'disconnected', connectionId: this.ownerConnectionId });
+      }
       this.owner = ws;
+      this.ownerConnectionId = connectionId;
+      this.diagnostic({ kind: 'connection', state: 'connected', connectionId });
       return report;
     }
     if (this.owner !== ws) {

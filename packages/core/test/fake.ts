@@ -12,6 +12,7 @@ import {
   type EditOptions,
   type EditorPort,
   type Focus,
+  type NarrationPort,
   type PanelEvent,
   type PanelPort,
   type RunOptions,
@@ -25,6 +26,7 @@ export const MOVE_TO_A: Action = { move: { file: 'a.ts', line: 1, to: 'line_end'
 
 /** An editor in memory: files as strings, a cursor, and a record of what the controller asked. */
 export class FakeEditor implements EditorPort {
+  readonly diagnostics = vi.fn(() => Promise.resolve({ diagnostics: [], warnings: [] }));
   files = new Map<string, string>();
   dirty = new Set<string>();
   saved: string[] = [];
@@ -97,6 +99,8 @@ export class FakeEditor implements EditorPort {
   follow(): void {
     this.follows++;
   }
+
+  cleanupIdleTerminals(): void {}
 
   async runCommand(command: string, options: RunOptions): Promise<CommandOutcome> {
     const script = this.commandScript.get(command) ?? { ms: 0, exitCode: 0 };
@@ -199,13 +203,13 @@ export const testConfig: Config = {
 };
 
 /** Returns a controller over a fake editor holding `files`, with the test config and `config` on top. */
-export function setup(files: Record<string, string> = {}, config: Partial<Config> = {}) {
+export function setup(files: Record<string, string> = {}, config: Partial<Config> = {}, narration?: NarrationPort) {
   const editor = new FakeEditor();
   const panel = new FakePanel();
   for (const [name, text] of Object.entries(files)) {
     editor.files.set(editor.resolvePath(name), text);
   }
-  const controller = new Controller(editor, panel, { ...testConfig, ...config });
+  const controller = new Controller(editor, panel, { ...testConfig, ...config }, narration);
   editor.controller = controller;
   return { editor, panel, controller };
 }

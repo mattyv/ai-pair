@@ -63,8 +63,11 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 |---|---|---|---|
 | `Serialize.cfg` | `NumCalls = 2` calls, each empty or not, the session ending, an interrupt, and the socket closing at any point | holds | 3,646 |
 | `Wire.cfg` | `NumSockets = 2` sockets, `NumCalls = 2` calls | holds | 43,426 |
-| `Panel.cfg` | `MaxEvents = 5` | holds | 21 |
-| `PanelScroll.cfg` | `MaxEvents = 5`, `ScrollOn = "you"` | holds | 42 |
+| `StructuralTyping.cfg` | both operations, closed and opaque field categories, selection and one or two closes | holds | 288 |
+| `LineEndGuard.cfg` | rehearsal and live suffix danger, with or without acknowledgment | holds | 22 |
+| `BuildIdentity.cfg` | two builds, installing and reloading | holds | 4 |
+| `Panel.cfg` | `MaxEvents = 5`, both display orders and the settings dialog | holds | 84 |
+| `PanelScroll.cfg` | `MaxEvents = 5`, `ScrollOn = "you"`, both display orders | holds | 108 |
 | `PanelReplay.cfg` | `MaxLog = 3`, `MaxEvents = 6` | holds | 127 |
 | `Controller.cfg` | `NumBatches = 2` batches, `NumEvents = 1` event, `NumQuietEdits = 1` quiet edit, `MaxCancels = 2` | holds | 82,085 |
 | `Discovery.cfg` | `NumWindows = 2` windows, one junk file, a write that may fail, a window that may refuse the hello | holds | 782 |
@@ -80,19 +83,69 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `EditEvents.cfg` | one file, 3 texts, `MaxEdits = 4` | holds | 516 |
 | `Scroll.cfg` | `NumLines = 8` lines, a view of `ViewHeight = 4`, `MaxMoves = 2`, `MaxFollowSwitches = 2`, `scrollBeyondLastLine` on and off, the programmer's turn | holds | 14,131 |
 | `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
-| `Resume.cfg` | 2 directories, `MaxSessions = 3` sessions, `PostOnRevive = TRUE` | holds | 56 |
-| `Timeline.cfg` | `MaxSleeps = 3` sleeps, a second sleep while one is pending | holds | 656 |
+| `Resume.cfg` | 2 directories, `MaxSessions = 3`, revive and replacement updates enabled | holds | 56 |
+| `TerminalPanel.cfg` | two command IDs and automatic visibility | holds | 61 |
+| `DiagnosticsCopy.cfg` | explicit request with clipboard success or failure | holds | 3 |
+| `DiagnosticsPrivacy.cfg` | bounded two-event history, copy and allowlisted projection | holds | 22,778 |
+| `DiagnosticsPrivacy_Speech.cfg` | speech-only projection without a session | holds | 38 |
+| `Timeline.cfg` | `MaxSleeps = 3` sleeps, holds, and a second sleep while one is pending | holds | 864 |
+| `PlaybackPreference.cfg` | three modes and two independent pace settings | holds | 36 |
+| `SpeechSetup.cfg` | two files; install, cancellation and rollback outcomes | holds | 42 |
+| `SpeechPage.cfg` | two page identities and two narration units | holds | 28 |
+| `CloudNarration.cfg` | two generations, provider and credential epochs | holds | 59 |
+| `CloudNarration_Healthy.cfg` | two generations with a healthy key read | holds | 59 |
+| `SpeechSettings.cfg` | two credential reads and catalog requests | holds | 50,968 |
+| `ProviderChoice.cfg` | two ordered settings writes and credential change | holds | 122 |
+| `AudioOutput.cfg` | native jobs, route changes and retirement | holds | 3,180 |
+| `OutputAdmission.cfg` | overlapping output checks and stale completion | holds | 140 |
+| `OutputHandoff.cfg` | worker admission and acknowledged browser retirement | holds | 270 |
+| `OutputReplacement.cfg` | view replacement and old-page disposal | holds | 22 |
+| `OutputPreference.cfg` | ordered choice, discovery and failed persistence | holds | 648 |
+| `LocalAudioAdmission.cfg` | capability, device snapshot and cloud admission | holds | 624 |
+| `LocalAudioOwnership.cfg` | local ownership, directional sequences and lease loss | holds | 3,632 |
+| `PanelPlacement.cfg` | bounded prepare, irrevocable commit and fallback | holds | 10 |
+| `SentencePipeline.cfg` | two units, three parts, pause, cancel and late callbacks | holds | 2,242 |
+| `SpeechTempo.cfg` | two units, two parts, rate changes and stale results | holds | 868 |
+| `SpeechTempo_Healthy.cfg` | two fair completed units | holds | 17 |
+| `SpeechTempo_Canceled.cfg` | fair retirement after cancellation or timeout | holds | 11 |
+| `WarmSynthesisWorker.cfg` | two epochs, two units and parts, stale and late completions, cancel between parts | holds | 440 |
+| `WarmSynthesisWorker_Healthy.cfg` | two units reuse one healthy worker | holds | 11 |
+| `WarmSynthesisWorker_Cancellation.cfg` | canceled inference returns and is discarded | holds | 440 |
+| `WarmSynthesisWorker_Watchdog.cfg` | canceled inference may never return; watchdog retires it | holds | 440 |
+| `WarmSynthesisWorker_Retirement.cfg` | fair physical worker exit | holds | 440 |
+| `SentencePipeline_Healthy.cfg` | fair healthy synthesis, output and eventual resume | holds | 107 |
+| `SentencePipeline_Canceled.cfg` | fair canceled inference and child retirement | holds | 137 |
+| `MultipartAudioLease.cfg` | two units, three parts, pause and route loss | holds | 13,716 |
+| `MultipartAudioLease_Healthy.cfg` | two completed units under fair child progress | holds | 59 |
+| `LocalPanelReplay.cfg` | two chunks, two epochs, bounded text and malformed frames | holds | 138 |
+| `LocalPanelReplay_Delivery.cfg` | two fair successful chunks | holds | 3 |
+| `PlaybackAnchor.cfg` | three-character insert, cursor marker and all bounded programmer edits | holds | 20 |
+| `PlaybackAnchor_Progress.cfg` | the same, with fair completion | holds | 20 |
+| `CodePlayback.cfg` | three atomic edits, bounded groups, two pause states and three countdown IDs | holds | 654 |
+| `CodePlayback_Progress.cfg` | the same edits with fair progress and no pause or interrupt | holds | 11 |
+| `ReadingSkip.cfg` | two countdown IDs, hold, pause, turn and suspension changes | holds | 5,840 |
+| `ReadingHold.cfg` | matching hold and release with changing pause state | holds | 444 |
+| `Narration.cfg` | two units, two page and session epochs, interruptions and independent gates | holds | 7,328 |
+| `SpeechWorker.cfg` | two jobs, cancellation, watchdog expiry and worker termination | holds | 19 |
+| `ReadingGesture.cfg` | short and long gestures across two countdown IDs | holds | 170 |
+| `ListeningHint.cfg` | status and session context | holds | 64 |
+| `SettingsAccess.cfg` | idle and active toolbar | holds | 4 |
 | `Terminals.cfg` | `NumTerminals = 2` terminals, `MaxRuns = 3`, 2 directories | holds | 3,361 |
-| `Turns.cfg` | batches of up to 2 actions, `MaxTurns = 2` turn changes | holds | 1,234 |
+| `QuietTerminals.cfg` | quiet default, fallback and guarded cleanup | holds | 9 |
+| `QuietTerminals_Visible.cfg` | automatic show, fallback and guarded cleanup | holds | 11 |
+| `TerminalReuse.cfg` | shell state, exposure, pending drain and foreign starts | holds | 48 |
+| `Turns.cfg` | batches of up to 2 actions, `MaxTurns = 2` turn changes | holds | 1,530 |
 | `Reload.cfg` | `NumLines = 5` lines, any of them changed on disk, a selection at a line's start or not | holds | 320 |
 | `Rehearsal.cfg` | `MaxLines = 3` lines, `MaxOthers = 2` changes by others, `MaxProgrammerEdits = 1`, `MaxBatches = 2` batches, `MaxQueued = 2` queued, either turn, `ReportWaitsForQueue = TRUE` | holds, in about 200 seconds | 6,721,044 |
-| `BatchFile.cfg` | files `sourceFile`, `destinationFile`, and `otherFile`, `MaxActions = 4` actions a batch, `FallBackToNamed = TRUE`, `CursorInNamed = TRUE`, a selection or none | holds | 369 |
-| `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await | holds | 2,294 |
+| `BatchFile.cfg` | files `sourceFile`, `destinationFile`, and `otherFile`, `MaxActions = 4` actions a batch, `FallBackToNamed = TRUE`, `CursorInNamed = TRUE`, a selection or none | holds | 330 |
+| `Diagnostics.cfg` | `MaxBatches = 3`, provider available or not, completed, interrupted, and failed batches | holds | 96 |
+| `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await | holds | 3,077 |
 | `Player.cfg` | `MaxEdits = 2` | holds | 26 |
 | `LineIdentity.cfg` | texts up to 4 characters, inserts up to 2 | holds (checked as `ASSUME`s) | |
 | `Places.cfg` | texts up to 5 characters, needles up to 3 | holds (`ASSUME`s) | |
-| `ActionValidation.cfg` | every move and span place by the kind of value in each field (180 moves, 960 spans), `CheckAtText = TRUE` | holds (`ASSUME`s) | |
+| `ActionValidation.cfg` | move and span places, including `next_close` and multi-close acknowledgment, `CheckAtText = TRUE` | holds (`ASSUME`s) | |
 | `Typing.cfg` | texts up to 7 characters | holds (`ASSUME`s) | |
+| `TypingEol.cfg` | up to 5 ordinary, LF, or CRLF input units; LF and CRLF document endings | holds (`ASSUME`s) | |
 | `Anchor.cfg` | `MaxBatches = 4`, `Guard = TRUE`, `DropsHeld = FALSE` | holds | 113 |
 | `Calibration.cfg` | `MaxRounds = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
 | `PointFocus.cfg` | a point, a look-away, a closed tab, `MaxReplies = 2` replies or resumes, `DropStaleFocus = TRUE`, `RevealOnReply = FALSE` | holds | 67 |
@@ -125,7 +178,7 @@ comment names them.
 ### `PairDefs`: the vocabulary the specs share
 
 No config: the module holds definitions only, as 5.2 of the style guide allows,
-and the specs that `EXTENDS` it check them. `ActionKinds` is the eight kinds of
+and the specs that `EXTENDS` it check them. `ActionKinds` is the nine kinds of
 action (Actions, BatchFile, Turns); `SessionPhases` and `NoSession` a session's
 phases (Bridge, Resume); `Views` what the panel shows of a session (Resume);
 `PageStates` a webview's page, loaded or disposed (Draft, Start); `Calls` and
@@ -256,11 +309,13 @@ since #18.
 
 | Spec | Code |
 |---|---|
+| `OpenSettings`, `CloseSettings` | the Settings dialog opens and closes |
+| `SwitchOrder` | the setting changes the displayed order without changing events |
 | `Say` | `setNow` |
 | `AddEntry` | `addYou`, `addRun`, `addOutside`, the interrupt and turn dividers: `add()` |
 | `ChangeSession` | the `session` event: a start, an end, and a suspension or resumption shown for the first time |
 | `RepeatSession` | the `session` event repeating a suspension the page already shows (#138): the band is filed and emptied, with no divider |
-| `currentMessage`, `messageFiled`, `WithMessageFiled` | `current`, `filed`, `fileCurrent()` |
+| `currentMessage`, `messageFiled`, `bandVisible`, `WithMessageFiled` | `current`, `filed`, the current narration, and `fileCurrent()` |
 
 Each invariant was proved to bite with a mutation, run in TLC and then
 reverted. NewestFirst implies NoDuplicates (a strictly decreasing history has
@@ -274,47 +329,56 @@ config:
 | `ChangeSession` drops the band's message | `NoneLost` |
 | `RepeatSession` drops the band's message | `NoneLost` |
 | Fix 1 never marks the message as filed | `NoDuplicates` |
+| Present the logical history without reversing it in oldest-first order | `DisplayOrdered` |
+| Leave the filed message visible in the band | `VisibleOnce` |
+| Hide a new message in the band | `NoneLost` |
 
 Every invariant names the test that proves the code obeys it:
 
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `VisibleOnce` | `webview/panel.test.ts`: VisibleOnce, NoneLost: shows each agent and programmer message once in each order |
+| `DisplayOrdered` | `visual/chat_order.spec.ts`: DisplayOrdered, NoneLost and NoDuplicates: switching reverses populated history and keeps the draft |
 | `NewestFirst` | `webview/panel.test.ts`: NewestFirst, NoneLost: puts a reply above the agent message it answers; NoDuplicates, NewestFirst: files the current message once, before anything added while it was current |
 | `NoneLost` | `webview/panel.test.ts`: NewestFirst, NoneLost: puts a reply above the agent message it answers |
 | `NoDuplicates` | `webview/panel.test.ts`: NoDuplicates, NewestFirst: files the current message once, before anything added while it was current |
 
 ### `PanelScroll`: the history's scroll position
 
-`add` and `addYou` in `packages/vscode/src/webview/panel.ts`. Issue #139. The
-constant `ScrollOn` says which entries scroll the history to its top; the code
-is `"you"`.
+`add` and `addYou` in `packages/vscode/src/webview/panel.ts`. Issue #139
+and #5. `ScrollOn = "you"` reveals the programmer's message. The model
+abstracts the viewport to one entry and permits newest-first browser anchoring
+at the top to keep the old entry. Oldest-first follows the latest edge only
+when already there, and preserves the visible entry otherwise.
 
 | Spec | Code |
 |---|---|
-| `AddEntry` | everything put in but the programmer's message: the agent's message filed (by `add()`, or by `setNow` through `fileCurrent` when a new message replaces it), runs, dividers, changes outside the editor |
-| `AddYours` | `addYou`, for the `programmer` event and a `turn` event with a message or a selection: it sets `scrollTop` to 0 |
+| `AddEntry` | add a filed message, run, divider or outside change |
+| `AddYours` | add a programmer message and reveal the newest edge |
 | `Scroll` | the programmer scrolling the history |
-| `entriesAboveView`, and `Prepend` keeping the entry at the view's top | `scrollTop`, and the browser's scroll anchoring |
+| `SwitchOrder` | reverse the entries and preserve the visible position |
+| `view` | the visible entry tracked by browser scroll anchoring |
 
-Each invariant was proved to bite with a mutation, run in TLC and then reverted:
+Each invariant was mutation-tested in TLC and the mutation reverted:
 
 | Mutation | Breaks |
 |---|---|
-| `ScrollOn = "none"`, the code before #139 | `YoursInView` |
-| `ScrollOn = "all"` | `KeepsPlace` |
-| `Scroll` reaches `Len(history)` | `ViewAtEntry` |
-| an entry stamped with the old time, 0 at first | `TypeOK` |
-
-Every invariant names the test that proves the code obeys it; the test's title
-carries the invariant's name:
+| Set the view to 0 on addition | `TypeOK` |
+| Clear the view on addition | `ViewAtEntry` |
+| Keep the old view when a reply arrives | `YoursInView` |
+| Always follow the latest entry | `KeepsPlace` |
+| Keep the old view when the latest entry arrives | `FollowsLatest` |
+| Clear the view on an order switch | `SwitchKeepsPlace` |
 
 | Invariant | Proved by |
 |---|---|
-| `YoursInView` | `webview/panel.test.ts`: YoursInView: your message scrolls the history back to its top (#139) |
-| `KeepsPlace` | `webview/panel.test.ts`: KeepsPlace: entries other than your message leave the history where you scrolled it (#139) |
-| `ViewAtEntry` | Nothing: the browser keeps `scrollTop` within the history |
-| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `YoursInView` | `visual/chat_order.spec.ts`: FollowsLatest, KeepsPlace and YoursInView: oldest-first tracks the reader |
+| `KeepsPlace` | `visual/chat_order.spec.ts`: FollowsLatest, KeepsPlace and YoursInView: oldest-first tracks the reader |
+| `SwitchKeepsPlace` | `visual/chat_order.spec.ts`: SwitchKeepsPlace: switching order keeps the visible history entry in place |
+| `FollowsLatest` | `visual/chat_order.spec.ts`: FollowsLatest, KeepsPlace and YoursInView: oldest-first tracks the reader |
+| `ViewAtEntry` | Browser scrolling keeps the view within the history |
+| `TypeOK` | The TypeScript compiler checks these types |
 
 ### `PanelReplay`: the panel's log and its replay
 
@@ -589,6 +653,8 @@ away (`editor.ts`).
 | Spec | Code |
 |---|---|
 | `Sleep`, `Fire` | `sleep(ms)` and its timer |
+| `FinishEarly` | `Controller.finishReading` checks the live player's current reading ID, then the live `Timeline.finish()` completes that sleep without interrupting playback |
+| `Hold`, `Release` | `Controller.holdReading` checks the live player's current reading ID, then the live `Timeline.hold()` or `Timeline.release()` freezes or resumes the delay; release respects a separate global pause |
 | `Pause`, `Resume` | `Controller.pause(reason)` with `Timeline.pause()`; `Controller.resume(reason)`, or with no reason all of them, then `Timeline.resume()` |
 | `Interrupt`, `Reset` | `interrupt()`; `reset()` for the next batch |
 | `SleepAgain`, `FireReplaced` | `sleep(ms)` with a sleep pending, which no caller makes; the replaced sleep's timer in `arm`, which leaves `sleeping` alone (#174) |
@@ -604,6 +670,7 @@ in TLC and then reverted:
 | `Pause` adds a reason outside `PauseReasons` | `TypeOK` |
 | `Resume` of one reason resumes the timeline with others left | `PausedMatchesReasons` |
 | `Pause` leaves the timer running | `NoTimerWhilePaused` |
+| `Hold` leaves the timer running | `NoTimerWhileHeld` |
 | `Interrupt` resolves the pending sleep but keeps it pending | `ResolvedOnce` |
 | `Resume` never restarts a waiting sleep's timer | `ResumeContinues` |
 | `FireReplaced` clears the pending sleep, the code without its check | `LatestPending` |
@@ -615,8 +682,9 @@ carries the invariant's name:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `PausedMatchesReasons` | `controller.test.ts`: PausedMatchesReasons, NoTimerWhilePaused, ResumeContinues: holds playback until the last pause reason is gone |
+| `PausedMatchesReasons` | `controller.test.ts`: PausedMatchesReasons, NoTimerWhilePaused, ResumeContinues: holds playback until the last pause reason is gone; `webview/panel.test.ts`: PausedMatchesReasons: distinguishes actual pause, active playback, natural reading, and turn or confirmation waits (the display consumes the controller's aggregated flag) |
 | `NoTimerWhilePaused` | `controller.test.ts`: PausedMatchesReasons, NoTimerWhilePaused, ResumeContinues: holds playback until the last pause reason is gone; `timeline.test.ts`: NoTimerWhilePaused, ResumeContinues: pauses a sleep with its time left, and resumes it for only that; `integration.ts`, in VS Code: NoTimerWhilePaused, ResumeContinues, ResolvedOnce: a pause held a say until the resume; an interrupt during a show cut the move, and the next batch played |
+| `NoTimerWhileHeld` | `timeline.test.ts`: NoTimerWhileHeld: holds only the remaining time and resumes it on release |
 | `ResolvedOnce` | `timeline.test.ts`: ResolvedOnce: resolves an interrupted sleep false once, and the next sleep after reset only when its own time is up. A `Promise` settles once, so no change to `timeline.ts` can resolve a sleep twice; the test checks what the code decides: `false` on an interrupt, and the next sleep's own time after `reset`; `integration.ts`, in VS Code: NoTimerWhilePaused, ResumeContinues, ResolvedOnce: a pause held a say until the resume; an interrupt during a show cut the move, and the next batch played |
 | `LatestPending` | `timeline.test.ts`: LatestPending: an earlier sleep that runs out leaves the later sleep that replaced it pending, for an interrupt to cut short |
 | `ResumeContinues` | `controller.test.ts`: PausedMatchesReasons, NoTimerWhilePaused, ResumeContinues: holds playback until the last pause reason is gone; `timeline.test.ts`: ResumeContinues: holds a sleep begun while paused until the resume, then runs all of its time; `integration.ts`, in VS Code: NoTimerWhilePaused, ResumeContinues, ResolvedOnce: a pause held a say until the resume; an interrupt during a show cut the move, and the next batch played |
@@ -924,14 +992,20 @@ every sequence of up to 4 actions, each with `file` of `sourceFile`,
 file without moving the cursor, so with the cursor
 elsewhere an action without `file` looked in the cursor's file, and a `type` or
 `delete` edited it. `FallBackToNamed` and `CursorInNamed` are the fix for #58.
+Every editing batch must now name its file before the first edit (#6). The model
+abstracts the controller's preflight as refusing the edit; the controller rejects
+such a batch before rehearsal or playback. Its accepted queue cannot reach the
+player's former late-naming guard: after an edit, the batch already has a named
+file, which the player does not clear within that batch. Direct calls to the
+internal player are not the public controller admission path.
 
 | Spec | Code |
 |---|---|
 | `Act` | `perform`: `names`, then `fileOf` for `move`, `select` and `point`, or the cursor for `type` and `delete` |
 | `Say` | a `say` or `run`, which act in no file |
 | `ActInFile` | `move`, `select` and `point` in the file `fileOf` gives; only `move` and `select` move the cursor |
-| `ActAtCursor` | `type` and `delete` at the cursor, rejected with it outside the named file, and a `delete` with nothing selected (`no_selection`) |
-| `Stop` | an action that fails: two files named, a file named after an edit, `no_cursor`, the cursor outside the named file, or a `delete` with nothing selected; the other ways an action fails (a text not found, the programmer's turn) are other specs' |
+| `ActAtCursor` | `type`, `newline` and `delete` at the cursor, rejected without a named file or with the cursor outside it, and a `delete` with nothing selected (`no_selection`) |
+| `Stop` | an action that fails: two files named, an edit without a prior file name, `no_cursor`, the cursor outside the named file, or a `delete` with nothing selected; the other ways an action fails (a text not found, the programmer's turn) are other specs' |
 | `EndBatch` | a new `Playing` for the next batch; the cursor stays |
 
 Each invariant and property was proved to bite with a mutation of a copy of the
@@ -942,7 +1016,7 @@ model, run in TLC and then reverted:
 | a rejected action's file is the string `"none"`, the sentinel before #148 | `TypeOK` |
 | `FallBackToNamed = FALSE`, the code before #58 | `ActsInNamedFile` |
 | `CursorInNamed = FALSE`, the code before #58 | `ActsInNamedFile` |
-| `ActAtCursor` rejects an edit in a batch that named no file | `EditAtCursorProp` |
+| `ActAtCursor` permits an edit in a batch that named no file | `EditRequiresNamed` |
 | `EditAtCursorProp` without `k = "delete" => selected`: a `delete` with nothing selected must edit | `EditAtCursorProp` |
 | `ActAtCursor` refuses a `delete` even with a selection | `EditAtCursorProp` |
 | `move` makes a selection | Nothing: no property says a `delete` after a `move` fails; `player.test.ts` does |
@@ -953,8 +1027,40 @@ test's title carries its name:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `ActsInNamedFile` | `session.e2e.test.ts`: ActsInNamedFile: looks in the file its batch named for an action without `file`, not the cursor's; ActsInNamedFile: looks in the file its batch named before the agent's cursor is in any file; ActsInNamedFile: rejects a type or delete with the cursor outside the file its batch named, editing nothing; `player.test.ts`: Act: refuses a second file in a batch, and a file named after its first edit; ActAtCursor: refuses a type or delete when the cursor is in another file than the batch's |
-| `EditAtCursorProp` | `session.e2e.test.ts`: EditAtCursorProp: types and deletes at the cursor in a batch that named the cursor's file, or named none; `player.test.ts`: EditAtCursorProp: refuses a move, select, point, or type before the cursor is anywhere, and a delete with nothing selected; `player.test.ts`: Complete: plays each action, saves the files it edited, and reports the code around its change, the cursor marked |
+| `ActsInNamedFile` | `session.e2e.test.ts`: ActsInNamedFile: looks in the file its batch named for an action without `file`, not the cursor's; ActsInNamedFile: looks in the file its batch named before the agent's cursor is in any file; ActsInNamedFile: rejects a type or delete with the cursor outside the file its batch named, editing nothing; `player.test.ts`: Act: refuses a second file in a batch; ActAtCursor: refuses a type or delete when the cursor is in another file than the batch's |
+| `EditAtCursorProp` | `session.e2e.test.ts`: EditAtCursorProp, EditRequiresNamed: types and deletes only after naming the cursor's file; `player.test.ts`: EditAtCursorProp: refuses a move, select, point, or type before the cursor is anywhere, and a delete with nothing selected |
+| `EditRequiresNamed` | `controller.test.ts`: EditRequiresNamed: refuses an unnamed editing batch before rehearsal, while allowing named edits and non-editing batches; `session.e2e.test.ts`: EditAtCursorProp, EditRequiresNamed: types and deletes only after naming the cursor's file |
+
+After removing the unreachable late-name branch, TLC still checks 8,610
+generated / 330 distinct states. Each mutation above was rerun with its stated
+result; the public late-name rejection remains covered by `integration_paths.ts`.
+
+### `Diagnostics`: advisory checks after edits
+
+The controller checks only files actually edited by a batch, after playback.
+Available observations are advisory and never change its result. This model
+abstracts provider availability and outcomes; changing sessions or source text
+while a check runs is covered by tests, not modeled here.
+
+| Spec | Code |
+|---|---|
+| `Edit` | successful editor edits recorded by `Player` |
+| `Finish` | `Controller.run` collects a snapshot without changing the batch result |
+| `NextBatch` | the next batch starts with its own edited-file set |
+
+Each behavioral invariant was checked with a mutation and then restored:
+
+| Mutation | Breaks |
+|---|---|
+| observe even when no edit happened | `OnlyEdited` |
+| suppress observations from an available provider | `ObserveWhenAvailable` |
+| force a failed result regardless of playback | `OutcomeUnchanged` |
+| disable batch completion | `Advisory` |
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | TypeScript checks these types |
+| `OnlyEdited`, `ObserveWhenAvailable`, `OutcomeUnchanged`, `Advisory` | `controller.test.ts`: OnlyEdited, Advisory: reports diagnostics only for files actually edited and does not reject the batch |
 
 ### `Draft`: the reply box's pause, across the view's page
 
@@ -1165,6 +1271,7 @@ model, run in TLC and then reverted:
 |---|---|
 | `EndByAgent` leaves a fifth state, `"closed"` | `TypeOK` |
 | `PostOnRevive = FALSE`, the code before #138 | `ShownIsState` |
+| `ClearOnReplace = FALSE`, preserving the previous suspended display | `ShownIsState` |
 | `SendMessage` leaves `stored` unchanged | `SavedIsCurrent` |
 | `Start(d)` never resumes: a new session from any directory | `ResumesSameProp` |
 | `ReloadWindow` brings back no session, checked without `ShownIsState`, which fails first | `WaitsProp` |
@@ -1183,7 +1290,7 @@ Every invariant and property names the test that proves the code obeys it:
 | `ResumesSameProp`, `Arrives` | `controller.test.ts`: ResumesSameProp, Arrives: suspends a session the agent disconnects from, and resumes it on a start from its directory |
 | `WaitsProp` | `controller.test.ts`: WaitsProp: starts a new session from another directory, ending the suspended one; WaitsProp: closes a suspended session at once when the programmer ends it |
 | `EndedHasAgent` | `controller.test.ts`: WaitsProp: closes a suspended session at once when the programmer ends it; EndedHasAgent: rejects the open call when the agent disconnects, and closes at once a session the programmer ended |
-| `ShownIsState` | `controller.test.ts`: SavedIsCurrent, NotLostProp, ShownIsState: brings back a session the window saved, suspended, after a reload; `webview/panel.test.ts`: ShownIsState: a session revived after a reload shows as suspended; ShownIsState: a revive after a disconnect shows the suspension once |
+| `ShownIsState` | `controller.test.ts`: SavedIsCurrent, NotLostProp, ShownIsState: brings back a session the window saved, suspended, after a reload; `webview/panel.test.ts`: ShownIsState: a session revived after a reload shows as suspended; ShownIsState: a revive after a disconnect shows the suspension once; ShownIsState: a replacement session clears an old suspension (live and replay) |
 
 ### `Navigator`: the programmer's edits, reported when they pause
 
@@ -1540,6 +1647,56 @@ Every invariant and property names the test that proves the code obeys it:
 | `FreedAfterEnd` | `terminal.test.ts`: FreedAfterEnd, Exit: reuses a terminal once its command ends, in the folder it's in, and not one whose shell exited |
 | `RunReturns` | `terminal.test.ts`: RunReturns, SkipAborted: doesn't wait for shell integration once playback is interrupted, and starts nothing; RunReturns, ExecuteCommand, End: runs the command, reads its output, and reports how it ended, with its shell; RunReturns, StopWaiting: returns with the command still running when the wait is over, or playback is interrupted; RunReturns, CloseTerminal: ends the wait when the programmer closes the terminal, and not for another terminal; RunReturns, SendText: waits for shell integration to come, for this terminal only, and types the command in without it |
 
+### `QuietTerminals`: visibility and cleanup
+
+This model checks quiet startup, automatic show, explicit reveal, fallback
+visibility, and cleanup. It abstracts shell completion; a live shell is never
+closed automatically because background work cannot be ruled out. Exposed
+terminals are also retained. Both settings were checked: 9 distinct states
+for quiet and 11 for automatic show.
+
+| Mutation | Breaks |
+|---|---|
+| allow cleanup of protected or live shells | `NeverCloseProtected` |
+| hide the untracked fallback | `FallbackVisible` |
+| fail to show on a reveal request | `RevealWorks` |
+| show a quiet start | `QuietStart` |
+| fail to show an automatic start | `AutoStartVisible` |
+| make starts a no-op | `RunBegins` |
+
+| Property | Test |
+|---|---|
+| `TypeOK` | TypeScript checks these types |
+| `NeverCloseProtected` | `terminal.test.ts`: cleans up exited owned terminals while preserving live, running and untracked shells |
+| `FallbackVisible` | `terminal.test.ts`: RunReturns, SendText |
+| `RevealWorks`, `QuietStart` | `terminal.test.ts`: runs quietly and reveals only the owned terminal on request |
+| `AutoStartVisible` | `terminal.test.ts`: StartRespectsPreference: reveals commands when automatic display is enabled |
+| `RunBegins` | `terminal.test.ts`: RunReturns, ExecuteCommand, End |
+
+### `TerminalReuse`: protected reuse
+
+This separate model enumerates shell state, exposure and pending output drain,
+and a foreign shell-start event. It abstracts path and terminal-ID matching,
+which the existing `Terminals` model and terminal tests cover. TLC checked 48
+states. An unobserved background descendant is not modeled as detectable; live
+shells are retained on cleanup even after a foreground command ends.
+
+| Mutation | Breaks |
+|---|---|
+| ignore exposure | `ProtectedNotReused` |
+| ignore pending output drain | `ProtectedNotReused` |
+| fail to protect a foreign start | `ForeignProtected` |
+| skip eligible reuse | `EligibleReused` |
+| make an attempt a no-op | `AttemptCompletes` |
+
+| Property | Test |
+|---|---|
+| `TypeOK` | TypeScript checks these types |
+| `ProtectedNotReused` | `terminal.test.ts`: NoReuseWhileBusy; protects a terminal if another execution starts; pending output drain prevents reuse |
+| `EligibleReused` | `terminal.test.ts`: ShowExact: invalidates the old command ID when a hidden terminal is reused |
+| `ForeignProtected` | `terminal.test.ts`: protects a terminal if another execution starts, while recognizing its own execution |
+| `AttemptCompletes` | `terminal.test.ts`: RunReturns, ExecuteCommand, End |
+
 ### Pure functions: `LineIdentity`, `Places`, `Typing`, `ActionValidation`
 
 These have no state or concurrency, so each spec is a model of the function and
@@ -1551,7 +1708,7 @@ code are held to one contract.
 |---|---|---|---|
 | `LineIdentity` | `applyChange` in `core/src/lines.ts` | one identity per line, none named twice; lines outside the change keep theirs; a line break at the end of a line keeps it in place, at its start moves it down | `core/test/lines.test.ts` |
 | `Places` | `resolveSpot`, `resolveSpan` in `core/src/places.ts` | a spot or span resolves exactly when one match is on its line, and lies there; a range ends at the first `through` after `from` | `core/test/places.test.ts`, with `through` up to 2 characters (the spec: 3) |
-| `Typing` | `planTyping` in `core/src/typing.ts` | the chunks concatenate to the text; each is one character, a line break with its indentation, or the leading indentation | `core/test/typing.test.ts`, texts up to 5 characters (the spec: 7) |
+| `Typing` | `planTyping` in `core/src/typing.ts` | chunks concatenate to the text; quote runs of three or more are atomic, and other chunks are characters or indentation with their line break | `core/test/typing.test.ts`, texts up to 5 characters (the spec: 7) |
 | `ActionValidation` | `moveProblem`, `spanProblem` in `protocol/src/index.ts` | a place gets no problem exactly when it is valid, and no place makes either check throw | `protocol/test/index.test.ts`, with the same kinds of value as the spec |
 
 Each is a module of `ASSUME`s alone, with a config that only gives the
@@ -1605,6 +1762,7 @@ Each `ASSUME` was proved to bite with a mutation, run in TLC and then reverted:
 |---|---|
 | a line feed's chunk drops the line feed | `ConcatenatesToText` |
 | an "x" shares its chunk with the character after it | `ChunksAreUnits` |
+| split every quote run into individual characters | `QuoteRunsAtomic` |
 
 Each names the test that proves the code obeys it:
 
@@ -1612,25 +1770,46 @@ Each names the test that proves the code obeys it:
 |---|---|
 | `ConcatenatesToText` | `typing.test.ts`: ConcatenatesToText, ChunksAreUnits: splits text into chunks that concatenate to it, each one character or a line break with its indentation |
 | `ChunksAreUnits` | the same test |
+| `QuoteRunsAtomic` | `typing.test.ts`: types a run of three or more quotes in one edit without losing cadence; `session.e2e.test.ts`: reports the correct remaining text when interrupted around an atomic quote run |
+
+#### `TypingEol`
+
+The model normalizes CRLF input before chunk planning and writes line feeds in
+the document's line ending. It covers suffixes at input-unit boundaries; lone
+carriage returns are outside the model. TLC checked all sequences of up to five
+units, for both output endings.
+
+| Mutation | Breaks |
+|---|---|
+| omit normalization before encoding | `CorrectEol` |
+| omit normalization from the remaining suffix | `SuffixSafe` |
+| allow a cursor between CR and LF | `NoSplitCRLF` |
+
+| Assumption | Proved by |
+|---|---|
+| `CorrectEol` | `player.test.ts`: normalizes CRLF input for both actions and document endings |
+| `SuffixSafe` | `session.e2e.test.ts`: normalizes CRLF and replays the interrupted action in both document endings and typing modes |
+| `NoSplitCRLF` | `index.test.ts`: rejects a cursor marker between CR and LF while allowing lone CR; `session.e2e.test.ts`: refuses both actions before editing |
 
 #### `ActionValidation`
 
 The checks both the relay's schema and the player ask (#45), over every
-`move` and every `select` or `point`, by the kind of value in each field: 180
-moves and 960 spans. Each `ASSUME` was proved to bite with a mutation, run in
+`move` and every `select` or `point`, by the kind of value in each field.
+Each `ASSUME` was proved to bite with a mutation, run in
 TLC and then reverted:
 
 | Mutation | Breaks |
 |---|---|
 | `CheckAtText = FALSE`, the code before #163, where `{ at: 5 }` threw in `spotProblem` | `NeverThrows` |
 | `MoveProblem` without its check for neither `at` nor `to` | `MoveExactly` |
+| omit the multi-close acknowledgment restriction | `MoveExactly` |
 | `SpanProblem` without its check for empty code | `SpanExactly` |
 
 Each names the test that proves the code obeys it:
 
 | Assumption | Proved by |
 |---|---|
-| `MoveExactly` | `protocol/test/index.test.ts`: MoveExactly, NeverThrows: gives no problem exactly for a valid move, and a message for every other; `integration.ts`, in VS Code: MoveExactly, SpanExactly, NeverThrows: 27 malformed actions refused by name in the editor; frames that aren't messages dropped |
+| `MoveExactly` | `protocol/test/index.test.ts`: MoveExactly, NeverThrows: gives no problem exactly for a valid move, and a message for every other; accepts the multiple-close acknowledgment only as true on line_end; `integration.ts`, in VS Code: MoveExactly, SpanExactly, NeverThrows: malformed actions refused by name in the editor; frames that aren't messages dropped |
 | `SpanExactly` | `protocol/test/index.test.ts`: SpanExactly, NeverThrows: gives no problem exactly for a valid span, and a message for every other; `integration.ts`, in VS Code: MoveExactly, SpanExactly, NeverThrows: 27 malformed actions refused by name in the editor; frames that aren't messages dropped |
 | `NeverThrows` | both tests |
 
@@ -1651,3 +1830,808 @@ above (#163); this contract holds the relay's schema and the player to them.
 
 Nothing ties a spec to its code but the tables above. When code in one of the
 files above changes, update its spec, and run `specs/check.sh`.
+
+### `LineEndGuard`: intent before crossing multiple closes
+
+Rehearsal rejects a batch before playback when its current-line suffix contains
+only multiple closing brackets and whitespace, unless the move acknowledges
+the crossing. Playback checks the live suffix again. The model abstracts this
+predicate as danger; it does not parse code or cover other suffixes. Its 22
+distinct states include different rehearsed and live contexts.
+
+| Mutation | Breaks |
+|---|---|
+| disable the rehearsal guard | `PreflightRefuses` |
+| disable the live guard | `LiveGuard` |
+| make an edit before rejecting | `RejectBeforeEdits` |
+| refuse acknowledged live crossings | `AllowedActs` |
+| make all allowed moves no-ops | `AllowedActs` |
+
+| Invariant | Test |
+|---|---|
+| `TypeOK` | TypeScript checks the state types |
+| `RejectBeforeEdits`, `PreflightRefuses` | `session.e2e.test.ts`: rejects an entire batch when a later line_end would cross multiple closes |
+| `LiveGuard` | `player.test.ts`: guards multiple adjacent closes during playback unless acknowledged |
+| `AllowedActs` | `session.e2e.test.ts`: allows an explicitly acknowledged multi-close move and subsequent edit; `player.test.ts`: allows line_end for a single close or when code follows the closes |
+
+### `StructuralTyping`: explicit structural edits
+
+`structuralNewline` and `Player.perform` split a supported Python or JSON pair
+only in code, and `next_close` crosses one adjacent close without altering the
+text. The model abstracts the prefix to ordinary, closed-field, open-field, and
+opaque categories; it does not model character-by-character lexing. The helper
+tests cover quoted fields, nesting, escaping, mismatches and the depth bound.
+
+| Spec | Code |
+|---|---|
+| `SmartNewline` | the opt-in `newline` action and its lexical guard |
+| `StepClose` | the relative `next_close` move |
+| `NewlineSafe`, `RefusalSafe` | reject unsupported or unsafe contexts |
+| `NewlineActs`, `StepActs` | eligible actions take effect |
+| `StepOne` | one close is crossed, and the text stays unchanged |
+
+Each invariant was mutation-tested in TLC, then the mutation was reverted:
+
+| Mutation | Breaks |
+|---|---|
+| Set the move distance to 2 | `TypeOK`, `StepOne` |
+| Make an eligible newline a no-op | `NewlineActs` |
+| Accept an unmatched pair | `NewlineSafe` |
+| Make an eligible close step a no-op | `StepActs` |
+| Change state after refusing a newline | `RefusalSafe` |
+| Treat a closed formatted field as opaque | `ClosedFieldRecovers` |
+| Treat open or unsupported fields as code | `OpaqueFieldRefused` |
+
+| Invariant | Test |
+|---|---|
+| `TypeOK` | The TypeScript compiler checks the types |
+| `NewlineSafe`, `RefusalSafe` | `player.test.ts`: NewlineSafe, RefusalSafe: refuses newline without a cursor, with a selection, or in an unsafe context |
+| `NewlineActs` | `player.test.ts`: NewlineActs: inserts a structural newline inside a Python pair |
+| `ClosedFieldRecovers` | `structural_typing.test.ts`: ClosedFieldRecovers: accepts a later assertion after a closed field; `session.e2e.test.ts`: ClosedFieldRecovers: splits the assertion after a closed quoted field |
+| `OpaqueFieldRefused` | `structural_typing.test.ts`: OpaqueFieldRefused: retains conservative refusal |
+| `StepOne`, `StepActs` | `player.test.ts`: StepOne, StepActs: steps past exactly one adjacent close and refuses any other character |
+
+### `BuildIdentity`: the running bundle's label
+
+The panel's Settings dialog displays the version and content-derived build ID
+compiled into the running extension. Installing another bundle changes the
+model's `installed` value; only a reload changes `running` and `displayed`.
+
+| Spec | Code |
+|---|---|
+| `Install`, `Reload` | VS Code installation and extension activation |
+| `ShowsRunning` | the panel receives the values compiled into its host |
+| `ShowsNewAfterReload` | activation uses the newly loaded bundle's values |
+
+TLC mutations that put an invalid value in the label, update it on install, or
+leave it stale on reload violate `TypeOK`, `ShowsRunning`, and
+`ShowsNewAfterReload`, respectively.
+
+| Invariant | Test |
+|---|---|
+| `TypeOK` | The TypeScript compiler checks the types |
+| `ShowsRunning`, `ShowsNewAfterReload` | `vscode/test/panel.test.ts`: ShowsRunning, ShowsNewAfterReload: each page uses its running bundle identity |
+
+### `ReadingSkip`: finishing a message's reading delay
+
+The panel sends an ID for the selected message countdown. The controller checks
+the session and pause state, queries the live Player for the current ID, then
+asks the session Timeline to finish its active sleep. IDs absent from older
+replay events do not enable the control. The model abstracts the timeline to
+one pending countdown.
+
+| Spec | Code |
+|---|---|
+| `Start`, `Finish` | a `say` starts and ends its reading delay |
+| `ChangeContext` | pause, turn or session suspension changes |
+| `Click` | the panel request, Controller guards and live Player identity query before the Timeline operation |
+
+Each property was checked by a mutation in a temporary model: accepting the
+wrong ID or an explicit pause violates `OnlyCurrent`; ignoring an eligible
+click violates `EligibleFinishes`; clearing a countdown on an ineligible click
+violates `IneligibleKeepsReading`; an out-of-range ID violates `TypeOK`.
+
+| Invariant | Test |
+|---|---|
+| `TypeOK` | The TypeScript compiler checks types |
+| `OnlyCurrent` | `controller.test.ts`: only the current live reading ID can finish the session Timeline |
+| `EligibleFinishes`, `IneligibleKeepsReading` | `session.e2e.test.ts`: EligibleFinishes, IneligibleKeepsReading: finishes the requested delay without lifting a user pause |
+| `IneligibleKeepsReading` | `controller.test.ts`: IneligibleKeepsReading: forwards an ID only in an active unpaused agent turn |
+
+### `SpeechWorker`: canceled inference and bounded cleanup
+
+> The `LocalSynthesisClient` of `WarmSynthesisWorker` now owns the worker
+> lifecycle this model describes; this model remains the record of the
+> service-level cleanup it checked, and the client's own invariants are in the
+> `WarmSynthesisWorker` section.
+
+`SpeechWorker.tla` keeps CPU-job ownership after its visible gate is canceled.
+A separate fair watchdog transitions a stuck job to termination, and a new job
+is admitted only after completion or termination. The liveness property
+assumes worker termination eventually settles; cancellation itself resolves the
+visible gate without waiting for that settlement. Two bounded job IDs expose
+stale results and attempts to overlap work. The build stages a compatible C++
+runtime alongside the native binding; this packaging repair does not change
+the modeled worker ownership, cancellation, or watchdog behavior.
+
+### `Narration`: selected speech and reading gates
+
+`Narration.tla` models one outstanding selected unit, two successive units,
+generation IDs, two page and session epochs, page loss, reply, pause, reading
+holds, and an independent command decision. `ReadyCurrent` and
+`CompletionCurrent` reject stale worker and page callbacks; `GateSafe` keeps
+speech completion, error, and cancellation from changing reading, holds,
+pause, or command approval. `AdvanceAfterGates` requires both gates, and
+`Progress` checks eventual advancement under weak fairness when a page and
+session eventually stay present and all pauses and holds eventually clear.
+The integration-only speech observation records `ended` or page failure only
+when the service accepts a callback for the current generation and page; idle
+after cancellation is not playback completion. The model abstracts the audio
+transport and the full queue implementation. The agent guide now recommends
+selecting useful narration without a per-session prompt; this changes the
+instruction, not the modeled speech or reading gates.
+
+### `ReadingHold`: scoped timer holds
+
+The controller accepts a hold only for the current eligible reading. Release
+clears the matching hold even if another pause arose meanwhile; it never clears
+that separate pause. Mutations accepting a stale ID, clearing global pause,
+ignoring eligible holds, or refusing a matching release while paused violate
+`StaleDoesNothing`, `ReleaseKeepsPause`, `EligibleHold`, and `EligibleRelease`.
+An unscoped hold violates `ScopedHold`. The player exposes the current reading
+identity; the controller applies matching live hold, release and finish to the
+session's `Timeline`. Only a new hold checks ended, suspended, turn and global
+pause eligibility. A matching release may still clear the local hold while any
+of those states apply, and `Timeline.release` preserves a separate global pause.
+The rehearsal has an immediate pacing clock and no programmer-addressable
+reading controls. Stale page-disposal safety is enforced separately by the
+panel's page-identity guard; a current-reading query alone does not establish it.
+
+| Invariant | Test |
+|---|---|
+| `TypeOK` | The TypeScript compiler checks types |
+| `ScopedHold`, `StaleDoesNothing`, `EligibleHold` | `controller.test.ts`: matching live reading IDs alone accept eligible holds; `integration_code_playback.ts`: held real code reading remains incomplete and unsettled |
+| `ReleaseKeepsPause`, `EligibleRelease` | `controller.test.ts`: matching release is forwarded even while globally paused; `timeline.test.ts`: ReleaseKeepsPause, EligibleRelease: does not release a separate playback pause when the hold ends |
+
+### `ReadingGesture`: binding a press to its countdown
+
+The panel captures the countdown ID at press time. A long press suppresses its
+following click; a short press can finish only that captured countdown. Mutations
+using the new ID, allowing the long click, and ignoring a short current press
+violate `NoNewerSkip`, `LongDoesNotSkip`, and `ShortCurrentSkips`.
+
+| Invariant | Test |
+|---|---|
+| `TypeOK` | The TypeScript compiler checks types |
+| `NoNewerSkip` | `webview/panel.test.ts`: NoNewerSkip: does not let an old press finish a newer countdown |
+| `LongDoesNotSkip` | `webview/panel.test.ts`: LongDoesNotSkip: holds, resumes on release, and suppresses the resulting click |
+| `ShortCurrentSkips` | `webview/panel.test.ts`: ShortCurrentSkips: finishes once on a short pointer press |
+
+### `ListeningHint` and `SettingsAccess`: panel controls
+
+The hint appears only for active, unpaused listening; Settings remains reachable
+in idle and active panels. Mutating the hint to ignore context violates
+`HintMatchesStatus`; hiding the gear while idle violates `SettingsAvailable`.
+
+| Invariant | Test |
+|---|---|
+| `TypeOK` | The TypeScript compiler checks types |
+| `HintMatchesStatus` | `webview/panel.test.ts`: offers a focusable explanation only while the active agent is listening |
+| `SettingsAvailable` | `panel_html.test.ts`: places one icon-only Settings control in the toolbar before End; `visual/chat_order.spec.ts`: the Settings gear remains available while idle, calibrating, and active |
+
+### `TerminalPanel`: preference and explicit terminal reveal
+
+The panel keeps automatic visibility separate from explicit requests. A reveal
+uses the command ID; a missing terminal produces an unavailable response. The
+model abstracts terminal ownership and cleanup, which the terminal model covers.
+TLC checked 61 distinct states. Mutating the result type, ignoring automatic
+visibility, showing a different ID, failing to report a missing ID, or ignoring
+an available request violates `TypeOK`, `StartRespectsPreference`, `ShowExact`,
+`MissingReported`, and `AvailableShown`, respectively.
+
+| Invariant | Test |
+|---|---|
+| `TypeOK` | TypeScript checks the message types; runtime requests are validated |
+| `StartRespectsPreference` | `terminal.test.ts`: StartRespectsPreference: reveals commands when automatic display is enabled |
+| `ShowExact` | `terminal.test.ts`: ShowExact: invalidates the old command ID when a hidden terminal is reused |
+| `AvailableShown` | `webview/panel.test.ts`: AvailableShown: offers the matching terminal for running and filed commands |
+| `MissingReported` | `panel.test.ts`: MissingReported and AvailableShown: validates settings and reports a closed terminal |
+
+### `DiagnosticsPrivacy`: bounded allowlisted history
+
+The recorder keeps a bounded history and constructs each event from permitted
+fields before it can be copied. The model represents an extra raw secret field,
+abstracts timestamps and lifecycle values, and checks a capacity of two. TLC
+checked 22,778 distinct states; the speech-only configuration checked 38.
+Concrete tests check runtime validation, the 100-event limit, pause-reason
+bounds, speech-only events and independent snapshots.
+
+| Mutation | Breaks |
+|---|---|
+| append the raw event instead of its safe projection | `TypeOK`, `OnlyAllowed` |
+| stop dropping the oldest event at capacity | `Bounded` |
+| copy an empty history instead of the current history | `CopiedExactly` |
+| record without appending | `Recorded` |
+| disable recording | `RecordsEventually` |
+
+| Property | Test |
+|---|---|
+| `TypeOK`, `OnlyAllowed` | `diagnostics.test.ts`: TypeOK, OnlyAllowed: rejects unrecognized speech enums and records capability without a reason; copies only allowlisted fields and rejects malformed input and unsafe identity strings |
+| `Bounded` | `diagnostics.test.ts`: bounds its history while retaining the latest state and returns independent snapshots |
+| `CopiedExactly` | `diagnostics.test.ts`: starts with unavailable states and records typed events in order |
+| `Recorded`, `RecordsEventually` | `diagnostics.test.ts`: OnlyAllowed, Recorded: records speech lifecycle without secret extras even when no session exists; retains valid request, integration and completion events |
+
+The owner connection ID is local to this extension activation; request IDs are
+scoped by that ID. `replied` records that the bridge sent a response to the
+socket, not that the client acknowledged or consumed it. Unknown state and
+uncaptured values stay unavailable; no task, chat, command, output, path,
+environment, credential or error text enters this history.
+
+### `DiagnosticsCopy`: explicit clipboard export
+
+An explicit action can succeed or fail; opening Settings alone does not copy.
+TLC checked three states. Mutations that copy before a request, fail to produce
+an outcome, or produce both outcomes violate `OnlyOnRequest`,
+`RequestedCompletes`, and `ExclusiveOutcome`; an invalid type is rejected.
+
+| Invariant | Test |
+|---|---|
+| `TypeOK` | TypeScript checks the control and outcome types |
+| `OnlyOnRequest` | `webview/panel.test.ts`: OnlyOnRequest: requests diagnostics only when the button is activated |
+| `RequestedCompletes`, `ExclusiveOutcome` | `panel.test.ts`: OnlyOnRequest and RequestedCompletes: copies only when asked and reports either outcome |
+
+### `CodePlayback`: grouped code and its reading pauses
+
+The model treats existing typing chunks as indivisible atoms. Each insertion
+chooses a contiguous, bounded group, including the exception for one oversized
+atom. A fresh countdown blocks the next insertion until it finishes; pause and
+interrupt also block insertion. A click can finish only its own live countdown.
+The progress config assumes no pause or interrupt and weak fairness.
+`Typing` separately models quote and newline/indent atoms. The model abstracts
+line/whitespace preference, text encoding, the visual highlight and panel
+rendering; tests cover those concrete details.
+
+The model mutations drop or duplicate an atom (`PrefixExact`), overflow the
+identifier (`TypeOK`), accept a stale click (`CurrentCountdown`), clear a
+rejected click (`RejectedKeepsCountdown`), bypass pause, reading, interruption
+or the group bounds (the corresponding action property), or disable insertion
+(`EventuallyComplete`). TLC found a violation for each mutation.
+
+| Property | Test |
+|---|---|
+| `TypeOK` | TypeScript checks the corresponding code types. |
+| `PrefixExact` | `typing.test.ts`: PrefixExact: groups complete lines without losing indentation or quote atoms; `player.test.ts`: PrefixExact: returns only the suffix when interrupted during reading. |
+| `CurrentCountdown`, `RejectedKeepsCountdown` | `controller.test.ts`: ScopedHold: controls only the current reading and releases while globally paused; `integration_code_playback.ts`: holds and finishes real grouped-code readings. |
+| `PausedBlocksInsert` | `session.e2e.test.ts`: PausedBlocksInsert: a paused code countdown blocks the next group. |
+| `ReadingBlocksInsert` | `session.e2e.test.ts`: ReadingBlocksInsert: interrupts a code reading pause with the exact suffix. |
+| `InterruptedBlocksInsert` | `player.test.ts`: PrefixExact: returns only the suffix when interrupted during reading. |
+| `BoundedGroups` | `typing.test.ts`: BoundedGroups: limits blocks to four lines and 240 Unicode characters. |
+| `EventuallyComplete` | `session.e2e.test.ts`: StableDuringChoice, NextActionUsesChoice: snapshots the mode for each typing action, while rehearsal stays instant. |
+
+### `PlaybackPreference`: choosing the code display
+
+The menu saves and displays the chosen mode independently of the pace. An
+in-progress typing action keeps its captured mode; the next action takes the
+new choice. TLC checked 36 states. Mutations that write an invalid pace, fail
+to save or apply a choice, change an ongoing action, start with the wrong mode,
+or change mode while changing pace violate `TypeOK`, `ChoiceSaved`,
+`ChoiceApplied`, `StableDuringChoice`, `NextActionUsesChoice`, and
+`PaceIndependent`, respectively.
+
+| Property | Test |
+|---|---|
+| `TypeOK` | TypeScript checks mode values; the panel and extension validate boundary values. |
+| `ChoiceSaved` | `extension.test.ts`: ChoiceSaved: reads, stores and applies the playback mode, defaulting invalid values to typing. |
+| `ChoiceApplied` | `panel.test.ts`: ChoiceApplied: sends the saved mode and accepts only valid choices; `webview/panel.test.ts`: ChoiceApplied: the code display menu updates mode separately from speed. |
+| `StableDuringChoice`, `NextActionUsesChoice` | `session.e2e.test.ts`: StableDuringChoice, NextActionUsesChoice: snapshots the mode for each typing action, while rehearsal stays instant. |
+| `PaceIndependent` | `webview/panel.test.ts`: ChoiceSaved, PaceIndependent: keeps code display and speed independent in either message order. |
+
+### `PlaybackAnchor`: cursor and reading target
+
+The final grouped insert puts the cursor at its marker before the editor
+awaits. The `reading` phase abstracts that editor await and the following
+reading pause. An external edit transforms that live cursor; finishing leaves
+it where the edit put it. The follow target is the start of the highlighted
+group while reading, then the cursor. The model abstracts the group start as a
+fixed offset and does not model visual layout or scroll motion; `Scroll`
+models the latter.
+
+Mutations placing an anchor outside the document, applying a stale tail
+subtraction, following the cursor while reading, keeping the group target after
+reading, and disabling finish violate the corresponding properties below.
+
+| Property | Test |
+|---|---|
+| `TypeOK` | TypeScript checks code types; cursor bounds are checked by the marker regressions below. |
+| `MarkerPreserved` | `session.e2e.test.ts`: MarkerPreserved: user edits during final code reading keep the marker at the transformed position; `player.test.ts`: MarkerPreserved: transforms the final marker when a user edit arrives during editor.edit. |
+| `ReadingTargetsGroup`, `FinishedTargetsCursor` | `editor.test.ts`: ReadingTargetsGroup: follows the inserted group during reading, then returns to the cursor. |
+| `EventuallyFinished` | `session.e2e.test.ts`: StableDuringChoice, NextActionUsesChoice: snapshots the mode for each typing action, while rehearsal stays instant. |
+
+### `SpeechPage`: current-page audio
+
+This model abstracts one page's audio clip, page replacement, pause, and the
+current narration ID. A delivery attempt records its eligibility independently
+of whether playback started. TLC checked 28 states. Mutating the initial page
+outside its range violates `TypeOK`; accepting a stale ID violates
+`PlayingIsCurrent`; refusing an eligible delivery violates `AcceptedStarts`.
+
+| Property | Test |
+|---|---|
+| `TypeOK` | `speech_audio.test.ts`: rejects invalid page and unit IDs and ignores duplicate audio. |
+| `PlayingIsCurrent` | `speech_audio.test.ts`: interrupts synchronously and never resurrects the old unit; ignores stale callbacks when a page or unit changes. |
+| `AcceptedStarts` | `speech_audio.test.ts`: plays only the current page and unit, then acknowledges and releases it. |
+
+### `SpeechSetup`: verified model installation
+
+One setup downloads a fixed manifest into staging, verifies it, and replaces a
+previous directory using backup and atomic rename. `Dispatch` is the commit
+boundary: cancellation before it cannot install new files; a dispatched
+rename may finish despite cancellation. Failed rollback leaves the backup in
+place. The model abstracts file contents as valid or corrupt and filesystem
+operations as atomic successes or failures; it does not model concurrent
+setup processes. TLC checked 42 states. Mutations that bypass verification,
+install on cancellation, accept corrupt content, lose the backup, or allow a
+stuck rollback violate the corresponding safety or progress property.
+
+| Property | Test |
+|---|---|
+| `InstalledOnlyIfVerified`, `NoBadInstall` | `speech_setup.test.ts`: downloads and verifies all fixed assets before exposing the model directory; rejects a corrupt download and never exposes a partial model. |
+| `CancelledDoesNotInstall` | `speech_setup_fs.test.ts`: restores the previous directory if cancelled after backup. |
+| `NoLostPrevious` | `speech_setup_fs.test.ts`: restores the previous directory if commit rename fails; preserves the backup directory if rollback also fails. |
+| `SetupProgress` | `speech_setup.test.ts`: times out a stalled download and cleans staging. |
+
+### `SpeechSettings`: credentials and account voices
+
+The model captures two immutable catalog request identities and credential
+reads. Provider, key and page changes invalidate old results. Explicit refresh
+requests and delivered current replies progress under weak fairness. TLC checks
+50,968 states. Negative controls detect invalid types, retaining a catalog
+across a provider change, accepting an old response after a new request,
+accepting a stale key read, changing a canceled prompt's key, disclosing a
+secret, refusing request dispatch, and refusing a current response.
+
+| Property | Test |
+|---|---|
+| `TypeOK` | `panel.test.ts`: NoSecret, TypeOK: forwards only nonsecret key actions and validated cloud selections. |
+| `CatalogSafe`, `AcceptedSafe`, `RequestProgress`, `ReplyProgress` | `speech_catalog.test.ts`: CatalogSafe, AcceptedSafe, RequestProgress, ReplyProgress: loads only on request and ignores stale results. |
+| `ReadSafe` | `speech_credentials.test.ts`: ReadSafe: waits for replacement and rejects a stale read after an external change. |
+| `PromptSafe` | `speech_credentials.test.ts`: PromptSafe: stores only a prompted key and preserves it when a prompt is canceled. |
+| `NoSecret` | `extension.test.ts`: NoSecret: uses the native masked prompt and does not put a key in settings or logs. |
+
+### `CloudNarration`: provider, cancellation and gates
+
+The model separates admission, asynchronous key reading, dispatch and response.
+It bounds two generations and credential changes; cancellation retains request
+ownership until settlement or timeout. The healthy-key configuration makes
+forward dispatch observable without assuming the network succeeds. Both
+configurations checked 59 states. Mutations disabling provider, key, epoch,
+single-request, gate, cancellation and retry guards violate the corresponding
+safety properties. Disabling admission, dispatch, playback or fair timeout
+violates the respective progress property. Clearing approval on timeout and
+allowing only the first generation also produce counterexamples.
+
+`Retry` never fires in the checked configurations because `GuardRetry` is true:
+automatic retry is forbidden. The negative control disables this guard and
+violates `NoRetry`; it does not represent supported production behavior.
+
+| Property | Test |
+|---|---|
+| `SafeSend` | `speech_elevenlabs.test.ts`: sends only the selected unit to the fixed endpoint using the secret header; never calls the provider when the key or voice is missing. |
+| `NoStale` | `speech_service.test.ts`: cancels cloud work when credentials change and discards the late response; aborts a canceled request and ignores its late output without queuing a successor. |
+| `NoOverlap`, `NoRetry` | `speech_service.test.ts`: aborts a canceled request and ignores its late output without queuing a successor; `speech_elevenlabs.test.ts`: times out a stalled request without retrying. |
+| `IndependentGates` | Existing `Narration` gate tests cover the independent reading and approval controls; cloud transport never receives these controls. |
+| `NoRestart`, `ReadyPlays` | `speech_service.test.ts`: keeps prepared cloud speech paused until resume and rejects stale page events. |
+| `RequestSettles`, `EligibleStarts`, `EligibleDispatch` | `speech_service.test.ts`: releases a hung cloud request at its watchdog without reviving late output; `speech_elevenlabs.e2e.test.ts`: converts a real streamed PCM response to bounded playable WAV. |
+
+### `ProviderChoice`: immediate selection and ordered persistence
+
+The model separates the visible and effective provider from stored settings.
+It bounds two choices and serial write completions, including external changes,
+write failures, and a key change that clears a previously selected voice. TLC
+checked 122 distinct states; `Settlement` assumes fair completion or failure
+of each queued write. It abstracts settings values other than provider and
+the presence of an old voice.
+
+| Mutation | Breaks |
+|---|---|
+| initialize an unsupported provider | `TypeOK` |
+| retain the old effective provider after selection | `ProviderAligned` |
+| let an older success or failure replace the newer choice | `LatestHonored` |
+| leave the old voice on key change, or restore it when the reset fails | `KeyClearsVoice` |
+| disable both write success and failure | `Settlement` |
+
+The liveness negative control disables deadlock checking to expose the
+stuttering counterexample; the normal configuration checks deadlocks.
+
+| Property | Test |
+|---|---|
+| `TypeOK` | `extension.test.ts`: TypeOK: ignores workspace attempts to select the cloud provider |
+| `ProviderAligned` | `extension.test.ts`: ProviderAligned: uses a selected provider immediately while its global setting is still being saved; ProviderAligned: does not cancel a preview on delayed settings echoes or unchanged disabled state |
+| `LatestHonored` | `extension.test.ts`: LatestHonored, Settlement: keeps the latest choice when an older global write settles; LatestHonored: does not roll back a newer provider when an older write fails |
+| `KeyClearsVoice` | `extension.test.ts`: KeyClearsVoice: clears an old account voice even while a settings save is pending; KeyClearsVoice: keeps the old account voice unavailable when a key-reset write fails |
+| `Settlement` | `extension.test.ts`: Settlement: rolls back the latest provider and reports a failed settings write; LatestHonored, Settlement: keeps the latest choice when an older global write settles |
+
+### `AudioOutput` and `OutputAdmission`: explicit speech routing
+
+`AudioOutput` models two immutable native job IDs, independent physical
+process ownership, output and page epochs, pause, cancellation, and the
+default route. It does not model PipeWire internals; an isolated PipeWire
+server verifies named-target behavior. `OutputAdmission` models overlapping
+discoveries, selected-route epochs, per-request reservation and timeout. The
+`pw-dump` catalog parser is outside both models; discovery changes do not alter
+the modeled admission or process ownership mechanics.
+
+The `GuardDefault`, `GuardRetire`, callback, admission and play-ID negative
+controls violate their respective safety invariants. Disabled admission or
+completion controls violate enabledness checks. Each pending discovery can
+settle through an independently fair timeout.
+
+| Property | Test |
+|---|---|
+| `NoOverlap`, `NoCrossRouteOverlap` | `speech_native_output.test.ts`: does not allow another route until the stopped process actually closes; `speech_output_router.test.ts`: blocks default synthesis and playback while a canceled native child is retiring. |
+| `NoRevival`, `NoCanceledEnd` | `speech_native_output.test.ts`: ignores callbacks retained from a retired process; keeps a timed-out child owned until close and ignores its late readiness. |
+| `NoFallback` | `speech_output_router.test.ts`: refuses an unavailable saved device before synthesis without falling back; isolated PipeWire target-loss test. |
+| `NoStartPaused` | `speech_native_output.test.ts`: freezes the startup deadline while paused; defers a readiness notification observed during pause until resume. |
+| `NoUnsafeDispatch`, `NoStalePlay` | `speech_output_router.test.ts`: does not let an older prepare replace a newer reservation; a stale play cannot consume a newer reserved route; `speech_service.test.ts`: blocks provider synthesis when output admission rejects or returns unavailable. |
+| `Settles`, `CanCheck`, `CanComplete` | `speech_service.test.ts`: times out admission and ignores its late success without sending text; ignores canceled admission success or rejection after a replacement starts. |
+
+### `OutputPreference`: route selection and persistence
+
+The model checks ordered local setting writes, immediate speech cancellation,
+stale discovery results and unavailable saved devices. TLC checked 648 states.
+Negative controls for invalid choices, stale writes or results, missing stop,
+disabled selection and missing fairness violate their corresponding properties.
+
+| Property | Test |
+|---|---|
+| `SelectionStops`, `ChoiceChangeStops` | `speech_output_preferences.test.ts`: stops speech before immediate selection and persists only the choice. |
+| `LatestHonored`, `Settlement` | `speech_output_preferences.test.ts`: serializes writes and ignores an older failed write after a newer selection; rolls back a latest failed write and exposes a fixed error. |
+| `StaleIgnored`, `EligibleSelect` | `speech_output_preferences.test.ts`: ignores stale discovery and keeps a missing saved output selected; treats a missing native choice as not ready until an available match is discovered. |
+
+### `OutputHandoff`: admission and browser retirement
+
+The model distinguishes pending output admission from a worker-ready state.
+It models two browser job IDs, two page IDs, delayed acknowledgements, native
+playback, same-page disposal and a bounded retirement timeout. Timeout reports
+the problem while retaining ownership; it cannot itself make native playback safe.
+A same-page close is trusted only because the page stops audio synchronously
+before reporting the hide, or because VS Code disposes the page. TLC checked
+270 states.
+
+Removing the worker admission gate, either acknowledgement identity check,
+the page-close identity check, or
+the native handoff guard violates `NoEarlyWorker`, `NoStaleAck`, or
+`NoCrossRouteOverlap`, respectively. Disabling timeout violates
+`RetirementReported`; disabling worker readiness violates `CanReady`. The
+model assumes a fair timeout action but does not assume an acknowledgement.
+
+| Property | Test |
+|---|---|
+| `NoEarlyWorker`, `CanReady` | `speech_service.test.ts`: does not let a canceled worker readiness bypass a newer pending output admission; starts the already-ready worker exactly once after the newer admission succeeds. |
+| `NoStaleAck`, `NoCrossRouteOverlap`, `CanAck`, `CanClose` | `speech_output_router.test.ts`: blocks native admission until the matching browser stop is acknowledged; only a requested stop or closure of the same page retires browser ownership. |
+| `RetirementReported` | `speech_service.test.ts`: times out admission and ignores its late success without sending text. |
+
+### `OutputReplacement`: preserve old-page audio ownership
+
+Replacing a view invalidates its page without proving that its browser audio
+has stopped. The model keeps the old owner until that same page is actually
+disposed, and allows immediate refusal of a native request while the owner
+remains. TLC checked 22 states. Releasing on replacement or accepting another
+page's disposal independently violates `NoPrematureRelease`.
+
+| Property | Test |
+|---|---|
+| `NoPrematureRelease`, `NoOverlap` | `panel.test.ts`: retains replaced browser-page ownership until its actual disposal; `extension.test.ts`: routes speech through the output router and invalidates it before a preference change. |
+| `CanRefuse` | `speech_output_router.test.ts`: blocks native admission until the matching browser stop is acknowledged. |
+
+### `LocalAudioAdmission` and `LocalAudioOwnership`: local playback bridge
+
+The admission model checks a logical snapshot of the selected output and its
+availability before provider dispatch. It does not assert that a device has
+been physically opened at that point. If the device disappears after cloud
+dispatch, provider work may already have incurred cost; playback must still
+fail without falling back to another output.
+
+The ownership model bounds two jobs, two page and connection epochs, and
+independent inbound control and outbound acknowledgement sequences. A lost
+remote link is detected by a local lease, then the adapter retires the local
+player. Parent loss likewise requests retirement; physical ownership remains
+until exit. `LeaseStops`, `RetirementStops` and `ParentLossSettles` assume fair
+detection and process retirement. Device loss cancels the selected route.
+
+The capability, admission, cloud, target, acknowledgement, control, heartbeat,
+parent and natural-end negative controls violate their safety properties.
+Disabling lease detection or retirement violates their liveness properties.
+The stale-terminal-callback control violates `NoStaleAck`. Requiring the
+current page instead of the immutable job page in `Retired` violates
+`LeaseStops`, `RetirementStops` and `ParentLossSettles` after page replacement;
+the unchanged baseline passes 3,632 states.
+
+| Property | Current test evidence |
+|---|---|
+| `NoOverlap`, `NoStaleAck` | `audio-native/test/ownership.test.ts`: holds exclusive ownership until the corresponding process has actually retired; snapshots owner identity and rejects leases after retirement or replacement. |
+| `NoStaleHeartbeat` | `audio-ui/test/local_connection.test.ts`: accepts ordered messages, rejects stale or malformed frames, and expires locally; refreshes the lease only for a valid ordered heartbeat and stops on disposal. |
+| `NoStaleAck`, sequence bounds | `audio-native/test/protocol.test.ts`: handles fragmented and coalesced event frames while rejecting stale sequences. |
+| `SafeAdmission`, `NoFallback` | `audio-native/test/adapter.test.ts`: validates and snapshots the selected route before admitting a job. |
+| `NoAbandonedReservation` | `speech_service.test.ts`: retires pending admission on cancel, timeout, and disposal before late results; `audio-native/test/adapter.test.ts`: cancels pending admission and ignores late discovery after stop. |
+| `NoOverlap`, `NoStaleAck` | `audio-ui/test/companion_output.test.ts`: keeps the route occupied until physical stop completes and ignores stale events; ignores late failures after cancellation and never releases on failed retirement. |
+| `RetirementStops`, `NoStaleAck` | `workspace_session.integration.test.ts`: retires the exact old job after a replacement page is ready; `remote_narration.test.ts`: rejects a later job acknowledgement with a reused sequence or job id. |
+| Protocol shape | `protocol/test/local_audio.test.ts`: accepts the bounded commands and terminal acknowledgements; rejects wrong versions, unknown commands, extra keys and invalid identities. |
+
+Native process retirement, parent loss, physical device routing, preflight and
+remote-host integration require further implementation-specific tests; the
+current parser and ownership tests alone do not establish those properties.
+
+### `PanelPlacement`: bounded two-phase panel ownership
+
+Prepare does not register a view. The main extension selects the companion
+irrevocably before sending commit; a lost acknowledgement cannot select legacy
+fallback. A preparation timeout expires the token and may fall back only
+before commit. A delayed prepare cannot register an extra view. TLC checked
+10 states and assumes fair timeouts before and after commit.
+
+The prepare-registration, late-registration and post-commit fallback negative
+controls violate `NoEarlyRegistration`, `NoDuplicateRegistration` and
+`NoFallbackAfterCommit`. Disabling the precommit timeout violates
+`PreparationSettles`.
+
+`UnsafeFallback` never fires in the checked configuration because
+`GuardFallback` is true: falling back to the legacy panel after commit is
+forbidden. The negative control disables this guard and violates
+`NoFallbackAfterCommit`; it does not represent supported production behavior.
+
+| Property | Test |
+|---|---|
+| `NoFallbackAfterCommit`, `CommittedSettles` | `panel_placement.test.ts`: chooses companion irrevocably before committing, including on a lost acknowledgement. |
+| `NoEarlyRegistration`, `NoDuplicateRegistration`, `PreparationSettles` | `panel_placement.test.ts`: falls back only before commit and ignores late prepare replies; uses local legacy only for a failed or invalid preparation before commit. |
+
+### `LocalPanelReplay`: ordered local panel replay
+
+One replay event is abstracted as two chunks. Frames carry a connection epoch,
+page epoch, sequence, message ID, index, count, bounded size and payload class.
+Invalid, duplicate, out-of-order and oversized frames discard a partial
+assembly; stale-page frames are rejected. Disconnect and page change clear it.
+The implementation must validate
+complete JSON and the visible-event schema before delivery. The payload classes
+abstract that validation; this model does not inspect JSON or prove that a
+particular field is nonsecret. Production bounds are 16,384 UTF-16 code units
+per chunk, 1,024 chunks and 16 MiB per message; oversize must be reported.
+Per-event messages preserve replay order without truncating the whole history.
+
+| Property | Code test |
+|---|---|
+| `NoPartialOrMixed` | `protocol/test/panel_chunks.test.ts`: reassembles a complete ordered update only for the current page; drops mixed chunk counts and invalid assembled JSON or updates. |
+| `NoStaleDelivery` | `protocol/test/panel_chunks.test.ts`: never combines fragments across page replacement or a duplicate fragment; `audio-ui/test/local_connection.test.ts`: accepts ordered messages, rejects stale or malformed frames, and expires locally. |
+| `BoundedAssembly` | `protocol/test/panel_chunks.test.ts`: discards partial, reordered, stale-page, malformed and oversized updates; `vscode/test/panel_update_sender.integration.test.ts`: reports oversized updates and stops sending after page replacement. |
+| `NoAudioOrSecrets` | `protocol/test/panel_update.test.ts`: rejects audio, speech settings, arbitrary commands, and unexpected properties. |
+| `DisconnectClears` | `protocol/test/panel_chunks.test.ts`: never combines fragments across page replacement or a duplicate fragment; `protocol/test/command_channel.test.ts`: settles active and queued sends on disposal and ignores a late rejection. Direct disconnect-to-assembler integration coverage remains pending. |
+| `CanStart`, `CanComplete`, `CanAbort` | `protocol/test/panel_chunks.test.ts`: reassembles a complete ordered update only for the current page; discards partial, reordered, stale-page, malformed and oversized updates. |
+| `PendingSettles`, `EventuallyDelivered` | `protocol/test/command_channel.test.ts`: closes on a lost acknowledgement without accepting late completion; sends one frame at a time and preserves enqueue order. |
+| Replay ordering and oversize | `vscode/test/panel_update_sender.integration.test.ts`: sends replay as ordered bounded per-event updates using the shared sequence; reports an oversized replay event and still sends later complete events. |
+
+TLC checked `LocalPanelReplay.cfg` with 51,992 generated and 138 distinct states;
+`LocalPanelReplay_Delivery.cfg` checked three distinct states under fair successful
+processing. Weak fairness of disconnect gives eventual abort in the loss model;
+the separate success model assumes both valid chunks are eventually processed.
+Disabling each of `GuardOrder`, `GuardEpoch`, `GuardBound` and `GuardPayload`
+produced a counterexample to `NoPartialOrMixed`, `NoStaleDelivery`,
+`BoundedAssembly` and `NoAudioOrSecrets`, respectively. Type and enabledness
+checks are sanity checks rather than independently mutation-tested properties.
+
+Native remote integration and real-device Windows playback verification remain
+pending; mocked or in-process tests do not establish those results.
+
+### `SentencePipeline`: bounded synthesis and playback
+
+The model separates a requested child from its started acknowledgement and
+physical close. One unit holds one captured output route; two unit identities
+and three part ordinals exercise stale output and synthesis callbacks. A
+single ready or in-flight next part is permitted. Duration units abstract the
+aggregate speech bound, and reading and approval remain held. The model does not
+represent actual PCM or text; the tests cover source reconstruction and the
+final thinking tail.
+
+| Property | Code test |
+|---|---|
+| `NoExcessLookahead` | `vscode/test/speech_service.test.ts`: SentencePipeline waits for the first started acknowledgement before one lookahead and completes only after the final part. |
+| `NoDispatchWhilePaused` | `vscode/test/speech_service.test.ts`: SentencePipeline does not dispatch the next part until its own started acknowledgement after pause and close; SentencePipeline holds first synthesis while paused during model loading. |
+| `FixedRoute` | `audio-ui/test/sentence_pipeline.e2e.test.ts`: SentencePipeline composes one captured route through physical closes and completes only the final part. |
+| `NoStaleEnd` | `vscode/test/speech_service.test.ts`: SentencePipeline ignores a stale part result without releasing the current inference; `audio-ui/test/companion_output.test.ts`: keeps the unit lease across parts and rejects stale part events. |
+| `FinalOnly` | `audio-ui/test/sentence_pipeline.e2e.test.ts`: SentencePipeline composes one captured route through physical closes and completes only the final part. |
+| `RetireBeforeRelease` | `audio-native/test/multipart_native_adapter.e2e.test.ts`: suppresses a pending natural end after cancellation and waits for child close. |
+| `ReadingApprovalHeld` | `core/test/player.test.ts`: keeps held reading and command approval after speech throw; keeps held reading and command approval after speech reject. |
+| `ContiguousParts` | `audio-native/test/multipart_native_adapter.e2e.test.ts`: rejects overlapping, repeated and skipped parts without launching another child. |
+| `AggregateBound` | `vscode/test/speech_service.test.ts`: SentencePipeline fails the whole unit if aggregate audio exceeds its bound. |
+| `CanStart`, `CanResume`, `HealthyProgress` | `vscode/test/speech_service.test.ts`: SentencePipeline keeps a finished lookahead paused until the current part retires and resumes; `audio-ui/test/sentence_pipeline.e2e.test.ts`: SentencePipeline composes one captured route through physical closes and completes only the final part. |
+| `CanceledProgress` | `vscode/test/speech_service.test.ts`: SentencePipeline cancels a delayed lookahead on reply and ignores its result; `audio-native/test/multipart_native_adapter.e2e.test.ts`: suppresses a pending natural end after cancellation and waits for child close. |
+| Source slices and final tail | `vscode/test/speech_segments.test.ts`: preserves every source character while grouping excess sentences into a fourth part; `vscode/test/speech_waveform.test.ts`: adds the thinking tail only when explicitly requested for the final part. |
+
+TLC checked 7,545 generated / 2,242 distinct safety states, 223 / 107
+healthy states, and 194 / 137 canceled states. Healthy progress assumes fair
+inference, start acknowledgement, output close and eventual stable unpause;
+canceled progress separately assumes fair pending inference settlement, stop,
+physical close and release. A permanently paused healthy unit need not finish.
+
+Disabling pause, route, stale-output, stale-synthesis, final-only, physical
+retirement or started-ack guards yields the corresponding invariant violation.
+Disabling synthesis, playback or close violates healthy progress. Disabling
+resume violates `CanResume`; disabling stop or release violates
+`CanceledProgress`. Raising the aggregate bound, releasing reading on admit,
+and skipping the first physical part violate their respective invariants.
+Disabling the buffer guard alone passes: in this three-part model the started
+acknowledgement guard already prevents a third buffered part. Disabling both
+buffer and started guards violates `NoExcessLookahead`. `TypeOK` is a sanity
+check rather than an independently mutated behavioral property.
+
+### `MultipartAudioLease`: one endpoint across sequential parts
+
+The model bounds two units and three parts, while the implementation allows
+at most four parts. It separates an early backend terminal callback from the
+physical child-close event. A logical unit retains one captured output route
+across part boundaries, including changes to the system default. The next part
+requires the previous child's close, a current route check, a contiguous
+ordinal and an unpaused start. An unstarted terminal result fails the part.
+The healthy configuration assumes fair starts, terminal callbacks and physical
+closes; paused units may remain paused in the general configuration.
+
+Negative controls for early lease release, delivery before close, stale
+callbacks, route changes, premature whole-unit completion, paused start,
+skipped part, stale route check and unstarted success each violate the
+corresponding invariant. Disabling either unit or any healthy request, spawn,
+start, terminal, close or release action violates `HealthyFinishes`.
+
+| Property | Test |
+|---|---|
+| `LeaseRetained`, `NoEarlyPartEvent`, `FixedRoute` | `audio-native/test/multipart_native_adapter.e2e.test.ts`: retains one exact route across parts and publishes completion only after child close; `audio-ui/test/sentence_pipeline.e2e.test.ts`: SentencePipeline composes one captured route through physical closes and completes only the final part. |
+| `NoStaleCallback`, `NoSkippedPart`, `NoOverlap` | `audio-native/test/multipart_native_adapter.e2e.test.ts`: rejects overlapping, repeated and skipped parts without launching another child; `audio-ui/test/companion_output.test.ts`: keeps the unit lease across parts and rejects stale part events. |
+| `NoStartPaused`, `NoStaleCheck` | `audio-native/test/multipart_native_adapter.e2e.test.ts`: rechecks the captured route after a paused boundary and refuses a missing device; rechecks when pause and resume both occur during an in-flight route check. |
+| `NoUnstartedSuccess` | `audio-native/test/multipart_native_adapter.e2e.test.ts`: treats end before start as failure and cannot launch another part. |
+| `NoEarlyCompletion`, `RetirementCompletes` | `audio-native/test/multipart_native_adapter.e2e.test.ts`: caps a unit at four parts and releases the lease only on explicit stop; suppresses a pending natural end after cancellation and waits for child close. |
+
+Real platform/device playback and a packaged GUI run remain separate acceptance
+checks; the composed test uses a fake worker and backend.
+
+### `SpeechTempo`: local listening-rate transforms
+
+The model snapshots a listening rate for a unit, associates each transform
+with its unit and part, and keeps one physical worker slot through retirement.
+It derives the watchdog from actual transformed samples, checks the aggregate
+unit bound, and appends a fixed tail only to the final part. A timed-out caller
+can settle before the worker exits; the slot remains occupied. The model
+abstracts PCM and does not establish speech quality or pitch preservation.
+
+| Property | Code test |
+|---|---|
+| `ImmutableRate` | `vscode/test/speech_service.test.ts`: snapshots listening speed, transforms once, and uses transformed duration without a second cloud request. |
+| `NoStaleResult`, `OneWorker` | `vscode/test/speech_tempo_client.test.ts`: rejects canceled work immediately but keeps its slot until physical retirement; rejects a wrong-part result without exposing its contents; reports busy from admission until the worker has physically retired. `vscode/test/speech_service.test.ts`: "Admit: refuses a transformed unit while the previous tempo worker is still retiring" (an unchanged-rate unit is admitted). |
+| `BoundedOutput`, `AccurateDuration` | `vscode/test/speech_service.test.ts`: fails closed when transformed audio exceeds the complete-unit duration limit; snapshots listening speed, transforms once, and uses transformed duration without a second cloud request. |
+| `FixedTail` | `vscode/test/speech_tempo_pcm.test.ts`: round trips exact signed samples and appends one final silent tail; `audio-ui/test/speech_tempo_composed.e2e.test.ts`: transforms two synthetic Kokoro parts in a real worker before local physical playback. |
+| `ReadingApprovalHeld` | `core/test/player.test.ts`: keeps held reading and command approval after speech throw; keeps held reading and command approval after speech reject. |
+| `HealthyProgress`, `CancelProgress` | `vscode/test/speech_tempo_client.e2e.test.ts`: runs the packaged worker in a real process and returns owned synthetic PCM; `vscode/test/speech_tempo_client.test.ts`: rejects canceled work immediately but keeps its slot until physical retirement. |
+| Byte identity and signal tests | `vscode/test/speech_tempo.test.ts`: preserves the original samples exactly at 1.0 without aliasing them; changes duration while preserving a voiced tone at rate %s. |
+
+TLC checked 2,563 generated / 868 distinct safety states, 17 / 17 healthy
+states and 15 / 11 cancellation states. Successful progress assumes fair
+transform and play; cancellation assumes eventual physical worker exit.
+Disabling each snapshot, stale-result, bound, tail, worker-exclusivity,
+watchdog-duration or played-rate guard violates its corresponding invariant.
+Disabling transform, play or retirement violates the associated progress
+property. Restricting retirement to the canceled phase violates cancellation
+progress when the caller times out first. Setting reading to released violates
+`ReadingApprovalHeld`. `TypeOK` is a sanity check, not independently mutated.
+The model's `failed` phase is terminal, so no unit after a failed one is explored
+(`CHECK_DEADLOCK FALSE`), a worker failure during `transforming` without a
+`Cancel` is covered only by the timeout, and `ReadingApprovalHeld` holds
+vacuously because no action touches those variables; the reading and approval
+guarantee is tested in the Player. The code bypasses the stretch for inputs under
+3,072 samples (one window of the target length), which the model abstracts.
+Synthetic tones and the retained offline corpus are not listening-quality
+validation; real speech review is still required before claiming validated rates.
+
+### `WarmSynthesisWorker`: bounded local synthesis ownership
+
+The model abstracts the versioned capabilities to valid or invalid and a result
+to a correctly sized or oversized one. It tracks a worker epoch, two units with
+two parts each, and keeps a worker alive until its matching exit. `Ready` and
+`Result` must match their owners; `LateResult` is a response that arrives while
+the worker expects none (a previous epoch's result after the slot is ready, a
+duplicate part, a result after retirement) and is rejected before buffering.
+`Cancel` discards the matching result of a busy inference; `CancelBetween`
+ends a unit between parts at once, so its remaining part never starts
+(`NoCanceledResume`). No inference starts while paused. A fatal error leaves
+the worker unavailable until a new epoch loads (`TruthfulUnavailable`). Buffers
+are modeled only as the oversize flag on a result; a stored buffer that must be
+cleared on cancel is not modeled, and cancel during loading is not covered (the
+load is not interrupted). Single inference is structural: `Dispatch` is enabled
+only from `ready`, and no invariant would catch one from another phase.
+Automatic replay of canceled or failed text is not modeled; `GuardReplay =
+FALSE` models a dispatch that still names the previous unit.
+
+| Invariant | Implementation mapping |
+|---|---|
+| `TypeOK` | Sanity check of the declared variable ranges. |
+| `OneEngine` | `LocalSynthesisClient` (`speech_local_client.ts`) spawns one worker per epoch and refuses a second load, a second inference, and any replacement while the retiring worker has not exited. `SpeechWorkerHost` loads once and answers a concurrent request `busy`. Tests: `speech_local_client.test.ts` "OneEngine: ..." (one load, one inference, slot kept until the actual exit whatever `terminate` reports), `speech_worker_host.test.ts` "OneEngine: ...", `speech_service.test.ts` "OneEngine: refuses a new unit while a retired worker has not exited", `speech_local.e2e.test.ts` "NoCanceledResume: ..." (reuse after a canceled inference). |
+| `ValidReady` | The client accepts `ready` only if its capabilities equal the host constants (`LOCAL_CAPABILITIES`) and its epoch is the current one; anything else retires the worker. Tests: `speech_local_client.test.ts` "ValidReady: ...", `speech_local_protocol.test.ts` "accepts ready only with the exact capabilities of the host constants". |
+| `CorrectDelivery` | Results and failures are strict schemas; a stale epoch, unit or part, a duplicate after settlement and a result with no inference owed change nothing, and an oversized or malformed result retires the worker before it is buffered. Tests: `speech_local_client.test.ts` "CorrectDelivery: ...", `speech_worker_host.test.ts` "CorrectDelivery: ...", `speech_local_protocol.test.ts` "accepts a bounded result and rejects an oversized, undersized or malformed one before buffering". |
+| `NoPausedDispatch` | Pause is the service's: `SpeechService.synthesize` does not dispatch a multi-part unit while paused. Test: `speech_service.test.ts` "NoPausedDispatch: SentencePipeline holds first synthesis while paused during model loading". |
+| `NoReplay` | A request is dispatched once with its own unit and part, and a failed or retired unit is never re-sent. Tests: `speech_local_client.test.ts` "NoReplay: a dispatch names exactly the requested unit and part, once", `speech_service.test.ts` "NoReplay: after a failure the next explicit request sends only its own text". |
+| `NoCanceledResume` | `cancel()` settles the unit's result at once and the discarded result never resumes it; nothing further is posted. Tests: `speech_local_client.test.ts` "NoCanceledResume: ...", `speech_service.test.ts` "NoCanceledResume: SentencePipeline cancels a delayed lookahead on reply and ignores its result" and "NoCanceledResume: a unit canceled during model loading ...", `speech_local.e2e.test.ts` "NoCanceledResume: a canceled inference keeps the worker owned ...". |
+| `TruthfulUnavailable` | A fatal error retires the worker, reports one fixed category to the listener, and refuses work until a new explicit load. Tests: `speech_local_client.test.ts` "TruthfulUnavailable: ...", `speech_service.test.ts` "TruthfulUnavailable: ...", `speech_local.e2e.test.ts` "TruthfulUnavailable: a fatal load error ends the unit ...". |
+| `HealthyProgress` | One load serves consecutive units; the independent watchdog bounds a load that never becomes ready. Tests: `speech_local_client.test.ts` "HealthyProgress: ...", `speech_local.e2e.test.ts` "HealthyProgress: two units share one worker and one model load ...". |
+| `CancellationProgress` | A canceled inference either returns and is discarded, or the watchdog retires the worker. Test: `speech_local_client.test.ts` "CancellationProgress: retires a canceled inference that never returns ...". |
+| `RetirementProgress` | A retired worker returns the slot to cold exactly once, at its exit. Test: `speech_local_client.test.ts` "RetirementProgress: ...". |
+
+Action mapping in the code (comments name the spec and action): `Load`,
+`Ready`, `Dispatch`/`NextPart`, `Result`/`DiscardResult`, `LateResult`,
+`Cancel`, `Retire` and `Exit` in `speech_local_client.ts`; `Load`, `Retire`
+and `Cancel` in `speech_service.ts`. The model forbids any dispatch while
+paused; the service holds only multi-part units while paused (a single-part
+unit is dispatched and its audio waits), so `NoPausedDispatch` is mapped for
+multi-part units only. The synthesis protocol (`speech_local_protocol.ts`) is
+transport neutral; the shipped Kokoro engine keeps its Node worker thread.
+
+| Mutation | Breaks |
+|---|---|
+| `GuardEpoch`, `GuardReady` | `ValidReady` |
+| `GuardPart`, `GuardBound`, `GuardLate` | `CorrectDelivery` |
+| `GuardExit`, `GuardExitEpoch`, `GuardDiscard` | `OneEngine` |
+| `GuardPause` | `NoPausedDispatch` |
+| `GuardReplay` | `NoReplay` |
+| `GuardCancel` | `NoCanceledResume` |
+| `GuardFailed` | `TruthfulUnavailable` |
+| `EnableLoad`, `EnableReady`, `EnableDispatch`, `EnableNextPart`, `EnableResult` (healthy config) | `HealthyProgress`, counterexamples of 1, 2, 3, 5 and 4 states |
+| `EnableDiscard` (cancellation config) | `CancellationProgress` (372 states) |
+| `EnableRetire`, `EnableExit` (watchdog config) | `CancellationProgress` (70 and 114 states) |
+| `EnableExit` (retirement config) | `RetirementProgress` |
+
+TLC checked 3,969 generated / 440 distinct safety states, 11 / 11 healthy
+states, and 3,969 / 440 states in each cancellation, watchdog and retirement
+configuration. Disabling the discard alone violates the discard-fair
+`CancellationProgress` while the watchdog configuration still holds, and
+disabling the watchdog alone violates the watchdog configuration while the
+discard-fair one still holds, so neither fairness assumption hides the other.
+`EnableNextPart` is distinct from `EnableDispatch`.
+The model does not prove actual audio quality or operating-system process exit.
+
+## Diagnostic fault isolation
+
+`DiagnosticsFaultIsolation` models one synchronous diagnostic attempt at one
+of the bridge, controller, and terminal call sites. The observer can be absent,
+return normally, or throw. A caught exception must not escape or stop the
+surrounding business operation. Weak fairness requires both the attempt and the
+completion to occur; it does not model a callback that never returns, asynchronous
+rejection, reentrancy, or changes the callback itself makes to shared state.
+Call sites must preserve the receiver used by the existing invocation.
+
+| Property | Implementation and test mapping |
+|---|---|
+| `TypeOK` | Sanity check of the bounded state. |
+| `NoEscapedException` | `diagnostic_delivery.test.ts`: "isolates a throwing observer from the operation". Its absent-observer and original-receiver tests cover the other modeled choices; bridge, controller, and terminal delegate to the helper. |
+| `BusinessCompletes` | `integration_gap_paths.ts`: `diagnosticObserverFailure` starts, pauses, resumes, and ends a real controller session with a throwing observer. Equivalent bridge and terminal integration cases are not yet mapped. |
+
+TLC checked 19 generated and 19 distinct states with `GuardCatch` and
+`EnableAttempt` true. Setting `GuardCatch` false violates `NoEscapedException`
+on a throwing observer; setting `EnableAttempt` false violates
+`BusinessCompletes` with a stuttering behavior. Both mutations were checked
+independently and discarded.
+
+## Speech platform evidence
+
+`SpeechPlatformEvidence` checks one local host for Linux x64 and positive
+evidence of the running process's GNU libc. A missing or failed process report
+can use independently verified process mappings; unknown evidence fails closed.
+Desktop and remote-host placement remain separate caller checks. The model
+abstracts the bounded probe and does not prove the operating system's mappings
+are truthful.
+
+| Property | Implementation and test mapping |
+|---|---|
+| `TypeOK` | Sanity check of the bounded state. |
+| `PositiveEvidence` | `speech_platform.test.ts`: positive report or mappings are required; musl and missing evidence are rejected. |
+| `RecognizesEvidence` | `speech_platform.test.ts`: accepts a valid runtime report and current-process GNU mappings, including versioned and Snap paths. |
+| `CheckCompletes` | `speech_platform.test.ts`: the fixed process-maps reader rejects oversized or unreadable input and closes its descriptor. |
+
+TLC checked 19 generated and 19 distinct states. Disabling `GuardEvidence`
+violates `PositiveEvidence`; disabling `EnableCheck` violates
+`CheckCompletes`; disabling `EnablePositive` violates `RecognizesEvidence`.
+All three mutations were discarded.

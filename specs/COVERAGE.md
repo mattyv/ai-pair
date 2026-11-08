@@ -21,15 +21,17 @@ Code goes without a spec for one of these reasons:
 | Functions | Spec |
 |---|---|
 | `step`, `listen`, `block`, `finishCall`, `callReady`, `ready`, `pump`, `update`, `serialize` | `Serialize`, `Controller` |
-| `snapshot`, `restore`, `withCursor`, `end`, `endSession`, `close` | `Controller`; `snapshot`'s edit events: `EditEvents`; a held rejection in `restore` and `snapshot`: `Anchor` (`Restore`, `TakeHeld`) |
+| `snapshot`, `restore`, `withCursor`, `end`, `endSession`, `close` | `Controller`; `close` terminal cleanup: `QuietTerminals`; `snapshot`'s edit events: `EditEvents`; a held rejection in `restore` and `snapshot`: `Anchor` (`Restore`, `TakeHeld`) |
 | `rehearse`, `rejectBatch`, `planned`, `saw`, `read` | `Rehearsal` |
 | `cursorAnchor`, `rejectUnanchored`, `anchorNeeded` in `step` and `snapshot` | `Anchor` |
+| `unnamedEdit` and its preflight in `step` | `BatchFile` (`EditRequiresNamed`) |
+| `selectedSpeech` and admission in `step`; pause, resume and cancellation propagation | `Narration` (`Admit`, `Pause`, `Resume`, `Reply`) |
 | `interrupt`, `discard`, `interrupting`, `userInterrupt`, `userMessage` | `Controller` (`Interrupt`), `Actions` (`Interrupt`) |
 | `userEdit` | `EditorAdapter`, `Navigator` (the programmer's turn), `Player` (`TypeBefore`, `TypeAfter`: the interrupt in the agent's turn) |
 | `otherEdit`, `recordEdit` | `Reload`, `Rehearsal`, `EditEvents` |
 | `takeTurn`, `handBack`, `turn` | `Turns` |
 | `pause`, `resume`, `isPaused` | `Timeline`; `resume`'s `reveal`: `Scroll`, a stale point, and the reply's resume without one: `PointFocus` |
-| `kick`, `run`, `startHead` | `Controller` (`Play`), `Turns` (`StartHead`) |
+| `kick`, `run`, `startHead` | `Controller` (`Play`), `Turns` (`StartHead`); diagnostics after playback: `Diagnostics` (`Finish`) |
 | `confirm`, `decideRun` | `RunBox` (`Go`, `Decline`) |
 | `start`, `disconnect` | `Bridge`, `Resume` |
 | `resumeSession`, `open`, `saved`, `revive`, `isSuspended`, `onChange` | `Resume` |
@@ -38,27 +40,27 @@ Code goes without a spec for one of these reasons:
 | `describeReport`, `cancelled`, `isRecorded`, `pendingEdit` | Pure, Format |
 | `render`, `cursorView` | Format: what the editor and panel draw |
 | `excerpt`, `ref`, `displayPath`, `resolvePath`, `requireSession`, `activeSession`, `isActive` | Pure |
-| `setSpeed`, `setReadingSpeed`, `setTimeouts`, `setTiming`, `setConfirmCommands`, `glideMs` | Glue: settings; `glideMs` is `glideDuration` in `timing.ts`, a duration `Scroll` does not model |
+| `setSpeed`, `setReadingSpeed`, `setCodePlayback`, `setTimeouts`, `setTiming`, `setConfirmCommands`, `glideMs` | Glue: settings; `glideMs` is `glideDuration` in `timing.ts`, a duration `Scroll` does not model |
 | `calibrate`, with the bridge's `calibrate` option, `resolveFile` | `Calibration` (`Supply`); the file read: Glue |
 
 ### `player.ts`
 
 | Functions | Spec |
 |---|---|
-| `play`, `actions`, `perform`, `stopped`, `failed`, `fail` | `Actions`, `Turns` |
+| `play`, `actions`, `perform`, `stopped`, `failed`, `fail` | `Actions`, `Turns`; selected say gates: `Narration` |
 | `names`, `fileOf` | `BatchFile` |
-| `type`, `delay` | `Actions`, `Turns`; the chunks: `Typing` |
+| `type`, `delay` | `Actions`, `Turns`; atomic chunks: `Typing`; grouped chunks and reading: `CodePlayback`; final marker: `PlaybackAnchor` |
 | `edit`, `transform`, `transformScene`, `mapThrough`, `touch` | `Player`, `Reload` |
 | `unseen`, `locate`, `span` | `Rehearsal` (`Accept`); finding text: `Places` |
 | `save`, `runCommand`, `confirm` | `RunBox`, `Actions`; the save: `EditorAdapter` |
-| `follow` | `Scroll` (`Move`) |
+| `follow` | `Scroll` (`Move`); the highlighted reading target: `PlaybackAnchor` |
 | `code`, `codeAt`, `clearPoint`, `render`, `displayPath`, `resolvePath`, `agentPath`, `config`, `speed`, `readingSpeed` | Pure, Format |
 
 ### The rest of core
 
 | File | Functions | Spec |
 |---|---|---|
-| `bridge.ts` | `start`, `accept`, `dispatch`, `dispose` | `Bridge` |
+| `bridge.ts` | `start`, `accept`, `dispatch`, `dispose` | `Bridge`; typed diagnostic events: `DiagnosticsPrivacy` |
 | | `connections` | Glue: what a test reads |
 | | `writeDiscovery`, `focused`, `file` | `Discovery` |
 | | `tokenMatches` | Pure: compares tokens in constant time |
@@ -70,7 +72,9 @@ Code goes without a spec for one of these reasons:
 | | `followChange` | `Rehearsal` (`EditAsOther`, `ShareIds`) |
 | `timeline.ts` | all | `Timeline` |
 | `places.ts` | `resolveSpot`, `resolveSpan`, and their helpers | `Places` |
+| `structural_typing.ts` | `structuralNewline`, `isCode` | `StructuralTyping` abstracts context categories; concrete lexical scanning is checked by unit tests |
 | `typing.ts` | `planTyping`, `isIndent` | `Typing` |
+| | `groupTyping` | `CodePlayback` (abstract bounded groups); concrete line and whitespace preferences: Pure |
 | | `readingTime` | Pure |
 | `diff.ts` | `lineChanges` | `Reload` (`SplitRuns`) |
 | | `fileDiff` | Format |
@@ -102,10 +106,30 @@ Code goes without a spec for one of these reasons:
 |---|---|---|
 | `wire.ts` | `frameJson`, `parseEditorMessage`, `parseRelayMessage` | `Wire` (`SendGarbage`) |
 | | `aiPairHome`, `discoveryDir` | Pure |
-| `index.ts` | `moveProblem`, `spanProblem` | `ActionValidation` |
+| `index.ts` | `moveProblem`, `spanProblem`, `speechProblem` | `ActionValidation` |
 | | `actionKinds`, `fieldsProblem`, `typeProblem` | Pure; `validation.test.ts` |
 | `schemas.ts` | the schemas, and the types taken from them | Types: data declarations, which the parsers above apply (#163) |
 | `paths.ts` | `samePath`, `withinFolder` | Pure |
+| `local_audio.ts` | local-audio bridge schemas | Types; validated at boundaries |
+| `panel_chunks.ts` | bounded ordered local panel replay assembly | `LocalPanelReplay`; transport tests |
+
+## audio-native
+
+| File | Functions | Spec |
+|---|---|---|
+| `admission.ts` | logical route reservation and cancellation | `LocalAudioAdmission`; native device integration pending |
+| `ownership.ts` | job ownership and retirement | `LocalAudioOwnership`; process integration tests pending |
+| `playback.ts` | player lifecycle | `LocalAudioOwnership`, `MultipartAudioLease`; process integration tests pending |
+| `protocol.ts` | helper event framing and sequence checks | `LocalAudioOwnership`; protocol unit tests |
+| `index.ts` | adapter contracts | Types |
+| `helper_location.ts` | helper path resolution | Glue; helper-location unit tests |
+
+## audio-ui
+
+| File | Functions | Spec |
+|---|---|---|
+| `local_connection.ts` | ordered frames and local lease | `LocalAudioOwnership`; physical retirement integration pending |
+| `companion_output.ts` | page and job ownership | `LocalAudioAdmission`, `LocalAudioOwnership`, `MultipartAudioLease`; native integration pending |
 
 ## vscode
 
@@ -114,11 +138,12 @@ Code goes without a spec for one of these reasons:
 | Functions | Spec |
 |---|---|
 | `edit`, `save`, `onChange`, `byProgrammer`, `track` | `EditorAdapter` |
+| `diagnostics` | `Diagnostics`: advisory observations; stale source and provider availability are checked in the adapter |
 | `getText`, `document`, `openDocument`, `exists`, `show`, `create`, `isDirty` | `FileText` |
 | `show`, `selfNav`, `navigating`, `onActiveEditor` | `FollowMode` |
 | `renderCursor`, `reveal`, `follow`, `keepInView`, `scroll`, `glide`, `onScroll` | `Scroll`; `onScroll`'s pause: `Timeline` |
 | `landing`, `viewport`, `visibleEditor`, `scrollsBeyondEnd`, `revealLine`, `revealTop`, `target` | Pure, Glue: VS Code calls `Scroll` abstracts as a view's top line |
-| `runCommand` | Glue: passes to `terminal.ts` |
+| `runCommand`, `showTerminal`, `cleanupIdleTerminals` | Glue: pass to `terminal.ts`; `QuietTerminals`, `TerminalReuse` |
 | `onSelectionChange`, `programmerSelection`, `selectionRef` | Look: what the programmer can attach to a message |
 | `redraw`, `updatePulse`, `cursorDecoration`, `labelDecoration`, `renderPoint`, `setAgentName` | Look |
 | `displayPath`, `resolvePath`, `inWorkspace`, `eol`, `dispose` | Pure, Glue |
@@ -130,28 +155,57 @@ Code goes without a spec for one of these reasons:
 | `panel.ts` | `post`, the `ready` message | `PanelReplay` |
 | | `history`, `restoreHistory`, `onPost` | `Resume` (`Store`, `ReloadWindow`) |
 | | the `draft` and `reply` messages, `onDidDispose` | `Draft`; the `reply` lifting the pause without a reveal: `PointFocus` |
+| | mode preference messages | `PlaybackPreference` (`Choose`, `Reload`) |
+| | speech delivery and page lifecycle | `SpeechPage`; `Narration` |
+| | `receive` diagnostics-copy message | `DiagnosticsCopy` (`Click`) |
+| | `showTerminalPreference`, `receive` terminal messages | `TerminalPanel` (`SetAuto`, `Show`) |
 | | `receive`'s other messages, `send` | Glue: each calls one controller function |
 | | `openByName`, `openChange` | Glue: opens a file or its diff; `seen` for `Outside` |
 | | `resolveWebviewView`, `reveal`, `focusReply`, `showSelection`, `showSpeed`, `showReadingSpeed`, `showTimings` | Glue |
 | | the `reply` message while a calibration runs, `showCalibration`, cancel on dispose and session end | `Calibration` |
 | | `askStart`, the `start` message, posting `startEnded` | `Start` |
-| `webview/panel.ts` | `setNow`, `add`, `addYou`, `addRun`, `addDivider`, `addOutside`, `fileCurrent`, `entry` | `Panel`; the scroll position: `PanelScroll` |
+| `extension.ts` | effective speech preferences, queued writes and key reset | `ProviderChoice` (`Select`, `Success`, `Failure`, `External`, `KeyChange`) |
+| `speech_credentials.ts` | key prompt, storage and invalidation | `SpeechSettings` |
+| `speech_catalog.ts` | explicit catalog requests and invalidation | `SpeechSettings` |
+| `webview/speech_audio.ts` | page, unit, audio and controls | `SpeechPage` |
+| `webview/panel.ts` | toolbar and Settings mode choice | `PlaybackPreference` (`Choose`, `SetPace`) |
+| | diagnostics-copy button | `DiagnosticsCopy` (`Click`) |
+| | `setNow`, `add`, `addYou`, `addRun`, `addDivider`, `addOutside`, `fileCurrent`, `entry` | `Panel`; the scroll position: `PanelScroll` |
 | | `syncDraft`, `takeDraft` | `Draft` |
 | | `handle`'s `run` case, `clearRun`, `setOutcome`, `setActive` | `RunBox`; `setActive` and replaying: `PanelReplay` |
+| | terminal setting and reveal controls | `TerminalPanel` (`SetAuto`, `Show`) |
 | | `handle`'s `session` case for a suspended or resumed session | `Resume` (`ShownIsState`) |
-| | `setState`, `syncStatus`, `arrive`, `startReading`, `syncReading`, `tick`, the tips, the speed menu, `syncAttach`, `takeAttach` | Look |
+| | `setState`, `syncStatus`, `statusText`, `arrive`, `startReading`, `syncReading`, `tick`, the tips, the speed menu, `syncAttach`, `takeAttach` | Look: status text gives actual pauses precedence while retaining confirmation or turn context |
 | | `showCalibration` | Look |
 | | the `canStart` and `startEnded` messages, the Start a session button, its starting note | `Start` |
 | | `esc`, `codeLink`, `refLink` | Format |
+| `speech_elevenlabs.ts` | cloud transport | `CloudNarration` |
+| `speech_pcm.ts` | bounded PCM conversion and thinking interval | Pure; unit and integration tests |
+| `speech_service.ts` | worker, audio and page lifecycle; pause, cancel, timeouts | `Narration`, `SpeechWorker`, `WarmSynthesisWorker`, `SpeechTempo`, `SentencePipeline`, `CloudNarration`, `OutputAdmission`, `OutputHandoff`; timer bounds and local platform checks: unit and integration tests |
+| `speech_native_output.ts` | discovery and native process lifecycle | `AudioOutput`; isolated PipeWire integration and unit tests |
+| `speech_output_router.ts` | route reservation and playback ownership | `AudioOutput`, `OutputAdmission`, `OutputHandoff`, `OutputReplacement` |
+| `speech_output_types.ts` | route and device types | Types |
+| `speech_output_preferences.ts` | selection, discovery and ordered persistence | `OutputPreference` |
+| `speech_synthesis.ts`, `speech_waveform.ts` | complete-token and waveform bounds | `ActionValidation` (`TokenBounds`, `PhonemeCoverage`); PCM encoding: Pure |
+| `speech_segments.ts` | sentence planning with exact source ranges | `SentencePipeline`; unit tests |
+| `speech_tempo.ts`, `speech_tempo_pcm.ts` | pitch-preserving time stretch and PCM framing | `SpeechTempo` (ownership, bounds, tail); the signal processing itself: unit tests and synthetic signals, not listening quality |
+| `speech_tempo_client.ts`, `speech_tempo_messages.ts`, `speech_tempo_worker.ts`, `speech_tempo_worker_host.ts` | tempo worker ownership, messages and bootstrap | `SpeechTempo`; unit and real-worker tests |
+| `speech_engine.ts` | `loadSpeechEngine` | Glue: loads the local model, tokenizer and phonemizer; offline worker integration |
+| `speech_local_client.ts` | worker epoch, ownership, cancellation and retirement until exit | `WarmSynthesisWorker`; unit and composed tests |
+| `speech_worker_host.ts`, `speech_worker.ts` | worker admission, validation and dispatch | `WarmSynthesisWorker`; worker isolation and concrete messages: unit and integration tests |
+| `speech_local_protocol.ts`, `speech_types.ts` | schemas and settings types | Types; validated at boundaries |
 | `outside.ts`, `outside_watch.ts` | all | `Outside` |
-| `terminal.ts` | all | `Terminals` |
+| `terminal.ts` | all | `Terminals`, `QuietTerminals`, `TerminalReuse`; typed diagnostic events: `DiagnosticsPrivacy` |
 | `view.ts` | `comfortable`, `landing`, `glideTop` | Pure; `Scroll` models `comfortable` and `landing` |
+| `python_diagnostics.ts` | `pythonDiagnostic` | `Diagnostics`: bounded advisory check, with Python parsing source on stdin |
 | | `row`, `viewport`, `isOwnEdit` | Pure |
 | `output.ts` | `outcomeOf`, `push` | Pure: a command's output, cut to size |
+| `diagnostics.ts` | all | `DiagnosticsPrivacy`: bounded allowlisted event history, speech-only events and independent snapshots |
 | `agents.ts` | all | Pure, Glue: agents' config files; `agents.test.ts` |
 | `setup.ts` | `claudeStarter` | `Start` (`AnswerCheck`, `Click`, `AgentExits`) |
 | | the rest | Glue |
 | `extension.ts` | saving the session and the panel's history, and reviving them | `Resume` (`Store`, `ReloadWindow`) |
+| | integration speech status observation | `Narration` (`CompletionCurrent`); Glue: exposes accepted state without text or audio |
 | | the calibration's host: `store` applies the timing before it resolves | `Calibration` (`ApplyRate`) |
 | | asking the panel again after Set Up Agent | `Start` (`FlipSetUp`) |
 | | the rest | Glue |
@@ -159,6 +213,7 @@ Code goes without a spec for one of these reasons:
 | `calibration.ts` | all | `Calibration` |
 | `passage.ts` | `builtInPassage` | Glue: reads the passage's media files |
 | `timings.ts` | `setTimings` | Glue: the extension's delays, one set for tests |
+| `panel_placement.ts` | panel prepare, commit and fallback | `PanelPlacement` |
 | `panel_html.ts` | `panelHtml`, `settingSpeed` | Format |
 | `webview/panel.css` | all | Look |
 | `panel_messages.ts` | | Types |

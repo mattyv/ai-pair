@@ -23,7 +23,7 @@ ASSUME AssumeMaxTurns == MaxTurns \in Nat
 ASSUME AssumeDeleteChecks == DeleteChecks \in BOOLEAN
 
 \* The actions that edit.
-EditKinds == {"type", "type_fast", "delete", "run"}
+EditKinds == {"type", "type_fast", "newline", "delete", "run"}
 
 \* Every batch: one to MaxActions actions.
 Batches == Seqs(ActionKinds, MaxActions) \ {<<>>}
@@ -93,7 +93,7 @@ TakeEffect ==
     /\ batch # <<>>
     /\ phase = "awaiting"
     /\ LET k == Head(batch)
-           checks == k \in {"type", "type_fast", "run"}
+           checks == k \in {"type", "type_fast", "newline", "run"}
                      \/ (k = "delete" /\ DeleteChecks)
        IN  IF interrupted /\ checks
            THEN Stop

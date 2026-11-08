@@ -1,11 +1,33 @@
 // The messages between the narration panel's page (webview/panel.ts) and the extension (panel.ts).
 
-import type { PanelEvent, Ref } from '@ai-pair/core';
+import type { CodePlayback, PanelEvent, Ref } from '@ai-pair/core';
 import type { CalibrationView } from './calibration';
+import type { SpeechSettings } from './speech_types';
+import type { CatalogView } from './speech_catalog';
+import type { OutputChoice } from './speech_output_types';
+import type { OutputPreferenceView } from './speech_output_preferences';
+
+export type SpeechState = 'preparing' | 'speaking' | 'paused' | 'unavailable' | 'idle';
+export type SpeechEvent = 'started' | 'ended' | 'failed';
+export type SpeechAction = 'pause' | 'resume' | 'stop';
+
+/** The order of the panel history. */
+export type ChatOrder = 'newestFirst' | 'oldestFirst';
 
 /** Messages from the page. */
 export type FromPanel =
   | { type: 'ready' }
+  | { type: 'copyDiagnostics' }
+  | { type: 'speechOutputRefresh' }
+  | { type: 'speechOutputSelect'; choice: OutputChoice }
+  | { type: 'speechSettings'; value: SpeechSettings }
+  | { type: 'speechSetup' | 'speechPreview' | 'speechStop' }
+  | { type: 'speechKeySet' | 'speechKeyRemove' | 'speechVoicesLoad' | 'speechVoicesMore' }
+  | { type: 'speechPageHidden' | 'speechPageVisible'; pageId: number }
+  | { type: 'speechRetired'; id: number; pageId: number }
+  | { type: 'speechEvent'; id: number; pageId: number; event: SpeechEvent }
+  | { type: 'skipReading'; id: number }
+  | { type: 'holdReading'; id: number; held: boolean }
   | { type: 'reply'; text: string; attach?: boolean }
   | { type: 'draft'; empty: boolean }
   | { type: 'pause' }
@@ -23,8 +45,12 @@ export type FromPanel =
   | { type: 'command'; command: string }
   /** The Start a session button: Claude Code's CLI starts with the prompt in a hidden terminal (#107, #115). */
   | { type: 'start' }
+  | { type: 'chatOrder'; value: ChatOrder }
+  | { type: 'showTerminals'; value: boolean }
+  | { type: 'showTerminal'; id: number }
   | { type: 'speed'; value: number }
   | { type: 'readingSpeed'; value: number }
+  | { type: 'codePlayback'; value: CodePlayback }
   | { type: 'runDecision'; id: number; run: boolean; remember?: boolean };
 
 /** Messages to the page: the session's events, and the panel's own. */
@@ -34,9 +60,23 @@ export type ToPanel =
   | { type: 'replay'; events: PanelEvent[] }
   /** The programmer's selection, offered with a reply. */
   | { type: 'selection'; ref: Ref | undefined }
+  | { type: 'speechPage'; pageId: number }
+  | { type: 'speechSupport'; supported: boolean }
+  | { type: 'speechCloudSupport'; supported: boolean }
+  | { type: 'speechSettings'; value: SpeechSettings }
+  | { type: 'speechOutputCatalog'; value: OutputPreferenceView }
+  | { type: 'speechKeyStatus'; hasKey: boolean }
+  | { type: 'speechCatalog'; value: CatalogView }
+  | { type: 'speechSetupState'; pending: boolean; message: string }
+  | { type: 'speechAudio'; id: number; pageId: number; wavBase64: string; durationMs: number }
+  | { type: 'speechControl'; id: number; pageId: number; action: SpeechAction }
+  | { type: 'speechStatus'; id: number; pageId: number; state: SpeechState; message?: string }
   | { type: 'focusReply' }
+  | { type: 'chatOrder'; value: ChatOrder }
+  | { type: 'showTerminals'; value: boolean }
   | { type: 'speed'; value: number }
   | { type: 'readingSpeed'; value: number }
+  | { type: 'codePlayback'; value: CodePlayback }
   /** The reading speed calibration's state, for the band (#109). */
   | { type: 'calibration'; view: CalibrationView }
   /** Whether the idle view offers Start a session: Claude Code is set up, its CLI is here, a folder is open (#107). */

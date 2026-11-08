@@ -10,9 +10,12 @@ import {
   withinFolder,
   type AgentState,
   type Change,
+  type CommandDiagnostic,
   type CommandOutcome,
   type Controller,
   type CursorView,
+  type DiagnosticCheck,
+  type EditorDiagnostic,
   type EditOptions,
   type EditorPort,
   type Focus,
@@ -23,6 +26,7 @@ import {
 import { timings } from './timings';
 import { comfortable, glideTop, isOwnEdit, landing, row, viewport, type Lines } from './view';
 import { PairTerminals } from './terminal';
+import { pythonDiagnostic } from './python_diagnostics';
 
 interface OwnEdit {
   offset: number;
@@ -48,6 +52,9 @@ const SOFT = 0.8;
 
 /** A shared selection is cut off here; the agent can `read` the rest. */
 const MAX_EXCERPT = 8000;
+/** Bounds diagnostics sent in a report. */
+const MAX_DIAGNOSTICS = 50;
+const MAX_DIAGNOSTIC_MESSAGE = 1000;
 
 function cursorDecoration(color: string, style: string, opacity: number) {
   return vscode.window.createTextEditorDecorationType({
@@ -81,20 +88,65 @@ const READ_TEXT = 'var(--vscode-aiPair-cursorReadForeground)';
 
 /** The controller's editor, over VS Code's API: documents, cursors, decorations, scrolling, and saves. */
 export class VsCodeEditor implements EditorPort, vscode.Disposable {
+  /** Reads current VS Code errors and checks Python syntax without executing the source. */
+  async diagnostics(file: string): Promise<DiagnosticCheck> {
+    const diagnostics: EditorDiagnostic[] = [];
+    const warnings = ['VS Code diagnostics may be stale or unavailable.'];
+    const seen = new Set<string>();
+    function add(item: EditorDiagnostic): void {
+      const bounded = { ...item, message: item.message.slice(0, MAX_DIAGNOSTIC_MESSAGE) };
+      const key = JSON.stringify(bounded);
+      if (!seen.has(key) && diagnostics.length < MAX_DIAGNOSTICS) {
+        seen.add(key);
+        diagnostics.push(bounded);
+      }
+    }
+    try {
+      for (const item of vscode.languages.getDiagnostics(vscode.Uri.file(file))) {
+        if (item.severity === vscode.DiagnosticSeverity.Error) {
+          add({
+            line: item.range.start.line + 1,
+            endLine: item.range.end.line + 1,
+            message: item.message,
+            ...(item.source === undefined ? {} : { source: item.source.slice(0, MAX_DIAGNOSTIC_MESSAGE) }),
+          });
+        }
+      }
+    } catch {
+      warnings.push('VS Code diagnostics could not be read.');
+    }
+    if (file.toLowerCase().endsWith('.py')) {
+      warnings.push('Python syntax check uses system python3, which may differ from the project interpreter.');
+      try {
+        const text = await this.getText(file);
+        const checked = await pythonDiagnostic(text);
+        if ((await this.getText(file)) !== text) {
+          warnings.push('Python syntax check discarded because the file changed while it ran.');
+        } else {
+          if (checked.diagnostic !== undefined) add(checked.diagnostic);
+          if (checked.warning !== undefined) warnings.push(checked.warning);
+        }
+      } catch {
+        warnings.push('Python syntax check unavailable because the file could not be read.');
+      }
+    }
+    return { diagnostics, warnings };
+  }
   /** The programmer's selection changed: what the panel offers to send along with a reply. */
   onSelection?: (ref: Ref | undefined) => void;
   private lastEditor?: vscode.TextEditor;
   private lastSelectionKey = '';
-  private readonly terminals = new PairTerminals();
+  private readonly terminals: PairTerminals;
   private readonly mirror = new Map<string, string>();
   private readonly own = new Map<string, OwnEdit[]>();
   /** Called with a file the editor writes on disk itself, and its text: `show` creating it (#15). */
-  wrote: (file: string, text: string) => void = () => {};
+  wrote?: (file: string, text: string) => void;
   /** Files we're saving: changes to them meanwhile are by save participants, like format on save. */
   private readonly saving = new Set<string>();
   private cursor: CursorView | undefined = undefined;
   private state: AgentState = 'thinking';
   private point: { file: string; start: number; end: number } | undefined = undefined;
+  private codeReading: { file: string; start: number; end: number } | undefined = undefined;
   private focus: Focus = 'cursor';
   private pulse?: ReturnType<typeof setInterval>;
   private pulseOn = true;
@@ -128,7 +180,10 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     agentName: string,
     /** The controller, made after the editor: read once the programmer edits or looks away, or the view scrolls. */
     private readonly controller: () => Controller,
+    showTerminalsAutomatically: () => boolean,
+    onDiagnostic?: (event: CommandDiagnostic) => void,
   ) {
+    this.terminals = new PairTerminals(showTerminalsAutomatically, onDiagnostic);
     this.cursorTypes = new Map([
       ['typing', cursorDecoration(CURSOR, 'solid', /* opacity= */ 1)],
       ['read', cursorDecoration(READ, 'solid', /* opacity= */ 1)],
@@ -319,6 +374,12 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     this.redraw();
   }
 
+  /** Highlights the inserted group with the existing theme-aware point decoration. */
+  renderCodeReading(range: { file: string; start: number; end: number } | undefined): void {
+    this.codeReading = range;
+    this.redraw();
+  }
+
   reveal(): void {
     // specs/Scroll.tla, `Follow`: a pause ends in `resume`, which reveals the target.
     const target = this.target();
@@ -337,6 +398,16 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
 
   runCommand(command: string, options: RunOptions): Promise<CommandOutcome> {
     return this.terminals.run(command, options);
+  }
+
+  /** Reveals the owned terminal associated with a command, if still available. */
+  showTerminal(id: number): boolean {
+    return this.terminals.showTerminal(id);
+  }
+
+  /** Cleans up idle owned terminals at the end of a session. */
+  cleanupIdleTerminals(): void {
+    this.terminals.cleanupIdle();
   }
 
   // ---- The programmer's selection ------------------------------------------
@@ -455,6 +526,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
 
   /** Returns what follow mode keeps in view: the agent cursor, or the start of the code it points at. */
   private target(): Target | undefined {
+    // specs/PlaybackAnchor.tla, ReadingTargetsGroup: follow the group being read.
+    if (this.codeReading) return { file: this.codeReading.file, offset: this.codeReading.start };
     if (this.focus === 'point' && this.point) return { file: this.point.file, offset: this.point.start };
     return this.cursor;
   }
@@ -625,7 +698,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
       }
       const sel = here?.selection;
       editor.setDecorations(this.selectionType, sel ? [new vscode.Range(doc.positionAt(sel.start), doc.positionAt(sel.end))] : []);
-      const point = this.point && this.point.file === file ? this.point : undefined;
+      const readingOrPoint = this.codeReading ?? this.point;
+      const point = readingOrPoint && readingOrPoint.file === file ? readingOrPoint : undefined;
       editor.setDecorations(this.pointType, point ? [new vscode.Range(doc.positionAt(point.start), doc.positionAt(point.end))] : []);
     }
   }
@@ -702,7 +776,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
       return;
     }
     await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(file)));
-    this.wrote(file, '');
+    this.wrote?.(file, '');
     await vscode.workspace.fs.writeFile(vscode.Uri.file(file), new Uint8Array());
   }
 

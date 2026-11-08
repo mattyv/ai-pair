@@ -2,9 +2,9 @@
   "version": 1,
   "bundleId": "277c3415-7b74-4008-8be4-8c14ae6d41dd",
   "revision": {
-    "number": 3,
-    "updatedAt": "2026-10-25T01:08:41.000Z",
-    "summary": "Tour for VS Code integration views"
+    "number": 13,
+    "updatedAt": "2026-11-08T00:00:00.000Z",
+    "summary": "Current-process local speech support and shared diagnostic fault isolation"
   },
   "diagrams": [
     {
@@ -50,11 +50,7 @@
           {
             "id": "protocol",
             "label": "Shared Protocol\nSchemas and wire message validation",
-            "files": [
-              "packages/protocol/src/schemas.ts",
-              "packages/protocol/src/wire.ts",
-              "packages/protocol/src/index.ts"
-            ],
+            "files": ["packages/protocol/src/schemas.ts", "packages/protocol/src/wire.ts", "packages/protocol/src/index.ts"],
             "group": "agentside",
             "x": 42,
             "y": 545,
@@ -63,9 +59,7 @@
           {
             "id": "bridge",
             "label": "Editor Bridge\nAuthenticated local WebSocket server",
-            "files": [
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/core/src/bridge.ts"],
             "group": "extension",
             "x": 780.5,
             "y": 545,
@@ -74,10 +68,7 @@
           {
             "id": "controller",
             "label": "Session Controller\nQueues batches, builds reports",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/core/src/rehearsal.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/core/src/rehearsal.ts"],
             "group": "extension",
             "x": 780.5,
             "y": 726,
@@ -86,10 +77,7 @@
           {
             "id": "player",
             "label": "Action Player\nPlays actions at human pace",
-            "files": [
-              "packages/core/src/player.ts",
-              "packages/core/src/typing.ts"
-            ],
+            "files": ["packages/core/src/player.ts", "packages/core/src/typing.ts"],
             "group": "extension",
             "x": 680.5,
             "y": 881,
@@ -572,9 +560,7 @@
           {
             "id": "link",
             "label": "Editor Link\nFinds window, speaks WebSocket",
-            "files": [
-              "packages/relay/src/link.ts"
-            ],
+            "files": ["packages/relay/src/link.ts"],
             "group": "agent",
             "x": 113,
             "y": 378,
@@ -583,10 +569,7 @@
           {
             "id": "setup",
             "label": "Agent Setup\nWrites launcher, registers MCP",
-            "files": [
-              "packages/vscode/src/setup.ts",
-              "packages/vscode/src/agents.ts"
-            ],
+            "files": ["packages/vscode/src/setup.ts", "packages/vscode/src/agents.ts"],
             "group": "agent",
             "x": 48,
             "y": 42,
@@ -609,9 +592,7 @@
           {
             "id": "bridge",
             "label": "Bridge\nAuthenticates relay, dispatches calls",
-            "files": [
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/core/src/bridge.ts"],
             "group": "wire",
             "x": 610.5,
             "y": 585,
@@ -626,7 +607,8 @@
               "packages/core/src/lines.ts",
               "packages/core/src/diff.ts",
               "packages/core/src/config.ts",
-              "packages/core/src/timeline.ts"
+              "packages/core/src/timeline.ts",
+              "packages/core/src/diagnostic_delivery.ts"
             ],
             "group": "session",
             "x": 610.5,
@@ -643,7 +625,8 @@
               "packages/core/src/timing.ts",
               "packages/core/src/typing.ts",
               "packages/core/src/text.ts",
-              "packages/core/src/ports.ts"
+              "packages/core/src/ports.ts",
+              "packages/core/src/structural_typing.ts"
             ],
             "group": "session",
             "x": 179.5,
@@ -686,9 +669,7 @@
           {
             "id": "ext",
             "label": "Extension Activation\nWires components together",
-            "files": [
-              "packages/vscode/src/extension.ts"
-            ],
+            "files": ["packages/vscode/src/extension.ts"],
             "group": "ide",
             "x": 1202.5,
             "y": 585,
@@ -1127,12 +1108,27 @@
               "id": "n-architecturecontroller",
               "text": "Owns the pairing session: its turn, queue of work, history, and reports. It never touches VS Code directly, so it can be tested with a fake editor.",
               "ts": 0
+            },
+            {
+              "id": "update-20261106-architecture-controller",
+              "text": "Playback fences a batch to its declared file. After edited files finish, diagnostics are advisory: VS Code errors can be stale, and Python syntax is checked with system python3, which can differ from the project interpreter.",
+              "ts": 0
             }
           ],
           "player": [
             {
               "id": "n-architectureplayer",
               "text": "Plays queued work at human pace. It also dry-runs each batch first so mistakes surface immediately.",
+              "ts": 0
+            },
+            {
+              "id": "update-20261106-architecture-player",
+              "text": "Explicit structural newline splits an adjacent matching pair only in supported Python or JSON code. The lexical scan treats strings and comments conservatively; it is not a Python grammar parser.",
+              "ts": 0
+            },
+            {
+              "id": "update-20261106b-architecture-player",
+              "text": "Rehearsal refuses an unacknowledged line_end crossing a current-line suffix consisting only of multiple closing brackets and whitespace; an explicit allow_multiple_closes flag permits it. Playback checks the live suffix again. This narrow check is not a parser.",
               "ts": 0
             }
           ],
@@ -1141,12 +1137,22 @@
               "id": "n-architectureeditor",
               "text": "The adapter that applies the player's steps to VS Code. It also notices edits the programmer makes and tells the session.",
               "ts": 0
+            },
+            {
+              "id": "update-20261106b-architecture-editor",
+              "text": "A document event matching a pending agent edit is recognized by offset, length and text. Other editor changes are conservatively classified; attribution does not prove that a person typed them.",
+              "ts": 0
             }
           ],
           "panel": [
             {
               "id": "n-architecturepanel",
               "text": "A side panel that shows the agent's narration. The programmer uses it to reply, pause, interrupt, or answer a command prompt.",
+              "ts": 0
+            },
+            {
+              "id": "update-20261106b-architecture-panel",
+              "text": "The reading control can finish the identified current message delay. It does not lift a separate pause; stale or ineligible control requests have no effect. A hold and release act only on the matching reading ID and preserve independent pauses; disposing the panel releases its hold.",
               "ts": 0
             }
           ],
@@ -1167,7 +1173,7 @@
       "type": "flow",
       "origin": "llm",
       "generation": {
-        "focus": "Session Start and Resume — Agent calls start through the MCP relay, which locates the editor window via discovery files, authenticates over WebSocket, reads project guides, and the controller opens a new session or resumes a suspended one after a reload or agent disconnect."
+        "focus": "Session Start and Resume \u2014 Agent calls start through the MCP relay, which locates the editor window via discovery files, authenticates over WebSocket, reads project guides, and the controller opens a new session or resumes a suspended one after a reload or agent disconnect."
       },
       "doc": {
         "type": "flow",
@@ -1175,10 +1181,7 @@
           {
             "id": "call",
             "label": "Agent calls start",
-            "files": [
-              "packages/relay/src/server.ts",
-              "packages/relay/src/tools.ts"
-            ],
+            "files": ["packages/relay/src/server.ts", "packages/relay/src/tools.ts"],
             "group": "relay",
             "x": 85,
             "y": 203,
@@ -1187,9 +1190,7 @@
           {
             "id": "folders",
             "label": "Collect candidate folders",
-            "files": [
-              "packages/relay/src/server.ts"
-            ],
+            "files": ["packages/relay/src/server.ts"],
             "group": "relay",
             "x": 54,
             "y": 311,
@@ -1198,10 +1199,7 @@
           {
             "id": "guides",
             "label": "Read user and project guides",
-            "files": [
-              "packages/relay/src/server.ts",
-              "packages/relay/src/guide.ts"
-            ],
+            "files": ["packages/relay/src/server.ts", "packages/relay/src/guide.ts"],
             "group": "relay",
             "x": 42,
             "y": 929,
@@ -1210,10 +1208,7 @@
           {
             "id": "find",
             "label": "Find best editor window",
-            "files": [
-              "packages/relay/src/link.ts",
-              "packages/protocol/src/schemas.ts"
-            ],
+            "files": ["packages/relay/src/link.ts", "packages/protocol/src/schemas.ts"],
             "group": "link",
             "x": 386,
             "y": 472,
@@ -1222,10 +1217,7 @@
           {
             "id": "conn",
             "label": "Open WebSocket, send hello",
-            "files": [
-              "packages/relay/src/link.ts",
-              "packages/protocol/src/wire.ts"
-            ],
+            "files": ["packages/relay/src/link.ts", "packages/protocol/src/wire.ts"],
             "group": "link",
             "x": 374,
             "y": 607,
@@ -1234,9 +1226,7 @@
           {
             "id": "auth",
             "label": "Token and version valid?",
-            "files": [
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/core/src/bridge.ts"],
             "group": "editor",
             "x": 382,
             "y": 794,
@@ -1246,9 +1236,7 @@
           {
             "id": "dispatch",
             "label": "Another agent owns session?",
-            "files": [
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/core/src/bridge.ts"],
             "group": "editor",
             "x": 370,
             "y": 1064,
@@ -1258,9 +1246,7 @@
           {
             "id": "susp",
             "label": "Suspended session waiting?",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "group": "session",
             "x": 804,
             "y": 1225,
@@ -1270,9 +1256,7 @@
           {
             "id": "same",
             "label": "Same directory?",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "group": "session",
             "x": 776,
             "y": 1360,
@@ -1282,9 +1266,7 @@
           {
             "id": "resume",
             "label": "Resume suspended session",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "group": "session",
             "x": 694,
             "y": 1495,
@@ -1293,9 +1275,7 @@
           {
             "id": "fresh",
             "label": "Open new session",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "group": "session",
             "x": 953.5,
             "y": 1495,
@@ -1304,9 +1284,7 @@
           {
             "id": "own",
             "label": "Record socket as owner",
-            "files": [
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/core/src/bridge.ts"],
             "group": "session",
             "x": 820,
             "y": 1603,
@@ -1315,10 +1293,7 @@
           {
             "id": "render",
             "label": "Render report with guides",
-            "files": [
-              "packages/relay/src/server.ts",
-              "packages/relay/src/render.ts"
-            ],
+            "files": ["packages/relay/src/server.ts", "packages/relay/src/render.ts"],
             "group": "relay",
             "x": 54,
             "y": 1764,
@@ -1327,11 +1302,7 @@
           {
             "id": "suspend",
             "label": "Suspend on reload or disconnect",
-            "files": [
-              "packages/vscode/src/extension.ts",
-              "packages/core/src/controller.ts",
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/vscode/src/extension.ts", "packages/core/src/controller.ts", "packages/core/src/bridge.ts"],
             "group": "session",
             "x": 774.5,
             "y": 42,
@@ -1796,7 +1767,7 @@
       "type": "flow",
       "origin": "llm",
       "generation": {
-        "focus": "Batch Rehearsal and Playback — A step call's actions are validated and rehearsed in memory, queued (or rejected/discarded), then played by the Player at human pace (move, select, type, delete, point, say, run) and reported back with the resulting code."
+        "focus": "Batch Rehearsal and Playback \u2014 A step call's actions are validated and rehearsed in memory, queued (or rejected/discarded), then played by the Player at human pace (move, select, type, delete, point, say, run) and reported back with the resulting code."
       },
       "doc": {
         "type": "flow",
@@ -1804,10 +1775,7 @@
           {
             "id": "recv",
             "label": "Receive step call with actions",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/core/src/bridge.ts"],
             "group": "submit",
             "x": 386,
             "y": 26,
@@ -1816,9 +1784,7 @@
           {
             "id": "anchor",
             "label": "Cursor unanchored after a stop?",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "group": "submit",
             "x": 382,
             "y": 134,
@@ -1828,11 +1794,7 @@
           {
             "id": "rehearse",
             "label": "Rehearse batch in memory, instantly",
-            "files": [
-              "packages/core/src/rehearsal.ts",
-              "packages/core/src/player.ts",
-              "packages/protocol/src/index.ts"
-            ],
+            "files": ["packages/core/src/rehearsal.ts", "packages/core/src/player.ts", "packages/protocol/src/index.ts"],
             "group": "rehearse",
             "x": 512.5,
             "y": 321,
@@ -1841,10 +1803,7 @@
           {
             "id": "failed",
             "label": "Would an action fail?",
-            "files": [
-              "packages/core/src/rehearsal.ts",
-              "packages/core/src/player.ts"
-            ],
+            "files": ["packages/core/src/rehearsal.ts", "packages/core/src/player.ts"],
             "group": "rehearse",
             "x": 568.5,
             "y": 429,
@@ -1854,9 +1813,7 @@
           {
             "id": "stale",
             "label": "Interrupted meanwhile?",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "group": "rehearse",
             "x": 639,
             "y": 564,
@@ -1866,9 +1823,7 @@
           {
             "id": "reject",
             "label": "Reject batch, nothing queued",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "group": "queue",
             "x": 40,
             "y": 751,
@@ -1877,9 +1832,7 @@
           {
             "id": "discard",
             "label": "Discard batch as stale",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "group": "queue",
             "x": 427.5,
             "y": 751,
@@ -1888,9 +1841,7 @@
           {
             "id": "queue",
             "label": "Queue batch with rehearsed state",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "group": "queue",
             "x": 749,
             "y": 751,
@@ -1903,7 +1854,8 @@
               "packages/core/src/player.ts",
               "packages/core/src/typing.ts",
               "packages/core/src/timeline.ts",
-              "packages/core/src/timing.ts"
+              "packages/core/src/timing.ts",
+              "packages/core/src/structural_typing.ts"
             ],
             "group": "play",
             "x": 757,
@@ -1913,10 +1865,7 @@
           {
             "id": "interrupted",
             "label": "Interrupted or failed?",
-            "files": [
-              "packages/core/src/player.ts",
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/player.ts", "packages/core/src/controller.ts"],
             "group": "play",
             "x": 684.5,
             "y": 1073,
@@ -1926,9 +1875,7 @@
           {
             "id": "finish",
             "label": "Save edited files, capture resulting code",
-            "files": [
-              "packages/core/src/player.ts"
-            ],
+            "files": ["packages/core/src/player.ts"],
             "group": "play",
             "x": 697.5,
             "y": 1343,
@@ -1937,9 +1884,7 @@
           {
             "id": "stop",
             "label": "Mark stale, discard batches behind",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "group": "play",
             "x": 636.5,
             "y": 1208,
@@ -1948,10 +1893,7 @@
           {
             "id": "report",
             "label": "Build report and return to agent",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/relay/src/render.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/relay/src/render.ts"],
             "group": "report",
             "x": 356,
             "y": 1530,
@@ -2127,6 +2069,11 @@
               "id": "n-batch-rehearsal-and-playbackfailed",
               "text": "If an action would fail, such as text that is not on its line, the whole batch is refused now.",
               "ts": 0
+            },
+            {
+              "id": "update-20261106b-batch-rehearsal-and-playback-failed",
+              "text": "The multi-close line_end guard rejects the whole batch during rehearsal before any action plays. Explicit acknowledgment allows intentional crossings; next_close and an exact spot provide alternatives.",
+              "ts": 0
             }
           ],
           "stale": [
@@ -2155,6 +2102,11 @@
               "id": "n-batch-rehearsal-and-playbackperform",
               "text": "Actions play one by one at human pace, including typing rhythm and reading pauses.",
               "ts": 0
+            },
+            {
+              "id": "update-20261106-batch-rehearsal-and-playback-perform",
+              "text": "Explicit structural newline acts only between matching adjacent delimiters in supported code; unsafe or ambiguous lexical contexts are refused. The batch file fence prevents an action from editing another file.",
+              "ts": 0
             }
           ],
           "interrupted": [
@@ -2168,6 +2120,11 @@
             {
               "id": "n-batch-rehearsal-and-playbackfinish",
               "text": "Edited files are saved, and the resulting code is captured for the report.",
+              "ts": 0
+            },
+            {
+              "id": "update-20261106-batch-rehearsal-and-playback-finish",
+              "text": "Edited files are checked after playback. Editor diagnostics and the separate Python syntax check are advisory and can be unavailable or stale; neither is a grammar guarantee for structural newline.",
               "ts": 0
             }
           ],
@@ -2187,7 +2144,7 @@
       "type": "flow",
       "origin": "llm",
       "generation": {
-        "focus": "Interruption and Turn Handling — Programmer messages, edits, interrupts, pauses, look-away, and turn swaps discard queued batches, mark the session stale, require re-anchoring of the cursor, and wake listen calls with events."
+        "focus": "Interruption and Turn Handling \u2014 Programmer messages, edits, interrupts, pauses, look-away, and turn swaps discard queued batches, mark the session stale, require re-anchoring of the cursor, and wake listen calls with events."
       },
       "doc": {
         "type": "flow",
@@ -2195,9 +2152,7 @@
           {
             "id": "watch",
             "label": "Editor Activity Watcher\nclassifies edits, detects look-away",
-            "files": [
-              "packages/vscode/src/editor.ts"
-            ],
+            "files": ["packages/vscode/src/editor.ts"],
             "group": "input",
             "x": 114,
             "y": 26
@@ -2205,10 +2160,7 @@
           {
             "id": "panel",
             "label": "Panel Controls\nmessage, interrupt, pause, turn swap",
-            "files": [
-              "packages/vscode/src/panel.ts",
-              "packages/vscode/src/extension.ts"
-            ],
+            "files": ["packages/vscode/src/panel.ts", "packages/vscode/src/extension.ts"],
             "group": "input",
             "x": 622,
             "y": 26
@@ -2216,9 +2168,7 @@
           {
             "id": "interrupting",
             "label": "Event interrupts playback?",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "group": "input",
             "x": 267,
             "y": 191,
@@ -2227,10 +2177,7 @@
           {
             "id": "hold",
             "label": "Timeline Hold\npause reason added, sleeps frozen",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/core/src/timeline.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/core/src/timeline.ts"],
             "group": "input",
             "x": 539,
             "y": 181
@@ -2238,9 +2185,7 @@
           {
             "id": "record",
             "label": "Record event\nqueue message, edit, interrupt or turn",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "group": "interrupt",
             "x": 27.5,
             "y": 388
@@ -2248,9 +2193,7 @@
           {
             "id": "stale",
             "label": "Mark session stale, discard queued batches",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "group": "interrupt",
             "x": 33.5,
             "y": 516
@@ -2258,10 +2201,7 @@
           {
             "id": "stop",
             "label": "Player Stops\nplaying batch ends between actions",
-            "files": [
-              "packages/core/src/player.ts",
-              "packages/core/src/timeline.ts"
-            ],
+            "files": ["packages/core/src/player.ts", "packages/core/src/timeline.ts"],
             "group": "interrupt",
             "x": 27.5,
             "y": 651
@@ -2269,9 +2209,7 @@
           {
             "id": "ready",
             "label": "Pending call ready to wake?",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "group": "report",
             "x": 263,
             "y": 831,
@@ -2280,9 +2218,7 @@
           {
             "id": "report",
             "label": "Build report, set anchorNeeded if batch stopped short",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "group": "report",
             "x": 197,
             "y": 966
@@ -2290,10 +2226,7 @@
           {
             "id": "deliver",
             "label": "Relay Renderer\ndelivers events and batch status to agent",
-            "files": [
-              "packages/relay/src/server.ts",
-              "packages/relay/src/render.ts"
-            ],
+            "files": ["packages/relay/src/server.ts", "packages/relay/src/render.ts"],
             "group": "report",
             "x": 197,
             "y": 1094
@@ -2301,9 +2234,7 @@
           {
             "id": "submit",
             "label": "Agent submits next batch",
-            "files": [
-              "packages/relay/src/tools.ts"
-            ],
+            "files": ["packages/relay/src/tools.ts"],
             "group": "anchor",
             "x": 275,
             "y": 1301
@@ -2311,9 +2242,7 @@
           {
             "id": "anchored",
             "label": "First cursor action gives file and line?",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "group": "anchor",
             "x": 67,
             "y": 1409,
@@ -2322,10 +2251,7 @@
           {
             "id": "refuse",
             "label": "Reject batch as unanchored",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/protocol/src/schemas.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/protocol/src/schemas.ts"],
             "group": "anchor",
             "x": 438,
             "y": 1554
@@ -2333,10 +2259,7 @@
           {
             "id": "queue",
             "label": "Rehearse and queue batch, clear anchorNeeded",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/core/src/rehearsal.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/core/src/rehearsal.ts"],
             "group": "anchor",
             "x": 26,
             "y": 1544
@@ -2452,7 +2375,7 @@
       "type": "flow",
       "origin": "llm",
       "generation": {
-        "focus": "Command Run Confirmation — A run action saves edited files, asks the programmer to allow, skip, or always-allow the command, executes it in a shell-integrated terminal, captures output, and reports exit status or background state."
+        "focus": "Command Run Confirmation \u2014 A run action saves edited files, asks the programmer to allow, skip, or always-allow the command, executes it in a shell-integrated terminal, captures output, and reports exit status or background state."
       },
       "doc": {
         "type": "flow",
@@ -2460,10 +2383,7 @@
           {
             "id": "save",
             "label": "Save edited files",
-            "files": [
-              "packages/core/src/player.ts",
-              "packages/vscode/src/editor.ts"
-            ],
+            "files": ["packages/core/src/player.ts", "packages/vscode/src/editor.ts"],
             "group": "confirm",
             "x": 405,
             "y": 26,
@@ -2472,9 +2392,7 @@
           {
             "id": "failsave",
             "label": "Save failed? Fail without running",
-            "files": [
-              "packages/core/src/player.ts"
-            ],
+            "files": ["packages/core/src/player.ts"],
             "group": "confirm",
             "x": 342,
             "y": 134,
@@ -2484,10 +2402,7 @@
           {
             "id": "need",
             "label": "Confirmation needed?",
-            "files": [
-              "packages/core/src/player.ts",
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/player.ts", "packages/core/src/controller.ts"],
             "group": "confirm",
             "x": 597,
             "y": 269,
@@ -2511,10 +2426,7 @@
           {
             "id": "decide",
             "label": "Programmer allows?",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/vscode/src/panel.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/vscode/src/panel.ts"],
             "group": "confirm",
             "x": 453,
             "y": 512,
@@ -2524,9 +2436,7 @@
           {
             "id": "remember",
             "label": "Add command to session allowed set",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "group": "confirm",
             "x": 376,
             "y": 647,
@@ -2535,9 +2445,7 @@
           {
             "id": "declined",
             "label": "Post declined; fail or interrupt",
-            "files": [
-              "packages/core/src/player.ts"
-            ],
+            "files": ["packages/core/src/player.ts"],
             "group": "report",
             "x": 26,
             "y": 1257,
@@ -2546,11 +2454,7 @@
           {
             "id": "exec",
             "label": "Acquire terminal, execute with shell integration",
-            "files": [
-              "packages/core/src/player.ts",
-              "packages/vscode/src/editor.ts",
-              "packages/vscode/src/terminal.ts"
-            ],
+            "files": ["packages/core/src/player.ts", "packages/vscode/src/editor.ts", "packages/vscode/src/terminal.ts"],
             "group": "execute",
             "x": 515,
             "y": 807,
@@ -2559,10 +2463,7 @@
           {
             "id": "capture",
             "label": "Capture output tail until end or wait",
-            "files": [
-              "packages/vscode/src/terminal.ts",
-              "packages/vscode/src/output.ts"
-            ],
+            "files": ["packages/vscode/src/terminal.ts", "packages/vscode/src/output.ts"],
             "group": "execute",
             "x": 541,
             "y": 962,
@@ -2571,10 +2472,7 @@
           {
             "id": "ended",
             "label": "Command finished within wait?",
-            "files": [
-              "packages/vscode/src/terminal.ts",
-              "packages/vscode/src/output.ts"
-            ],
+            "files": ["packages/vscode/src/terminal.ts", "packages/vscode/src/output.ts"],
             "group": "execute",
             "x": 573,
             "y": 1070,
@@ -2584,10 +2482,7 @@
           {
             "id": "bg",
             "label": "Post background; exit reported later",
-            "files": [
-              "packages/core/src/player.ts",
-              "packages/vscode/src/output.ts"
-            ],
+            "files": ["packages/core/src/player.ts", "packages/vscode/src/output.ts"],
             "group": "report",
             "x": 381,
             "y": 1257,
@@ -2596,10 +2491,7 @@
           {
             "id": "done",
             "label": "Post done with exit code",
-            "files": [
-              "packages/core/src/player.ts",
-              "packages/protocol/src/schemas.ts"
-            ],
+            "files": ["packages/core/src/player.ts", "packages/protocol/src/schemas.ts"],
             "group": "report",
             "x": 733,
             "y": 1257,
@@ -2768,7 +2660,7 @@
           "exec": [
             {
               "id": "n-command-run-confirmationexec",
-              "text": "The command runs in a terminal the programmer can see.",
+              "text": "The command runs in a Pair-owned terminal; the programmer can reveal it.",
               "ts": 0
             }
           ],
@@ -2809,7 +2701,7 @@
       "type": "flow",
       "origin": "llm",
       "generation": {
-        "focus": "Outside Change Tracking — File watcher events are grouped, compared with known saved text, marked in the explorer and panel history, and cleared when the programmer opens the file or its diff."
+        "focus": "Outside Change Tracking \u2014 File watcher events are grouped, compared with known saved text, marked in the explorer and panel history, and cleared when the programmer opens the file or its diff."
       },
       "doc": {
         "type": "flow",
@@ -2817,9 +2709,7 @@
           {
             "id": "w",
             "label": "Watcher reports file write",
-            "files": [
-              "packages/vscode/src/outside_watch.ts"
-            ],
+            "files": ["packages/vscode/src/outside_watch.ts"],
             "group": "detect",
             "x": 365.5,
             "y": 26
@@ -2827,10 +2717,7 @@
           {
             "id": "f",
             "label": "Active session and watched folder?",
-            "files": [
-              "packages/vscode/src/outside_watch.ts",
-              "packages/vscode/src/outside.ts"
-            ],
+            "files": ["packages/vscode/src/outside_watch.ts", "packages/vscode/src/outside.ts"],
             "group": "detect",
             "x": 333.5,
             "y": 134,
@@ -2839,10 +2726,7 @@
           {
             "id": "g",
             "label": "Add to group, restart timer",
-            "files": [
-              "packages/vscode/src/outside.ts",
-              "packages/vscode/src/timings.ts"
-            ],
+            "files": ["packages/vscode/src/outside.ts", "packages/vscode/src/timings.ts"],
             "group": "detect",
             "x": 361.5,
             "y": 269
@@ -2850,10 +2734,7 @@
           {
             "id": "s",
             "label": "Own save recorded as known text",
-            "files": [
-              "packages/vscode/src/outside_watch.ts",
-              "packages/vscode/src/editor.ts"
-            ],
+            "files": ["packages/vscode/src/outside_watch.ts", "packages/vscode/src/editor.ts"],
             "group": "detect",
             "x": 26,
             "y": 269
@@ -2861,10 +2742,7 @@
           {
             "id": "t",
             "label": "Group settles after delay",
-            "files": [
-              "packages/vscode/src/outside.ts",
-              "packages/vscode/src/timings.ts"
-            ],
+            "files": ["packages/vscode/src/outside.ts", "packages/vscode/src/timings.ts"],
             "group": "compare",
             "x": 369.5,
             "y": 456
@@ -2872,10 +2750,7 @@
           {
             "id": "r",
             "label": "Read file text from disk",
-            "files": [
-              "packages/vscode/src/outside_watch.ts",
-              "packages/vscode/src/outside.ts"
-            ],
+            "files": ["packages/vscode/src/outside_watch.ts", "packages/vscode/src/outside.ts"],
             "group": "compare",
             "x": 271,
             "y": 591
@@ -2883,9 +2758,7 @@
           {
             "id": "d",
             "label": "Text differs from known text?",
-            "files": [
-              "packages/vscode/src/outside.ts"
-            ],
+            "files": ["packages/vscode/src/outside.ts"],
             "group": "compare",
             "x": 251,
             "y": 699,
@@ -2894,10 +2767,7 @@
           {
             "id": "m",
             "label": "Mark file, redraw badge",
-            "files": [
-              "packages/vscode/src/outside.ts",
-              "packages/vscode/src/outside_watch.ts"
-            ],
+            "files": ["packages/vscode/src/outside.ts", "packages/vscode/src/outside_watch.ts"],
             "group": "mark",
             "x": 275,
             "y": 886
@@ -2905,11 +2775,7 @@
           {
             "id": "h",
             "label": "Post one outside entry to panel",
-            "files": [
-              "packages/vscode/src/outside.ts",
-              "packages/vscode/src/outside_watch.ts",
-              "packages/vscode/src/panel.ts"
-            ],
+            "files": ["packages/vscode/src/outside.ts", "packages/vscode/src/outside_watch.ts", "packages/vscode/src/panel.ts"],
             "group": "mark",
             "x": 243,
             "y": 994
@@ -2917,10 +2783,7 @@
           {
             "id": "p",
             "label": "Panel history lists changed files",
-            "files": [
-              "packages/vscode/src/webview/panel.ts",
-              "packages/core/src/ports.ts"
-            ],
+            "files": ["packages/vscode/src/webview/panel.ts", "packages/core/src/ports.ts"],
             "group": "mark",
             "x": 235,
             "y": 1102
@@ -2928,11 +2791,7 @@
           {
             "id": "o",
             "label": "Programmer opens file or diff",
-            "files": [
-              "packages/vscode/src/outside_watch.ts",
-              "packages/vscode/src/panel.ts",
-              "packages/vscode/src/webview/panel.ts"
-            ],
+            "files": ["packages/vscode/src/outside_watch.ts", "packages/vscode/src/panel.ts", "packages/vscode/src/webview/panel.ts"],
             "group": "clear",
             "x": 251,
             "y": 1289
@@ -2940,10 +2799,7 @@
           {
             "id": "c",
             "label": "Record seen text, clear mark",
-            "files": [
-              "packages/vscode/src/outside.ts",
-              "packages/vscode/src/outside_watch.ts"
-            ],
+            "files": ["packages/vscode/src/outside.ts", "packages/vscode/src/outside_watch.ts"],
             "group": "clear",
             "x": 255,
             "y": 1397
@@ -3032,7 +2888,7 @@
       "type": "flow",
       "origin": "llm",
       "generation": {
-        "focus": "Agent Setup and Reading Calibration — Set Up Agent writes a launcher and registers the relay in each agent's MCP config, and the calibration flow times the programmer reading a passage and stores the resulting reading rate."
+        "focus": "Agent Setup and Reading Calibration \u2014 Set Up Agent writes a launcher and registers the relay in each agent's MCP config, and the calibration flow times the programmer reading a passage and stores the resulting reading rate."
       },
       "doc": {
         "type": "flow",
@@ -3040,10 +2896,7 @@
           {
             "id": "launcher",
             "label": "Write launcher script",
-            "files": [
-              "packages/vscode/src/setup.ts",
-              "packages/vscode/src/extension.ts"
-            ],
+            "files": ["packages/vscode/src/setup.ts", "packages/vscode/src/extension.ts"],
             "group": "setup",
             "x": 78,
             "y": 26
@@ -3051,10 +2904,7 @@
           {
             "id": "pick",
             "label": "Pick detected agents",
-            "files": [
-              "packages/vscode/src/setup.ts",
-              "packages/vscode/src/agents.ts"
-            ],
+            "files": ["packages/vscode/src/setup.ts", "packages/vscode/src/agents.ts"],
             "group": "setup",
             "x": 82,
             "y": 186
@@ -3062,9 +2912,7 @@
           {
             "id": "register",
             "label": "Register relay in agent MCP config",
-            "files": [
-              "packages/vscode/src/agents.ts"
-            ],
+            "files": ["packages/vscode/src/agents.ts"],
             "group": "setup",
             "x": 26,
             "y": 321
@@ -3072,10 +2920,7 @@
           {
             "id": "arm",
             "label": "Arm calibration, pause playback",
-            "files": [
-              "packages/vscode/src/calibration.ts",
-              "packages/vscode/src/extension.ts"
-            ],
+            "files": ["packages/vscode/src/calibration.ts", "packages/vscode/src/extension.ts"],
             "group": "arm",
             "x": 443,
             "y": 26
@@ -3083,9 +2928,7 @@
           {
             "id": "go",
             "label": "Reply is go?",
-            "files": [
-              "packages/vscode/src/calibration.ts"
-            ],
+            "files": ["packages/vscode/src/calibration.ts"],
             "group": "timing",
             "x": 498,
             "y": 186,
@@ -3094,9 +2937,7 @@
           {
             "id": "read",
             "label": "Show passage, start clock",
-            "files": [
-              "packages/vscode/src/calibration.ts"
-            ],
+            "files": ["packages/vscode/src/calibration.ts"],
             "group": "timing",
             "x": 538,
             "y": 321
@@ -3104,9 +2945,7 @@
           {
             "id": "stop",
             "label": "Reply is x?",
-            "files": [
-              "packages/vscode/src/calibration.ts"
-            ],
+            "files": ["packages/vscode/src/calibration.ts"],
             "group": "timing",
             "x": 569,
             "y": 482,
@@ -3115,9 +2954,7 @@
           {
             "id": "cancel",
             "label": "Cancel, store nothing, resume",
-            "files": [
-              "packages/vscode/src/calibration.ts"
-            ],
+            "files": ["packages/vscode/src/calibration.ts"],
             "group": "timing",
             "x": 406,
             "y": 643
@@ -3125,9 +2962,7 @@
           {
             "id": "finish",
             "label": "Compute ms per character",
-            "files": [
-              "packages/vscode/src/calibration.ts"
-            ],
+            "files": ["packages/vscode/src/calibration.ts"],
             "group": "store",
             "x": 920,
             "y": 643
@@ -3135,9 +2970,7 @@
           {
             "id": "store",
             "label": "Write rate to aiPair.timing setting",
-            "files": [
-              "packages/vscode/src/extension.ts"
-            ],
+            "files": ["packages/vscode/src/extension.ts"],
             "group": "store",
             "x": 876,
             "y": 777
@@ -3145,11 +2978,7 @@
           {
             "id": "apply",
             "label": "Controller applies rate, show result, resume",
-            "files": [
-              "packages/vscode/src/extension.ts",
-              "packages/core/src/controller.ts",
-              "packages/vscode/src/calibration.ts"
-            ],
+            "files": ["packages/vscode/src/extension.ts", "packages/core/src/controller.ts", "packages/vscode/src/calibration.ts"],
             "group": "store",
             "x": 842,
             "y": 885
@@ -3157,10 +2986,7 @@
           {
             "id": "use",
             "label": "Player times say pauses with rate",
-            "files": [
-              "packages/core/src/player.ts",
-              "packages/core/src/typing.ts"
-            ],
+            "files": ["packages/core/src/player.ts", "packages/core/src/typing.ts"],
             "group": "store",
             "x": 884,
             "y": 1040
@@ -3245,7 +3071,7 @@
       "type": "dataflow",
       "origin": "llm",
       "generation": {
-        "focus": "Session Startup and Window Discovery — The agent harness launches the relay (pair-mcp via a launcher written by the extension), which reads the bridge's per-window discovery files, picks the best live VS Code window by workspace folder, opens an authenticated WebSocket (hello/token/version handshake), and calls `start`, which also loads project guides and begins or resumes a Controller session."
+        "focus": "Session Startup and Window Discovery \u2014 The agent harness launches the relay (pair-mcp via a launcher written by the extension), which reads the bridge's per-window discovery files, picks the best live VS Code window by workspace folder, opens an authenticated WebSocket (hello/token/version handshake), and calls `start`, which also loads project guides and begins or resumes a Controller session."
       },
       "doc": {
         "type": "dataflow",
@@ -3253,9 +3079,7 @@
           {
             "id": "harness",
             "label": "Agent Harness\nLaunches relay, calls start",
-            "files": [
-              "packages/relay/src/main.ts"
-            ],
+            "files": ["packages/relay/src/main.ts"],
             "group": "agent",
             "x": 259,
             "y": 197
@@ -3263,10 +3087,7 @@
           {
             "id": "launcher",
             "label": "Relay Launcher\nScript runs relay with VS Code",
-            "files": [
-              "packages/vscode/src/setup.ts",
-              "packages/vscode/src/extension.ts"
-            ],
+            "files": ["packages/vscode/src/setup.ts", "packages/vscode/src/extension.ts"],
             "group": "agent",
             "x": 249,
             "y": 42
@@ -3287,9 +3108,7 @@
           {
             "id": "guides",
             "label": "Guide Reader\nLoads user and project guides",
-            "files": [
-              "packages/relay/src/guide.ts"
-            ],
+            "files": ["packages/relay/src/guide.ts"],
             "group": "relay",
             "x": 52.5,
             "y": 559
@@ -3297,9 +3116,7 @@
           {
             "id": "finder",
             "label": "Window Finder\nPicks best live window by folder",
-            "files": [
-              "packages/relay/src/link.ts"
-            ],
+            "files": ["packages/relay/src/link.ts"],
             "group": "relay",
             "x": 582.5,
             "y": 559
@@ -3307,10 +3124,7 @@
           {
             "id": "link",
             "label": "Editor Link\nWebSocket handshake and calls",
-            "files": [
-              "packages/relay/src/link.ts",
-              "packages/relay/src/timings.ts"
-            ],
+            "files": ["packages/relay/src/link.ts", "packages/relay/src/timings.ts"],
             "group": "relay",
             "x": 457,
             "y": 714
@@ -3318,11 +3132,7 @@
           {
             "id": "disc",
             "label": "Discovery Files\nPer-window port, token, folders",
-            "files": [
-              "packages/core/src/bridge.ts",
-              "packages/protocol/src/wire.ts",
-              "packages/protocol/src/schemas.ts"
-            ],
+            "files": ["packages/core/src/bridge.ts", "packages/protocol/src/wire.ts", "packages/protocol/src/schemas.ts"],
             "group": "editor",
             "x": 133,
             "y": 1076
@@ -3330,11 +3140,7 @@
           {
             "id": "bridge",
             "label": "Bridge\nAuthenticates socket, dispatches start",
-            "files": [
-              "packages/core/src/bridge.ts",
-              "packages/protocol/src/wire.ts",
-              "packages/protocol/src/schemas.ts"
-            ],
+            "files": ["packages/core/src/bridge.ts", "packages/protocol/src/wire.ts", "packages/protocol/src/schemas.ts"],
             "group": "editor",
             "x": 447,
             "y": 921
@@ -3342,9 +3148,7 @@
           {
             "id": "controller",
             "label": "Session Controller\nStarts or resumes session",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "group": "editor",
             "x": 560,
             "y": 1076
@@ -3352,10 +3156,7 @@
           {
             "id": "panel",
             "label": "Narration Panel\nShows session started",
-            "files": [
-              "packages/vscode/src/panel.ts",
-              "packages/vscode/src/extension.ts"
-            ],
+            "files": ["packages/vscode/src/panel.ts", "packages/vscode/src/extension.ts"],
             "group": "editor",
             "x": 586,
             "y": 1231
@@ -3715,7 +3516,7 @@
       "type": "dataflow",
       "origin": "llm",
       "generation": {
-        "focus": "Agent Batch Playback — An agent `step` call travels MCP tool schema validation, relay link, Bridge WebSocket dispatch, Controller (in-memory rehearsal, then queueing), and Player, which resolves places and types/moves/selects/runs at human pace through the VS Code editor and terminal, then returns a rendered Report to the agent."
+        "focus": "Agent Batch Playback \u2014 An agent `step` call travels MCP tool schema validation, relay link, Bridge WebSocket dispatch, Controller (in-memory rehearsal, then queueing), and Player, which groups code edits at the selected pace, shows reading countdowns and highlights, and returns a rendered Report to the agent."
       },
       "doc": {
         "type": "dataflow",
@@ -3723,9 +3524,7 @@
           {
             "id": "agent",
             "label": "Agent Harness\nissues MCP step calls",
-            "files": [
-              "packages/relay/src/main.ts"
-            ],
+            "files": ["packages/relay/src/main.ts"],
             "group": "agent",
             "x": 536,
             "y": 26
@@ -3733,11 +3532,7 @@
           {
             "id": "schema",
             "label": "Tool Schema Validation\nchecks action batches strictly",
-            "files": [
-              "packages/relay/src/tools.ts",
-              "packages/protocol/src/index.ts",
-              "packages/protocol/src/schemas.ts"
-            ],
+            "files": ["packages/relay/src/tools.ts", "packages/protocol/src/index.ts", "packages/protocol/src/schemas.ts"],
             "group": "relay",
             "x": 270.5,
             "y": 233
@@ -3745,9 +3540,7 @@
           {
             "id": "relay",
             "label": "Relay Server\nroutes tools, renders reports",
-            "files": [
-              "packages/relay/src/server.ts"
-            ],
+            "files": ["packages/relay/src/server.ts"],
             "group": "relay",
             "x": 276.5,
             "y": 388
@@ -3755,9 +3548,7 @@
           {
             "id": "link",
             "label": "Editor Link\nWebSocket client to window",
-            "files": [
-              "packages/relay/src/link.ts"
-            ],
+            "files": ["packages/relay/src/link.ts"],
             "group": "relay",
             "x": 214.5,
             "y": 543
@@ -3765,9 +3556,7 @@
           {
             "id": "render",
             "label": "Report Renderer\nturns reports into text",
-            "files": [
-              "packages/relay/src/render.ts"
-            ],
+            "files": ["packages/relay/src/render.ts"],
             "group": "relay",
             "x": 582.5,
             "y": 543
@@ -3775,10 +3564,7 @@
           {
             "id": "bridge",
             "label": "Bridge\nauthenticated WebSocket dispatch",
-            "files": [
-              "packages/core/src/bridge.ts",
-              "packages/protocol/src/wire.ts"
-            ],
+            "files": ["packages/core/src/bridge.ts", "packages/protocol/src/wire.ts"],
             "group": "core",
             "x": 210.5,
             "y": 750
@@ -3786,9 +3572,7 @@
           {
             "id": "ctrl",
             "label": "Controller\nserializes calls, queues batches",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "group": "core",
             "x": 194.5,
             "y": 905
@@ -3796,9 +3580,7 @@
           {
             "id": "rehearse",
             "label": "Rehearsal\ndry-runs batch in memory",
-            "files": [
-              "packages/core/src/rehearsal.ts"
-            ],
+            "files": ["packages/core/src/rehearsal.ts"],
             "group": "core",
             "x": 65.5,
             "y": 1060
@@ -3819,20 +3601,23 @@
           {
             "id": "editor",
             "label": "VS Code Editor\napplies edits, cursor, scrolling",
-            "files": [
-              "packages/vscode/src/editor.ts"
-            ],
+            "files": ["packages/vscode/src/editor.ts"],
             "group": "host",
             "x": 89.5,
             "y": 1267
           },
           {
+            "id": "playback-panel",
+            "label": "Pair panel\nmode and reading control",
+            "files": ["packages/vscode/src/panel.ts", "packages/vscode/src/webview/panel.ts"],
+            "group": "host",
+            "x": 850,
+            "y": 1267
+          },
+          {
             "id": "term",
             "label": "Terminal Runner\nruns commands, captures output",
-            "files": [
-              "packages/vscode/src/terminal.ts",
-              "packages/vscode/src/output.ts"
-            ],
+            "files": ["packages/vscode/src/terminal.ts", "packages/vscode/src/output.ts"],
             "group": "host",
             "x": 501.5,
             "y": 1267
@@ -3880,9 +3665,19 @@
             "label": "queued batch"
           },
           {
+            "from": "playback-panel",
+            "to": "ctrl",
+            "label": "mode and reading controls"
+          },
+          {
+            "from": "player",
+            "to": "playback-panel",
+            "label": "reading countdown"
+          },
+          {
             "from": "player",
             "to": "editor",
-            "label": "edits, moves, selections"
+            "label": "edits and group highlights"
           },
           {
             "from": "player",
@@ -3952,7 +3747,7 @@
       "type": "dataflow",
       "origin": "llm",
       "generation": {
-        "focus": "Command Run and Terminal Output — A `run` action saves edited files, optionally waits for the programmer's confirmation in the panel, executes the command in a VS Code terminal via shell integration, tails and cleans the output, and returns the outcome (exit code, truncation, background status) in the batch report."
+        "focus": "Command Run and Terminal Output \u2014 A `run` action saves edited files, optionally waits for approval, runs quietly in an eligible Pair-owned terminal, and reports output and status. The panel can reveal the terminal for a specific command; an unavailable terminal is reported honestly."
       },
       "doc": {
         "type": "dataflow",
@@ -3960,10 +3755,7 @@
           {
             "id": "agent",
             "label": "Agent Tool Call\nstep batch containing run action",
-            "files": [
-              "packages/relay/src/tools.ts",
-              "packages/relay/src/server.ts"
-            ],
+            "files": ["packages/relay/src/tools.ts", "packages/relay/src/server.ts"],
             "group": "entry",
             "x": 114.5,
             "y": 26
@@ -3971,10 +3763,7 @@
           {
             "id": "link",
             "label": "Relay and Bridge\nforwards calls to editor",
-            "files": [
-              "packages/relay/src/link.ts",
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/relay/src/link.ts", "packages/core/src/bridge.ts"],
             "group": "entry",
             "x": 361,
             "y": 181
@@ -3982,10 +3771,7 @@
           {
             "id": "ctrl",
             "label": "Controller\nrehearses, queues, assembles reports",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/core/src/rehearsal.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/core/src/rehearsal.ts"],
             "group": "core",
             "x": 1094,
             "y": 362
@@ -3993,9 +3779,7 @@
           {
             "id": "player",
             "label": "Player\nsaves, confirms, runs, records results",
-            "files": [
-              "packages/core/src/player.ts"
-            ],
+            "files": ["packages/core/src/player.ts"],
             "group": "core",
             "x": 1380.5,
             "y": 543
@@ -4003,11 +3787,7 @@
           {
             "id": "panel",
             "label": "Narration Panel\nshows run box, takes decision",
-            "files": [
-              "packages/vscode/src/panel.ts",
-              "packages/vscode/src/panel_messages.ts",
-              "packages/vscode/src/webview/panel.ts"
-            ],
+            "files": ["packages/vscode/src/panel.ts", "packages/vscode/src/panel_messages.ts", "packages/vscode/src/webview/panel.ts"],
             "group": "editor",
             "x": 1026,
             "y": 750
@@ -4015,9 +3795,7 @@
           {
             "id": "editor",
             "label": "Editor Adapter\nsaves files, delegates command run",
-            "files": [
-              "packages/vscode/src/editor.ts"
-            ],
+            "files": ["packages/vscode/src/editor.ts"],
             "group": "editor",
             "x": 1511.5,
             "y": 750
@@ -4025,10 +3803,7 @@
           {
             "id": "term",
             "label": "Terminal Runner\nexecutes via shell integration",
-            "files": [
-              "packages/vscode/src/terminal.ts",
-              "packages/vscode/src/timings.ts"
-            ],
+            "files": ["packages/vscode/src/terminal.ts", "packages/vscode/src/timings.ts"],
             "group": "terminal",
             "x": 1511.5,
             "y": 957
@@ -4036,10 +3811,7 @@
           {
             "id": "tail",
             "label": "Output Tail\ncleans, truncates, builds outcome",
-            "files": [
-              "packages/vscode/src/output.ts",
-              "packages/core/src/text.ts"
-            ],
+            "files": ["packages/vscode/src/output.ts", "packages/core/src/text.ts"],
             "group": "terminal",
             "x": 1182,
             "y": 1112
@@ -4047,10 +3819,7 @@
           {
             "id": "render",
             "label": "Report Renderer\nformats run result for agent",
-            "files": [
-              "packages/relay/src/render.ts",
-              "packages/protocol/src/schemas.ts"
-            ],
+            "files": ["packages/relay/src/render.ts", "packages/protocol/src/schemas.ts"],
             "group": "entry",
             "x": 26,
             "y": 362
@@ -4086,6 +3855,11 @@
             "from": "panel",
             "to": "ctrl",
             "label": "run decision and remember flag"
+          },
+          {
+            "from": "panel",
+            "to": "editor",
+            "label": "show terminal by command ID"
           },
           {
             "from": "editor",
@@ -4145,7 +3919,7 @@
       "type": "dataflow",
       "origin": "llm",
       "generation": {
-        "focus": "Session Persistence and Outside Changes — Controller state and panel history are saved to workspace storage and revived suspended after a reload or relay disconnect until `start` resumes it, while a file watcher groups on-disk changes made outside the protocol and marks them in the explorer and panel history."
+        "focus": "Session Persistence and Outside Changes \u2014 Controller state and panel history are saved to workspace storage and revived suspended after a reload or relay disconnect until `start` resumes it, while a file watcher groups on-disk changes made outside the protocol and marks them in the explorer and panel history."
       },
       "doc": {
         "type": "dataflow",
@@ -4153,10 +3927,7 @@
           {
             "id": "relay",
             "label": "Agent Relay Connection\nsends start; socket close",
-            "files": [
-              "packages/core/src/bridge.ts",
-              "packages/relay/src/link.ts"
-            ],
+            "files": ["packages/core/src/bridge.ts", "packages/relay/src/link.ts"],
             "group": "sources",
             "x": 201.5,
             "y": 26
@@ -4164,9 +3935,7 @@
           {
             "id": "fsevents",
             "label": "VS Code File Events\ndisk writes, saves, focus",
-            "files": [
-              "packages/vscode/src/outside_watch.ts"
-            ],
+            "files": ["packages/vscode/src/outside_watch.ts"],
             "group": "sources",
             "x": 778.5,
             "y": 26
@@ -4174,9 +3943,7 @@
           {
             "id": "bridge",
             "label": "Bridge\nroutes start, detects disconnect",
-            "files": [
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/core/src/bridge.ts"],
             "group": "processing",
             "x": 219.5,
             "y": 233
@@ -4184,9 +3951,7 @@
           {
             "id": "watcher",
             "label": "Outside Watcher\nfilters events, reads disk text",
-            "files": [
-              "packages/vscode/src/outside_watch.ts"
-            ],
+            "files": ["packages/vscode/src/outside_watch.ts"],
             "group": "processing",
             "x": 778.5,
             "y": 233
@@ -4194,10 +3959,7 @@
           {
             "id": "tracker",
             "label": "Outside Change Tracker\ngroups writes, marks differing files",
-            "files": [
-              "packages/vscode/src/outside.ts",
-              "packages/vscode/src/timings.ts"
-            ],
+            "files": ["packages/vscode/src/outside.ts", "packages/vscode/src/timings.ts"],
             "group": "processing",
             "x": 778.5,
             "y": 388
@@ -4205,9 +3967,7 @@
           {
             "id": "controller",
             "label": "Session Controller\nholds session; suspends, revives, resumes",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "group": "processing",
             "x": 201.5,
             "y": 388
@@ -4215,10 +3975,7 @@
           {
             "id": "panel",
             "label": "Narration Panel\nkeeps capped history log",
-            "files": [
-              "packages/vscode/src/panel.ts",
-              "packages/core/src/ports.ts"
-            ],
+            "files": ["packages/vscode/src/panel.ts", "packages/core/src/ports.ts"],
             "group": "processing",
             "x": 552.5,
             "y": 569
@@ -4226,10 +3983,7 @@
           {
             "id": "ext",
             "label": "Extension Host\ndebounced save, restore on activate",
-            "files": [
-              "packages/vscode/src/extension.ts",
-              "packages/vscode/src/timings.ts"
-            ],
+            "files": ["packages/vscode/src/extension.ts", "packages/vscode/src/timings.ts"],
             "group": "processing",
             "x": 201.5,
             "y": 750
@@ -4237,9 +3991,7 @@
           {
             "id": "storage",
             "label": "Workspace Storage\nsaved session and history",
-            "files": [
-              "packages/vscode/src/extension.ts"
-            ],
+            "files": ["packages/vscode/src/extension.ts"],
             "group": "stores",
             "x": 203.5,
             "y": 957
@@ -4247,9 +3999,7 @@
           {
             "id": "badge",
             "label": "Explorer Badge\nmarks files changed outside",
-            "files": [
-              "packages/vscode/src/outside_watch.ts"
-            ],
+            "files": ["packages/vscode/src/outside_watch.ts"],
             "group": "outputs",
             "x": 1297,
             "y": 569
@@ -4344,7 +4094,7 @@
       "type": "dataflow",
       "origin": "llm",
       "generation": {
-        "focus": "Reading Speed Calibration — The programmer's command or the agent's `calibrate` tool (passage file read by the bridge) arms the Calibration state machine, which pauses playback, times the programmer reading a passage via panel replies, and stores the resulting ms-per-char in settings for the Player's say pauses."
+        "focus": "Reading Speed Calibration \u2014 The programmer's command or the agent's `calibrate` tool (passage file read by the bridge) arms the Calibration state machine, which pauses playback, times the programmer reading a passage via panel replies, and stores the resulting ms-per-char in settings for the Player's say pauses."
       },
       "doc": {
         "type": "dataflow",
@@ -4352,9 +4102,7 @@
           {
             "id": "cmd",
             "label": "Calibrate Command\nprogrammer's palette command",
-            "files": [
-              "packages/vscode/src/extension.ts"
-            ],
+            "files": ["packages/vscode/src/extension.ts"],
             "group": "triggers",
             "x": 436,
             "y": 26
@@ -4362,10 +4110,7 @@
           {
             "id": "tool",
             "label": "Calibrate Tool\nagent MCP call, passage file",
-            "files": [
-              "packages/relay/src/server.ts",
-              "packages/relay/src/tools.ts"
-            ],
+            "files": ["packages/relay/src/server.ts", "packages/relay/src/tools.ts"],
             "group": "triggers",
             "x": 28,
             "y": 26
@@ -4373,9 +4118,7 @@
           {
             "id": "link",
             "label": "Relay Editor Link\nforwards calls over WebSocket",
-            "files": [
-              "packages/relay/src/link.ts"
-            ],
+            "files": ["packages/relay/src/link.ts"],
             "group": "triggers",
             "x": 26,
             "y": 207
@@ -4383,9 +4126,7 @@
           {
             "id": "bridge",
             "label": "Bridge\nreads passage file, dispatches",
-            "files": [
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/core/src/bridge.ts"],
             "group": "calibration",
             "x": 888,
             "y": 414
@@ -4393,9 +4134,7 @@
           {
             "id": "ctrl",
             "label": "Controller\nresolves path, pause and resume",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "group": "calibration",
             "x": 1068.5,
             "y": 595
@@ -4403,10 +4142,7 @@
           {
             "id": "calib",
             "label": "Calibration State Machine\narms, times reading, computes rate",
-            "files": [
-              "packages/vscode/src/calibration.ts",
-              "packages/core/src/typing.ts"
-            ],
+            "files": ["packages/vscode/src/calibration.ts", "packages/core/src/typing.ts"],
             "group": "calibration",
             "x": 1598,
             "y": 414
@@ -4414,11 +4150,7 @@
           {
             "id": "panel",
             "label": "Narration Panel\nshows passage, relays replies",
-            "files": [
-              "packages/vscode/src/panel.ts",
-              "packages/vscode/src/webview/panel.ts",
-              "packages/vscode/src/panel_messages.ts"
-            ],
+            "files": ["packages/vscode/src/panel.ts", "packages/vscode/src/webview/panel.ts", "packages/vscode/src/panel_messages.ts"],
             "group": "ui",
             "x": 2210,
             "y": 595
@@ -4426,10 +4158,7 @@
           {
             "id": "wiring",
             "label": "Extension Wiring\nsupplies passage, stores rate",
-            "files": [
-              "packages/vscode/src/extension.ts",
-              "packages/vscode/src/passage.ts"
-            ],
+            "files": ["packages/vscode/src/extension.ts", "packages/vscode/src/passage.ts"],
             "group": "calibration",
             "x": 1608,
             "y": 207
@@ -4437,10 +4166,7 @@
           {
             "id": "settings",
             "label": "Timing Settings\naiPair.timing reading rate",
-            "files": [
-              "packages/vscode/src/extension.ts",
-              "packages/core/src/timing.ts"
-            ],
+            "files": ["packages/vscode/src/extension.ts", "packages/core/src/timing.ts"],
             "group": "storage",
             "x": 2662,
             "y": 414
@@ -4448,10 +4174,7 @@
           {
             "id": "player",
             "label": "Player\npauses after each say",
-            "files": [
-              "packages/core/src/player.ts",
-              "packages/core/src/timing.ts"
-            ],
+            "files": ["packages/core/src/player.ts", "packages/core/src/timing.ts"],
             "group": "storage",
             "x": 2718,
             "y": 595
@@ -4546,7 +4269,7 @@
       "type": "state",
       "origin": "llm",
       "generation": {
-        "focus": "Pairing Session Lifecycle — Controller session moves from none to active, suspended (agent disconnect or window reload), resumed via start, and ended by the agent or programmer, with turn switching between agent and programmer (navigator)."
+        "focus": "Pairing Session Lifecycle \u2014 Controller session moves from none to active, suspended (agent disconnect or window reload), resumed via start, and ended by the agent or programmer, with turn switching between agent and programmer (navigator)."
       },
       "doc": {
         "type": "state",
@@ -4554,9 +4277,7 @@
           {
             "id": "none",
             "label": "No Session",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "x": 1860,
             "y": 16,
             "step": 1
@@ -4564,10 +4285,7 @@
           {
             "id": "agentTurn",
             "label": "Active (Agent Turn)",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/core/src/ports.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/core/src/ports.ts"],
             "x": 1308.5,
             "y": 151,
             "step": 2
@@ -4575,11 +4293,7 @@
           {
             "id": "navigator",
             "label": "Active (Programmer Turn, Agent Navigator)",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/relay/src/render.ts",
-              "packages/core/src/ports.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/relay/src/render.ts", "packages/core/src/ports.ts"],
             "x": 516,
             "y": 286,
             "step": 3
@@ -4587,11 +4301,7 @@
           {
             "id": "suspended",
             "label": "Suspended",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/relay/src/link.ts",
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/relay/src/link.ts", "packages/core/src/bridge.ts"],
             "x": 1036,
             "y": 556,
             "step": 4
@@ -4599,9 +4309,7 @@
           {
             "id": "ending",
             "label": "Ending (Final Report Pending)",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "x": 873.5,
             "y": 421,
             "step": 5
@@ -4609,9 +4317,7 @@
           {
             "id": "closed",
             "label": "Closed",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "x": 1049.5,
             "y": 691,
             "step": 6
@@ -5144,7 +4850,7 @@
       "type": "state",
       "origin": "llm",
       "generation": {
-        "focus": "Batch Queue and Playback — Each batch is rehearsed, then queued, playing, and done as completed, interrupted, failed or discarded, with stale/anchor-needed flags gating the next batch and calls (step/listen/end) blocking until a report is ready."
+        "focus": "Batch Queue and Playback \u2014 Each batch is rehearsed, then queued, playing, and done as completed, interrupted, failed or discarded, with stale/anchor-needed flags gating the next batch and calls (step/listen/end) blocking until a report is ready."
       },
       "doc": {
         "type": "state",
@@ -5152,116 +4858,84 @@
           {
             "id": "rehearsing",
             "label": "Rehearsing",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/core/src/rehearsal.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/core/src/rehearsal.ts"],
             "x": 1552.5,
             "y": 0
           },
           {
             "id": "rejected",
             "label": "Rejected (not queued)",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/core/src/rehearsal.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/core/src/rehearsal.ts"],
             "x": 7,
             "y": 983
           },
           {
             "id": "queued",
             "label": "Queued",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "x": 865,
             "y": 135
           },
           {
             "id": "playing",
             "label": "Playing",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/core/src/player.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/core/src/player.ts"],
             "x": 517.5,
             "y": 270
           },
           {
             "id": "completed",
             "label": "Done: Completed",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/core/src/player.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/core/src/player.ts"],
             "x": 270,
             "y": 829
           },
           {
             "id": "interrupted",
             "label": "Done: Interrupted",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/core/src/player.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/core/src/player.ts"],
             "x": 445,
             "y": 424
           },
           {
             "id": "failed",
             "label": "Done: Failed",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/core/src/player.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/core/src/player.ts"],
             "x": 1045.5,
             "y": 424
           },
           {
             "id": "discarded",
             "label": "Done: Discarded",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/core/src/player.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/core/src/player.ts"],
             "x": 874.5,
             "y": 694
           },
           {
             "id": "stale",
             "label": "Stale (new batches discarded)",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "x": 908,
             "y": 559
           },
           {
             "id": "anchorneeded",
             "label": "Anchor Needed",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "x": 1088,
             "y": 829
           },
           {
             "id": "blocked",
             "label": "Call Blocked (step/listen/end)",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "x": 239,
             "y": 983
           },
           {
             "id": "reported",
             "label": "Reported",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/relay/src/render.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/relay/src/render.ts"],
             "x": 136,
             "y": 1118
           }
@@ -5388,7 +5062,7 @@
       "type": "state",
       "origin": "llm",
       "generation": {
-        "focus": "Agent Status and Pause — The agent's displayed state (typing, read, running, thinking, listening, absent, paused, navigator) derived from queue, pause reasons, listen grace and quiet timers."
+        "focus": "Agent Status and Pause \u2014 The agent's displayed state (typing, read, running, thinking, listening, absent, paused, navigator) derived from queue, pause reasons, listen grace and quiet timers."
       },
       "doc": {
         "type": "state",
@@ -5396,85 +5070,56 @@
           {
             "id": "navigator",
             "label": "Navigator",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/core/src/ports.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/core/src/ports.ts"],
             "x": 1478,
             "y": 0
           },
           {
             "id": "paused",
             "label": "Paused",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/core/src/ports.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/core/src/ports.ts"],
             "x": 624,
             "y": 559
           },
           {
             "id": "typing",
             "label": "Typing",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/core/src/player.ts",
-              "packages/core/src/ports.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/core/src/player.ts", "packages/core/src/ports.ts"],
             "x": 1657.5,
             "y": 694
           },
           {
             "id": "read",
             "label": "Read",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/core/src/player.ts",
-              "packages/core/src/ports.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/core/src/player.ts", "packages/core/src/ports.ts"],
             "x": 1471.5,
             "y": 848
           },
           {
             "id": "running",
             "label": "Running",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/core/src/player.ts",
-              "packages/core/src/ports.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/core/src/player.ts", "packages/core/src/ports.ts"],
             "x": 1867.5,
             "y": 848
           },
           {
             "id": "listening",
             "label": "Listening",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/core/src/config.ts",
-              "packages/core/src/ports.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/core/src/config.ts", "packages/core/src/ports.ts"],
             "x": 900,
             "y": 424
           },
           {
             "id": "thinking",
             "label": "Thinking",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/core/src/ports.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/core/src/ports.ts"],
             "x": 871,
             "y": 135
           },
           {
             "id": "absent",
             "label": "Absent",
-            "files": [
-              "packages/core/src/controller.ts",
-              "packages/core/src/config.ts",
-              "packages/core/src/ports.ts"
-            ],
+            "files": ["packages/core/src/controller.ts", "packages/core/src/config.ts", "packages/core/src/ports.ts"],
             "x": 1295,
             "y": 289
           }
@@ -5606,7 +5251,7 @@
       "type": "state",
       "origin": "llm",
       "generation": {
-        "focus": "Run Command Confirmation — A run action saves files, optionally waits for the programmer's confirm, runs in a terminal, and ends as done, background, exited, or declined."
+        "focus": "Run Command Confirmation \u2014 A run action saves files, optionally waits for the programmer's confirm, runs in a terminal, and ends as done, background, exited, or declined."
       },
       "doc": {
         "type": "state",
@@ -5614,19 +5259,14 @@
           {
             "id": "queued",
             "label": "Run Queued",
-            "files": [
-              "packages/core/src/player.ts"
-            ],
+            "files": ["packages/core/src/player.ts"],
             "x": 215,
             "y": 0
           },
           {
             "id": "saving",
             "label": "Saving Files",
-            "files": [
-              "packages/core/src/player.ts",
-              "packages/vscode/src/editor.ts"
-            ],
+            "files": ["packages/core/src/player.ts", "packages/vscode/src/editor.ts"],
             "x": 215,
             "y": 135
           },
@@ -5645,64 +5285,42 @@
           {
             "id": "declined",
             "label": "Declined",
-            "files": [
-              "packages/core/src/player.ts",
-              "packages/core/src/controller.ts",
-              "packages/core/src/ports.ts"
-            ],
+            "files": ["packages/core/src/player.ts", "packages/core/src/controller.ts", "packages/core/src/ports.ts"],
             "x": 70,
             "y": 559
           },
           {
             "id": "running",
             "label": "Running in Terminal",
-            "files": [
-              "packages/core/src/player.ts",
-              "packages/vscode/src/terminal.ts",
-              "packages/vscode/src/editor.ts"
-            ],
+            "files": ["packages/core/src/player.ts", "packages/vscode/src/terminal.ts", "packages/vscode/src/editor.ts"],
             "x": 619,
             "y": 424
           },
           {
             "id": "done",
             "label": "Done",
-            "files": [
-              "packages/core/src/player.ts",
-              "packages/vscode/src/output.ts",
-              "packages/core/src/ports.ts"
-            ],
+            "files": ["packages/core/src/player.ts", "packages/vscode/src/output.ts", "packages/core/src/ports.ts"],
             "x": 574.5,
             "y": 559
           },
           {
             "id": "background",
             "label": "Background",
-            "files": [
-              "packages/core/src/player.ts",
-              "packages/vscode/src/output.ts",
-              "packages/vscode/src/terminal.ts"
-            ],
+            "files": ["packages/core/src/player.ts", "packages/vscode/src/output.ts", "packages/vscode/src/terminal.ts"],
             "x": 864.5,
             "y": 559
           },
           {
             "id": "exited",
             "label": "Exited",
-            "files": [
-              "packages/core/src/player.ts",
-              "packages/vscode/src/terminal.ts",
-              "packages/core/src/ports.ts"
-            ],
+            "files": ["packages/core/src/player.ts", "packages/vscode/src/terminal.ts", "packages/core/src/ports.ts"],
             "x": 864.5,
             "y": 694
           },
           {
             "id": "saveFailed",
             "label": "Save Failed",
-            "files": [
-              "packages/core/src/player.ts"
-            ],
+            "files": ["packages/core/src/player.ts"],
             "x": 360,
             "y": 289
           }
@@ -5769,7 +5387,7 @@
       "type": "state",
       "origin": "llm",
       "generation": {
-        "focus": "Reading Speed Calibration — Calibration moves idle, armed, reading, storing and back to idle, holding playback with the calibrate pause until the stored rate reaches the player."
+        "focus": "Reading Speed Calibration \u2014 Calibration moves idle, armed, reading, storing and back to idle, holding playback with the calibrate pause until the stored rate reaches the player."
       },
       "doc": {
         "type": "state",
@@ -5777,37 +5395,28 @@
           {
             "id": "idle",
             "label": "Idle",
-            "files": [
-              "packages/vscode/src/calibration.ts"
-            ],
+            "files": ["packages/vscode/src/calibration.ts"],
             "x": 600.5,
             "y": 0
           },
           {
             "id": "armed",
             "label": "Armed (passage announced, playback held)",
-            "files": [
-              "packages/vscode/src/calibration.ts"
-            ],
+            "files": ["packages/vscode/src/calibration.ts"],
             "x": 158,
             "y": 154
           },
           {
             "id": "reading",
             "label": "Reading (passage shown, clock running)",
-            "files": [
-              "packages/vscode/src/calibration.ts"
-            ],
+            "files": ["packages/vscode/src/calibration.ts"],
             "x": 346.5,
             "y": 308
           },
           {
             "id": "storing",
             "label": "Storing (rate being written, pause held)",
-            "files": [
-              "packages/vscode/src/calibration.ts",
-              "packages/vscode/src/extension.ts"
-            ],
+            "files": ["packages/vscode/src/calibration.ts", "packages/vscode/src/extension.ts"],
             "x": 435.5,
             "y": 443
           }
@@ -5854,7 +5463,7 @@
       "type": "state",
       "origin": "llm",
       "generation": {
-        "focus": "Relay Editor Connection — The relay's EditorLink discovers windows, opens a WebSocket, passes hello/welcome authentication, sends calls, handles cancel and handed-back reports, and closes or reconnects."
+        "focus": "Relay Editor Connection \u2014 The relay's EditorLink discovers windows, opens a WebSocket, passes hello/welcome authentication, sends calls, handles cancel and handed-back reports, and closes or reconnects."
       },
       "doc": {
         "type": "state",
@@ -5862,98 +5471,70 @@
           {
             "id": "idle",
             "label": "Disconnected (no socket)",
-            "files": [
-              "packages/relay/src/link.ts"
-            ],
+            "files": ["packages/relay/src/link.ts"],
             "x": 626,
             "y": 0
           },
           {
             "id": "located",
             "label": "Window Located",
-            "files": [
-              "packages/relay/src/link.ts",
-              "packages/relay/src/server.ts"
-            ],
+            "files": ["packages/relay/src/link.ts", "packages/relay/src/server.ts"],
             "x": 70.5,
             "y": 154
           },
           {
             "id": "connecting",
             "label": "Connecting (one attempt)",
-            "files": [
-              "packages/relay/src/link.ts"
-            ],
+            "files": ["packages/relay/src/link.ts"],
             "x": 1319,
             "y": 154
           },
           {
             "id": "handshaking",
             "label": "Hello Sent (awaiting welcome)",
-            "files": [
-              "packages/relay/src/link.ts",
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/relay/src/link.ts", "packages/core/src/bridge.ts"],
             "x": 1299,
             "y": 308
           },
           {
             "id": "ready",
             "label": "Welcomed / Open",
-            "files": [
-              "packages/relay/src/link.ts",
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/relay/src/link.ts", "packages/core/src/bridge.ts"],
             "x": 1346,
             "y": 462
           },
           {
             "id": "calling",
             "label": "Call In Flight",
-            "files": [
-              "packages/relay/src/link.ts",
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/relay/src/link.ts", "packages/core/src/bridge.ts"],
             "x": 341,
             "y": 597
           },
           {
             "id": "cancelling",
             "label": "Call Cancelled (awaiting answer)",
-            "files": [
-              "packages/relay/src/link.ts",
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/relay/src/link.ts", "packages/core/src/bridge.ts"],
             "x": 1193.5,
             "y": 732
           },
           {
             "id": "handedback",
             "label": "Report Handed Back",
-            "files": [
-              "packages/relay/src/link.ts",
-              "packages/relay/src/server.ts",
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/relay/src/link.ts", "packages/relay/src/server.ts", "packages/core/src/bridge.ts"],
             "x": 1333.5,
             "y": 597
           },
           {
             "id": "failed",
             "label": "Connection Failed",
-            "files": [
-              "packages/relay/src/link.ts"
-            ],
+            "files": ["packages/relay/src/link.ts"],
             "x": 816,
             "y": 462
           },
           {
             "id": "closed",
             "label": "Link Closed",
-            "files": [
-              "packages/relay/src/link.ts",
-              "packages/relay/src/server.ts"
-            ],
+            "files": ["packages/relay/src/link.ts", "packages/relay/src/server.ts"],
             "x": 1808.5,
             "y": 597
           }
@@ -6065,7 +5646,7 @@
       "type": "sequence",
       "origin": "llm",
       "generation": {
-        "focus": "Session Start and Discovery — The agent's start tool makes the relay locate the matching VS Code window via discovery files, open an authenticated WebSocket (hello/welcome), read project guides, and have the Bridge start or resume a Controller session."
+        "focus": "Session Start and Discovery \u2014 The agent's start tool makes the relay locate the matching VS Code window via discovery files, open an authenticated WebSocket (hello/welcome), read project guides, and have the Bridge start or resume a Controller session."
       },
       "doc": {
         "type": "sequence",
@@ -6073,68 +5654,49 @@
           {
             "id": "agent",
             "label": "Agent (MCP client)",
-            "files": [
-              "packages/relay/src/main.ts"
-            ],
+            "files": ["packages/relay/src/main.ts"],
             "x": 160,
             "y": 20
           },
           {
             "id": "server",
             "label": "Relay MCP Server",
-            "files": [
-              "packages/relay/src/server.ts",
-              "packages/relay/src/tools.ts",
-              "packages/relay/src/render.ts"
-            ],
+            "files": ["packages/relay/src/server.ts", "packages/relay/src/tools.ts", "packages/relay/src/render.ts"],
             "x": 556,
             "y": 20
           },
           {
             "id": "link",
             "label": "Editor Link",
-            "files": [
-              "packages/relay/src/link.ts",
-              "packages/relay/src/timings.ts"
-            ],
+            "files": ["packages/relay/src/link.ts", "packages/relay/src/timings.ts"],
             "x": 973,
             "y": 20
           },
           {
             "id": "disc",
             "label": "Discovery Files",
-            "files": [
-              "packages/protocol/src/wire.ts",
-              "packages/protocol/src/schemas.ts"
-            ],
+            "files": ["packages/protocol/src/wire.ts", "packages/protocol/src/schemas.ts"],
             "x": 1544,
             "y": 20
           },
           {
             "id": "guides",
             "label": "Project Guides",
-            "files": [
-              "packages/relay/src/guide.ts"
-            ],
+            "files": ["packages/relay/src/guide.ts"],
             "x": 1804,
             "y": 20
           },
           {
             "id": "bridge",
             "label": "Bridge (VS Code window)",
-            "files": [
-              "packages/core/src/bridge.ts",
-              "packages/vscode/src/extension.ts"
-            ],
+            "files": ["packages/core/src/bridge.ts", "packages/vscode/src/extension.ts"],
             "x": 2064,
             "y": 20
           },
           {
             "id": "ctrl",
             "label": "Controller",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "x": 2565,
             "y": 20
           }
@@ -6231,7 +5793,7 @@
       "type": "sequence",
       "origin": "llm",
       "generation": {
-        "focus": "Batch Rehearsal and Playback — A step call is rehearsed in memory, queued, played by the Player at human pace in the editor (typing, moves, say, point), then reported back to the agent in a pipelined step result."
+        "focus": "Batch Rehearsal and Playback \u2014 A step call is rehearsed in memory, queued, played by the Player at human pace in the editor (typing, moves, say, point), then reported back to the agent in a pipelined step result."
       },
       "doc": {
         "type": "sequence",
@@ -6258,56 +5820,42 @@
           {
             "id": "bridge",
             "label": "Editor Bridge",
-            "files": [
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/core/src/bridge.ts"],
             "x": 680,
             "y": 20
           },
           {
             "id": "ctrl",
             "label": "Controller (batch queue)",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "x": 1083,
             "y": 20
           },
           {
             "id": "rehearsal",
             "label": "Rehearsal (in-memory)",
-            "files": [
-              "packages/core/src/rehearsal.ts"
-            ],
+            "files": ["packages/core/src/rehearsal.ts"],
             "x": 1493,
             "y": 20
           },
           {
             "id": "player",
             "label": "Player",
-            "files": [
-              "packages/core/src/player.ts",
-              "packages/core/src/typing.ts",
-              "packages/core/src/timeline.ts"
-            ],
+            "files": ["packages/core/src/player.ts", "packages/core/src/typing.ts", "packages/core/src/timeline.ts"],
             "x": 1959,
             "y": 20
           },
           {
             "id": "editor",
             "label": "VS Code Editor",
-            "files": [
-              "packages/vscode/src/editor.ts"
-            ],
+            "files": ["packages/vscode/src/editor.ts"],
             "x": 2390,
             "y": 20
           },
           {
             "id": "panel",
             "label": "Narration Panel",
-            "files": [
-              "packages/vscode/src/panel.ts"
-            ],
+            "files": ["packages/vscode/src/panel.ts"],
             "x": 2650,
             "y": 20
           }
@@ -6399,7 +5947,7 @@
       "type": "sequence",
       "origin": "llm",
       "generation": {
-        "focus": "Programmer Interruption and Listen — Programmer messages, edits, interrupts, pauses and turn changes in the panel or editor discard queued batches and wake the agent's blocked listen call with an event report."
+        "focus": "Programmer Interruption and Listen \u2014 Programmer messages, edits, interrupts, pauses and turn changes in the panel or editor discard queued batches and wake the agent's blocked listen call with an event report."
       },
       "doc": {
         "type": "sequence",
@@ -6414,68 +5962,49 @@
           {
             "id": "panel",
             "label": "Narration Panel",
-            "files": [
-              "packages/vscode/src/panel.ts",
-              "packages/vscode/src/panel_messages.ts",
-              "packages/vscode/src/webview/panel.ts"
-            ],
+            "files": ["packages/vscode/src/panel.ts", "packages/vscode/src/panel_messages.ts", "packages/vscode/src/webview/panel.ts"],
             "x": 563,
             "y": 20
           },
           {
             "id": "editor",
             "label": "VS Code Editor Adapter",
-            "files": [
-              "packages/vscode/src/editor.ts",
-              "packages/vscode/src/extension.ts"
-            ],
+            "files": ["packages/vscode/src/editor.ts", "packages/vscode/src/extension.ts"],
             "x": 823,
             "y": 20
           },
           {
             "id": "controller",
             "label": "Session Controller",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "x": 1303,
             "y": 20
           },
           {
             "id": "timeline",
             "label": "Playback Timeline",
-            "files": [
-              "packages/core/src/timeline.ts"
-            ],
+            "files": ["packages/core/src/timeline.ts"],
             "x": 1643,
             "y": 20
           },
           {
             "id": "bridge",
             "label": "Bridge",
-            "files": [
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/core/src/bridge.ts"],
             "x": 1903,
             "y": 20
           },
           {
             "id": "relay",
             "label": "Relay (MCP server)",
-            "files": [
-              "packages/relay/src/server.ts",
-              "packages/relay/src/link.ts",
-              "packages/relay/src/render.ts"
-            ],
+            "files": ["packages/relay/src/server.ts", "packages/relay/src/link.ts", "packages/relay/src/render.ts"],
             "x": 2201,
             "y": 20
           },
           {
             "id": "agent",
             "label": "Agent",
-            "files": [
-              "packages/relay/src/tools.ts"
-            ],
+            "files": ["packages/relay/src/tools.ts"],
             "x": 2590,
             "y": 20
           }
@@ -6557,7 +6086,7 @@
       "type": "sequence",
       "origin": "llm",
       "generation": {
-        "focus": "Run Command with Confirmation — A run action saves edited files, asks the programmer to allow it in the panel, executes it in a shell-integrated terminal, and returns output and exit code in the batch report."
+        "focus": "Run Command with Confirmation \u2014 A run action saves edited files, asks the programmer to allow it in the panel, executes it in a shell-integrated terminal, and returns output and exit code in the batch report."
       },
       "doc": {
         "type": "sequence",
@@ -6565,67 +6094,49 @@
           {
             "id": "agent",
             "label": "Agent (via Relay)",
-            "files": [
-              "packages/relay/src/server.ts",
-              "packages/relay/src/link.ts"
-            ],
+            "files": ["packages/relay/src/server.ts", "packages/relay/src/link.ts"],
             "x": 160,
             "y": 20
           },
           {
             "id": "bridge",
             "label": "Editor Bridge",
-            "files": [
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/core/src/bridge.ts"],
             "x": 570,
             "y": 20
           },
           {
             "id": "ctrl",
             "label": "Controller",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "x": 830,
             "y": 20
           },
           {
             "id": "player",
             "label": "Player",
-            "files": [
-              "packages/core/src/player.ts"
-            ],
+            "files": ["packages/core/src/player.ts"],
             "x": 1184,
             "y": 20
           },
           {
             "id": "panel",
             "label": "Narration Panel",
-            "files": [
-              "packages/vscode/src/panel.ts",
-              "packages/vscode/src/webview/panel.ts",
-              "packages/vscode/src/panel_messages.ts"
-            ],
+            "files": ["packages/vscode/src/panel.ts", "packages/vscode/src/webview/panel.ts", "packages/vscode/src/panel_messages.ts"],
             "x": 1496,
             "y": 20
           },
           {
             "id": "editor",
             "label": "VS Code Editor",
-            "files": [
-              "packages/vscode/src/editor.ts"
-            ],
+            "files": ["packages/vscode/src/editor.ts"],
             "x": 1756,
             "y": 20
           },
           {
             "id": "term",
             "label": "Pair Terminals",
-            "files": [
-              "packages/vscode/src/terminal.ts",
-              "packages/vscode/src/output.ts"
-            ],
+            "files": ["packages/vscode/src/terminal.ts", "packages/vscode/src/output.ts"],
             "x": 2040,
             "y": 20
           }
@@ -6722,7 +6233,7 @@
       "type": "sequence",
       "origin": "llm",
       "generation": {
-        "focus": "Cancel and Report Hand-Back — A cancelled tool call or an answered-then-cancelled report is returned over the wire to the Controller's restore so it is redelivered, marked as possibly repeated."
+        "focus": "Cancel and Report Hand-Back \u2014 A cancelled tool call or an answered-then-cancelled report is returned over the wire to the Controller's restore so it is redelivered, marked as possibly repeated."
       },
       "doc": {
         "type": "sequence",
@@ -6737,46 +6248,35 @@
           {
             "id": "server",
             "label": "Relay MCP Server",
-            "files": [
-              "packages/relay/src/server.ts"
-            ],
+            "files": ["packages/relay/src/server.ts"],
             "x": 465,
             "y": 20
           },
           {
             "id": "link",
             "label": "Relay Editor Link",
-            "files": [
-              "packages/relay/src/link.ts"
-            ],
+            "files": ["packages/relay/src/link.ts"],
             "x": 770,
             "y": 20
           },
           {
             "id": "proto",
             "label": "Wire Protocol",
-            "files": [
-              "packages/protocol/src/wire.ts",
-              "packages/protocol/src/schemas.ts"
-            ],
+            "files": ["packages/protocol/src/wire.ts", "packages/protocol/src/schemas.ts"],
             "x": 1124,
             "y": 20
           },
           {
             "id": "bridge",
             "label": "Editor Bridge",
-            "files": [
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/core/src/bridge.ts"],
             "x": 1443,
             "y": 20
           },
           {
             "id": "ctrl",
             "label": "Controller",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "x": 1860,
             "y": 20
           }
@@ -6868,7 +6368,7 @@
       "type": "sequence",
       "origin": "llm",
       "generation": {
-        "focus": "Reload Suspend and Resume — Socket close suspends the session, which the window saves to workspace storage and revives after a reload until the agent calls start again to resume."
+        "focus": "Reload Suspend and Resume \u2014 Socket close suspends the session, which the window saves to workspace storage and revives after a reload until the agent calls start again to resume."
       },
       "doc": {
         "type": "sequence",
@@ -6876,46 +6376,35 @@
           {
             "id": "agent",
             "label": "Agent via Relay",
-            "files": [
-              "packages/relay/src/server.ts",
-              "packages/relay/src/link.ts"
-            ],
+            "files": ["packages/relay/src/server.ts", "packages/relay/src/link.ts"],
             "x": 160,
             "y": 20
           },
           {
             "id": "bridge",
             "label": "Editor Bridge",
-            "files": [
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/core/src/bridge.ts"],
             "x": 570,
             "y": 20
           },
           {
             "id": "ctrl",
             "label": "Session Controller",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "x": 938,
             "y": 20
           },
           {
             "id": "panel",
             "label": "Narration Panel",
-            "files": [
-              "packages/vscode/src/panel.ts"
-            ],
+            "files": ["packages/vscode/src/panel.ts"],
             "x": 1327,
             "y": 20
           },
           {
             "id": "ext",
             "label": "Extension Window",
-            "files": [
-              "packages/vscode/src/extension.ts"
-            ],
+            "files": ["packages/vscode/src/extension.ts"],
             "x": 1587,
             "y": 20
           },
@@ -7023,9 +6512,7 @@
           {
             "id": "controller",
             "label": "Controller",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "x": 1774.5,
             "y": 432,
             "members": [
@@ -7042,9 +6529,7 @@
           {
             "id": "player",
             "label": "Player",
-            "files": [
-              "packages/core/src/player.ts"
-            ],
+            "files": ["packages/core/src/player.ts"],
             "x": 1182.5,
             "y": 816,
             "members": [
@@ -7058,9 +6543,7 @@
           {
             "id": "rehearsal",
             "label": "Rehearsal",
-            "files": [
-              "packages/core/src/rehearsal.ts"
-            ],
+            "files": ["packages/core/src/rehearsal.ts"],
             "x": 761.75,
             "y": 669,
             "members": [
@@ -7071,9 +6554,7 @@
           {
             "id": "memoryeditor",
             "label": "MemoryEditor",
-            "files": [
-              "packages/core/src/rehearsal.ts"
-            ],
+            "files": ["packages/core/src/rehearsal.ts"],
             "x": 408,
             "y": 825,
             "members": [
@@ -7086,9 +6567,7 @@
           {
             "id": "timeline",
             "label": "Timeline",
-            "files": [
-              "packages/core/src/timeline.ts"
-            ],
+            "files": ["packages/core/src/timeline.ts"],
             "x": 2227,
             "y": 972,
             "members": [
@@ -7104,9 +6583,7 @@
           {
             "id": "lineids",
             "label": "LineIds",
-            "files": [
-              "packages/core/src/lines.ts"
-            ],
+            "files": ["packages/core/src/lines.ts"],
             "x": 2482,
             "y": 990,
             "members": [
@@ -7120,25 +6597,15 @@
           {
             "id": "config",
             "label": "Config",
-            "files": [
-              "packages/core/src/config.ts",
-              "packages/core/src/timing.ts"
-            ],
+            "files": ["packages/core/src/config.ts", "packages/core/src/timing.ts"],
             "x": 1122.75,
             "y": 660,
-            "members": [
-              "+ maxBlockMs: number",
-              "+ timing: Timing",
-              "+ confirmCommands: boolean",
-              "+ runWaitMs: number"
-            ]
+            "members": ["+ maxBlockMs: number", "+ timing: Timing", "+ confirmCommands: boolean", "+ runWaitMs: number"]
           },
           {
             "id": "editorport",
             "label": "EditorPort",
-            "files": [
-              "packages/core/src/ports.ts"
-            ],
+            "files": ["packages/core/src/ports.ts"],
             "x": 969.25,
             "y": 972,
             "members": [
@@ -7154,21 +6621,15 @@
           {
             "id": "panelport",
             "label": "PanelPort",
-            "files": [
-              "packages/core/src/ports.ts"
-            ],
+            "files": ["packages/core/src/ports.ts"],
             "x": 1358.75,
             "y": 687,
-            "members": [
-              "+ post(event: PanelEvent): void"
-            ]
+            "members": ["+ post(event: PanelEvent): void"]
           },
           {
             "id": "bridge",
             "label": "Bridge",
-            "files": [
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/core/src/bridge.ts"],
             "x": 2895,
             "y": 258,
             "members": [
@@ -7183,10 +6644,7 @@
           {
             "id": "vseditor",
             "label": "VsCodeEditor",
-            "files": [
-              "packages/vscode/src/editor.ts",
-              "packages/vscode/src/view.ts"
-            ],
+            "files": ["packages/vscode/src/editor.ts", "packages/vscode/src/view.ts"],
             "x": 1810,
             "y": 1302,
             "members": [
@@ -7201,17 +6659,10 @@
           {
             "id": "terminals",
             "label": "PairTerminals",
-            "files": [
-              "packages/vscode/src/terminal.ts",
-              "packages/vscode/src/output.ts"
-            ],
+            "files": ["packages/vscode/src/terminal.ts", "packages/vscode/src/output.ts"],
             "x": 1783.5,
             "y": 1476,
-            "members": [
-              "- owned: Owned[]",
-              "+ run(command, options): Promise<CommandOutcome>",
-              "+ dispose(): void"
-            ]
+            "members": ["- owned: Owned[]", "+ run(command, options): Promise<CommandOutcome>", "+ dispose(): void"]
           },
           {
             "id": "panel",
@@ -7236,42 +6687,23 @@
           {
             "id": "calibration",
             "label": "Calibration",
-            "files": [
-              "packages/vscode/src/calibration.ts",
-              "packages/vscode/src/passage.ts"
-            ],
+            "files": ["packages/vscode/src/calibration.ts", "packages/vscode/src/passage.ts"],
             "x": 1397.75,
             "y": 1164,
-            "members": [
-              "+ phase: Phase",
-              "+ arm(passage): boolean",
-              "+ reply(text): boolean",
-              "+ cancel(): void"
-            ]
+            "members": ["+ phase: Phase", "+ arm(passage): boolean", "+ reply(text): boolean", "+ cancel(): void"]
           },
           {
             "id": "outside",
             "label": "OutsideChanges",
-            "files": [
-              "packages/vscode/src/outside.ts",
-              "packages/vscode/src/outside_watch.ts"
-            ],
+            "files": ["packages/vscode/src/outside.ts", "packages/vscode/src/outside_watch.ts"],
             "x": 2744,
             "y": 1164,
-            "members": [
-              "+ saved(file, text): void",
-              "+ reported(file): void",
-              "+ seen(file, text): void",
-              "+ isMarked(file): boolean"
-            ]
+            "members": ["+ saved(file, text): void", "+ reported(file): void", "+ seen(file, text): void", "+ isMarked(file): boolean"]
           },
           {
             "id": "setup",
             "label": "Agent setup",
-            "files": [
-              "packages/vscode/src/setup.ts",
-              "packages/vscode/src/agents.ts"
-            ],
+            "files": ["packages/vscode/src/setup.ts", "packages/vscode/src/agents.ts"],
             "x": 0,
             "y": 285,
             "members": [
@@ -7283,24 +6715,15 @@
           {
             "id": "extension",
             "label": "Extension",
-            "files": [
-              "packages/vscode/src/extension.ts",
-              "packages/vscode/src/demo.ts",
-              "packages/vscode/src/timings.ts"
-            ],
+            "files": ["packages/vscode/src/extension.ts", "packages/vscode/src/demo.ts", "packages/vscode/src/timings.ts"],
             "x": 661.25,
             "y": 129,
-            "members": [
-              "+ activate(context): Api",
-              "+ deactivate(): void"
-            ]
+            "members": ["+ activate(context): Api", "+ deactivate(): void"]
           },
           {
             "id": "editorlink",
             "label": "EditorLink",
-            "files": [
-              "packages/relay/src/link.ts"
-            ],
+            "files": ["packages/relay/src/link.ts"],
             "x": 3033.5,
             "y": 102,
             "members": [
@@ -7324,10 +6747,7 @@
             ],
             "x": 3213,
             "y": 0,
-            "members": [
-              "+ createServer(link, guide, cwd): McpServer",
-              "+ serve(options): Promise<void>"
-            ]
+            "members": ["+ createServer(link, guide, cwd): McpServer", "+ serve(options): Promise<void>"]
           },
           {
             "id": "protocol",
@@ -7352,38 +6772,26 @@
           {
             "id": "toolerror",
             "label": "ToolError",
-            "files": [
-              "packages/protocol/src/index.ts"
-            ],
+            "files": ["packages/protocol/src/index.ts"],
             "x": 1969.75,
             "y": 687,
-            "members": [
-              "+ code: ToolErrorCode"
-            ]
+            "members": ["+ code: ToolErrorCode"]
           },
           {
             "id": "relayerror",
             "label": "RelayError",
-            "files": [
-              "packages/relay/src/link.ts"
-            ],
+            "files": ["packages/relay/src/link.ts"],
             "x": 3124,
             "y": 303,
-            "members": [
-              "+ code: string"
-            ]
+            "members": ["+ code: string"]
           },
           {
             "id": "missingfile",
             "label": "MissingFile",
-            "files": [
-              "packages/core/src/ports.ts"
-            ],
+            "files": ["packages/core/src/ports.ts"],
             "x": 449.75,
             "y": 1026,
-            "members": [
-              "+ file: string"
-            ]
+            "members": ["+ file: string"]
           },
           {
             "id": "places",
@@ -7652,10 +7060,7 @@
           {
             "id": "action",
             "label": "Action",
-            "files": [
-              "packages/protocol/src/schemas.ts",
-              "packages/protocol/src/index.ts"
-            ],
+            "files": ["packages/protocol/src/schemas.ts", "packages/protocol/src/index.ts"],
             "x": 220,
             "y": 666,
             "members": [
@@ -7673,40 +7078,23 @@
           {
             "id": "movetarget",
             "label": "MoveTarget",
-            "files": [
-              "packages/protocol/src/schemas.ts"
-            ],
+            "files": ["packages/protocol/src/schemas.ts"],
             "x": 110,
             "y": 903,
-            "members": [
-              "file: String",
-              "line: int",
-              "at: String",
-              "to: 'line_end'"
-            ]
+            "members": ["file: String", "line: int", "at: String", "to: 'line_end'"]
           },
           {
             "id": "spantarget",
             "label": "SpanTarget",
-            "files": [
-              "packages/protocol/src/schemas.ts"
-            ],
+            "files": ["packages/protocol/src/schemas.ts"],
             "x": 330,
             "y": 894,
-            "members": [
-              "file: String",
-              "line: int",
-              "text: String",
-              "from: String",
-              "through: String"
-            ]
+            "members": ["file: String", "line: int", "text: String", "from: String", "through: String"]
           },
           {
             "id": "batch",
             "label": "BatchResult",
-            "files": [
-              "packages/protocol/src/schemas.ts"
-            ],
+            "files": ["packages/protocol/src/schemas.ts"],
             "x": 636.5,
             "y": 465,
             "members": [
@@ -7722,82 +7110,47 @@
           {
             "id": "batcherror",
             "label": "BatchError",
-            "files": [
-              "packages/protocol/src/schemas.ts"
-            ],
+            "files": ["packages/protocol/src/schemas.ts"],
             "x": 550,
             "y": 720,
-            "members": [
-              "kind: ErrorKind",
-              "message: String",
-              "candidates: Candidate[]"
-            ]
+            "members": ["kind: ErrorKind", "message: String", "candidates: Candidate[]"]
           },
           {
             "id": "candidate",
             "label": "Candidate",
-            "files": [
-              "packages/protocol/src/schemas.ts"
-            ],
+            "files": ["packages/protocol/src/schemas.ts"],
             "x": 550,
             "y": 921,
-            "members": [
-              "line: int",
-              "context: String"
-            ]
+            "members": ["line: int", "context: String"]
           },
           {
             "id": "runresult",
             "label": "RunResult",
-            "files": [
-              "packages/protocol/src/schemas.ts"
-            ],
+            "files": ["packages/protocol/src/schemas.ts"],
             "x": 770,
             "y": 693,
-            "members": [
-              "command: String",
-              "exit_code: int",
-              "output: String",
-              "truncated: bool",
-              "running: bool",
-              "shell: String"
-            ]
+            "members": ["command: String", "exit_code: int", "output: String", "truncated: bool", "running: bool", "shell: String"]
           },
           {
             "id": "code",
             "label": "Code",
-            "files": [
-              "packages/protocol/src/schemas.ts"
-            ],
+            "files": ["packages/protocol/src/schemas.ts"],
             "x": 0,
             "y": 720,
-            "members": [
-              "file: String",
-              "lines: {number, text}[]",
-              "end: {final_newline}"
-            ]
+            "members": ["file: String", "lines: {number, text}[]", "end: {final_newline}"]
           },
           {
             "id": "filecontent",
             "label": "FileContent",
-            "files": [
-              "packages/protocol/src/schemas.ts"
-            ],
+            "files": ["packages/protocol/src/schemas.ts"],
             "x": 51.5,
             "y": 264,
-            "members": [
-              "file: String",
-              "dirty: bool",
-              "lines: {number, text}[]",
-              "end: {final_newline}"
-            ]
+            "members": ["file: String", "dirty: bool", "lines: {number, text}[]", "end: {final_newline}"]
           },
           {
             "id": "report",
             "label": "Report",
-            "files": [
-              "packages/protocol/src/schemas.ts"
-            ],
+            "files": ["packages/protocol/src/schemas.ts"],
             "x": 282.5,
             "y": 210,
             "members": [
@@ -7816,9 +7169,7 @@
           {
             "id": "event",
             "label": "Event",
-            "files": [
-              "packages/protocol/src/schemas.ts"
-            ],
+            "files": ["packages/protocol/src/schemas.ts"],
             "x": 946,
             "y": 456,
             "members": [
@@ -7835,47 +7186,26 @@
           {
             "id": "excerpt",
             "label": "Excerpt",
-            "files": [
-              "packages/protocol/src/schemas.ts",
-              "packages/core/src/ports.ts"
-            ],
+            "files": ["packages/protocol/src/schemas.ts", "packages/core/src/ports.ts"],
             "x": 990,
             "y": 702,
-            "members": [
-              "file: String",
-              "from: LineColumn",
-              "to: LineColumn",
-              "text: String",
-              "truncated: bool"
-            ]
+            "members": ["file: String", "from: LineColumn", "to: LineColumn", "text: String", "truncated: bool"]
           },
           {
             "id": "linecol",
             "label": "LineColumn",
-            "files": [
-              "packages/protocol/src/schemas.ts"
-            ],
+            "files": ["packages/protocol/src/schemas.ts"],
             "x": 990,
             "y": 921,
-            "members": [
-              "line: int",
-              "column: int"
-            ]
+            "members": ["line: int", "column: int"]
           },
           {
             "id": "passage",
             "label": "Passage",
-            "files": [
-              "packages/protocol/src/schemas.ts",
-              "packages/vscode/src/passage.ts"
-            ],
+            "files": ["packages/protocol/src/schemas.ts", "packages/vscode/src/passage.ts"],
             "x": 1356,
             "y": 1060,
-            "members": [
-              "title: String",
-              "text: String",
-              "notice: String"
-            ]
+            "members": ["title: String", "text: String", "notice: String"]
           },
           {
             "id": "discovery",
@@ -7888,22 +7218,12 @@
             ],
             "x": 1120,
             "y": 1060,
-            "members": [
-              "pid: int",
-              "workspaceFolders: String[]",
-              "port: int",
-              "token: String",
-              "protocolVersion: int",
-              "lastFocused: int"
-            ]
+            "members": ["pid: int", "workspaceFolders: String[]", "port: int", "token: String", "protocolVersion: int", "lastFocused: int"]
           },
           {
             "id": "relaymsg",
             "label": "RelayMessage",
-            "files": [
-              "packages/protocol/src/schemas.ts",
-              "packages/protocol/src/wire.ts"
-            ],
+            "files": ["packages/protocol/src/schemas.ts", "packages/protocol/src/wire.ts"],
             "x": 309,
             "y": 0,
             "members": [
@@ -7920,10 +7240,7 @@
           {
             "id": "editormsg",
             "label": "EditorMessage",
-            "files": [
-              "packages/protocol/src/schemas.ts",
-              "packages/protocol/src/wire.ts"
-            ],
+            "files": ["packages/protocol/src/schemas.ts", "packages/protocol/src/wire.ts"],
             "x": 14,
             "y": 18,
             "members": [
@@ -7938,41 +7255,23 @@
           {
             "id": "savedsession",
             "label": "SavedSession",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "x": 1014.25,
             "y": 264,
-            "members": [
-              "task: String",
-              "scene: Scene subset",
-              "finished: BatchResult[]",
-              "events: Event[]"
-            ]
+            "members": ["task: String", "scene: Scene subset", "finished: BatchResult[]", "events: Event[]"]
           },
           {
             "id": "scene",
             "label": "Scene",
-            "files": [
-              "packages/core/src/player.ts",
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/player.ts", "packages/core/src/controller.ts"],
             "x": 1254,
             "y": 483,
-            "members": [
-              "root: String",
-              "turn: Turn",
-              "cursor: {file, offset}",
-              "selection: {start, end}",
-              "allowedCommands: String[]"
-            ]
+            "members": ["root: String", "turn: Turn", "cursor: {file, offset}", "selection: {start, end}", "allowedCommands: String[]"]
           },
           {
             "id": "config",
             "label": "Config",
-            "files": [
-              "packages/core/src/config.ts"
-            ],
+            "files": ["packages/core/src/config.ts"],
             "x": 110,
             "y": 1060,
             "members": [
@@ -7989,9 +7288,7 @@
           {
             "id": "timing",
             "label": "Timing",
-            "files": [
-              "packages/core/src/timing.ts"
-            ],
+            "files": ["packages/core/src/timing.ts"],
             "x": 110,
             "y": 1270,
             "members": [
@@ -8010,40 +7307,23 @@
           {
             "id": "cadence",
             "label": "Cadence",
-            "files": [
-              "packages/core/src/timing.ts"
-            ],
+            "files": ["packages/core/src/timing.ts"],
             "x": 0,
             "y": 1516,
-            "members": [
-              "charMs: int",
-              "jitter: float",
-              "wordStartMs: int",
-              "punctuationMs: int",
-              "openBracketMs: int",
-              "newlineMs: int"
-            ]
+            "members": ["charMs: int", "jitter: float", "wordStartMs: int", "punctuationMs: int", "openBracketMs: int", "newlineMs: int"]
           },
           {
             "id": "reading",
             "label": "Reading",
-            "files": [
-              "packages/core/src/timing.ts"
-            ],
+            "files": ["packages/core/src/timing.ts"],
             "x": 220,
             "y": 1552,
-            "members": [
-              "msPerChar: float",
-              "minMs: int"
-            ]
+            "members": ["msPerChar: float", "minMs: int"]
           },
           {
             "id": "panelevent",
             "label": "PanelEvent",
-            "files": [
-              "packages/core/src/ports.ts",
-              "packages/vscode/src/panel_messages.ts"
-            ],
+            "files": ["packages/core/src/ports.ts", "packages/vscode/src/panel_messages.ts"],
             "x": 440,
             "y": 1060,
             "members": [
@@ -8059,23 +7339,15 @@
           {
             "id": "ref",
             "label": "Ref",
-            "files": [
-              "packages/core/src/ports.ts"
-            ],
+            "files": ["packages/core/src/ports.ts"],
             "x": 560,
             "y": 1288,
-            "members": [
-              "file: String",
-              "line: int",
-              "endLine: int"
-            ]
+            "members": ["file: String", "line: int", "endLine: int"]
           },
           {
             "id": "timings",
             "label": "Timings",
-            "files": [
-              "packages/vscode/src/timings.ts"
-            ],
+            "files": ["packages/vscode/src/timings.ts"],
             "x": 900,
             "y": 1060,
             "members": [
@@ -8091,15 +7363,10 @@
           {
             "id": "agent",
             "label": "Agent",
-            "files": [
-              "packages/vscode/src/agents.ts"
-            ],
+            "files": ["packages/vscode/src/agents.ts"],
             "x": 1576,
             "y": 1060,
-            "members": [
-              "id: String",
-              "label: String"
-            ]
+            "members": ["id: String", "label: String"]
           }
         ],
         "edges": [
@@ -8264,10 +7531,7 @@
           {
             "id": "relay",
             "label": "Relay Process\npair-mcp over stdio",
-            "files": [
-              "packages/relay/src/main.ts",
-              "packages/relay/src/server.ts"
-            ],
+            "files": ["packages/relay/src/main.ts", "packages/relay/src/server.ts"],
             "x": 286.5,
             "y": 191,
             "kind": "process"
@@ -8275,10 +7539,7 @@
           {
             "id": "rloop",
             "label": "Relay Event Loop\nsingle-threaded Node",
-            "files": [
-              "packages/relay/src/server.ts",
-              "packages/relay/src/link.ts"
-            ],
+            "files": ["packages/relay/src/server.ts", "packages/relay/src/link.ts"],
             "x": 270.5,
             "y": 366,
             "kind": "loop"
@@ -8286,11 +7547,7 @@
           {
             "id": "mcp",
             "label": "MCP Tool Handlers\nforward calls, track cancels",
-            "files": [
-              "packages/relay/src/server.ts",
-              "packages/relay/src/tools.ts",
-              "packages/relay/src/render.ts"
-            ],
+            "files": ["packages/relay/src/server.ts", "packages/relay/src/tools.ts", "packages/relay/src/render.ts"],
             "group": "rloop",
             "x": 244.5,
             "y": 567,
@@ -8299,9 +7556,7 @@
           {
             "id": "link",
             "label": "Editor Link\nWebSocket client, call matching",
-            "files": [
-              "packages/relay/src/link.ts"
-            ],
+            "files": ["packages/relay/src/link.ts"],
             "group": "rloop",
             "x": 246.5,
             "y": 768,
@@ -8310,10 +7565,7 @@
           {
             "id": "ws",
             "label": "Localhost WebSocket\nframes, discovery file, token",
-            "files": [
-              "packages/protocol/src/wire.ts",
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/protocol/src/wire.ts", "packages/core/src/bridge.ts"],
             "x": 244.5,
             "y": 969,
             "kind": "resource"
@@ -8321,9 +7573,7 @@
           {
             "id": "eloop",
             "label": "Extension Host Loop\nsingle-threaded Node",
-            "files": [
-              "packages/vscode/src/extension.ts"
-            ],
+            "files": ["packages/vscode/src/extension.ts"],
             "x": 897.5,
             "y": 567,
             "kind": "loop"
@@ -8331,9 +7581,7 @@
           {
             "id": "bridge",
             "label": "Bridge\nWebSocket server, dispatch",
-            "files": [
-              "packages/core/src/bridge.ts"
-            ],
+            "files": ["packages/core/src/bridge.ts"],
             "group": "eloop",
             "x": 925.5,
             "y": 768,
@@ -8342,9 +7590,7 @@
           {
             "id": "ctrl",
             "label": "Controller\nserialised calls, session state",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "group": "eloop",
             "x": 978.5,
             "y": 969,
@@ -8353,9 +7599,7 @@
           {
             "id": "queue",
             "label": "Batch Queue\nqueued batches and events",
-            "files": [
-              "packages/core/src/controller.ts"
-            ],
+            "files": ["packages/core/src/controller.ts"],
             "x": 16,
             "y": 1319,
             "kind": "resource"
@@ -8363,10 +7607,7 @@
           {
             "id": "player",
             "label": "Player\nplays batches at human pace",
-            "files": [
-              "packages/core/src/player.ts",
-              "packages/core/src/rehearsal.ts"
-            ],
+            "files": ["packages/core/src/player.ts", "packages/core/src/rehearsal.ts"],
             "group": "eloop",
             "x": 904,
             "y": 1144,
@@ -8375,9 +7616,7 @@
           {
             "id": "timeline",
             "label": "Timeline\npausable, interruptible sleeps",
-            "files": [
-              "packages/core/src/timeline.ts"
-            ],
+            "files": ["packages/core/src/timeline.ts"],
             "x": 376,
             "y": 1319,
             "kind": "sync"
@@ -8385,10 +7624,7 @@
           {
             "id": "editor",
             "label": "VS Code Editor and Terminals\nedits, cursor, shell runs",
-            "files": [
-              "packages/vscode/src/editor.ts",
-              "packages/vscode/src/terminal.ts"
-            ],
+            "files": ["packages/vscode/src/editor.ts", "packages/vscode/src/terminal.ts"],
             "group": "eloop",
             "x": 1088.5,
             "y": 1319,
@@ -8752,9 +7988,7 @@
           {
             "id": "ctrl",
             "label": "Session controller\nAI Pair core",
-            "files": [
-              "packages/core/src"
-            ],
+            "files": ["packages/core/src"],
             "group": "ext",
             "x": 1030,
             "y": 177,
@@ -8763,9 +7997,7 @@
           {
             "id": "editorts",
             "label": "Editor adapter\nVsEditor",
-            "files": [
-              "packages/vscode/src/editor.ts"
-            ],
+            "files": ["packages/vscode/src/editor.ts", "packages/vscode/src/python_diagnostics.ts"],
             "group": "ext",
             "x": 800,
             "y": 332,
@@ -8774,9 +8006,7 @@
           {
             "id": "termts",
             "label": "Terminal runner",
-            "files": [
-              "packages/vscode/src/terminal.ts"
-            ],
+            "files": ["packages/vscode/src/terminal.ts"],
             "group": "ext",
             "x": 1085,
             "y": 342,
@@ -8785,10 +8015,7 @@
           {
             "id": "panelts",
             "label": "Pair panel host",
-            "files": [
-              "packages/vscode/src/panel.ts",
-              "packages/vscode/src/panel_html.ts"
-            ],
+            "files": ["packages/vscode/src/panel.ts", "packages/vscode/src/panel_html.ts"],
             "group": "ext",
             "x": 1355,
             "y": 342,
@@ -8797,10 +8024,7 @@
           {
             "id": "outsidets",
             "label": "Outside-change watcher",
-            "files": [
-              "packages/vscode/src/outside_watch.ts",
-              "packages/vscode/src/outside.ts"
-            ],
+            "files": ["packages/vscode/src/outside_watch.ts", "packages/vscode/src/outside.ts"],
             "group": "ext",
             "x": 1558,
             "y": 342,
@@ -8808,14 +8032,40 @@
           },
           {
             "id": "extts",
-            "label": "Activation and wiring",
-            "files": [
-              "packages/vscode/src/extension.ts"
-            ],
+            "label": "Activation, preferences and wiring",
+            "files": ["packages/vscode/src/extension.ts"],
             "group": "ext",
             "x": 1562,
             "y": 42,
             "step": 1
+          },
+          {
+            "id": "session-diagnostics",
+            "label": "Session and speech diagnostics",
+            "files": ["packages/vscode/src/diagnostics.ts"],
+            "group": "ext",
+            "x": 1840,
+            "y": 177
+          },
+          {
+            "id": "local-speech",
+            "label": "Speech service\nShared playback and cancellation",
+            "files": [
+              "packages/vscode/src/speech_service.ts",
+              "packages/vscode/src/speech_worker_host.ts",
+              "packages/vscode/src/speech_worker.ts",
+              "packages/vscode/src/speech_engine.ts",
+              "packages/vscode/src/speech_setup.ts",
+              "packages/vscode/src/webview/speech_audio.ts",
+              "packages/vscode/src/speech_output_preferences.ts",
+              "packages/vscode/src/speech_output_router.ts",
+              "packages/vscode/src/speech_native_output.ts",
+              "packages/vscode/scripts/speech_runtime.mts",
+              "packages/vscode/test/speech_runtime.test.ts"
+            ],
+            "group": "ext",
+            "x": 1830,
+            "y": 342
           },
           {
             "id": "api",
@@ -8933,9 +8183,71 @@
             "x": 1923,
             "y": 1108,
             "step": 15
+          },
+          {
+            "id": "elevenlabs-client",
+            "label": "ElevenLabs client\nBounded HTTPS synthesis and account voices",
+            "files": [
+              "packages/vscode/src/speech_elevenlabs.ts",
+              "packages/vscode/src/speech_pcm.ts",
+              "packages/vscode/src/speech_catalog.ts"
+            ],
+            "group": "ext",
+            "x": 2140,
+            "y": 342
+          },
+          {
+            "id": "speech-credentials",
+            "label": "Speech credentials\nNative key prompt and SecretStorage",
+            "files": ["packages/vscode/src/speech_credentials.ts"],
+            "group": "ext",
+            "x": 2140,
+            "y": 177
+          },
+          {
+            "id": "elevenlabs-api",
+            "label": "ElevenLabs cloud API\nSelected text and preview only",
+            "files": [],
+            "x": 2440,
+            "y": 342
           }
         ],
         "edges": [
+          {
+            "from": "ctrl",
+            "to": "local-speech",
+            "label": "selected narration"
+          },
+          {
+            "from": "local-speech",
+            "to": "panelts",
+            "label": "bounded audio and status"
+          },
+          {
+            "from": "extts",
+            "to": "local-speech",
+            "label": "wires local and cloud providers"
+          },
+          {
+            "from": "extts",
+            "to": "session-diagnostics",
+            "label": "wires lifecycle signals"
+          },
+          {
+            "from": "ctrl",
+            "to": "session-diagnostics",
+            "label": "session and pause state"
+          },
+          {
+            "from": "termts",
+            "to": "session-diagnostics",
+            "label": "command lifecycle"
+          },
+          {
+            "from": "panelts",
+            "to": "session-diagnostics",
+            "label": "copy snapshot on request"
+          },
           {
             "from": "extts",
             "to": "ctrl",
@@ -9573,6 +8885,26 @@
                 "y": 0
               }
             }
+          },
+          {
+            "from": "local-speech",
+            "to": "elevenlabs-client",
+            "label": "explicit cloud provider only"
+          },
+          {
+            "from": "elevenlabs-client",
+            "to": "elevenlabs-api",
+            "label": "fixed HTTPS, bounded PCM"
+          },
+          {
+            "from": "extts",
+            "to": "speech-credentials",
+            "label": "masked key entry"
+          },
+          {
+            "from": "elevenlabs-client",
+            "to": "speech-credentials",
+            "label": "host-only key reader"
           }
         ],
         "groups": [
@@ -9671,6 +9003,11 @@
               "id": "c9",
               "text": "Start here: this is where VS Code switches AI Pair on and connects its parts. Activates on onStartupFinished (package.json); that event fires after * extensions finish (abstractExtensionService.ts:426). The relay finds this window by workspace folder, not through VS Code. Verified by reading both repos.",
               "ts": 1792890521753
+            },
+            {
+              "id": "update-20261106-vscode-integration-extts",
+              "text": "Activation passes the bundled version and build identity to the runtime so the running extension can be identified separately from an installed package.",
+              "ts": 0
             }
           ],
           "__diagram__": [
@@ -9678,6 +9015,27 @@
               "id": "c0",
               "text": "Design constraints from VS Code that shape AI Pair: (1) a separate extension-host process behind an RPC seam, so edits and cursor moves are async and racy with the programmer; (2) only public vscode API is used, no workbench internals; (3) the panel is a webview in the secondary sidebar and has no access to editors; (4) terminal results depend on shell integration. Verified by reading code in ../vscode-main and packages/vscode.",
               "ts": 1792890521753
+            }
+          ],
+          "editorts": [
+            {
+              "id": "update-20261106-vscode-integration-editorts",
+              "text": "Collects advisory VS Code diagnostics and a separate system-python3 syntax check after edits. The system interpreter can differ from the project interpreter; stale or unavailable checks are reported.",
+              "ts": 0
+            }
+          ],
+          "panelts": [
+            {
+              "id": "update-20261106b-vscode-integration-panelts",
+              "text": "The webview displays the message reading pause and sends its identifier when the programmer requests early completion. The controller validates eligibility and leaves independent pauses intact. A hold and release act only on the matching reading ID and preserve independent pauses; disposing the panel releases its hold.",
+              "ts": 0
+            }
+          ],
+          "local-speech": [
+            {
+              "id": "speech-output-note",
+              "text": "The shared service preflights each explicit native route before synthesis. The output router keeps browser and native ownership separate until the matching browser stop or page disposal and native process close.",
+              "ts": 0
             }
           ]
         }
@@ -9776,6 +9134,863 @@
               "id": "s0",
               "text": "Why batches are rehearsed and checked for staleness: the programmer and the agent both act on the editor through the same async RPC, so the extension learns of a human edit only after it arrives as an event. Verified by reading the code.",
               "ts": 1792890521753
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "build-and-delivery",
+      "name": "Build and delivery",
+      "type": "flow",
+      "doc": {
+        "type": "flow",
+        "nodes": [
+          {
+            "id": "source",
+            "label": "GitHub source",
+            "files": [".github/workflows/build-vsix.yml"],
+            "x": 40,
+            "y": 40,
+            "step": 1
+          },
+          {
+            "id": "ci",
+            "label": "Build VSIX on CI",
+            "files": [".github/workflows/build-vsix.yml", "packages/vscode/package.json"],
+            "x": 40,
+            "y": 180,
+            "step": 2
+          },
+          {
+            "id": "artifact",
+            "label": "VSIX artifact",
+            "files": [".github/workflows/build-vsix.yml"],
+            "x": 40,
+            "y": 320,
+            "step": 3
+          },
+          {
+            "id": "host",
+            "label": "Ubuntu host",
+            "files": [],
+            "x": 40,
+            "y": 460,
+            "step": 4
+          },
+          {
+            "id": "runtime",
+            "label": "Verify build ID",
+            "files": ["packages/vscode/src/extension.ts"],
+            "x": 40,
+            "y": 600,
+            "step": 5
+          },
+          {
+            "id": "dev-build",
+            "label": "VM dev build",
+            "files": ["packages/vscode/package.json"],
+            "x": 400,
+            "y": 180,
+            "step": 6
+          },
+          {
+            "id": "shared-vsix",
+            "label": "Shared-folder VSIX",
+            "files": [],
+            "x": 400,
+            "y": 320,
+            "step": 7
+          }
+        ],
+        "edges": [
+          {
+            "from": "source",
+            "to": "ci"
+          },
+          {
+            "from": "ci",
+            "to": "artifact"
+          },
+          {
+            "from": "artifact",
+            "to": "host",
+            "label": "download VSIX"
+          },
+          {
+            "from": "host",
+            "to": "runtime"
+          },
+          {
+            "from": "dev-build",
+            "to": "shared-vsix"
+          },
+          {
+            "from": "shared-vsix",
+            "to": "host",
+            "label": "manual install"
+          }
+        ],
+        "comments": {
+          "__diagram__": [
+            {
+              "id": "d-build-and-delivery",
+              "text": "GitHub Actions builds a VSIX on Ubuntu and uploads an artifact named with its version and commit. Download and install it on the target Ubuntu host, reload VS Code, and check the running build identity.",
+              "ts": 0
+            }
+          ],
+          "dev-build": [
+            {
+              "id": "n-build-delivery-dev",
+              "text": "For development, build the VSIX in the VM and place it in the shared repository folder. The Ubuntu host accesses the same folder and installs that artifact manually.",
+              "ts": 0
+            }
+          ]
+        },
+        "groups": []
+      }
+    },
+    {
+      "id": "speech-output-routing",
+      "name": "Speech output routing",
+      "type": "architecture",
+      "origin": "llm",
+      "generation": {
+        "focus": "Shared output selection and safe browser to native handoff"
+      },
+      "doc": {
+        "type": "architecture",
+        "autoLayoutApplied": true,
+        "nodes": [
+          {
+            "id": "output-settings",
+            "label": "Output preferences\nSystem default or named device",
+            "files": [
+              "packages/vscode/src/speech_output_preferences.ts",
+              "packages/vscode/src/speech_output_types.ts",
+              "packages/vscode/src/extension.ts"
+            ],
+            "group": "extension",
+            "x": 40,
+            "y": 75
+          },
+          {
+            "id": "speech-service",
+            "label": "Speech service\nKokoro or ElevenLabs",
+            "files": [
+              "packages/vscode/src/speech_service.ts",
+              "packages/vscode/src/speech_elevenlabs.ts",
+              "packages/vscode/src/speech_worker_host.ts"
+            ],
+            "group": "extension",
+            "x": 490,
+            "y": 75
+          },
+          {
+            "id": "output-router",
+            "label": "Output router\nAdmission and retirement",
+            "files": ["packages/vscode/src/speech_output_router.ts"],
+            "group": "extension",
+            "x": 940,
+            "y": 75
+          },
+          {
+            "id": "browser-output",
+            "label": "System default\nVS Code webview audio",
+            "files": [
+              "packages/vscode/src/webview/speech_audio.ts",
+              "packages/vscode/src/panel.ts",
+              "packages/vscode/src/panel_messages.ts"
+            ],
+            "group": "webview",
+            "x": 1450,
+            "y": 75
+          },
+          {
+            "id": "native-output",
+            "label": "Native driver\nExplicit PipeWire target",
+            "files": ["packages/vscode/src/speech_native_output.ts"],
+            "group": "extension",
+            "x": 940,
+            "y": 380
+          },
+          {
+            "id": "pipewire-player",
+            "label": "pw-play and PipeWire\nNamed local output",
+            "files": [],
+            "group": "host",
+            "x": 1450,
+            "y": 380
+          }
+        ],
+        "edges": [
+          {
+            "from": "output-settings",
+            "to": "output-router",
+            "label": "choice and refresh",
+            "vertices": [
+              {
+                "x": 240,
+                "y": 280
+              },
+              {
+                "x": 1100,
+                "y": 280
+              }
+            ]
+          },
+          {
+            "from": "speech-service",
+            "to": "output-router",
+            "label": "preflight"
+          },
+          {
+            "from": "output-router",
+            "to": "browser-output",
+            "label": "WAV"
+          },
+          {
+            "from": "browser-output",
+            "to": "output-router",
+            "label": "stop ack",
+            "vertices": [
+              {
+                "x": 1600,
+                "y": 0
+              },
+              {
+                "x": 1100,
+                "y": 0
+              }
+            ]
+          },
+          {
+            "from": "output-router",
+            "to": "native-output",
+            "label": ""
+          },
+          {
+            "from": "native-output",
+            "to": "pipewire-player",
+            "label": "named target"
+          },
+          {
+            "from": "native-output",
+            "to": "output-router",
+            "label": "owns child until close"
+          }
+        ],
+        "groups": [
+          {
+            "id": "extension",
+            "label": "AI Pair extension host"
+          },
+          {
+            "id": "webview",
+            "label": "VS Code webview"
+          },
+          {
+            "id": "host",
+            "label": "Local audio server"
+          }
+        ],
+        "comments": {
+          "output-settings": [
+            {
+              "id": "speech-pref-comment",
+              "text": "The displayed device catalog refreshes on request. Each explicit native speech unit also performs its own bounded availability preflight before synthesis. A missing saved choice stays visible.",
+              "ts": 0
+            }
+          ],
+          "output-router": [
+            {
+              "id": "speech-route-comment",
+              "text": "An unavailable named route is refused without falling back. A browser stop is acknowledged for the matching unit and page, or the owning page must actually be disposed; replacing a view alone does not retire its audio.",
+              "ts": 0
+            }
+          ],
+          "native-output": [
+            {
+              "id": "speech-native-comment",
+              "text": "The Linux PipeWire path owns the player process until it closes. Pause stops the player; buffered audio can finish briefly. Device loss stops playback rather than moving to the system default.",
+              "ts": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "local-audio-placement",
+      "name": "Local audio placement",
+      "type": "architecture",
+      "origin": "llm",
+      "generation": {
+        "focus": "Local companion and workspace boundaries"
+      },
+      "doc": {
+        "type": "architecture",
+        "autoLayoutApplied": true,
+        "nodes": [
+          {
+            "id": "workspace-session",
+            "label": "Workspace session\nController, editor and commands",
+            "files": ["packages/core/src/controller.ts", "packages/vscode/src/extension.ts"],
+            "group": "workspace",
+            "x": 40,
+            "y": 80
+          },
+          {
+            "id": "workspace-audio-proxy",
+            "label": "Narration proxy\nBounded requests and terminal acknowledgements",
+            "files": ["packages/vscode/src/remote_narration.ts", "packages/vscode/src/panel_placement.ts"],
+            "group": "workspace",
+            "x": 520,
+            "y": 80
+          },
+          {
+            "id": "local-panel",
+            "label": "Local companion panel\nLocal actions stop before forwarding",
+            "files": [
+              "packages/audio-ui/src/attachment_gate.ts",
+              "packages/audio-ui/src/local_connection.ts",
+              "packages/vscode/src/panel.ts"
+            ],
+            "group": "desktop",
+            "x": 1040,
+            "y": 80
+          },
+          {
+            "id": "local-speech-host",
+            "label": "Local speech host\nSettings, credentials and selected narration",
+            "files": [
+              "packages/audio-ui/src/speech_host.ts",
+              "packages/audio-ui/src/companion_narration.ts",
+              "packages/vscode/src/speech_service.ts",
+              "packages/vscode/src/speech_platform.ts"
+            ],
+            "group": "desktop",
+            "x": 1040,
+            "y": 400
+          },
+          {
+            "id": "local-output-adapter",
+            "label": "Output adapter\nExact route and physical retirement",
+            "files": [
+              "packages/audio-ui/src/companion_output.ts",
+              "packages/audio-native/src/native_adapter.ts",
+              "packages/audio-native/src/admission.ts",
+              "packages/audio-native/src/playback.ts"
+            ],
+            "group": "desktop",
+            "x": 1580,
+            "y": 400
+          },
+          {
+            "id": "native-platform-output",
+            "label": "Native platform output\nPipeWire, CoreAudio or WASAPI",
+            "files": [
+              "packages/audio-native/src/linux_backend.ts",
+              "packages/audio-native/src/helper_backend.ts",
+              "packages/audio-native/native/macos/main.swift",
+              "packages/audio-native/native/windows/main.cpp"
+            ],
+            "group": "native",
+            "x": 2130,
+            "y": 400
+          },
+          {
+            "id": "local-kokoro",
+            "label": "Local Kokoro worker\nSupported packaged runtime only",
+            "files": ["packages/vscode/src/speech_worker.ts", "packages/audio-ui/scripts/speech_runtime.mts"],
+            "group": "desktop",
+            "x": 1040,
+            "y": 730
+          },
+          {
+            "id": "cloud-provider",
+            "label": "ElevenLabs\nSelected text from the local host",
+            "files": ["packages/vscode/src/speech_elevenlabs.ts"],
+            "group": "cloud",
+            "x": 2130,
+            "y": 80
+          }
+        ],
+        "edges": [
+          {
+            "from": "workspace-session",
+            "to": "workspace-audio-proxy",
+            "label": "narration"
+          },
+          {
+            "from": "workspace-audio-proxy",
+            "to": "local-panel",
+            "label": "requests"
+          },
+          {
+            "from": "local-panel",
+            "to": "workspace-audio-proxy",
+            "label": "actions",
+            "vertices": [
+              {
+                "x": 1230,
+                "y": 280
+              },
+              {
+                "x": 710,
+                "y": 280
+              }
+            ]
+          },
+          {
+            "from": "local-panel",
+            "to": "local-speech-host",
+            "label": "speech actions"
+          },
+          {
+            "from": "local-speech-host",
+            "to": "local-output-adapter",
+            "label": "route / WAV"
+          },
+          {
+            "from": "local-speech-host",
+            "to": "local-kokoro",
+            "label": "bounded local request"
+          },
+          {
+            "from": "local-speech-host",
+            "to": "cloud-provider",
+            "label": "HTTPS / selected text",
+            "vertices": [
+              {
+                "x": 1490,
+                "y": 250
+              },
+              {
+                "x": 2320,
+                "y": 250
+              }
+            ]
+          },
+          {
+            "from": "local-output-adapter",
+            "to": "native-platform-output",
+            "label": "PCM / control"
+          },
+          {
+            "from": "native-platform-output",
+            "to": "local-output-adapter",
+            "label": "retired",
+            "vertices": [
+              {
+                "x": 2320,
+                "y": 610
+              },
+              {
+                "x": 1770,
+                "y": 610
+              }
+            ]
+          },
+          {
+            "from": "local-speech-host",
+            "to": "workspace-audio-proxy",
+            "label": "terminal ack"
+          }
+        ],
+        "groups": [
+          {
+            "id": "workspace",
+            "label": "Workspace extension host (local or remote)"
+          },
+          {
+            "id": "desktop",
+            "label": "Local VS Code UI host"
+          },
+          {
+            "id": "native",
+            "label": "Local audio system"
+          },
+          {
+            "id": "cloud",
+            "label": "Optional cloud provider"
+          }
+        ],
+        "comments": {
+          "local-panel": [
+            {
+              "id": "placement-commit",
+              "text": "Prepare cannot register a view. Commit selects one panel owner for the window; a lost acknowledgement cannot register a legacy fallback. The two-extension arrangement was demonstrated in an isolated SSH window.",
+              "ts": 0
+            }
+          ],
+          "local-speech-host": [
+            {
+              "id": "placement-privacy",
+              "text": "Speech settings, key entry, SecretStorage and output preferences stay on the UI host. Audio bytes and keys are excluded from workspace transport. Reading and command approval remain workspace-owned.",
+              "ts": 0
+            },
+            {
+              "id": "platform-evidence",
+              "text": "Verify the local Linux x64 runtime using Node report evidence, then bounded mappings of this same process if needed. Accept only positive GNU libc and loader evidence; keep musl, unknown, deleted or inaccessible evidence blocked. Reports and mapping paths are not copied to diagnostics.",
+              "ts": 0
+            }
+          ],
+          "local-output-adapter": [
+            {
+              "id": "route-reservation",
+              "text": "Admission snapshots a concrete endpoint, including System default. Playback rechecks and opens that endpoint or fails. Unplugging after provider dispatch can still consume provider credits. Cancellation cannot release a still-live output.",
+              "ts": 0
+            }
+          ],
+          "native-platform-output": [
+            {
+              "id": "platform-verification",
+              "text": "Compilation and protocol tests are distinct from native routing and audible playback verification. Kokoro synthesis support remains limited by its separately packaged runtime.",
+              "ts": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "sentence-narration",
+      "name": "Sentence narration",
+      "type": "architecture",
+      "origin": "llm",
+      "generation": {
+        "focus": "Bounded sentence pipeline under review"
+      },
+      "doc": {
+        "type": "architecture",
+        "autoLayoutApplied": true,
+        "nodes": [
+          {
+            "id": "admitted",
+            "label": "Admitted narration\nOne text and reading clock",
+            "files": ["packages/vscode/src/speech_service.ts"],
+            "x": 40,
+            "y": 80
+          },
+          {
+            "id": "segments",
+            "label": "Exact sentence parts\nAt most four source slices",
+            "files": ["packages/vscode/src/speech_segments.ts"],
+            "x": 540,
+            "y": 80
+          },
+          {
+            "id": "worker",
+            "label": "Warm local client\nOne inference and one lookahead",
+            "files": ["packages/vscode/src/speech_local_client.ts", "packages/vscode/src/speech_worker_host.ts"],
+            "x": 1040,
+            "y": 80
+          },
+          {
+            "id": "scheduler",
+            "label": "Unit scheduler\nFinal-only completion",
+            "files": ["packages/vscode/src/speech_service.ts"],
+            "x": 540,
+            "y": 430
+          },
+          {
+            "id": "lease",
+            "label": "Concrete output lease\nOne endpoint across parts",
+            "files": ["packages/audio-ui/src/companion_output.ts", "packages/audio-native/src/native_adapter.ts"],
+            "x": 1040,
+            "y": 430
+          },
+          {
+            "id": "physical",
+            "label": "Physical playback\nRetire before next part",
+            "files": ["packages/audio-native/src/playback.ts"],
+            "x": 1540,
+            "y": 430
+          }
+        ],
+        "edges": [
+          {
+            "from": "admitted",
+            "to": "segments",
+            "label": "exact text"
+          },
+          {
+            "from": "segments",
+            "to": "worker",
+            "label": "part text"
+          },
+          {
+            "from": "worker",
+            "to": "scheduler",
+            "label": "bounded result"
+          },
+          {
+            "from": "scheduler",
+            "to": "lease",
+            "label": "ordinal / WAV"
+          },
+          {
+            "from": "lease",
+            "to": "physical",
+            "label": "same endpoint"
+          },
+          {
+            "from": "physical",
+            "to": "scheduler",
+            "label": "started / retired",
+            "vertices": [
+              {
+                "x": 1710,
+                "y": 680
+              },
+              {
+                "x": 710,
+                "y": 680
+              }
+            ]
+          }
+        ],
+        "groups": [],
+        "comments": {
+          "admitted": [
+            {
+              "id": "reading-contract",
+              "text": "Implementation under review. Show text once and preserve one reading clock; sentence boundaries do not approve commands or advance code.",
+              "ts": 0
+            }
+          ],
+          "worker": [
+            {
+              "id": "provider-boundary",
+              "text": "Local Kokoro uses the bounded multipart path through one warm worker: one load, one inference at a time, one lookahead part. ElevenLabs retains one request per unit; legacy output stays one waveform. No future narration is synthesized.",
+              "ts": 0
+            }
+          ],
+          "lease": [
+            {
+              "id": "retirement",
+              "text": "Logical ownership survives each physically retired part. Stale callbacks cannot settle a newer part. Release only after final completion or canceled physical retirement.",
+              "ts": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "speech-tempo",
+      "name": "Speech tempo",
+      "type": "architecture",
+      "origin": "llm",
+      "generation": {
+        "focus": "Independent local listening rate; implementation under review"
+      },
+      "doc": {
+        "type": "architecture",
+        "autoLayoutApplied": true,
+        "nodes": [
+          {
+            "id": "settings",
+            "label": "Speech settings\nSnapshot listening rate per unit",
+            "files": ["packages/vscode/src/speech_types.ts", "packages/audio-ui/src/speech_host.ts"],
+            "x": 40,
+            "y": 80
+          },
+          {
+            "id": "service",
+            "label": "Speech service\nProvider synthesis speed stays separate",
+            "files": ["packages/vscode/src/speech_service.ts"],
+            "x": 540,
+            "y": 80
+          },
+          {
+            "id": "client",
+            "label": "Tempo client\nOne owned local worker operation",
+            "files": ["packages/vscode/src/speech_tempo_client.ts", "packages/vscode/src/speech_tempo_messages.ts"],
+            "x": 1040,
+            "y": 80
+          },
+          {
+            "id": "dsp",
+            "label": "Experimental tempo transform\nTransient-aware overlap-add",
+            "files": ["packages/vscode/src/speech_tempo.ts", "packages/vscode/src/speech_tempo_worker.ts"],
+            "x": 1040,
+            "y": 430
+          },
+          {
+            "id": "framing",
+            "label": "PCM and WAV framing\nOne unchanged final thinking tail",
+            "files": ["packages/vscode/src/speech_tempo_pcm.ts"],
+            "x": 540,
+            "y": 430
+          },
+          {
+            "id": "output",
+            "label": "Part playback\nUse actual transformed duration",
+            "files": ["packages/audio-ui/src/companion_output.ts", "packages/audio-native/src/native_adapter.ts"],
+            "x": 40,
+            "y": 430
+          }
+        ],
+        "edges": [
+          {
+            "from": "settings",
+            "to": "service",
+            "label": "next-unit rate"
+          },
+          {
+            "from": "service",
+            "to": "client",
+            "label": "tail-free PCM"
+          },
+          {
+            "from": "client",
+            "to": "dsp",
+            "label": "epoch / unit / part"
+          },
+          {
+            "from": "dsp",
+            "to": "framing",
+            "label": "PCM result"
+          },
+          {
+            "from": "framing",
+            "to": "output",
+            "label": "bounded WAV"
+          }
+        ],
+        "groups": [],
+        "comments": {
+          "service": [
+            {
+              "id": "tempo-contract",
+              "text": "Rate 1.0 bypasses the transform byte for byte, and so does an input under 3072 samples. Admission of a new unit waits while a tempo worker is still retiring. Listening speed does not change code pace, the reading clock or provider requests. Settings changes affect a later unit.",
+              "ts": 0
+            }
+          ],
+          "client": [
+            {
+              "id": "tempo-retirement",
+              "text": "Cancellation invalidates results immediately but cannot grant a replacement worker slot before actual termination. Unit and part identity reject stale responses.",
+              "ts": 0
+            }
+          ],
+          "dsp": [
+            {
+              "id": "tempo-evidence",
+              "text": "Synthetic tone and offline speech metrics are distinct from human listening validation. The control is experimental; source and packaged review remain release gates. Transients are detected and kept from smearing across the overlap.",
+              "ts": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "warm-local-synthesis",
+      "name": "Warm local synthesis",
+      "type": "architecture",
+      "origin": "llm",
+      "generation": {
+        "focus": "Versioned warm worker protocol and ownership; implementation under review"
+      },
+      "doc": {
+        "type": "architecture",
+        "autoLayoutApplied": true,
+        "nodes": [
+          {
+            "id": "service",
+            "label": "Speech service\nAdmits a unit only when the slot is free",
+            "files": ["packages/vscode/src/speech_service.ts"],
+            "x": 40,
+            "y": 80
+          },
+          {
+            "id": "client",
+            "label": "Local synthesis client\nOne warm worker per epoch",
+            "files": ["packages/vscode/src/speech_local_client.ts"],
+            "x": 540,
+            "y": 80
+          },
+          {
+            "id": "protocol",
+            "label": "Worker protocol\nStrict versioned frames",
+            "files": ["packages/vscode/src/speech_local_protocol.ts"],
+            "x": 1040,
+            "y": 80
+          },
+          {
+            "id": "worker",
+            "label": "Worker thread\nInit once, echo the epoch",
+            "files": ["packages/vscode/src/speech_worker_host.ts", "packages/vscode/src/speech_worker.ts"],
+            "x": 1040,
+            "y": 430
+          },
+          {
+            "id": "retirement",
+            "label": "Retirement slot\nHeld until the exit event",
+            "files": ["packages/vscode/src/speech_local_client.ts"],
+            "x": 540,
+            "y": 430
+          },
+          {
+            "id": "watchdog",
+            "label": "Independent watchdog\nLoad and inference deadline",
+            "files": ["packages/vscode/src/speech_local_client.ts"],
+            "x": 40,
+            "y": 430
+          }
+        ],
+        "edges": [
+          {
+            "from": "service",
+            "to": "client",
+            "label": "requests"
+          },
+          {
+            "from": "client",
+            "to": "protocol",
+            "label": "zod request"
+          },
+          {
+            "from": "protocol",
+            "to": "worker",
+            "label": "epoch / unit / part"
+          },
+          {
+            "from": "worker",
+            "to": "retirement",
+            "label": "results"
+          },
+          {
+            "from": "watchdog",
+            "to": "retirement",
+            "label": "deadline retires"
+          },
+          {
+            "from": "retirement",
+            "to": "service",
+            "label": "slot released"
+          }
+        ],
+        "groups": [],
+        "comments": {
+          "client": [
+            {
+              "id": "ownership",
+              "text": "Cancel invalidates the result at once but the inference keeps ownership until its result arrives or the watchdog retires the worker. Stale, duplicate and late responses change nothing.",
+              "ts": 0
+            }
+          ],
+          "protocol": [
+            {
+              "id": "protocol-bounds",
+              "text": "Ready reports capabilities the client checks against its own constants. Failures carry one fixed category (load, synthesis, protocol, busy), never free text. Spec: WarmSynthesisWorker.",
+              "ts": 0
+            }
+          ],
+          "worker": [
+            {
+              "id": "not-claimed",
+              "text": "Not claimed: no new engine, no persistent synthesis cache, and ElevenLabs is unchanged. The shipped transport is a Node worker thread behind an injected factory.",
+              "ts": 0
             }
           ]
         }

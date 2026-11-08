@@ -1,0 +1,91 @@
+# Cross-compilation verifies SDK compatibility, not playback on that architecture.
+# Matching-runner silent smoke may skip when no output endpoint exists; device
+# loss and no-fallback behavior require separate native-device verification.
+name: Native audio compile
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS ${{ matrix.arch }} compile
+    runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            target: x86_64-apple-macos13.0
+          - arch: arm64
+            target: arm64-apple-macos13.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile AudioQueue helper
+        run: |
+          mkdir -p native-build
+          xcrun swiftc -O -target "${{ matrix.target }}" \
+            -framework AudioToolbox -framework CoreAudio \
+            packages/audio-native/native/macos/main.swift \
+            -o "native-build/audio-darwin-${{ matrix.arch }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: audio-darwin-${{ matrix.arch }}-compile-only
+          path: native-build/audio-darwin-${{ matrix.arch }}
+      - name: Smoke test on matching architecture
+        shell: bash
+        run: |
+          machine="$(uname -m)"
+          if [[ ( "$machine" == "x86_64" && "${{ matrix.arch }}" == "x64" ) || ( "$machine" == "arm64" && "${{ matrix.arch }}" == "arm64" ) ]]; then
+            node packages/audio-native/native/macos/smoke.mjs "native-build/audio-darwin-${{ matrix.arch }}"
+            node packages/audio-native/test/native-silent-smoke.mjs "native-build/audio-darwin-${{ matrix.arch }}"
+          else
+            echo "Native smoke unavailable on this runner architecture; compile only."
+          fi
+
+  windows:
+    name: Windows ${{ matrix.arch }} compile
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            compiler: x64
+          - arch: arm64
+            compiler: amd64_arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.compiler }}
+      - name: Compile WASAPI helper
+        shell: cmd
+        run: >-
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT
+          packages\audio-native\native\windows\main.cpp
+          /Fe:audio-win32-${{ matrix.arch }}.exe
+          /link ole32.lib uuid.lib propsys.lib
+      - uses: actions/upload-artifact@v4
+        with:
+          name: audio-win32-${{ matrix.arch }}-compile-only
+          path: audio-win32-${{ matrix.arch }}.exe
+      - name: Compile portable lifecycle tests
+        if: matrix.arch == 'x64'
+        shell: cmd
+        run: |
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT packages\audio-native\native\windows\tests\protocol_test.cpp /Fe:protocol-test.exe || exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT packages\audio-native\native\windows\tests\session_test.cpp /Fe:session-test.exe || exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT packages\audio-native\native\windows\tests\process_fixture.cpp /Fe:process-fixture.exe || exit /b 1
+      - name: Run portable and missing-endpoint tests
+        if: matrix.arch == 'x64'
+        shell: cmd
+        run: |
+          protocol-test.exe || exit /b 1
+          session-test.exe || exit /b 1
+          python packages\audio-native\native\windows\tests\process_test.py .\process-fixture.exe || exit /b 1
+          node packages\audio-native\test\windows-smoke.mjs .\audio-win32-x64.exe || exit /b 1
+          node packages\audio-native\test\native-silent-smoke.mjs .\audio-win32-x64.exe

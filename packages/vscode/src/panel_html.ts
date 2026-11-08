@@ -4,6 +4,7 @@
 
 import { randomBytes } from 'node:crypto';
 import { ELLIPSIS, SPEED_SUFFIX } from '@ai-pair/core/constants';
+import { SPEECH_PREVIEW_TEXT } from './speech_types';
 
 /** The range `aiPair.speed` declares in package.json. */
 const MIN_SPEED = 0.25;
@@ -43,11 +44,19 @@ const ICONS = {
   swap: svg('<path d="M7 7h11l-3-3M17 17H6l3 3"/>'),
   exit: svg('<path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h11"/>'),
   send: svg('<path d="M4 12l16-8-6 16-2.5-6.5z"/>'),
+  settings: svg(
+    '<circle cx="12" cy="12" r="3"/>' +
+      '<path d="M10 2h4l.5 2.4 1.9.8 2.1-1.3 1.4 1.4-1.3 2.1.8 1.9L22 10v4l-2.6.5-.8 1.9 ' +
+      '1.3 2.1-1.4 1.4-2.1-1.3-1.9.8L14 22h-4l-.5-2.6-1.9-.8-2.1 1.3-1.4-1.4 1.3-2.1 ' +
+      '-.8-1.9L2 14v-4l2.6-.5.8-1.9-1.3-2.1 1.4-1.4 2.1 1.3 1.9-.8L10 2z"/>',
+  ),
   play: svg('<path d="M8 5l11 7-11 7z"/>'),
 };
 
 /** Renders the page. `styleUri` and `scriptUri`: dist/panel.css and dist/panel.js, built from webview/, as the webview loads them. */
-export function panelHtml(cspSource: string, styleUri: string, scriptUri: string): string {
+export function panelHtml(cspSource: string, styleUri: string, scriptUri: string, version = 'development', build = 'development'): string {
+  const safeVersion = version.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  const safeBuild = build.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
   const nonce = randomBytes(NONCE_BYTES).toString('base64');
   const speeds = SPEEDS.map(
     (s) => `<button type="button" role="menuitemradio" aria-checked="false" data-speed="${s}">${s.toFixed(1)}${SPEED_SUFFIX}</button>`,
@@ -55,19 +64,142 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
   return /* html */ `<!doctype html>
 <html lang="en">
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource}; script-src 'nonce-${nonce}';">
+<meta http-equiv="Content-Security-Policy"
+  content="default-src 'none'; style-src ${cspSource}; media-src blob:; script-src 'nonce-${nonce}';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AI Pair</title>
 <link rel="stylesheet" href="${styleUri}">
 <div class="app">
+  <dialog data-ui="settings-dialog" class="settings-dialog" aria-label="Settings">
+    <h1>Settings</h1>
+    <section class="settings-section">
+      <h2>Conversation</h2>
+      <label class="settings-field">Chat order
+        <select data-ui="chat-order">
+          <option value="newestFirst">Newest first</option>
+          <option value="oldestFirst">Oldest first</option>
+        </select>
+      </label>
+    </section>
+    <section class="settings-section">
+      <h2>Playback</h2>
+      <label class="settings-field">Code display
+        <select data-ui="settings-code-playback">
+          <option value="typing">Typing</option>
+          <option value="lines">Lines</option>
+          <option value="blocks">Blocks</option>
+        </select>
+      </label>
+      <p>Changes apply to the next typing action. You can also choose this in the toolbar.</p>
+    </section>
+    <section class="settings-section">
+      <h2>Commands</h2>
+      <label class="settings-check"><input type="checkbox" data-ui="show-terminals"> Show terminals automatically</label>
+    </section>
+    <section class="settings-section">
+      <h2>Speech</h2>
+      <label class="settings-field">Speech provider
+        <select data-ui="speech-provider">
+          <option value="kokoro">Kokoro (local)</option>
+          <option value="elevenlabs">ElevenLabs (cloud)</option>
+        </select>
+      </label>
+      <label class="settings-field">Speech output
+        <select data-ui="speech-output"><option value="default">System default</option></select>
+      </label>
+      <p>System default follows VS Code audio routing. Output selection applies only to Pair speech.</p>
+      <div class="settings-actions"><button type="button" data-ui="speech-output-refresh" class="soft">Refresh outputs</button></div>
+      <p data-ui="speech-output-status" role="status"></p>
+      <label class="settings-check"><input type="checkbox" data-ui="speech-enabled"> Speak selected narration automatically</label>
+      <div data-ui="speech-local">
+      <label class="settings-field">Voice
+        <select data-ui="speech-voice">
+          <option value="af_heart">Heart</option>
+          <option value="am_michael">Michael</option>
+          <option value="bf_emma">Emma</option>
+          <option value="bm_george">George</option>
+        </select>
+      </label>
+      <label class="settings-field">Synthesis speed
+        <select data-ui="speech-speed">
+          <option value="0.75">0.75x</option>
+          <option value="1" selected>1.0x</option>
+          <option value="1.25">1.25x</option>
+          <option value="1.5">1.5x</option>
+        </select>
+      </label>
+      <p>Optional setup downloads a local voice model of about 94 MB.</p>
+      <div class="settings-actions">
+        <button type="button" data-ui="speech-setup" class="soft" disabled>Download Kokoro model</button>
+      </div>
+      </div>
+      <div data-ui="speech-cloud" hidden>
+        <p>Selected narration and voice previews are sent to ElevenLabs and use your account credits.
+          Your normal session history stays in Pair.
+          <a href="#" class="url" data-url="https://elevenlabs.io/privacy-policy">Privacy policy</a>.</p>
+        <p>Voice availability depends on your account. Use a key with Text to Speech and Voices read access.</p>
+        <p data-ui="speech-key-status" role="status"></p>
+        <div class="settings-actions">
+          <button type="button" data-ui="speech-key-set" class="soft">Add or replace API key</button>
+          <button type="button" data-ui="speech-key-remove" class="soft">Remove API key</button>
+        </div>
+        <label class="settings-field">Account voice
+          <select data-ui="speech-cloud-voice"><option value="">Choose a voice</option></select>
+        </label>
+        <div class="settings-actions">
+          <button type="button" data-ui="speech-voices-load" class="soft">Load voices</button>
+          <button type="button" data-ui="speech-voices-more" class="soft" hidden>Load more</button>
+        </div>
+        <label class="settings-field">Synthesis speed
+          <select data-ui="speech-cloud-speed">
+            <option value="0.75">0.75x</option><option value="1" selected>1.0x</option>
+            <option value="1.2">1.2x</option>
+          </select>
+        </label>
+      </div>
+      <label class="settings-field">Listening speed (experimental)
+        <select data-ui="speech-listening-speed">
+          <option value="0.75">0.75x</option><option value="1" selected>1.0x</option>
+          <option value="1.25">1.25x</option><option value="1.5">1.5x</option>
+        </select>
+      </label>
+      <p>Preview: ${SPEECH_PREVIEW_TEXT}</p>
+      <div class="settings-actions">
+        <button type="button" data-ui="speech-preview" class="soft" disabled>Preview voice</button>
+        <button type="button" data-ui="speech-stop" class="soft">Stop speech</button>
+      </div>
+      <p data-ui="speech-settings-status" role="status"></p>
+    </section>
+    <section class="settings-section">
+      <h2>Diagnostics</h2>
+      <p>Copies version and recent connection, session, and command status; no command text.</p>
+      <div class="settings-actions">
+        <button type="button" data-ui="copy-diagnostics" class="soft">Copy diagnostics</button>
+      </div>
+    </section>
+    <div class="settings-footer">
+      <p class="build-identity">v${safeVersion} - build ${safeBuild}</p>
+      <button type="button" data-ui="settings-close" class="primary">Close</button>
+    </div>
+  </dialog>
   <div data-ui="band" class="band">
     <div class="main">
       <div class="head">
         <div class="status">
-          <span data-ui="dot" class="dot off"></span>
+          <button
+            type="button"
+            data-ui="skip-reading"
+            class="reading-control"
+            aria-label="Finish reading pause"
+            data-tip="Click to finish; hold to pause the timer"
+            disabled
+          >
+            <span data-ui="dot" class="dot off"></span>
+          </button>
           <span data-ui="status-text" class="status-text" role="status">No session</span>
         </div>
         <div class="controls">
+          <div class="session-controls">
           <button
             type="button"
             data-ui="pause"
@@ -95,11 +227,28 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
               type="button"
               data-ui="speed"
               class="quiet speed"
+              aria-label="Playback speed: 1.0${SPEED_SUFFIX}"
               aria-haspopup="menu"
               aria-expanded="false"
               data-tip="Playback speed"
             >1.0${SPEED_SUFFIX}</button>
             <div data-ui="speed-menu" class="speed-menu" role="menu" aria-label="Playback speed" hidden>${speeds}</div>
+          </div>
+          <div class="speed-wrap">
+            <button
+              type="button"
+              data-ui="code-mode"
+              class="quiet speed"
+              aria-label="Code display: Typing"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              data-tip="Code display"
+            >Typing</button>
+            <div data-ui="code-mode-menu" class="speed-menu" role="menu" aria-label="Code display" hidden>
+              <button type="button" role="menuitemradio" aria-checked="true" data-code-playback="typing">Typing</button>
+              <button type="button" role="menuitemradio" aria-checked="false" data-code-playback="lines">Lines</button>
+              <button type="button" role="menuitemradio" aria-checked="false" data-code-playback="blocks">Blocks</button>
+            </div>
           </div>
           <div class="speed-wrap">
             <button
@@ -112,6 +261,15 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
             >read 1.0${SPEED_SUFFIX}</button>
             <div data-ui="reading-menu" class="speed-menu" role="menu" aria-label="Reading speed" hidden>${speeds}</div>
           </div>
+          </div>
+          <button
+            type="button"
+            data-ui="settings"
+            class="quiet"
+            aria-label="Settings"
+            aria-haspopup="dialog"
+            data-tip="Settings"
+          >${ICONS.settings}</button>
           <button
             type="button"
             data-ui="end"
@@ -124,6 +282,10 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
       <div class="now">
         <div data-ui="now-text" class="now-text empty" aria-live="polite"></div>
         <div data-ui="now-ref" class="now-ref"></div>
+        <div data-ui="speech-live" class="speech-live" hidden>
+          <span data-ui="speech-live-status" role="status"></span>
+          <button type="button" data-ui="speech-stop-live" class="quiet">Stop speech</button>
+        </div>
         <div data-ui="passage" class="passage" hidden>
           <div data-ui="passage-text"></div>
           <div data-ui="passage-notice" class="passage-notice"></div>
@@ -131,6 +293,7 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
         <div data-ui="run" class="run-box">
           <div data-ui="run-label" class="run-label"></div>
           <div data-ui="run-cmd" class="run-cmd"></div>
+          <button type="button" data-ui="show-terminal" class="quiet" hidden>Show terminal</button>
           <div class="run-actions">
             <button type="button" data-ui="run-go" class="primary">${ICONS.play}<span>Run</span></button>
             <button

@@ -1,6 +1,39 @@
 <!doctype html>
 <html lang="en">
-<meta charset="utf-8">
-<meta http-equiv="refresh" content="0; url=ai-pair.html">
-<title>AI Pair architecture</title>
-<a href="ai-pair.html">AI Pair architecture</a>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Pair Programmer</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: system-ui, sans-serif;
+      line-height: 1.6;
+    }
+    body {
+      max-width: 48rem;
+      margin: 0 auto;
+      padding: 2rem 1.25rem;
+    }
+    h1 {
+      line-height: 1.2;
+    }
+    li {
+      margin-block: 0.5rem;
+    }
+  </style>
+  <main>
+    <h1>AI Pair Programmer</h1>
+    <p>This fork builds on the <a href="https://github.com/faiface/ai-pair">original AI Pair project</a>.</p>
+    <p>Pair with a coding agent in VS Code, with controls for conversation order, reading pace, and code display.</p>
+    <ul>
+      <li>Choose Typing, Lines, or Blocks for code playback.</li>
+      <li>Use optional local Kokoro narration after downloading its model, or choose ElevenLabs and add an API key securely in VS Code.</li>
+      <li>Preview voices and copy diagnostics for speech and session status without including keys or narration.</li>
+    </ul>
+    <p><a href="ai-pair.html">Explore the interactive architecture</a>.</p>
+    <p>
+      <a href="https://github.com/mattyv/ai-pair/actions">Download a fork build from GitHub Actions</a> by opening a successful Build VSIX
+      run and downloading its artifact.
+    </p>
+  </main>
+</html>

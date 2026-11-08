@@ -77,7 +77,10 @@ function renderRun(run: RunResult): string {
   const outcome =
     run.exit_code !== undefined ? `exited with ${run.exit_code}` : run.running ? 'still running in its terminal' : 'exit code unknown';
   const shell = run.shell === undefined ? '' : ` in ${run.shell}`;
-  if (run.output === '') return `Ran \`${run.command}\`${shell}: ${outcome}, no output.`;
+  if (run.output === '') {
+    const hint = run.exit_code === undefined && run.running ? ' It may be waiting for input; check the terminal.' : '';
+    return `Ran \`${run.command}\`${shell}: ${outcome}, no output.${hint}`;
+  }
   const fence = '`'.repeat(Math.max(MIN_FENCE, longestRun(run.output, '`') + 1));
   return `Ran \`${run.command}\`${shell}: ${outcome}. Output${run.truncated ? ', its end' : ''}:\n${fence}\n${run.output}\n${fence}`;
 }
@@ -92,6 +95,14 @@ function renderRejected(r: NonNullable<Report['rejected']>): string {
 function renderBatch(batch: BatchResult): string {
   const parts = [batch.code ? `Batch ${batch.id} ${batch.status}, in ${batch.code.file}:` : `Batch ${batch.id} ${batch.status}.`];
   if (batch.code) parts.push(renderCode(batch.code));
+  for (const warning of batch.warnings ?? []) {
+    parts.push(`Advisory: ${warning}`);
+  }
+  for (const diagnostic of batch.diagnostics ?? []) {
+    const end = diagnostic.endLine === diagnostic.line ? '' : `-${diagnostic.endLine}`;
+    const source = diagnostic.source === undefined ? '' : ` (${diagnostic.source})`;
+    parts.push(`Advisory diagnostic ${diagnostic.file}:${diagnostic.line}${end}${source}: ${diagnostic.message}`);
+  }
   for (const run of batch.runs ?? []) {
     parts.push(renderRun(run));
   }
@@ -114,17 +125,18 @@ function renderEvent(event: Event): string {
       return `The programmer said:\n${quote(event.text)}${event.selection ? `\n${renderExcerpt(event.selection)}` : ''}`;
     case 'edit':
       if (event.diff === '') {
-        const who = event.by === 'other' ? OTHER_EDITOR : 'The programmer';
-        return `${who} edited ${event.file}, then changed it back: no net change.`;
+        return event.by === 'other'
+          ? `${OTHER_EDITOR} edited ${event.file}, then changed it back: no net change.`
+          : `Editor changes left ${event.file} unchanged overall.`;
       }
       if (event.omitted !== undefined) {
-        const who = event.by === 'other' ? OTHER_EDITOR : 'The programmer';
+        const who = event.by === 'other' ? OTHER_EDITOR : 'Editor activity';
         return `${who} changed ${event.file} in these places, too much to show (${event.omitted} lines of diff left out). \`read\` the file for its text:\n${event.diff}`;
       }
       if (event.by === 'other') {
         return `${event.file} was changed, not by the programmer but by a tool, a formatter, or on disk:\n${event.diff}`;
       }
-      return `The programmer edited ${event.file}:\n${event.diff}`;
+      return `Editor text changed in ${event.file}:\n${event.diff}`;
     case 'interrupt':
       return 'The programmer pressed Interrupt.';
     case 'turn':

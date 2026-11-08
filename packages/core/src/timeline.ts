@@ -20,6 +20,7 @@ interface Sleep {
 /** The clock playback runs on: sleeps that a pause holds and an interrupt cuts short. */
 export class Timeline {
   private interrupted = false;
+  private held = false;
   private sleeping: Sleep | undefined = undefined;
   private abort = new AbortController();
 
@@ -47,6 +48,7 @@ export class Timeline {
   sleep(ms: number): Promise<boolean> {
     if (this.interrupted) return Promise.resolve(false);
     return new Promise((resolve) => {
+      this.held = false;
       this.sleeping = { remaining: Math.max(0, ms), startedAt: 0, resolve };
       if (!this.paused) this.arm(this.sleeping);
     });
@@ -56,12 +58,7 @@ export class Timeline {
   pause(): void {
     if (this.paused) return;
     this.paused = true;
-    const p = this.sleeping;
-    if (p?.timer !== undefined) {
-      clearTimeout(p.timer);
-      p.timer = undefined;
-      p.remaining = Math.max(0, p.remaining - (Date.now() - p.startedAt));
-    }
+    this.stopTimer();
   }
 
   /** Starts the sleep's timer again (specs/Timeline.tla, `Resume`, once no pause reason is left). */
@@ -69,11 +66,45 @@ export class Timeline {
     if (!this.paused) return;
     this.paused = false;
     // A paused sleep has no timer (`NoTimerWhilePaused`), so a sleep is waiting, and is armed again.
-    if (this.sleeping) this.arm(this.sleeping);
+    if (this.sleeping && !this.held) this.arm(this.sleeping);
+  }
+
+  /** Completes the current sleep early only while it is running. */
+  finish(): void {
+    const pending = this.sleeping;
+    if (this.paused || this.held || pending === undefined) return;
+    clearTimeout(pending.timer);
+    this.sleeping = undefined;
+    pending.resolve(true);
+  }
+
+  /** Holds the current running sleep without changing any playback pause. */
+  hold(): void {
+    if (this.paused || this.held || this.sleeping === undefined) return;
+    this.held = true;
+    this.stopTimer();
+  }
+
+  /** Releases a reading hold, respecting any separate playback pause. */
+  release(): void {
+    if (!this.held) return;
+    this.held = false;
+    if (!this.paused && this.sleeping !== undefined) this.arm(this.sleeping);
+  }
+
+  /** Stops an armed timer and retains its remaining duration. */
+  private stopTimer(): void {
+    const pending = this.sleeping;
+    if (pending?.timer !== undefined) {
+      clearTimeout(pending.timer);
+      pending.timer = undefined;
+      pending.remaining = Math.max(0, pending.remaining - (Date.now() - pending.startedAt));
+    }
   }
 
   /** Resolves the sleep `false`, and later ones too until `reset` (specs/Timeline.tla, `Interrupt`). */
   interrupt(): void {
+    this.held = false;
     this.interrupted = true;
     this.abort.abort();
     const p = this.sleeping;

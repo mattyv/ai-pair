@@ -6,13 +6,11 @@
 # bundle, c8 reports it against the sources, in coverage/integration/, and the
 # run fails below the file's minimums in coverage_thresholds.json (#161).
 set -e
-
 readonly MAC_CODE='/Applications/Visual Studio Code.app/Contents/MacOS/Code'
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 readonly ROOT
 # COVERAGE_ROOT: where the reports go; the repository's coverage/ by default.
 readonly COVERAGE_DIR="${COVERAGE_ROOT:-${ROOT}/coverage}/integration"
-
 cd "$(dirname "$0")/.."
 coverage=0
 if [[ "${1:-}" == '--coverage' ]]; then
@@ -26,13 +24,10 @@ readonly coverage
 readonly CODE="${VSCODE_BIN:-${MAC_CODE}}"
 TMP="$(mktemp -d)"
 readonly TMP
-# Code's temporary files, its sockets among them, and the test's: Code and the
-# extension host take them as TMPDIR. A socket's path must fit in 104
-# characters, so this folder is short.
+# Keep the temporary path short enough for Code's sockets.
 TMP_FILES="$(mktemp -d /tmp/ai-pair.XXXXXX)"
 readonly TMP_FILES
-# The run's workspace, user data, extensions, home, and temporary files go when
-# it ends, passed or failed (#176).
+# Temporary data is removed after success or failure (#176).
 trap 'rm -rf "${TMP}" "${TMP_FILES}"' EXIT
 mkdir -p "${TMP}/workspace"
 # Keep discovery files and the launcher out of the real ~/.ai-pair.
@@ -47,10 +42,13 @@ npx esbuild test/integration.ts --bundle --platform=node --format=cjs \
 # VSCODE_ARGS: more flags, like the ones a CI machine needs (--no-sandbox),
 # split on spaces.
 read -r -a CODE_ARGS <<<"${VSCODE_ARGS:-}"
+PLATFORM="$(uname -s)"
+readonly PLATFORM
+if [[ "${PLATFORM}" == Linux ]]; then
+  CODE_ARGS+=(--password-store=basic)
+fi
 readonly CODE_ARGS
-# A terminal inside VS Code, Claude Code's for one, can set
-# ELECTRON_RUN_AS_NODE, which runs the Code binary as plain Node: it would
-# reject every flag below (#152).
+# Code must run as Electron, even when launched from a Node terminal (#152).
 unset ELECTRON_RUN_AS_NODE
 # Set Up Agent writes agents' configurations: Claude Code's, Codex's, and
 # OpenCode's go to the run's folder, by the variables they honor, and only the
@@ -58,23 +56,30 @@ unset ELECTRON_RUN_AS_NODE
 # on macOS, Code finds its keychain by it (#176).
 TMPDIR="${TMP_FILES}" CLAUDE_CONFIG_DIR="${TMP}/agents/claude" \
   CODEX_HOME="${TMP}/agents/codex" XDG_CONFIG_HOME="${TMP}/agents/xdg" \
+  PULSE_SERVER='unix:/nonexistent' \
+  PIPEWIRE_REMOTE='ai-pair-integration-no-audio' \
   PATH='/usr/bin:/bin:/usr/sbin:/sbin' \
   "${CODE}" "${CODE_ARGS[@]}" \
   --user-data-dir="${TMP}/user" \
+  --shared-data-dir="${TMP}/shared" \
   --extensions-dir="${TMP}/extensions" \
   --disable-workspace-trust --skip-welcome --skip-release-notes \
   --extensionDevelopmentPath="${EXTENSION_PATH}" \
   --extensionTestsPath="${PWD}/dist-test/integration.js" \
   "${TMP}/workspace"
+# The companion's normal-window restart uses the same coverage output.
+bash scripts/integration_companion.sh "${ROOT}" "${TMP}" "${TMP_FILES}" \
+  "${CODE}" "${EXTENSION_PATH}" "${CODE_ARGS[@]}"
+bash scripts/integration_speech_faults.sh "${ROOT}" "${TMP}" "${TMP_FILES}" \
+  "${CODE}" "${EXTENSION_PATH}" "${CODE_ARGS[@]}"
 if ((coverage)); then
-  # The bundle is selected before c8 follows its source map back to the
-  # sources; the report script keeps ours and drops node_modules. From the
-  # root, since c8 matches paths against the cwd.
+  # c8 resolves bundled coverage through the source maps from the root.
   (
     cd "${ROOT}" && npx c8 report --temp-directory "${COVERAGE_DIR}/v8" \
       --reports-dir "${COVERAGE_DIR}" \
       --reporter text-summary --reporter lcov --reporter json-summary \
-      --include 'packages/vscode/dist/**' --all=false \
+      --include 'packages/vscode/dist/**' \
+      --include 'packages/audio-ui/dist/**' --all=false \
       && node scripts/coverage_report.ts --integration --check
   )
 fi

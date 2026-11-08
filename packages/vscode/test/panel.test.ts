@@ -64,6 +64,7 @@ vi.mock('vscode', () => {
     window: {
       showTextDocument: vi.fn(() => Promise.resolve()),
       showInformationMessage: vi.fn(() => Promise.resolve()),
+      showErrorMessage: vi.fn(() => Promise.resolve()),
       showQuickPick: vi.fn((items: unknown[]) => Promise.resolve(fakes.pick === undefined ? undefined : items[fakes.pick])),
     },
     workspace: {
@@ -105,10 +106,48 @@ const REF: Ref = { file: 'a.ts', line: 1, endLine: 2 };
 interface Harness {
   panel: NarrationPanel;
   controller: MockProxy<Controller>;
+  controllerAccessor: ReturnType<typeof vi.fn<() => MockProxy<Controller>>>;
   calibration: MockProxy<Calibration>;
   starter: MockProxy<Starter>;
   speed: { get: ReturnType<typeof vi.fn<() => number>>; set: ReturnType<typeof vi.fn<(value: number) => void>> };
   readingSpeed: { get: ReturnType<typeof vi.fn<() => number>>; set: ReturnType<typeof vi.fn<(value: number) => void>> };
+  chatOrder: {
+    get: ReturnType<typeof vi.fn<() => 'newestFirst' | 'oldestFirst'>>;
+    set: ReturnType<typeof vi.fn<(value: 'newestFirst' | 'oldestFirst') => void>>;
+  };
+  terminalSettings: { get: ReturnType<typeof vi.fn<() => boolean>>; set: ReturnType<typeof vi.fn<(value: boolean) => void>> };
+  showTerminal: ReturnType<typeof vi.fn<(id: number) => boolean>>;
+  copyDiagnostics: ReturnType<typeof vi.fn<() => Promise<void>>>;
+  codePlayback: {
+    get: ReturnType<typeof vi.fn<() => 'typing' | 'lines' | 'blocks'>>;
+    set: ReturnType<typeof vi.fn<(value: 'typing' | 'lines' | 'blocks') => void>>;
+  };
+  speech: {
+    settings: {
+      get: ReturnType<typeof vi.fn<() => import('../src/speech_types').SpeechSettings>>;
+      set: ReturnType<typeof vi.fn>;
+    };
+    diagnostic: ReturnType<typeof vi.fn<(event: import('../src/diagnostics').SpeechDiagnosticEvent) => void>>;
+    outputView: ReturnType<typeof vi.fn>;
+    outputReady: ReturnType<typeof vi.fn<() => boolean>>;
+    outputRetired: ReturnType<typeof vi.fn>;
+    outputPageRetired: ReturnType<typeof vi.fn>;
+    outputRefresh: ReturnType<typeof vi.fn>;
+    outputSelect: ReturnType<typeof vi.fn>;
+    supported: ReturnType<typeof vi.fn<() => boolean>>;
+    installed: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
+    setup: ReturnType<typeof vi.fn<() => Promise<void>>>;
+    preview: ReturnType<typeof vi.fn<() => Promise<void>>>;
+    stop: ReturnType<typeof vi.fn<() => void>>;
+    event: ReturnType<typeof vi.fn>;
+    pageClosed: ReturnType<typeof vi.fn>;
+    cloudSupported: ReturnType<typeof vi.fn<() => boolean>>;
+    keySet: ReturnType<typeof vi.fn<() => Promise<void>>>;
+    keyRemove: ReturnType<typeof vi.fn<() => Promise<void>>>;
+    keyRefresh: ReturnType<typeof vi.fn<() => void>>;
+    loadVoices: ReturnType<typeof vi.fn<(more: boolean) => void>>;
+    validCloudVoice: ReturnType<typeof vi.fn<(id: string) => boolean>>;
+  };
   onPost: ReturnType<typeof vi.fn<() => void>>;
   traced: string[];
 }
@@ -126,11 +165,56 @@ interface FakeView {
 }
 
 /** Returns a panel with every collaborator a fake, the controller's turn `turn`. */
-function harness(turn: Turn = 'agent'): Harness {
+function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: 'test-build' }): Harness {
   const traced: string[] = [];
   const speed = { get: vi.fn(() => SPEEDS[1] ?? 0), set: vi.fn<(value: number) => void>() };
   const readingSpeed = { get: vi.fn(() => SPEEDS[2] ?? 0), set: vi.fn<(value: number) => void>() };
+  const chatOrder = {
+    get: vi.fn<() => 'newestFirst' | 'oldestFirst'>(() => 'newestFirst'),
+    set: vi.fn<(value: 'newestFirst' | 'oldestFirst') => void>(),
+  };
+  const terminalSettings = { get: vi.fn(() => false), set: vi.fn<(value: boolean) => void>() };
+  const showTerminal = vi.fn<(id: number) => boolean>();
+  const codePlayback = {
+    get: vi.fn<() => 'typing' | 'lines' | 'blocks'>(() => 'typing'),
+    set: vi.fn<(value: 'typing' | 'lines' | 'blocks') => void>(),
+  };
+  const copyDiagnostics = vi.fn<() => Promise<void>>().mockResolvedValue();
+  const speech = {
+    settings: {
+      get: vi.fn<() => import('../src/speech_types').SpeechSettings>(() => ({
+        enabled: false,
+        provider: 'kokoro',
+        voice: 'af_heart',
+        speed: 1,
+        elevenLabsVoice: '',
+        elevenLabsSpeed: 1,
+      })),
+      set: vi.fn(),
+    },
+    diagnostic: vi.fn<(event: import('../src/diagnostics').SpeechDiagnosticEvent) => void>(),
+    outputView: vi.fn(() => ({ supported: false, devices: [], selected: { kind: 'default' as const } })),
+    outputReady: vi.fn(() => true),
+    outputRetired: vi.fn(),
+    outputPageRetired: vi.fn(),
+    outputRefresh: vi.fn(),
+    outputSelect: vi.fn(),
+    cloudSupported: vi.fn(() => true),
+    keySet: vi.fn<() => Promise<void>>().mockResolvedValue(),
+    keyRemove: vi.fn<() => Promise<void>>().mockResolvedValue(),
+    keyRefresh: vi.fn<() => void>(),
+    loadVoices: vi.fn<(more: boolean) => void>(),
+    validCloudVoice: vi.fn<(id: string) => boolean>(),
+    supported: vi.fn(() => true),
+    installed: vi.fn<() => Promise<boolean>>().mockResolvedValue(false),
+    setup: vi.fn<() => Promise<void>>().mockResolvedValue(),
+    preview: vi.fn<() => Promise<void>>().mockResolvedValue(),
+    stop: vi.fn<() => void>(),
+    event: vi.fn(),
+    pageClosed: vi.fn(),
+  };
   const controller = mock<Controller>({ turn });
+  const controllerAccessor = vi.fn(() => controller);
   const calibration = mock<Calibration>();
   calibration.reply.mockReturnValue(false);
   const starter = mock<Starter>();
@@ -145,11 +229,32 @@ function harness(turn: Turn = 'agent'): Harness {
       traced.push(line);
     },
     vscode.Uri.file(EXTENSION),
-    { controller: () => controller, calibration: () => calibration, starter },
+    { controller: controllerAccessor, calibration: () => calibration, starter, copyDiagnostics, speech },
+    chatOrder,
+    buildInfo,
+    terminalSettings,
+    showTerminal,
+    codePlayback,
   );
   const onPost = vi.fn<() => void>();
   panel.onPost = onPost;
-  return { panel, controller, calibration, starter, speed, readingSpeed, onPost, traced };
+  return {
+    panel,
+    controller,
+    controllerAccessor,
+    calibration,
+    starter,
+    speed,
+    readingSpeed,
+    chatOrder,
+    terminalSettings,
+    showTerminal,
+    copyDiagnostics,
+    speech,
+    codePlayback,
+    onPost,
+    traced,
+  };
 }
 
 /** Resolves a fake view into `panel`, and returns it. */
@@ -221,8 +326,29 @@ describe('resolveWebviewView', () => {
   it("gives the page scripts, the extension's dist folder, and the page from panelHtml with its style and script", () => {
     const view = open(harness().panel);
     expect(view.webview.options).toEqual({ enableScripts: true, localResourceRoots: [vscode.Uri.file('/ext/dist')] });
-    expect(vi.mocked(panelHtml).mock.calls).toEqual([[CSP, 'webview:/ext/dist/panel.css', 'webview:/ext/dist/panel.js']]);
+    expect(vi.mocked(panelHtml).mock.calls).toEqual([
+      [CSP, 'webview:/ext/dist/panel.css', 'webview:/ext/dist/panel.js', '0.10.0', 'test-build'],
+    ]);
     expect(view.webview.html).toBe('<html>');
+  });
+
+  it('ShowsRunning, ShowsNewAfterReload: each page uses its running bundle identity', () => {
+    open(harness('agent', { version: '0.9.0', build: 'old' }).panel);
+    open(harness('agent', { version: '0.10.0', build: 'new' }).panel);
+    expect(vi.mocked(panelHtml).mock.calls.map((args) => args.slice(3))).toEqual([
+      ['0.9.0', 'old'],
+      ['0.10.0', 'new'],
+    ]);
+  });
+
+  it('releases a reading hold only when the current view is disposed', () => {
+    const { panel, controller } = harness();
+    const old = open(panel);
+    const current = open(panel);
+    old.dispose();
+    expect(controller.releaseReadingHold.mock.calls).toEqual([]);
+    current.dispose();
+    expect(controller.releaseReadingHold.mock.calls).toEqual([[]]);
   });
 
   it('Dispose: forgets a disposed view, but not a newer one an older disposal follows', () => {
@@ -242,6 +368,16 @@ describe('resolveWebviewView', () => {
     const { panel, controller } = harness();
     open(panel).send({ type: 'draft', empty: false });
     expect(controller.pause.mock.calls).toEqual([['reply']]);
+  });
+
+  it('keeps the new view draft and calibration when an old view is disposed', () => {
+    const { panel, controller, calibration } = harness();
+    const old = open(panel);
+    const current = open(panel);
+    current.send({ type: 'draft', empty: false });
+    old.dispose();
+    expect(controller.resume.mock.calls).toEqual([]);
+    expect(calibration.cancel.mock.calls).toEqual([]);
   });
 
   it("ReplyMeansDraft: ends the draft's pause when the view is disposed with it", () => {
@@ -467,13 +603,122 @@ describe('receive', () => {
     await flush();
     expect(controller.resume.mock.calls).toEqual([['reply']]);
     expect(view.posted).toEqual([
+      { type: 'speechPage', pageId: 1 },
+      {
+        type: 'speechSettings',
+        value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+      },
+      { type: 'speechOutputCatalog', value: { supported: false, devices: [], selected: { kind: 'default' } } },
+      { type: 'speechCloudSupport', supported: true },
+      { type: 'speechSupport', supported: true },
+      { type: 'chatOrder', value: 'newestFirst' },
       { type: 'replay', events: [{ type: 'say', text: 'hi' }] },
+      { type: 'showTerminals', value: false },
       { type: 'speed', value: SPEEDS[1] },
       { type: 'readingSpeed', value: SPEEDS[2] },
+      { type: 'codePlayback', value: 'typing' },
       { type: 'selection', ref: REF },
       { type: 'timings', tipDelayMs: 7, tipWarmMs: 8 },
+      { type: 'speechSetupState', pending: false, message: 'Local speech is not set up.' },
       { type: 'canStart', value: true },
     ]);
+  });
+
+  it('sends the saved order before replay and accepts only valid choices', () => {
+    const { panel, chatOrder } = harness();
+    chatOrder.get.mockReturnValue('oldestFirst');
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(view.posted.slice(5, 7)).toEqual([
+      { type: 'chatOrder', value: 'oldestFirst' },
+      { type: 'replay', events: [] },
+    ]);
+    view.send({ type: 'chatOrder', value: 'newestFirst' });
+    expect(chatOrder.set).toHaveBeenCalledWith('newestFirst');
+    // A webview message crosses a runtime boundary despite its compile-time type.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    view.send({ type: 'chatOrder', value: 'invalid' } as unknown as FromPanel);
+    expect(chatOrder.set).toHaveBeenCalledTimes(1);
+    panel.showChatOrder('oldestFirst');
+    expect(view.posted).toContainEqual({ type: 'chatOrder', value: 'oldestFirst' });
+  });
+
+  it('receiveFromPage: handles an object with a string type as the page would, and drops anything else', () => {
+    const { panel, controller } = harness();
+    panel.receiveFromPage({ type: 'pause' });
+    expect(controller.pause.mock.calls).toEqual([[]]);
+    for (const other of [undefined, JSON.parse('null') as unknown, 'pause', 7, { kind: 'pause' }, { type: 7 }]) {
+      panel.receiveFromPage(other);
+    }
+    expect(controller.pause.mock.calls).toEqual([[]]);
+  });
+
+  it('OnlyOnRequest and RequestedCompletes: copies only when asked and reports either outcome', async () => {
+    const { panel, copyDiagnostics } = harness();
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(copyDiagnostics).not.toHaveBeenCalled();
+    view.send({ type: 'copyDiagnostics' });
+    await flush();
+    expect(copyDiagnostics).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(vscode.window.showInformationMessage)).toHaveBeenCalledWith('AI Pair diagnostics copied.');
+    copyDiagnostics.mockRejectedValueOnce(new Error('clipboard unavailable'));
+    view.send({ type: 'copyDiagnostics' });
+    await flush();
+    expect(vi.mocked(vscode.window.showErrorMessage)).toHaveBeenCalledWith('Could not copy AI Pair diagnostics.');
+  });
+
+  it('ChoiceApplied: sends the saved mode and accepts only valid choices', () => {
+    const { panel, codePlayback } = harness();
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(view.posted).toContainEqual({ type: 'codePlayback', value: 'typing' });
+    view.send({ type: 'codePlayback', value: 'lines' });
+    view.send({ type: 'codePlayback', value: 'blocks' });
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    view.send({ type: 'codePlayback', value: 'other' } as unknown as FromPanel);
+    expect(codePlayback.set.mock.calls).toEqual([['lines'], ['blocks']]);
+  });
+
+  it('forwards only valid reading countdown IDs', () => {
+    const { panel, controller } = harness();
+    const view = open(panel);
+    view.send({ type: 'skipReading', id: 42 });
+    view.send({ type: 'skipReading', id: -1 });
+    view.send({ type: 'skipReading', id: Number.NaN });
+    expect(controller.finishReading.mock.calls).toEqual([[42]]);
+  });
+
+  it('validates reading hold requests at the webview boundary', () => {
+    const { panel, controller } = harness();
+    const view = open(panel);
+    view.send({ type: 'holdReading', id: 42, held: true });
+    view.send({ type: 'holdReading', id: 42, held: false });
+    view.send({ type: 'holdReading', id: -1, held: true });
+    view.send({ type: 'holdReading', id: Number.NaN, held: true });
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    view.send({ type: 'holdReading', id: 42, held: 'yes' } as unknown as FromPanel);
+    expect(controller.holdReading.mock.calls).toEqual([
+      [42, true],
+      [42, false],
+    ]);
+  });
+
+  it('MissingReported and AvailableShown: validates settings and reports a closed terminal', () => {
+    const { panel, terminalSettings, showTerminal } = harness();
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(view.posted).toContainEqual({ type: 'showTerminals', value: false });
+    view.send({ type: 'showTerminals', value: true });
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    view.send({ type: 'showTerminals', value: 'yes' } as unknown as FromPanel);
+    expect(terminalSettings.set.mock.calls).toEqual([[true]]);
+    showTerminal.mockReturnValueOnce(true).mockReturnValueOnce(false);
+    view.send({ type: 'showTerminal', id: 71 });
+    view.send({ type: 'showTerminal', id: 72 });
+    view.send({ type: 'showTerminal', id: -1 });
+    expect(showTerminal.mock.calls).toEqual([[71], [72]]);
+    expect(vi.mocked(vscode.window.showInformationMessage)).toHaveBeenCalledWith('That terminal is no longer available.');
   });
 
   it('showTimings: tells the page its delays, as a test sets them', () => {
@@ -675,5 +920,431 @@ describe('openFile', () => {
     view.send({ type: 'openFile', file: 'a.ts' });
     await flush();
     expect(vi.mocked(vscode.window.showTextDocument).mock.calls).toEqual([[found[1]]]);
+  });
+});
+
+it('sends audio only to the ready current page and never adds it to history', () => {
+  const { panel, speech } = harness();
+  expect(panel.playSpeech(1, new Uint8Array([1, 2]), 40)).toBeUndefined();
+  const first = open(panel);
+  first.send({ type: 'ready' });
+  expect(panel.playSpeech(1, new Uint8Array([1, 2]), 40)).toBe(1);
+  expect(first.posted).toContainEqual({ type: 'speechAudio', id: 1, pageId: 1, wavBase64: 'AQI=', durationMs: 40 });
+  expect(panel.history).toEqual([]);
+  const second = open(panel);
+  second.send({ type: 'ready' });
+  first.send({ type: 'speechEvent', id: 1, pageId: 1, event: 'ended' });
+  expect(speech.event).not.toHaveBeenCalled();
+  expect(panel.playSpeech(2, new Uint8Array([3]), 40)).toBe(2);
+  second.send({ type: 'speechEvent', id: 2, pageId: 2, event: 'ended' });
+  expect(speech.event).toHaveBeenCalledWith({ id: 2, pageId: 2, event: 'ended' });
+  second.dispose();
+  expect(speech.pageClosed).toHaveBeenCalledWith(2);
+});
+
+it('cancels speech before resuming for a reply', () => {
+  const { panel, speech, controller } = harness();
+  const view = open(panel);
+  view.send({ type: 'reply', text: 'Continue' });
+  expect(speech.stop).toHaveBeenCalledOnce();
+  expect(speech.stop.mock.invocationCallOrder[0]).toBeLessThan(controller.resume.mock.invocationCallOrder[0] ?? 0);
+});
+
+it('does not offer setup or preview on an unsupported host', async () => {
+  const { panel, speech } = harness();
+  speech.supported.mockReturnValue(false);
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  view.send({ type: 'speechSetup' });
+  view.send({ type: 'speechPreview' });
+  await flush();
+  expect(view.posted).toContainEqual({ type: 'speechSupport', supported: false });
+  expect(speech.setup).not.toHaveBeenCalled();
+  expect(speech.preview).not.toHaveBeenCalled();
+});
+
+it('routes speech controls and status only to the ready current page', () => {
+  const { panel } = harness();
+  expect(panel.speechPageIsReady()).toBe(false);
+  expect(panel.speechReadyPageId()).toBeUndefined();
+  panel.refreshSpeechSupport();
+  panel.controlSpeech(1, 1, 'pause');
+  panel.showSpeechStatus(1, 'preparing');
+  const view = open(panel);
+  expect(panel.playSpeech(1, new Uint8Array([1]), 1)).toBeUndefined();
+  view.send({ type: 'ready' });
+  expect(panel.speechPageIsReady()).toBe(true);
+  expect(panel.speechReadyPageId()).toBe(1);
+  panel.controlSpeech(1, 2, 'pause');
+  panel.controlSpeech(1, 1, 'resume');
+  panel.showSpeechStatus(1, 'preparing');
+  panel.showSpeechStatus(1, 'unavailable', 'unavailable');
+  expect(view.posted).toContainEqual({ type: 'speechControl', id: 1, pageId: 1, action: 'resume' });
+  expect(view.posted).not.toContainEqual({ type: 'speechControl', id: 1, pageId: 2, action: 'pause' });
+  expect(view.posted).toContainEqual({ type: 'speechStatus', id: 1, pageId: 1, state: 'preparing' });
+  expect(view.posted).toContainEqual({ type: 'speechStatus', id: 1, pageId: 1, state: 'unavailable', message: 'unavailable' });
+  view.send({ type: 'speechPageHidden', pageId: 2 });
+  expect(panel.speechPageIsReady()).toBe(true);
+  view.send({ type: 'speechPageHidden', pageId: 1 });
+  expect(panel.speechPageIsReady()).toBe(false);
+  expect(panel.speechReadyPageId()).toBeUndefined();
+  view.send({ type: 'speechPageVisible', pageId: 2 });
+  expect(panel.speechPageIsReady()).toBe(false);
+  view.send({ type: 'speechPageVisible', pageId: 1 });
+  expect(panel.speechPageIsReady()).toBe(true);
+});
+
+it('validates page events and preferences before forwarding speech controls', () => {
+  const { panel, speech } = harness();
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  for (const value of [
+    { type: 'speechEvent', id: 0, pageId: 1, event: 'started' },
+    { type: 'speechEvent', id: 1.5, pageId: 1, event: 'started' },
+    { type: 'speechEvent', id: 1, pageId: 2, event: 'started' },
+    { type: 'speechEvent', id: 1, pageId: 1, event: 'unknown' },
+    { type: 'speechSettings', value: undefined },
+    { type: 'speechSettings', value: { enabled: 'yes', voice: 'af_heart', speed: 1 } },
+    {
+      type: 'speechSettings',
+      value: { enabled: true, provider: 'kokoro', voice: 'invalid', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    },
+    {
+      type: 'speechSettings',
+      value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 9, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    },
+    {
+      type: 'speechSettings',
+      value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, listeningSpeed: 9, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    },
+  ]) {
+    view.receive(value);
+  }
+  expect(speech.event.mock.calls).toEqual([]);
+  expect(speech.settings.set.mock.calls).toEqual([]);
+  view.send({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'kokoro', voice: 'bf_emma', speed: 1.25, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+  view.send({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'kokoro', voice: 'bf_emma', speed: 1, listeningSpeed: 0.75, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+  view.send({ type: 'speechStop' });
+  expect(speech.settings.set.mock.calls).toEqual([
+    [{ enabled: true, provider: 'kokoro', voice: 'bf_emma', speed: 1.25, elevenLabsVoice: '', elevenLabsSpeed: 1 }],
+    [{ enabled: true, provider: 'kokoro', voice: 'bf_emma', speed: 1, listeningSpeed: 0.75, elevenLabsVoice: '', elevenLabsSpeed: 1 }],
+  ]);
+  expect(speech.stop.mock.calls).toEqual([[]]);
+});
+
+it('reports setup and preview outcomes and ignores superseded availability checks', async () => {
+  const { panel, speech } = harness();
+  const pending = Promise.withResolvers<boolean>();
+  speech.installed.mockReturnValueOnce(pending.promise).mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('unknown'));
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  panel.refreshSpeechSupport();
+  await flush();
+  expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Local speech is ready.' });
+  pending.reject(new Error('stale'));
+  await flush();
+  expect(view.posted).not.toContainEqual({ type: 'speechSetupState', pending: false, message: 'Local speech availability is unknown.' });
+  panel.refreshSpeechSupport();
+  await flush();
+  expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Local speech availability is unknown.' });
+  speech.preview.mockRejectedValueOnce(new Error('unavailable'));
+  speech.setup.mockResolvedValueOnce().mockRejectedValueOnce(new Error('cancelled'));
+  view.send({ type: 'speechPreview' });
+  view.send({ type: 'speechSetup' });
+  await flush();
+  view.send({ type: 'speechSetup' });
+  await flush();
+  expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Voice preview is unavailable.' });
+  expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: true, message: 'Setting up local speech...' });
+  expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Speech setup did not complete.' });
+});
+
+it('NoSecret, TypeOK: forwards only nonsecret key actions and validated cloud selections', async () => {
+  const { panel, speech } = harness();
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  view.send({ type: 'speechKeySet' });
+  view.send({ type: 'speechKeyRemove' });
+  await flush();
+  expect(speech.keySet.mock.calls).toEqual([[]]);
+  expect(speech.keyRemove.mock.calls).toEqual([[]]);
+  panel.showSpeechKeyStatus(true);
+  expect(view.posted).toContainEqual({ type: 'speechKeyStatus', hasKey: true });
+  const choice = {
+    enabled: false,
+    provider: 'elevenlabs' as const,
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: 'account-voice',
+    elevenLabsSpeed: 1,
+  };
+  view.send({ type: 'speechSettings', value: choice });
+  expect(speech.settings.set.mock.calls).toEqual([]);
+  speech.validCloudVoice.mockReturnValue(true);
+  view.send({ type: 'speechSettings', value: choice });
+  expect(speech.settings.set.mock.calls).toEqual([[choice]]);
+  expect(JSON.stringify(view.posted)).not.toContain('secret-key');
+});
+
+it('requests voice pages only for a selected supported cloud provider', () => {
+  const { panel, speech } = harness();
+  const view = open(panel);
+  view.send({ type: 'speechVoicesLoad' });
+  expect(speech.loadVoices.mock.calls).toEqual([]);
+  speech.settings.get.mockReturnValue({
+    enabled: false,
+    provider: 'elevenlabs',
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: '',
+    elevenLabsSpeed: 1,
+  });
+  view.send({ type: 'speechVoicesLoad' });
+  view.send({ type: 'speechVoicesMore' });
+  expect(speech.loadVoices.mock.calls).toEqual([[false], [true]]);
+});
+
+it('reports key operation failures and respects unsupported cloud hosts', async () => {
+  const { panel, speech } = harness();
+  const view = open(panel);
+  speech.keySet.mockRejectedValueOnce(new Error('private'));
+  view.send({ type: 'speechKeySet' });
+  await flush();
+  expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Could not update the API key.' });
+  expect(JSON.stringify(view.posted)).not.toContain('private');
+  panel.showSpeechCatalog({ voices: [], more: false, loading: false, error: false });
+  expect(view.posted).toContainEqual({ type: 'speechCatalog', value: { voices: [], more: false, loading: false, error: false } });
+  speech.cloudSupported.mockReturnValue(false);
+  speech.settings.get.mockReturnValue({
+    enabled: false,
+    provider: 'elevenlabs',
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: '',
+    elevenLabsSpeed: 1,
+  });
+  view.send({ type: 'speechKeyRemove' });
+  view.send({ type: 'speechPreview' });
+  view.send({ type: 'speechVoicesLoad' });
+  expect(speech.keyRemove.mock.calls).toEqual([]);
+  expect(speech.preview.mock.calls).toEqual([]);
+  expect(speech.loadVoices.mock.calls).toEqual([]);
+});
+
+it('records speech action receipt, dispatch and blocked reasons without private inputs', async () => {
+  const { panel, speech } = harness();
+  const view = open(panel);
+  speech.supported.mockReturnValue(false);
+  view.send({ type: 'speechPreview' });
+  view.send({ type: 'speechSetup' });
+  view.send({ type: 'speechVoicesLoad' });
+  expect(speech.diagnostic.mock.calls.map(([event]) => event)).toEqual([
+    { kind: 'speech', event: 'preview', phase: 'received', provider: 'kokoro' },
+    { kind: 'speech', event: 'preview', phase: 'blocked', provider: 'kokoro', reason: 'unsupported' },
+    { kind: 'speech', event: 'setup', phase: 'received', provider: 'kokoro' },
+    { kind: 'speech', event: 'setup', phase: 'blocked', provider: 'kokoro', reason: 'unsupported' },
+    { kind: 'speech', event: 'catalog', phase: 'received', provider: 'kokoro' },
+    { kind: 'speech', event: 'catalog', phase: 'blocked', provider: 'kokoro', reason: 'not_ready' },
+  ]);
+  expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Local speech is unsupported on this host.' });
+  expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Select ElevenLabs to load voices.' });
+  speech.diagnostic.mockClear();
+  speech.supported.mockReturnValue(true);
+  view.send({ type: 'speechPreview' });
+  view.send({ type: 'speechSetup' });
+  await flush();
+  expect(speech.diagnostic.mock.calls.map(([event]) => event)).toEqual([
+    { kind: 'speech', event: 'preview', phase: 'received', provider: 'kokoro' },
+    { kind: 'speech', event: 'preview', phase: 'dispatched', provider: 'kokoro' },
+    { kind: 'speech', event: 'setup', phase: 'received', provider: 'kokoro' },
+    { kind: 'speech', event: 'setup', phase: 'dispatched', provider: 'kokoro' },
+    { kind: 'speech', event: 'setup', phase: 'ready', provider: 'kokoro' },
+  ]);
+});
+
+it('records capability and local model readiness even before any action', async () => {
+  const { panel, speech } = harness();
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  await flush();
+  expect(speech.diagnostic).toHaveBeenCalledWith({ kind: 'speech', event: 'capability', phase: 'ready', provider: 'kokoro' });
+  expect(speech.diagnostic).toHaveBeenCalledWith({ kind: 'speech', event: 'capability', phase: 'ready', provider: 'elevenlabs' });
+  expect(speech.diagnostic).toHaveBeenCalledWith({
+    kind: 'speech',
+    event: 'setup',
+    phase: 'blocked',
+    provider: 'kokoro',
+    reason: 'not_ready',
+  });
+});
+
+it('records unsupported cloud capability when the page becomes ready', () => {
+  const { panel, speech } = harness();
+  speech.cloudSupported.mockReturnValue(false);
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  expect(speech.diagnostic).toHaveBeenCalledWith({
+    kind: 'speech',
+    event: 'capability',
+    phase: 'blocked',
+    provider: 'elevenlabs',
+    reason: 'unsupported',
+  });
+});
+
+it('offers output state on page readiness and forwards only explicit refresh and selection', () => {
+  const { panel, speech } = harness();
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  expect(view.posted).toContainEqual({
+    type: 'speechOutputCatalog',
+    value: { supported: false, devices: [], selected: { kind: 'default' } },
+  });
+  expect(speech.outputRefresh).not.toHaveBeenCalled();
+  view.send({ type: 'speechOutputRefresh' });
+  view.send({ type: 'speechOutputSelect', choice: { kind: 'default' } });
+  expect(speech.outputRefresh).toHaveBeenCalledOnce();
+  expect(speech.outputSelect).toHaveBeenCalledWith({ kind: 'default' });
+  expect(speech.preview).not.toHaveBeenCalled();
+});
+
+it('blocks preview before synthesis when the selected output is unavailable', () => {
+  const { panel, speech } = harness();
+  const view = open(panel);
+  speech.outputReady.mockReturnValue(false);
+  view.send({ type: 'speechPreview' });
+  expect(speech.preview).not.toHaveBeenCalled();
+  expect(speech.diagnostic).toHaveBeenCalledWith({
+    kind: 'speech',
+    event: 'preview',
+    phase: 'blocked',
+    provider: 'kokoro',
+    reason: 'not_ready',
+  });
+  expect(view.posted).toContainEqual({
+    type: 'speechSetupState',
+    pending: false,
+    message: 'The selected speech output is unavailable. Refresh outputs or choose System default.',
+  });
+});
+
+it('accepts retirement acknowledgement only from its own page and valid unit', () => {
+  const { panel, speech } = harness();
+  const view = open(panel);
+  view.send({ type: 'speechRetired', id: 1, pageId: 2 });
+  view.send({ type: 'speechRetired', id: 0, pageId: 1 });
+  view.send({ type: 'speechRetired', id: 1, pageId: 1 });
+  expect(speech.outputRetired.mock.calls).toEqual([[1, 1]]);
+});
+
+it('retains replaced browser-page ownership until its actual disposal', () => {
+  const { panel, speech } = harness();
+  const first = open(panel);
+  first.send({ type: 'ready' });
+  const second = open(panel);
+  second.send({ type: 'ready' });
+  expect(speech.pageClosed).toHaveBeenCalledWith(1);
+  expect(speech.outputPageRetired).not.toHaveBeenCalled();
+  first.dispose();
+  expect(speech.outputPageRetired.mock.calls).toEqual([[1]]);
+  second.send({ type: 'speechPageHidden', pageId: 1 });
+  expect(speech.outputPageRetired.mock.calls).toEqual([[1]]);
+  second.send({ type: 'speechPageHidden', pageId: 2 });
+  expect(speech.outputPageRetired.mock.calls).toEqual([[1], [2]]);
+});
+
+describe('remote panel port', () => {
+  it('sends workspace updates to the attached page and handles validated actions without touching remote speech', () => {
+    const { panel, controller, speech } = harness();
+    const send = vi.fn<(message: ToPanel) => void>();
+    panel.attachRemote(1, send);
+    panel.receiveRemote(1, { type: 'ready' });
+    expect(speech.keyRefresh).not.toHaveBeenCalled();
+    expect(speech.settings.get).not.toHaveBeenCalled();
+    panel.post({ type: 'say', text: 'Hello.' });
+    expect(send).toHaveBeenCalledWith({ type: 'say', text: 'Hello.' });
+    panel.receiveRemote(1, { type: 'reply', text: 'Continue.' });
+    expect(controller.userMessage.mock.calls.length).toBeGreaterThan(0);
+    expect(speech.stop).not.toHaveBeenCalled();
+    panel.closeRemote(1);
+    expect(controller.releaseReadingHold.mock.calls.length).toBeGreaterThan(0);
+    panel.receiveRemote(1, { type: 'pause' });
+    expect(controller.pause.mock.calls).toHaveLength(0);
+  });
+});
+
+it('routes remote interrupt, turn, end and page disposal without stopping remote speech', () => {
+  const { panel, controller, speech } = harness('programmer');
+  panel.attachRemote(1, vi.fn<(message: ToPanel) => void>());
+  panel.closeRemote(2);
+  panel.receiveRemote(1, { type: 'interrupt' });
+  panel.receiveRemote(1, { type: 'turn' });
+  panel.receiveRemote(1, { type: 'end' });
+  expect(controller.userInterrupt.mock.calls).toHaveLength(1);
+  expect(controller.handBack.mock.calls).toHaveLength(1);
+  expect(controller.endSession.mock.calls).toHaveLength(1);
+  expect(speech.stop).not.toHaveBeenCalled();
+  panel.receiveRemote(1, { type: 'pageClosed' });
+  expect(controller.releaseReadingHold.mock.calls).toHaveLength(1);
+});
+
+describe('companion panel port', () => {
+  it('keeps speech local and forwards validated workspace actions with the local page identity', () => {
+    const { panel, controller, controllerAccessor, speech } = harness();
+    const forward = vi.fn<(action: import('@ai-pair/protocol').LocalPanelAction, pageId: number) => void>();
+    const closed = vi.fn<(pageId: number) => void>();
+    panel.useCompanion({ forward, closed });
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(speech.keyRefresh).toHaveBeenCalledTimes(1);
+    expect(forward).toHaveBeenCalledWith({ type: 'ready' }, 1);
+    view.send({ type: 'reply', text: 'Continue.' });
+    expect(forward).toHaveBeenCalledWith({ type: 'reply', text: 'Continue.' }, 1);
+    expect(controller.userMessage.mock.calls).toHaveLength(0);
+    panel.showRemoteUpdate({ type: 'say', text: 'From workspace.' });
+    expect(view.posted).toContainEqual({ type: 'say', text: 'From workspace.' });
+    panel.showRemoteUpdate({ type: 'speechAudio', wavBase64: 'secret' });
+    expect(view.posted).not.toContainEqual({ type: 'speechAudio', wavBase64: 'secret' });
+    view.send({ type: 'speechStop' });
+    expect(speech.stop).toHaveBeenCalledTimes(1);
+    expect(controllerAccessor).not.toHaveBeenCalled();
+    view.receive({ type: 'command', command: 'arbitrary.exec' });
+    view.receive({ type: 'reply', text: 'x'.repeat(65_537) });
+    expect(controller.userMessage.mock.calls).toHaveLength(0);
+    expect(forward).toHaveBeenCalledTimes(2);
+    view.dispose();
+    expect(closed).toHaveBeenCalledWith(1);
+    expect(controller.releaseReadingHold.mock.calls).toHaveLength(0);
+  });
+  it('retires the old companion page before replacing its view', () => {
+    const { panel, speech } = harness();
+    const closed = vi.fn<(pageId: number) => void>();
+    panel.useCompanion({ forward: vi.fn<(action: import('@ai-pair/protocol').LocalPanelAction, page: number) => void>(), closed });
+    const old = open(panel);
+    old.send({ type: 'ready' });
+    const replacement = open(panel);
+    expect(speech.pageClosed).toHaveBeenCalledWith(1);
+    expect(closed).toHaveBeenCalledWith(1);
+    old.dispose();
+    expect(closed).toHaveBeenCalledTimes(1);
+    replacement.dispose();
+  });
+  it('ignores updates without a companion view and does not close a replaced view twice', () => {
+    const first = harness();
+    first.panel.showRemoteUpdate({ type: 'say', text: 'not shown' });
+    const closed = vi.fn<(pageId: number) => void>();
+    first.panel.useCompanion({ forward: vi.fn<(action: import('@ai-pair/protocol').LocalPanelAction, page: number) => void>(), closed });
+    first.panel.showRemoteUpdate({ type: 'say', text: 'not shown' });
+    const view = open(first.panel);
+    view.dispose();
+    expect(closed).toHaveBeenCalledTimes(1);
+    open(first.panel);
+    expect(closed).toHaveBeenCalledTimes(1);
   });
 });

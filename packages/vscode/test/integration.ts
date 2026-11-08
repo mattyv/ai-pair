@@ -12,12 +12,24 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import * as vscode from 'vscode';
 import { WebSocket, WebSocketServer } from 'ws';
+import { z } from 'zod';
 import { CURSOR_MARKER, discoveryDir, fieldsProblem, PROTOCOL_VERSION, typeProblem, type Report, type ToolName } from '@ai-pair/protocol';
 import { LEFT_ARROW } from '@ai-pair/core/constants';
 import { EditorLink, findWindows } from '../../relay/src/link';
 import type { Api } from '../src/extension';
 import { DEFAULT_TIMINGS } from '../src/timings';
 import { controllerPaths, extensionPaths, playerPaths } from './integration_paths';
+import { panelPaths } from './integration_panel_paths';
+import { gapPaths } from './integration_gap_paths';
+import { codePlaybackPaths } from './integration_code_playback';
+import { corePaths } from './integration_core_paths';
+import { playerGapPaths } from './integration_player_gap_paths';
+import { runLegacySpeechPaths } from './integration_legacy_speech_paths';
+import { installTerminalCleanup } from './integration_terminal_cleanup';
+import { playerFaults } from './integration_player_faults';
+import { exerciseStartup } from './integration_startup_paths';
+import { invalidCalibration } from './integration_invalid_calibration';
+import { badSpeechSettings } from './integration_bad_speech_settings';
 
 const EXPECTED_TODOS = `export interface Todo {
   id: number;
@@ -73,6 +85,9 @@ const ABSENT_MS = 45_000;
 const GRACE_SLACK_MS = 1000;
 /** The navigator's idle time, as the default is. */
 const NAVIGATOR_IDLE_MS = 3000;
+
+/** How long the panel gets to see a selection the test changed. */
+const SELECTION_SETTLE_MS = 100;
 
 /** A relay's socket the test drives by hand: the frames the bridge answers with, one at a time, and its close. */
 interface RawSocket {
@@ -207,9 +222,20 @@ function fakeWindow(name: string, folders: string[], port: number, changes: { pi
 
 /** Runs every scenario inside VS Code; the extension host exits with its result. */
 export async function run(): Promise<void> {
+  const cleanup = installTerminalCleanup();
   const ext = vscode.extensions.getExtension('michalstrba.ai-pair');
   assert.ok(ext, 'extension not found');
-  const exported: unknown = await ext.activate();
+  assert.equal(ext.isActive, false, 'main activated before the cleanup observer');
+  let exported: unknown;
+  try {
+    exported = await ext.activate();
+    assert.ok(isApi(exported), 'the extension exported something other than its Api');
+    await exerciseStartup(exported);
+    await exported.ready;
+    await cleanup.run(exported);
+  } finally {
+    cleanup.dispose();
+  }
   assert.ok(isApi(exported), 'the extension exported something other than its Api');
   const api = exported;
   const folder = vscode.workspace.workspaceFolders?.[0];
@@ -248,11 +274,12 @@ export async function run(): Promise<void> {
   const other = await vscode.workspace.openTextDocument(file('other.txt'));
   await controller.start('other edits');
   await controller.step([{ move: { file: 'tool.txt', line: 1, to: 'line_end' } }, { type_fast: `${'x'.repeat(200)}${CURSOR_MARKER}` }]);
-  const queued = controller.step([{ type: `abc${CURSOR_MARKER}` }]);
+  const queued = controller.step([{ move: { file: 'tool.txt', to: 'line_end' } }, { type: `abc${CURSOR_MARKER}` }]);
   await sleep(1500);
   fs.writeFileSync(file('other.txt'), 'after\n');
   await until(() => other.getText() === 'after\n');
   const first = await queued;
+  assert.equal(first.rejected, undefined, JSON.stringify(first.rejected));
   assert.deepEqual(
     first.batches.map((b) => b.status),
     ['completed'],
@@ -267,8 +294,8 @@ export async function run(): Promise<void> {
   // ...and a save participant, trimming what the agent typed when its batch is saved: its change isn't
   // the programmer's, and the batch queued behind it, planned against the untrimmed text, is discarded.
   await vscode.workspace.getConfiguration('files').update('trimTrailingWhitespace', true, vscode.ConfigurationTarget.Global);
-  await controller.step([{ type: `\nend   ${CURSOR_MARKER}` }]);
-  const trimmed = await controller.step([{ type: `!${CURSOR_MARKER}` }]);
+  await controller.step([{ move: { file: 'tool.txt', to: 'line_end' } }, { type: `\nend   ${CURSOR_MARKER}` }]);
+  const trimmed = await controller.step([{ move: { file: 'tool.txt', to: 'line_end' } }, { type: `!${CURSOR_MARKER}` }]);
   const trimDone = await controller.step([]);
   await vscode.workspace.getConfiguration('files').update('trimTrailingWhitespace', undefined, vscode.ConfigurationTarget.Global);
   assert.deepEqual(
@@ -436,15 +463,33 @@ export async function run(): Promise<void> {
     { type: 'x' },
     { type: `${CURSOR_MARKER}x${CURSOR_MARKER}` },
   ];
+  fs.writeFileSync(file('refusals.txt'), 'a\n');
+  await refusing.call('read', { file: 'refusals.txt' });
   for (const action of refusals) {
+    // Name the file before an edit so this exercises action validation after the file fence.
+    const actions =
+      'delete' in action || 'type' in action ? [{ move: { file: 'refusals.txt', line: 1, to: 'line_end' } }, action] : [action];
     // The editor answers a step with a report.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const answer = (await refusing.call('step', { actions: [action] })) as Report;
+    const answer = (await refusing.call('step', { actions })) as Report;
     const expected = fieldsProblem(action) ?? ('type' in action ? typeProblem(action.type) : undefined);
     assert.equal(answer.rejected?.error.kind, 'invalid_action', JSON.stringify(action));
     if (expected !== undefined) {
       assert.equal(answer.rejected.error.message, expected, JSON.stringify(action));
     }
+  }
+  // An action that is no object, a place that is none, and a file that is no string reach the editor from a link too:
+  // each is answered with a report, not an exception.
+  // Written as JSON, the way a link sends them, since a literal null is none of this code's.
+  const malformed: unknown = JSON.parse(
+    '[null, 5, "move", {"move": 5}, {"select": null}, {"point": "x"}, {"move": {"file": 5, "line": 1, "to": "line_end"}}]',
+  );
+  assert.ok(Array.isArray(malformed));
+  for (const action of malformed as unknown[]) {
+    const answer = await refusing.call('step', { actions: [action] });
+    const rejected = z.object({ rejected: z.object({ error: z.object({ kind: z.string() }) }) }).safeParse(answer);
+    assert.ok(rejected.success, `malformed action was not rejected: ${JSON.stringify(action)} => ${JSON.stringify(answer)}`);
+    assert.equal(rejected.data.rejected.error.kind, 'invalid_action', JSON.stringify(action));
   }
   const window = findWindows([root], discoveryDir()).windows[0];
   const raw = new WebSocket(`ws://127.0.0.1:${window.port}`);
@@ -560,6 +605,20 @@ export async function run(): Promise<void> {
   waiter.socket.close();
   await waiter.closed;
   controller.endSession();
+  await sleep(300);
+  // Replacing an ended session transfers ownership even if the old socket stays open.
+  const oldOwner = await greeted();
+  assert.match(JSON.stringify(await ask(oldOwner, 1, 'start', { cwd: root })), /^\{"type":"result"/);
+  controller.endSession();
+  const newOwner = await greeted();
+  assert.match(JSON.stringify(await ask(newOwner, 1, 'start', { cwd: root })), /^\{"type":"result"/);
+  assert.match(JSON.stringify(await ask(oldOwner, 2, 'read', { file: 'other.txt' })), /"code":"no_session"/);
+  oldOwner.socket.close();
+  await oldOwner.closed;
+  assert.match(JSON.stringify(await ask(newOwner, 2, 'read', { file: 'other.txt' })), /^\{"type":"result"/);
+  await ask(newOwner, 3, 'end', {});
+  newOwner.socket.close();
+  await newOwner.closed;
   await sleep(300);
   // A discovery file the window can't write is reported, and the window goes on (#9; specs/Discovery.tla, `OpenWindow`
   // unlisted). A regular file where the folder was fails the write even for root, as in a container.
@@ -794,7 +853,7 @@ export async function run(): Promise<void> {
   await controller.end();
   console.log('an interrupt while a run saves stops it, without asking');
 
-  // A batch interrupted after a type with nothing to type changed nothing, so it's discarded (specs/Actions.tla).
+  // An empty type changes no text; the named move is reported when the batch is interrupted (specs/Actions.tla).
   fs.writeFileSync(file('nothing.txt'), 'a\n');
   await controller.start('nothing');
   await controller.read('nothing.txt');
@@ -806,15 +865,17 @@ export async function run(): Promise<void> {
     if (++eols === 2) controller.userInterrupt();
     return eol(f);
   };
-  await controller.step([{ type: CURSOR_MARKER }, { say: 'Typed.' }]);
+  await controller.step([{ move: { file: 'nothing.txt', to: 'line_end' } }, { type: CURSOR_MARKER }, { say: 'Typed.' }]);
   const untyped = await controller.listen();
   api.editor.eol = eol;
   assert.deepEqual(
     untyped.batches.map((b) => b.status),
-    ['discarded'],
+    ['interrupted'],
   );
+  assert.deepEqual(untyped.batches[0]?.unplayed, [{ say: 'Typed.' }]);
+  assert.equal(await buffer('nothing.txt'), 'a\n');
   await controller.end();
-  console.log('a batch interrupted after a type with nothing to type is discarded');
+  console.log('an interrupted empty type leaves the text unchanged');
 
   // A pause holds a sleep with what is left of it, and the resume plays the rest (specs/Timeline.tla, `Pause`,
   // `Resume`). An interrupt while a move waits for its file to show cuts the move's next pause at once, and the
@@ -963,7 +1024,7 @@ export async function run(): Promise<void> {
   controller.setSpeed(1);
   await controller.start('interrupt test');
   await controller.step([{ move: { file: 'scratch.ts', line: 1, to: 'line_end' } }, { type: `${alphabet}${CURSOR_MARKER}` }]);
-  const pending = controller.step([{ type: `!${CURSOR_MARKER}` }]);
+  const pending = controller.step([{ move: { file: 'scratch.ts', to: 'line_end' } }, { type: `!${CURSOR_MARKER}` }]);
   // Past the pauses around moving into a new file (~1 s), and into the typing.
   await sleep(1500);
   const doc = await vscode.workspace.openTextDocument(file('scratch.ts'));
@@ -1119,12 +1180,59 @@ export async function run(): Promise<void> {
     { select: { text: 'a', extra: 1 } },
     { type_fast: 5 },
     { type_fast: 'x' },
+    { say: 'Look: ```code```', speak: true },
+    { say: 'a', speak: 'yes' },
+    { newline: { indent: '' } },
   ];
   for (const action of schemaRefusals) {
     const refused = await agent.callTool({ name: 'step', arguments: { actions: [action] } });
     assert.equal(refused.isError, true, JSON.stringify(action));
   }
   console.log(`the relay's schema refused ${schemaRefusals.length} malformed actions`);
+  // What the agent reads back: a command's output in each form, a spoken say (speech is off), a file read whole, in
+  // part, past its end, and with unsaved changes, and the programmer's selection sent with a reply and a turn.
+  const rendered = path.join(root, 'render.txt');
+  fs.writeFileSync(rendered, 'first line\nsecond line\nthird line\n');
+  await toolAll('start', { task: 'render' });
+  controller.setConfirmCommands(false);
+  const commandsRan = await toolAll('step', {
+    actions: [
+      { say: 'Running some commands.', speak: true },
+      { run: "printf '%s\\n' '```'" },
+      { run: 'true' },
+      { run: 'sleep 2', wait: 0.3 },
+    ],
+  });
+  const reported = `${commandsRan}\n${await toolAll('listen')}`;
+  assert.match(reported, /Ran `true`.*no output/);
+  assert.match(reported, /Output:\n````/);
+  assert.match(reported, /still running in its terminal/);
+  assert.match(await tool('read', { file: 'render.txt' }), /^render\.txt:\n1 {2}first line/);
+  assert.match(await tool('read', { file: 'render.txt', from_line: 2, to_line: 2 }), /second line/);
+  assert.match(await tool('read', { file: 'render.txt', from_line: 50, to_line: 60 }), /\(end of file\)/);
+  assert.match(await tool('read', { file: 'render.txt', from_line: 3, to_line: 2 }), /no lines in this range/);
+  const renderEditor = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(rendered));
+  await renderEditor.edit((edit) => {
+    edit.insert(new vscode.Position(0, 0), 'unsaved ');
+  });
+  assert.match(await tool('read', { file: 'render.txt' }), /with unsaved changes in the editor/);
+  await vscode.commands.executeCommand('workbench.action.files.revert');
+  renderEditor.selection = new vscode.Selection(0, 0, 1, 'second'.length);
+  await sleep(SELECTION_SETTLE_MS);
+  api.panelMessage({ type: 'reply', text: 'about this', attach: true });
+  renderEditor.selection = new vscode.Selection(2, 0, 2, 'third'.length);
+  await sleep(SELECTION_SETTLE_MS);
+  api.panelMessage({ type: 'reply', text: 'and this', attach: true });
+  const selectionsSent = await tool('listen');
+  assert.match(selectionsSent, /About the code they had selected, render\.txt lines 1-2:/);
+  assert.match(selectionsSent, /About the code they had selected, render\.txt line 3:/);
+  api.panelMessage({ type: 'turn' });
+  api.panelMessage({ type: 'turn', message: 'your move', attach: true });
+  const turns = await tool('listen');
+  assert.match(turns, /took the turn/);
+  assert.match(turns, /handed the turn back to you:\n> your move/);
+  await tool('end', { summary: 'Done.' });
+  console.log('the relay: a command in each form, a file read in each form, and a selection sent with a reply and a turn');
   await agent.close();
   // The run's log, in the user data folder next to the workspace (scripts/integration.sh).
   const logs = path.join(root, '..', 'user', 'logs');
@@ -1315,9 +1423,10 @@ export async function run(): Promise<void> {
     }
     await running;
   }
-  await vscode.env.clipboard.writeText('');
+  const clipboardBefore = 'ai-pair integration: picker was closed';
+  await vscode.env.clipboard.writeText(clipboardBefore);
   await setUpAgents([]);
-  assert.equal(await vscode.env.clipboard.readText(), '');
+  assert.equal(await vscode.env.clipboard.readText(), clipboardBefore);
   await setUpAgents([5]);
   const copied: unknown = JSON.parse(await vscode.env.clipboard.readText());
   assert.deepEqual(copied, { mcpServers: { pair: { command: api.launcher, args: [] } } });
@@ -1328,12 +1437,32 @@ export async function run(): Promise<void> {
   assert.match(fs.readFileSync(path.join(agents, 'codex', 'config.toml'), 'utf8'), /\[mcp_servers\.pair\]/);
   // Opened again, it lists Codex as set up; from the run's own config files, so the same on every machine.
   await setUpAgents([]);
-  console.log('Set Up Agent: closed, copied for another agent, and set up Codex past a broken Claude Code file');
+  // A multi-agent choice writes both isolated configurations from scratch.
+  fs.rmSync(path.join(agents, 'codex'), { recursive: true, force: true });
+  await setUpAgents([1, 2]);
+  const openCodeFile = path.join(agents, 'xdg', 'opencode', 'opencode.json');
+  const openCode = z
+    .object({ mcp: z.object({ pair: z.object({ type: z.literal('local'), command: z.tuple([z.string()]), enabled: z.literal(true) }) }) })
+    .parse(JSON.parse(fs.readFileSync(openCodeFile, 'utf8')));
+  assert.equal(openCode.mcp.pair.command[0], api.launcher);
+  const codexConfig = fs.readFileSync(path.join(agents, 'codex', 'config.toml'), 'utf8');
+  assert.match(codexConfig, /\[mcp_servers\.pair\]/);
+  assert.ok(codexConfig.includes(api.launcher), 'Codex did not receive the current launcher');
+  console.log('Set Up Agent: closed, copied, and configured multiple agents in the isolated profile');
 
   // Last, since they change the playback's settings: the player's and the controller's paths (#176).
+  await codePlaybackPaths(api, root);
+  await playerGapPaths(api, root);
+  await playerFaults(api, root);
   await playerPaths(api, root);
   await controllerPaths(api, root);
+  await corePaths(api, root);
   await extensionPaths(api, root);
+  await panelPaths(api);
+  await invalidCalibration(api);
+  await runLegacySpeechPaths(api);
+  await badSpeechSettings(api);
+  await gapPaths(api);
 
   // The window's file and its sockets go with it, at exit: here the file is gone already, and a socket is still open
   // (specs/Discovery.tla, `CloseWindow`).

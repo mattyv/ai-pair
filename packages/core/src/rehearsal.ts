@@ -8,6 +8,7 @@ import type { LineIds, Sighting } from './lines';
 import { Player, transformScene, type Failure, type Scene } from './player';
 import { MissingFile, type Change, type CommandOutcome, type EditorPort, type PanelPort, type PlayerEditor } from './ports';
 import { instant } from './timeline';
+import type { CodePlayback } from './typing';
 
 /** A panel that shows nothing: a rehearsal is silent. */
 const silent: PanelPort = { post: () => {} };
@@ -87,6 +88,7 @@ export async function rehearse(
   from: Rehearsal,
   actions: Action[],
   knows: (file: string, line: number, id: number) => boolean,
+  mode: CodePlayback = 'typing',
 ): Promise<{ result: BatchResult; sightings: Sighting[]; failed?: Failure; after: Rehearsal }> {
   const scene: Scene = {
     ...from.scene,
@@ -103,6 +105,7 @@ export async function rehearse(
     config: () => config,
     speed: () => 1,
     readingSpeed: () => 1,
+    codePlayback: () => mode,
     render: () => {},
     confirm: () => Promise.resolve(true),
     lines,

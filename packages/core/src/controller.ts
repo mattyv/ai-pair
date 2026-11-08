@@ -14,6 +14,7 @@ import {
   type Report,
   type Turn,
 } from '@ai-pair/protocol';
+import { reportDiagnostic } from './diagnostic_delivery';
 import { boundedDiff, lineChanges } from './diff';
 import { LineIds, type Sighting } from './lines';
 import { agentPath, displayPath, Player, type Failure, type Scene } from './player';
@@ -22,7 +23,9 @@ import {
   type AgentState,
   type Change,
   type CursorView,
+  type DiagnosticEvent,
   type EditorPort,
+  type NarrationPort,
   type PanelPort,
   type Ref,
   type SharedSelection,
@@ -35,6 +38,13 @@ import { defaultTiming, glideDuration, withOverrides } from './timing';
 
 const UNANCHORED =
   'Your previous batch was interrupted, discarded, or failed, so your cursor is where it stopped, not where that batch would have ended. `read` the file, then start this batch with a `move` or `select` that gives both `file` and `line`.';
+const FILE_REQUIRED =
+  'Name the target file in a `move`, `select`, or `point` before the first edit in each batch. The cursor can be in a different file than you expect.';
+
+/** Identifies a selected narration even when a malformed action bypassed the schema. */
+function selectedSpeech(action: unknown): boolean {
+  return typeof action === 'object' && action !== null && 'say' in action && 'speak' in action && action.speak === true;
+}
 
 interface Batch {
   id: number;
@@ -201,9 +211,30 @@ function describeReport(report: Report): string {
 /** Returns the first action at the cursor, and whether it anchors the cursor: a `move` or `select` giving both `file` and `line` (#112). */
 function cursorAnchor(actions: Action[]): CursorAnchor | undefined {
   for (const [i, action] of actions.entries()) {
+    if (typeof action !== 'object' || action === null) return undefined;
     if ('say' in action || 'run' in action || 'point' in action) continue;
     const place = 'move' in action ? action.move : 'select' in action ? action.select : undefined;
-    return { index: i + 1, action, anchored: place?.file !== undefined && place?.line !== undefined };
+    const relativeMove = 'move' in action && action.move?.to === 'next_close';
+    return { index: i + 1, action, anchored: !relativeMove && place?.file !== undefined && place?.line !== undefined };
+  }
+  return undefined;
+}
+
+/** Finds the first edit that has no explicitly named file in its batch (specs/BatchFile.tla, `EditRequiresNamed`). */
+function unnamedEdit(actions: Action[]): { index: number; action: Action } | undefined {
+  let named = false;
+  for (const [index, action] of actions.entries()) {
+    if (typeof action !== 'object' || action === null) return undefined;
+    if ('move' in action || 'select' in action || 'point' in action) {
+      const place: unknown = 'move' in action ? action.move : 'select' in action ? action.select : action.point;
+      if (typeof place !== 'object' || place === null) return undefined;
+      if ('file' in place && place.file !== undefined) {
+        if (typeof place.file !== 'string') return undefined;
+        named = true;
+      }
+    } else if ('type' in action || 'type_fast' in action || 'delete' in action || 'newline' in action) {
+      if (!named) return { index: index + 1, action };
+    }
   }
   return undefined;
 }
@@ -231,9 +262,18 @@ export class Controller {
   private readonly pauseReasons = new Set<PauseReason>();
   private speed = 1;
   private readingSpeed = 1;
+  private codePlayback: import('./typing').CodePlayback = 'typing';
   private lastPosted = '';
   /** After any change the session's `saved` form may have: the window saves it (#25). */
   onChange?: () => void;
+  /** Receives allowlisted lifecycle facts, without session text. */
+  onDiagnostic?: (event: DiagnosticEvent) => void;
+
+  /** Reports diagnostics without allowing an observer to affect the operation. */
+  private diagnostic(event: DiagnosticEvent): void {
+    reportDiagnostic(this.onDiagnostic, event, this);
+  }
+
   /** Where the session's interactions are logged: statuses, batches, pauses, interrupts, edits, reports (#149). */
   trace?: (line: string) => void;
 
@@ -241,6 +281,7 @@ export class Controller {
     private readonly editor: EditorPort,
     private readonly panel: PanelPort,
     private config: Config = defaultConfig,
+    private readonly narration?: NarrationPort,
   ) {}
 
   // ---- Tools -------------------------------------------------------------
@@ -270,6 +311,8 @@ export class Controller {
         allowedCommands: new Set(),
       };
       this.open(scene, task);
+      this.diagnostic({ kind: 'session', state: 'active' });
+      this.diagnostic({ kind: 'pause', paused: this.pauseReasons.size > 0, reasons: [...this.pauseReasons] });
       this.trace?.(`session started${task === undefined ? '' : `: ${task}`}`);
       this.panel.post({ type: 'session', active: true, task, ...(rules !== undefined && rules.length > 0 ? { rules } : {}) });
       this.render();
@@ -283,6 +326,7 @@ export class Controller {
    */
   private resumeSession(session: Session, rules?: string[]): Promise<Report> {
     session.suspended = false;
+    this.diagnostic({ kind: 'session', state: 'active' });
     this.trace?.('session resumed');
     session.seen = new Map();
     session.seenCursor = undefined;
@@ -311,6 +355,8 @@ export class Controller {
         config: () => this.config,
         speed: () => this.speed,
         readingSpeed: () => this.readingSpeed,
+        codePlayback: () => this.codePlayback,
+        narration: this.narration,
         render: () => {
           this.render();
         },
@@ -371,6 +417,8 @@ export class Controller {
     };
     const session = this.open(scene, saved.task);
     session.suspended = true;
+    this.diagnostic({ kind: 'session', state: 'suspended' });
+    this.diagnostic({ kind: 'pause', paused: this.pauseReasons.size > 0, reasons: [...this.pauseReasons] });
     this.trace?.('session revived after a reload, suspended');
     session.finished = [...saved.finished];
     session.events = [...saved.events];
@@ -389,6 +437,33 @@ export class Controller {
       // report of the step discarded as stale (`TakeHeld`, #193).
       const anchor = cursorAnchor(actions);
       if (session.anchorNeeded && anchor && !anchor.anchored && session.held.length === 0) return this.rejectUnanchored(session, anchor);
+      // The target must be explicit even when no interruption was reported (specs/BatchFile.tla, `EditRequiresNamed`).
+      const unnamed = unnamedEdit(actions);
+      if (unnamed !== undefined && !session.stale && !session.ended && session.held.length === 0) {
+        const rejected = { ...unnamed, error: { kind: 'file_required' as const, message: FILE_REQUIRED } };
+        const report = { ...this.snapshot(session, /* waiting= */ false), rejected };
+        this.trace?.(`report to step: ${describeReport(report)}`);
+        this.render();
+        return this.withCursor(session, report);
+      }
+      // A selected unit cannot queue behind another selected unit, even while speech is disabled.
+      if (!session.stale && !session.ended && session.held.length === 0) {
+        const selected = actions.flatMap((action, index) => (selectedSpeech(action) ? [{ action, index: index + 1 }] : []));
+        const outstanding = session.queue.some((batch) => batch.actions.some(selectedSpeech));
+        const rejected = selected.length > 1 ? selected[1] : outstanding ? selected[0] : undefined;
+        if (rejected !== undefined) {
+          const message =
+            selected.length > 1
+              ? 'Submit only one selected narration per batch.'
+              : 'Wait for the current narration and report before selecting another.';
+          const report = {
+            ...this.snapshot(session, /* waiting= */ false),
+            rejected: { ...rejected, error: { kind: 'invalid_action' as const, message } },
+          };
+          this.render();
+          return this.withCursor(session, report);
+        }
+      }
       // Played in memory first, so what would fail is reported now, not when the batch plays (specs/Controller.tla, `Submit`).
       const rehearsal = session.stale || session.ended ? undefined : await this.rehearse(session, actions);
       // An interruption arriving meanwhile discards it, like any batch planned without knowing about it
@@ -644,6 +719,7 @@ export class Controller {
     // `EndByProgrammer` in specs/Bridge.tla and specs/Controller.tla: its last report, to the owner's next call, closes it
     // (`End` in specs/Serialize.tla).
     session.ended = true;
+    this.diagnostic({ kind: 'session', state: 'ended' });
     session.events.push({ kind: 'end' });
     this.interrupt(session);
     this.panel.post({ type: 'session', active: false, reason: 'programmer' });
@@ -670,6 +746,7 @@ export class Controller {
     // Nothing plays without its agent: what's queued is discarded, and reported once it's back.
     this.interrupt(session);
     session.suspended = true;
+    this.diagnostic({ kind: 'session', state: 'suspended' });
     this.trace?.('session suspended: the agent disconnected');
     this.panel.post({ type: 'session', active: true, task: session.task, suspended: true });
     this.update();
@@ -677,9 +754,12 @@ export class Controller {
 
   /** Adds a pause reason, and pauses playback (specs/Timeline.tla, `Pause`). */
   pause(reason: PauseReason = 'programmer'): void {
-    if (!this.pauseReasons.has(reason)) this.trace?.(`pause ${reason}`);
+    const changed = !this.pauseReasons.has(reason);
+    if (changed) this.trace?.(`pause ${reason}`);
     this.pauseReasons.add(reason);
+    if (changed) this.diagnostic({ kind: 'pause', paused: true, reasons: [...this.pauseReasons] });
     this.session?.timeline.pause();
+    this.narration?.pause();
     this.render();
   }
 
@@ -690,6 +770,7 @@ export class Controller {
    */
   resume(reason?: PauseReason, { reveal = true }: { reveal?: boolean } = {}): void {
     if (this.pauseReasons.size === 0) return;
+    const before = this.pauseReasons.size;
     const lookedAway = this.pauseReasons.has('away');
     if (reason === undefined || this.pauseReasons.has(reason)) this.trace?.(`resume ${reason ?? 'all'}`);
     if (reason === undefined) {
@@ -697,7 +778,11 @@ export class Controller {
     } else {
       this.pauseReasons.delete(reason);
     }
+    if (this.pauseReasons.size !== before) {
+      this.diagnostic({ kind: 'pause', paused: this.pauseReasons.size > 0, reasons: [...this.pauseReasons] });
+    }
     if (this.pauseReasons.size > 0) return;
+    this.narration?.resume();
     const session = this.session;
     if (session) {
       // A point the programmer looked away from is stale: from now on the view follows the cursor,
@@ -719,6 +804,34 @@ export class Controller {
   /** Returns how long follow mode's scroll glides over `lines` lines, at the playback speed (#123). */
   glideMs(lines: number): number {
     return glideDuration(this.config.timing, lines, this.speed);
+  }
+
+  /** Finishes only the current message's reading delay, without ending a pause. */
+  finishReading(id: number): void {
+    const session = this.activeSession();
+    if (session === undefined || session.suspended || session.scene.turn !== 'agent' || this.pauseReasons.size > 0) return;
+    if (session.player.isCurrentReading(id)) session.timeline.finish();
+  }
+
+  /** Holds or releases only the matching reading delay, preserving pauses. */
+  holdReading(id: number, held: boolean): void {
+    const session = this.session;
+    if (session === undefined) return;
+    if (held && (session.ended || session.suspended || session.scene.turn !== 'agent' || this.pauseReasons.size > 0)) return;
+    if (!session.player.isCurrentReading(id)) return;
+    if (held) session.timeline.hold();
+    else session.timeline.release();
+  }
+
+  /** Releases a reading hold belonging to a disposed panel. */
+  releaseReadingHold(): void {
+    const session = this.session;
+    if (session !== undefined && session.player.hasCurrentReading()) session.timeline.release();
+  }
+
+  /** Sets the granularity used by the next typing action. */
+  setCodePlayback(mode: import('./typing').CodePlayback): void {
+    this.codePlayback = mode;
   }
 
   setReadingSpeed(speed: number): void {
@@ -834,7 +947,14 @@ export class Controller {
   /** Plays a batch in memory, from where the queued batches leave off, or the editor as it is (specs/Rehearsal.tla, `Submit`). */
   private rehearse(session: Session, actions: Action[]): ReturnType<typeof rehearse> {
     const from = session.queue.at(-1)?.after ?? { scene: session.scene, texts: new Map(), lines: session.lines, edits: new Set<string>() };
-    return rehearse(this.editor, this.config, from, actions, (file, line, id) => session.seen.get(file)?.get(line) === id);
+    return rehearse(
+      this.editor,
+      this.config,
+      from,
+      actions,
+      (file, line, id) => session.seen.get(file)?.get(line) === id,
+      this.codePlayback,
+    );
   }
 
   /** Reports a batch that played in memory failed, without queuing it; nothing else changes. */
@@ -1075,8 +1195,11 @@ export class Controller {
 
   private close(session: Session): void {
     this.trace?.('session closed');
+    this.diagnostic({ kind: 'session', state: 'ended' });
     this.session = undefined;
+    this.narration?.cancel();
     session.timeline.interrupt();
+    this.editor.cleanupIdleTerminals();
     clearTimeout(session.navigatorTimer);
     this.endGrace();
     this.endQuiet();
@@ -1099,6 +1222,7 @@ export class Controller {
    * (specs/Rehearsal.tla, `QueuesAfterInterrupt`, #151).
    */
   private interrupt(session: Session): void {
+    this.narration?.cancel();
     markStale(session);
     const discarded = session.queue.filter((b) => b.state === 'queued').map((b) => b.id);
     const playing = session.queue.find((b) => b.state === 'playing');
@@ -1130,7 +1254,24 @@ export class Controller {
         // specs/Controller.tla: `Play`, then `Complete` once it has played.
         this.startHead(session);
         this.render();
-        const { result, sightings } = await session.player.play(batch.id, batch.actions);
+        const { result, sightings, editedFiles } = await session.player.play(batch.id, batch.actions);
+        if (this.session !== session) break;
+        // specs/Diagnostics.tla, `Finish`: inspect only files actually edited; checks remain advisory.
+        for (const file of editedFiles) {
+          try {
+            const checked = await this.editor.diagnostics(file);
+            if (this.session !== session) break;
+            if (checked.diagnostics.length > 0) {
+              result.diagnostics = [
+                ...(result.diagnostics ?? []),
+                ...checked.diagnostics.map((diagnostic) => ({ ...diagnostic, file: this.displayPath(session, file) })),
+              ];
+            }
+            if (checked.warnings.length > 0) result.warnings = [...(result.warnings ?? []), ...checked.warnings];
+          } catch {
+            result.warnings = [...(result.warnings ?? []), 'Diagnostics unavailable for an edited file.'];
+          }
+        }
         if (this.session !== session) break;
         // It played as it did in memory, so the lines it typed are the ones later batches were rehearsed with
         // (specs/Rehearsal.tla, `Play`).

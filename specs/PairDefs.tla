@@ -10,7 +10,8 @@ EXTENDS Naturals
 
 \* The kinds of action a batch may hold (packages/protocol/src/schemas.ts).
 ActionKinds ==
-    {"say", "move", "select", "point", "type", "type_fast", "delete", "run"}
+    {"say", "move", "select", "point", "type", "type_fast", "newline",
+     "delete", "run"}
 
 \* A session's phases: "active"; "suspended", its agent gone; "ended", by the
 \* programmer, until its last report closes it.

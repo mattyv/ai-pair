@@ -1,6 +1,18 @@
 // What the core needs from the editor and the narration panel.
 
-import type { Excerpt, Turn } from '@ai-pair/protocol';
+import type { Excerpt, PauseReason, Turn } from '@ai-pair/protocol';
+
+/** Controls one optional live narration without owning reading or command decisions. */
+export interface NarrationPort {
+  /** Speaks one displayed unit and resolves on completion, cancellation, or text-only fallback. */
+  speak: (text: string) => Promise<void>;
+  /** Pauses audio or prevents a prepared waveform from starting. */
+  pause: () => void;
+  /** Resumes only the current uncanceled audio. */
+  resume: () => void;
+  /** Stops current audio and invalidates its pending generation. */
+  cancel: () => void;
+}
 
 /** What the agent is doing, as the panel shows it. */
 export type AgentState = 'typing' | 'read' | 'running' | 'thinking' | 'absent' | 'paused' | 'listening' | 'navigator';
@@ -21,6 +33,27 @@ export interface EditOptions {
   undoStopAfter: boolean;
 }
 
+/** The only lifecycle facts allowed in copied diagnostics. */
+export type DiagnosticEvent =
+  | { kind: 'session'; state: 'active' | 'suspended' | 'ended' }
+  | { kind: 'connection'; state: 'connected' | 'disconnected'; connectionId: number }
+  | { kind: 'pause'; paused: boolean; reasons: PauseReason[] }
+  | {
+      kind: 'request';
+      connectionId: number;
+      id: number;
+      method: 'start' | 'step' | 'listen' | 'end' | 'read' | 'calibrate' | 'unknown';
+      phase: 'received' | 'replied' | 'failed' | 'cancelled';
+    }
+  | CommandDiagnostic;
+
+/** A command lifecycle event with no command text or output. */
+export type CommandDiagnostic =
+  | { kind: 'command'; id: number; phase: 'requested'; waitMs: number }
+  | { kind: 'command'; id: number; phase: 'integration'; available: boolean }
+  | { kind: 'command'; id: number; phase: 'end'; exitCode?: number }
+  | { kind: 'command'; id: number; phase: 'start' | 'timeout' | 'abort' | 'closed' | 'untracked' | 'failed' };
+
 /** What a command produced in the terminal, and how it ended. */
 export interface CommandOutcome {
   /** Absent while still running, or when the terminal couldn't report it. */
@@ -38,6 +71,8 @@ export interface CommandOutcome {
 
 /** How to run a command: where, how long to wait, and the signal that stops waiting. */
 export interface RunOptions {
+  /** The panel's ID for this command. */
+  id: number;
   /** Directory to run in (absolute). */
   cwd: string;
   /** Stop waiting after this long; the command keeps running. */
@@ -63,8 +98,24 @@ export class MissingFile extends Error {
   }
 }
 
+/** An advisory error snapshot from an editor or a syntax checker. Lines are one-based. */
+export interface EditorDiagnostic {
+  line: number;
+  endLine: number;
+  message: string;
+  source?: string;
+}
+
+/** Diagnostics and limitations observed after an actual edit. */
+export interface DiagnosticCheck {
+  diagnostics: EditorDiagnostic[];
+  warnings: string[];
+}
+
 /** Files are absolute paths; offsets are into the document text. */
 export interface EditorPort {
+  /** Checks a file after edits; diagnostics are advisory and may be unavailable. */
+  diagnostics(file: string): Promise<DiagnosticCheck>;
   /**
    * Returns the absolute path for a path given by the agent (absolute or workspace-relative), in the same
    * canonical form the editor reports files in (e.g. VS Code lowercases the Windows drive letter).
@@ -83,16 +134,20 @@ export interface EditorPort {
   save(file: string): Promise<void>;
   renderCursor(cursor: CursorView | undefined, state: AgentState, focus: Focus): void;
   renderPoint(point?: { file: string; start: number; end: number }): void;
+  /** Highlights a newly inserted code group while it is read. */
+  renderCodeReading?(range?: { file: string; start: number; end: number }): void;
   /** Brings the programmer's view back to what it follows. */
   reveal(): void;
   /** Keeps what the view follows in view, after a keystroke, move, selection or point of the agent changed it. */
   follow(): void;
-  /** Runs a command in a terminal the programmer can see. */
+  /** Runs a command in an owned terminal. */
   runCommand(command: string, options: RunOptions): Promise<CommandOutcome>;
+  /** Closes idle owned terminals that are safe to clean up. */
+  cleanupIdleTerminals(): void;
 }
 
 /** What a `Player` asks of the editor: the rest of `EditorPort` is the controller's. */
-export type PlayerEditor = Omit<EditorPort, 'isDirty' | 'renderCursor' | 'reveal'>;
+export type PlayerEditor = Omit<EditorPort, 'cleanupIdleTerminals' | 'diagnostics' | 'isDirty' | 'renderCursor' | 'reveal'>;
 
 /** Something the panel shows: a session starting or ending, a status, a word to the programmer, a report. */
 export type PanelEvent =
@@ -100,7 +155,7 @@ export type PanelEvent =
   | { type: 'session'; active: true; task?: string; rules?: string[]; suspended?: true; resumed?: true }
   | { type: 'session'; active: false; reason: 'agent' | 'programmer' | 'disconnected'; summary?: string }
   | { type: 'say'; text: string }
-  | { type: 'reading'; ms: number }
+  | { type: 'reading'; ms: number; id?: number; owner?: 'code' }
   | { type: 'state'; state: AgentState; turn: Turn; paused: boolean }
   | { type: 'programmer'; text: string; ref?: Ref }
   | { type: 'turn'; to: Turn; message?: string; ref?: Ref }
