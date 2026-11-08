@@ -1069,7 +1069,7 @@ Each behavioral invariant was checked with a mutation and then restored:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | TypeScript checks these types |
-| `OnlyEdited`, `ObserveWhenAvailable`, `OutcomeUnchanged`, `Advisory` | `controller.test.ts`: OnlyEdited, Advisory: reports diagnostics only for files actually edited and does not reject the batch |
+| `OnlyEdited`, `ObserveWhenAvailable`, `OutcomeUnchanged`, `Advisory` | `controller.test.ts`: OnlyEdited, Advisory: reports diagnostics only for files actually edited and does not reject the batch; `integration_render_diagnostic.ts`: a real editor advisory reaches the agent through the relay |
 | `CaveatNeedsEdit`, `CaveatRecorded`, `CaveatOnce`, `CaveatOnFirstEdit` | `controller.test.ts`: reports Pylance diagnostics on every batch but the snapshot caveat only once per session |
 
 ### `Draft`: the reply box's pause, across the view's page

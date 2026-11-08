@@ -256,6 +256,7 @@ Last updated: css, 2026-11-08.
 | `packages/vscode/test/integration_player_gap_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_preserved_playback.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/integration_recovery_restart.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/integration_render_diagnostic.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/integration_restricted_runtime.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_runtime_identity.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/integration_speech_reminder.ts` | TypeScript | test | - | test | - | - | test |
