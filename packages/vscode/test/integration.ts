@@ -13,7 +13,16 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import * as vscode from 'vscode';
 import { WebSocket, WebSocketServer } from 'ws';
 import { z } from 'zod';
-import { CURSOR_MARKER, discoveryDir, fieldsProblem, PROTOCOL_VERSION, typeProblem, type Report, type ToolName } from '@ai-pair/protocol';
+import {
+  CURSOR_MARKER,
+  DISCOVERY_SCHEMA,
+  discoveryDir,
+  fieldsProblem,
+  PROTOCOL_VERSION,
+  typeProblem,
+  type Report,
+  type ToolName,
+} from '@ai-pair/protocol';
 import { LEFT_ARROW } from '@ai-pair/core/constants';
 import { EditorLink, findWindows } from '../../relay/src/link';
 import type { Api } from '../src/extension';
@@ -208,6 +217,9 @@ async function fakeEditor(answer: (socket: WebSocket) => void): Promise<{ server
 /** Writes the discovery file of a window that isn't this one, open on `folders`, and returns its path. */
 function fakeWindow(name: string, folders: string[], port: number, changes: { pid?: number; lastFocused?: number } = {}): string {
   const written = path.join(discoveryDir(), `${name}.json`);
+  const current: unknown = JSON.parse(fs.readFileSync(path.join(discoveryDir(), `${process.pid}.json`), 'utf8'));
+  const runtime = DISCOVERY_SCHEMA.parse(current).runtime;
+  assert.ok(runtime, 'the active editor must advertise its runtime');
   fs.writeFileSync(
     written,
     JSON.stringify({
@@ -216,6 +228,7 @@ function fakeWindow(name: string, folders: string[], port: number, changes: { pi
       port,
       token: name,
       protocolVersion: PROTOCOL_VERSION,
+      runtime,
       lastFocused: Date.now(),
       ...changes,
     }),
