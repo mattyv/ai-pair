@@ -373,6 +373,8 @@ it('provides safe local-only panel settings and refuses workspace operations', a
   expect(invoke(args[10])).toBe(false);
   expect(invoke(field(args[11], 'get'))).toBe('typing');
   invoke(field(args[11], 'set'), 'lines');
+  expect(invoke(field(args[12], 'get'))).toBe('interrupt');
+  invoke(field(args[12], 'set'), 'finishAction');
   current.dispose();
 });
 
