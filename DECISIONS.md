@@ -392,3 +392,8 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   The restart harness bounds the launcher wait and requires the actual Code
     binary. Its timeout watchdog does not promise descendant cleanup for
     arbitrary CLI wrappers. Normal successful runs close their own windows.
+
+-   Catalog integration tests intercept the fixed ElevenLabs voices endpoint
+    before activation and return controlled provider responses. They exercise
+    the real client, catalog and settings without sending the synthetic key
+    to the network; they do not establish live account voice availability.

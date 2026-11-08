@@ -421,6 +421,40 @@ async function terminalWithoutReportedCwd(api: Api): Promise<void> {
   }
 }
 
+/** A synthetic status-less shell-integration end must not invent an exit code. */
+async function terminalEndWithoutStatus(api: Api): Promise<void> {
+  const { controller } = api;
+  const command = "printf '\\033]633;D\\007'; sleep 1";
+  const ended = Promise.withResolvers<vscode.TerminalShellExecutionEndEvent>();
+  const listener = vscode.window.onDidEndTerminalShellExecution((event) => {
+    if (event.execution.commandLine.value === command) ended.resolve(event);
+  });
+  controller.setConfirmCommands(false);
+  controller.setSpeed(20);
+  await closeTerminals();
+  try {
+    await controller.start('shell integration without status');
+    await controller.step([{ run: command, wait: 5 }]);
+    const report = await controller.step([]);
+    const event = await Promise.race([ended.promise, sleep(INTERRUPT_WAIT_MS).then(() => undefined)]);
+    assert.ok(event, 'VS Code did not report the shell integration end');
+    assert.equal(event.exitCode, undefined, 'the synthetic end unexpectedly contained a status');
+    assert.ok(
+      report.batches.some((batch) => batch.status === 'completed'),
+      JSON.stringify(report),
+    );
+    const run = report.batches.flatMap((batch) => batch.runs ?? []).find((item) => item.command === command);
+    assert.ok(run, JSON.stringify(report));
+    assert.equal(run.exit_code, undefined, 'Pair invented an exit status');
+    await sleep(1300);
+    console.log('a synthetic shell integration end without status remains status-less');
+  } finally {
+    listener.dispose();
+    controller.endSession();
+    await closeTerminals();
+  }
+}
+
 /** A foreign shell execution protects its terminal from reuse by Pair. */
 async function foreignTerminalExecution(api: Api): Promise<void> {
   const { controller } = api;
@@ -760,6 +794,7 @@ export async function gapPaths(api: Api): Promise<void> {
   const { controller } = api;
   const settings = vscode.workspace.getConfiguration('aiPair');
   const global = vscode.ConfigurationTarget.Global;
+  assert.equal(await vscode.commands.executeCommand('aiPair.localAudio.workspace', {}), false);
   controller.setConfirmCommands(false);
   controller.setSpeed(20);
   await controller.start('gaps');
@@ -779,6 +814,7 @@ export async function gapPaths(api: Api): Promise<void> {
   await unrelatedTerminalEnd(api);
   await interruptRunningCommand(api);
   await terminalWithoutReportedCwd(api);
+  await terminalEndWithoutStatus(api);
   await foreignTerminalExecution(api);
   await diagnosticObserverFailure(api);
   await narrationSettingsFailure(api);

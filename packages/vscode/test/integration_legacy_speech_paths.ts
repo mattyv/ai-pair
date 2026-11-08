@@ -193,6 +193,68 @@ export async function runLegacySpeechPaths(api: Api): Promise<void> {
     api.panelMessage({ type: 'speechSettings', value });
     await until(() => getConfiguration('aiPair').get('speech.speed') === 1, 'settings persistence after failure');
 
+    // A failed older write must not roll back or report over a newer choice.
+    let entered = false;
+    let rejectOld: ((reason?: unknown) => void) | undefined;
+    const deferred = new Promise<void>((resolve, reject) => {
+      void resolve;
+      rejectOld = reject;
+    });
+    let staleErrors = 0;
+    try {
+      Object.defineProperty(vscode.window, 'showErrorMessage', {
+        ...errorDescriptor,
+        value: (...args: unknown[]) => {
+          if (args[0] === 'Could not save speech settings.') staleErrors++;
+          const result: unknown = Reflect.apply(showError, undefined, args);
+          return result;
+        },
+      });
+      Object.defineProperty(vscode.workspace, 'getConfiguration', {
+        ...configurationDescriptor,
+        value: (section?: string, scope?: vscode.ConfigurationScope) => {
+          const real = getConfiguration(section, scope);
+          if (section !== 'aiPair') return real;
+          return new Proxy(
+            {},
+            {
+              get(target, key) {
+                void target;
+                const member: unknown = Reflect.get(real, key);
+                if (key === 'update' && typeof member === 'function') {
+                  return (...args: unknown[]) => {
+                    if (!entered && args[0] === 'speech.enabled' && args[1] === true) {
+                      entered = true;
+                      return deferred;
+                    }
+                    const result: unknown = Reflect.apply(member, real, args);
+                    return result;
+                  };
+                }
+                if (typeof member === 'function') {
+                  const bound: unknown = member.bind(real);
+                  return bound;
+                }
+                return member;
+              },
+            },
+          );
+        },
+      });
+      api.panelMessage({ type: 'speechSettings', value: { ...value, enabled: true } });
+      await until(() => entered, 'the delayed settings write');
+      api.panelMessage({ type: 'speechSettings', value: { ...value, speed: 1.25 } });
+      assert.ok(rejectOld);
+      rejectOld(new Error('injected stale settings failure'));
+      await until(() => getConfiguration('aiPair').get('speech.speed') === 1.25, 'the newer settings choice');
+      assert.equal(getConfiguration('aiPair').get('speech.enabled'), false);
+      assert.equal(staleErrors, 0, 'an obsolete failure was reported');
+    } finally {
+      if (entered) rejectOld?.(new Error('cancel delayed settings write'));
+      Object.defineProperty(vscode.workspace, 'getConfiguration', configurationDescriptor);
+      Object.defineProperty(vscode.window, 'showErrorMessage', errorDescriptor);
+    }
+
     // Dismiss the real native password prompt; no credential is entered.
     api.panelMessage({ type: 'speechKeySet' });
     await new Promise<void>((resolve) => {

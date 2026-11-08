@@ -28,6 +28,18 @@ if [[ -n "${AI_PAIR_COMPANION_RESTART:-}" ]]; then
   done
   printf '{"stage":"%s","ok":true}' "${AI_PAIR_COMPANION_RESTART}" >"${AI_PAIR_RESTART_RESULT}"
 fi
+for arg in "$@"; do
+  case "${arg}" in
+    --extensionTestsPath=*integration_catalog_paths.js)
+      RECORD="${RECORD}.speech.catalog"; ENV_RECORD="${ENV_RECORD}.speech.catalog" ;;
+    --extensionTestsPath=*integration_companion_faults.js)
+      RECORD="${RECORD}.speech.companion"; ENV_RECORD="${ENV_RECORD}.speech.companion" ;;
+    --extensionTestsPath=*integration_no_workspace.js)
+      RECORD="${RECORD}.speech.empty"; ENV_RECORD="${ENV_RECORD}.speech.empty" ;;
+    --extensionTestsPath=*integration_restricted_runtime.js)
+      RECORD="${RECORD}.speech.restricted"; ENV_RECORD="${ENV_RECORD}.speech.restricted" ;;
+  esac
+done
 printf '%s\n' "$@" >"${RECORD}"
 env | grep -E '^(NODE_V8_COVERAGE|ELECTRON_RUN_AS_NODE|AI_PAIR_HOME|HOME|PATH|CODEX_HOME|TMPDIR|AI_PAIR_COMPANION_RESTART|PULSE_SERVER|PIPEWIRE_REMOTE)=' >"${ENV_RECORD}" || true
 if [[ -n "${AI_PAIR_COMPANION_RESTART:-}" ]]; then
@@ -137,4 +149,15 @@ CODE
   grep -q "^NODE_V8_COVERAGE=${COVERAGE_ROOT}/integration/v8\$" "${ENV_RECORD}.companion.verify"
   grep -q '^PULSE_SERVER=unix:/nonexistent$' "${ENV_RECORD}"
   grep -q '^PIPEWIRE_REMOTE=ai-pair-integration-no-audio$' "${ENV_RECORD}"
+}
+
+
+@test "speech fault hosts run before the combined coverage report" {
+  run --separate-stderr bash "${ROOT}/packages/vscode/scripts/integration.sh" --coverage
+  [[ "${status}" -eq 0 ]]
+  [[ -f "${RECORD}.speech.companion" && -f "${RECORD}.speech.empty" ]]
+  if [[ "$(uname -s)" == Linux ]]; then
+    [[ -f "${RECORD}.speech.catalog" && -f "${RECORD}.speech.restricted" ]]
+  fi
+  grep -q "^NODE_V8_COVERAGE=${COVERAGE_ROOT}/integration/v8\$" "${ENV_RECORD}.speech.companion"
 }

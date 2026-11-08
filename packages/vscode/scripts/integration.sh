@@ -70,6 +70,8 @@ TMPDIR="${TMP_FILES}" CLAUDE_CONFIG_DIR="${TMP}/agents/claude" \
 # The companion's normal-window restart uses the same coverage output.
 bash scripts/integration_companion.sh "${ROOT}" "${TMP}" "${TMP_FILES}" \
   "${CODE}" "${EXTENSION_PATH}" "${CODE_ARGS[@]}"
+bash scripts/integration_speech_faults.sh "${ROOT}" "${TMP}" "${TMP_FILES}" \
+  "${CODE}" "${EXTENSION_PATH}" "${CODE_ARGS[@]}"
 if ((coverage)); then
   # c8 resolves bundled coverage through the source maps from the root.
   (

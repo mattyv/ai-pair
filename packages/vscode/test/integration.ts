@@ -27,6 +27,9 @@ import { playerGapPaths } from './integration_player_gap_paths';
 import { runLegacySpeechPaths } from './integration_legacy_speech_paths';
 import { installTerminalCleanup } from './integration_terminal_cleanup';
 import { playerFaults } from './integration_player_faults';
+import { exerciseStartup } from './integration_startup_paths';
+import { invalidCalibration } from './integration_invalid_calibration';
+import { badSpeechSettings } from './integration_bad_speech_settings';
 
 const EXPECTED_TODOS = `export interface Todo {
   id: number;
@@ -227,6 +230,7 @@ export async function run(): Promise<void> {
   try {
     exported = await ext.activate();
     assert.ok(isApi(exported), 'the extension exported something other than its Api');
+    await exerciseStartup(exported);
     await exported.ready;
     await cleanup.run(exported);
   } finally {
@@ -1455,7 +1459,9 @@ export async function run(): Promise<void> {
   await corePaths(api, root);
   await extensionPaths(api, root);
   await panelPaths(api);
+  await invalidCalibration(api);
   await runLegacySpeechPaths(api);
+  await badSpeechSettings(api);
   await gapPaths(api);
 
   // The window's file and its sockets go with it, at exit: here the file is gone already, and a socket is still open
