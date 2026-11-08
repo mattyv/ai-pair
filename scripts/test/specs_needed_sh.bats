@@ -24,14 +24,24 @@ setup() {
   [ "${output}" = false ]
 }
 
-@test "runs for source, spec, unknown and mixed changes" {
+@test "runs for source, spec and unknown changes independently" {
   for path in packages/demo/src/demo.ts specs/Demo.tla README.md; do
+    git reset --hard -q "${BASE}"
     echo after >"${path}"
     git add . && git commit -qm change
     run bash "${ROOT}/scripts/specs_needed.sh" "${BASE}" HEAD
     [ "${status}" -eq 0 ]
     [ "${output}" = true ]
   done
+}
+
+@test "runs for mixed test and source changes" {
+  echo after >packages/demo/test/demo.test.ts
+  echo after >packages/demo/src/demo.ts
+  git add . && git commit -qm mixed
+  run bash "${ROOT}/scripts/specs_needed.sh" "${BASE}" HEAD
+  [ "${status}" -eq 0 ]
+  [ "${output}" = true ]
 }
 
 @test "runs for an invalid base and an empty diff" {
