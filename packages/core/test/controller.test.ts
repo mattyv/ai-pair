@@ -505,9 +505,23 @@ describe('a session the agent leaves, and comes back to', () => {
     expect(posted(h).at(-1)).toEqual({ type: 'session', active: true, task: 'Kept.', resumed: true });
   });
 
+  it('RecoveryBatchIds FreshStartsAtOne: starts numbering again after ending a session', async () => {
+    const h = await started();
+    await report(h.controller.step(SAY));
+    expect(h.controller.saved?.nextBatchId).toBe(2);
+    await report(h.controller.end());
+    await h.controller.start();
+    expect(h.controller.saved?.nextBatchId).toBe(1);
+    await report(h.controller.step(SAY));
+    expect(player().play).toHaveBeenCalledWith(1, SAY);
+  });
+
   it('RecoveryBatchIds Unique: keeps the next batch ID after saving and reviving a session', async () => {
     const first = await started();
     await report(first.controller.step([{ say: 'First.' }]));
+    first.controller.disconnect();
+    await first.controller.start();
+    expect(first.controller.saved?.nextBatchId).toBe(2);
     const saved = first.controller.saved;
     expect(saved).toBeDefined();
     const second = harness();
@@ -532,8 +546,10 @@ describe('a session the agent leaves, and comes back to', () => {
   it('WaitsProp: starts a new session from another directory, ending the suspended one', async () => {
     const h = harness();
     await h.controller.start('Kept.', ROOT);
+    await report(h.controller.step(SAY));
     h.controller.disconnect();
     await h.controller.start('New.', '/other');
+    expect(h.controller.saved?.nextBatchId).toBe(1);
     expect(fakes.players).toHaveLength(2);
     expect(scene().root).toBe('/other');
     expect(h.controller.isSuspended).toBe(false);
@@ -542,6 +558,18 @@ describe('a session the agent leaves, and comes back to', () => {
       { type: 'session', active: true, task: 'Kept.', suspended: true },
       { type: 'session', active: true, task: 'New.' },
     ]);
+  });
+
+  it('keeps a late result from the old session out of the new session with the same batch ID', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    h.controller.disconnect();
+    await h.controller.start('New.', '/other');
+    await report(h.controller.step(SAY));
+    finish({ status: 'failed' });
+    await settle();
+    expect(h.controller.saved?.finished).toEqual([{ id: 1, status: 'completed' }]);
   });
 
   it('WaitsProp: closes a suspended session at once when the programmer ends it', async () => {

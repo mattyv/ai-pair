@@ -10,6 +10,13 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   GPT-6.1 Terra agents write code and tests; GPT-6 Astra agents review them.
     Resolve findings and verify the resulting changes before reporting completion.
 
+## Session batch IDs
+
+-   Number batches from one within each fresh session; resuming a saved or
+    suspended session retains its next number. History belongs to its session,
+    and pending playback is guarded by session identity. A crash before the
+    asynchronous save can still reuse an ID within a resumed session.
+
 ## Conversation panel
 
 -   Offer newest-first and oldest-first chat order, retaining newest-first as the

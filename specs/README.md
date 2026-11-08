@@ -2647,8 +2647,9 @@ All three mutations were discarded.
 
 ### `RecoveryBatchIds`: saved batch allocation
 
-`RecoveryBatchIds` models allocation and a reload from the latest successfully
-saved snapshot. It assumes each allocation is saved before reload; the actual
+`RecoveryBatchIds` models allocation within a session, a fresh session, and a
+reload from the latest successfully saved snapshot. A fresh session starts at
+one; a resumed session retains its saved counter. It assumes each allocation is saved before reload; the actual
 workspace storage is asynchronous and a crash before that save can reuse an ID.
 Legacy snapshots cannot recover IDs already reported and removed from the saved
 results. The model does not cover command IDs or queue replay.
@@ -2657,10 +2658,12 @@ results. The model does not cover command IDs or queue replay.
 |---|---|
 | `TypeOK` | The saved counter and restored batch IDs are checked by the recovery tests below; the model also checks their types. |
 | `Unique` | `controller.test.ts`: RecoveryBatchIds Unique: keeps the next batch ID after saving and reviving a session; derives a safe counter from legacy or invalid saved value. `session.e2e.test.ts`: RecoveryBatchIds Unique: keeps IDs distinct when a saved session is resumed. |
+| `FreshStartsAtOne` | `controller.test.ts`: RecoveryBatchIds FreshStartsAtOne: starts numbering again after ending a session. |
 | `Progress` | `session.e2e.test.ts`: RecoveryBatchIds Unique: keeps IDs distinct when a saved session is resumed. |
 
-TLC checked `RecoveryBatchIds.cfg` with `MaxId = 3`: 11 generated and 8
-distinct states, no violation. Setting `PreserveCounter` to `FALSE` makes
+TLC checked `RecoveryBatchIds.cfg` with `MaxId = 3`: 29 generated and 16
+distinct states, no violation. Retaining the prior counter in `Fresh` violates
+`FreshStartsAtOne`. Setting `PreserveCounter` to `FALSE` makes
 `Unique` fail after one allocation and a reload. Initializing `nextId` to zero
 violates `TypeOK`. Disabling `Allocate` while
 retaining its fairness condition makes `Progress` fail.

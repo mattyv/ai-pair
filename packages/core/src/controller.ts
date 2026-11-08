@@ -394,6 +394,8 @@ export class Controller {
       lines,
       seen: new Map(),
     };
+    // specs/RecoveryBatchIds.tla, `Fresh`: each new session starts its own batch sequence.
+    this.nextBatchId = 1;
     this.session = s;
     this.closed = undefined;
     this.lastPosted = '';
