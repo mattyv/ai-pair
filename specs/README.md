@@ -2763,9 +2763,11 @@ lack this guard or prove the authenticity of the discovery file.
 
 | Property | Test |
 | --- | --- |
+| `TypeOK` | No direct code test: the model phase is an abstraction, not a runtime value. |
 | `Safe` | `link.test.ts`: RuntimeIdentity Safe; `relay.test.ts`: RuntimeIdentity Safe |
 | `Settles` | `link.test.ts`: RuntimeIdentity Settles; `relay.test.ts`: RuntimeIdentity Settles |
 
-Changing the mismatch result to `forwarded` violates `Safe`; disabling `Start`
-violates `Settles`. The terminal states intentionally have no outgoing action,
+Changing the initial phase to an unrecognized value violates `TypeOK`; changing
+the mismatch result to `forwarded` violates `Safe`; disabling `Start` violates
+`Settles`. The terminal states intentionally have no outgoing action,
 so both configurations disable deadlock checking.

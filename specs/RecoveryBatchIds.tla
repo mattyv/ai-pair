@@ -10,7 +10,8 @@ TypeOK == /\ nextId \in Nat \ {0}
           /\ restored \in BOOLEAN
           /\ fresh \in BOOLEAN
           /\ freshUsed \in BOOLEAN
-Init == /\ nextId = 1 /\ savedNext = 1 /\ issued = {} /\ restored = FALSE /\ fresh = FALSE /\ freshUsed = FALSE
+Init == /\ nextId = 1 /\ savedNext = 1 /\ issued = {}
+        /\ restored = FALSE /\ fresh = FALSE /\ freshUsed = FALSE
 Allocate == /\ nextId <= MaxId
             /\ nextId' = nextId + 1
             /\ issued' = issued \cup {nextId}
