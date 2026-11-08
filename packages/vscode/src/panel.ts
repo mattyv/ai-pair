@@ -346,11 +346,14 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       ...(supported ? {} : { reason: 'unsupported' }),
     });
     this.send({ type: 'speechSupport', supported });
-    void this.wiring.speech.modelStatus().then((value) => {
-      if (this.speechPageId === pageId && this.speechSetupCheck === check) this.send({ type: 'speechModelStatus', value });
-    }).catch(() => {
-      if (this.speechPageId === pageId && this.speechSetupCheck === check) this.send({ type: 'speechModelStatusUnavailable' });
-    });
+    void this.wiring.speech
+      .modelStatus()
+      .then((value) => {
+        if (this.speechPageId === pageId && this.speechSetupCheck === check) this.send({ type: 'speechModelStatus', value });
+      })
+      .catch(() => {
+        if (this.speechPageId === pageId && this.speechSetupCheck === check) this.send({ type: 'speechModelStatusUnavailable' });
+      });
     if (supported) {
       void this.wiring.speech.installed().then(
         (installed) => {
@@ -613,7 +616,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         return;
       case 'reply':
         // Cancel before resume so an old generation cannot restart.
-        if (this.remote === undefined) this.wiring.speech.stop();
+        if (this.remote === undefined && message.defer !== true) this.wiring.speech.stop();
         // Replying means "go on with this", so any pause ends. It moves no view, so the programmer's tab and
         // selection stay as they were (specs/PointFocus.tla, `SendReply`, issue 125; specs/Draft.tla,
         // `ResumeAll`).
@@ -623,7 +626,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
           return;
         }
         controller().resume(undefined, { reveal: false });
-        controller().userMessage(message.text, message.attach === true ? this.selection.current() : undefined);
+        controller().userMessage(message.text, message.attach === true ? this.selection.current() : undefined, message.defer === true);
         return;
       case 'draft':
         // Typing a reply pauses playback, the way a pair stops when you start talking (specs/Draft.tla, `TypeDraft`, `Clear`).

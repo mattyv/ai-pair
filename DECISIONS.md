@@ -242,6 +242,14 @@ Issue discussions and working notes hold the detailed evidence and history.
     extension bundle lacked the current post-interruption anchor guard. This does
     not establish the host's version or what caused any particular editing incident.
 
+## Deferred replies, 2026-11-08
+
+-   Keep immediate replies as the default. The optional action-boundary reply
+    waits for the current action to finish before stopping later work and
+    delivering the message. Stop, edits, turn changes and session end remain
+    immediate and preserve queued replies. A long-running or blocked action can
+    therefore delay a deferred reply until it ends or the programmer stops it.
+
 ## Model status, 2026-11-08
 
 -   Show the model's fixed local path, upstream revision and source in speech

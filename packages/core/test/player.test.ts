@@ -341,6 +341,18 @@ describe('play', () => {
     expect(h.editor.follow.mock.calls.length).toBeGreaterThan(0);
   });
 
+  it('FinishAction: calls the action boundary before starting the next action', async () => {
+    const h = harness({ files: { 'a.ts': 'x' } });
+    const afterAction = vi.fn(() => {
+      h.pacing.interrupt();
+    });
+    h.stage.afterAction = afterAction;
+    const result = await played(h, [moveTo(1), { say: 'Later.' }]);
+    expect(afterAction).toHaveBeenCalledOnce();
+    expect(result.result).toMatchObject({ status: 'interrupted', unplayed: [{ say: 'Later.' }] });
+    expect(h.panel.post.mock.calls).not.toContainEqual([{ type: 'say', text: 'Later.' }]);
+  });
+
   it('Stop: discards a batch interrupted before its first action, and reports no code for it', async () => {
     const h = harness({ files: { 'a.ts': 'x\n' } });
     h.pacing.interrupt();

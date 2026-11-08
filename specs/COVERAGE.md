@@ -26,7 +26,7 @@ Code goes without a spec for one of these reasons:
 | `cursorAnchor`, `rejectUnanchored`, `anchorNeeded` in `step` and `snapshot` | `Anchor` |
 | `unnamedEdit` and its preflight in `step` | `BatchFile` (`EditRequiresNamed`) |
 | `selectedSpeech` and admission in `step`; pause, resume and cancellation propagation | `Narration` (`Admit`, `Pause`, `Resume`, `Reply`) |
-| `interrupt`, `discard`, `interrupting`, `userInterrupt`, `userMessage` | `Controller` (`Interrupt`), `Actions` (`Interrupt`) |
+| `interrupt`, `discard`, `interrupting`, `userInterrupt`, `userMessage`, `flushDeferred` | `Controller` (`Interrupt`), `Actions` (`Interrupt`); deferred replies: `DeferredMessage` |
 | `userEdit` | `EditorAdapter`, `Navigator` (the programmer's turn), `Player` (`TypeBefore`, `TypeAfter`: the interrupt in the agent's turn) |
 | `otherEdit`, `recordEdit` | `Reload`, `Rehearsal`, `EditEvents` |
 | `takeTurn`, `handBack`, `turn` | `Turns` |
@@ -47,7 +47,7 @@ Code goes without a spec for one of these reasons:
 
 | Functions | Spec |
 |---|---|
-| `play`, `actions`, `perform`, `stopped`, `failed`, `fail` | `Actions`, `Turns`; selected say gates: `Narration` |
+| `play`, `actions`, `perform`, `stopped`, `failed`, `fail` | `Actions`, `Turns`; selected say gates: `Narration`; action boundary: `DeferredMessage` |
 | `names`, `fileOf` | `BatchFile` |
 | `type`, `delay` | `Actions`, `Turns`; atomic chunks: `Typing`; grouped chunks and reading: `CodePlayback`; final marker: `PlaybackAnchor` |
 | `edit`, `transform`, `transformScene`, `mapThrough`, `touch` | `Player`, `Reload` |
@@ -154,7 +154,7 @@ Code goes without a spec for one of these reasons:
 |---|---|---|
 | `panel.ts` | `post`, the `ready` message | `PanelReplay` |
 | | `history`, `restoreHistory`, `onPost` | `Resume` (`Store`, `ReloadWindow`) |
-| | the `draft` and `reply` messages, `onDidDispose` | `Draft`; the `reply` lifting the pause without a reveal: `PointFocus` |
+| | the `draft` and `reply` messages, `onDidDispose` | `Draft`; the `reply` lifting the pause without a reveal: `PointFocus`; deferred reply: `DeferredMessage` |
 | | mode preference messages | `PlaybackPreference` (`Choose`, `Reload`) |
 | | speech delivery and page lifecycle | `SpeechPage`; `Narration` |
 | | `receive` diagnostics-copy message | `DiagnosticsCopy` (`Click`) |
@@ -165,13 +165,14 @@ Code goes without a spec for one of these reasons:
 | | the `reply` message while a calibration runs, `showCalibration`, cancel on dispose and session end | `Calibration` |
 | | `askStart`, the `start` message, posting `startEnded` | `Start` |
 | `extension.ts` | effective speech preferences, queued writes and key reset | `ProviderChoice` (`Select`, `Success`, `Failure`, `External`, `KeyChange`) |
+| `speech_setup.ts` | model status check | `ModelStatus` |
 | `speech_credentials.ts` | key prompt, storage and invalidation | `SpeechSettings` |
 | `speech_catalog.ts` | explicit catalog requests and invalidation | `SpeechSettings` |
 | `webview/speech_audio.ts` | page, unit, audio and controls | `SpeechPage` |
 | `webview/panel.ts` | toolbar and Settings mode choice | `PlaybackPreference` (`Choose`, `SetPace`) |
 | | diagnostics-copy button | `DiagnosticsCopy` (`Click`) |
 | | `setNow`, `add`, `addYou`, `addRun`, `addDivider`, `addOutside`, `fileCurrent`, `entry` | `Panel`; the scroll position: `PanelScroll` |
-| | `syncDraft`, `takeDraft` | `Draft` |
+| | `syncDraft`, `takeDraft` | `Draft`; deferred send: `DeferredMessage` |
 | | `handle`'s `run` case, `clearRun`, `setOutcome`, `setActive` | `RunBox`; `setActive` and replaying: `PanelReplay` |
 | | terminal setting and reveal controls | `TerminalPanel` (`SetAuto`, `Show`) |
 | | `handle`'s `session` case for a suspended or resumed session | `Resume` (`ShownIsState`) |

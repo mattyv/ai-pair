@@ -110,6 +110,8 @@ interface Session {
   /** Finished batches not yet reported. */
   finished: BatchResult[];
   events: PendingEvent[];
+  /** Messages waiting for the current action to finish. */
+  deferredMessages: PendingEvent[];
   /** An interruption or failure not yet reported, or reported while a batch it left still plays: new batches are discarded. */
   stale: boolean;
   /** A report told the agent of the interruption while a batch it left plays: `stale` clears when that batch ends (#219). */
@@ -359,6 +361,9 @@ export class Controller {
         readingSpeed: () => this.readingSpeed,
         codePlayback: () => this.codePlayback,
         narration: this.narration,
+        afterAction: () => {
+          if (s.deferredMessages.length > 0) this.interrupt(s);
+        },
         render: () => {
           this.render();
         },
@@ -368,6 +373,7 @@ export class Controller {
       queue: [],
       finished: [],
       events: [],
+      deferredMessages: [],
       stale: false,
       staleReported: false,
       anchorNeeded: false,
@@ -590,18 +596,28 @@ export class Controller {
    * Records a message from the programmer. `selection`: code they had selected, sent along with it. To an active or a suspended session
    * (specs/Resume.tla, `SendMessage`); the next report takes it to the agent (`Report`).
    */
-  userMessage(text: string, selection?: SharedSelection): void {
+  userMessage(text: string, selection?: SharedSelection, defer = false): void {
     const session = this.activeSession();
     if (!session) return;
-    session.events.push(selection ? { kind: 'message', text, selection: this.excerpt(session, selection) } : { kind: 'message', text });
+    const event: PendingEvent = selection
+      ? { kind: 'message', text, selection: this.excerpt(session, selection) }
+      : { kind: 'message', text };
     this.panel.post({ type: 'programmer', text, ref: selection && this.ref(selection) });
-    this.interrupt(session);
+    // specs/DeferredMessage.tla, SendDeferred: hold the event until the current action finishes.
+    if (defer && session.queue[0]?.state === 'playing' && !session.timeline.isInterrupted) {
+      session.deferredMessages.push(event);
+    } else {
+      this.flushDeferred(session);
+      session.events.push(event);
+      this.interrupt(session);
+    }
     this.update();
   }
 
   userInterrupt(): void {
     const session = this.activeSession();
     if (!session) return;
+    this.flushDeferred(session);
     session.events.push({ kind: 'interrupt' });
     this.panel.post({ type: 'interrupt' });
     this.interrupt(session);
@@ -612,6 +628,7 @@ export class Controller {
   userEdit(file: string, before: string, after: string, changes: Change[]): void {
     const session = this.activeSession();
     if (!session) return;
+    if (session.scene.turn === 'agent') this.flushDeferred(session);
     this.recordEdit(session, file, before, after, changes, 'programmer');
     if (session.scene.turn === 'agent') {
       // specs/Player.tla, `TypeBefore` and `TypeAfter`, and specs/Rehearsal.tla, `EditAsProgrammer`: the edit
@@ -650,6 +667,7 @@ export class Controller {
         followChange(b.after, file, after, changes);
       }
     }
+    if (planned) this.flushDeferred(session);
     const recorded = this.recordEdit(session, file, before, after, changes, 'other');
     if (planned) {
       recorded.interrupted = true;
@@ -692,6 +710,7 @@ export class Controller {
     if (!session || session.scene.turn === 'programmer') return;
     session.scene.turn = 'programmer';
     session.scene.focus = 'cursor';
+    this.flushDeferred(session);
     session.events.push({ kind: 'turn', to: 'programmer' });
     this.panel.post({ type: 'turn', to: 'programmer' });
     // specs/Turns.tla and specs/Rehearsal.tla, `ChangeTurn`: the turn changes, and playback is interrupted.
@@ -707,6 +726,7 @@ export class Controller {
     const event: Event = { kind: 'turn', to: 'agent' };
     if (message !== undefined) event.message = message;
     if (selection) event.selection = this.excerpt(session, selection);
+    this.flushDeferred(session);
     session.events.push(event);
     this.panel.post({ type: 'turn', to: 'agent', message, ref: selection && this.ref(selection) });
     // specs/Turns.tla and specs/Rehearsal.tla, `ChangeTurn`: the turn changes, and playback is interrupted.
@@ -728,6 +748,7 @@ export class Controller {
     // (`End` in specs/Serialize.tla).
     session.ended = true;
     this.diagnostic({ kind: 'session', state: 'ended' });
+    this.flushDeferred(session);
     session.events.push({ kind: 'end' });
     this.interrupt(session);
     this.panel.post({ type: 'session', active: false, reason: 'programmer' });
@@ -1229,7 +1250,13 @@ export class Controller {
    * `EndByProgrammer`; specs/Actions.tla and specs/Serialize.tla, `Interrupt`). A batch already playing plays on and may complete
    * (specs/Rehearsal.tla, `QueuesAfterInterrupt`, #151).
    */
+  private flushDeferred(session: Session): void {
+    // specs/DeferredMessage.tla, Urgent: preserve replies when an immediate stop arrives.
+    session.events.push(...session.deferredMessages.splice(0));
+  }
+
   private interrupt(session: Session): void {
+    this.flushDeferred(session);
     this.narration?.cancel();
     markStale(session);
     const discarded = session.queue.filter((b) => b.state === 'queued').map((b) => b.id);
@@ -1264,6 +1291,7 @@ export class Controller {
         this.render();
         const { result, sightings, editedFiles } = await session.player.play(batch.id, batch.actions);
         if (this.session !== session) break;
+        if (session.deferredMessages.length > 0) this.interrupt(session);
         // specs/Diagnostics.tla, `Finish`: inspect only files actually edited; checks remain advisory.
         for (const file of editedFiles) {
           try {

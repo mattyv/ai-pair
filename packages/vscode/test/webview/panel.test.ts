@@ -1701,7 +1701,10 @@ it('shows Speaking after the reading ring ends while the voice is still playing'
 });
 
 it('shows the local model status, path and pinned source', () => {
-  send({ type: 'speechModelStatus', value: { path: '/storage/model', source: 'https://example.test/model', revision: 'abc', verified: true, download: 'installed' } });
+  send({
+    type: 'speechModelStatus',
+    value: { path: '/storage/model', source: 'https://example.test/model', revision: 'abc', verified: true, download: 'installed' },
+  });
   expect(text('speech-model-status')).toContain('verified');
   expect(text('speech-model-status')).toContain('/storage/model');
   expect(text('speech-model-status')).toContain('https://example.test/model');
@@ -1741,6 +1744,16 @@ it('sends explicit setup, preview, stop and validated speech preferences', () =>
   expect(posted()).toContainEqual({ type: 'speechSetup' });
   expect(posted()).toContainEqual({ type: 'speechPreview' });
   expect(posted()).toContainEqual({ type: 'speechStop' });
+});
+
+it('offers sending after the current action', () => {
+  start();
+  const deferred = element('defer-reply');
+  if (!(deferred instanceof window.HTMLInputElement)) throw new TypeError('Missing deferred reply control');
+  deferred.checked = true;
+  typeReply('Wait');
+  click(element('send'));
+  expect(posted()).toContainEqual({ type: 'reply', text: 'Wait', attach: false, defer: true });
 });
 
 it('silences the current audio synchronously before posting a reply and ignores late audio', async () => {

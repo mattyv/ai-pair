@@ -524,7 +524,9 @@ vi.mock('../src/speech_native_output', () => ({
 vi.mock('../src/speech_output_router', () => ({ SpeechOutputRouter: fakes.FakeOutputRouter }));
 vi.mock('../src/speech_setup', () => ({
   installedSpeechModel: vi.fn(() => Promise.resolve(undefined)),
-  speechModelStatus: vi.fn(() => Promise.resolve({ path: '/model', source: 'https://example.test', revision: 'abc', verified: false, download: 'missing' })),
+  speechModelStatus: vi.fn(() =>
+    Promise.resolve({ path: '/model', source: 'https://example.test', revision: 'abc', verified: false, download: 'missing' }),
+  ),
   setupSpeech: vi.fn(() => Promise.resolve()),
 }));
 vi.mock('../src/outside_watch', () => ({ watchOutside: vi.fn(() => ({ outside: 'outside', disposable: { dispose: () => {} } })) }));
@@ -918,6 +920,7 @@ describe('activate', () => {
     );
     wiring.settings.set({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 });
     expect(speech.cancel).toHaveBeenCalledOnce();
+    expect(await wiring.modelStatus()).toMatchObject({ download: 'missing' });
     expect(await wiring.installed()).toBe(false);
     vi.mocked(installedSpeechModel).mockResolvedValueOnce('/verified/model');
     expect(await wiring.installed()).toBe(true);

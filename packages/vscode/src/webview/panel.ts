@@ -124,6 +124,7 @@ const ui = {
   start: $('start', HTMLButtonElement),
   starting: $('starting', HTMLElement),
   reply: $('reply', HTMLTextAreaElement),
+  deferReply: $('defer-reply', HTMLInputElement),
   send: $('send', HTMLButtonElement),
   attach: $('attach', HTMLElement),
   attachRef: $('attach-ref', HTMLElement),
@@ -1390,8 +1391,9 @@ function takeAttach(): boolean {
 function sendReply(): void {
   const text = takeDraft();
   if (text) {
-    stopSpeechLocally();
-    vscode.postMessage({ type: 'reply', text, attach: takeAttach() });
+    const defer = ui.deferReply.checked;
+    if (!defer) stopSpeechLocally();
+    vscode.postMessage({ type: 'reply', text, attach: takeAttach(), ...(defer ? { defer: true } : {}) });
   }
 }
 

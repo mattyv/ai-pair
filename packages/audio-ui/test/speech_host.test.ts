@@ -133,7 +133,13 @@ vi.mock('../../vscode/src/speech_output_preferences', () => ({
   },
 }));
 vi.mock('../../vscode/src/speech_runtime_status', () => ({ speechRuntimeAvailable: fakes.runtime }));
-vi.mock('../../vscode/src/speech_setup', () => ({ installedSpeechModel: fakes.installed, speechModelStatus: vi.fn().mockResolvedValue({ path: '/model', source: 'https://example.test', revision: 'abc', verified: false, download: 'missing' }), setupSpeech: fakes.setup }));
+vi.mock('../../vscode/src/speech_setup', () => ({
+  installedSpeechModel: fakes.installed,
+  speechModelStatus: vi
+    .fn()
+    .mockResolvedValue({ path: '/model', source: 'https://example.test', revision: 'abc', verified: false, download: 'missing' }),
+  setupSpeech: fakes.setup,
+}));
 vi.mock('../src/companion_output', () => ({
   CompanionOutput: class {
     constructor(wiring: NonNullable<typeof fakes.outputWiring>) {
@@ -228,6 +234,7 @@ it('uses local settings and credentials through panel callbacks', async () => {
     expect(panel.showSpeechSettings).toHaveBeenCalled();
   });
   expect(fakes.cancel).toHaveBeenCalled();
+  expect(await host.panelSpeech.modelStatus()).toMatchObject({ download: 'missing' });
   host.panelSpeech.outputView();
   host.panelSpeech.outputReady();
   host.panelSpeech.outputRefresh();

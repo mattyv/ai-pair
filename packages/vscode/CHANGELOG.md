@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.21.0
+
+-   Show the local Kokoro model's download and verification status, local
+    path, and pinned source in speech settings.
+-   Offer **Finish current action before sending** for replies, preserving
+    immediate interruption for Stop and editor changes.
+
 ## 0.20.1
 
 -   Verify local Kokoro platform support using bounded evidence from the running

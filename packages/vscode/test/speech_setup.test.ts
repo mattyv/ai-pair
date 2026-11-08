@@ -66,7 +66,9 @@ vi.mock('node:fs/promises', () => ({
     fakes.statHook?.(file);
     if (fakes.statFailure !== undefined) throw fakes.statFailure;
     const data = fakes.files.get(file);
-    if (data === undefined && [...fakes.files.keys()].some((entry) => entry.startsWith(`${file}/`))) return { size: 0, isFile: () => false };
+    if (data === undefined && [...fakes.files.keys()].some((entry) => entry.startsWith(`${file}/`))) {
+      return { size: 0, isFile: () => false };
+    }
     if (data === undefined) throw Object.assign(new Error('missing'), { code: 'ENOENT' });
     return { size: data.length, isFile: () => !fakes.invalidFile };
   }),
@@ -121,8 +123,11 @@ function download(): void {
 describe('speech setup', () => {
   it('reports the pinned source, local path and verification result', async () => {
     expect(await speechModelStatus('/storage')).toEqual({
-      path: '/storage/speech/revision', source: 'https://huggingface.co/fixed/revision',
-      revision: 'revision', verified: false, download: 'missing',
+      path: '/storage/speech/revision',
+      source: 'https://huggingface.co/fixed/revision',
+      revision: 'revision',
+      verified: false,
+      download: 'missing',
     });
     download();
     await setupSpeech('/storage');

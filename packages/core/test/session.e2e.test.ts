@@ -273,6 +273,44 @@ describe('where the controller and the player meet', () => {
     expect(after.batches[0]?.id).toBe(2);
   });
 
+  it('NoEarlyDelivery: defers a reply until the current action finishes, then discards later actions', async () => {
+    const { editor, controller } = setup({ 'a.py': '' });
+    await controller.start();
+    await controller.step([{ move: { file: 'a.py', line: 1, to: 'line_end' } }, { type: `unknown${CURSOR_MARKER}` }, { say: 'Later.' }]);
+    await advance(100 + 3 * 100 + 50);
+    expect(editor.text('a.py')).toBe('unk');
+    controller.userMessage('Wait', undefined, /* defer= */ true);
+    const report = await until(controller.listen());
+    expect(editor.text('a.py')).toBe('unknown');
+    expect(report.events).toContainEqual({ kind: 'message', text: 'Wait' });
+    expect(report.batches).toMatchObject([{ status: 'interrupted', unplayed: [{ say: 'Later.' }] }]);
+  });
+
+  it('Urgent: a stop interrupts immediately and delivers a previously queued reply first', async () => {
+    const { editor, controller } = setup({ 'a.py': '' });
+    await controller.start();
+    await controller.step([{ move: { file: 'a.py', line: 1, to: 'line_end' } }, { type: `unknown${CURSOR_MARKER}` }]);
+    await advance(100 + 3 * 100 + 50);
+    controller.userMessage('Wait', undefined, /* defer= */ true);
+    controller.userInterrupt();
+    const report = await until(controller.listen());
+    expect(editor.text('a.py')).toBe('unk');
+    expect(report.events).toEqual([{ kind: 'message', text: 'Wait' }, { kind: 'interrupt' }]);
+  });
+
+  it('Urgent: a programmer edit stops immediately without losing the queued reply', async () => {
+    const { editor, controller } = setup({ 'a.py': '' });
+    await controller.start();
+    await controller.step([{ move: { file: 'a.py', line: 1, to: 'line_end' } }, { type: `unknown${CURSOR_MARKER}` }]);
+    await advance(100 + 3 * 100 + 50);
+    controller.userMessage('Wait', undefined, /* defer= */ true);
+    editor.userEdit('a.py', { offset: 0, deleteLength: 0, text: '!' });
+    const report = await until(controller.listen());
+    expect(editor.text('a.py')).toBe('!unk');
+    expect(report.events[0]).toEqual({ kind: 'message', text: 'Wait' });
+    expect(report.events[1]).toMatchObject({ kind: 'edit', by: 'programmer' });
+  });
+
   it('interrupts within a token, reports its remainder, and discards the queued batch', async () => {
     const { editor, controller } = setup({ 'a.py': '' });
     await controller.start();

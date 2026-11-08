@@ -970,6 +970,41 @@ describe('playing the queue', () => {
     expect(player().play).toHaveBeenCalledOnce();
   });
 
+  it('SendDeferred and FinishAction: holds multiple replies until the action boundary', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    h.controller.userMessage('first', undefined, /* defer= */ true);
+    h.controller.userMessage('second', undefined, /* defer= */ true);
+    expect(timeline().interrupt).not.toHaveBeenCalled();
+    stage().afterAction?.();
+    expect(timeline().interrupt).toHaveBeenCalledOnce();
+    finish({ status: 'interrupted' });
+    const result = await report(h.controller.listen());
+    expect(result.events).toEqual([
+      { kind: 'message', text: 'first' },
+      { kind: 'message', text: 'second' },
+    ]);
+  });
+
+  it('FinishAction: delivers a reply queued while the completed player is still settling', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    h.controller.userMessage('late', undefined, /* defer= */ true);
+    finish();
+    await settle();
+    expect(timeline().interrupt).toHaveBeenCalledOnce();
+    expect((await report(h.controller.listen())).events).toEqual([{ kind: 'message', text: 'late' }]);
+  });
+
+  it('SendDeferred: delivers immediately when no action is playing', async () => {
+    const h = await started();
+    h.controller.userMessage('now', undefined, /* defer= */ true);
+    expect(timeline().interrupt).toHaveBeenCalledOnce();
+    expect((await report(h.controller.listen())).events).toEqual([{ kind: 'message', text: 'now' }]);
+  });
+
   it('waits for an interrupted batch to finish before it reports, so the report says what was typed', async () => {
     const h = await started();
     const finish = holdPlay();

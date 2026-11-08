@@ -2,9 +2,9 @@
   "version": 1,
   "bundleId": "277c3415-7b74-4008-8be4-8c14ae6d41dd",
   "revision": {
-    "number": 13,
+    "number": 14,
     "updatedAt": "2026-11-08T00:00:00.000Z",
-    "summary": "Current-process local speech support and shared diagnostic fault isolation"
+    "summary": "Verified model status and optional action-boundary replies"
   },
   "diagrams": [
     {
@@ -513,14 +513,14 @@
           "controller": [
             {
               "id": "n-overviewcontroller",
-              "text": "The session's brain. It lines up the agent's work, decides what to refuse, and writes the report the agent reads next.",
+              "text": "The session lines up work, builds reports, and can hold a reply until the current action finishes. Urgent stops remain immediate.",
               "ts": 0
             }
           ],
           "player": [
             {
               "id": "n-overviewplayer",
-              "text": "Carries out queued work the way a person would: typing character by character, moving the cursor, pausing to read.",
+              "text": "Carries out queued work at a human pace and signals each completed action to the session controller.",
               "ts": 0
             }
           ],

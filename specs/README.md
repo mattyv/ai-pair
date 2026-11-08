@@ -90,6 +90,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `DiagnosticsPrivacy_Speech.cfg` | speech-only projection without a session | holds | 38 |
 | `Timeline.cfg` | `MaxSleeps = 3` sleeps, holds, and a second sleep while one is pending | holds | 864 |
 | `PlaybackPreference.cfg` | three modes and two independent pace settings | holds | 36 |
+| `DeferredMessage.cfg` | one action, deferred reply and urgent stop | holds | 8 |
 | `ModelStatus.cfg` | installed and missing model, verification | holds | 4 |
 | `SpeechSetup.cfg` | two files; install, cancellation and rollback outcomes | holds | 42 |
 | `SpeechPage.cfg` | two page identities and two narration units | holds | 28 |
@@ -2671,3 +2672,19 @@ Mutations checked with TLC: an invalid display state violates `TypeOK`;
 reporting verified for a missing model violates `VerifiedIsInstalled`; removing
 fairness for the check violates `StatusProgress`.
 
+## Deferred messages
+
+`DeferredMessage` checks one deferred reply, the current action and an urgent
+stop. The real queue can hold multiple replies; urgent input flushes them in
+order.
+
+| Property | Code test |
+|---|---|
+| `TypeOK` | `SendDeferred and FinishAction: holds multiple replies until the action boundary` |
+| `NoEarlyDelivery` | `NoEarlyDelivery: defers a reply until the current action finishes, then discards later actions` |
+| `UrgentIsImmediate` | `Urgent: a stop interrupts immediately and delivers a previously queued reply first` |
+| `PendingProgress` | `SendDeferred and FinishAction: holds multiple replies until the action boundary` |
+
+TLC mutations changed the action state outside its domain, delivered a reply
+early, let urgent input avoid interruption, and removed action fairness; each
+violated its corresponding property.

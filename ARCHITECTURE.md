@@ -11,7 +11,7 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes the 0.20.1 implementation on this feature branch.
+Status: describes the 0.21.0 implementation on this feature branch.
 
 The source is `.archi/ai-pair.json`. To regenerate the page with
 Archi-Techture 1.5.1, set `ARCHI_TO_HTML` to its `out/tools/archi-to-html.js`
@@ -49,7 +49,9 @@ with Archi's `validate-archi.js` and check the regenerated page in a browser.
 -   **The core** is an editor-agnostic TypeScript library, running inside the
     extension: sessions, the batch queue, the playback scheduler, place
     resolution, cursor tracking, the event log, and report assembly. It has no
-    editor dependencies, so it can be tested against a fake editor.
+    editor dependencies, so it can be tested against a fake editor. An optional
+    deferred reply waits for the player's current action boundary; urgent
+    interruptions still stop playback immediately.
 -   **The VS Code adapter** is a thin layer over the VS Code API: apply edits
     with undo stops, report document changes, render decorations, scroll, save.
     It identifies its own edits by keeping a queue of pending edits per file

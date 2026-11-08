@@ -271,6 +271,29 @@ export async function run(): Promise<void> {
     }
     assert.ok(done(), 'timed out');
   }
+  // A panel reply may wait for a currently typing action without cutting its token.
+  fs.writeFileSync(file('deferred.txt'), '');
+  const deferred = await vscode.workspace.openTextDocument(file('deferred.txt'));
+  await vscode.window.showTextDocument(deferred);
+  await controller.start('deferred reply');
+  await controller.step([
+    { move: { file: 'deferred.txt', line: 1, to: 'line_end' } },
+    { type: `abcdefghijkl${CURSOR_MARKER}` },
+    { say: 'Later.' },
+  ]);
+  await until(() => deferred.getText().length > 0 && deferred.getText().length < 12);
+  api.panelMessage({ type: 'reply', text: 'Wait', defer: true });
+  const deferredReport = await controller.step([]);
+  assert.equal(deferred.getText(), 'abcdefghijkl');
+  assert.deepEqual(deferredReport.events, [{ kind: 'message', text: 'Wait' }]);
+  assert.deepEqual(
+    deferredReport.batches.map((batch) => batch.status),
+    ['interrupted'],
+  );
+  assert.deepEqual(deferredReport.batches[0]?.unplayed, [{ say: 'Later.' }]);
+  await controller.end();
+  console.log('NoEarlyDelivery: deferred reply waits for the current typing action');
+
   fs.writeFileSync(file('other.txt'), 'before\n');
   const other = await vscode.workspace.openTextDocument(file('other.txt'));
   await controller.start('other edits');

@@ -29,7 +29,7 @@ export type FromPanel =
   | { type: 'speechEvent'; id: number; pageId: number; event: SpeechEvent }
   | { type: 'skipReading'; id: number }
   | { type: 'holdReading'; id: number; held: boolean }
-  | { type: 'reply'; text: string; attach?: boolean }
+  | { type: 'reply'; text: string; attach?: boolean; defer?: boolean }
   | { type: 'draft'; empty: boolean }
   | { type: 'pause' }
   | { type: 'resume' }
