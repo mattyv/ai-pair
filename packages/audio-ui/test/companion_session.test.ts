@@ -233,6 +233,15 @@ it('forwards panel controls only after local retirement and clears pause reasons
   current.dispose();
 });
 
+it('forwards a reply behavior change to the workspace', () => {
+  const current = session();
+  routing().forward({ type: 'replyBehavior', value: 'finishAction' }, 7);
+  expect(fake.send).toHaveBeenCalledWith(
+    expect.objectContaining({ type: 'panelAction', pageEpoch: 7, action: { type: 'replyBehavior', value: 'finishAction' } }),
+  );
+  current.dispose();
+});
+
 it('forwards a deferred reply without canceling local narration', () => {
   const current = session();
   const panel = routing();

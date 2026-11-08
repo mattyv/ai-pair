@@ -8,6 +8,8 @@ describe('cross-host panel updates', () => {
       { type: 'replay', events: [{ type: 'session', active: true, task: 'Pair' }] },
       { type: 'selection', ref: { file: 'a.ts', line: 1, endLine: 2 } },
       { type: 'focusReply' },
+      { type: 'replyBehavior', value: 'interrupt' },
+      { type: 'replyBehavior', value: 'finishAction' },
       { type: 'calibration', view: { phase: 'idle' } },
     ]) {
       expect(localPanelUpdate.safeParse(update).success).toBe(true);
@@ -16,6 +18,8 @@ describe('cross-host panel updates', () => {
 
   it('rejects audio, speech settings, arbitrary commands, and unexpected properties', () => {
     for (const update of [
+      { type: 'replyBehavior', value: 'invalid' },
+      { type: 'replyBehavior', value: 'finishAction', extra: true },
       { type: 'speechAudio', wavBase64: 'abc' },
       { type: 'speechSettings', value: { key: 'secret' } },
       { type: 'command', command: 'arbitrary' },

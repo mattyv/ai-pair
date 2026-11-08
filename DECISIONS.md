@@ -457,3 +457,10 @@ replay interrupted work and does not address terminal command IDs (issue #11).
 -   Try TLC's official named release URL before the pinned asset API URL, after
     repeated API 504 responses. Both must match the same pinned SHA-256; the
     named release can change, so a mismatch falls back and never runs TLC.
+
+## Reply timing preference
+
+Reply timing is a persistent Settings choice, defaulting to immediate interruption.
+The alternative waits for the current action boundary, which can delay a reply
+during a long command. Stop remains immediate. The workspace and local companion
+share the existing panel protocol and workspace configuration for this choice.

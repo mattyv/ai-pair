@@ -154,7 +154,7 @@ account. While you pair:
 
 | To... | Do this |
 |---|---|
-| say something to the agent | type in the reply box, press Enter. Typing pauses playback. Select **Finish current action before sending** to wait for the action boundary. |
+| say something to the agent | type in the reply box, press Enter. Typing pauses playback. In Settings, choose **Finish current action first** to wait for the action boundary; long commands can delay replies and Stop remains immediate. |
 | ask about some code | select it in the editor, then reply: the selection goes along (**x** leaves it out) |
 | let it run a command | **Run**, **Allow for session**, or **Skip** in the panel; **Show terminal** reveals the command's terminal |
 | stop it right now | **Interrupt**, or just edit the code: any edit interrupts |

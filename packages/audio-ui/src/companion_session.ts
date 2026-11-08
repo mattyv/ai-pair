@@ -140,6 +140,7 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
     { get: () => false, set: () => {} },
     () => false,
     { get: () => 'typing', set: () => {} },
+    { get: () => 'interrupt', set: () => {} },
   );
   function sendAction(action: LocalPanelAction, page: number): void {
     void channel.send({

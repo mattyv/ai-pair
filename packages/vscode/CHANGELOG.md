@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.21.1
+
+-   Move reply timing into Settings as a persistent choice, with immediate
+    interruption as the default.
+
 ## 0.21.0
 
 -   Show the local Kokoro model's download and verification status, local

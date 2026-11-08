@@ -1748,12 +1748,28 @@ it('sends explicit setup, preview, stop and validated speech preferences', () =>
 
 it('offers sending after the current action', () => {
   start();
-  const deferred = element('defer-reply');
-  if (!(deferred instanceof window.HTMLInputElement)) throw new TypeError('Missing deferred reply control');
-  deferred.checked = true;
+  const deferred = element('reply-behavior');
+  if (!(deferred instanceof window.HTMLSelectElement)) throw new TypeError('Missing reply behavior setting');
+  deferred.value = 'finishAction';
+  deferred.dispatchEvent(new window.Event('change'));
+  expect(posted()).toContainEqual({ type: 'replyBehavior', value: 'finishAction' });
   typeReply('Wait');
   click(element('send'));
   expect(posted()).toContainEqual({ type: 'reply', text: 'Wait', attach: false, defer: true });
+});
+
+it('restores reply timing and applies a change to a drafted reply', () => {
+  start();
+  send({ type: 'replyBehavior', value: 'finishAction' });
+  const choice = element('reply-behavior');
+  if (!(choice instanceof window.HTMLSelectElement)) throw new TypeError('Missing reply behavior setting');
+  expect(choice.value).toBe('finishAction');
+  typeReply('Now');
+  choice.value = 'interrupt';
+  choice.dispatchEvent(new window.Event('change'));
+  click(element('send'));
+  expect(posted()).toContainEqual({ type: 'replyBehavior', value: 'interrupt' });
+  expect(posted()).toContainEqual({ type: 'reply', text: 'Now', attach: false });
 });
 
 it('silences the current audio synchronously before posting a reply and ignores late audio', async () => {

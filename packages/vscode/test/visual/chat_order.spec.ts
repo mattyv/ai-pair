@@ -673,6 +673,7 @@ test('Settings stays readable and operable in a narrow panel', async ({ page }) 
   const post = await load(page);
   await post({ type: 'session', active: true });
   await post({ type: 'codePlayback', value: 'lines' });
+  await post({ type: 'replyBehavior', value: 'finishAction' });
   await expect(page.getByRole('button', { name: 'Code display: Lines' })).toBeVisible();
   await page.getByRole('button', { name: 'Settings' }).click();
   const dialog = page.getByRole('dialog', { name: 'Settings' });
@@ -680,6 +681,12 @@ test('Settings stays readable and operable in a narrow panel', async ({ page }) 
   for (const title of ['Conversation', 'Playback', 'Commands', 'Speech', 'Diagnostics']) {
     await expect(dialog.getByRole('heading', { name: title })).toBeAttached();
   }
+  const replyBehavior = dialog.getByRole('combobox', { name: 'When I send a reply' });
+  await expect(replyBehavior).toHaveValue('finishAction');
+  await replyBehavior.focus();
+  await expect(replyBehavior).toBeFocused();
+  await replyBehavior.selectOption('interrupt');
+  await expect(replyBehavior).toHaveValue('interrupt');
   await expect(dialog.getByRole('combobox', { name: 'Code display' })).toHaveValue('lines');
   await dialog.getByRole('combobox', { name: 'Code display' }).selectOption('blocks');
   const copy = dialog.getByRole('button', { name: 'Copy diagnostics' });

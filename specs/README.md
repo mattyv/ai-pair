@@ -2679,6 +2679,8 @@ fairness for the check violates `StatusProgress`.
 `DeferredMessage` checks one deferred reply, the current action and an urgent
 stop. The real queue can hold multiple replies; urgent input flushes them in
 order. `Resume` also treats a deferred reply as a waiting message when stored.
+The Settings reply preference selects whether the existing deferred action is
+requested; it does not change the modeled queue or urgent-stop semantics.
 
 | Property | Code test |
 |---|---|

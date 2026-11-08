@@ -336,6 +336,12 @@ export function activate(context: vscode.ExtensionContext): Api {
       },
     );
   }
+  const replyBehavior = {
+    get: () => (config().get<unknown>('replyBehavior') === 'finishAction' ? ('finishAction' as const) : ('interrupt' as const)),
+    set: (value: 'interrupt' | 'finishAction') => {
+      void config().update('replyBehavior', value, vscode.ConfigurationTarget.Global);
+    },
+  };
   const chatOrder = {
     get: () => (config().get<unknown>('chatOrder') === 'oldestFirst' ? ('oldestFirst' as const) : ('newestFirst' as const)),
     set: (value: 'newestFirst' | 'oldestFirst') => {
@@ -465,6 +471,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     terminalSettings,
     (id) => editor.showTerminal(id),
     codePlayback,
+    replyBehavior,
   );
   outputPreferences = new SpeechOutputPreferences({
     initial: context.globalState.get<unknown>('speechOutput'),
@@ -742,6 +749,7 @@ export function activate(context: vscode.ExtensionContext): Api {
         }
         panel.showSpeechSettings(current);
       }
+      if (e.affectsConfiguration('aiPair.replyBehavior')) panel.showReplyBehavior(replyBehavior.get());
       if (e.affectsConfiguration('aiPair.chatOrder')) panel.showChatOrder(chatOrder.get());
       if (e.affectsConfiguration('aiPair.showTerminalsAutomatically')) panel.showTerminalPreference(terminalSettings.get());
       if (e.affectsConfiguration('aiPair.speed')) {

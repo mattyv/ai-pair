@@ -267,6 +267,7 @@ const fakes = vi.hoisted(() => {
     readonly showSpeed = vi.fn();
     readonly showReadingSpeed = vi.fn();
     readonly showChatOrder = vi.fn();
+    readonly showReplyBehavior = vi.fn();
     readonly showCodePlayback = vi.fn();
     readonly showSpeechSettings = vi.fn<(value: SpeechSettings) => void>();
     readonly showSpeechKeyStatus = vi.fn();
@@ -305,6 +306,7 @@ const fakes = vi.hoisted(() => {
       readonly terminalSettings: { get: () => boolean; set: (value: boolean) => void },
       readonly showTerminal: (id: number) => boolean,
       readonly codePlayback: { get: () => string; set: (value: string) => void },
+      readonly replyBehavior: { get: () => string; set: (value: string) => void },
     ) {
       made.panels.push(this);
     }
@@ -721,6 +723,19 @@ describe('activate', () => {
     changed('codePlayback');
     expect(h.controller.setCodePlayback).toHaveBeenLastCalledWith('typing');
     expect(h.panel.showCodePlayback).toHaveBeenLastCalledWith('typing');
+  });
+
+  it('persists reply behavior and defaults invalid values to interrupt', () => {
+    const h = activated();
+    expect(h.panel.replyBehavior.get()).toBe('interrupt');
+    fakes.settings.set('replyBehavior', 'finishAction');
+    changed('replyBehavior');
+    expect(h.panel.showReplyBehavior).toHaveBeenLastCalledWith('finishAction');
+    h.panel.replyBehavior.set('interrupt');
+    expect(fakes.updated).toContainEqual(['replyBehavior', 'interrupt', 1]);
+    fakes.settings.set('replyBehavior', 'invalid');
+    changed('replyBehavior');
+    expect(h.panel.showReplyBehavior).toHaveBeenLastCalledWith('interrupt');
   });
 
   it('reads, saves, and applies the chat order, defaulting invalid values to newest first', () => {

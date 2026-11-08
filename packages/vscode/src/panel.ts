@@ -141,6 +141,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     private readonly terminalSettings: { get: () => boolean; set: (value: boolean) => void },
     private readonly showTerminal: (id: number) => boolean,
     private readonly codePlayback: { get: () => CodePlayback; set: (value: CodePlayback) => void },
+    private readonly replyBehavior: { get: () => 'interrupt' | 'finishAction'; set: (value: 'interrupt' | 'finishAction') => void },
   ) {}
 
   /** Posts to the page, if there is one. */
@@ -201,6 +202,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   /** Shows the saved history order, including changes made in VS Code settings. */
   showChatOrder(value: ChatOrder): void {
     this.send({ type: 'chatOrder', value });
+  }
+
+  /** Shows the saved reply behavior. */
+  showReplyBehavior(value: 'interrupt' | 'finishAction'): void {
+    this.send({ type: 'replyBehavior', value });
   }
 
   /** Shows the selected code playback mode. */
@@ -572,6 +578,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         // A new page has an empty draft (#69): specs/Draft.tla, `LoadPage`.
         controller().resume('reply');
         this.showChatOrder(this.chatOrder.get());
+        this.showReplyBehavior(this.replyBehavior.get());
         this.send({ type: 'replay', events: this.log });
         this.showTerminalPreference(this.terminalSettings.get());
         this.showSpeed(this.speed.get());
@@ -581,6 +588,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         this.showTimings();
         // The new page asks once whether a session can start: specs/Start.tla, `LoadPage`.
         this.askStart();
+        return;
+      case 'replyBehavior':
+        if (message.value === 'interrupt' || message.value === 'finishAction') this.replyBehavior.set(message.value);
         return;
       case 'chatOrder':
         if (message.value === 'newestFirst' || message.value === 'oldestFirst') this.chatOrder.set(message.value);

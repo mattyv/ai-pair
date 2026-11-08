@@ -124,7 +124,7 @@ const ui = {
   start: $('start', HTMLButtonElement),
   starting: $('starting', HTMLElement),
   reply: $('reply', HTMLTextAreaElement),
-  deferReply: $('defer-reply', HTMLInputElement),
+  replyBehavior: $('reply-behavior', HTMLSelectElement),
   send: $('send', HTMLButtonElement),
   attach: $('attach', HTMLElement),
   attachRef: $('attach-ref', HTMLElement),
@@ -1030,6 +1030,11 @@ ui.settingsCodePlayback.addEventListener('change', () => {
   }
 });
 
+ui.replyBehavior.addEventListener('change', () => {
+  const value = ui.replyBehavior.value === 'finishAction' ? 'finishAction' : 'interrupt';
+  vscode.postMessage({ type: 'replyBehavior', value });
+});
+
 ui.chatOrder.addEventListener('change', () => {
   const value = ui.chatOrder.value === 'oldestFirst' ? 'oldestFirst' : 'newestFirst';
   setChatOrder(value);
@@ -1206,6 +1211,9 @@ function handle(message: ToPanel): void {
     }
     case 'showTerminals':
       ui.showTerminals.checked = message.value;
+      return;
+    case 'replyBehavior':
+      ui.replyBehavior.value = message.value;
       return;
     case 'chatOrder':
       setChatOrder(message.value);
@@ -1391,7 +1399,7 @@ function takeAttach(): boolean {
 function sendReply(): void {
   const text = takeDraft();
   if (text) {
-    const defer = ui.deferReply.checked;
+    const defer = ui.replyBehavior.value === 'finishAction';
     if (!defer) stopSpeechLocally();
     vscode.postMessage({ type: 'reply', text, attach: takeAttach(), ...(defer ? { defer: true } : {}) });
   }

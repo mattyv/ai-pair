@@ -274,6 +274,22 @@ export async function run(): Promise<void> {
     }
     assert.ok(done(), 'timed out');
   }
+  // The actual panel handler persists reply timing in global VS Code settings.
+  const replySettings = vscode.workspace.getConfiguration('aiPair');
+  const previousReplyBehavior = replySettings.inspect('replyBehavior')?.globalValue;
+  try {
+    await replySettings.update('replyBehavior', undefined, vscode.ConfigurationTarget.Global);
+    assert.equal(replySettings.get('replyBehavior'), 'interrupt');
+    api.panelMessage({ type: 'replyBehavior', value: 'finishAction' });
+    await until(() => replySettings.get('replyBehavior') === 'finishAction');
+    api.panelMessage({ type: 'replyBehavior', value: 'invalid' });
+    assert.equal(replySettings.get('replyBehavior'), 'finishAction');
+    api.panelMessage({ type: 'replyBehavior', value: 'interrupt' });
+    await until(() => replySettings.get('replyBehavior') === 'interrupt');
+  } finally {
+    await replySettings.update('replyBehavior', previousReplyBehavior, vscode.ConfigurationTarget.Global);
+  }
+
   // A panel reply may wait for a currently typing action without cutting its token.
   fs.writeFileSync(file('deferred.txt'), '');
   const deferred = await vscode.workspace.openTextDocument(file('deferred.txt'));

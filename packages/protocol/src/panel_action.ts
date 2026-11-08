@@ -32,6 +32,7 @@ export const localPanelAction = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('openUrl'), url: reference }),
   z.strictObject({ type: z.literal('command'), command: z.enum(['aiPair.playDemo', 'aiPair.setUpAgent']) }),
   z.strictObject({ type: z.literal('start') }),
+  z.strictObject({ type: z.literal('replyBehavior'), value: z.enum(['interrupt', 'finishAction']) }),
   z.strictObject({ type: z.literal('chatOrder'), value: z.enum(['newestFirst', 'oldestFirst']) }),
   z.strictObject({ type: z.literal('showTerminals'), value: z.boolean() }),
   z.strictObject({ type: z.literal('showTerminal'), id }),
