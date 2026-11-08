@@ -29,7 +29,7 @@ TMP_FILES="$(mktemp -d /tmp/ai-pair.XXXXXX)"
 readonly TMP_FILES
 # Temporary data is removed after success or failure (#176).
 trap 'rm -rf "${TMP}" "${TMP_FILES}"' EXIT
-mkdir -p "${TMP}/workspace"
+mkdir -p "${TMP}/workspace" "${TMP}/agents/codex"
 # Keep discovery files and the launcher out of the real ~/.ai-pair.
 export AI_PAIR_HOME="${TMP}/home"
 if [[ -z "${EXTENSION_PATH}" ]]; then

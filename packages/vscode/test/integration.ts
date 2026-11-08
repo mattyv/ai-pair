@@ -1438,7 +1438,7 @@ export async function run(): Promise<void> {
   // real home, so they are never picked here.
   const agents = path.join(root, '..', 'agents');
   /** Runs Set Up Agent, ticks the items at `indexes` in its picker with VS Code's quick input commands, and accepts, or hides it with none. */
-  async function setUpAgents(indexes: number[]): Promise<void> {
+  async function setUpAgents(indexes: number[], initiallyPicked: number[] = []): Promise<void> {
     const running = vscode.commands.executeCommand('aiPair.setUpAgent');
     await sleep(1000);
     if (indexes.length === 0) {
@@ -1446,7 +1446,10 @@ export async function run(): Promise<void> {
     } else {
       await vscode.commands.executeCommand('quickInput.first');
       let at = 0;
-      for (const index of indexes) {
+      const toggles = [...new Set([...indexes, ...initiallyPicked])]
+        .filter((index) => indexes.includes(index) !== initiallyPicked.includes(index))
+        .sort((a, b) => a - b);
+      for (const index of toggles) {
         for (; at < index; at++) {
           await vscode.commands.executeCommand('quickInput.next');
         }
@@ -1460,19 +1463,19 @@ export async function run(): Promise<void> {
   await vscode.env.clipboard.writeText(clipboardBefore);
   await setUpAgents([]);
   assert.equal(await vscode.env.clipboard.readText(), clipboardBefore);
-  await setUpAgents([5]);
+  await setUpAgents([5], [1]);
   const copied: unknown = JSON.parse(await vscode.env.clipboard.readText());
   assert.deepEqual(copied, { mcpServers: { pair: { command: api.launcher, args: [] } } });
   fs.mkdirSync(path.join(agents, 'claude'), { recursive: true });
   fs.writeFileSync(path.join(agents, 'claude', '.claude.json'), '{ "mcpServers": ');
-  await setUpAgents([0, 1]);
+  await setUpAgents([0, 1], [0, 1]);
   assert.equal(fs.readFileSync(path.join(agents, 'claude', '.claude.json'), 'utf8'), '{ "mcpServers": ', 'the broken file was changed');
   assert.match(fs.readFileSync(path.join(agents, 'codex', 'config.toml'), 'utf8'), /\[mcp_servers\.pair\]/);
   // Opened again, it lists Codex as set up; from the run's own config files, so the same on every machine.
   await setUpAgents([]);
   // A multi-agent choice writes both isolated configurations from scratch.
   fs.rmSync(path.join(agents, 'codex'), { recursive: true, force: true });
-  await setUpAgents([1, 2]);
+  await setUpAgents([1, 2], [0]);
   const openCodeFile = path.join(agents, 'xdg', 'opencode', 'opencode.json');
   const openCode = z
     .object({ mcp: z.object({ pair: z.object({ type: z.literal('local'), command: z.tuple([z.string()]), enabled: z.literal(true) }) }) })
