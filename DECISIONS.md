@@ -419,8 +419,9 @@ Issue discussions and working notes hold the detailed evidence and history.
 ## Batch identity on session recovery, 2026-11-08
 
 Save the next batch ID with the session so a normal saved-session reload keeps
-allocating beyond IDs already reported. For older or malformed snapshots, use
-one above the largest unreported finished batch ID. Older snapshots cannot
-recover IDs that have already left that list. Workspace storage is asynchronous,
+allocating beyond IDs already reported. When `nextBatchId` is missing or
+invalid, use one above the largest unreported finished batch ID. Older
+snapshots cannot recover IDs that have already left that list. Workspace
+storage is asynchronous,
 so a crash before its latest write can still reuse an ID. This change does not
 replay interrupted work and does not address terminal command IDs (issue #11).
