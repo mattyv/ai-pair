@@ -166,7 +166,12 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
         narration.setLocalPause(false, 'draft');
         narration.setLocalPause(false, 'manual');
       }
-      if (action.type === 'reply' || action.type === 'interrupt' || action.type === 'turn' || action.type === 'end') {
+      // specs/DeferredMessage.tla, SendDeferred: keep the current narration until the action ends.
+      if (action.type === 'reply' && action.defer === true) {
+        narration.setLocalPause(false, 'draft');
+        narration.setLocalPause(false, 'manual');
+        sendAction(action, page);
+      } else if (action.type === 'reply' || action.type === 'interrupt' || action.type === 'turn' || action.type === 'end') {
         const stopped = narration.interruptThen(() => {
           sendAction(action, page);
         });

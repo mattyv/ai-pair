@@ -1288,7 +1288,7 @@ Every invariant and property names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `SavedIsCurrent`, `NotLostProp` | `controller.test.ts`: SavedIsCurrent, NotLostProp: saves a session for the window, and none once it ended; SavedIsCurrent, NotLostProp, ShownIsState: brings back a session the window saved, suspended, after a reload |
+| `SavedIsCurrent`, `NotLostProp` | `controller.test.ts`: Store: saves queued replies without delivering or duplicating them in the live session; SavedIsCurrent, NotLostProp: saves a session for the window, and none once it ended; SavedIsCurrent, NotLostProp, ShownIsState: brings back a session the window saved, suspended, after a reload |
 | `ResumesSameProp`, `Arrives` | `controller.test.ts`: ResumesSameProp, Arrives: suspends a session the agent disconnects from, and resumes it on a start from its directory |
 | `WaitsProp` | `controller.test.ts`: WaitsProp: starts a new session from another directory, ending the suspended one; WaitsProp: closes a suspended session at once when the programmer ends it |
 | `EndedHasAgent` | `controller.test.ts`: WaitsProp: closes a suspended session at once when the programmer ends it; EndedHasAgent: rejects the open call when the agent disconnects, and closes at once a session the programmer ended |
@@ -2676,7 +2676,7 @@ fairness for the check violates `StatusProgress`.
 
 `DeferredMessage` checks one deferred reply, the current action and an urgent
 stop. The real queue can hold multiple replies; urgent input flushes them in
-order.
+order. `Resume` also treats a deferred reply as a waiting message when stored.
 
 | Property | Code test |
 |---|---|

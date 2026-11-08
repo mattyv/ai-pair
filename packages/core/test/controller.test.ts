@@ -1033,6 +1033,28 @@ describe('playing the queue', () => {
     expect((await report(h.controller.listen())).events).toEqual([{ kind: 'message', text: 'late' }]);
   });
 
+  it('Store: saves queued replies without delivering or duplicating them in the live session', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    h.controller.userMessage('first', undefined, /* defer= */ true);
+    h.controller.userMessage('second', undefined, /* defer= */ true);
+    const saved = h.controller.saved;
+    if (saved === undefined) throw new Error('Missing saved session');
+    expect(saved.events).toEqual([
+      { kind: 'message', text: 'first' },
+      { kind: 'message', text: 'second' },
+    ]);
+    expect(timeline().interrupt).not.toHaveBeenCalled();
+    const liveStage = stage();
+    const restored = harness();
+    restored.controller.revive(saved);
+    expect((await restored.controller.start()).events).toEqual(saved.events);
+    liveStage.afterAction?.();
+    finish({ status: 'interrupted' });
+    expect((await report(h.controller.listen())).events).toEqual(saved.events);
+  });
+
   it('SendDeferred: delivers immediately when no action is playing', async () => {
     const h = await started();
     h.controller.userMessage('now', undefined, /* defer= */ true);

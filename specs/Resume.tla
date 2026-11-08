@@ -34,7 +34,7 @@ VARIABLES
     connected,      \* an agent's relay is connected, and drives the session if
                     \* one is active
     messageWaiting, \* a message from the programmer the agent hasn't been sent
-                    \* yet
+                    \* yet, including one deferred until an action boundary
     shown,          \* what the panel shows, one of Views
     stored          \* what the workspace's storage holds: the session as of its
                     \* last change

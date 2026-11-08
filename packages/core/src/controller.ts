@@ -410,7 +410,8 @@ export class Controller {
       scene: { root, turn, cursor, selection, allowedCommands: [...session.scene.allowedCommands] },
       finished: session.finished,
       nextBatchId: this.nextBatchId,
-      events: session.events.filter((e): e is Exclude<Event, { kind: 'edit' }> => e.kind !== 'edit'),
+      // specs/Resume.tla, Store: a queued reply survives reload without changing the live queue.
+      events: [...session.events, ...session.deferredMessages].filter((e): e is Exclude<Event, { kind: 'edit' }> => e.kind !== 'edit'),
     };
   }
 

@@ -233,6 +233,27 @@ it('forwards panel controls only after local retirement and clears pause reasons
   current.dispose();
 });
 
+it('forwards a deferred reply without canceling local narration', () => {
+  const current = session();
+  const panel = routing();
+  panel.forward({ type: 'draft', empty: false }, 7);
+  fake.setPause.mockClear();
+  panel.forward({ type: 'reply', text: 'Wait', defer: true }, 7);
+  expect(fake.interrupt).not.toHaveBeenCalled();
+  expect(fake.setPause.mock.calls).toEqual([
+    [false, 'draft'],
+    [false, 'manual'],
+  ]);
+  expect(fake.send).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: 'panelAction',
+      pageEpoch: 7,
+      action: { type: 'reply', text: 'Wait', defer: true },
+    }),
+  );
+  current.dispose();
+});
+
 it('delivers complete panel updates and ignores heartbeats', () => {
   const current = session();
   const common = { version: 1 as const, connectionEpoch: 'epoch', sequence: 2 };
