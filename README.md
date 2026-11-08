@@ -14,6 +14,9 @@ It adds:
 -   Copyable session and speech diagnostics, plus a running version and build
     in Settings. Speech diagnostics show capability, button dispatch and safe
     failure categories without copying keys, narration or audio.
+-   When enabled speech is available, the agent is encouraged to select a
+    concise explanation to speak, and may be reminded after several batches
+    without one. The reminder does not enable speech or make a provider request.
 -   Optional local Kokoro speech for narration selected by the connected coding
     agent, which selects useful short explanations without a per-session prompt.
     Speech is off by default and needs no additional API key. In Settings,

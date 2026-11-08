@@ -90,7 +90,12 @@ with Archi's `validate-archi.js` and check the regenerated page in a browser.
     ownership until close. Page replacement and interruption invalidate the
     active unit. Speech and
     reading complete independently; speech never approves a command or releases
-    a reading hold. History and diagnostics do not retain speech audio.
+    a reading hold. After three accepted batches without selected narration, the
+    controller checks current readiness before adding a reminder to a step
+    report. The companion readiness query is scoped to the connection epoch and
+    returns only a Boolean; it does not synthesize speech or transfer keys,
+    narration, or audio. Readiness is a local check, not a promise of future
+    playback. History and diagnostics do not retain speech audio.
 -   **The narration panel** is a webview. It talks to the extension via
     `postMessage`, with the messages typed in
     [`panel_messages.ts`](packages/vscode/src/panel_messages.ts). Its markup is
