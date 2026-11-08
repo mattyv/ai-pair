@@ -11,7 +11,7 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes the 0.19.0 local-audio architecture on this feature branch.
+Status: describes the local-audio architecture and 0.20.0 development work.
 
 The source is `.archi/ai-pair.json`. To regenerate the page with
 Archi-Techture 1.5.1, set `ARCHI_TO_HTML` to its `out/tools/archi-to-html.js`
@@ -333,3 +333,12 @@ official MCP TypeScript SDK.
 -   **Starting from the editor** (see above).
 -   **Multiple agents** in one window.
 -   **Zed.**
+
+## Bounded sentence narration
+
+The sentence pipeline is being implemented on this feature branch. The Archi
+`Sentence narration` diagram records its ownership boundaries. One admitted text
+retains one reading clock and one concrete output lease. Local Kokoro may
+synthesize one next sentence while the current part plays; each physical output
+must retire before the next starts. ElevenLabs keeps its single-request path.
+These changes require final review and packaged verification before release.

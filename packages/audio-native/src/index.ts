@@ -1,3 +1,6 @@
+/** Largest number of waveform parts in one admitted unit. */
+export const MAX_AUDIO_PARTS = 4;
+
 /** Ownership is scoped to one connection, job, and webview page. */
 export interface AudioOwner {
   connectionEpoch: string;
@@ -21,13 +24,15 @@ export type AudioLease = string & { readonly __audioLease: unique symbol };
 export interface AudioEvent {
   owner: AudioOwner;
   sequence: number;
+  /** Zero-based part ordinal within this admitted unit. */
+  part: number;
   type: 'started' | 'ended' | 'canceled' | 'failed';
 }
 export interface AudioAdapter {
   capabilities(): Promise<AudioCapabilities>;
   list(): Promise<AudioDevice[]>;
   admit(owner: AudioOwner, choice: AudioChoice): Promise<AudioLease>;
-  play(lease: AudioLease, wav: Uint8Array): Promise<void>;
+  play(lease: AudioLease, wav: Uint8Array, part?: number): Promise<void>;
   pause(owner: AudioOwner): Promise<void>;
   resume(owner: AudioOwner): Promise<void>;
   stop(owner: AudioOwner): Promise<void>;

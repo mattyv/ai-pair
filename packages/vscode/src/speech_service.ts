@@ -15,9 +15,12 @@ import {
   type SpeechVoice,
 } from './speech_types';
 import { SPEECH_WORKER_OUTPUT } from './speech_worker_messages';
+import { speechSegments } from './speech_segments';
 
 /** The panel operations used by local speech; audio is never added to history. */
 export interface SpeechOutput {
+  /** Supports sequential parts under one local route reservation. */
+  parts?: boolean;
   /** Checks and reserves the selected route before synthesis. */
   prepare?: (id: number) => Promise<boolean>;
   /** Cancels a reserved or pending route before a page has begun playback. */
@@ -25,7 +28,7 @@ export interface SpeechOutput {
   /** Fixed, non-sensitive local worker lifecycle facts. */
   localDiagnostic?: (phase: 'ready' | 'failed', reason?: LocalSpeechFailureReason) => void;
   /** Posts audio and returns its current page ID, or undefined when no page is ready. */
-  play: (id: number, wav: Uint8Array, durationMs: number) => number | undefined;
+  play: (id: number, wav: Uint8Array, durationMs: number, part?: number) => number | undefined;
   /** Controls only the audio belonging to the given page and generation. */
   control: (id: number, pageId: number, action: 'pause' | 'resume' | 'stop') => void;
   /** Displays a short live state or a text-only fallback reason. */
@@ -48,11 +51,19 @@ export interface SpeechAudioEvent {
   id: number;
   pageId: number;
   event: 'started' | 'ended' | 'failed';
+  part?: number;
 }
 
 interface ActiveSpeech {
   id: number;
   text: string;
+  parts: string[];
+  multipart: boolean;
+  nextPart: number;
+  part: number;
+  lookaheadAllowed: boolean;
+  buffered?: { part: number; wav: Uint8Array; durationMs: number };
+  aggregateMs: number;
   provider: SpeechProvider;
   cloudVoice: string;
   voice: SpeechVoice;
@@ -98,7 +109,7 @@ export class SpeechService implements NarrationPort {
   private paused = false;
   private worker?: Worker;
   private workerReady = false;
-  private workerBusyId?: number;
+  private workerBusyId?: { id: number; part?: number };
   private workerTimer?: ReturnType<typeof setTimeout>;
   private cloudBusy?: { id: number; controller: AbortController; timer: ReturnType<typeof setTimeout> };
   private closing = false;
@@ -163,6 +174,12 @@ export class SpeechService implements NarrationPort {
     const current: ActiveSpeech = {
       id,
       text,
+      parts: provider === 'kokoro' && this.options.output.parts === true ? speechSegments(text) : [text],
+      multipart: false,
+      nextPart: 0,
+      part: 0,
+      lookaheadAllowed: false,
+      aggregateMs: 0,
       provider,
       cloudVoice: settings.elevenLabsVoice,
       voice: voice ?? 'af_heart',
@@ -175,6 +192,7 @@ export class SpeechService implements NarrationPort {
       preview,
       remaining: START_TIMEOUT_MS,
     };
+    current.multipart = current.parts.length > 1;
     this.current = current;
     this.options.output.status(id, 'preparing');
     if (this.current === current) {
@@ -189,7 +207,7 @@ export class SpeechService implements NarrationPort {
     current.phase = 'loading';
     if (current.provider === 'elevenlabs') this.startCloud(current);
     else {
-      this.arm(current, START_TIMEOUT_MS);
+      if (!this.paused || !current.multipart) this.arm(current, START_TIMEOUT_MS);
       void this.start(current);
     }
   }
@@ -313,15 +331,45 @@ export class SpeechService implements NarrationPort {
   }
 
   private synthesize(current: ActiveSpeech, worker: Worker): void {
-    current.phase = 'synthesizing';
-    this.workerBusyId = current.id;
-    this.clearTimer(current);
+    if (this.current !== current || this.worker !== worker || (this.paused && current.multipart)) return;
+    const part = current.nextPart;
+    // A bounded slice is empty if an internal ordinal is invalid; the worker rejects it.
+    const text = current.parts.slice(part, part + 1).join('');
+    current.nextPart++;
+    if (current.phase !== 'playing') current.phase = 'synthesizing';
+    // specs/SentencePipeline.tla, Synthesize: one inference owns its unit and part.
+    this.workerBusyId = { id: current.id, ...(current.multipart ? { part } : {}) };
+    if (current.phase !== 'playing') this.clearTimer(current);
     this.armWorker(worker);
     try {
-      worker.postMessage({ type: 'synthesize', id: current.id, text: current.text, voice: current.voice, speed: current.speed });
+      worker.postMessage({
+        type: 'synthesize',
+        id: current.id,
+        text,
+        voice: current.voice,
+        speed: current.speed,
+        ...(current.multipart ? { part, final: part === current.parts.length - 1 } : {}),
+      });
     } catch {
       this.workerFailed(worker);
     }
+  }
+
+  /** Starts at most one lookahead after the prior part actually started. */
+  private lookahead(current: ActiveSpeech): void {
+    if (
+      this.current !== current ||
+      !current.multipart ||
+      this.paused ||
+      !current.lookaheadAllowed ||
+      current.buffered !== undefined ||
+      this.workerBusyId !== undefined ||
+      this.worker === undefined ||
+      current.nextPart >= current.parts.length
+    ) {
+      return;
+    }
+    this.synthesize(current, this.worker);
   }
 
   private workerMessage(worker: Worker, raw: unknown): void {
@@ -341,41 +389,57 @@ export class SpeechService implements NarrationPort {
       if (current !== undefined && current.phase === 'loading') this.synthesize(current, worker);
       return;
     }
-    if (message.id !== undefined && message.id === this.workerBusyId) {
-      this.workerBusyId = undefined;
-      this.clearWorkerTimer();
+    if (message.type === 'error' && message.id === undefined) {
+      this.workerFailed(worker, this.workerReady ? 'worker_error' : 'model_load');
+      return;
     }
+    const busy = this.workerBusyId;
+    // specs/SentencePipeline.tla, SynthDone: stale part results cannot clear another request.
+    if (busy === undefined || message.id !== busy.id || message.part !== busy.part) return;
+    this.workerBusyId = undefined;
+    this.clearWorkerTimer();
     if (message.type === 'error') {
-      if (message.id === undefined) {
-        this.workerFailed(worker, this.workerReady ? 'worker_error' : 'model_load');
-      } else if (current?.id === message.id) {
+      if (current?.id === message.id) {
         this.localDiagnostic('failed', 'synthesis');
         this.fail(current, message.message);
       }
       return;
     }
-    if (current?.id !== message.id || current.phase !== 'synthesizing') return;
-    if (message.wav.length < MIN_WAV_BYTES || message.wav.length > MAX_WAV_BYTES || message.durationMs > MAX_DURATION_MS) {
+    if (current?.id !== message.id) return;
+    const part = message.part ?? 0;
+    if (
+      message.wav.length < MIN_WAV_BYTES ||
+      message.wav.length > MAX_WAV_BYTES ||
+      !Number.isFinite(message.durationMs) ||
+      message.durationMs <= 0 ||
+      current.aggregateMs + message.durationMs > MAX_DURATION_MS
+    ) {
       this.fail(current, 'Generated speech was invalid; continue reading.');
       return;
     }
+    current.aggregateMs += message.durationMs;
+    if (current.phase === 'playing') {
+      current.buffered = { part, wav: message.wav, durationMs: message.durationMs };
+      return;
+    }
+    current.part = part;
     current.wav = message.wav;
     current.durationMs = message.durationMs;
     current.phase = 'prepared';
     this.clearTimer(current);
-    if (this.paused) {
-      this.options.output.status(current.id, 'paused');
-    } else {
-      this.play(current);
-    }
+    if (this.paused) this.options.output.status(current.id, 'paused');
+    else this.play(current);
   }
 
   private play(current: ActiveSpeech): void {
+    if (current.multipart) current.lookaheadAllowed = false;
     this.options.output.status(current.id, 'preparing');
     if (this.current !== current) return;
     let pageId: number | undefined;
     try {
-      pageId = this.options.output.play(current.id, current.wav, current.durationMs);
+      pageId = current.multipart
+        ? this.options.output.play(current.id, current.wav, current.durationMs, current.part)
+        : this.options.output.play(current.id, current.wav, current.durationMs);
     } catch {
       if (current.provider === 'kokoro') this.localDiagnostic('failed', 'audio_page');
       this.fail(current, 'Audio could not play. Open the Pair panel and try Preview voice.');
@@ -399,7 +463,13 @@ export class SpeechService implements NarrationPort {
   /** Accepts page acknowledgements only for the current page and generation. */
   audioEvent(event: SpeechAudioEvent): 'ended' | 'failed' | undefined {
     const current = this.current;
-    if (current === undefined || current.id !== event.id || current.pageId !== event.pageId || current.phase !== 'playing') {
+    if (
+      current === undefined ||
+      current.id !== event.id ||
+      current.pageId !== event.pageId ||
+      current.phase !== 'playing' ||
+      (event.part ?? 0) !== current.part
+    ) {
       return undefined;
     }
     if (event.event === 'failed') {
@@ -407,6 +477,26 @@ export class SpeechService implements NarrationPort {
       this.fail(current, 'Audio could not play. Use Preview voice to enable audio.');
       return 'failed';
     } else if (event.event === 'ended') {
+      if (current.multipart && !current.started) {
+        this.fail(current, 'Audio could not play. Use Preview voice to enable audio.');
+        return 'failed';
+      }
+      if (current.multipart && current.part < current.parts.length - 1) {
+        // specs/SentencePipeline.tla, Close: intermediate retirement never completes the unit.
+        this.clearTimer(current);
+        current.started = false;
+        const buffered = current.buffered;
+        current.buffered = undefined;
+        current.phase = buffered === undefined ? 'synthesizing' : 'prepared';
+        if (buffered !== undefined) {
+          current.part = buffered.part;
+          current.wav = buffered.wav;
+          current.durationMs = buffered.durationMs;
+          current.lookaheadAllowed = false;
+          if (!this.paused) this.play(current);
+        } else this.lookahead(current);
+        return undefined;
+      }
       this.finish(current);
       return 'ended';
     } else {
@@ -415,6 +505,8 @@ export class SpeechService implements NarrationPort {
       current.remaining = current.durationMs + PLAYBACK_GRACE_MS;
       if (!this.paused) this.arm(current, current.remaining);
       this.options.output.status(current.id, this.paused ? 'paused' : 'speaking');
+      current.lookaheadAllowed = true;
+      this.lookahead(current);
       return undefined;
     }
   }
@@ -424,6 +516,7 @@ export class SpeechService implements NarrationPort {
     this.paused = true;
     const current = this.current;
     if (current === undefined) return;
+    if (current.multipart && current.phase === 'loading') this.freeze(current);
     if (current.phase === 'playing' && current.pageId !== undefined) {
       this.freeze(current);
       this.options.output.control(current.id, current.pageId, 'pause');
@@ -442,7 +535,13 @@ export class SpeechService implements NarrationPort {
       this.options.output.control(current.id, current.pageId, 'resume');
       this.arm(current, current.remaining);
       this.options.output.status(current.id, current.started ? 'speaking' : 'preparing');
+      this.lookahead(current);
     } else {
+      if (current.phase === 'loading' && this.workerReady && this.worker !== undefined) this.synthesize(current, this.worker);
+      else {
+        if (current.multipart && current.phase === 'loading') this.arm(current, current.remaining);
+        this.lookahead(current);
+      }
       this.options.output.status(current.id, 'preparing');
     }
   }

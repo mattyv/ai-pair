@@ -59,12 +59,31 @@ describe('companion audio output', () => {
     expect(admit.mock.calls).toEqual([[owner, { kind: 'device', id: 'selected' }]]);
     expect(output.play(7, new Uint8Array([1]))).toBe(4);
     expect(play.mock.calls).toHaveLength(1);
-    send({ owner: { ...owner, pageEpoch: 3 }, sequence: 1, type: 'ended' });
+    send({ owner: { ...owner, pageEpoch: 3 }, sequence: 1, part: 0, type: 'ended' });
     expect(event).not.toHaveBeenCalled();
-    send({ owner, sequence: 1, type: 'started' });
-    send({ owner, sequence: 2, type: 'ended' });
-    expect(event).toHaveBeenCalledWith({ id: 7, pageId: 4, event: 'started' });
-    expect(event).toHaveBeenCalledWith({ id: 7, pageId: 4, event: 'ended' });
+    send({ owner, sequence: 1, part: 0, type: 'started' });
+    send({ owner, sequence: 2, part: 0, type: 'ended' });
+    expect(event).toHaveBeenCalledWith({ id: 7, pageId: 4, event: 'started', part: 0 });
+    expect(event).toHaveBeenCalledWith({ id: 7, pageId: 4, event: 'ended', part: 0 });
+  });
+
+  it('keeps the unit lease across parts and rejects stale part events', async () => {
+    const { output, stop, event, send } = fixture();
+    expect(output.parts).toBe(true);
+    expect(await output.prepare(7)).toBe(true);
+    const owner: AudioOwner = { connectionEpoch: 'connection', jobId: '7', pageEpoch: 4 };
+    expect(output.play(7, new Uint8Array(44), 1000, 0)).toBe(4);
+    send({ owner, sequence: 1, part: 0, type: 'ended' });
+    expect(stop).not.toHaveBeenCalled();
+    expect(output.play(7, new Uint8Array(44), 1000, 2)).toBeUndefined();
+    expect(output.play(7, new Uint8Array(44), 1000, 1)).toBe(4);
+    send({ owner, sequence: 2, part: 0, type: 'ended' });
+    expect(event).toHaveBeenCalledTimes(1);
+    send({ owner, sequence: 3, part: 1, type: 'ended' });
+    expect(event).toHaveBeenLastCalledWith({ id: 7, pageId: 4, part: 1, event: 'ended' });
+    expect(stop).not.toHaveBeenCalled();
+    output.cancel(7);
+    expect(stop).toHaveBeenCalledTimes(1);
   });
 
   it('invalidates a pending admission before a late success can dispatch playback', async () => {
@@ -89,12 +108,14 @@ describe('companion audio output', () => {
     expect(output.play(1, new Uint8Array())).toBe(4);
     expect(output.play(1, new Uint8Array())).toBeUndefined();
     const owner: AudioOwner = { connectionEpoch: 'connection', jobId: '1', pageEpoch: 4 };
-    send({ owner, sequence: 2, type: 'started' });
-    send({ owner, sequence: 1, type: 'ended' });
-    send({ owner: { ...owner, jobId: 'old' }, sequence: 3, type: 'ended' });
-    send({ owner: { ...owner, connectionEpoch: 'old' }, sequence: 3, type: 'ended' });
+    send({ owner, sequence: 2, part: 0, type: 'started' });
+    send({ owner, sequence: 1, part: 0, type: 'ended' });
+    send({ owner: { ...owner, jobId: 'old' }, sequence: 3, part: 0, type: 'ended' });
+    send({ owner: { ...owner, connectionEpoch: 'old' }, sequence: 3, part: 0, type: 'ended' });
     expect(event).toHaveBeenCalledTimes(1);
-    send({ owner, sequence: 3, type: 'ended' });
+    send({ owner, sequence: 3, part: 0, type: 'ended' });
+    expect(stop).not.toHaveBeenCalled();
+    output.cancel(1);
     expect(await output.prepare(2)).toBe(false);
     stopped.resolve();
     await Promise.resolve();
@@ -132,15 +153,15 @@ describe('companion audio output', () => {
     const first = fixture();
     expect(await first.output.prepare(5)).toBe(true);
     expect(first.output.play(5, new Uint8Array())).toBe(4);
-    first.send({ owner: { connectionEpoch: 'connection', jobId: '5', pageEpoch: 4 }, sequence: 1, type: 'canceled' });
-    expect(first.event).toHaveBeenCalledWith({ id: 5, pageId: 4, event: 'failed' });
+    first.send({ owner: { connectionEpoch: 'connection', jobId: '5', pageEpoch: 4 }, sequence: 1, part: 0, type: 'canceled' });
+    expect(first.event).toHaveBeenCalledWith({ id: 5, pageId: 4, event: 'failed', part: 0 });
     expect(first.stop).toHaveBeenCalled();
     const second = fixture();
     second.play.mockRejectedValue(new Error('device'));
     expect(await second.output.prepare(6)).toBe(true);
     expect(second.output.play(6, new Uint8Array())).toBe(4);
     await Promise.resolve();
-    expect(second.event).toHaveBeenCalledWith({ id: 6, pageId: 4, event: 'failed' });
+    expect(second.event).toHaveBeenCalledWith({ id: 6, pageId: 4, event: 'failed', part: 0 });
     expect(second.stop).toHaveBeenCalled();
   });
   it('ignores late failures after cancellation and never releases on failed retirement', async () => {
@@ -154,7 +175,7 @@ describe('companion audio output', () => {
     output.control(8, 4, 'pause');
     playing.reject(new Error('late'));
     await Promise.resolve();
-    send({ owner: { connectionEpoch: 'connection', jobId: '8', pageEpoch: 4 }, sequence: 1, type: 'ended' });
+    send({ owner: { connectionEpoch: 'connection', jobId: '8', pageEpoch: 4 }, sequence: 1, part: 0, type: 'ended' });
     expect(event).not.toHaveBeenCalled();
     expect(await output.prepare(9)).toBe(false);
     output.dispose();
@@ -178,7 +199,7 @@ describe('companion audio output', () => {
   it('disposes an idle output and ignores callbacks after retirement', () => {
     const { output, send, event } = fixture();
     output.dispose();
-    send({ owner: { connectionEpoch: 'connection', jobId: '1', pageEpoch: 4 }, sequence: 1, type: 'ended' });
+    send({ owner: { connectionEpoch: 'connection', jobId: '1', pageEpoch: 4 }, sequence: 1, part: 0, type: 'ended' });
     expect(event).not.toHaveBeenCalled();
   });
   it('ignores a rejected pause control without exposing the backend error', async () => {

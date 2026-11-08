@@ -193,3 +193,32 @@ describe('remote narration port', () => {
     await job;
   });
 });
+
+it('keeps a long multipart unit paused and retains its slot after timeout until matching retirement', async () => {
+  vi.useFakeTimers();
+  const send = vi.fn<(_: unknown) => void>();
+  const port = new RemoteNarration({ epoch: 'connection', page: () => 4, timeoutMs: 270_600, send, nextSequence: sequence() });
+  const job = port.speak('First. Second. Third. Fourth.');
+  await vi.advanceTimersByTimeAsync(120_000);
+  port.pause();
+  await vi.advanceTimersByTimeAsync(300_000);
+  port.resume();
+  await vi.advanceTimersByTimeAsync(150_600);
+  await job;
+  await port.speak('Must wait.');
+  expect(send.mock.calls.map(([frame]) => frame)).toMatchObject([
+    { type: 'speak' },
+    { type: 'pause' },
+    { type: 'resume' },
+    { type: 'cancel' },
+  ]);
+  expect(port.ack({ version: 1, connectionEpoch: 'old', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' })).toBe(
+    false,
+  );
+  expect(
+    port.ack({ version: 1, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'canceled' }),
+  ).toBe(true);
+  void port.speak('Next.');
+  expect(send.mock.calls[4]?.[0]).toMatchObject({ type: 'speak', jobId: '2' });
+  port.dispose();
+});

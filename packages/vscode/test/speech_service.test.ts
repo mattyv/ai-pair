@@ -33,6 +33,9 @@ const fake = vi.hoisted(() => {
 vi.mock('node:worker_threads', () => ({ Worker: fake.Worker }));
 vi.mock('../src/speech_setup', () => ({ installedSpeechModel: vi.fn() }));
 vi.mock('../src/speech_runtime_status', () => ({ speechRuntimeAvailable: vi.fn() }));
+vi.mock('../src/speech_segments', () => ({
+  speechSegments: vi.fn((text: string) => text.match(/[^.!?]+[.!?]\s*/gu) ?? [text]),
+}));
 
 /** Checks a callback captured from the timer fake. */
 function isTimerCallback(value: unknown): value is () => void {
@@ -1428,4 +1431,281 @@ it('retires pending admission on cancel, timeout, and disposal before late resul
     await settle();
     expect(cloud.synthesize.mock.calls).toHaveLength(0);
   }
+});
+
+it('SentencePipeline waits for the first started acknowledgement before one lookahead and completes only after the final part', async () => {
+  const { service, output } = harness();
+  output.parts = true;
+  const gate = service.speak('First sentence. Second sentence.');
+  let done = false;
+  void gate.then(() => {
+    done = true;
+  });
+  await settle();
+  const worker = fake.Worker.made[0];
+  if (worker === undefined) throw new Error('No worker');
+  worker.emit('message', { type: 'ready' });
+  expect(worker.postMessage).toHaveBeenLastCalledWith({
+    type: 'synthesize',
+    id: 1,
+    part: 0,
+    final: false,
+    text: 'First sentence. ',
+    voice: 'af_heart',
+    speed: 1,
+  });
+  worker.emit('message', { type: 'audio', id: 1, part: 0, wav: new Uint8Array(44), durationMs: 1000 });
+  expect(output.play).toHaveBeenCalledWith(1, new Uint8Array(44), 1000, 0);
+  expect(worker.postMessage).toHaveBeenCalledTimes(2);
+  service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'started' });
+  expect(worker.postMessage).toHaveBeenLastCalledWith({
+    type: 'synthesize',
+    id: 1,
+    part: 1,
+    final: true,
+    text: 'Second sentence.',
+    voice: 'af_heart',
+    speed: 1,
+  });
+  worker.emit('message', { type: 'audio', id: 1, part: 1, wav: new Uint8Array(44), durationMs: 1000 });
+  expect(output.play).toHaveBeenCalledTimes(1);
+  expect(service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'ended' })).toBeUndefined();
+  expect(output.play).toHaveBeenCalledTimes(2);
+  await settle();
+  expect(done).toBe(false);
+  service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'ended' });
+  expect(done).toBe(false);
+  service.audioEvent({ id: 1, pageId: 7, part: 1, event: 'started' });
+  expect(service.audioEvent({ id: 1, pageId: 7, part: 1, event: 'ended' })).toBe('ended');
+  await gate;
+  expect(done).toBe(true);
+  expect(output.control).toHaveBeenCalledWith(1, 7, 'stop');
+});
+
+it('SentencePipeline does not dispatch the next part until its own started acknowledgement after pause and close', async () => {
+  const { service, output } = harness();
+  output.parts = true;
+  const gate = service.speak('First. Second. Third.');
+  await settle();
+  const worker = fake.Worker.made[0];
+  if (worker === undefined) throw new Error('No worker');
+  worker.emit('message', { type: 'ready' });
+  worker.emit('message', { type: 'audio', id: 1, part: 0, wav: new Uint8Array(44), durationMs: 1000 });
+  service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'started' });
+  service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'ended' });
+  worker.emit('message', { type: 'audio', id: 1, part: 1, wav: new Uint8Array(44), durationMs: 1000 });
+  service.pause();
+  service.resume();
+  expect(worker.postMessage).toHaveBeenCalledTimes(3);
+  service.audioEvent({ id: 1, pageId: 7, part: 1, event: 'started' });
+  expect(worker.postMessage).toHaveBeenCalledTimes(4);
+  service.cancel();
+  await gate;
+});
+
+it('SentencePipeline holds first synthesis while paused during model loading', async () => {
+  const { service, output } = harness();
+  output.parts = true;
+  const gate = service.speak('First. Second.');
+  await settle();
+  const worker = fake.Worker.made[0];
+  if (worker === undefined) throw new Error('No worker');
+  service.pause();
+  worker.emit('message', { type: 'ready' });
+  expect(worker.postMessage).toHaveBeenCalledTimes(1);
+  service.resume();
+  expect(worker.postMessage).toHaveBeenCalledTimes(2);
+  service.cancel();
+  await gate;
+});
+
+it('SentencePipeline ignores a stale part result without releasing the current inference', async () => {
+  const { service, output } = harness();
+  output.parts = true;
+  const gate = service.speak('First. Second.');
+  await settle();
+  const worker = fake.Worker.made[0];
+  if (worker === undefined) throw new Error('No worker');
+  worker.emit('message', { type: 'ready' });
+  worker.emit('message', { type: 'audio', id: 1, part: 0, wav: new Uint8Array(44), durationMs: 1000 });
+  service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'started' });
+  worker.emit('message', { type: 'audio', id: 1, part: 0, wav: new Uint8Array(44), durationMs: 1000 });
+  service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'ended' });
+  expect(output.play).toHaveBeenCalledTimes(1);
+  worker.emit('message', { type: 'audio', id: 1, part: 1, wav: new Uint8Array(44), durationMs: 1000 });
+  expect(output.play).toHaveBeenCalledTimes(2);
+  service.cancel();
+  await gate;
+});
+
+it('SentencePipeline cancels a delayed lookahead on reply and ignores its result', async () => {
+  const { service, output } = harness();
+  output.parts = true;
+  const gate = service.speak('First. Second.');
+  await settle();
+  const worker = fake.Worker.made[0];
+  if (worker === undefined) throw new Error('No worker');
+  worker.emit('message', { type: 'ready' });
+  worker.emit('message', { type: 'audio', id: 1, part: 0, wav: new Uint8Array(44), durationMs: 1000 });
+  service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'started' });
+  service.cancel();
+  await gate;
+  worker.emit('message', { type: 'audio', id: 1, part: 1, wav: new Uint8Array(44), durationMs: 1000 });
+  expect(output.play).toHaveBeenCalledTimes(1);
+  expect(output.control).toHaveBeenCalledWith(1, 7, 'stop');
+});
+
+it('SentencePipeline fails the whole unit if aggregate audio exceeds its bound', async () => {
+  const { service, output } = harness();
+  output.parts = true;
+  const gate = service.speak('First. Second.');
+  await settle();
+  const worker = fake.Worker.made[0];
+  if (worker === undefined) throw new Error('No worker');
+  worker.emit('message', { type: 'ready' });
+  worker.emit('message', { type: 'audio', id: 1, part: 0, wav: new Uint8Array(44), durationMs: 25_000 });
+  service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'started' });
+  worker.emit('message', { type: 'audio', id: 1, part: 1, wav: new Uint8Array(44), durationMs: 16_000 });
+  await gate;
+  expect(output.play).toHaveBeenCalledTimes(1);
+  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'Generated speech was invalid; continue reading.');
+  expect(output.control).toHaveBeenCalledWith(1, 7, 'stop');
+});
+
+it('SentencePipeline keeps paused model-ready speech pending past the playback-start deadline', async () => {
+  const { service, output } = harness();
+  output.parts = true;
+  const gate = service.speak('First. Second.');
+  let done = false;
+  void gate.then(() => {
+    done = true;
+  });
+  await settle();
+  const worker = fake.Worker.made[0];
+  if (worker === undefined) throw new Error('No worker');
+  service.pause();
+  worker.emit('message', { type: 'ready' });
+  await vi.advanceTimersByTimeAsync(21_000);
+  expect(done).toBe(false);
+  expect(output.status).not.toHaveBeenCalledWith(1, 'unavailable', expect.anything());
+  service.resume();
+  expect(worker.postMessage).toHaveBeenCalledTimes(2);
+  service.cancel();
+  await gate;
+});
+
+it('SentencePipeline does not launch lookahead if a status callback cancels the unit', async () => {
+  const { service, output } = harness();
+  output.parts = true;
+  output.status.mockImplementation((id, state) => {
+    if (id === 1 && state === 'speaking') service.cancel();
+  });
+  const gate = service.speak('First. Second.');
+  await settle();
+  const worker = fake.Worker.made[0];
+  if (worker === undefined) throw new Error('No worker');
+  worker.emit('message', { type: 'ready' });
+  worker.emit('message', { type: 'audio', id: 1, part: 0, wav: new Uint8Array(44), durationMs: 1000 });
+  service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'started' });
+  await gate;
+  expect(worker.postMessage).toHaveBeenCalledTimes(2);
+});
+
+it('SentencePipeline fails an end acknowledgement before the part starts', async () => {
+  const { service, output } = harness();
+  output.parts = true;
+  const gate = service.speak('First. Second.');
+  await settle();
+  const worker = fake.Worker.made[0];
+  if (worker === undefined) throw new Error('No worker');
+  worker.emit('message', { type: 'ready' });
+  worker.emit('message', { type: 'audio', id: 1, part: 0, wav: new Uint8Array(44), durationMs: 1000 });
+  expect(service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'ended' })).toBe('failed');
+  await gate;
+  expect(worker.postMessage).toHaveBeenCalledTimes(2);
+});
+
+it('SentencePipeline keeps a finished lookahead paused until the current part retires and resumes', async () => {
+  const { service, output } = harness();
+  output.parts = true;
+  const gate = service.speak('First. Second.');
+  await settle();
+  const worker = fake.Worker.made[0];
+  if (worker === undefined) throw new Error('No worker');
+  worker.emit('message', { type: 'ready' });
+  worker.emit('message', { type: 'audio', id: 1, part: 0, wav: new Uint8Array(44), durationMs: 1000 });
+  service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'started' });
+  worker.emit('message', { type: 'audio', id: 1, part: 1, wav: new Uint8Array(44), durationMs: 1000 });
+  service.pause();
+  service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'ended' });
+  expect(output.play).toHaveBeenCalledTimes(1);
+  service.resume();
+  expect(output.play).toHaveBeenCalledTimes(2);
+  service.cancel();
+  await gate;
+});
+
+it('SentencePipeline discards a late synthesis error after cancellation', async () => {
+  const { service, output } = harness();
+  output.parts = true;
+  const gate = service.speak('First. Second.');
+  await settle();
+  const worker = fake.Worker.made[0];
+  if (worker === undefined) throw new Error('No worker');
+  worker.emit('message', { type: 'ready' });
+  service.cancel();
+  await gate;
+  worker.emit('message', { type: 'error', id: 1, part: 0, message: 'fixed failure' });
+  expect(output.status).not.toHaveBeenCalledWith(1, 'unavailable', 'fixed failure');
+});
+
+it('SentencePipeline resumes a model that is still loading without losing its watchdog', async () => {
+  const { service, output } = harness();
+  output.parts = true;
+  const gate = service.speak('First. Second.');
+  await settle();
+  service.pause();
+  service.resume();
+  await vi.advanceTimersByTimeAsync(20_001);
+  await gate;
+  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.any(String));
+});
+
+it('SentencePipeline keeps the start watchdog frozen when admission completes while paused', async () => {
+  const { service, output } = harness();
+  output.parts = true;
+  const admission = Promise.withResolvers<boolean>();
+  output.prepare = vi.fn().mockReturnValue(admission.promise);
+  const gate = service.speak('First. Second.');
+  let done = false;
+  void gate.then(() => {
+    done = true;
+  });
+  service.pause();
+  admission.resolve(true);
+  await settle();
+  const worker = fake.Worker.made[0];
+  if (worker === undefined) throw new Error('No worker');
+  worker.emit('message', { type: 'ready' });
+  await vi.advanceTimersByTimeAsync(21_000);
+  expect(done).toBe(false);
+  service.resume();
+  expect(worker.postMessage).toHaveBeenCalledTimes(2);
+  service.cancel();
+  await gate;
+});
+
+it('SentencePipeline does not synthesize if a ready diagnostic cancels the unit', async () => {
+  const { service, output } = harness();
+  output.parts = true;
+  output.localDiagnostic = vi.fn((phase) => {
+    if (phase === 'ready') service.cancel();
+  });
+  const gate = service.speak('First. Second.');
+  await settle();
+  const worker = fake.Worker.made[0];
+  if (worker === undefined) throw new Error('No worker');
+  worker.emit('message', { type: 'ready' });
+  await gate;
+  expect(worker.postMessage).toHaveBeenCalledTimes(1);
 });

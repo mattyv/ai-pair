@@ -18,6 +18,7 @@ export interface SpeechRequest {
   text: string;
   voice: SpeechVoice;
   speed: number;
+  final?: boolean;
 }
 
 /** Encodes a checked model result and its playback duration. */
@@ -41,6 +42,6 @@ export async function synthesizeSpeech<T extends SpeechTokens>(
   const tokens = engine.tokenize(phonemes);
   checkedTokenCount(tokens.dims.at(-1) ?? 0);
   const audio = await engine.generate(tokens, request.voice, request.speed);
-  const wav = encodeSpeechWav(audio.samples, audio.rate);
-  return { wav, durationMs: (audio.samples.length / audio.rate) * MS_PER_SECOND + TRAILING_SILENCE_MS };
+  const wav = request.final === false ? encodeSpeechWav(audio.samples, audio.rate, false) : encodeSpeechWav(audio.samples, audio.rate);
+  return { wav, durationMs: (audio.samples.length / audio.rate) * MS_PER_SECOND + (request.final === false ? 0 : TRAILING_SILENCE_MS) };
 }

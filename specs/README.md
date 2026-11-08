@@ -104,6 +104,11 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `LocalAudioAdmission.cfg` | capability, device snapshot and cloud admission | holds | 624 |
 | `LocalAudioOwnership.cfg` | local ownership, directional sequences and lease loss | holds | 3,632 |
 | `PanelPlacement.cfg` | bounded prepare, irrevocable commit and fallback | holds | 10 |
+| `SentencePipeline.cfg` | two units, three parts, pause, cancel and late callbacks | holds | 2,242 |
+| `SentencePipeline_Healthy.cfg` | fair healthy synthesis, output and eventual resume | holds | 107 |
+| `SentencePipeline_Canceled.cfg` | fair canceled inference and child retirement | holds | 137 |
+| `MultipartAudioLease.cfg` | two units, three parts, pause and route loss | holds | 13,716 |
+| `MultipartAudioLease_Healthy.cfg` | two completed units under fair child progress | holds | 59 |
 | `LocalPanelReplay.cfg` | two chunks, two epochs, bounded text and malformed frames | holds | 138 |
 | `LocalPanelReplay_Delivery.cfg` | two fair successful chunks | holds | 3 |
 | `PlaybackAnchor.cfg` | three-character insert, cursor marker and all bounded programmer edits | holds | 20 |
@@ -2381,3 +2386,73 @@ checks are sanity checks rather than independently mutation-tested properties.
 
 Native remote integration and real-device Windows playback verification remain
 pending; mocked or in-process tests do not establish those results.
+
+### `SentencePipeline`: bounded synthesis and playback
+
+The model separates a requested child from its started acknowledgement and
+physical close. One unit holds one captured output route; two unit identities
+and three part ordinals exercise stale output and synthesis callbacks. A
+single ready or in-flight next part is permitted. Duration units abstract the
+aggregate speech bound, and reading and approval remain held. The model does not
+represent actual PCM or text; the tests cover source reconstruction and the
+final thinking tail.
+
+| Property | Code test |
+|---|---|
+| `NoExcessLookahead` | `vscode/test/speech_service.test.ts`: SentencePipeline waits for the first started acknowledgement before one lookahead and completes only after the final part. |
+| `NoDispatchWhilePaused` | `vscode/test/speech_service.test.ts`: SentencePipeline does not dispatch the next part until its own started acknowledgement after pause and close; SentencePipeline holds first synthesis while paused during model loading. |
+| `FixedRoute` | `audio-ui/test/sentence_pipeline.e2e.test.ts`: SentencePipeline composes one captured route through physical closes and completes only the final part. |
+| `NoStaleEnd` | `vscode/test/speech_service.test.ts`: SentencePipeline ignores a stale part result without releasing the current inference; `audio-ui/test/companion_output.test.ts`: keeps the unit lease across parts and rejects stale part events. |
+| `FinalOnly` | `audio-ui/test/sentence_pipeline.e2e.test.ts`: SentencePipeline composes one captured route through physical closes and completes only the final part. |
+| `RetireBeforeRelease` | `audio-native/test/multipart_native_adapter.e2e.test.ts`: suppresses a pending natural end after cancellation and waits for child close. |
+| `ReadingApprovalHeld` | `core/test/player.test.ts`: keeps held reading and command approval after speech throw; keeps held reading and command approval after speech reject. |
+| `ContiguousParts` | `audio-native/test/multipart_native_adapter.e2e.test.ts`: rejects overlapping, repeated and skipped parts without launching another child. |
+| `AggregateBound` | `vscode/test/speech_service.test.ts`: SentencePipeline fails the whole unit if aggregate audio exceeds its bound. |
+| `CanStart`, `CanResume`, `HealthyProgress` | `vscode/test/speech_service.test.ts`: SentencePipeline keeps a finished lookahead paused until the current part retires and resumes; `audio-ui/test/sentence_pipeline.e2e.test.ts`: SentencePipeline composes one captured route through physical closes and completes only the final part. |
+| `CanceledProgress` | `vscode/test/speech_service.test.ts`: SentencePipeline cancels a delayed lookahead on reply and ignores its result; `audio-native/test/multipart_native_adapter.e2e.test.ts`: suppresses a pending natural end after cancellation and waits for child close. |
+| Source slices and final tail | `vscode/test/speech_segments.test.ts`: preserves every source character while grouping excess sentences into a fourth part; `vscode/test/speech_waveform.test.ts`: adds the thinking tail only when explicitly requested for the final part. |
+
+TLC checked 7,545 generated / 2,242 distinct safety states, 223 / 107
+healthy states, and 194 / 137 canceled states. Healthy progress assumes fair
+inference, start acknowledgement, output close and eventual stable unpause;
+canceled progress separately assumes fair pending inference settlement, stop,
+physical close and release. A permanently paused healthy unit need not finish.
+
+Disabling pause, route, stale-output, stale-synthesis, final-only, physical
+retirement or started-ack guards yields the corresponding invariant violation.
+Disabling synthesis, playback or close violates healthy progress. Disabling
+resume violates `CanResume`; disabling stop or release violates
+`CanceledProgress`. Raising the aggregate bound, releasing reading on admit,
+and skipping the first physical part violate their respective invariants.
+Disabling the buffer guard alone passes: in this three-part model the started
+acknowledgement guard already prevents a third buffered part. Disabling both
+buffer and started guards violates `NoExcessLookahead`. `TypeOK` is a sanity
+check rather than an independently mutated behavioral property.
+
+### `MultipartAudioLease`: one endpoint across sequential parts
+
+The model bounds two units and three parts, while the implementation allows
+at most four parts. It separates an early backend terminal callback from the
+physical child-close event. A logical unit retains one captured output route
+across part boundaries, including changes to the system default. The next part
+requires the previous child's close, a current route check, a contiguous
+ordinal and an unpaused start. An unstarted terminal result fails the part.
+The healthy configuration assumes fair starts, terminal callbacks and physical
+closes; paused units may remain paused in the general configuration.
+
+Negative controls for early lease release, delivery before close, stale
+callbacks, route changes, premature whole-unit completion, paused start,
+skipped part, stale route check and unstarted success each violate the
+corresponding invariant. Disabling either unit or any healthy request, spawn,
+start, terminal, close or release action violates `HealthyFinishes`.
+
+| Property | Test |
+|---|---|
+| `LeaseRetained`, `NoEarlyPartEvent`, `FixedRoute` | `audio-native/test/multipart_native_adapter.e2e.test.ts`: retains one exact route across parts and publishes completion only after child close; `audio-ui/test/sentence_pipeline.e2e.test.ts`: SentencePipeline composes one captured route through physical closes and completes only the final part. |
+| `NoStaleCallback`, `NoSkippedPart`, `NoOverlap` | `audio-native/test/multipart_native_adapter.e2e.test.ts`: rejects overlapping, repeated and skipped parts without launching another child; `audio-ui/test/companion_output.test.ts`: keeps the unit lease across parts and rejects stale part events. |
+| `NoStartPaused`, `NoStaleCheck` | `audio-native/test/multipart_native_adapter.e2e.test.ts`: rechecks the captured route after a paused boundary and refuses a missing device; rechecks when pause and resume both occur during an in-flight route check. |
+| `NoUnstartedSuccess` | `audio-native/test/multipart_native_adapter.e2e.test.ts`: treats end before start as failure and cannot launch another part. |
+| `NoEarlyCompletion`, `RetirementCompletes` | `audio-native/test/multipart_native_adapter.e2e.test.ts`: caps a unit at four parts and releases the lease only on explicit stop; suppresses a pending natural end after cancellation and waits for child close. |
+
+Real platform/device playback and a packaged GUI run remain separate acceptance
+checks; the composed test uses a fake worker and backend.

@@ -119,7 +119,7 @@ Code goes without a spec for one of these reasons:
 |---|---|---|
 | `admission.ts` | logical route reservation and cancellation | `LocalAudioAdmission`; native device integration pending |
 | `ownership.ts` | job ownership and retirement | `LocalAudioOwnership`; process integration tests pending |
-| `playback.ts` | player lifecycle | `LocalAudioOwnership`; process integration tests pending |
+| `playback.ts` | player lifecycle | `LocalAudioOwnership`, `MultipartAudioLease`; process integration tests pending |
 | `protocol.ts` | helper event framing and sequence checks | `LocalAudioOwnership`; protocol unit tests |
 | `index.ts` | adapter contracts | Types |
 | `helper_location.ts` | helper path resolution | Glue; helper-location unit tests |
@@ -129,7 +129,7 @@ Code goes without a spec for one of these reasons:
 | File | Functions | Spec |
 |---|---|---|
 | `local_connection.ts` | ordered frames and local lease | `LocalAudioOwnership`; physical retirement integration pending |
-| `companion_output.ts` | page and job ownership | `LocalAudioAdmission`, `LocalAudioOwnership`; native integration pending |
+| `companion_output.ts` | page and job ownership | `LocalAudioAdmission`, `LocalAudioOwnership`, `MultipartAudioLease`; native integration pending |
 
 ## vscode
 

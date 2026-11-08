@@ -139,3 +139,19 @@ describe('workspace session wiring', () => {
     expect(lost).not.toHaveBeenCalled();
   });
 });
+
+it('allows all four bounded synthesis and playback stages before the remote backstop', () => {
+  const session = new WorkspaceSession({
+    epoch: 'epoch',
+    panel: {
+      attachRemote: vi.fn<(_: number, send: (message: unknown) => void) => void>(),
+      receiveRemote: vi.fn<(_: number, action: import('@ai-pair/protocol').LocalPanelAction) => void>(),
+      closeRemote: vi.fn<(_: number) => void>(),
+    },
+    send: vi.fn().mockResolvedValue(undefined),
+    lost: vi.fn<() => void>(),
+  });
+  const worstCaseMs = 5000 + 20_000 + 4 * 20_000 + 4 * 20_000 + 40_600 + 4 * 5000;
+  expect(fake.narrationOptions?.timeoutMs).toBeGreaterThanOrEqual(worstCaseMs + 10_000);
+  session.dispose();
+});

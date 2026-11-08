@@ -45,7 +45,7 @@ export function checkedTokenCount(total: number): number {
 }
 
 /** Encodes bounded mono model output as PCM WAV with a trailing thinking interval. */
-export function encodeSpeechWav(samples: Float32Array, rate: number): Uint8Array {
+export function encodeSpeechWav(samples: Float32Array, rate: number, includeTail = true): Uint8Array {
   if (rate !== SAMPLE_RATE || samples.length === 0 || samples.length > rate * MAX_AUDIO_SECONDS) {
     throw new Error('The generated audio has an invalid size or sample rate.');
   }
@@ -55,7 +55,7 @@ export function encodeSpeechWav(samples: Float32Array, rate: number): Uint8Array
     if (sample !== 0) nonzero = true;
   }
   if (!nonzero) throw new Error('The generated audio is silent.');
-  const dataBytes = (samples.length + rate * TRAILING_SILENCE_SECONDS) * PCM_BYTES;
+  const dataBytes = (samples.length + (includeTail ? rate * TRAILING_SILENCE_SECONDS : 0)) * PCM_BYTES;
   const bytes = new Uint8Array(WAV_HEADER_BYTES + dataBytes);
   const view = new DataView(bytes.buffer);
   for (const [offset, text] of [

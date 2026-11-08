@@ -55,3 +55,10 @@ describe('synthesizeSpeech', () => {
     }
   });
 });
+
+it('omits the thinking tail for a nonfinal part', async () => {
+  const fake = engine(3);
+  const result = await synthesizeSpeech(fake, { text: 'First.', voice: 'af_heart', speed: 1, final: false });
+  expect(encodeSpeechWav).toHaveBeenCalledWith(new Float32Array([0.5]), 24_000, false);
+  expect(result.durationMs).toBeCloseTo(1000 / 24_000);
+});

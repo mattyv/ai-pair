@@ -37,15 +37,36 @@ export class SpeechWorkerHost<T extends SpeechTokens> {
     }
     const engine = this.engine;
     if (this.busy || engine === undefined) {
-      this.post({ type: 'error', id: request.id, message: 'Local speech is busy or unavailable.' });
+      this.post({
+        type: 'error',
+        id: request.id,
+        ...(request.part === undefined ? {} : { part: request.part }),
+        message: 'Local speech is busy or unavailable.',
+      });
       return;
     }
     this.busy = true;
     try {
-      const result = await synthesizeSpeech(engine, { text: request.text, voice: request.voice, speed: request.speed });
-      this.post({ type: 'audio', id: request.id, wav: new Uint8Array(result.wav), durationMs: result.durationMs });
+      const result = await synthesizeSpeech(engine, {
+        text: request.text,
+        voice: request.voice,
+        speed: request.speed,
+        ...(request.final === undefined ? {} : { final: request.final }),
+      });
+      this.post({
+        type: 'audio',
+        id: request.id,
+        ...(request.part === undefined ? {} : { part: request.part }),
+        wav: new Uint8Array(result.wav),
+        durationMs: result.durationMs,
+      });
     } catch {
-      this.post({ type: 'error', id: request.id, message: 'Could not speak this text. Continue reading it.' });
+      this.post({
+        type: 'error',
+        id: request.id,
+        ...(request.part === undefined ? {} : { part: request.part }),
+        message: 'Could not speak this text. Continue reading it.',
+      });
     } finally {
       this.busy = false;
     }

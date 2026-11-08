@@ -9,11 +9,25 @@ const HEARTBEAT_MS = 3000;
 const COMMAND_TIMEOUT_MS = 3000;
 /** Maximum queued commands before failing the connection closed. */
 const MAX_PENDING_COMMANDS = 128;
+/** Unpaused admission deadline in SpeechService. */
+const ADMISSION_MS = 5000;
+/** Worker load, each inference, and each playback-start deadline. */
+const STAGE_MS = 20_000;
+/** Maximum number of Kokoro parts in one admitted unit. */
+const MAX_PARTS = 4;
+/** The aggregate waveform limit, including the final thinking tail. */
+const MAX_AUDIO_MS = 40_600;
+/** Playback grace allowed for each part. */
+const PART_GRACE_MS = 5000;
+/** Allows bounded transport and scheduling overhead. */
+const TRANSPORT_MARGIN_MS = 25_000;
 /**
- * Unpaused backstop for admission, worker startup, synthesis, playback startup,
- * the longest waveform and delivery: longer than the local stage deadlines.
+ * Unpaused upper backstop for admission, load, every inference and start,
+ * aggregate audio, each playback grace and transport. RemoteNarration retains
+ * ownership after this timer settles the caller until terminal acknowledgement.
  */
-const NARRATION_TIMEOUT_MS = 130_000;
+const NARRATION_TIMEOUT_MS =
+  ADMISSION_MS + STAGE_MS + MAX_PARTS * STAGE_MS * 2 + MAX_AUDIO_MS + MAX_PARTS * PART_GRACE_MS + TRANSPORT_MARGIN_MS;
 
 /** Workspace panel operations needed by the companion connection. */
 export interface WorkspaceSessionPanel {

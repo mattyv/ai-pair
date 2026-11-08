@@ -241,3 +241,20 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   The VM's previously installed extension was version 0.1.0; its installed
     extension bundle lacked the current post-interruption anchor guard. This does
     not establish the host's version or what caused any particular editing incident.
+
+## Speech follow-up implementation, 2026-11-08
+
+-   Implement the authorized speech improvements in order: bounded Kokoro
+    sentence pipelining, independent pitch-preserving listening speed, then a
+    common warm local-synthesis worker protocol. Preserve the existing reading
+    countdown, code pace, speech switch and one admitted narration unit. Keep
+    ElevenLabs on one request per unit in the first increment.
+-   Treat optional music ducking as a separate local-host feature. Its planned
+    settings include an enable switch and attenuation level. Restore affected
+    streams on speech pause, completion, cancellation and failure, without
+    overwriting a concurrent user volume change. Capability and crash-recovery
+    behavior require platform-specific verification before claiming support.
+-   Keep the reviewed cross-platform audio checkpoint separate from these new
+    features. Its legacy editor scenarios pass, but 31 integration coverage
+    thresholds remain below their floors. This is an outstanding merge gate;
+    development installers do not establish release readiness.

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.20.0
+
+-   Pipeline local Kokoro narration as bounded sentence parts while retaining
+    one displayed message, reading clock and concrete output route. Hold unit
+    completion until the final playback process retires. ElevenLabs retains
+    one synthesis request per narration.
+
 ## 0.19.0
 
 -   Use the optional AI Pair Local Audio companion to keep the Pair panel,

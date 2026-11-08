@@ -40467,6 +40467,101 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
               },
             },
           },
+          {
+            id: "sentence-narration",
+            name: "Sentence narration",
+            type: "architecture",
+            origin: "llm",
+            generation: { focus: "Bounded sentence pipeline under review" },
+            doc: {
+              type: "architecture",
+              autoLayoutApplied: true,
+              nodes: [
+                {
+                  id: "admitted",
+                  label: "Admitted narration\nOne text and reading clock",
+                  files: ["packages/vscode/src/speech_service.ts"],
+                  x: 40,
+                  y: 80,
+                },
+                {
+                  id: "segments",
+                  label: "Exact sentence parts\nAt most four source slices",
+                  files: ["packages/vscode/src/speech_segments.ts"],
+                  x: 540,
+                  y: 80,
+                },
+                {
+                  id: "worker",
+                  label: "Local synthesis\nOne inference and one lookahead",
+                  files: ["packages/vscode/src/speech_worker_host.ts"],
+                  x: 1040,
+                  y: 80,
+                },
+                {
+                  id: "scheduler",
+                  label: "Unit scheduler\nFinal-only completion",
+                  files: ["packages/vscode/src/speech_service.ts"],
+                  x: 540,
+                  y: 430,
+                },
+                {
+                  id: "lease",
+                  label: "Concrete output lease\nOne endpoint across parts",
+                  files: ["packages/audio-ui/src/companion_output.ts", "packages/audio-native/src/native_adapter.ts"],
+                  x: 1040,
+                  y: 430,
+                },
+                {
+                  id: "physical",
+                  label: "Physical playback\nRetire before next part",
+                  files: ["packages/audio-native/src/playback.ts"],
+                  x: 1540,
+                  y: 430,
+                },
+              ],
+              edges: [
+                { from: "admitted", to: "segments", label: "exact text" },
+                { from: "segments", to: "worker", label: "part text" },
+                { from: "worker", to: "scheduler", label: "bounded result" },
+                { from: "scheduler", to: "lease", label: "ordinal / WAV" },
+                { from: "lease", to: "physical", label: "same endpoint" },
+                {
+                  from: "physical",
+                  to: "scheduler",
+                  label: "started / retired",
+                  vertices: [
+                    { x: 1710, y: 680 },
+                    { x: 710, y: 680 },
+                  ],
+                },
+              ],
+              groups: [],
+              comments: {
+                admitted: [
+                  {
+                    id: "reading-contract",
+                    text: "Implementation under review. Show text once and preserve one reading clock; sentence boundaries do not approve commands or advance code.",
+                    ts: 0,
+                  },
+                ],
+                worker: [
+                  {
+                    id: "provider-boundary",
+                    text: "Local Kokoro uses the bounded multipart path. ElevenLabs retains one request per unit; legacy output stays one waveform. No future narration is synthesized.",
+                    ts: 0,
+                  },
+                ],
+                lease: [
+                  {
+                    id: "retirement",
+                    text: "Logical ownership survives each physically retired part. Stale callbacks cannot settle a newer part. Release only after final completion or canceled physical retirement.",
+                    ts: 0,
+                  },
+                ],
+              },
+            },
+          },
         ],
         typesPresent: ["overview", "architecture", "flow", "dataflow", "state", "sequence", "class", "er", "concurrency"],
         codeThreads: [

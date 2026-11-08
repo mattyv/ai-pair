@@ -1,4 +1,11 @@
-import type { AudioAdapter, AudioChoice, AudioEvent, AudioLease, AudioOwner } from '../../audio-native/src';
+import {
+  MAX_AUDIO_PARTS,
+  type AudioAdapter,
+  type AudioChoice,
+  type AudioEvent,
+  type AudioLease,
+  type AudioOwner,
+} from '../../audio-native/src';
 import type { SpeechAudioEvent, SpeechOutput } from '../../vscode/src/speech_service';
 
 /** Dependencies for a UI-local output that reserves a route before synthesis. */
@@ -20,10 +27,13 @@ interface Request {
   sequence: number;
   lease?: AudioLease;
   playing: boolean;
+  nextPart: number;
+  part?: number;
 }
 
 /** Connects the shared speech service to a UI-local native output adapter. */
 export class CompanionOutput implements SpeechOutput {
+  readonly parts = true;
   private current?: Request;
   private readonly subscription: { dispose(): void };
 
@@ -43,6 +53,7 @@ export class CompanionOutput implements SpeechOutput {
       canceled: false,
       sequence: 0,
       playing: false,
+      nextPart: 0,
     };
     this.current = request;
     try {
@@ -61,13 +72,27 @@ export class CompanionOutput implements SpeechOutput {
   }
 
   /** Begins playback on the reserved route without sending PCM over the workspace bridge. */
-  play(id: number, wav: Uint8Array): number | undefined {
+  play(id: number, wav: Uint8Array, durationMs?: number, part = 0): number | undefined {
+    void durationMs;
     const request = this.current;
-    if (request === undefined || request.id !== id || request.canceled || request.lease === undefined || request.playing) return undefined;
+    if (
+      request === undefined ||
+      request.id !== id ||
+      request.canceled ||
+      request.lease === undefined ||
+      request.playing ||
+      !Number.isSafeInteger(part) ||
+      part !== request.nextPart ||
+      part >= MAX_AUDIO_PARTS
+    ) {
+      return undefined;
+    }
     request.playing = true;
-    void this.options.adapter.play(request.lease, wav).catch(() => {
-      if (this.current !== request || request.canceled) return;
-      this.options.event({ id, pageId: request.owner.pageEpoch, event: 'failed' });
+    request.part = part;
+    void this.options.adapter.play(request.lease, wav, part).catch(() => {
+      if (this.current !== request || request.canceled || request.part !== part) return;
+      request.canceled = true;
+      this.options.event({ id, pageId: request.owner.pageEpoch, event: 'failed', part });
       void this.retire(request);
     });
     return request.owner.pageEpoch;
@@ -126,6 +151,7 @@ export class CompanionOutput implements SpeechOutput {
       request.canceled ||
       !request.playing ||
       event.sequence <= request.sequence ||
+      event.part !== request.part ||
       event.owner.connectionEpoch !== request.owner.connectionEpoch ||
       event.owner.jobId !== request.owner.jobId ||
       event.owner.pageEpoch !== request.owner.pageEpoch
@@ -133,8 +159,19 @@ export class CompanionOutput implements SpeechOutput {
       return;
     }
     request.sequence = event.sequence;
-    this.options.event({ id: request.id, pageId: request.owner.pageEpoch, event: event.type === 'canceled' ? 'failed' : event.type });
-    if (event.type !== 'started') void this.retire(request);
+    if (event.type === 'ended') {
+      request.playing = false;
+      request.nextPart = event.part + 1;
+    } else if (event.type !== 'started') {
+      request.canceled = true;
+    }
+    this.options.event({
+      id: request.id,
+      pageId: request.owner.pageEpoch,
+      event: event.type === 'canceled' ? 'failed' : event.type,
+      part: event.part,
+    });
+    if (event.type !== 'started' && event.type !== 'ended') void this.retire(request);
   }
 
   /** Keeps the slot closed until the adapter confirms physical retirement. */

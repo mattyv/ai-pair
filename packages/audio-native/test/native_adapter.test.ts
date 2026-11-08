@@ -64,7 +64,7 @@ it('forwards discovery and starts the admitted exact route', async () => {
   await adapter.play(lease, new Uint8Array(44));
   event?.('started');
   await Promise.resolve();
-  expect(listener).toHaveBeenCalledWith({ owner, sequence: 1, type: 'started' });
+  expect(listener).toHaveBeenCalledWith({ owner, sequence: 1, part: 0, type: 'started' });
   await adapter.pause(owner);
   await adapter.resume(owner);
   expect(handle.pause).toHaveBeenCalledOnce();
@@ -140,6 +140,8 @@ it('drops queued stale events after the matching child closes', async () => {
     start: vi.fn((id: string, wav: Uint8Array, event: typeof callback) => {
       expect(id).toBe('a');
       expect(wav.byteLength).toBe(44);
+      void id;
+      void wav;
       callback = event;
       return { stop: vi.fn<() => void>(), closed: Promise.resolve() };
     }),
@@ -152,10 +154,13 @@ it('drops queued stale events after the matching child closes', async () => {
   retired.resolve();
   await retired.promise;
   await Promise.resolve();
-  expect(mocks.release).toHaveBeenCalledWith(owner);
+  expect(mocks.release).not.toHaveBeenCalled();
+  expect(listener).toHaveBeenCalledWith({ owner, sequence: 1, part: 0, type: 'failed' });
   callback?.('ended');
   await Promise.resolve();
-  expect(listener).not.toHaveBeenCalled();
+  expect(listener).toHaveBeenCalledTimes(1);
+  await adapter.stop(owner);
+  expect(mocks.release).toHaveBeenCalledWith(owner);
 });
 
 it('rejects a paused pending play when stopped and wakes the waiter', async () => {
@@ -218,4 +223,100 @@ it('ignores a late close callback after stop already cleared the old job', async
   await retired.promise;
   await Promise.resolve();
   expect(mocks.release).not.toHaveBeenCalled();
+});
+
+it('rechecks the route when pause and resume occur during discovery', async () => {
+  const pending = Promise.withResolvers<string>();
+  mocks.recheck.mockReturnValueOnce(pending.promise).mockResolvedValue('a');
+  const backend = { list: () => Promise.resolve(devices), start: vi.fn(() => ({ stop: vi.fn<() => void>(), closed: Promise.resolve() })) };
+  const adapter = new NativeAdapter(backend);
+  await adapter.admit(owner, { kind: 'device', id: 'a' });
+  const play = adapter.play(lease, new Uint8Array(44), 0);
+  await adapter.pause(owner);
+  await adapter.resume(owner);
+  pending.resolve('a');
+  await play;
+  expect(mocks.recheck).toHaveBeenCalledTimes(2);
+  expect(backend.start).toHaveBeenCalledOnce();
+  await adapter.stop(owner);
+});
+
+it('suppresses duplicate starts and a start queued before cancellation', async () => {
+  let callback: ((type: 'started' | 'ended' | 'canceled' | 'failed') => void) | undefined;
+  const backend = {
+    list: () => Promise.resolve(devices),
+    start: (id: string, wav: Uint8Array, event: typeof callback) => {
+      void id;
+      void wav;
+      callback = event;
+      return { stop: vi.fn<() => void>(), closed: Promise.resolve() };
+    },
+  };
+  const adapter = new NativeAdapter(backend);
+  const listener = vi.fn<(...args: unknown[]) => void>();
+  adapter.onEvent(listener);
+  await adapter.admit(owner, { kind: 'device', id: 'a' });
+  await adapter.play(lease, new Uint8Array(44), 0);
+  callback?.('started');
+  callback?.('started');
+  const stopped = adapter.stop(owner);
+  await stopped;
+  expect(listener).not.toHaveBeenCalled();
+});
+
+it('publishes a natural part only after close and keeps its logical lease', async () => {
+  const retired = Promise.withResolvers<void>();
+  mocks.wait.mockReturnValueOnce(retired.promise);
+  let callback: ((type: 'started' | 'ended' | 'canceled' | 'failed') => void) | undefined;
+  const backend = {
+    list: () => Promise.resolve(devices),
+    start: (id: string, wav: Uint8Array, event: typeof callback) => {
+      void id;
+      void wav;
+      callback = event;
+      return { stop: vi.fn<() => void>(), closed: Promise.resolve() };
+    },
+  };
+  const adapter = new NativeAdapter(backend);
+  const listener = vi.fn<(...args: unknown[]) => void>();
+  adapter.onEvent(listener);
+  await adapter.admit(owner, { kind: 'device', id: 'a' });
+  await adapter.play(lease, new Uint8Array(44), 0);
+  callback?.('started');
+  await Promise.resolve();
+  callback?.('ended');
+  expect(listener).toHaveBeenCalledTimes(1);
+  retired.resolve();
+  await vi.waitFor(() => {
+    expect(listener).toHaveBeenCalledWith({ owner, sequence: 2, part: 0, type: 'ended' });
+  });
+  expect(mocks.release).not.toHaveBeenCalled();
+  await adapter.stop(owner);
+});
+
+it('publishes canceled physical completion and blocks later parts', async () => {
+  const retired = Promise.withResolvers<void>();
+  mocks.wait.mockReturnValueOnce(retired.promise);
+  let callback: ((type: 'started' | 'ended' | 'canceled' | 'failed') => void) | undefined;
+  const backend = {
+    list: () => Promise.resolve(devices),
+    start: (id: string, wav: Uint8Array, event: typeof callback) => {
+      void id;
+      void wav;
+      callback = event;
+      return { stop: vi.fn<() => void>(), closed: Promise.resolve() };
+    },
+  };
+  const adapter = new NativeAdapter(backend);
+  const listener = vi.fn<(...args: unknown[]) => void>();
+  adapter.onEvent(listener);
+  await adapter.admit(owner, { kind: 'device', id: 'a' });
+  await adapter.play(lease, new Uint8Array(44), 0);
+  callback?.('canceled');
+  retired.resolve();
+  await vi.waitFor(() => {
+    expect(listener).toHaveBeenCalledWith({ owner, sequence: 1, part: 0, type: 'canceled' });
+  });
+  await expect(adapter.play(lease, new Uint8Array(44), 0)).rejects.toThrow();
+  await adapter.stop(owner);
 });

@@ -48,7 +48,7 @@ it('cancels pending admission and refuses its late result', async () => {
   expect(backend.start).not.toHaveBeenCalled();
 });
 
-it('ignores stale controls and releases a naturally closed process', async () => {
+it('ignores stale controls and retains the unit after a child closes', async () => {
   const closed = Promise.withResolvers<void>();
   const stop = vi.fn<() => void>();
   const pause = vi.fn<() => void>();
@@ -69,9 +69,12 @@ it('ignores stale controls and releases a naturally closed process', async () =>
   expect(pause).toHaveBeenCalledTimes(1);
   expect(resume).toHaveBeenCalledTimes(1);
   closed.resolve();
-  await vi.waitFor(async () => {
-    await expect(adapter.admit({ ...owner, jobId: 'next' }, { kind: 'device', id: 'a' })).resolves.toBeTruthy();
+  await vi.waitFor(() => {
+    expect(stop).not.toHaveBeenCalled();
   });
+  await expect(adapter.admit({ ...owner, jobId: 'next' }, { kind: 'device', id: 'a' })).rejects.toThrow();
+  await adapter.stop(owner);
+  await expect(adapter.admit({ ...owner, jobId: 'next' }, { kind: 'device', id: 'a' })).resolves.toBeTruthy();
 });
 
 it('does not start a process when stop races an immediately resolved playback recheck', async () => {
@@ -168,13 +171,17 @@ it('delivers scoped events and ignores callbacks after the old process closes', 
   await adapter.play(lease, new Uint8Array(44));
   signal?.('started');
   await Promise.resolve();
-  expect(observed).toHaveBeenCalledWith({ owner, sequence: 1, type: 'started' });
+  expect(observed).toHaveBeenCalledWith({ owner, sequence: 1, part: 0, type: 'started' });
+  signal?.('ended');
   closed.resolve();
-  await vi.waitFor(async () => {
-    await expect(adapter.admit({ ...owner, jobId: 'next' }, { kind: 'device', id: 'a' })).resolves.toBeTruthy();
+  await vi.waitFor(() => {
+    expect(observed).toHaveBeenCalledWith({ owner, sequence: 2, part: 0, type: 'ended' });
   });
+  await expect(adapter.admit({ ...owner, jobId: 'next' }, { kind: 'device', id: 'a' })).rejects.toThrow();
+  await adapter.stop(owner);
+  await expect(adapter.admit({ ...owner, jobId: 'next' }, { kind: 'device', id: 'a' })).resolves.toBeTruthy();
   signal?.('ended');
   await Promise.resolve();
-  expect(observed).toHaveBeenCalledTimes(1);
+  expect(observed).toHaveBeenCalledTimes(2);
   subscription.dispose();
 });

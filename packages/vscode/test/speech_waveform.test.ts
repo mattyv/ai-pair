@@ -31,3 +31,11 @@ describe('encodeSpeechWav', () => {
     expect(() => encodeSpeechWav(new Float32Array([1]), 0)).toThrow();
   });
 });
+
+it('adds the thinking tail only when explicitly requested for the final part', () => {
+  const samples = new Float32Array([0.5, -0.5]);
+  const part = encodeSpeechWav(samples, 24_000, false);
+  const final = encodeSpeechWav(samples, 24_000, true);
+  expect(part.length).toBe(44 + samples.length * 2);
+  expect(final.length - part.length).toBe(24_000 * 0.6 * 2);
+});

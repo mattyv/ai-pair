@@ -22,3 +22,11 @@ describe('speech worker messages', () => {
     expect(SPEECH_WORKER_OUTPUT.safeParse({ type: 'audio', id: 1, wav: 'bytes', durationMs: 1 }).success).toBe(false);
   });
 });
+
+it('requires a bounded ordinal and final flag together for multipart requests', () => {
+  const request = { type: 'synthesize', id: 1, text: 'Text.', voice: 'af_heart', speed: 1 };
+  expect(SPEECH_WORKER_INPUT.safeParse({ ...request, part: 0 }).success).toBe(false);
+  expect(SPEECH_WORKER_INPUT.safeParse({ ...request, final: false }).success).toBe(false);
+  expect(SPEECH_WORKER_INPUT.safeParse({ ...request, part: 4, final: false }).success).toBe(false);
+  expect(SPEECH_WORKER_INPUT.safeParse({ ...request, part: 1, final: false }).success).toBe(true);
+});

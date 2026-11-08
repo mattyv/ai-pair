@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: css, 2026-11-07.
+Last updated: css, 2026-11-08.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -28,7 +28,7 @@ Last updated: css, 2026-11-07.
 | `packages/audio-native/src/helper_catalog.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/audio-native/src/helper_location.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/audio-native/src/helper_manifest.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/audio-native/src/index.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
+| `packages/audio-native/src/index.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/audio-native/src/linux_backend.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/audio-native/src/linux_default.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/audio-native/src/native_adapter.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -48,6 +48,7 @@ Last updated: css, 2026-11-07.
 | `packages/audio-native/test/helper_manifest.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/audio-native/test/linux_backend.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/audio-native/test/linux_default.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/audio-native/test/multipart_native_adapter.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/audio-native/test/native_adapter.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/audio-native/test/native_adapter.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/audio-native/test/ownership.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
@@ -79,6 +80,7 @@ Last updated: css, 2026-11-07.
 | `packages/audio-ui/test/local_connection.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/audio-ui/test/native_output.integration.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/audio-ui/test/packaging.integration.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/audio-ui/test/sentence_pipeline.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/audio-ui/test/speech_host.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/audio-ui/test/speech_host.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/audio-ui/test/worker_diagnostics.integration.test.ts` | TypeScript | test | - | - | - | - | test |
@@ -189,6 +191,7 @@ Last updated: css, 2026-11-07.
 | `packages/vscode/src/speech_pcm.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_phonemizer_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_runtime_status.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_segments.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_service.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_synthesis.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -247,6 +250,7 @@ Last updated: css, 2026-11-07.
 | `packages/vscode/test/speech_pcm.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_phonemizer_bridge.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_runtime.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_segments.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_service.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_setup.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_setup_fs.test.ts` | TypeScript | test | - | test | - | - | test |
@@ -346,6 +350,13 @@ Last updated: css, 2026-11-07.
 | `specs/LocalPanelReplay.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/LocalPanelReplay.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/LocalPanelReplay_Delivery.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/MultipartAudioLease.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/MultipartAudioLease.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/MultipartAudioLease_Healthy.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/MultipartAudioLease_TTrace_1794100096.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/MultipartAudioLease_TTrace_1794100103.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/MultipartAudioLease_TTrace_1794100249.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/MultipartAudioLease_TTrace_1794100256.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/Narration.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Narration.tla` | TLA+ | - | - | 20 of 20 actions | - | - | - |
 | `specs/Navigator.cfg` | TLC config | - | - | - | - | - | - |
@@ -403,6 +414,10 @@ Last updated: css, 2026-11-07.
 | `specs/RunBox.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
 | `specs/Scroll.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Scroll.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
+| `specs/SentencePipeline.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/SentencePipeline.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/SentencePipeline_Canceled.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/SentencePipeline_Healthy.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Serialize.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Serialize.tla` | TLA+ | - | - | 13 of 13 actions | - | - | - |
 | `specs/SettingsAccess.cfg` | TLC config | - | - | - | - | - | - |
@@ -413,6 +428,10 @@ Last updated: css, 2026-11-07.
 | `specs/SpeechSettings.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/SpeechSetup.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechSetup.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
+| `specs/SpeechTempo.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/SpeechTempo.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/SpeechTempo_Canceled.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/SpeechTempo_Healthy.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechWorker.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechWorker.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/Start.cfg` | TLC config | - | - | - | - | - | - |

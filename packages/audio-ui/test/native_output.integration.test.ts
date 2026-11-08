@@ -32,7 +32,7 @@ it('delivers the real adapter first started event to the speech output', async (
   expect(await output.prepare(1)).toBe(true);
   expect(output.play(1, new Uint8Array(44))).toBe(1);
   await vi.waitFor(() => {
-    expect(event).toHaveBeenCalledWith({ id: 1, pageId: 1, event: 'started' });
+    expect(event).toHaveBeenCalledWith({ id: 1, pageId: 1, event: 'started', part: 0 });
   });
   output.cancel(1);
   await output.stopAndWait();

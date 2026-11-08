@@ -63,3 +63,40 @@ describe('SpeechWorkerHost', () => {
     expect(JSON.stringify(post.mock.calls)).not.toContain('secret input');
   });
 });
+
+it('echoes a part ordinal and requests a final-only tail', async () => {
+  const post = vi.fn((value: unknown) => {
+    SPEECH_WORKER_OUTPUT.parse(value);
+  });
+  const worker = new SpeechWorkerHost(vi.fn().mockResolvedValue({ phonemize: vi.fn(), tokenize: vi.fn(), generate: vi.fn() }), post);
+  vi.mocked(synthesizeSpeech).mockResolvedValue({ wav: new Uint8Array([1]), durationMs: 1 });
+  await worker.receive({ type: 'load', modelPath: '/model' });
+  await worker.receive(
+    SPEECH_WORKER_INPUT.parse({ type: 'synthesize', id: 1, part: 0, final: false, text: 'One.', voice: 'af_heart', speed: 1 }),
+  );
+  expect(synthesizeSpeech).toHaveBeenCalledWith(expect.anything(), { text: 'One.', voice: 'af_heart', speed: 1, final: false });
+  expect(post).toHaveBeenCalledWith({ type: 'audio', id: 1, part: 0, wav: new Uint8Array([1]), durationMs: 1 });
+});
+
+it('reports part identity on busy and synthesis failures', async () => {
+  const post = vi.fn((value: unknown) => {
+    SPEECH_WORKER_OUTPUT.parse(value);
+  });
+  const worker = new SpeechWorkerHost(vi.fn().mockResolvedValue({ phonemize: vi.fn(), tokenize: vi.fn(), generate: vi.fn() }), post);
+  const request = SPEECH_WORKER_INPUT.parse({
+    type: 'synthesize',
+    id: 1,
+    part: 1,
+    final: true,
+    text: 'Next.',
+    voice: 'af_heart',
+    speed: 1,
+  });
+  await worker.receive(request);
+  expect(post).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'error', id: 1, part: 1 }));
+  await worker.receive({ type: 'load', modelPath: '/model' });
+  vi.mocked(synthesizeSpeech).mockRejectedValueOnce(new Error('private'));
+  await worker.receive(request);
+  expect(post).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'error', id: 1, part: 1 }));
+  expect(JSON.stringify(post.mock.calls)).not.toContain('private');
+});
