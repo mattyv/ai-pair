@@ -1354,12 +1354,13 @@ holds "thinking", "absent", and "listening".
 
 | Spec | Code |
 |---|---|
-| `Status` | `state()` with the queue empty |
+| `Status` | `state()` with the queue empty; the panel labels thinking as "Waiting for agent" |
 | `Call` | a call that blocks arriving: `serialize` counting it in `openCalls`, ending the quiet with `endQuiet` and the grace with `endGrace`, then `block()`; `close` ends both |
 | `Read` | `read`: `endGrace`, and the quiet restarted at once |
 | `FailRehearsal` | a `step` answered by `rejectBatch` or `rejectUnanchored`: `serialize` ended the grace, the agent owes a response to the rejection, and the report takes the events |
 | `Timeout` | `finishCall` for a `listen` with `waiting` and no batches, events, or rejection: `startGrace` |
 | `QuietNews`, `TimeoutWithNews` | a batch completing without a command, or an edit `interrupting` does not hold for, which wakes no `listen`; `finishCall` for a `listen` with `waiting` and such news: no grace |
+| `RunNews`, `RunDelivered` | `callReady` and `finishCall` for completed command results; `controller.test.ts`: wakes a pending listen with the command result once |
 | `Return` | `finishCall` with anything else |
 | `Interrupt` | an event `interrupting` holds for: a message, an interrupt, an edit of the programmer's, a turn change |
 | `Expire` | the grace timer firing after `listenGraceMs` |
@@ -1411,7 +1412,9 @@ interrupted head, and fairness of Return makes enabled reports eventual.
 | `TypeOK` | TypeScript checks types |
 | `Conservation`, `PromptRunReady` | `controller.test.ts`: command result delivery tests |
 | `NoQuietWake` | `controller.test.ts`: a completed batch without a command leaves listen pending |
-| `NoEarlyEnd`, `NoEarlyDiscarded`, `NoInterruptedReturn` | Existing serialization and interruption tests; targeted new tests still needed |
+| `NoEarlyEnd` | `controller.test.ts`: command news does not let end return before later work finishes |
+| `NoEarlyDiscarded` | `controller.test.ts`: command news does not let a discarded step return before the interrupted head |
+| `NoInterruptedReturn` | `controller.test.ts`: command news waits until the interrupted head settles |
 | `RunDelivered` | `controller.test.ts`: wakes a pending listen with the command result once |
 
 Mutation checks detected omitted wake (`PromptRunReady`; separately

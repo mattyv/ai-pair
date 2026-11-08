@@ -959,6 +959,60 @@ describe('command result delivery', () => {
     await settle();
   });
 
+  async function commandWithLaterBatch(): Promise<{ h: Harness; finishLater: ReturnType<typeof holdPlay> }> {
+    const h = await started();
+    const finishCommand = holdPlay();
+    await report(h.controller.step([{ run: 'echo hello' }]));
+    const abort = new AbortController();
+    const queued = h.controller.step(SAY, abort.signal);
+    await settle();
+    abort.abort();
+    await expect(queued).rejects.toMatchObject({ code: 'cancelled' });
+    const finishLater = holdPlay();
+    finishCommand({ runs: [{ command: 'echo hello', output: 'hello', exit_code: 0 }] });
+    await settle();
+    return { h, finishLater };
+  }
+
+  it('PromptRunReady: listen returns command news while later work plays', async () => {
+    const { h, finishLater } = await commandWithLaterBatch();
+    const listen = h.controller.listen();
+    await settle();
+    expect(await pending(listen)).toBe(false);
+    expect((await report(listen)).batches[0]?.runs?.[0]?.output).toBe('hello');
+    finishLater();
+    await settle();
+  });
+
+  it('NoInterruptedReturn: command news waits until the interrupted head settles', async () => {
+    const { h, finishLater } = await commandWithLaterBatch();
+    h.controller.userInterrupt();
+    const listen = h.controller.listen();
+    expect(await pending(listen)).toBe(true);
+    finishLater({ status: 'interrupted' });
+    await settle();
+    expect((await report(listen)).batches.map((batch) => batch.status)).toEqual(['completed', 'interrupted']);
+  });
+
+  it('NoEarlyEnd: command news does not let end return before later work finishes', async () => {
+    const { h, finishLater } = await commandWithLaterBatch();
+    const end = h.controller.end();
+    expect(await pending(end)).toBe(true);
+    finishLater();
+    await settle();
+    expect((await report(end)).batches.map((batch) => batch.id)).toEqual([1, 2]);
+  });
+
+  it('NoEarlyDiscarded: command news does not let a discarded step return before the interrupted head', async () => {
+    const { h, finishLater } = await commandWithLaterBatch();
+    h.controller.userInterrupt();
+    const discarded = h.controller.step(SAY);
+    expect(await pending(discarded)).toBe(true);
+    finishLater({ status: 'interrupted' });
+    await settle();
+    expect((await report(discarded)).batches.map((batch) => batch.status)).toEqual(['completed', 'interrupted', 'discarded']);
+  });
+
   it('NoQuietWake: a completed batch without a command leaves listen pending', async () => {
     const h = await started();
     const finish = holdPlay();

@@ -184,8 +184,7 @@ function markStale(session: Session): void {
 function callReady(session: Session, call: Call): boolean {
   switch (call.kind) {
     case 'step':
-      // An empty step, or one whose batch was discarded, waits for the queued batches, so its report comes after the
-      // batch an interrupt left playing (#219).
+      // A discarded step waits for queued batches, including the one an interrupt left playing (#219).
       // specs/CommandDelivery.tla, PromptRunReady: an empty step can return command news before later work.
       if (call.batch === undefined) return session.queue.length === 0 || session.finished.some((r) => (r.runs?.length ?? 0) > 0);
       if (call.batch.result?.status === 'discarded') return session.queue.length === 0;

@@ -440,7 +440,7 @@ describe('the band', () => {
     ['typing', '', 'Playing: typing'],
     ['read', 'read', 'Read this'],
     ['running', '', 'Running a command'],
-    ['thinking', 'dim', 'Agent is thinking'],
+    ['thinking', 'dim', 'Waiting for agent'],
     ['absent', 'dim', "Agent isn't listening"],
     ['paused', 'dim', 'Paused'],
     ['listening', 'ring', 'Your move'],
