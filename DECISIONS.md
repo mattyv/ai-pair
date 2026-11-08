@@ -315,3 +315,28 @@ Issue discussions and working notes hold the detailed evidence and history.
     exclusive file ownership wrote code and tests, Fable reviewed the models and
     sources before they were committed. Reviewer approvals are recorded in the
     commit history and PR; they are not proofs of listening quality.
+-   Verify the warm worker with the real Kokoro model, not only fakes. A run of
+    the real client, worker bundle and cached model (no audio device) showed a
+    455-581 ms cold load, about 2 s per sentence part, a warm second unit with
+    another voice on the same worker, refusal of an overlapping request, a
+    canceled inference that kept the worker owned for its remaining 2 s before
+    the worker was reused, and a retired worker that held its slot until its
+    exit event. It also found a defect the mocked tests could not: the pinned
+    phonemizer bridge reads `workerData.modelPath`, which the refactor had
+    dropped. The client now hands the checked model directory to the transport,
+    and a test pins the Node worker's `workerData`. Real-speech tempo output
+    had exactly the expected lengths at 0.75, 1.25 and 1.5, kept the sample
+    peak at 0.75 and 1.25 but lost about 19 percent of it at 1.5, and moved a
+    pitch estimate at one position from 140 to 170 Hz at 1.5 where the content
+    at that position also differs; this is an automated sanity check, not
+    listening validation, and it is one more reason the control stays labeled
+    experimental.
+-   Known limitation, older than this change: Node cannot load
+    onnxruntime's native addon in a second worker thread of the same process
+    after the first worker exited (`ERR_DLOPEN_FAILED`, reported as the
+    `worker_native` category). After a worker is retired by a failure or a
+    watchdog timeout, local narration therefore cannot load a replacement until
+    the VS Code window is reloaded. Cancellation alone does not retire the
+    worker, so ordinary use is unaffected. A replacement that survives an exit
+    needs the engine in a separate process, which is deliberately not part of
+    this release.
