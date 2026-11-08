@@ -1434,10 +1434,10 @@ export async function run(): Promise<void> {
   // Set Up Agent, with the agents' config folders in the run's folder and no agent installed (scripts/integration.sh):
   // closing the picker changes nothing; Another agent puts the configuration on the clipboard; and of the agents
   // picked, one whose file is broken is reported, and the rest are set up. The picker's items are Claude Code, Codex,
-  // OpenCode, Gemini CLI, Cursor, and Another agent, in that order, none ticked. Gemini CLI and Cursor write under the
+  // OpenCode, Gemini CLI, Cursor, and Another agent, in that order. Gemini CLI and Cursor write under the
   // real home, so they are never picked here.
   const agents = path.join(root, '..', 'agents');
-  /** Runs Set Up Agent, ticks the items at `indexes` in its picker with VS Code's quick input commands, and accepts, or hides it with none. */
+  /** Selects the requested items from the known initial selection, or hides the picker if none are requested. */
   async function setUpAgents(indexes: number[], initiallyPicked: number[] = []): Promise<void> {
     const running = vscode.commands.executeCommand('aiPair.setUpAgent');
     await sleep(1000);
