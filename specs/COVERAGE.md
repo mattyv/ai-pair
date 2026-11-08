@@ -25,7 +25,7 @@ Code goes without a spec for one of these reasons:
 | `rehearse`, `rejectBatch`, `planned`, `saw`, `read` | `Rehearsal` |
 | `cursorAnchor`, `rejectUnanchored`, `anchorNeeded` in `step` and `snapshot` | `Anchor` |
 | `unnamedEdit` and its preflight in `step` | `BatchFile` (`EditRequiresNamed`) |
-| `selectedSpeech` and admission in `step`; pause, resume and cancellation propagation | `Narration` (`Admit`, `Pause`, `Resume`, `Reply`) |
+| `selectedSpeech` and admission in `step`; pause, resume and cancellation propagation | `Narration` (`Admit`, `Pause`, `Resume`, `Reply`); reminder counting and reporting: `SpeechReminder` |
 | `interrupt`, `discard`, `interrupting`, `userInterrupt`, `userMessage`, `flushDeferred` | `Controller` (`Interrupt`), `Actions` (`Interrupt`); deferred replies: `DeferredMessage` |
 | `userEdit` | `EditorAdapter`, `Navigator` (the programmer's turn), `Player` (`TypeBefore`, `TypeAfter`: the interrupt in the agent's turn) |
 | `otherEdit`, `recordEdit` | `Reload`, `Rehearsal`, `EditEvents` |
@@ -78,6 +78,7 @@ Code goes without a spec for one of these reasons:
 | | `readingTime` | Pure |
 | `diff.ts` | `lineChanges` | `Reload` (`SplitRuns`) |
 | | `fileDiff` | Format |
+| `speech_reminder.ts` | batch count, due check and report reset | `SpeechReminder` (`Batch`, `Report`) |
 | `text.ts`, `timing.ts` | all | Pure |
 | `ports.ts`, `config.ts`, `paths.ts`, `index.ts` | | Types; `config.ts` also holds the defaults and `TEST_TIMEOUTS` |
 
@@ -129,6 +130,7 @@ Code goes without a spec for one of these reasons:
 | File | Functions | Spec |
 |---|---|---|
 | `local_connection.ts` | ordered frames and local lease | `LocalAudioOwnership`; physical retirement integration pending |
+| `companion_session.ts`, `speech_host.ts` | readiness query and host facts | `SpeechReminder` abstracts readiness; concrete local checks: unit and integration tests |
 | `companion_output.ts` | page and job ownership | `LocalAudioAdmission`, `LocalAudioOwnership`, `MultipartAudioLease`; native integration pending |
 
 ## vscode
@@ -183,6 +185,7 @@ Code goes without a spec for one of these reasons:
 | `speech_elevenlabs.ts` | cloud transport | `CloudNarration` |
 | `speech_pcm.ts` | bounded PCM conversion and thinking interval | Pure; unit and integration tests |
 | `speech_service.ts` | worker, audio and page lifecycle; pause, cancel, timeouts | `Narration`, `SpeechWorker`, `WarmSynthesisWorker`, `SpeechTempo`, `SentencePipeline`, `CloudNarration`, `OutputAdmission`, `OutputHandoff`; timer bounds and local platform checks: unit and integration tests |
+| `speech_readiness.ts` | provider, settings and output readiness checks | `SpeechReminder` abstracts readiness; concrete checks: unit and integration tests |
 | `speech_native_output.ts` | discovery and native process lifecycle | `AudioOutput`; isolated PipeWire integration and unit tests |
 | `speech_output_router.ts` | route reservation and playback ownership | `AudioOutput`, `OutputAdmission`, `OutputHandoff`, `OutputReplacement` |
 | `speech_output_types.ts` | route and device types | Types |

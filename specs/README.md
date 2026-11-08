@@ -2694,7 +2694,10 @@ violated its corresponding property.
 `SpeechReminder.tla` counts accepted unspoken batches up to three, resets on
 selected speech, and gates the next reminder on current readiness. A report
 that emits a reminder resets the count. Readiness abstracts the local checks
-and cannot guarantee future synthesis or playback.
+and cannot guarantee future synthesis or playback. All three actions fired in
+the TLC coverage run. The real controller and counter also meet in the core
+session test `reminds after three accepted unspoken batches only while speech
+is ready`.
 
 | Invariant | Test |
 | --- | --- |
