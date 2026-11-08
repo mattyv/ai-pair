@@ -278,6 +278,13 @@
       "functions": 100
     }
   },
+  "packages/core/src/speech_reminder.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/core/src/text.ts": {
     "unit": {
       "lines": 100,
@@ -731,6 +738,13 @@
     }
   },
   "packages/vscode/src/speech_platform.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/speech_readiness.ts": {
     "unit": {
       "lines": 100,
       "branches": 100,
