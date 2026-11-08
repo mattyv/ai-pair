@@ -242,6 +242,22 @@ Issue discussions and working notes hold the detailed evidence and history.
     extension bundle lacked the current post-interruption anchor guard. This does
     not establish the host's version or what caused any particular editing incident.
 
+## Deferred replies, 2026-11-08
+
+-   Keep immediate replies as the default. The optional action-boundary reply
+    waits for the current action to finish before stopping later work and
+    delivering the message. Stop, edits, turn changes and session end remain
+    immediate and preserve queued replies. A long-running or blocked action can
+    therefore delay a deferred reply until it ends or the programmer stops it.
+
+## Model status, 2026-11-08
+
+-   Show the model's fixed local path, upstream revision and source in speech
+    settings. Verify every pinned asset with the installer's existing size and
+    SHA-256 checks before labeling it verified. A directory may exist but fail
+    verification; an inaccessible directory has unknown download status. The
+    result describes the last check and does not promise later file integrity.
+
 ## Speech follow-up implementation, 2026-11-08
 
 -   Implement the authorized speech improvements in order: bounded Kokoro
@@ -405,3 +421,39 @@ Issue discussions and working notes hold the detailed evidence and history.
     dependency; skipping the unused CUDA download avoids an external GPU
     artifact dependency during CI. This setting applies to CI only and does
     not change developer installations or ONNX Runtime versions.
+
+## CI resilience and model selection, 2026-11-08
+
+-   Use current GitHub-maintained Node 24 action releases and retry transient
+    download failures, retaining the pinned release asset IDs and SHA-256
+    verification. Exhausted retries and checksum mismatches still fail CI.
+-   Keep the specs job present on every run. Only a pull request whose nonempty
+    diff contains exclusively recognized test files or the explicitly named VS
+    Code integration harness files skips TLC; source, model,
+    workflow and unknown changes, an unavailable base, and push events run
+    every model. Disabling rename detection checks both paths of a move.
+
+## Batch identity on session recovery, 2026-11-08
+
+Save the next batch ID with the session so a normal saved-session reload keeps
+allocating beyond IDs already reported. When `nextBatchId` is missing or
+invalid, use one above the largest unreported finished batch ID. Older
+snapshots cannot recover IDs that have already left that list. Workspace
+storage is asynchronous,
+so a crash before its latest write can still reuse an ID. This change does not
+replay interrupted work and does not address terminal command IDs (issue #11).
+
+## Speech reminders, 2026-11-08
+
+-   Treat one concise selected narration per batch as the usual shape, while
+    preserving the one-selection and 45-word limits and the programmer's
+    control of speech. After three accepted batches without a selection, a
+    step report may remind the agent once and restart the count.
+-   Gate the reminder on current local settings, provider prerequisites and
+    output readiness. The companion answers an epoch-bound readiness query;
+    no text, key or audio crosses it and no provider request is made. A local
+    check cannot guarantee that a provider or audio device will succeed later.
+
+-   Try TLC's official named release URL before the pinned asset API URL, after
+    repeated API 504 responses. Both must match the same pinned SHA-256; the
+    named release can change, so a mismatch falls back and never runs TLC.

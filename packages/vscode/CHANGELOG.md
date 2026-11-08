@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.21.0
+
+-   Show the local Kokoro model's download and verification status, local
+    path, and pinned source in speech settings.
+-   Offer **Finish current action before sending** for replies, preserving
+    immediate interruption for Stop and editor changes.
+-   Encourage concise selected speech and remind the agent after three batches
+    without it when speech is enabled and available.
+-   Preserve the next batch ID across saved-session recovery to avoid reusing
+    already reported IDs after a normal reload.
+
 ## 0.20.1
 
 -   Verify local Kokoro platform support using bounded evidence from the running

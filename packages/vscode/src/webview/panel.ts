@@ -90,6 +90,7 @@ const ui = {
   speechSpeed: $('speech-speed', HTMLSelectElement),
   speechListeningSpeed: $('speech-listening-speed', HTMLSelectElement),
   speechSetup: $('speech-setup', HTMLButtonElement),
+  speechModelStatus: $('speech-model-status', HTMLElement),
   speechPreview: $('speech-preview', HTMLButtonElement),
   speechStop: $('speech-stop', HTMLButtonElement),
   speechSettingsStatus: $('speech-settings-status', HTMLElement),
@@ -123,6 +124,7 @@ const ui = {
   start: $('start', HTMLButtonElement),
   starting: $('starting', HTMLElement),
   reply: $('reply', HTMLTextAreaElement),
+  deferReply: $('defer-reply', HTMLInputElement),
   send: $('send', HTMLButtonElement),
   attach: $('attach', HTMLElement),
   attachRef: $('attach-ref', HTMLElement),
@@ -1147,6 +1149,12 @@ function handle(message: ToPanel): void {
       syncSpeechProvider();
       return;
     }
+    case 'speechModelStatus':
+      ui.speechModelStatus.textContent = `${message.value.download === 'missing' ? 'Not downloaded' : message.value.download === 'unknown' ? 'Download status unknown' : message.value.verified ? 'Downloaded and verified' : 'Local model is not verified; the path exists'}. Local path: ${message.value.path}. Pinned source: ${message.value.source} (revision ${message.value.revision}).`;
+      return;
+    case 'speechModelStatusUnavailable':
+      ui.speechModelStatus.textContent = 'Local model status is unknown.';
+      return;
     case 'speechSetupState':
       ui.speechSetup.disabled = message.pending || !speechSupported;
       syncSpeechProvider();
@@ -1383,8 +1391,9 @@ function takeAttach(): boolean {
 function sendReply(): void {
   const text = takeDraft();
   if (text) {
-    stopSpeechLocally();
-    vscode.postMessage({ type: 'reply', text, attach: takeAttach() });
+    const defer = ui.deferReply.checked;
+    if (!defer) stopSpeechLocally();
+    vscode.postMessage({ type: 'reply', text, attach: takeAttach(), ...(defer ? { defer: true } : {}) });
   }
 }
 

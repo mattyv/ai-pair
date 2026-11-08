@@ -16,6 +16,7 @@ import { playDemo } from './demo';
 import { VsCodeEditor } from './editor';
 import { Diagnostics } from './diagnostics';
 import { SpeechService, type SpeechAudioEvent, type SpeechOutput } from './speech_service';
+import { speechReady } from './speech_readiness';
 import { SpeechTempoClient } from './speech_tempo_client';
 import { NativeOutputDriver, discoverOutputs } from './speech_native_output';
 import { SpeechOutputRouter, type OutputDiscovery } from './speech_output_router';
@@ -23,7 +24,7 @@ import { SpeechCredentials } from './speech_credentials';
 import { SpeechCatalog } from './speech_catalog';
 import { SpeechOutputPreferences } from './speech_output_preferences';
 import { ElevenLabsClient } from './speech_elevenlabs';
-import { installedSpeechModel, setupSpeech } from './speech_setup';
+import { installedSpeechModel, setupSpeech, speechModelStatus } from './speech_setup';
 import { speechRuntimeAvailable } from './speech_runtime_status';
 import { localSpeechPlatform } from './speech_platform';
 import { speechListeningRate, type SpeechSettings } from './speech_types';
@@ -165,6 +166,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   let keyStatusEpoch = 0;
   let cloudVoiceInvalidated = false;
   let panel: NarrationPanel;
+  const connectionEpoch = randomUUID();
   let selectedNarration: NarrationPort | undefined;
   let owner: PanelOwner | 'pending' = 'pending';
   let ownerReady: Promise<void>;
@@ -433,6 +435,7 @@ export function activate(context: vscode.ExtensionContext): Api {
           });
           return available;
         },
+        modelStatus: () => speechModelStatus(context.globalStorageUri.fsPath),
         setup: () => setupSpeech(context.globalStorageUri.fsPath),
         preview: () => {
           previewProvider = speechSettings.get().provider;
@@ -527,8 +530,9 @@ export function activate(context: vscode.ExtensionContext): Api {
       panel.showSpeechStatus(id, state, message);
     },
   };
+  const nativeOutput = new NativeOutputDriver();
   outputRouter = new SpeechOutputRouter({
-    driver: new NativeOutputDriver(),
+    driver: nativeOutput,
     discover: discoverSpeechOutputs,
     choice: () => outputPreferences.choice(),
     defaultOutput,
@@ -546,6 +550,21 @@ export function activate(context: vscode.ExtensionContext): Api {
     output: outputRouter,
   });
   const narration: NarrationPort = {
+    ready: async () => {
+      if (owner === 'companion') {
+        const ready: unknown = await vscode.commands.executeCommand('aiPair.localAudio.ready', connectionEpoch);
+        return ready === true && owner === 'companion' && workspaceSession?.pageReady() === true;
+      }
+      if (owner !== 'legacy') return false;
+      return speechReady({
+        settings: speechSettings.get,
+        desktop: () => cloudSupported && owner === 'legacy',
+        local: () => localSpeechSupported && runtimeSpeechSupported,
+        output: () => panel.speechPageIsReady() && nativeOutput.available() && outputPreferences.ready(),
+        model: async () => (await installedSpeechModel(context.globalStorageUri.fsPath)) !== undefined,
+        key: () => credentials.hasKey(),
+      });
+    },
     speak: (text) => selectedNarration?.speak(text) ?? Promise.resolve(),
     pause: () => {
       selectedNarration?.pause();
@@ -795,17 +814,16 @@ export function activate(context: vscode.ExtensionContext): Api {
       },
     },
   );
-  const epoch = randomUUID();
   const placement = new PanelPlacement({
-    epoch,
+    epoch: connectionEpoch,
     remote: vscode.env.remoteName !== undefined,
     timeoutMs: COMPANION_PREPARE_TIMEOUT_MS,
-    prepare: () => Promise.resolve(vscode.commands.executeCommand('aiPair.localAudio.prepare', { version: 1, epoch })),
+    prepare: () => Promise.resolve(vscode.commands.executeCommand('aiPair.localAudio.prepare', { version: 1, epoch: connectionEpoch })),
     beforeCommit: () => {
       owner = 'companion';
       if (shuttingDown) throw new Error('Window is closing.');
       workspaceSession = new WorkspaceSession({
-        epoch,
+        epoch: connectionEpoch,
         panel,
         send: async (frame) => {
           const accepted: unknown = await vscode.commands.executeCommand('aiPair.localAudio.frame', frame);

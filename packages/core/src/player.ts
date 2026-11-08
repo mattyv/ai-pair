@@ -71,6 +71,8 @@ export interface Stage {
   codePlayback(): CodePlayback;
   /** Live narration only; omitted for rehearsal. */
   narration?: NarrationPort;
+  /** Runs after each live action has finished. */
+  afterAction?(): void;
   /** Shows the agent cursor and state after a change. */
   render(): void;
   /** Waits for the programmer to allow or decline a command. */
@@ -318,6 +320,8 @@ export class Player {
       } catch (error) {
         outcome = fail('invalid_action', error instanceof Error ? error.message : String(error));
       }
+      // specs/DeferredMessage.tla, FinishAction: deliver a queued reply at the action boundary.
+      this.stage.afterAction?.();
       const rest = actions.slice(i + 1);
       if (outcome.kind === 'interrupted') {
         if (outcome.consumed === true) return this.stopped(id, rest, /* effect= */ true);

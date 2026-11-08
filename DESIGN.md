@@ -113,9 +113,12 @@ Behavior:
 
 -   **Typing in the reply box pauses playback**, the way a pair stops when you
     start talking. Clearing it resumes. Sending the reply delivers a `message`
-    event (which interrupts) and ends any pause, so the agent's answer plays
+    event and ends any pause, so the agent's answer plays
     right away. (Pausing on focus alone would leave playback paused after
-    sending, while the box still has focus.) The reply moves no view: a file the
+    sending, while the box still has focus.) The optional **Finish current
+    action before sending** control waits for the action boundary before
+    delivering the reply and stopping later work. Interrupt and editor edits
+    still stop immediately. The reply moves no view: a file the
     programmer closed stays closed, and the tab they switched to stays in front,
     with the selection they made (#125).
 -   With text in the reply box, "Hand back" hands back the turn with it as the
@@ -155,7 +158,8 @@ automatically. The key stays in SecretStorage; the panel sees only whether a key
 exists. Voice availability depends on the account and Preview may report an
 access or credit limit. Opening Settings never synthesizes audio.
 
-Reply, Stop, provider changes and key changes invalidate current cloud audio.
+Immediate replies, Stop, provider changes and key changes invalidate current
+cloud audio. A deferred reply waits until the current action ends.
 An aborted request may already have consumed credits. Cloud failures leave the
 text readable and do not approve commands, finish the reading timer, or switch
 providers. Pause retains the current unit while its request deadline continues;

@@ -1,7 +1,10 @@
 // Controlled HTTP boundary: the real legacy client and catalog never contact ElevenLabs.
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { z } from 'zod';
+import type { Report } from '@ai-pair/protocol';
 import type { Api } from '../src/extension';
 
 const report = z.object({ events: z.array(z.looseObject({ kind: z.string(), seq: z.number() })) });
@@ -49,7 +52,11 @@ export async function run(): Promise<void> {
   assert.ok(extension && !extension.isActive, 'main extension must be inactive before installing the HTTP boundary');
   const fetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch');
   const promptDescriptor = Object.getOwnPropertyDescriptor(vscode.window, 'showInputBox');
-  assert.ok(fetchDescriptor && promptDescriptor);
+  const commandDescriptor = Object.getOwnPropertyDescriptor(vscode.commands, 'executeCommand');
+  assert.ok(fetchDescriptor && promptDescriptor && commandDescriptor);
+  const executeCommand = vscode.commands.executeCommand;
+  const placement = Promise.withResolvers<unknown>();
+  let prepareCalled = false;
   const realFetch = globalThis.fetch;
   let mode = 'empty';
   let requests = 0;
@@ -73,10 +80,10 @@ export async function run(): Promise<void> {
       value: (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(typeof input === 'string' || input instanceof URL ? input.toString() : input.url);
         if (url.hostname !== 'api.elevenlabs.io') return realFetch(input, init);
+        requests++;
         if (url.origin !== 'https://api.elevenlabs.io' || url.pathname !== '/v2/voices' || init?.method !== 'GET') {
           return Promise.reject(new Error('Unexpected ElevenLabs request'));
         }
-        requests++;
         const cursor = url.searchParams.get('next_page_token');
         if (cursor !== null) sawMore = true;
         if (mode === 'auth') return Promise.resolve(new Response('', { status: 401 }));
@@ -95,8 +102,35 @@ export async function run(): Promise<void> {
       ...promptDescriptor,
       value: () => Promise.resolve('ai-pair-integration-dummy-key'),
     });
+    // Delay the private placement boundary while exercising the real controller.
+    Object.defineProperty(vscode.commands, 'executeCommand', {
+      ...commandDescriptor,
+      value: (name: string, ...args: unknown[]) => {
+        if (name === 'aiPair.localAudio.prepare') {
+          prepareCalled = true;
+          return placement.promise;
+        }
+        return executeCommand(name, ...args);
+      },
+    });
     api = await extension.activate();
+    assert.ok(prepareCalled, 'placement boundary was not invoked');
+    let placementFinished = false;
+    void api.ready.then(() => {
+      placementFinished = true;
+    });
+    api.controller.setSpeed(20);
+    api.controller.setReadingSpeed(100);
+    await api.controller.start('pending speech readiness');
+    for (let index = 0; index < 3; index++) {
+      const pending: Report = await api.controller.step([{ say: 'Pending.' }]);
+      assert.equal(pending.speechReminder, undefined, 'pending placement must not prompt for speech');
+    }
+    assert.equal(placementFinished, false, 'placement must stay pending during the three batches');
+    await api.controller.end();
+    placement.resolve(undefined);
     await api.ready;
+    Object.defineProperty(vscode.commands, 'executeCommand', commandDescriptor);
     await vscode.commands.executeCommand('aiPair.setElevenLabsKey');
     api.panelMessage({ type: 'speechSettings', value });
     for (let attempt = 0; attempt < 100 && vscode.workspace.getConfiguration('aiPair').get('speech.provider') !== 'elevenlabs'; attempt++) {
@@ -121,12 +155,51 @@ export async function run(): Promise<void> {
       });
     }
     assert.equal(vscode.workspace.getConfiguration('aiPair').get('speech.elevenLabsVoice'), 'test_voice');
+
+    // The real relay must carry the readiness-gated reminder without a synthesis request.
+    await vscode.commands.executeCommand('aiPair.narration.focus');
+    for (let attempt = 0; attempt < 100 && !api.speechPageReady(); attempt++) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 50);
+      });
+    }
+    assert.ok(api.speechPageReady(), 'the legacy panel did not become ready');
+    api.panelMessage({ type: 'speechSettings', value: { ...value, enabled: true, elevenLabsVoice: 'test_voice' } });
+    for (let attempt = 0; attempt < 100 && vscode.workspace.getConfiguration('aiPair').get('speech.enabled') !== true; attempt++) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 50);
+      });
+    }
+    assert.equal(vscode.workspace.getConfiguration('aiPair').get('speech.enabled'), true);
+    const agent = new Client({ name: 'speech-reminder-integration', version: '0' });
+    const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    assert.ok(root !== undefined && root !== '', 'fixture requires a workspace');
+    const env = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined));
+    await agent.connect(new StdioClientTransport({ command: api.launcher, cwd: root, env }));
+    try {
+      api.controller.setSpeed(20);
+      const start = await agent.callTool({ name: 'start', arguments: { task: 'speech reminder' } });
+      assert.notEqual(start.isError, true);
+      const before = requests;
+      for (let index = 0; index < 3; index++) {
+        const result = await agent.callTool({ name: 'step', arguments: { actions: [{ say: 'A short explanation.' }] } });
+        assert.notEqual(result.isError, true);
+        if (index === 2) assert.match(JSON.stringify(result.content), /Speech is available.*speak: true/);
+      }
+      assert.equal(requests, before, 'a reminder must not contact the provider');
+      await agent.callTool({ name: 'end', arguments: {} });
+    } finally {
+      await agent.close();
+    }
+
     for (const reason of ['auth', 'network', 'invalid']) {
       mode = reason;
       await catalog(api, 'failed', reason);
     }
     assert.ok(requests >= 6, 'the controlled HTTP boundary did not receive each catalog request');
   } finally {
+    placement.resolve(undefined);
+    Object.defineProperty(vscode.commands, 'executeCommand', commandDescriptor);
     Object.defineProperty(vscode.window, 'showInputBox', promptDescriptor);
     try {
       if (api !== undefined) await vscode.commands.executeCommand('aiPair.removeElevenLabsKey');

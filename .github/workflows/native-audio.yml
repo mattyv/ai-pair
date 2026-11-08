@@ -23,7 +23,7 @@ jobs:
           - arch: arm64
             target: arm64-apple-macos13.0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Compile AudioQueue helper
         run: |
           mkdir -p native-build
@@ -31,7 +31,7 @@ jobs:
             -framework AudioToolbox -framework CoreAudio \
             packages/audio-native/native/macos/main.swift \
             -o "native-build/audio-darwin-${{ matrix.arch }}"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: audio-darwin-${{ matrix.arch }}-compile-only
           path: native-build/audio-darwin-${{ matrix.arch }}
@@ -58,7 +58,7 @@ jobs:
           - arch: arm64
             compiler: amd64_arm64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: ${{ matrix.compiler }}
@@ -69,7 +69,7 @@ jobs:
           packages\audio-native\native\windows\main.cpp
           /Fe:audio-win32-${{ matrix.arch }}.exe
           /link ole32.lib uuid.lib propsys.lib
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: audio-win32-${{ matrix.arch }}-compile-only
           path: audio-win32-${{ matrix.arch }}.exe

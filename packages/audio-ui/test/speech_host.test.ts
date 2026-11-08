@@ -14,6 +14,7 @@ import type { SpeechDiagnosticEvent } from '../../vscode/src/diagnostics';
 import { createSpeechHost } from '../src/speech_host';
 
 const fakes = vi.hoisted(() => ({
+  readiness: vi.fn<(options: import('../../vscode/src/speech_readiness').SpeechReadiness) => Promise<boolean>>().mockResolvedValue(true),
   platform: vi.fn<() => import('../../vscode/src/speech_platform').SpeechPlatformResult>().mockReturnValue({ supported: true }),
   config: new Map<string, unknown>(),
   update: vi.fn().mockResolvedValue(undefined),
@@ -50,6 +51,7 @@ const fakes = vi.hoisted(() => ({
   installed: vi.fn().mockResolvedValue(undefined),
   setup: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock('../../vscode/src/speech_readiness', () => ({ speechReady: fakes.readiness }));
 vi.mock('../../vscode/src/speech_platform', () => ({ localSpeechPlatform: fakes.platform }));
 vi.mock('vscode', () => ({
   env: {
@@ -133,7 +135,13 @@ vi.mock('../../vscode/src/speech_output_preferences', () => ({
   },
 }));
 vi.mock('../../vscode/src/speech_runtime_status', () => ({ speechRuntimeAvailable: fakes.runtime }));
-vi.mock('../../vscode/src/speech_setup', () => ({ installedSpeechModel: fakes.installed, setupSpeech: fakes.setup }));
+vi.mock('../../vscode/src/speech_setup', () => ({
+  installedSpeechModel: fakes.installed,
+  speechModelStatus: vi
+    .fn()
+    .mockResolvedValue({ path: '/model', source: 'https://example.test', revision: 'abc', verified: false, download: 'missing' }),
+  setupSpeech: fakes.setup,
+}));
 vi.mock('../src/companion_output', () => ({
   CompanionOutput: class {
     constructor(wiring: NonNullable<typeof fakes.outputWiring>) {
@@ -228,6 +236,7 @@ it('uses local settings and credentials through panel callbacks', async () => {
     expect(panel.showSpeechSettings).toHaveBeenCalled();
   });
   expect(fakes.cancel).toHaveBeenCalled();
+  expect(await host.panelSpeech.modelStatus()).toMatchObject({ download: 'missing' });
   host.panelSpeech.outputView();
   host.panelSpeech.outputReady();
   host.panelSpeech.outputRefresh();
@@ -594,4 +603,20 @@ it('constructs the listening-speed worker from the fixed local extension path', 
   const { host } = harness();
   expect(tempoPaths).toEqual(['/extension/dist/speech/tempo_worker.mjs']);
   host.dispose();
+});
+
+it('passes local readiness facts to the readiness check', async () => {
+  const { host } = harness();
+  expect(await host.ready()).toBe(true);
+  const facts = fakes.readiness.mock.lastCall?.[0];
+  expect(facts).toBeDefined();
+  expect(facts?.settings().enabled).toBe(false);
+  expect(facts?.desktop()).toBe(true);
+  await expect(facts?.key()).resolves.toBe(false);
+  await expect(facts?.model()).resolves.toBe(false);
+  expect(facts?.local()).toBe(false);
+  await Promise.resolve();
+  expect(facts?.output()).toBe(true);
+  host.dispose();
+  expect(facts?.desktop()).toBe(false);
 });

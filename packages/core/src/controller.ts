@@ -33,6 +33,7 @@ import {
 import { followChange, rehearse, type Rehearsal } from './rehearsal';
 import { fileLines } from './text';
 import { Timeline } from './timeline';
+import { SpeechReminder } from './speech_reminder';
 import { defaultConfig, type Config, type Timeouts } from './config';
 import { defaultTiming, glideDuration, withOverrides } from './timing';
 
@@ -91,6 +92,8 @@ export interface SavedSession {
   task?: string;
   scene: Pick<Scene, 'root' | 'turn' | 'cursor' | 'selection'> & { allowedCommands: string[] };
   finished: BatchResult[];
+  /** The next batch ID, absent in sessions saved by older versions. */
+  nextBatchId?: number;
   events: Array<Exclude<Event, { kind: 'edit' }>>;
 }
 
@@ -101,6 +104,7 @@ export function isSavedSession(v: unknown): v is SavedSession {
 
 interface Session {
   task?: string;
+  speechReminder: SpeechReminder;
   scene: Scene;
   player: Player;
   /** Batches not yet finished; the head may be playing. */
@@ -108,6 +112,8 @@ interface Session {
   /** Finished batches not yet reported. */
   finished: BatchResult[];
   events: PendingEvent[];
+  /** Messages waiting for the current action to finish. */
+  deferredMessages: PendingEvent[];
   /** An interruption or failure not yet reported, or reported while a batch it left still plays: new batches are discarded. */
   stale: boolean;
   /** A report told the agent of the interruption while a batch it left plays: `stale` clears when that batch ends (#219). */
@@ -348,6 +354,7 @@ export class Controller {
     const s: Session = {
       task,
       scene,
+      speechReminder: new SpeechReminder(),
       player: new Player(scene, {
         editor: this.editor,
         panel: this.panel,
@@ -357,6 +364,9 @@ export class Controller {
         readingSpeed: () => this.readingSpeed,
         codePlayback: () => this.codePlayback,
         narration: this.narration,
+        afterAction: () => {
+          if (s.deferredMessages.length > 0) this.interrupt(s);
+        },
         render: () => {
           this.render();
         },
@@ -366,6 +376,7 @@ export class Controller {
       queue: [],
       finished: [],
       events: [],
+      deferredMessages: [],
       stale: false,
       staleReported: false,
       anchorNeeded: false,
@@ -398,7 +409,9 @@ export class Controller {
       task: session.task,
       scene: { root, turn, cursor, selection, allowedCommands: [...session.scene.allowedCommands] },
       finished: session.finished,
-      events: session.events.filter((e): e is Exclude<Event, { kind: 'edit' }> => e.kind !== 'edit'),
+      nextBatchId: this.nextBatchId,
+      // specs/Resume.tla, Store: a queued reply survives reload without changing the live queue.
+      events: [...session.events, ...session.deferredMessages].filter((e): e is Exclude<Event, { kind: 'edit' }> => e.kind !== 'edit'),
     };
   }
 
@@ -420,6 +433,10 @@ export class Controller {
     this.diagnostic({ kind: 'session', state: 'suspended' });
     this.diagnostic({ kind: 'pause', paused: this.pauseReasons.size > 0, reasons: [...this.pauseReasons] });
     this.trace?.('session revived after a reload, suspended');
+    // specs/RecoveryBatchIds.tla, `Reload`: restore the saved allocation high-water mark.
+    const next = saved.nextBatchId;
+    const reportedNext = Math.max(1, ...saved.finished.map((batch) => batch.id + 1));
+    this.nextBatchId = typeof next === 'number' && Number.isSafeInteger(next) && next >= reportedNext ? next : reportedNext;
     session.finished = [...saved.finished];
     session.events = [...saved.events];
     // specs/Resume.tla, `ReloadWindow`: the replayed history may end with the session live (#138).
@@ -449,7 +466,7 @@ export class Controller {
       // A selected unit cannot queue behind another selected unit, even while speech is disabled.
       if (!session.stale && !session.ended && session.held.length === 0) {
         const selected = actions.flatMap((action, index) => (selectedSpeech(action) ? [{ action, index: index + 1 }] : []));
-        const outstanding = session.queue.some((batch) => batch.actions.some(selectedSpeech));
+        const outstanding = session.queue.some((batch) => batch.actions.some((action) => selectedSpeech(action)));
         const rejected = selected.length > 1 ? selected[1] : outstanding ? selected[0] : undefined;
         if (rejected !== undefined) {
           const message =
@@ -471,9 +488,11 @@ export class Controller {
       const current = rehearsal && !session.stale && !session.ended;
       // specs/Serialize.tla: `FailRehearsal` answers with the rejection; `Rehearse` queues the batch, or discards it.
       if (current === true && rehearsal.failed !== undefined) return this.rejectBatch(session, rehearsal.failed, rehearsal);
+      // specs/RecoveryBatchIds.tla, `Allocate`: the next snapshot carries the incremented counter.
       if (current === true) {
         const queued: QueuedBatch = { id: this.nextBatchId++, actions, state: 'queued', after: rehearsal.after };
         session.queue.push(queued);
+        session.speechReminder.batch(actions.some((action) => selectedSpeech(action)));
         this.trace?.(`batch ${queued.id} queued: ${actions.length} actions`);
         if (anchor?.anchored === true) session.anchorNeeded = false;
         this.kick(session);
@@ -582,18 +601,28 @@ export class Controller {
    * Records a message from the programmer. `selection`: code they had selected, sent along with it. To an active or a suspended session
    * (specs/Resume.tla, `SendMessage`); the next report takes it to the agent (`Report`).
    */
-  userMessage(text: string, selection?: SharedSelection): void {
+  userMessage(text: string, selection?: SharedSelection, defer = false): void {
     const session = this.activeSession();
     if (!session) return;
-    session.events.push(selection ? { kind: 'message', text, selection: this.excerpt(session, selection) } : { kind: 'message', text });
+    const event: PendingEvent = selection
+      ? { kind: 'message', text, selection: this.excerpt(session, selection) }
+      : { kind: 'message', text };
     this.panel.post({ type: 'programmer', text, ref: selection && this.ref(selection) });
-    this.interrupt(session);
+    // specs/DeferredMessage.tla, SendDeferred: hold the event until the current action finishes.
+    if (defer && session.queue[0]?.state === 'playing' && !session.timeline.isInterrupted) {
+      session.deferredMessages.push(event);
+    } else {
+      this.flushDeferred(session);
+      session.events.push(event);
+      this.interrupt(session);
+    }
     this.update();
   }
 
   userInterrupt(): void {
     const session = this.activeSession();
     if (!session) return;
+    this.flushDeferred(session);
     session.events.push({ kind: 'interrupt' });
     this.panel.post({ type: 'interrupt' });
     this.interrupt(session);
@@ -604,6 +633,7 @@ export class Controller {
   userEdit(file: string, before: string, after: string, changes: Change[]): void {
     const session = this.activeSession();
     if (!session) return;
+    if (session.scene.turn === 'agent') this.flushDeferred(session);
     this.recordEdit(session, file, before, after, changes, 'programmer');
     if (session.scene.turn === 'agent') {
       // specs/Player.tla, `TypeBefore` and `TypeAfter`, and specs/Rehearsal.tla, `EditAsProgrammer`: the edit
@@ -642,6 +672,7 @@ export class Controller {
         followChange(b.after, file, after, changes);
       }
     }
+    if (planned) this.flushDeferred(session);
     const recorded = this.recordEdit(session, file, before, after, changes, 'other');
     if (planned) {
       recorded.interrupted = true;
@@ -684,6 +715,7 @@ export class Controller {
     if (!session || session.scene.turn === 'programmer') return;
     session.scene.turn = 'programmer';
     session.scene.focus = 'cursor';
+    this.flushDeferred(session);
     session.events.push({ kind: 'turn', to: 'programmer' });
     this.panel.post({ type: 'turn', to: 'programmer' });
     // specs/Turns.tla and specs/Rehearsal.tla, `ChangeTurn`: the turn changes, and playback is interrupted.
@@ -699,6 +731,7 @@ export class Controller {
     const event: Event = { kind: 'turn', to: 'agent' };
     if (message !== undefined) event.message = message;
     if (selection) event.selection = this.excerpt(session, selection);
+    this.flushDeferred(session);
     session.events.push(event);
     this.panel.post({ type: 'turn', to: 'agent', message, ref: selection && this.ref(selection) });
     // specs/Turns.tla and specs/Rehearsal.tla, `ChangeTurn`: the turn changes, and playback is interrupted.
@@ -720,6 +753,7 @@ export class Controller {
     // (`End` in specs/Serialize.tla).
     session.ended = true;
     this.diagnostic({ kind: 'session', state: 'ended' });
+    this.flushDeferred(session);
     session.events.push({ kind: 'end' });
     this.interrupt(session);
     this.panel.post({ type: 'session', active: false, reason: 'programmer' });
@@ -1064,7 +1098,7 @@ export class Controller {
     this.trace?.(`report to ${call.kind}: ${describeReport(report)}`);
     // specs/Serialize.tla, `HandBack`: the report is handed back after the commit.
     // `Deliver` in specs/Controller.tla, unless the agent canceled meanwhile: the relay hands the report back (`Bounce`).
-    void this.withCursor(session, report).then(call.resolve, () => {
+    void this.withCursor(session, report, call.kind === 'step').then(call.resolve, () => {
       call.resolve(report);
     });
   }
@@ -1104,7 +1138,11 @@ export class Controller {
   }
 
   /** Adds the cursor's line to the report, unless it's where the agent last saw it, in a report's code or cursor. */
-  private async withCursor(session: Session, report: Report): Promise<Report> {
+  private async withCursor(session: Session, report: Report, step = false): Promise<Report> {
+    if (step && session.speechReminder.due() && this.narration?.ready !== undefined) {
+      const ready = await this.narration.ready().catch(() => false);
+      if (session.speechReminder.report(ready)) report = { ...report, speechReminder: true };
+    }
     for (const b of report.batches) {
       const line = b.code?.lines.find((l) => l.text.includes(CURSOR_MARKER));
       if (b.code && line) session.seenCursor = `${b.code.file}:${line.number}:${line.text}`;
@@ -1221,7 +1259,13 @@ export class Controller {
    * `EndByProgrammer`; specs/Actions.tla and specs/Serialize.tla, `Interrupt`). A batch already playing plays on and may complete
    * (specs/Rehearsal.tla, `QueuesAfterInterrupt`, #151).
    */
+  private flushDeferred(session: Session): void {
+    // specs/DeferredMessage.tla, Urgent: preserve replies when an immediate stop arrives.
+    session.events.push(...session.deferredMessages.splice(0));
+  }
+
   private interrupt(session: Session): void {
+    this.flushDeferred(session);
     this.narration?.cancel();
     markStale(session);
     const discarded = session.queue.filter((b) => b.state === 'queued').map((b) => b.id);
@@ -1256,6 +1300,7 @@ export class Controller {
         this.render();
         const { result, sightings, editedFiles } = await session.player.play(batch.id, batch.actions);
         if (this.session !== session) break;
+        if (session.deferredMessages.length > 0) this.interrupt(session);
         // specs/Diagnostics.tla, `Finish`: inspect only files actually edited; checks remain advisory.
         for (const file of editedFiles) {
           try {

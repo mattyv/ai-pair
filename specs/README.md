@@ -90,6 +90,8 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `DiagnosticsPrivacy_Speech.cfg` | speech-only projection without a session | holds | 38 |
 | `Timeline.cfg` | `MaxSleeps = 3` sleeps, holds, and a second sleep while one is pending | holds | 864 |
 | `PlaybackPreference.cfg` | three modes and two independent pace settings | holds | 36 |
+| `DeferredMessage.cfg` | one action, deferred reply and urgent stop | holds | 8 |
+| `ModelStatus.cfg` | installed and missing model, verification | holds | 4 |
 | `SpeechSetup.cfg` | two files; install, cancellation and rollback outcomes | holds | 42 |
 | `SpeechPage.cfg` | two page identities and two narration units | holds | 28 |
 | `CloudNarration.cfg` | two generations, provider and credential epochs | holds | 59 |
@@ -1286,7 +1288,7 @@ Every invariant and property names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `SavedIsCurrent`, `NotLostProp` | `controller.test.ts`: SavedIsCurrent, NotLostProp: saves a session for the window, and none once it ended; SavedIsCurrent, NotLostProp, ShownIsState: brings back a session the window saved, suspended, after a reload |
+| `SavedIsCurrent`, `NotLostProp` | `controller.test.ts`: Store: saves queued replies without delivering or duplicating them in the live session; SavedIsCurrent, NotLostProp: saves a session for the window, and none once it ended; SavedIsCurrent, NotLostProp, ShownIsState: brings back a session the window saved, suspended, after a reload |
 | `ResumesSameProp`, `Arrives` | `controller.test.ts`: ResumesSameProp, Arrives: suspends a session the agent disconnects from, and resumes it on a start from its directory |
 | `WaitsProp` | `controller.test.ts`: WaitsProp: starts a new session from another directory, ending the suspended one; WaitsProp: closes a suspended session at once when the programmer ends it |
 | `EndedHasAgent` | `controller.test.ts`: WaitsProp: closes a suspended session at once when the programmer ends it; EndedHasAgent: rejects the open call when the agent disconnects, and closes at once a session the programmer ended |
@@ -2635,3 +2637,82 @@ TLC checked 19 generated and 19 distinct states. Disabling `GuardEvidence`
 violates `PositiveEvidence`; disabling `EnableCheck` violates
 `CheckCompletes`; disabling `EnablePositive` violates `RecognizesEvidence`.
 All three mutations were discarded.
+
+### `RecoveryBatchIds`: saved batch allocation
+
+`RecoveryBatchIds` models allocation and a reload from the latest successfully
+saved snapshot. It assumes each allocation is saved before reload; the actual
+workspace storage is asynchronous and a crash before that save can reuse an ID.
+Legacy snapshots cannot recover IDs already reported and removed from the saved
+results. The model does not cover command IDs or queue replay.
+
+| Property | Test |
+|---|---|
+| `TypeOK` | The saved counter and restored batch IDs are checked by the recovery tests below; the model also checks their types. |
+| `Unique` | `controller.test.ts`: RecoveryBatchIds Unique: keeps the next batch ID after saving and reviving a session; derives a safe counter from legacy or invalid saved value. `session.e2e.test.ts`: RecoveryBatchIds Unique: keeps IDs distinct when a saved session is resumed. |
+| `Progress` | `session.e2e.test.ts`: RecoveryBatchIds Unique: keeps IDs distinct when a saved session is resumed. |
+
+TLC checked `RecoveryBatchIds.cfg` with `MaxId = 3`: 11 generated and 8
+distinct states, no violation. Setting `PreserveCounter` to `FALSE` makes
+`Unique` fail after one allocation and a reload. Initializing `nextId` to zero
+violates `TypeOK`. Disabling `Allocate` while
+retaining its fairness condition makes `Progress` fail.
+
+## Model status
+
+`ModelStatus` abstracts one check of an installed or missing model. A check
+reports verified only for a verified installation. The real implementation
+reports the result of a check, not a continuously watched guarantee.
+
+| Property | Code test |
+|---|---|
+| `TypeOK` | `reports the pinned source, local path and verification result` |
+| `VerifiedIsInstalled` | `reports the pinned source, local path and verification result` |
+| `StatusProgress` | `reports the pinned source, local path and verification result` |
+
+Mutations checked with TLC: an invalid display state violates `TypeOK`;
+reporting verified for a missing model violates `VerifiedIsInstalled`; removing
+fairness for the check violates `StatusProgress`.
+
+## Deferred messages
+
+`DeferredMessage` checks one deferred reply, the current action and an urgent
+stop. The real queue can hold multiple replies; urgent input flushes them in
+order. `Resume` also treats a deferred reply as a waiting message when stored.
+
+| Property | Code test |
+|---|---|
+| `TypeOK` | `SendDeferred and FinishAction: holds multiple replies until the action boundary` |
+| `NoEarlyDelivery` | `NoEarlyDelivery: defers a reply until the current action finishes, then discards later actions` |
+| `UrgentIsImmediate` | `Urgent: a stop interrupts immediately and delivers a previously queued reply first` |
+| `PendingProgress` | `SendDeferred and FinishAction: holds multiple replies until the action boundary` |
+
+TLC mutations changed the action state outside its domain, delivered a reply
+early, let urgent input avoid interruption, and removed action fairness; each
+violated its corresponding property.
+
+### `SpeechReminder`: reminders for selected speech
+
+`SpeechReminder.tla` counts accepted unspoken batches up to three, resets on
+selected speech, and gates the next reminder on current readiness. A report
+that emits a reminder resets the count. Readiness abstracts the local checks
+and cannot guarantee future synthesis or playback. All three actions fired in
+the TLC coverage run. The real controller and counter also meet in the core
+session test `reminds after three accepted unspoken batches only while speech
+is ready`.
+
+| Invariant | Test |
+| --- | --- |
+| `TypeOK` | `speech_reminder.test.ts`: count and report cases |
+| `ReminderOnlyReady` | `speech_reminder.test.ts`: reminds after three unspoken batches only when ready, then counts again |
+| `SelectedResets` | `speech_reminder.test.ts`: resets its count on a selected narration |
+| `DueIsReminded` | `speech_reminder.test.ts`: reminds after three unspoken batches only when ready, then counts again |
+
+With the readiness gate removed, `ReminderOnlyReady` fails. With the selected
+reset removed, `SelectedResets` fails. With reminder emission disabled,
+`DueIsReminded` fails. `TypeOK` bounds the counter and state types; removing
+its counter cap permits the count to leave its declared range.
+
+| Configuration | Bounds | Distinct states | Result |
+| --- | --- | ---: | --- |
+| `SpeechReminder.cfg` | Three batches; Boolean readiness and selection | 11 | Pass |

@@ -59,6 +59,29 @@ function isRouting(value: unknown): value is { forward(action: unknown, page: nu
 }
 
 describe('companion session integration', () => {
+  it('forwards a deferred reply while resuming the locally paused narration', async () => {
+    fake.stop.mockClear();
+    fake.speechCancel.mockClear();
+    fake.speechResume.mockClear();
+    fake.execute.mockClear().mockResolvedValue(undefined);
+    fake.register.mockReturnValue({ dispose: () => {} });
+    const current = createCompanionSession(mock<vscode.ExtensionContext>({ extensionPath: '/trusted', subscriptions: [] }), 'epoch');
+    const panel = fake.panel;
+    if (typeof panel !== 'object' || panel === null || !('routing' in panel) || !isRouting(panel.routing)) throw new Error('No routing');
+    panel.routing.forward({ type: 'draft', empty: false }, 1);
+    panel.routing.forward({ type: 'reply', text: 'Wait', defer: true }, 1);
+    expect(fake.speechCancel).not.toHaveBeenCalled();
+    expect(fake.stop).not.toHaveBeenCalled();
+    expect(fake.speechResume).toHaveBeenCalledOnce();
+    await vi.waitFor(() => {
+      expect(fake.execute).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ type: 'panelAction', action: { type: 'reply', text: 'Wait', defer: true } }),
+      );
+    });
+    current.dispose();
+  });
+
   it('registers one local provider and forwards a reply only after local retirement', async () => {
     const retirement = Promise.withResolvers<void>();
     fake.stop.mockReturnValue(retirement.promise);

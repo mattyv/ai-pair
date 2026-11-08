@@ -106,6 +106,7 @@ const fakes = vi.hoisted(() => {
       fork: vi.fn(),
       forget: vi.fn(),
     }),
+    reminder: { batch: vi.fn(), due: vi.fn<() => boolean>(), report: vi.fn<(ready: boolean) => boolean>() },
     FakeTimeline,
     FakePlayer,
     FakeMissingFile,
@@ -140,6 +141,13 @@ const SAY: Action[] = [{ say: 'Hi.' }];
 /** A move that anchors the cursor, with its file and line. */
 const ANCHORED: Action = { move: { file: 'a.ts', line: 1, to: 'line_end' } };
 
+vi.mock('../src/speech_reminder', () => ({
+  SpeechReminder: class {
+    batch = fakes.reminder.batch;
+    due = fakes.reminder.due;
+    report = fakes.reminder.report;
+  },
+}));
 vi.mock('../src/diagnostic_delivery', () => ({
   reportDiagnostic: vi.fn((observer: ((event: unknown) => void) | undefined, event: unknown, receiver: unknown) =>
     observer?.call(receiver, event),
@@ -497,6 +505,30 @@ describe('a session the agent leaves, and comes back to', () => {
     expect(posted(h).at(-1)).toEqual({ type: 'session', active: true, task: 'Kept.', resumed: true });
   });
 
+  it('RecoveryBatchIds Unique: keeps the next batch ID after saving and reviving a session', async () => {
+    const first = await started();
+    await report(first.controller.step([{ say: 'First.' }]));
+    const saved = first.controller.saved;
+    expect(saved).toBeDefined();
+    const second = harness();
+    if (saved === undefined) throw new Error('missing session');
+    second.controller.revive(saved);
+    await second.controller.start(undefined, undefined);
+    expect(second.controller.saved?.nextBatchId).toBe(2);
+  });
+
+  it.each([undefined, 0, 1.5, 2, 'invalid'])(
+    'RecoveryBatchIds Unique: derives a safe counter from legacy or invalid saved value %s',
+    (nextBatchId) => {
+      const h = harness();
+      const value = { scene: { turn: 'agent', allowedCommands: [] }, finished: [{ id: 3, status: 'completed' }], events: [], nextBatchId };
+      // The storage boundary accepts unknown JSON, including old and invalid optional fields.
+      if (!isSavedSession(value)) throw new Error('missing session');
+      h.controller.revive(value);
+      expect(h.controller.saved?.nextBatchId).toBe(4);
+    },
+  );
+
   it('WaitsProp: starts a new session from another directory, ending the suspended one', async () => {
     const h = harness();
     await h.controller.start('Kept.', ROOT);
@@ -547,6 +579,7 @@ describe('a session the agent leaves, and comes back to', () => {
       task: 'Kept.',
       scene: { root: ROOT, turn: 'agent', cursor: { file: A, offset: 2 }, selection: undefined, allowedCommands: ['ls'] },
       finished: [],
+      nextBatchId: 1,
       events: [{ kind: 'interrupt' }],
     });
     h.controller.endSession();
@@ -580,6 +613,46 @@ describe('a session the agent leaves, and comes back to', () => {
     expect(fakes.players).toHaveLength(1);
     const resumed = REPORT_SCHEMA.parse(await h.controller.start(undefined, ROOT));
     expect(resumed).toMatchObject({ batches: [{ id: 3, status: 'completed' }], events: [{ kind: 'interrupt' }], resumed: true });
+  });
+});
+
+describe('speech reminders', () => {
+  it('passes accepted batch selections and readiness to the reminder', async () => {
+    const narration = mock<NarrationPort>();
+    narration.ready = vi.fn().mockResolvedValue(true);
+    fakes.reminder.due.mockReturnValue(true);
+    fakes.reminder.report.mockReturnValue(true);
+    const h = harness({}, {}, narration);
+    await h.controller.start('A task.');
+    const result = await report(h.controller.step([{ say: 'One.' }]));
+    expect(fakes.reminder.batch).toHaveBeenCalledWith(false);
+    expect(narration.ready).toHaveBeenCalledOnce();
+    expect(fakes.reminder.report).toHaveBeenCalledWith(true);
+    expect(result.speechReminder).toBe(true);
+    fakes.reminder.due.mockReturnValue(false);
+    await report(h.controller.step([{ say: 'Selected.', speak: true }]));
+    expect(fakes.reminder.batch).toHaveBeenLastCalledWith(true);
+  });
+
+  it('treats a failed readiness check as unavailable', async () => {
+    const narration = mock<NarrationPort>();
+    narration.ready = vi.fn().mockRejectedValue(new Error('unavailable'));
+    fakes.reminder.due.mockReturnValue(true);
+    fakes.reminder.report.mockReturnValue(false);
+    const h = harness({}, {}, narration);
+    await h.controller.start('A task.');
+    expect((await report(h.controller.step([{ say: 'One.' }]))).speechReminder).toBeUndefined();
+    expect(fakes.reminder.report).toHaveBeenCalledWith(false);
+  });
+
+  it('does not query readiness until the counter is due', async () => {
+    const narration = mock<NarrationPort>();
+    narration.ready = vi.fn().mockResolvedValue(true);
+    fakes.reminder.due.mockReturnValue(false);
+    const h = harness({}, {}, narration);
+    await h.controller.start('A task.');
+    expect((await report(h.controller.step([{ say: 'One.' }]))).speechReminder).toBeUndefined();
+    expect(narration.ready).not.toHaveBeenCalled();
   });
 });
 
@@ -943,6 +1016,69 @@ describe('playing the queue', () => {
     finish();
     await settle();
     expect(player().play).toHaveBeenCalledOnce();
+  });
+
+  it('FinishAction: leaves playback alone when no reply is queued', async () => {
+    await started();
+    stage().afterAction?.();
+    expect(timeline().interrupt).not.toHaveBeenCalled();
+  });
+
+  it('SendDeferred and FinishAction: holds multiple replies until the action boundary', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    h.controller.userMessage('first', undefined, /* defer= */ true);
+    h.controller.userMessage('second', undefined, /* defer= */ true);
+    expect(timeline().interrupt).not.toHaveBeenCalled();
+    stage().afterAction?.();
+    expect(timeline().interrupt).toHaveBeenCalledOnce();
+    finish({ status: 'interrupted' });
+    const result = await report(h.controller.listen());
+    expect(result.events).toEqual([
+      { kind: 'message', text: 'first' },
+      { kind: 'message', text: 'second' },
+    ]);
+  });
+
+  it('FinishAction: delivers a reply queued while the completed player is still settling', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    h.controller.userMessage('late', undefined, /* defer= */ true);
+    finish();
+    await settle();
+    expect(timeline().interrupt).toHaveBeenCalledOnce();
+    expect((await report(h.controller.listen())).events).toEqual([{ kind: 'message', text: 'late' }]);
+  });
+
+  it('Store: saves queued replies without delivering or duplicating them in the live session', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    h.controller.userMessage('first', undefined, /* defer= */ true);
+    h.controller.userMessage('second', undefined, /* defer= */ true);
+    const saved = h.controller.saved;
+    if (saved === undefined) throw new Error('Missing saved session');
+    expect(saved.events).toEqual([
+      { kind: 'message', text: 'first' },
+      { kind: 'message', text: 'second' },
+    ]);
+    expect(timeline().interrupt).not.toHaveBeenCalled();
+    const liveStage = stage();
+    const restored = harness();
+    restored.controller.revive(saved);
+    expect((await restored.controller.start()).events).toEqual(saved.events);
+    liveStage.afterAction?.();
+    finish({ status: 'interrupted' });
+    expect((await report(h.controller.listen())).events).toEqual(saved.events);
+  });
+
+  it('SendDeferred: delivers immediately when no action is playing', async () => {
+    const h = await started();
+    h.controller.userMessage('now', undefined, /* defer= */ true);
+    expect(timeline().interrupt).toHaveBeenCalledOnce();
+    expect((await report(h.controller.listen())).events).toEqual([{ kind: 'message', text: 'now' }]);
   });
 
   it('waits for an interrupted batch to finish before it reports, so the report says what was typed', async () => {

@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import type { Controller, PanelEvent, Ref } from '@ai-pair/core';
 import { EXCERPT_SCHEMA, type Turn } from '@ai-pair/protocol';
 import type { Calibration } from '../src/calibration';
-import { NarrationPanel, type Starter } from '../src/panel';
+import { NarrationPanel, type PanelWiring, type Starter } from '../src/panel';
 import { panelHtml, SPEEDS } from '../src/panel_html';
 import type { FromPanel, ToPanel } from '../src/panel_messages';
 
@@ -136,6 +136,7 @@ interface Harness {
     outputSelect: ReturnType<typeof vi.fn>;
     supported: ReturnType<typeof vi.fn<() => boolean>>;
     installed: ReturnType<typeof vi.fn<() => Promise<boolean>>>;
+    modelStatus: ReturnType<typeof vi.fn<PanelWiring['speech']['modelStatus']>>;
     setup: ReturnType<typeof vi.fn<() => Promise<void>>>;
     preview: ReturnType<typeof vi.fn<() => Promise<void>>>;
     stop: ReturnType<typeof vi.fn<() => void>>;
@@ -207,6 +208,9 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
     validCloudVoice: vi.fn<(id: string) => boolean>(),
     supported: vi.fn(() => true),
     installed: vi.fn<() => Promise<boolean>>().mockResolvedValue(false),
+    modelStatus: vi
+      .fn<PanelWiring['speech']['modelStatus']>()
+      .mockResolvedValue({ path: '/model', source: 'https://example.test', revision: 'abc', verified: false, download: 'missing' }),
     setup: vi.fn<() => Promise<void>>().mockResolvedValue(),
     preview: vi.fn<() => Promise<void>>().mockResolvedValue(),
     stop: vi.fn<() => void>(),
@@ -619,6 +623,10 @@ describe('receive', () => {
       { type: 'codePlayback', value: 'typing' },
       { type: 'selection', ref: REF },
       { type: 'timings', tipDelayMs: 7, tipWarmMs: 8 },
+      {
+        type: 'speechModelStatus',
+        value: { path: '/model', source: 'https://example.test', revision: 'abc', verified: false, download: 'missing' },
+      },
       { type: 'speechSetupState', pending: false, message: 'Local speech is not set up.' },
       { type: 'canStart', value: true },
     ]);
@@ -750,9 +758,17 @@ describe('receive', () => {
     expect(calibration.reply.mock.calls).toEqual([['done'], ['with'], ['without']]);
     expect(controller.resume.mock.calls).toEqual([['reply'], [undefined, { reveal: false }], [undefined, { reveal: false }]]);
     expect(controller.userMessage.mock.calls).toEqual([
-      ['with', SELECTION],
-      ['without', undefined],
+      ['with', SELECTION, false],
+      ['without', undefined, false],
     ]);
+  });
+
+  it('forwards a deferred reply without stopping narration immediately', () => {
+    const { panel, controller, speech } = harness();
+    open(panel).send({ type: 'reply', text: 'Wait', defer: true });
+    expect(speech.stop).not.toHaveBeenCalled();
+    expect(controller.userMessage.mock.calls).toContainEqual(['Wait', undefined, true]);
+    expect(controller.resume.mock.calls).toContainEqual([undefined, { reveal: false }]);
   });
 
   it('draft: an empty draft ends the draft pause', () => {
@@ -1063,6 +1079,33 @@ it('reports setup and preview outcomes and ignores superseded availability check
   expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Voice preview is unavailable.' });
   expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: true, message: 'Setting up local speech...' });
   expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Speech setup did not complete.' });
+});
+
+it('ignores a stale model check and reports a failed current check', async () => {
+  const { panel, speech } = harness();
+  const stale = Promise.withResolvers<Awaited<ReturnType<PanelWiring['speech']['modelStatus']>>>();
+  speech.modelStatus.mockReturnValueOnce(stale.promise).mockRejectedValueOnce(new Error('failed'));
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  panel.refreshSpeechSupport();
+  await flush();
+  expect(view.posted).toContainEqual({ type: 'speechModelStatusUnavailable' });
+  stale.resolve({ path: '/stale', source: 'https://example.test', revision: 'old', verified: true, download: 'installed' });
+  await flush();
+  expect(view.posted.some((message) => message.type === 'speechModelStatus' && message.value.path === '/stale')).toBe(false);
+});
+
+it('ignores a rejected superseded model status check', async () => {
+  const { panel, speech } = harness();
+  const stale = Promise.withResolvers<Awaited<ReturnType<PanelWiring['speech']['modelStatus']>>>();
+  speech.modelStatus.mockReturnValueOnce(stale.promise);
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  panel.refreshSpeechSupport();
+  await flush();
+  stale.reject(new Error('stale'));
+  await flush();
+  expect(view.posted).not.toContainEqual({ type: 'speechModelStatusUnavailable' });
 });
 
 it('NoSecret, TypeOK: forwards only nonsecret key actions and validated cloud selections', async () => {

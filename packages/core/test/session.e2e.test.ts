@@ -23,6 +23,21 @@ function reload(editor: ReturnType<typeof setup>['editor']): void {
 // With the test config, a beat is 100 ms and `type` takes 100 ms per character.
 
 describe('where the controller and the player meet', () => {
+  it('reminds after three accepted unspoken batches only while speech is ready', async () => {
+    const ready = vi.fn().mockResolvedValue(false);
+    const narration = { ready, speak: vi.fn().mockResolvedValue(undefined), pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() };
+    const { controller } = setup({}, {}, narration);
+    await controller.start();
+    expect((await until(controller.step([{ say: 'One.' }]))).speechReminder).toBeUndefined();
+    expect((await until(controller.step([{ say: 'Two.' }]))).speechReminder).toBeUndefined();
+    expect((await until(controller.step([{ say: 'Three.' }]))).speechReminder).toBeUndefined();
+    ready.mockResolvedValue(true);
+    expect((await until(controller.step([{ say: 'Four.' }]))).speechReminder).toBe(true);
+    expect((await until(controller.step([{ say: 'Five.' }]))).speechReminder).toBeUndefined();
+    await until(controller.step([{ say: 'Selected.', speak: true }]));
+    expect((await until(controller.step([{ say: 'Six.' }]))).speechReminder).toBeUndefined();
+  });
+
   it('waits for selected speech after reading before playing the next edit', async () => {
     const { promise, resolve } = Promise.withResolvers<void>();
     const narration = {
@@ -254,6 +269,61 @@ describe('where the controller and the player meet', () => {
     ]);
     expect(report.rejected).toMatchObject({ index: 4, error: { kind: 'invalid_action' } });
     expect(editor.text('a.py')).toBe('x = call((1))\n');
+  });
+
+  it('RecoveryBatchIds Unique: keeps IDs distinct when a saved session is resumed', async () => {
+    const first = setup({ 'a.ts': '' });
+    await first.controller.start();
+    await first.controller.step([{ say: 'First.' }]);
+    const before = await until(first.controller.step([]));
+    const saved = first.controller.saved;
+    expect(saved).toBeDefined();
+    if (saved === undefined) throw new Error('missing session');
+    const second = setup({ 'a.ts': '' });
+    second.controller.revive(saved);
+    await second.controller.start();
+    await second.controller.step([{ say: 'Second.' }]);
+    const after = await until(second.controller.step([]));
+    expect(before.batches[0]?.id).toBe(1);
+    expect(after.batches[0]?.id).toBe(2);
+  });
+
+  it('NoEarlyDelivery: defers a reply until the current action finishes, then discards later actions', async () => {
+    const { editor, controller } = setup({ 'a.py': '' });
+    await controller.start();
+    await controller.step([{ move: { file: 'a.py', line: 1, to: 'line_end' } }, { type: `unknown${CURSOR_MARKER}` }, { say: 'Later.' }]);
+    await advance(100 + 3 * 100 + 50);
+    expect(editor.text('a.py')).toBe('unk');
+    controller.userMessage('Wait', undefined, /* defer= */ true);
+    const report = await until(controller.listen());
+    expect(editor.text('a.py')).toBe('unknown');
+    expect(report.events).toContainEqual({ kind: 'message', text: 'Wait' });
+    expect(report.batches).toMatchObject([{ status: 'interrupted', unplayed: [{ say: 'Later.' }] }]);
+  });
+
+  it('Urgent: a stop interrupts immediately and delivers a previously queued reply first', async () => {
+    const { editor, controller } = setup({ 'a.py': '' });
+    await controller.start();
+    await controller.step([{ move: { file: 'a.py', line: 1, to: 'line_end' } }, { type: `unknown${CURSOR_MARKER}` }]);
+    await advance(100 + 3 * 100 + 50);
+    controller.userMessage('Wait', undefined, /* defer= */ true);
+    controller.userInterrupt();
+    const report = await until(controller.listen());
+    expect(editor.text('a.py')).toBe('unk');
+    expect(report.events).toEqual([{ kind: 'message', text: 'Wait' }, { kind: 'interrupt' }]);
+  });
+
+  it('Urgent: a programmer edit stops immediately without losing the queued reply', async () => {
+    const { editor, controller } = setup({ 'a.py': '' });
+    await controller.start();
+    await controller.step([{ move: { file: 'a.py', line: 1, to: 'line_end' } }, { type: `unknown${CURSOR_MARKER}` }]);
+    await advance(100 + 3 * 100 + 50);
+    controller.userMessage('Wait', undefined, /* defer= */ true);
+    editor.userEdit('a.py', { offset: 0, deleteLength: 0, text: '!' });
+    const report = await until(controller.listen());
+    expect(editor.text('a.py')).toBe('!unk');
+    expect(report.events[0]).toEqual({ kind: 'message', text: 'Wait' });
+    expect(report.events[1]).toMatchObject({ kind: 'edit', by: 'programmer' });
   });
 
   it('interrupts within a token, reports its remainder, and discards the queued batch', async () => {

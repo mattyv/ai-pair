@@ -14,10 +14,14 @@ It adds:
 -   Copyable session and speech diagnostics, plus a running version and build
     in Settings. Speech diagnostics show capability, button dispatch and safe
     failure categories without copying keys, narration or audio.
+-   When enabled speech is available, the agent is encouraged to select a
+    concise explanation to speak, and may be reminded after several batches
+    without one. The reminder does not enable speech or make a provider request.
 -   Optional local Kokoro speech for narration selected by the connected coding
     agent, which selects useful short explanations without a per-session prompt.
     Speech is off by default and needs no additional API key. In Settings,
     run **Download Kokoro model** to download about 94 MB, then **Preview voice**.
+    Settings show the model path, pinned source and latest verification result.
     Local speech requires a supported local Linux x64 desktop with glibc, such
     as Ubuntu; the rest of Pair works without speech.
 -   Bounded sentence pipelining for local Kokoro in the audio companion. The
@@ -150,7 +154,7 @@ account. While you pair:
 
 | To... | Do this |
 |---|---|
-| say something to the agent | type in the reply box, press Enter. Typing pauses playback. |
+| say something to the agent | type in the reply box, press Enter. Typing pauses playback. Select **Finish current action before sending** to wait for the action boundary. |
 | ask about some code | select it in the editor, then reply: the selection goes along (**x** leaves it out) |
 | let it run a command | **Run**, **Allow for session**, or **Skip** in the panel; **Show terminal** reveals the command's terminal |
 | stop it right now | **Interrupt**, or just edit the code: any edit interrupts |

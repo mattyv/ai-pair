@@ -129,6 +129,7 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
         </select>
       </label>
       <p>Optional setup downloads a local voice model of about 94 MB.</p>
+      <p data-ui="speech-model-status">Checking model verification...</p>
       <div class="settings-actions">
         <button type="button" data-ui="speech-setup" class="soft" disabled>Download Kokoro model</button>
       </div>
@@ -330,6 +331,7 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
           data-tip="Don't send the selection"
         >x</button>
       </div>
+      <label><input type="checkbox" data-ui="defer-reply"> Finish current action before sending</label>
       <div class="compose-row">
         <textarea
           data-ui="reply"

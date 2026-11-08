@@ -19,6 +19,7 @@ import { EditorLink, findWindows } from '../../relay/src/link';
 import type { Api } from '../src/extension';
 import { DEFAULT_TIMINGS } from '../src/timings';
 import { controllerPaths, extensionPaths, playerPaths } from './integration_paths';
+import { deferredSettlementPaths } from './integration_deferred_settlement';
 import { panelPaths } from './integration_panel_paths';
 import { gapPaths } from './integration_gap_paths';
 import { codePlaybackPaths } from './integration_code_playback';
@@ -29,6 +30,7 @@ import { runLegacySpeechPaths } from './integration_legacy_speech_paths';
 import { installTerminalCleanup } from './integration_terminal_cleanup';
 import { playerFaults } from './integration_player_faults';
 import { exerciseStartup } from './integration_startup_paths';
+import { modelStatusPaths } from './integration_model_status';
 import { invalidCalibration } from './integration_invalid_calibration';
 import { badSpeechSettings } from './integration_bad_speech_settings';
 
@@ -239,6 +241,7 @@ export async function run(): Promise<void> {
   }
   assert.ok(isApi(exported), 'the extension exported something other than its Api');
   const api = exported;
+  await modelStatusPaths();
   const folder = vscode.workspace.workspaceFolders?.[0];
   assert.ok(folder, 'no workspace folder is open');
   const root = folder.uri.fsPath;
@@ -271,6 +274,36 @@ export async function run(): Promise<void> {
     }
     assert.ok(done(), 'timed out');
   }
+  // A panel reply may wait for a currently typing action without cutting its token.
+  fs.writeFileSync(file('deferred.txt'), '');
+  const deferred = await vscode.workspace.openTextDocument(file('deferred.txt'));
+  await vscode.window.showTextDocument(deferred);
+  await controller.start('deferred reply');
+  await controller.step([
+    { move: { file: 'deferred.txt', line: 1, to: 'line_end' } },
+    { type: `abcdefghijkl${CURSOR_MARKER}` },
+    { say: 'Later.' },
+  ]);
+  await until(() => deferred.getText().length > 0 && deferred.getText().length < 12);
+  api.panelMessage({ type: 'reply', text: 'Wait', defer: true });
+  const deferredSaved = controller.saved;
+  assert.ok(deferredSaved, 'the queued reply has a saved session');
+  assert.deepEqual(deferredSaved.events, [{ kind: 'message', text: 'Wait' }]);
+  const deferredReport = await controller.step([]);
+  assert.equal(deferred.getText(), 'abcdefghijkl');
+  assert.deepEqual(deferredReport.events, [{ kind: 'message', text: 'Wait' }]);
+  assert.deepEqual(
+    deferredReport.batches.map((batch) => batch.status),
+    ['interrupted'],
+  );
+  assert.deepEqual(deferredReport.batches[0]?.unplayed, [{ say: 'Later.' }]);
+  await controller.end();
+  controller.revive(deferredSaved);
+  const revivedReply = await controller.start(undefined, deferredSaved.scene.root);
+  assert.deepEqual(revivedReply.events, [{ kind: 'message', text: 'Wait' }]);
+  await controller.end();
+  console.log('NoEarlyDelivery, Store: deferred reply waits for typing and survives reload');
+
   fs.writeFileSync(file('other.txt'), 'before\n');
   const other = await vscode.workspace.openTextDocument(file('other.txt'));
   await controller.start('other edits');
@@ -1402,11 +1435,11 @@ export async function run(): Promise<void> {
   // Set Up Agent, with the agents' config folders in the run's folder and no agent installed (scripts/integration.sh):
   // closing the picker changes nothing; Another agent puts the configuration on the clipboard; and of the agents
   // picked, one whose file is broken is reported, and the rest are set up. The picker's items are Claude Code, Codex,
-  // OpenCode, Gemini CLI, Cursor, and Another agent, in that order, none ticked. Gemini CLI and Cursor write under the
+  // OpenCode, Gemini CLI, Cursor, and Another agent, in that order. Gemini CLI and Cursor write under the
   // real home, so they are never picked here.
   const agents = path.join(root, '..', 'agents');
-  /** Runs Set Up Agent, ticks the items at `indexes` in its picker with VS Code's quick input commands, and accepts, or hides it with none. */
-  async function setUpAgents(indexes: number[]): Promise<void> {
+  /** Selects the requested items from the known initial selection, or hides the picker if none are requested. */
+  async function setUpAgents(indexes: number[], initiallyPicked: number[] = []): Promise<void> {
     const running = vscode.commands.executeCommand('aiPair.setUpAgent');
     await sleep(1000);
     if (indexes.length === 0) {
@@ -1414,7 +1447,10 @@ export async function run(): Promise<void> {
     } else {
       await vscode.commands.executeCommand('quickInput.first');
       let at = 0;
-      for (const index of indexes) {
+      const toggles = [...new Set([...indexes, ...initiallyPicked])]
+        .filter((index) => indexes.includes(index) !== initiallyPicked.includes(index))
+        .toSorted((a, b) => a - b);
+      for (const index of toggles) {
         for (; at < index; at++) {
           await vscode.commands.executeCommand('quickInput.next');
         }
@@ -1428,19 +1464,20 @@ export async function run(): Promise<void> {
   await vscode.env.clipboard.writeText(clipboardBefore);
   await setUpAgents([]);
   assert.equal(await vscode.env.clipboard.readText(), clipboardBefore);
-  await setUpAgents([5]);
+  await setUpAgents([5], [1]);
   const copied: unknown = JSON.parse(await vscode.env.clipboard.readText());
   assert.deepEqual(copied, { mcpServers: { pair: { command: api.launcher, args: [] } } });
   fs.mkdirSync(path.join(agents, 'claude'), { recursive: true });
   fs.writeFileSync(path.join(agents, 'claude', '.claude.json'), '{ "mcpServers": ');
-  await setUpAgents([0, 1]);
+  await setUpAgents([0, 1], [0, 1]);
   assert.equal(fs.readFileSync(path.join(agents, 'claude', '.claude.json'), 'utf8'), '{ "mcpServers": ', 'the broken file was changed');
   assert.match(fs.readFileSync(path.join(agents, 'codex', 'config.toml'), 'utf8'), /\[mcp_servers\.pair\]/);
   // Opened again, it lists Codex as set up; from the run's own config files, so the same on every machine.
   await setUpAgents([]);
   // A multi-agent choice writes both isolated configurations from scratch.
   fs.rmSync(path.join(agents, 'codex'), { recursive: true, force: true });
-  await setUpAgents([1, 2]);
+  fs.mkdirSync(path.join(agents, 'codex'));
+  await setUpAgents([1, 2], [0, 1]);
   const openCodeFile = path.join(agents, 'xdg', 'opencode', 'opencode.json');
   const openCode = z
     .object({ mcp: z.object({ pair: z.object({ type: z.literal('local'), command: z.tuple([z.string()]), enabled: z.literal(true) }) }) })
@@ -1458,6 +1495,7 @@ export async function run(): Promise<void> {
   await playerFaults(api, root);
   await playerPaths(api, root);
   await controllerPaths(api, root);
+  await deferredSettlementPaths(api, root);
   await corePaths(api, root);
   await extensionPaths(api, root);
   await panelPaths(api);

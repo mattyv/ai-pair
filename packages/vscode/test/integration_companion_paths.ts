@@ -4,6 +4,8 @@ import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 import { localSpeechReport } from '@ai-pair/protocol';
 import type { Api } from '../src/extension';
+import { prepareRecovery, verifyRecovery } from './integration_recovery_restart';
+import { unavailableSpeechReminder } from './integration_speech_reminder';
 
 async function until(condition: () => boolean, description: string): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt++) {
@@ -37,12 +39,15 @@ export async function run(): Promise<void> {
       api.history().some((event) => event.type === 'programmer' && event.text === 'retained companion reply'),
       'the workspace did not restore the visible session history',
     );
+    await verifyRecovery(api);
+    await unavailableSpeechReminder(api);
     await api.controller.end();
     console.log('the restarted companion restored the suspended session and its visible history');
     return;
   }
 
   await api.controller.start('companion integration');
+  if (process.env.AI_PAIR_COMPANION_RESTART === 'prepare') await prepareRecovery(api);
   api.panelMessage({ type: 'reply', text: 'retained companion reply', attach: false });
   await until(() => api.history().some((event) => event.type === 'programmer' && event.text === 'retained companion reply'), 'the reply');
   assert.ok(api.history().length > 0, 'the workspace retained no session history');
@@ -115,11 +120,10 @@ export async function run(): Promise<void> {
   await vscode.commands.executeCommand('workbench.action.webview.reloadWebviewAction');
   await until(() => !api.controller.isPaused && api.speechPageReady(), 'the reloaded companion webview');
   if (process.env.AI_PAIR_COMPANION_RESTART === 'prepare') {
-    await until(() => api.saved()?.task === 'companion integration', 'the persisted session');
-    // History is written alongside the session; allow the workspace storage write to finish before Code exits.
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 1000);
-    });
+    await until(
+      () => api.saved()?.nextBatchId === 2 && api.saved()?.finished.length === 0,
+      'the reported batch allocation in workspace storage',
+    );
   } else {
     await api.controller.end();
   }

@@ -188,6 +188,8 @@ export const REPORT_SCHEMA = z.object({
   /** The agent cursor's line, when it isn't where the agent last saw it: in this report's code, or an earlier report. */
   cursor: CODE_SCHEMA.optional(),
   waiting: z.literal(true).optional(),
+  /** Reminds the agent to select speech when it is available. */
+  speechReminder: z.literal(true).optional(),
   /** Some of it may repeat a report the agent already saw: a call it canceled came back after its answer (#67). */
   repeated: z.literal(true).optional(),
   /** `start` resumed a session its agent had disconnected from, or the window had reloaded with (#25). */

@@ -35102,14 +35102,14 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 controller: [
                   {
                     id: "n-overviewcontroller",
-                    text: "The session's brain. It lines up the agent's work, decides what to refuse, and writes the report the agent reads next.",
+                    text: "The session lines up work, builds reports, and can hold a reply until the current action finishes. Urgent stops remain immediate.",
                     ts: 0,
                   },
                 ],
                 player: [
                   {
                     id: "n-overviewplayer",
-                    text: "Carries out queued work the way a person would: typing character by character, moving the cursor, pausing to read.",
+                    text: "Carries out queued work at a human pace and signals each completed action to the session controller.",
                     ts: 0,
                   },
                 ],
@@ -40314,7 +40314,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 {
                   id: "workspace-session",
                   label: "Workspace session\nController, editor and commands",
-                  files: ["packages/core/src/controller.ts", "packages/vscode/src/extension.ts"],
+                  files: ["packages/core/src/controller.ts", "packages/vscode/src/extension.ts", "packages/core/src/speech_reminder.ts"],
                   group: "workspace",
                   x: 40,
                   y: 80,
@@ -40347,6 +40347,8 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                     "packages/audio-ui/src/companion_narration.ts",
                     "packages/vscode/src/speech_service.ts",
                     "packages/vscode/src/speech_platform.ts",
+                    "packages/audio-ui/src/companion_session.ts",
+                    "packages/vscode/src/speech_readiness.ts",
                   ],
                   group: "desktop",
                   x: 1040,
@@ -40430,6 +40432,15 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                   ],
                 },
                 { from: "local-speech-host", to: "workspace-audio-proxy", label: "terminal ack" },
+                {
+                  from: "workspace-session",
+                  to: "local-speech-host",
+                  label: "epoch-bound readiness query",
+                  vertices: [
+                    { x: 215, y: 560 },
+                    { x: 1020, y: 560 },
+                  ],
+                },
               ],
               groups: [
                 { id: "workspace", label: "Workspace extension host (local or remote)" },
@@ -40468,6 +40479,13 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                   {
                     id: "platform-verification",
                     text: "Compilation and protocol tests are distinct from native routing and audible playback verification. Kokoro synthesis support remains limited by its separately packaged runtime.",
+                    ts: 0,
+                  },
+                ],
+                "workspace-session": [
+                  {
+                    id: "speech-reminder-query",
+                    text: "After three accepted batches without selected narration, query current speech readiness. Only an enabled and locally available route permits a short report reminder; the query sends no text or audio and does not synthesize.",
                     ts: 0,
                   },
                 ],

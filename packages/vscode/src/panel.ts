@@ -1,3 +1,4 @@
+import type { SpeechModelStatus } from './speech_setup';
 // The narration panel: a webview view in the secondary side bar. See "Narration panel" in DESIGN.md.
 
 import * as vscode from 'vscode';
@@ -66,6 +67,7 @@ export interface PanelWiring {
     settings: { get: () => SpeechSettings; set: (value: SpeechSettings) => void };
     supported: () => boolean;
     installed: () => Promise<boolean>;
+    modelStatus: () => Promise<SpeechModelStatus>;
     setup: () => Promise<void>;
     preview: () => Promise<void>;
     stop: () => void;
@@ -344,6 +346,14 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       ...(supported ? {} : { reason: 'unsupported' }),
     });
     this.send({ type: 'speechSupport', supported });
+    void this.wiring.speech
+      .modelStatus()
+      .then((value) => {
+        if (this.speechPageId === pageId && this.speechSetupCheck === check) this.send({ type: 'speechModelStatus', value });
+      })
+      .catch(() => {
+        if (this.speechPageId === pageId && this.speechSetupCheck === check) this.send({ type: 'speechModelStatusUnavailable' });
+      });
     if (supported) {
       void this.wiring.speech.installed().then(
         (installed) => {
@@ -542,6 +552,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
           () => {
             this.wiring.speech.diagnostic({ kind: 'speech', event: 'setup', phase: 'ready', provider: 'kokoro' });
             this.send({ type: 'speechSetupState', pending: false, message: 'Local speech is ready.' });
+            this.refreshSpeechSupport();
           },
           () => {
             this.wiring.speech.diagnostic({ kind: 'speech', event: 'setup', phase: 'failed', provider: 'kokoro', reason: 'unknown' });
@@ -605,7 +616,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         return;
       case 'reply':
         // Cancel before resume so an old generation cannot restart.
-        if (this.remote === undefined) this.wiring.speech.stop();
+        if (this.remote === undefined && message.defer !== true) this.wiring.speech.stop();
         // Replying means "go on with this", so any pause ends. It moves no view, so the programmer's tab and
         // selection stay as they were (specs/PointFocus.tla, `SendReply`, issue 125; specs/Draft.tla,
         // `ResumeAll`).
@@ -615,7 +626,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
           return;
         }
         controller().resume(undefined, { reveal: false });
-        controller().userMessage(message.text, message.attach === true ? this.selection.current() : undefined);
+        controller().userMessage(message.text, message.attach === true ? this.selection.current() : undefined, message.defer === true);
         return;
       case 'draft':
         // Typing a reply pauses playback, the way a pair stops when you start talking (specs/Draft.tla, `TypeDraft`, `Clear`).

@@ -114,6 +114,7 @@ vi.mock('../src/speech_host', () => ({
       panelSpeech: { keySet: fake.keySet, keyRemove: fake.keyRemove, preview: fake.preview },
       output: { stopAndWait: fake.stopOutput },
       observation: fake.observation,
+      ready: () => Promise.resolve(true),
       dispose: fake.hostDispose,
     };
   },
@@ -184,6 +185,8 @@ it('registers one provider and forwards local commands and diagnostics', async (
   expect(fake.preview).toHaveBeenCalledOnce();
   fake.observation.mockReturnValue({ id: 1, state: 'speaking', started: true });
   expect(current.observation()).toMatchObject({ id: 1 });
+  expect(await current.ready('wrong')).toBe(false);
+  expect(await current.ready('epoch')).toBe(true);
   expect(current.diagnostics()).toMatchObject({ version: 'test', build: 'test-build' });
   fake.hostOptions?.diagnostic({ kind: 'test' });
   expect(fake.diagnostic).toHaveBeenCalledWith({ kind: 'test' });
@@ -197,6 +200,7 @@ it('registers one provider and forwards local commands and diagnostics', async (
   await fake.channelOptions?.send({ version: 1, connectionEpoch: 'epoch', sequence: 2, type: 'heartbeat' });
   expect(fake.execute).toHaveBeenCalledOnce();
   current.dispose();
+  expect(await current.ready('epoch')).toBe(false);
   expect(fake.providerDispose).toHaveBeenCalledOnce();
   expect(fake.hostDispose).toHaveBeenCalledOnce();
   expect(fake.narrationDispose).toHaveBeenCalledOnce();
@@ -226,6 +230,27 @@ it('forwards panel controls only after local retirement and clears pause reasons
   await Promise.resolve();
   expect(fake.send).toHaveBeenCalledWith(expect.objectContaining({ action: { type: 'pageClosed' }, pageEpoch: 7 }));
   expect(fake.setPage).toHaveBeenCalledWith(undefined);
+  current.dispose();
+});
+
+it('forwards a deferred reply without canceling local narration', () => {
+  const current = session();
+  const panel = routing();
+  panel.forward({ type: 'draft', empty: false }, 7);
+  fake.setPause.mockClear();
+  panel.forward({ type: 'reply', text: 'Wait', defer: true }, 7);
+  expect(fake.interrupt).not.toHaveBeenCalled();
+  expect(fake.setPause.mock.calls).toEqual([
+    [false, 'draft'],
+    [false, 'manual'],
+  ]);
+  expect(fake.send).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: 'panelAction',
+      pageEpoch: 7,
+      action: { type: 'reply', text: 'Wait', defer: true },
+    }),
+  );
   current.dispose();
 });
 

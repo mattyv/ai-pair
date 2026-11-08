@@ -11,8 +11,9 @@ import { SpeechOutputPreferences, type OutputPreferenceView } from '../../vscode
 import { speechRuntimeAvailable } from '../../vscode/src/speech_runtime_status';
 import { localSpeechPlatform } from '../../vscode/src/speech_platform';
 import { SpeechService } from '../../vscode/src/speech_service';
+import { speechReady } from '../../vscode/src/speech_readiness';
 import { SpeechTempoClient } from '../../vscode/src/speech_tempo_client';
-import { installedSpeechModel, setupSpeech } from '../../vscode/src/speech_setup';
+import { installedSpeechModel, setupSpeech, speechModelStatus } from '../../vscode/src/speech_setup';
 import { speechListeningRate, type SpeechSettings } from '../../vscode/src/speech_types';
 import { CompanionOutput } from './companion_output';
 
@@ -50,6 +51,7 @@ export interface SpeechHost {
   output: CompanionOutput;
   panelSpeech: PanelWiring['speech'];
   observation(): LocalSpeechObservation | undefined;
+  ready(): Promise<boolean>;
   dispose(): void;
 }
 
@@ -343,6 +345,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     validCloudVoice: (id) => catalog.contains(id),
     supported: () => platform && runtimeAvailable,
     installed: async () => (await installedSpeechModel(context.globalStorageUri.fsPath)) !== undefined,
+    modelStatus: () => speechModelStatus(context.globalStorageUri.fsPath),
     setup: () => setupSpeech(context.globalStorageUri.fsPath),
     preview: () => {
       previewProvider = settings.get().provider;
@@ -395,6 +398,15 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     output,
     panelSpeech,
     observation: () => (observation === undefined ? undefined : { ...observation }),
+    ready: () =>
+      speechReady({
+        settings: settings.get,
+        desktop: () => desktop && !disposed,
+        local: () => platform && runtimeAvailable,
+        output: () => options.page() !== undefined && outputReady(),
+        model: async () => (await installedSpeechModel(context.globalStorageUri.fsPath)) !== undefined,
+        key: () => credentials.hasKey(),
+      }),
     dispose: () => {
       disposed = true;
       subscriptions.forEach((subscription) => {

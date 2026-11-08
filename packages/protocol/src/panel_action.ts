@@ -17,7 +17,7 @@ export const localPanelAction = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('ready') }),
   z.strictObject({ type: z.literal('pageClosed') }),
   z.strictObject({ type: z.literal('copyDiagnostics') }),
-  z.strictObject({ type: z.literal('reply'), text, attach: z.boolean().optional() }),
+  z.strictObject({ type: z.literal('reply'), text, attach: z.boolean().optional(), defer: z.boolean().optional() }),
   z.strictObject({ type: z.literal('draft'), empty: z.boolean() }),
   z.strictObject({ type: z.literal('pause') }),
   z.strictObject({ type: z.literal('resume') }),

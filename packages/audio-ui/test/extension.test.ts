@@ -9,7 +9,14 @@ const fake = vi.hoisted(() => ({
   prepare: vi.fn(),
   commit: vi.fn(),
   register: undefined as (() => void) | undefined,
-  session: { accept: vi.fn(), keySet: vi.fn(), keyRemove: vi.fn(), preview: vi.fn(), dispose: vi.fn() },
+  session: {
+    accept: vi.fn(),
+    keySet: vi.fn(),
+    keyRemove: vi.fn(),
+    preview: vi.fn(),
+    ready: vi.fn().mockResolvedValue(true),
+    dispose: vi.fn(),
+  },
 }));
 vi.mock('node:crypto', () => ({ randomUUID: () => 'token' }));
 vi.mock('../src/attachment_gate', () => ({
@@ -76,6 +83,7 @@ it('rejects malformed commit and makes unattached commands safe', async () => {
   expect(fake.commit).not.toHaveBeenCalled();
   expect(fake.commands.get('aiPair.localAudio.frame')?.({})).toBe(false);
   expect(fake.commands.get('aiPair.localAudio.status')?.(undefined)).toBeUndefined();
+  await expect(fake.commands.get('aiPair.localAudio.ready')?.('epoch')).resolves.toBe(false);
   expect(fake.commands.get('aiPair.localAudio.diagnostics')?.(undefined)).toBeUndefined();
   await expect(fake.commands.get('aiPair.localAudio.keySet')?.(undefined)).resolves.toBeUndefined();
   await expect(fake.commands.get('aiPair.localAudio.keyRemove')?.(undefined)).resolves.toBeUndefined();
@@ -97,6 +105,8 @@ it('forwards attached commands to the local session and disposes it', async () =
   await fake.commands.get('aiPair.localAudio.keySet')?.(undefined);
   await fake.commands.get('aiPair.localAudio.keyRemove')?.(undefined);
   await fake.commands.get('aiPair.localAudio.preview')?.(undefined);
+  await expect(fake.commands.get('aiPair.localAudio.ready')?.('epoch')).resolves.toBe(true);
+  expect(fake.session.ready).toHaveBeenCalledWith('epoch');
   expect(fake.commands.get('aiPair.localAudio.diagnostics')?.(undefined)).toEqual({ version: 'test', build: 'test-build', events: [] });
   expect(fake.session.accept).toHaveBeenCalledWith({ message: 'safe' });
   expect(fake.session.keySet).toHaveBeenCalledOnce();
