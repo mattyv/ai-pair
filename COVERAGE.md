@@ -238,6 +238,7 @@ Last updated: css, 2026-11-08.
 | `packages/vscode/test/integration_bad_speech_settings.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_catalog_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_code_playback.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_command_delivery.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/integration_companion_faults.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_companion_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_companion_version.ts` | TypeScript | test | - | - | - | - | test |

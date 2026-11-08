@@ -1410,7 +1410,7 @@ interrupted head, and fairness of Return makes enabled reports eventual.
 | Property | Code test or check |
 |---|---|
 | `TypeOK` | TypeScript checks types |
-| `Conservation`, `PromptRunReady` | `controller.test.ts`: command result delivery tests |
+| `Conservation`, `PromptRunReady` | `controller.test.ts`: command result delivery tests; `integration_command_delivery.ts`: real listen and empty step return a command result once while later work plays |
 | `NoQuietWake` | `controller.test.ts`: a completed batch without a command leaves listen pending |
 | `NoEarlyEnd` | `controller.test.ts`: command news does not let end return before later work finishes |
 | `NoEarlyDiscarded` | `controller.test.ts`: command news does not let a discarded step return before the interrupted head |
