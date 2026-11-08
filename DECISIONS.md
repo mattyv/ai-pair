@@ -499,6 +499,10 @@ these identities and the editor build. Hashes identify local builds; they do not
 attest to trust. Relays already running from older releases cannot perform this
 check and may need to be restarted after every window is updated.
 
+Archi revision 17 records this boundary and its older-relay limitation. Its
+source passed Archi 1.5.1 validation; the regenerated standalone HTML opened
+in Chromium without page errors and displayed its diagrams.
+
 ## Selective upstream PR 17 adoption, 2026-11-08
 
 Adopt prompt completed-command delivery and honest working, ready and approval

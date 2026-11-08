@@ -2649,8 +2649,9 @@ All three mutations were discarded.
 
 `RecoveryBatchIds` models allocation within a session, a fresh session, and a
 reload from the latest successfully saved snapshot. A fresh session starts at
-one; a resumed session retains its saved counter. It assumes each allocation is saved before reload; the actual
-workspace storage is asynchronous and a crash before that save can reuse an ID.
+one; a resumed session retains its saved counter. It assumes each allocation is
+saved before reload; the actual workspace storage is asynchronous and a crash
+before that save can reuse an ID.
 Legacy snapshots cannot recover IDs already reported and removed from the saved
 results. The model does not cover command IDs or queue replay.
 
