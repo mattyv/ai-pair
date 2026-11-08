@@ -776,5 +776,4 @@ test('approval and queued work remain readable in a narrow panel', async ({ page
   const bounds = await status.boundingBox();
   expect(bounds).not.toBeNull();
   expect((bounds?.x ?? 240) + (bounds?.width ?? 240)).toBeLessThanOrEqual(240);
-  await page.screenshot({ path: '/tmp/ai-pair-27-ready-approval.png' });
 });
