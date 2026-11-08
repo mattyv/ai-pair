@@ -112,7 +112,7 @@ interface Session {
   queue: QueuedBatch[];
   /** Finished batches not yet reported. */
   finished: BatchResult[];
-  /** Whether this session has already reported the diagnostic snapshot caveat. */
+  /** Whether this session has already attached the diagnostic snapshot caveat. */
   diagnosticSnapshotWarned: boolean;
   events: PendingEvent[];
   /** Messages waiting for the current action to finish. */

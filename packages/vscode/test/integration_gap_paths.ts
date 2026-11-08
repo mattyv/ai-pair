@@ -630,7 +630,7 @@ async function narrationSettingsFailure(api: Api): Promise<void> {
 }
 
 /** VS Code diagnostics remain visible on each edit while the snapshot caveat appears once. */
-async function diagnosticSnapshotCaveat(api: Api): Promise<void> {
+export async function diagnosticSnapshotCaveat(api: Api): Promise<void> {
   const folder = vscode.workspace.workspaceFolders?.[0];
   assert.ok(folder, 'workspace not found');
   const name = 'integration-diagnostic-snapshot.txt';
@@ -663,7 +663,7 @@ async function diagnosticSnapshotCaveat(api: Api): Promise<void> {
 }
 
 /** An injected EditorPort diagnostics rejection is advisory and the next check recovers. */
-async function editorDiagnosticsFailure(api: Api): Promise<void> {
+export async function editorDiagnosticsFailure(api: Api): Promise<void> {
   const folder = vscode.workspace.workspaceFolders?.[0];
   assert.ok(folder, 'workspace not found');
   const name = 'integration-diagnostics-failure.txt';

@@ -954,6 +954,25 @@ describe('playing the queue', () => {
     expect(second.batches[0]?.warnings).toBeUndefined();
   });
 
+  it('retains the caveat in a restored report and repeats it in a new session', async () => {
+    const h = await started();
+    const caveat = 'VS Code diagnostics are snapshots; freshness is not confirmed.';
+    h.editor.diagnostics.mockResolvedValue({ diagnostics: [], warnings: [caveat] });
+    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed' }, sightings: [], editedFiles: [A, B] });
+    await report(h.controller.step(SAY));
+    await settle();
+    const first = await report(h.controller.listen());
+    expect(first.batches[0]?.warnings).toEqual([caveat]);
+    h.controller.restore(first);
+    expect((await report(h.controller.listen())).batches[0]?.warnings).toEqual([caveat]);
+    h.controller.endSession();
+    await h.controller.start('Another session.');
+    player().play.mockResolvedValueOnce({ result: { id: 1, status: 'completed' }, sightings: [], editedFiles: [A] });
+    await report(h.controller.step(SAY));
+    await settle();
+    expect((await report(h.controller.listen())).batches[0]?.warnings).toEqual([caveat]);
+  });
+
   it('keeps specific diagnostic failures after the snapshot caveat has been reported', async () => {
     const h = await started();
     const caveat = 'VS Code diagnostics are snapshots; freshness is not confirmed.';
