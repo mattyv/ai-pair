@@ -453,3 +453,7 @@ replay interrupted work and does not address terminal command IDs (issue #11).
     output readiness. The companion answers an epoch-bound readiness query;
     no text, key or audio crosses it and no provider request is made. A local
     check cannot guarantee that a provider or audio device will succeed later.
+
+-   Try TLC's official named release URL before the pinned asset API URL, after
+    repeated API 504 responses. Both must match the same pinned SHA-256; the
+    named release can change, so a mismatch falls back and never runs TLC.
