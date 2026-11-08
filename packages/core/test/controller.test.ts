@@ -497,6 +497,30 @@ describe('a session the agent leaves, and comes back to', () => {
     expect(posted(h).at(-1)).toEqual({ type: 'session', active: true, task: 'Kept.', resumed: true });
   });
 
+  it('RecoveryBatchIds Unique: keeps the next batch ID after saving and reviving a session', async () => {
+    const first = await started();
+    await report(first.controller.step([{ say: 'First.' }]));
+    const saved = first.controller.saved;
+    expect(saved).toBeDefined();
+    const second = harness();
+    if (saved === undefined) throw new Error('missing session');
+    second.controller.revive(saved);
+    await second.controller.start(undefined, undefined);
+    expect(second.controller.saved?.nextBatchId).toBe(2);
+  });
+
+  it.each([undefined, 0, 1.5, 2, 'invalid'])(
+    'RecoveryBatchIds Unique: derives a safe counter from legacy or invalid saved value %s',
+    (nextBatchId) => {
+      const h = harness();
+      const value = { scene: { turn: 'agent', allowedCommands: [] }, finished: [{ id: 3, status: 'completed' }], events: [], nextBatchId };
+      // The storage boundary accepts unknown JSON, including old and invalid optional fields.
+      if (!isSavedSession(value)) throw new Error('missing session');
+      h.controller.revive(value);
+      expect(h.controller.saved?.nextBatchId).toBe(4);
+    },
+  );
+
   it('WaitsProp: starts a new session from another directory, ending the suspended one', async () => {
     const h = harness();
     await h.controller.start('Kept.', ROOT);
@@ -547,6 +571,7 @@ describe('a session the agent leaves, and comes back to', () => {
       task: 'Kept.',
       scene: { root: ROOT, turn: 'agent', cursor: { file: A, offset: 2 }, selection: undefined, allowedCommands: ['ls'] },
       finished: [],
+      nextBatchId: 1,
       events: [{ kind: 'interrupt' }],
     });
     h.controller.endSession();

@@ -224,3 +224,18 @@ hardware, Bluetooth, Pulse-only servers, macOS and Windows are untested or have
 no mechanism. The feature remains deferred. The raw scripts and numbers were
 kept under `/tmp/duck-scope` on the build machine and are not part of the
 repository.
+
+## Future option: user-routed music sink
+
+Offer an explicitly selected virtual music sink that the user routes music to,
+then reduce its separate gain during speech. This avoids automatically moving
+other applications or guessing which streams contain music. PipeWire provides a
+[loopback module](https://docs.pipewire.org/page_module_loopback.html) that may
+be a building block; the private-server loopback gain study above demonstrates
+independent gain only for its tested configuration.
+
+This is not implemented. A sink disappearing on helper or extension failure can
+interrupt or redirect music, so durable sink ownership, fail-open behavior,
+restart, user routing, and crash recovery must be designed and measured before
+shipping. A daemon tied to the same process failure is not proof of restoration.
+No support for other platforms follows from the PipeWire experiment.

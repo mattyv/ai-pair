@@ -2635,3 +2635,21 @@ TLC checked 19 generated and 19 distinct states. Disabling `GuardEvidence`
 violates `PositiveEvidence`; disabling `EnableCheck` violates
 `CheckCompletes`; disabling `EnablePositive` violates `RecognizesEvidence`.
 All three mutations were discarded.
+
+### `RecoveryBatchIds`: saved batch allocation
+
+`RecoveryBatchIds` models allocation and a reload from the latest successfully
+saved snapshot. It assumes each allocation is saved before reload; the actual
+workspace storage is asynchronous and a crash before that save can reuse an ID.
+Legacy snapshots cannot recover IDs already reported and removed from the saved
+results. The model does not cover command IDs or queue replay.
+
+| Property | Test |
+|---|---|
+| `Unique` | `controller.test.ts`: RecoveryBatchIds Unique: keeps the next batch ID after saving and reviving a session; derives a safe counter from legacy or invalid saved value. `session.e2e.test.ts`: RecoveryBatchIds Unique: keeps IDs distinct when a saved session is resumed. |
+| `Progress` | `session.e2e.test.ts`: RecoveryBatchIds Unique: keeps IDs distinct when a saved session is resumed. |
+
+TLC checked `RecoveryBatchIds.cfg` with `MaxId = 3`: 11 generated and 8
+distinct states, no violation. Setting `PreserveCounter` to `FALSE` makes
+`Unique` fail after one allocation and a reload. Disabling `Allocate` while
+retaining its fairness condition makes `Progress` fail.

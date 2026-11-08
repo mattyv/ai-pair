@@ -415,3 +415,12 @@ Issue discussions and working notes hold the detailed evidence and history.
     diff contains exclusively recognized test files skips TLC; source, model,
     workflow and unknown changes, an unavailable base, and push events run
     every model. Disabling rename detection checks both paths of a move.
+
+## Batch identity on session recovery, 2026-11-08
+
+Save the next batch ID with the session so a normal saved-session reload keeps
+allocating beyond IDs already reported. For older or malformed snapshots, use
+one above the largest unreported finished batch ID. Older snapshots cannot
+recover IDs that have already left that list. Workspace storage is asynchronous,
+so a crash before its latest write can still reuse an ID. This change does not
+replay interrupted work and does not address terminal command IDs (issue #11).

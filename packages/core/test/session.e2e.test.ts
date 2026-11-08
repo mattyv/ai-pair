@@ -256,6 +256,23 @@ describe('where the controller and the player meet', () => {
     expect(editor.text('a.py')).toBe('x = call((1))\n');
   });
 
+  it('RecoveryBatchIds Unique: keeps IDs distinct when a saved session is resumed', async () => {
+    const first = setup({ 'a.ts': '' });
+    await first.controller.start();
+    await first.controller.step([{ say: 'First.' }]);
+    const before = await until(first.controller.step([]));
+    const saved = first.controller.saved;
+    expect(saved).toBeDefined();
+    if (saved === undefined) throw new Error('missing session');
+    const second = setup({ 'a.ts': '' });
+    second.controller.revive(saved);
+    await second.controller.start();
+    await second.controller.step([{ say: 'Second.' }]);
+    const after = await until(second.controller.step([]));
+    expect(before.batches[0]?.id).toBe(1);
+    expect(after.batches[0]?.id).toBe(2);
+  });
+
   it('interrupts within a token, reports its remainder, and discards the queued batch', async () => {
     const { editor, controller } = setup({ 'a.py': '' });
     await controller.start();

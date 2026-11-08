@@ -91,6 +91,8 @@ export interface SavedSession {
   task?: string;
   scene: Pick<Scene, 'root' | 'turn' | 'cursor' | 'selection'> & { allowedCommands: string[] };
   finished: BatchResult[];
+  /** The next batch ID, absent in sessions saved by older versions. */
+  nextBatchId?: number;
   events: Array<Exclude<Event, { kind: 'edit' }>>;
 }
 
@@ -398,6 +400,7 @@ export class Controller {
       task: session.task,
       scene: { root, turn, cursor, selection, allowedCommands: [...session.scene.allowedCommands] },
       finished: session.finished,
+      nextBatchId: this.nextBatchId,
       events: session.events.filter((e): e is Exclude<Event, { kind: 'edit' }> => e.kind !== 'edit'),
     };
   }
@@ -420,6 +423,10 @@ export class Controller {
     this.diagnostic({ kind: 'session', state: 'suspended' });
     this.diagnostic({ kind: 'pause', paused: this.pauseReasons.size > 0, reasons: [...this.pauseReasons] });
     this.trace?.('session revived after a reload, suspended');
+    // specs/RecoveryBatchIds.tla, `Reload`: restore the saved allocation high-water mark.
+    const next = saved.nextBatchId;
+    const reportedNext = Math.max(1, ...saved.finished.map((batch) => batch.id + 1));
+    this.nextBatchId = typeof next === 'number' && Number.isSafeInteger(next) && next >= reportedNext ? next : reportedNext;
     session.finished = [...saved.finished];
     session.events = [...saved.events];
     // specs/Resume.tla, `ReloadWindow`: the replayed history may end with the session live (#138).
@@ -471,6 +478,7 @@ export class Controller {
       const current = rehearsal && !session.stale && !session.ended;
       // specs/Serialize.tla: `FailRehearsal` answers with the rejection; `Rehearse` queues the batch, or discards it.
       if (current === true && rehearsal.failed !== undefined) return this.rejectBatch(session, rehearsal.failed, rehearsal);
+      // specs/RecoveryBatchIds.tla, `Allocate`: the next snapshot carries the incremented counter.
       if (current === true) {
         const queued: QueuedBatch = { id: this.nextBatchId++, actions, state: 'queued', after: rehearsal.after };
         session.queue.push(queued);
