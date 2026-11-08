@@ -6,6 +6,10 @@
     path, and pinned source in speech settings.
 -   Offer **Finish current action before sending** for replies, preserving
     immediate interruption for Stop and editor changes.
+-   Encourage concise selected speech and remind the agent after three batches
+    without it when speech is enabled and available.
+-   Preserve the next batch ID across saved-session recovery to avoid reusing
+    already reported IDs after a normal reload.
 
 ## 0.20.1
 
