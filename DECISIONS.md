@@ -258,3 +258,11 @@ Issue discussions and working notes hold the detailed evidence and history.
     features. Its legacy editor scenarios pass, but 31 integration coverage
     thresholds remain below their floors. This is an outstanding merge gate;
     development installers do not establish release readiness.
+
+-   Separate experimental listening speed from each provider's synthesis speed.
+    Snapshot the listening rate per narration; setting changes apply to the
+    next unit. Rate 1.0 preserves the waveform bytes. Apply local PCM processing
+    in a dedicated worker before the one fixed final thinking tail, using the
+    actual resulting duration for output bounds. No extra cloud request is
+    needed. Offline corpus metrics complement, but do not replace, listening
+    validation.

@@ -1,3 +1,5 @@
+import { SPEECH_LISTENING_RATES, type SpeechTempoRate } from './speech_tempo';
+
 /** The voices available for selected local narration. */
 export const SPEECH_VOICES = ['af_heart', 'am_michael', 'bf_emma', 'bm_george'] as const;
 /** A supported local voice. */
@@ -11,6 +13,8 @@ export const SPEECH_PREVIEW_TEXT = 'Here is a short example of the voice for our
 /** Preferences sampled when a new narration unit starts. */
 export interface SpeechSettings {
   enabled: boolean;
+  /** Independent listening speed; absent older settings mean normal speed. */
+  listeningSpeed?: number;
   provider: SpeechProvider;
   elevenLabsVoice: string;
   elevenLabsSpeed: number;
@@ -59,3 +63,8 @@ export type LocalSpeechFailureReason =
   | 'synthesis'
   | 'timeout'
   | 'audio_page';
+
+/** Normalizes absent, unsupported, or malformed listening speed. */
+export function speechListeningRate(value: unknown): SpeechTempoRate {
+  return SPEECH_LISTENING_RATES.find((rate) => rate === value) ?? 1;
+}

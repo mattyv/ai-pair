@@ -8,6 +8,7 @@ import {
   SPEECH_PREVIEW_TEXT,
   SPEECH_SPEEDS,
   SPEECH_VOICES,
+  speechListeningRate,
   type ElevenLabsSpeechPort,
   type LocalSpeechFailureReason,
   type SpeechProvider,
@@ -16,6 +17,8 @@ import {
 } from './speech_types';
 import { SPEECH_WORKER_OUTPUT } from './speech_worker_messages';
 import { speechSegments } from './speech_segments';
+import { decodeSpeechWav, encodeTempoWav } from './speech_tempo_pcm';
+import type { SpeechTempoRate } from './speech_tempo';
 
 /** The panel operations used by local speech; audio is never added to history. */
 export interface SpeechOutput {
@@ -35,6 +38,12 @@ export interface SpeechOutput {
   status: (id: number, state: 'preparing' | 'speaking' | 'paused' | 'unavailable' | 'idle', message?: string) => void;
 }
 
+/** A local, single-slot tempo worker with cancelable unit ownership. */
+export interface SpeechTempoProcessor {
+  transform(request: { unitId: number; part: number; rate: SpeechTempoRate; pcm: Int16Array }, signal: AbortSignal): Promise<Int16Array>;
+  dispose(): Promise<void>;
+}
+
 /** Inputs needed by the speech service. */
 export interface SpeechServiceOptions {
   runtimeDirectory: string;
@@ -42,6 +51,7 @@ export interface SpeechServiceOptions {
   localDesktop: boolean;
   kokoroSupported?: boolean;
   cloud?: ElevenLabsSpeechPort;
+  tempo?: SpeechTempoProcessor;
   output: SpeechOutput;
   settings(): SpeechSettings;
 }
@@ -64,12 +74,14 @@ interface ActiveSpeech {
   lookaheadAllowed: boolean;
   buffered?: { part: number; wav: Uint8Array; durationMs: number };
   aggregateMs: number;
+  listeningRate: SpeechTempoRate;
+  processing?: { part: number; controller: AbortController };
   provider: SpeechProvider;
   cloudVoice: string;
   voice: SpeechVoice;
   speed: number;
   resolve(): void;
-  phase: 'admitting' | 'loading' | 'synthesizing' | 'prepared' | 'playing';
+  phase: 'admitting' | 'loading' | 'synthesizing' | 'transforming' | 'prepared' | 'playing';
   wav: Uint8Array;
   durationMs: number;
   pageId?: number;
@@ -180,6 +192,7 @@ export class SpeechService implements NarrationPort {
       part: 0,
       lookaheadAllowed: false,
       aggregateMs: 0,
+      listeningRate: speechListeningRate(settings.listeningSpeed),
       provider,
       cloudVoice: settings.elevenLabsVoice,
       voice: voice ?? 'af_heart',
@@ -253,21 +266,7 @@ export class SpeechService implements NarrationPort {
         (audio) => {
           release();
           if (this.current !== current || controller.signal.aborted) return;
-          if (
-            audio.wav.length < MIN_WAV_BYTES ||
-            audio.wav.length > MAX_WAV_BYTES ||
-            !Number.isFinite(audio.durationMs) ||
-            audio.durationMs <= 0 ||
-            audio.durationMs > MAX_DURATION_MS
-          ) {
-            this.fail(current, 'Generated speech was invalid; continue reading.');
-            return;
-          }
-          current.wav = audio.wav;
-          current.durationMs = audio.durationMs;
-          current.phase = 'prepared';
-          if (this.paused) this.options.output.status(current.id, 'paused');
-          else this.play(current);
+          this.receiveAudio(current, 0, audio, true);
         },
         () => {
           release();
@@ -363,6 +362,7 @@ export class SpeechService implements NarrationPort {
       this.paused ||
       !current.lookaheadAllowed ||
       current.buffered !== undefined ||
+      current.processing !== undefined ||
       this.workerBusyId !== undefined ||
       this.worker === undefined ||
       current.nextPart >= current.parts.length
@@ -407,24 +407,79 @@ export class SpeechService implements NarrationPort {
     }
     if (current?.id !== message.id) return;
     const part = message.part ?? 0;
+    this.receiveAudio(current, part, { wav: message.wav, durationMs: message.durationMs }, part === current.parts.length - 1);
+  }
+
+  /** Applies listening speed locally before exposing a waveform to playback. */
+  private receiveAudio(current: ActiveSpeech, part: number, audio: { wav: Uint8Array; durationMs: number }, final: boolean): void {
     if (
-      message.wav.length < MIN_WAV_BYTES ||
-      message.wav.length > MAX_WAV_BYTES ||
-      !Number.isFinite(message.durationMs) ||
-      message.durationMs <= 0 ||
-      current.aggregateMs + message.durationMs > MAX_DURATION_MS
+      audio.wav.length < MIN_WAV_BYTES ||
+      audio.wav.length > MAX_WAV_BYTES ||
+      !Number.isFinite(audio.durationMs) ||
+      audio.durationMs <= 0
     ) {
       this.fail(current, 'Generated speech was invalid; continue reading.');
       return;
     }
-    current.aggregateMs += message.durationMs;
+    if (current.listeningRate === 1) {
+      this.acceptAudio(current, part, audio);
+      return;
+    }
+    const tempo = this.options.tempo;
+    if (tempo === undefined || current.processing !== undefined) {
+      this.fail(current, 'Listening speed is unavailable; continue reading.');
+      return;
+    }
+    const processing = { part, controller: new AbortController() };
+    current.processing = processing;
+    if (current.phase !== 'playing') current.phase = 'transforming';
+    try {
+      const pcm = decodeSpeechWav(audio.wav, final);
+      void tempo.transform({ unitId: current.id, part, rate: current.listeningRate, pcm }, processing.controller.signal).then(
+        (result) => {
+          if (this.current !== current || current.processing !== processing || processing.controller.signal.aborted) return;
+          current.processing = undefined;
+          try {
+            this.acceptAudio(current, part, encodeTempoWav(result, final));
+          } catch {
+            this.fail(current, 'Listening speed is unavailable; continue reading.');
+          }
+        },
+        () => {
+          if (this.current === current && current.processing === processing) {
+            current.processing = undefined;
+            this.fail(current, 'Listening speed is unavailable; continue reading.');
+          }
+        },
+      );
+    } catch {
+      if (this.current === current) {
+        current.processing = undefined;
+        this.fail(current, 'Listening speed is unavailable; continue reading.');
+      }
+    }
+  }
+
+  /** Bounds the complete transformed unit and buffers at most one next part. */
+  private acceptAudio(current: ActiveSpeech, part: number, audio: { wav: Uint8Array; durationMs: number }): void {
+    if (
+      audio.wav.length < MIN_WAV_BYTES ||
+      audio.wav.length > MAX_WAV_BYTES ||
+      !Number.isFinite(audio.durationMs) ||
+      audio.durationMs <= 0 ||
+      current.aggregateMs + audio.durationMs > MAX_DURATION_MS
+    ) {
+      this.fail(current, 'Generated speech was invalid; continue reading.');
+      return;
+    }
+    current.aggregateMs += audio.durationMs;
     if (current.phase === 'playing') {
-      current.buffered = { part, wav: message.wav, durationMs: message.durationMs };
+      current.buffered = { part, wav: audio.wav, durationMs: audio.durationMs };
       return;
     }
     current.part = part;
-    current.wav = message.wav;
-    current.durationMs = message.durationMs;
+    current.wav = audio.wav;
+    current.durationMs = audio.durationMs;
     current.phase = 'prepared';
     this.clearTimer(current);
     if (this.paused) this.options.output.status(current.id, 'paused');
@@ -487,7 +542,7 @@ export class SpeechService implements NarrationPort {
         current.started = false;
         const buffered = current.buffered;
         current.buffered = undefined;
-        current.phase = buffered === undefined ? 'synthesizing' : 'prepared';
+        current.phase = buffered === undefined ? (current.processing === undefined ? 'synthesizing' : 'transforming') : 'prepared';
         if (buffered !== undefined) {
           current.part = buffered.part;
           current.wav = buffered.wav;
@@ -562,6 +617,7 @@ export class SpeechService implements NarrationPort {
   dispose(): void {
     this.disposed = true;
     this.cancel();
+    void this.options.tempo?.dispose().catch(() => {});
     if (this.worker !== undefined) this.workerFailed(this.worker);
   }
 
@@ -614,6 +670,7 @@ export class SpeechService implements NarrationPort {
     if (this.current !== current) return;
     this.current = undefined;
     if (current.provider === 'elevenlabs' && this.cloudBusy?.id === current.id) this.cloudBusy.controller.abort();
+    current.processing?.controller.abort();
     this.clearTimer(current);
     if (current.pageId !== undefined) this.options.output.control(current.id, current.pageId, 'stop');
     else this.options.output.cancel?.(current.id);

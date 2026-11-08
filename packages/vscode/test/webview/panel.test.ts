@@ -1713,7 +1713,7 @@ it('sends explicit setup, preview, stop and validated speech preferences', () =>
   voice.dispatchEvent(new window.Event('change', { bubbles: true }));
   expect(posted()).toContainEqual({
     type: 'speechSettings',
-    value: { enabled: true, provider: 'kokoro', voice: 'bf_emma', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    value: { enabled: true, provider: 'kokoro', voice: 'bf_emma', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1, listeningSpeed: 1 },
   });
   click(element('speech-setup'));
   click(element('speech-preview'));
@@ -1925,7 +1925,7 @@ it('validates selection controls and stops live speech when disabled', () => {
   enabled.dispatchEvent(new window.Event('change'));
   expect(posted()).toContainEqual({
     type: 'speechSettings',
-    value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1, listeningSpeed: 1 },
   });
   mode.value = 'lines';
   mode.dispatchEvent(new window.Event('change'));
@@ -1995,7 +1995,15 @@ it('chooses a cloud voice and speed, loads more, and keeps provider errors sanit
   speed.dispatchEvent(new window.Event('change'));
   expect(posted()).toContainEqual({
     type: 'speechSettings',
-    value: { enabled: true, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: 'id1', elevenLabsSpeed: 1.2 },
+    value: {
+      enabled: true,
+      provider: 'elevenlabs',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: 'id1',
+      elevenLabsSpeed: 1.2,
+      listeningSpeed: 1,
+    },
   });
   click(element('speech-voices-more'));
   click(element('speech-key-remove'));
@@ -2037,7 +2045,15 @@ it('switches to cloud even when old local voice settings are invalid', () => {
   provider.dispatchEvent(new window.Event('change'));
   expect(posted()).toContainEqual({
     type: 'speechSettings',
-    value: { enabled: true, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    value: {
+      enabled: true,
+      provider: 'elevenlabs',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+      listeningSpeed: 1,
+    },
   });
 });
 
@@ -2052,7 +2068,15 @@ it('switches to cloud with the default rate when a saved cloud rate is invalid',
   provider.dispatchEvent(new window.Event('change'));
   expect(posted()).toContainEqual({
     type: 'speechSettings',
-    value: { enabled: false, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    value: {
+      enabled: false,
+      provider: 'elevenlabs',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+      listeningSpeed: 1,
+    },
   });
 });
 
@@ -2067,7 +2091,7 @@ it('switches back to Kokoro when saved inactive cloud settings are invalid', () 
   provider.dispatchEvent(new window.Event('change'));
   expect(posted()).toContainEqual({
     type: 'speechSettings',
-    value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1, listeningSpeed: 1 },
   });
 });
 
@@ -2208,4 +2232,35 @@ it('acknowledges matching browser audio stop only after the clip is silenced', a
   send({ type: 'speechControl', pageId: 1, id: 2, action: 'stop' });
   expect(pause).toHaveBeenCalledOnce();
   expect(posted()).toContainEqual({ type: 'speechRetired', id: 2, pageId: 1 });
+});
+
+it('saves listening speed independently of both provider synthesis speeds', () => {
+  send({
+    type: 'speechSettings',
+    value: {
+      enabled: true,
+      provider: 'elevenlabs',
+      voice: 'af_heart',
+      speed: 1.25,
+      elevenLabsVoice: 'voice',
+      elevenLabsSpeed: 1.2,
+      listeningSpeed: 1,
+    },
+  });
+  const speed = element('speech-listening-speed');
+  if (!(speed instanceof window.HTMLSelectElement)) throw new TypeError('Missing listening speed');
+  speed.value = '1.25';
+  speed.dispatchEvent(new window.Event('change'));
+  expect(posted()).toContainEqual({
+    type: 'speechSettings',
+    value: {
+      enabled: true,
+      provider: 'elevenlabs',
+      voice: 'af_heart',
+      speed: 1.25,
+      elevenLabsVoice: 'voice',
+      elevenLabsSpeed: 1.2,
+      listeningSpeed: 1.25,
+    },
+  });
 });

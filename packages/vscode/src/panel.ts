@@ -7,6 +7,7 @@ import { panelHtml, SPEEDS } from './panel_html';
 import { timings } from './timings';
 import type { ChatOrder, FromPanel, SpeechAction, SpeechEvent, SpeechState, ToPanel } from './panel_messages';
 import { ELEVENLABS_SPEEDS, SPEECH_SPEEDS, SPEECH_VOICES, type SpeechSettings } from './speech_types';
+import { SPEECH_LISTENING_RATES } from './speech_tempo';
 import type { CatalogView } from './speech_catalog';
 import type { OutputPreferenceView } from './speech_output_preferences';
 import type { SpeechDiagnosticEvent } from './diagnostics';
@@ -449,6 +450,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
           typeof message.value?.enabled === 'boolean' &&
           SPEECH_VOICES.some((voice) => voice === message.value.voice) &&
           SPEECH_SPEEDS.some((speed) => speed === message.value.speed) &&
+          (message.value.listeningSpeed === undefined || SPEECH_LISTENING_RATES.some((rate) => rate === message.value.listeningSpeed)) &&
           (message.value.provider === 'kokoro' || message.value.provider === 'elevenlabs') &&
           (message.value.elevenLabsVoice === '' ||
             this.wiring.speech.validCloudVoice(message.value.elevenLabsVoice) ||

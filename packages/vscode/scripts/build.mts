@@ -73,6 +73,14 @@ await esbuild.build({
   outfile: 'dist/speech/worker.mjs',
 });
 
+// The local tempo transform runs off the extension-host event loop.
+await esbuild.build({
+  ...common,
+  format: 'esm',
+  entryPoints: ['src/speech_tempo_worker.ts'],
+  outfile: 'dist/speech/tempo_worker.mjs',
+});
+
 // Hash the extension with a fixed build-id placeholder, plus every other file
 // shipped in the VSIX. This avoids hashing a bundle that contains its own hash.
 const extensionOptions: esbuild.BuildOptions = {

@@ -2,9 +2,9 @@
   "version": 1,
   "bundleId": "277c3415-7b74-4008-8be4-8c14ae6d41dd",
   "revision": {
-    "number": 10,
+    "number": 11,
     "updatedAt": "2026-11-08T00:00:00.000Z",
-    "summary": "Bounded sentence narration and retained multipart output ownership"
+    "summary": "Bounded sentence narration and independent local tempo worker"
   },
   "diagrams": [
     {
@@ -9762,6 +9762,114 @@
             {
               "id": "retirement",
               "text": "Logical ownership survives each physically retired part. Stale callbacks cannot settle a newer part. Release only after final completion or canceled physical retirement.",
+              "ts": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "speech-tempo",
+      "name": "Speech tempo",
+      "type": "architecture",
+      "origin": "llm",
+      "generation": {
+        "focus": "Independent local listening rate; implementation under review"
+      },
+      "doc": {
+        "type": "architecture",
+        "autoLayoutApplied": true,
+        "nodes": [
+          {
+            "id": "settings",
+            "label": "Speech settings\nSnapshot listening rate per unit",
+            "files": ["packages/vscode/src/speech_types.ts", "packages/audio-ui/src/speech_host.ts"],
+            "x": 40,
+            "y": 80
+          },
+          {
+            "id": "service",
+            "label": "Speech service\nProvider synthesis speed stays separate",
+            "files": ["packages/vscode/src/speech_service.ts"],
+            "x": 540,
+            "y": 80
+          },
+          {
+            "id": "client",
+            "label": "Tempo client\nOne owned local worker operation",
+            "files": ["packages/vscode/src/speech_tempo_client.ts", "packages/vscode/src/speech_tempo_messages.ts"],
+            "x": 1040,
+            "y": 80
+          },
+          {
+            "id": "dsp",
+            "label": "Experimental tempo transform\nBounded PCM in a worker thread",
+            "files": ["packages/vscode/src/speech_tempo.ts", "packages/vscode/src/speech_tempo_worker.ts"],
+            "x": 1040,
+            "y": 430
+          },
+          {
+            "id": "framing",
+            "label": "PCM and WAV framing\nOne unchanged final thinking tail",
+            "files": ["packages/vscode/src/speech_tempo_pcm.ts"],
+            "x": 540,
+            "y": 430
+          },
+          {
+            "id": "output",
+            "label": "Part playback\nUse actual transformed duration",
+            "files": ["packages/audio-ui/src/companion_output.ts", "packages/audio-native/src/native_adapter.ts"],
+            "x": 40,
+            "y": 430
+          }
+        ],
+        "edges": [
+          {
+            "from": "settings",
+            "to": "service",
+            "label": "next-unit rate"
+          },
+          {
+            "from": "service",
+            "to": "client",
+            "label": "tail-free PCM"
+          },
+          {
+            "from": "client",
+            "to": "dsp",
+            "label": "epoch / unit / part"
+          },
+          {
+            "from": "dsp",
+            "to": "framing",
+            "label": "PCM result"
+          },
+          {
+            "from": "framing",
+            "to": "output",
+            "label": "bounded WAV"
+          }
+        ],
+        "groups": [],
+        "comments": {
+          "service": [
+            {
+              "id": "tempo-contract",
+              "text": "Rate 1.0 bypasses the transform byte for byte. Listening speed does not change code pace, the reading clock or provider requests. Settings changes affect a later unit.",
+              "ts": 0
+            }
+          ],
+          "client": [
+            {
+              "id": "tempo-retirement",
+              "text": "Cancellation invalidates results immediately but cannot grant a replacement worker slot before actual termination. Unit and part identity reject stale responses.",
+              "ts": 0
+            }
+          ],
+          "dsp": [
+            {
+              "id": "tempo-evidence",
+              "text": "Synthetic tone and offline speech metrics are distinct from human listening validation. The control is experimental; source and packaged review remain release gates.",
               "ts": 0
             }
           ]

@@ -12,6 +12,9 @@ it('stages the shared offline runtime and worker for the companion', async () =>
     expect.objectContaining({ entryPoints: ['../vscode/src/speech_worker.ts'], outfile: '/out/worker.mjs' }),
   );
   expect(mocks.build).toHaveBeenCalledWith(
+    expect.objectContaining({ entryPoints: ['../vscode/src/speech_tempo_worker.ts'], outfile: '/out/tempo_worker.mjs' }),
+  );
+  expect(mocks.build).toHaveBeenCalledWith(
     expect.objectContaining({
       entryPoints: ['../vscode/src/speech_phonemizer_bridge.ts'],
       outfile: '/out/node_modules/phonemizer/index.mjs',
@@ -19,9 +22,9 @@ it('stages the shared offline runtime and worker for the companion', async () =>
   );
 });
 
-it('stages only the worker on unsupported platforms', async () => {
+it('stages both workers on unsupported platforms', async () => {
   mocks.build.mockClear();
   await stageCompanionSpeech({ platform: 'darwin', arch: 'arm64', source: '/modules', destination: '/out' });
-  expect(mocks.build).toHaveBeenCalledTimes(1);
+  expect(mocks.build).toHaveBeenCalledTimes(2);
   expect(mocks.build).toHaveBeenCalledWith(expect.objectContaining({ entryPoints: ['../vscode/src/speech_worker.ts'] }));
 });

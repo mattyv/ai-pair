@@ -16,6 +16,7 @@ import { playDemo } from './demo';
 import { VsCodeEditor } from './editor';
 import { Diagnostics } from './diagnostics';
 import { SpeechService, type SpeechAudioEvent, type SpeechOutput } from './speech_service';
+import { SpeechTempoClient } from './speech_tempo_client';
 import { NativeOutputDriver, discoverOutputs } from './speech_native_output';
 import { SpeechOutputRouter, type OutputDiscovery } from './speech_output_router';
 import { SpeechCredentials } from './speech_credentials';
@@ -24,7 +25,7 @@ import { SpeechOutputPreferences } from './speech_output_preferences';
 import { ElevenLabsClient } from './speech_elevenlabs';
 import { installedSpeechModel, setupSpeech } from './speech_setup';
 import { speechRuntimeAvailable } from './speech_runtime_status';
-import type { SpeechSettings } from './speech_types';
+import { speechListeningRate, type SpeechSettings } from './speech_types';
 import type { SpeechState } from './panel_messages';
 import type { OutsideChanges } from './outside';
 import { watchOutside } from './outside_watch';
@@ -236,6 +237,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     const cloudSpeed: unknown = config().get('speech.elevenLabsSpeed');
     return {
       enabled: enabled === true,
+      listeningSpeed: speechListeningRate(config().get('speech.listeningSpeed')),
       voice,
       speed: speechRate,
       provider: choice === 'elevenlabs' ? 'elevenlabs' : 'kokoro',
@@ -259,12 +261,13 @@ export function activate(context: vscode.ExtensionContext): Api {
       // specs/ProviderChoice.tla, Select: use the latest choice before disk writes settle.
       const restoresVoice = cloudVoiceInvalidated && value.elevenLabsVoice !== '' && catalog.contains(value.elevenLabsVoice);
       const generation = ++speechSaveGeneration;
-      pendingSpeechSettings = { ...value };
+      pendingSpeechSettings = { ...value, listeningSpeed: speechListeningRate(value.listeningSpeed) };
       lastSpeechProvider = value.provider;
       lastSpeechEnabled = value.enabled;
       const saveOperation = speechSaveTail.then(async () => {
         const updates: Array<[string, unknown]> = [
           ['speech.enabled', value.enabled],
+          ['speech.listeningSpeed', speechListeningRate(value.listeningSpeed)],
           ['speech.voice', value.voice],
           ['speech.speed', value.speed],
           ['speech.provider', value.provider],
@@ -541,6 +544,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   });
   speech = new SpeechService({
     runtimeDirectory: path.join(context.extensionPath, 'dist', 'speech'),
+    tempo: new SpeechTempoClient(path.join(context.extensionPath, 'dist', 'speech', 'tempo_worker.mjs')),
     cloud,
     storageDirectory: context.globalStorageUri.fsPath,
     localDesktop: cloudSupported,

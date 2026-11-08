@@ -228,6 +228,18 @@
           "description": "Local speech speed for the next selected narration.",
           "scope": "application"
         },
+        "aiPair.speech.listeningSpeed": {
+          "type": "number",
+          "enum": [
+            0.75,
+            1,
+            1.25,
+            1.5
+          ],
+          "default": 1,
+          "description": "Experimental listening speed for the next selected narration or preview.",
+          "scope": "application"
+        },
         "aiPair.showTerminalsAutomatically": {
           "type": "boolean",
           "default": false,

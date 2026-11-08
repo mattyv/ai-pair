@@ -3,6 +3,15 @@
 // the extension it builds on are fakes, so a test says what each answers and sees what activate asked of it.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+const tempoPaths = vi.hoisted(() => [] as string[]);
+vi.mock('../src/speech_tempo_client', () => ({
+  SpeechTempoClient: class {
+    constructor(path: string) {
+      tempoPaths.push(path);
+    }
+    dispose = vi.fn().mockResolvedValue(undefined);
+  },
+}));
 import * as vscode from 'vscode';
 import { isSavedSession } from '@ai-pair/core';
 import { playDemo } from '../src/demo';
@@ -865,6 +874,7 @@ describe('activate', () => {
       speed: 1,
       elevenLabsVoice: '',
       elevenLabsSpeed: 1,
+      listeningSpeed: 1,
     });
     expect(speech.options.localDesktop).toBe(true);
     fakes.settings.set('speech.enabled', true);
@@ -878,6 +888,7 @@ describe('activate', () => {
       speed: 1.25,
       elevenLabsVoice: '',
       elevenLabsSpeed: 1,
+      listeningSpeed: 1,
     });
     fakes.settings.set('speech.voice', 'invalid');
     fakes.settings.set('speech.speed', 9);
@@ -888,6 +899,7 @@ describe('activate', () => {
       speed: 9,
       elevenLabsVoice: '',
       elevenLabsSpeed: 1,
+      listeningSpeed: 1,
     });
     fakes.settings.set('speech.enabled', false);
     changed('speech', 'speech.enabled');
@@ -1747,4 +1759,25 @@ it('does not refresh workspace credentials when a pending secret change resolves
   await h.api.ready;
   expect(h.context.secrets.get).not.toHaveBeenCalled();
   expect(fakes.providerRegistered).not.toHaveBeenCalled();
+});
+
+it('defaults invalid listening speed and persists it without changing synthesis speed', async () => {
+  const h = activated();
+  const speech = fakes.made.speech.at(-1);
+  if (!speech) throw new Error('Missing speech service');
+  const settings = h.panel.wiring.speech.settings;
+  expect(settings.get()).toMatchObject({ listeningSpeed: 1, speed: 1, elevenLabsSpeed: 1 });
+  fakes.settings.set('speech.listeningSpeed', 9);
+  expect(settings.get()).toMatchObject({ listeningSpeed: 1 });
+  settings.set({ ...settings.get(), listeningSpeed: 1.25 });
+  expect(speech.cancel).not.toHaveBeenCalled();
+  await vi.waitFor(() => {
+    expect(fakes.updated).toContainEqual(['speech.listeningSpeed', 1.25, 1]);
+  });
+});
+
+it('constructs the legacy listening-speed worker from the fixed extension path', () => {
+  tempoPaths.length = 0;
+  activated();
+  expect(tempoPaths).toEqual(['/ext/dist/speech/tempo_worker.mjs']);
 });

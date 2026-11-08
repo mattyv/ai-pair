@@ -3,7 +3,8 @@ import { mock } from 'vitest-mock-extended';
 import { installedSpeechModel } from '../src/speech_setup';
 import { speechRuntimeAvailable } from '../src/speech_runtime_status';
 import { SpeechService, type SpeechOutput } from '../src/speech_service';
-import type { ElevenLabsSpeechPort } from '../src/speech_types';
+import type { ElevenLabsSpeechPort, SpeechSettings } from '../src/speech_types';
+import { decodeSpeechWav, encodeTempoWav } from '../src/speech_tempo_pcm';
 
 const fake = vi.hoisted(() => {
   class Worker {
@@ -33,6 +34,7 @@ const fake = vi.hoisted(() => {
 vi.mock('node:worker_threads', () => ({ Worker: fake.Worker }));
 vi.mock('../src/speech_setup', () => ({ installedSpeechModel: vi.fn() }));
 vi.mock('../src/speech_runtime_status', () => ({ speechRuntimeAvailable: vi.fn() }));
+vi.mock('../src/speech_tempo_pcm', () => ({ decodeSpeechWav: vi.fn(), encodeTempoWav: vi.fn() }));
 vi.mock('../src/speech_segments', () => ({
   speechSegments: vi.fn((text: string) => text.match(/[^.!?]+[.!?]\s*/gu) ?? [text]),
 }));
@@ -1708,4 +1710,249 @@ it('SentencePipeline does not synthesize if a ready diagnostic cancels the unit'
   worker.emit('message', { type: 'ready' });
   await gate;
   expect(worker.postMessage).toHaveBeenCalledTimes(1);
+});
+
+function tempoHarness(listeningSpeed: number, hasTempo = true) {
+  const settings: SpeechSettings = {
+    enabled: true,
+    provider: 'elevenlabs',
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: 'voice',
+    elevenLabsSpeed: 1.2,
+    listeningSpeed,
+  };
+  const wav = new Uint8Array(44);
+  const synthesize = vi.fn().mockResolvedValue({ wav, durationMs: 1000 });
+  const transform = vi.fn();
+  const dispose = vi.fn().mockResolvedValue(undefined);
+  const output: SpeechOutput = {
+    play: vi.fn(() => 7),
+    control: vi.fn<SpeechOutput['control']>(),
+    status: vi.fn<SpeechOutput['status']>(),
+  };
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    settings: () => settings,
+    output,
+    cloud: { synthesize, voices: vi.fn() },
+    ...(hasTempo ? { tempo: { transform, dispose } } : {}),
+  });
+  return { service, settings, wav, synthesize, transform, dispose, output };
+}
+
+describe('listening-speed processing', () => {
+  beforeEach(() => {
+    vi.useRealTimers();
+    vi.mocked(decodeSpeechWav).mockReturnValue(new Int16Array([1, -1]));
+    vi.mocked(encodeTempoWav).mockReturnValue({ wav: new Uint8Array(48), durationMs: 601 });
+  });
+  it('snapshots listening speed, transforms once, and uses transformed duration without a second cloud request', async () => {
+    const { service, settings, synthesize, transform, output } = tempoHarness(1.25);
+    const pending = Promise.withResolvers<Int16Array>();
+    transform.mockReturnValueOnce(pending.promise);
+    const finished = service.speak('Selected text.');
+    await vi.waitFor(() => {
+      expect(transform).toHaveBeenCalledOnce();
+    });
+    settings.listeningSpeed = 1.5;
+    expect(transform.mock.calls[0]?.[0]).toMatchObject({ unitId: 1, part: 0, rate: 1.25 });
+    expect(output.play).not.toHaveBeenCalled();
+    pending.resolve(new Int16Array([1, -1, 1]));
+    await vi.waitFor(() => {
+      expect(output.play).toHaveBeenCalledWith(1, expect.any(Uint8Array), 601);
+    });
+    expect(encodeTempoWav).toHaveBeenCalledWith(expect.any(Int16Array), true);
+    expect(synthesize).toHaveBeenCalledOnce();
+    service.audioEvent({ id: 1, pageId: 7, event: 'started' });
+    service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+    await finished;
+  });
+
+  it('keeps normal-speed provider WAV byte-identical and makes no transform or extra cloud request', async () => {
+    const { service, wav, synthesize, transform, output } = tempoHarness(1);
+    const finished = service.speak('Selected text.');
+    await vi.waitFor(() => {
+      expect(output.play).toHaveBeenCalledWith(1, wav, 1000);
+    });
+    expect(transform).not.toHaveBeenCalled();
+    expect(decodeSpeechWav).not.toHaveBeenCalled();
+    expect(synthesize).toHaveBeenCalledOnce();
+    service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+    await finished;
+  });
+
+  it('ignores a canceled transform result and never plays it', async () => {
+    const { service, transform, output } = tempoHarness(1.25);
+    const pending = Promise.withResolvers<Int16Array>();
+    transform.mockReturnValueOnce(pending.promise);
+    const finished = service.speak('Selected text.');
+    await vi.waitFor(() => {
+      expect(transform).toHaveBeenCalledOnce();
+    });
+    service.cancel();
+    await finished;
+    pending.resolve(new Int16Array([1, -1]));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(output.play).not.toHaveBeenCalled();
+    expect(encodeTempoWav).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when transformed audio exceeds the complete-unit duration limit', async () => {
+    const { service, transform, output } = tempoHarness(0.75);
+    transform.mockResolvedValueOnce(new Int16Array([1, -1]));
+    vi.mocked(encodeTempoWav).mockReturnValueOnce({ wav: new Uint8Array(48), durationMs: 40_601 });
+    await service.speak('Selected text.');
+    expect(output.play).not.toHaveBeenCalled();
+    expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.any(String));
+  });
+
+  it('fails closed and releases the unit when the tempo worker rejects', async () => {
+    const { service, transform, output } = tempoHarness(1.5);
+    transform.mockRejectedValueOnce(new Error('worker failed'));
+    await service.speak('Selected text.');
+    expect(output.play).not.toHaveBeenCalled();
+    expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.any(String));
+    service.dispose();
+  });
+
+  it('reports unavailable without starting playback when the tempo worker is absent', async () => {
+    const { service, output } = tempoHarness(1.25, false);
+    await service.speak('Selected text.');
+    expect(output.play).not.toHaveBeenCalled();
+    expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.any(String));
+  });
+
+  it.each(['provider waveform', 'worker waveform'] as const)('fails safely on malformed %s', async (which) => {
+    const { service, transform, output } = tempoHarness(1.25);
+    transform.mockResolvedValue(new Int16Array([1, -1]));
+    if (which === 'provider waveform') {
+      vi.mocked(decodeSpeechWav).mockImplementationOnce(() => {
+        throw new Error('bad waveform');
+      });
+    } else {
+      vi.mocked(encodeTempoWav).mockImplementationOnce(() => {
+        throw new Error('bad worker result');
+      });
+    }
+    await service.speak('Selected text.');
+    expect(output.play).not.toHaveBeenCalled();
+    expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.any(String));
+  });
+
+  it('ignores rejection from a tempo request after cancellation', async () => {
+    const { service, transform, output } = tempoHarness(1.25);
+    const pending = Promise.withResolvers<Int16Array>();
+    transform.mockReturnValueOnce(pending.promise);
+    const finished = service.speak('Selected text.');
+    await vi.waitFor(() => {
+      expect(transform).toHaveBeenCalledOnce();
+    });
+    service.cancel();
+    pending.reject(new Error('late failure'));
+    await finished;
+    await Promise.resolve();
+    expect(output.play).not.toHaveBeenCalled();
+  });
+
+  it('does not report a synchronous worker failure after reentrant cancellation', async () => {
+    const { service, transform, output } = tempoHarness(1.25);
+    transform.mockImplementationOnce(() => {
+      service.cancel();
+      throw new Error('failed after cancellation');
+    });
+    await service.speak('Selected text.');
+    expect(output.status).not.toHaveBeenCalledWith(1, 'unavailable', expect.any(String));
+  });
+
+  it('absorbs tempo disposal failure after stopping the service', async () => {
+    const { service, dispose } = tempoHarness(1.25);
+    dispose.mockRejectedValueOnce(new Error('worker already failed'));
+    service.dispose();
+    await Promise.resolve();
+  });
+
+  it('keeps a completed transform silent while paused and plays it on resume', async () => {
+    const { service, transform, output } = tempoHarness(1.25);
+    const pending = Promise.withResolvers<Int16Array>();
+    transform.mockReturnValueOnce(pending.promise);
+    const finished = service.speak('Selected text.');
+    await vi.waitFor(() => {
+      expect(transform).toHaveBeenCalledOnce();
+    });
+    service.pause();
+    pending.resolve(new Int16Array([1, -1]));
+    await vi.waitFor(() => {
+      expect(encodeTempoWav).toHaveBeenCalledOnce();
+    });
+    expect(output.play).not.toHaveBeenCalled();
+    service.resume();
+    expect(output.play).toHaveBeenCalledWith(1, expect.any(Uint8Array), 601);
+    service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+    await finished;
+  });
+
+  it('does not start a third synthesis while the second part is still transforming', async () => {
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+    Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
+    const second = Promise.withResolvers<Int16Array>();
+    const transform = vi
+      .fn()
+      .mockResolvedValueOnce(new Int16Array([1, -1]))
+      .mockReturnValueOnce(second.promise);
+    const output: SpeechOutput = {
+      parts: true,
+      play: vi.fn(() => 7),
+      control: vi.fn<SpeechOutput['control']>(),
+      status: vi.fn<SpeechOutput['status']>(),
+    };
+    const service = new SpeechService({
+      runtimeDirectory: '/runtime',
+      storageDirectory: '/storage',
+      localDesktop: true,
+      output,
+      tempo: { transform, dispose: vi.fn().mockResolvedValue(undefined) },
+      settings: () => ({
+        enabled: true,
+        provider: 'kokoro',
+        voice: 'af_heart',
+        speed: 1,
+        elevenLabsVoice: '',
+        elevenLabsSpeed: 1,
+        listeningSpeed: 1.25,
+      }),
+    });
+    const finished = service.speak('First sentence. Second sentence. Third sentence.');
+    await vi.waitFor(() => {
+      expect(fake.Worker.made.at(-1)).toBeDefined();
+    });
+    const worker = fake.Worker.made.at(-1);
+    if (!worker) throw new Error('Missing worker');
+    worker.emit('message', { type: 'ready' });
+    worker.emit('message', { type: 'audio', id: 1, part: 0, wav: new Uint8Array(44), durationMs: 1000 });
+    await vi.waitFor(() => {
+      expect(output.play).toHaveBeenCalledTimes(1);
+    });
+    service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'started' });
+    expect(worker.postMessage).toHaveBeenCalledTimes(3);
+    worker.emit('message', { type: 'audio', id: 1, part: 1, wav: new Uint8Array(44), durationMs: 1000 });
+    await vi.waitFor(() => {
+      expect(transform).toHaveBeenCalledTimes(2);
+    });
+    service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'ended' });
+    expect(worker.postMessage).toHaveBeenCalledTimes(3);
+    expect(output.play).toHaveBeenCalledTimes(1);
+    second.resolve(new Int16Array([1, -1]));
+    await vi.waitFor(() => {
+      expect(output.play).toHaveBeenCalledTimes(2);
+    });
+    service.audioEvent({ id: 1, pageId: 7, part: 1, event: 'started' });
+    expect(worker.postMessage).toHaveBeenCalledTimes(4);
+    service.cancel();
+    await finished;
+    service.dispose();
+  });
 });

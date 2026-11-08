@@ -120,7 +120,7 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
           <option value="bm_george">George</option>
         </select>
       </label>
-      <label class="settings-field">Speech speed
+      <label class="settings-field">Synthesis speed
         <select data-ui="speech-speed">
           <option value="0.75">0.75x</option>
           <option value="1" selected>1.0x</option>
@@ -150,13 +150,19 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
           <button type="button" data-ui="speech-voices-load" class="soft">Load voices</button>
           <button type="button" data-ui="speech-voices-more" class="soft" hidden>Load more</button>
         </div>
-        <label class="settings-field">Speech speed
+        <label class="settings-field">Synthesis speed
           <select data-ui="speech-cloud-speed">
             <option value="0.75">0.75x</option><option value="1" selected>1.0x</option>
             <option value="1.2">1.2x</option>
           </select>
         </label>
       </div>
+      <label class="settings-field">Listening speed (experimental)
+        <select data-ui="speech-listening-speed">
+          <option value="0.75">0.75x</option><option value="1" selected>1.0x</option>
+          <option value="1.25">1.25x</option><option value="1.5">1.5x</option>
+        </select>
+      </label>
       <p>Preview: ${SPEECH_PREVIEW_TEXT}</p>
       <div class="settings-actions">
         <button type="button" data-ui="speech-preview" class="soft" disabled>Preview voice</button>

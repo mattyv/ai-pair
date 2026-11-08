@@ -197,13 +197,13 @@ describe('remote narration port', () => {
 it('keeps a long multipart unit paused and retains its slot after timeout until matching retirement', async () => {
   vi.useFakeTimers();
   const send = vi.fn<(_: unknown) => void>();
-  const port = new RemoteNarration({ epoch: 'connection', page: () => 4, timeoutMs: 270_600, send, nextSequence: sequence() });
+  const port = new RemoteNarration({ epoch: 'connection', page: () => 4, timeoutMs: 390_600, send, nextSequence: sequence() });
   const job = port.speak('First. Second. Third. Fourth.');
   await vi.advanceTimersByTimeAsync(120_000);
   port.pause();
   await vi.advanceTimersByTimeAsync(300_000);
   port.resume();
-  await vi.advanceTimersByTimeAsync(150_600);
+  await vi.advanceTimersByTimeAsync(270_600);
   await job;
   await port.speak('Must wait.');
   expect(send.mock.calls.map(([frame]) => frame)).toMatchObject([

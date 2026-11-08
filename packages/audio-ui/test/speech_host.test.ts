@@ -1,4 +1,13 @@
 import { beforeEach, expect, it, vi } from 'vitest';
+const tempoPaths = vi.hoisted(() => [] as string[]);
+vi.mock('../../vscode/src/speech_tempo_client', () => ({
+  SpeechTempoClient: class {
+    constructor(path: string) {
+      tempoPaths.push(path);
+    }
+    dispose = vi.fn().mockResolvedValue(undefined);
+  },
+}));
 import type * as vscode from 'vscode';
 import type { AudioAdapter } from '../../audio-native/src';
 import type { SpeechDiagnosticEvent } from '../../vscode/src/diagnostics';
@@ -259,7 +268,7 @@ it('keeps the latest setting while serialized writes are pending and rolls back 
   });
   pending.resolve();
   await vi.waitFor(() => {
-    expect(fakes.update).toHaveBeenCalledTimes(12);
+    expect(fakes.update).toHaveBeenCalledTimes(14);
   });
   expect(panel.showSpeechSettings).toHaveBeenCalledTimes(1);
   fakes.update.mockRejectedValueOnce(new Error('private'));
@@ -392,6 +401,7 @@ it('reads local settings, previews installed models, and keeps cloud unavailable
     provider: 'elevenlabs',
     elevenLabsVoice: 'voice',
     elevenLabsSpeed: 1.1,
+    listeningSpeed: 1,
   });
   expect(host.panelSpeech.cloudSupported()).toBe(false);
   expect(host.panelSpeech.supported()).toBe(false);
@@ -417,14 +427,14 @@ it('restores a newly validated voice and ignores a superseded failed save', asyn
   const first = { ...host.panelSpeech.settings.get(), enabled: true };
   host.panelSpeech.settings.set(first);
   await vi.waitFor(() => {
-    expect(fakes.update).toHaveBeenCalledTimes(7);
+    expect(fakes.update).toHaveBeenCalledTimes(8);
   });
   fakes.contains.mockReturnValue(true);
   const second = { ...first, elevenLabsVoice: 'new_voice' };
   host.panelSpeech.settings.set(second);
   blocked.reject(new Error('old failure'));
   await vi.waitFor(() => {
-    expect(fakes.update).toHaveBeenCalledTimes(13);
+    expect(fakes.update).toHaveBeenCalledTimes(15);
   });
   expect(fakes.errorMessage).not.toHaveBeenCalled();
   fakes.config.set('speech.elevenLabsVoice', 'new_voice');
@@ -562,5 +572,26 @@ it('records preview failure and ignores an older preview settlement', async () =
   expect(diagnostic).toHaveBeenCalledWith({ kind: 'speech', event: 'runtime', provider: 'kokoro', phase: 'ready' });
   newer.resolve();
   await second;
+  host.dispose();
+});
+
+it('defaults invalid listening speed and persists it independently of synthesis speed', async () => {
+  const { host } = harness();
+  expect(host.panelSpeech.settings.get()).toMatchObject({ listeningSpeed: 1, speed: 1, elevenLabsSpeed: 1 });
+  fakes.config.set('speech.listeningSpeed', 9);
+  expect(host.panelSpeech.settings.get()).toMatchObject({ listeningSpeed: 1 });
+  const current = host.panelSpeech.settings.get();
+  host.panelSpeech.settings.set({ ...current, listeningSpeed: 1.25 });
+  expect(fakes.cancel).not.toHaveBeenCalled();
+  await vi.waitFor(() => {
+    expect(fakes.update).toHaveBeenCalledWith('speech.listeningSpeed', 1.25, 1);
+  });
+  host.dispose();
+});
+
+it('constructs the listening-speed worker from the fixed local extension path', () => {
+  tempoPaths.length = 0;
+  const { host } = harness();
+  expect(tempoPaths).toEqual(['/extension/dist/speech/tempo_worker.mjs']);
   host.dispose();
 });

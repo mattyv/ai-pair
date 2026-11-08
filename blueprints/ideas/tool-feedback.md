@@ -154,3 +154,20 @@ The programmer reports that `speak: true` plays narration aloud. The 45-word
 limit and the one-spoken-message-per-batch limit were enforced, and typing
 appeared to wait for speech to finish. These observations do not establish
 the cause of B10.
+
+## Speech follow-ups, 2026-11-08
+
+The programmer authorized all three planned speech increments, optional music
+ducking, and the final merge to main with removal of unused local and origin
+branches after required verification. Terra implements and Astra reviews.
+
+| Request | Current checkpoint | Remaining evidence |
+|---|---|---|
+| Sentence pipelining | Source approved; pipeline GitHub build green; installed three-sentence Kokoro unit completed on a private null sink. | Final combined package, boundary timing and platform/device acceptance. |
+| Separate listening speed | Experimental setting and local PCM worker implemented; focused and composed tests pass. | Final solitary coverage, Astra source review, package verification and listening validation. |
+| Warm local worker protocol | Model and ownership contract in progress. | Reviewed model, implementation, tests and packaged reuse proof. |
+| Music ducking | Private PipeWire experiments rejected shared soft-volume writes and generic loopback restoration. | A verified gain mechanism that preserves user volume and routing under failure. |
+| Merge and branch cleanup | Explicitly authorized. | Required integration coverage, completed feature review and final package checks; preserve unmerged work and host-only worktrees. |
+
+Ducking is not yet an advertised capability. The rejected experiments and their
+limits are recorded in `blueprints/ideas/local-music-ducking.md`.

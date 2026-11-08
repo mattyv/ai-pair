@@ -33,4 +33,9 @@ export async function stageCompanionSpeech(options: CompanionSpeechStageOptions)
     external: ['kokoro-js', '@huggingface/transformers', 'phonemizer'],
     outfile: path.join(options.destination, 'worker.mjs'),
   });
+  await esbuild.build({
+    ...common,
+    entryPoints: ['../vscode/src/speech_tempo_worker.ts'],
+    outfile: path.join(options.destination, 'tempo_worker.mjs'),
+  });
 }

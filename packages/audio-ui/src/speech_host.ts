@@ -10,8 +10,9 @@ import { ElevenLabsClient } from '../../vscode/src/speech_elevenlabs';
 import { SpeechOutputPreferences, type OutputPreferenceView } from '../../vscode/src/speech_output_preferences';
 import { speechRuntimeAvailable } from '../../vscode/src/speech_runtime_status';
 import { SpeechService } from '../../vscode/src/speech_service';
+import { SpeechTempoClient } from '../../vscode/src/speech_tempo_client';
 import { installedSpeechModel, setupSpeech } from '../../vscode/src/speech_setup';
-import type { SpeechSettings } from '../../vscode/src/speech_types';
+import { speechListeningRate, type SpeechSettings } from '../../vscode/src/speech_types';
 import { CompanionOutput } from './companion_output';
 
 /** The local panel operations used by the speech host. */
@@ -110,6 +111,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     const cloudSpeed: unknown = config().get('speech.elevenLabsSpeed');
     return {
       enabled: enabled === true,
+      listeningSpeed: speechListeningRate(config().get('speech.listeningSpeed')),
       voice: typeof voice === 'string' ? voice : 'af_heart',
       speed: typeof speed === 'number' ? speed : 1,
       provider: provider === 'elevenlabs' ? 'elevenlabs' : 'kokoro',
@@ -132,11 +134,12 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
       const restoresVoice = invalidVoice && value.elevenLabsVoice !== '' && catalog.contains(value.elevenLabsVoice);
       // specs/ProviderChoice.tla, Select: the latest local choice takes effect before persistence.
       const current = ++generation;
-      pending = { ...value };
+      pending = { ...value, listeningSpeed: speechListeningRate(value.listeningSpeed) };
       last = value;
       const save = tail.then(async () => {
         const updates: Array<[string, unknown]> = [
           ['speech.enabled', value.enabled],
+          ['speech.listeningSpeed', speechListeningRate(value.listeningSpeed)],
           ['speech.voice', value.voice],
           ['speech.speed', value.speed],
           ['speech.provider', value.provider],
@@ -298,6 +301,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
   });
   speech = new SpeechService({
     runtimeDirectory,
+    tempo: new SpeechTempoClient(path.join(runtimeDirectory, 'tempo_worker.mjs')),
     storageDirectory: context.globalStorageUri.fsPath,
     localDesktop: desktop,
     kokoroSupported: platform,

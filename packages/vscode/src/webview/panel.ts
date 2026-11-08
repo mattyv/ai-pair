@@ -1,3 +1,4 @@
+import { SPEECH_LISTENING_RATES } from '../speech_tempo';
 // The narration panel's page script, bundled for the webview as dist/panel.js (#6). The markup and
 // styles are in panel_html.ts; the messages in panel_messages.ts.
 
@@ -87,6 +88,7 @@ const ui = {
   speechVoicesMore: $('speech-voices-more', HTMLButtonElement),
   speechVoice: $('speech-voice', HTMLSelectElement),
   speechSpeed: $('speech-speed', HTMLSelectElement),
+  speechListeningSpeed: $('speech-listening-speed', HTMLSelectElement),
   speechSetup: $('speech-setup', HTMLButtonElement),
   speechPreview: $('speech-preview', HTMLButtonElement),
   speechStop: $('speech-stop', HTMLButtonElement),
@@ -879,7 +881,14 @@ function isSpeechVoice(value: string): value is SpeechVoice {
 function saveSpeechSettings(): void {
   const voice = ui.speechVoice.value;
   const speed = Number(ui.speechSpeed.value);
-  if (!isSpeechVoice(voice) || !SPEECH_SPEEDS.some((option) => option === speed)) return;
+  const listeningSpeed = Number(ui.speechListeningSpeed.value);
+  if (
+    !isSpeechVoice(voice) ||
+    !SPEECH_SPEEDS.some((option) => option === speed) ||
+    !SPEECH_LISTENING_RATES.some((option) => option === listeningSpeed)
+  ) {
+    return;
+  }
   if (speechEnabled && !ui.speechEnabled.checked) stopSpeechLocally();
   speechEnabled = ui.speechEnabled.checked;
   vscode.postMessage({
@@ -888,6 +897,7 @@ function saveSpeechSettings(): void {
       enabled: speechEnabled,
       voice,
       speed,
+      listeningSpeed,
       provider: speechProvider,
       elevenLabsVoice: cloudVoice,
       elevenLabsSpeed: cloudSpeed,
@@ -988,6 +998,7 @@ ui.speechVoicesMore.addEventListener('click', () => {
 ui.speechEnabled.addEventListener('change', saveSpeechSettings);
 ui.speechVoice.addEventListener('change', saveSpeechSettings);
 ui.speechSpeed.addEventListener('change', saveSpeechSettings);
+ui.speechListeningSpeed.addEventListener('change', saveSpeechSettings);
 ui.speechSetup.addEventListener('click', () => {
   vscode.postMessage({ type: 'speechSetup' });
 });
@@ -1049,6 +1060,7 @@ function handle(message: ToPanel): void {
       ui.speechEnabled.checked = message.value.enabled;
       ui.speechVoice.value = message.value.voice;
       ui.speechSpeed.value = String(message.value.speed);
+      ui.speechListeningSpeed.value = String(message.value.listeningSpeed ?? 1);
       return;
     case 'speechCloudSupport':
       cloudSupported = message.supported;

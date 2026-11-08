@@ -83,6 +83,7 @@ Last updated: css, 2026-11-08.
 | `packages/audio-ui/test/sentence_pipeline.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/audio-ui/test/speech_host.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/audio-ui/test/speech_host.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/audio-ui/test/speech_tempo_composed.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/audio-ui/test/worker_diagnostics.integration.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/core/src/bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/config.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
@@ -195,6 +196,12 @@ Last updated: css, 2026-11-08.
 | `packages/vscode/src/speech_service.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_synthesis.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_tempo.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_tempo_client.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_tempo_messages.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_tempo_pcm.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_tempo_worker.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_tempo_worker_host.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_types.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_waveform.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_worker.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -216,6 +223,7 @@ Last updated: css, 2026-11-08.
 | `packages/vscode/test/diagnostics.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/editor.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/extension.test.ts` | TypeScript | test | test | test | test | - | test |
+| `packages/vscode/test/fixtures/tempo_schema_fake.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/integration.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/integration_paths.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/launcher.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
@@ -257,6 +265,14 @@ Last updated: css, 2026-11-08.
 | `packages/vscode/test/speech_smoke_integration.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_smoke_integration.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_synthesis.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_tempo.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_tempo_client.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_tempo_client.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_tempo_framing.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_tempo_messages.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_tempo_pcm.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_tempo_worker.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_tempo_worker_host.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_waveform.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_worker.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_worker_host.test.ts` | TypeScript | test | - | test | - | - | test |
@@ -353,10 +369,6 @@ Last updated: css, 2026-11-08.
 | `specs/MultipartAudioLease.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/MultipartAudioLease.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/MultipartAudioLease_Healthy.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/MultipartAudioLease_TTrace_1794100096.tla` | TLA+ | - | - | - | - | - | - |
-| `specs/MultipartAudioLease_TTrace_1794100103.tla` | TLA+ | - | - | - | - | - | - |
-| `specs/MultipartAudioLease_TTrace_1794100249.tla` | TLA+ | - | - | - | - | - | - |
-| `specs/MultipartAudioLease_TTrace_1794100256.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/Narration.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Narration.tla` | TLA+ | - | - | 20 of 20 actions | - | - | - |
 | `specs/Navigator.cfg` | TLC config | - | - | - | - | - | - |
@@ -452,6 +464,11 @@ Last updated: css, 2026-11-08.
 | `specs/Typing.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/TypingEol.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/TypingEol.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
+| `specs/WarmSynthesisWorker.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/WarmSynthesisWorker.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/WarmSynthesisWorker_Cancellation.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/WarmSynthesisWorker_Healthy.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/WarmSynthesisWorker_Retirement.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Wire.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Wire.tla` | TLA+ | - | - | 15 of 15 actions | - | - | - |
 | `specs/check.sh` | Shell | - | - | - | - | - | - |

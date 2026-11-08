@@ -2,6 +2,7 @@ import { CommandChannel, LOCAL_AUDIO_VERSION, type LocalAudioFrame, type LocalPa
 import { PanelUpdateSender } from './panel_update_sender';
 import { RemoteNarration } from './remote_narration';
 import { WorkspacePanelBridge } from './workspace_panel_bridge';
+import { SPEECH_TEMPO_TIMEOUT_MS } from './speech_tempo_client';
 
 /** Interval between connection lease heartbeats. */
 const HEARTBEAT_MS = 3000;
@@ -23,11 +24,17 @@ const PART_GRACE_MS = 5000;
 const TRANSPORT_MARGIN_MS = 25_000;
 /**
  * Unpaused upper backstop for admission, load, every inference and start,
- * aggregate audio, each playback grace and transport. RemoteNarration retains
+ * aggregate audio, each tempo transform, each playback grace and transport. RemoteNarration retains
  * ownership after this timer settles the caller until terminal acknowledgement.
  */
 const NARRATION_TIMEOUT_MS =
-  ADMISSION_MS + STAGE_MS + MAX_PARTS * STAGE_MS * 2 + MAX_AUDIO_MS + MAX_PARTS * PART_GRACE_MS + TRANSPORT_MARGIN_MS;
+  ADMISSION_MS +
+  STAGE_MS +
+  MAX_PARTS * STAGE_MS * 2 +
+  MAX_PARTS * SPEECH_TEMPO_TIMEOUT_MS +
+  MAX_AUDIO_MS +
+  MAX_PARTS * PART_GRACE_MS +
+  TRANSPORT_MARGIN_MS;
 
 /** Workspace panel operations needed by the companion connection. */
 export interface WorkspaceSessionPanel {

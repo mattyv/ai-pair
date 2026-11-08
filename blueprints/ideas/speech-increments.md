@@ -290,3 +290,28 @@ source approval from packaged GUI, platform/device and real-account evidence. No
 deadline estimate is reliable until the first multi-part reservation prototype
 establishes its boundary costs; this is staged feature work, not a small
 preference-only patch.
+
+## Sentence pipeline checkpoint, 2026-11-08
+
+Astra approved the sentence scheduler and retained multipart lease, then
+independently reviewed the narrow throwing-observer cleanup correction. The
+full pre-correction unit run passed 1,801 tests with all measured source metrics
+at 100 percent; the correction separately passed 19 focused/composed tests.
+These results do not replace the still-failing legacy integration coverage gate.
+
+A disposable installed 0.20.0 pair exercised a 23-word, three-sentence narration
+through the public controller, real Kokoro runtime and private PipeWire null
+sink. The selected unit started and ended naturally. Its fixture observed
+first start at 3,472 ms and final completion at 14,531 ms on this VM. No
+whole-waveform baseline or per-part timing was exposed, so this does not
+establish a latency improvement or measure boundary gaps. The package preceded
+the observer-exception correction; the final combined package requires another
+verification run. No ElevenLabs request or host audio device was used.
+
+The first harness run used an expired private PipeWire server. The server was
+restarted with hardware monitors disabled; its graph contained only dummy
+drivers and the test null sink, with zero devices. A second run still failed
+before starting speech. A subsequent probe with a bounded initial delay passed;
+initial discovery timing is a candidate explanation, not a confirmed cause.
+The successful probe preserved all private environment guards and made one
+narration attempt.

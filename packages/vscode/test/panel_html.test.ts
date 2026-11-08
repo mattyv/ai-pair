@@ -198,3 +198,10 @@ it('offers explicit cloud controls without exposing a key input', () => {
   expect(markup).toContain('Selected narration and voice previews are sent to ElevenLabs');
   expect(markup).not.toContain('type="password"');
 });
+
+it('marks listening speed experimental in the visible settings', () => {
+  const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js');
+  const page = new window.DOMParser().parseFromString(html, 'text/html');
+  const label = page.querySelector('[data-ui="speech-listening-speed"]')?.closest('label');
+  expect(label?.textContent).toContain('Listening speed (experimental)');
+});

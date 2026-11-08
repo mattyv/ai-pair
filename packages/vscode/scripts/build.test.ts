@@ -14,6 +14,7 @@ vi.mock('node:fs', () => ({
     directory === 'dist/speech'
       ? [
           { name: 'worker.mjs', isDirectory: () => false, isFile: () => true },
+          { name: 'tempo_worker.mjs', isDirectory: () => false, isFile: () => true },
           { name: 'node_modules', isDirectory: () => true, isFile: () => false },
           { name: 'link', isDirectory: () => false, isFile: () => false },
         ]
@@ -100,6 +101,12 @@ it('bundles the extension, the page script, the page styles, and the relay, with
       entryPoints: ['src/speech_worker.ts'],
       external: ['kokoro-js', '@huggingface/transformers', 'phonemizer'],
       outfile: 'dist/speech/worker.mjs',
+    },
+    {
+      ...common,
+      format: 'esm',
+      entryPoints: ['src/speech_tempo_worker.ts'],
+      outfile: 'dist/speech/tempo_worker.mjs',
     },
     {
       ...common,
@@ -198,4 +205,25 @@ it('keeps unsupported builds text-only without bundling the native bridge', asyn
 it('does not read or follow a non-file entry in the staged runtime', async () => {
   await built();
   expect(fs.readFileSync).not.toHaveBeenCalledWith('dist/speech/link');
+});
+
+it('bundles the tempo worker into the hashed speech runtime', async () => {
+  await built();
+  expect(builds()).toContainEqual(
+    expect.objectContaining({ entryPoints: ['src/speech_tempo_worker.ts'], outfile: 'dist/speech/tempo_worker.mjs' }),
+  );
+});
+
+it('changes the build ID when the staged tempo worker changes', async () => {
+  vi.mocked(fs.readFileSync).mockImplementation((file) =>
+    String(file) === 'dist/speech/tempo_worker.mjs' ? 'first tempo worker' : JSON.stringify({ version: '1.2.3' }),
+  );
+  await built();
+  const first = builds().at(-1)?.define?.AI_PAIR_BUILD_ID;
+  vi.mocked(esbuild.build).mockClear();
+  vi.mocked(fs.readFileSync).mockImplementation((file) =>
+    String(file) === 'dist/speech/tempo_worker.mjs' ? 'changed tempo worker' : JSON.stringify({ version: '1.2.3' }),
+  );
+  await built();
+  expect(builds().at(-1)?.define?.AI_PAIR_BUILD_ID).not.toBe(first);
 });

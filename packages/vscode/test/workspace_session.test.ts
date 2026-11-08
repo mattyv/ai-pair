@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LocalAudioFrame } from '@ai-pair/protocol';
 import { WorkspaceSession } from '../src/workspace_session';
+import { SPEECH_TEMPO_TIMEOUT_MS } from '../src/speech_tempo_client';
 
 const fake = vi.hoisted(() => ({
   channelOptions: undefined as import('@ai-pair/protocol').CommandChannelOptions<import('@ai-pair/protocol').LocalAudioFrame> | undefined,
@@ -140,7 +141,7 @@ describe('workspace session wiring', () => {
   });
 });
 
-it('allows all four bounded synthesis and playback stages before the remote backstop', () => {
+it('allows all four bounded synthesis, transform and playback stages before the remote backstop', () => {
   const session = new WorkspaceSession({
     epoch: 'epoch',
     panel: {
@@ -151,7 +152,7 @@ it('allows all four bounded synthesis and playback stages before the remote back
     send: vi.fn().mockResolvedValue(undefined),
     lost: vi.fn<() => void>(),
   });
-  const worstCaseMs = 5000 + 20_000 + 4 * 20_000 + 4 * 20_000 + 40_600 + 4 * 5000;
+  const worstCaseMs = 5000 + 20_000 + 4 * 20_000 + 4 * SPEECH_TEMPO_TIMEOUT_MS + 4 * 20_000 + 40_600 + 4 * 5000;
   expect(fake.narrationOptions?.timeoutMs).toBeGreaterThanOrEqual(worstCaseMs + 10_000);
   session.dispose();
 });

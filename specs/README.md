@@ -105,6 +105,14 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `LocalAudioOwnership.cfg` | local ownership, directional sequences and lease loss | holds | 3,632 |
 | `PanelPlacement.cfg` | bounded prepare, irrevocable commit and fallback | holds | 10 |
 | `SentencePipeline.cfg` | two units, three parts, pause, cancel and late callbacks | holds | 2,242 |
+| `SpeechTempo.cfg` | two units, two parts, rate changes and stale results | holds | 868 |
+| `SpeechTempo_Healthy.cfg` | two fair completed units | holds | 17 |
+| `SpeechTempo_Canceled.cfg` | fair retirement after cancellation or timeout | holds | 11 |
+| `WarmSynthesisWorker.cfg` | two epochs, two units and parts, stale and late completions, cancel between parts | holds | 440 |
+| `WarmSynthesisWorker_Healthy.cfg` | two units reuse one healthy worker | holds | 11 |
+| `WarmSynthesisWorker_Cancellation.cfg` | canceled inference returns and is discarded | holds | 440 |
+| `WarmSynthesisWorker_Watchdog.cfg` | canceled inference may never return; watchdog retires it | holds | 440 |
+| `WarmSynthesisWorker_Retirement.cfg` | fair physical worker exit | holds | 440 |
 | `SentencePipeline_Healthy.cfg` | fair healthy synthesis, output and eventual resume | holds | 107 |
 | `SentencePipeline_Canceled.cfg` | fair canceled inference and child retirement | holds | 137 |
 | `MultipartAudioLease.cfg` | two units, three parts, pause and route loss | holds | 13,716 |
@@ -2456,3 +2464,82 @@ start, terminal, close or release action violates `HealthyFinishes`.
 
 Real platform/device playback and a packaged GUI run remain separate acceptance
 checks; the composed test uses a fake worker and backend.
+
+### `SpeechTempo`: local listening-rate transforms
+
+The model snapshots a listening rate for a unit, associates each transform
+with its unit and part, and keeps one physical worker slot through retirement.
+It derives the watchdog from actual transformed samples, checks the aggregate
+unit bound, and appends a fixed tail only to the final part. A timed-out caller
+can settle before the worker exits; the slot remains occupied. The model
+abstracts PCM and does not establish speech quality or pitch preservation.
+
+| Property | Code test |
+|---|---|
+| `ImmutableRate` | `vscode/test/speech_service.test.ts`: snapshots listening speed, transforms once, and uses transformed duration without a second cloud request. |
+| `NoStaleResult`, `OneWorker` | `vscode/test/speech_tempo_client.test.ts`: rejects canceled work immediately but keeps its slot until physical retirement; rejects a wrong-part result without exposing its contents. |
+| `BoundedOutput`, `AccurateDuration` | `vscode/test/speech_service.test.ts`: fails closed when transformed audio exceeds the complete-unit duration limit; snapshots listening speed, transforms once, and uses transformed duration without a second cloud request. |
+| `FixedTail` | `vscode/test/speech_tempo_pcm.test.ts`: round trips exact signed samples and appends one final silent tail; `audio-ui/test/speech_tempo_composed.e2e.test.ts`: transforms two synthetic Kokoro parts in a real worker before local physical playback. |
+| `ReadingApprovalHeld` | `core/test/player.test.ts`: keeps held reading and command approval after speech throw; keeps held reading and command approval after speech reject. |
+| `HealthyProgress`, `CancelProgress` | `vscode/test/speech_tempo_client.e2e.test.ts`: runs the packaged worker in a real process and returns owned synthetic PCM; `vscode/test/speech_tempo_client.test.ts`: rejects canceled work immediately but keeps its slot until physical retirement. |
+| Byte identity and signal tests | `vscode/test/speech_tempo.test.ts`: preserves the original samples exactly at 1.0 without aliasing them; changes duration while preserving a voiced tone at rate %s. |
+
+TLC checked 2,563 generated / 868 distinct safety states, 17 / 17 healthy
+states and 15 / 11 cancellation states. Successful progress assumes fair
+transform and play; cancellation assumes eventual physical worker exit.
+Disabling each snapshot, stale-result, bound, tail, worker-exclusivity,
+watchdog-duration or played-rate guard violates its corresponding invariant.
+Disabling transform, play or retirement violates the associated progress
+property. Restricting retirement to the canceled phase violates cancellation
+progress when the caller times out first. Setting reading to released violates
+`ReadingApprovalHeld`. `TypeOK` is a sanity check, not independently mutated.
+Synthetic tones and the retained offline corpus are not listening-quality
+validation; real speech review is still required before claiming validated rates.
+
+### `WarmSynthesisWorker`: bounded local synthesis ownership
+
+The model abstracts the versioned capabilities to valid or invalid and a result
+to a correctly sized or oversized one. It tracks a worker epoch, two units with
+two parts each, and keeps a worker alive until its matching exit. `Ready` and
+`Result` must match their owners; `LateResult` is a response that arrives while
+the worker expects none (a previous epoch's result after the slot is ready, a
+duplicate part, a result after retirement) and is rejected before buffering.
+`Cancel` discards the matching result of a busy inference; `CancelBetween`
+ends a unit between parts at once, so its remaining part never starts
+(`NoCanceledResume`). No inference starts while paused. A fatal error leaves
+the worker unavailable until a new epoch loads (`TruthfulUnavailable`). Buffers
+are modeled only as the oversize flag on a result; a stored buffer that must be
+cleared on cancel is not modeled, and cancel during loading is not covered (the
+load is not interrupted). Single inference is structural: `Dispatch` is enabled
+only from `ready`, and no invariant would catch one from another phase.
+Automatic replay of canceled or failed text is not modeled; `GuardReplay =
+FALSE` models a dispatch that still names the previous unit.
+
+| Invariant | Implementation mapping |
+|---|---|
+| `TypeOK` | Sanity check of the declared variable ranges. |
+| `OneEngine`, `ValidReady`, `CorrectDelivery`, `NoPausedDispatch`, `NoReplay`, `NoCanceledResume`, `TruthfulUnavailable` | Pending implementation and tests. |
+| `HealthyProgress`, `CancellationProgress`, `RetirementProgress` | Pending implementation and tests. |
+
+| Mutation | Breaks |
+|---|---|
+| `GuardEpoch`, `GuardReady` | `ValidReady` |
+| `GuardPart`, `GuardBound`, `GuardLate` | `CorrectDelivery` |
+| `GuardExit`, `GuardExitEpoch`, `GuardDiscard` | `OneEngine` |
+| `GuardPause` | `NoPausedDispatch` |
+| `GuardReplay` | `NoReplay` |
+| `GuardCancel` | `NoCanceledResume` |
+| `GuardFailed` | `TruthfulUnavailable` |
+| `EnableLoad`, `EnableReady`, `EnableDispatch`, `EnableNextPart`, `EnableResult` (healthy config) | `HealthyProgress`, counterexamples of 1, 2, 3, 5 and 4 states |
+| `EnableDiscard` (cancellation config) | `CancellationProgress` (372 states) |
+| `EnableRetire`, `EnableExit` (watchdog config) | `CancellationProgress` (70 and 114 states) |
+| `EnableExit` (retirement config) | `RetirementProgress` |
+
+TLC checked 3,969 generated / 440 distinct safety states, 11 / 11 healthy
+states, and 3,969 / 440 states in each cancellation, watchdog and retirement
+configuration. Disabling the discard alone violates the discard-fair
+`CancellationProgress` while the watchdog configuration still holds, and
+disabling the watchdog alone violates the watchdog configuration while the
+discard-fair one still holds, so neither fairness assumption hides the other.
+`EnableNextPart` is distinct from `EnableDispatch`.
+The model does not prove actual audio quality or operating-system process exit.

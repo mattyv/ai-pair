@@ -20,6 +20,10 @@ It adds:
     run **Download Kokoro model** to download about 94 MB, then **Preview voice**.
     Local speech requires a supported local Linux x64 desktop with glibc, such
     as Ubuntu; the rest of Pair works without speech.
+-   Bounded sentence pipelining for local Kokoro in the audio companion. The
+    first sentence can play while one following part is prepared. The complete
+    selected text, reading countdown and output device stay fixed for the unit.
+    ElevenLabs continues to use one synthesis request per selected narration.
 -   Optional ElevenLabs cloud speech, using the same selected narration and
     reading controls. Choose **ElevenLabs** in Settings, add your API key through
     the secure VS Code prompt, load your account voices, choose one and use

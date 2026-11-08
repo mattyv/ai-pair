@@ -342,3 +342,14 @@ retains one reading clock and one concrete output lease. Local Kokoro may
 synthesize one next sentence while the current part plays; each physical output
 must retire before the next starts. ElevenLabs keeps its single-request path.
 These changes require final review and packaged verification before release.
+
+## Independent listening speed
+
+The experimental listening-rate implementation snapshots its rate once per
+narration unit. It processes tail-free mono PCM in a local worker, then frames
+the actual transformed samples and appends the fixed thinking tail once. Rate
+1.0 bypasses processing byte for byte. The existing synthesis-speed controls,
+reading clock and code pace remain separate. Worker cancellation retains the
+slot until termination, and stale unit or part responses cannot restart audio.
+The Archi `Speech tempo` diagram shows the implementation boundaries under
+review; offline metrics do not establish human listening quality.

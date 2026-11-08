@@ -1003,6 +1003,10 @@ it('validates page events and preferences before forwarding speech controls', ()
       type: 'speechSettings',
       value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 9, elevenLabsVoice: '', elevenLabsSpeed: 1 },
     },
+    {
+      type: 'speechSettings',
+      value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, listeningSpeed: 9, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    },
   ]) {
     view.receive(value);
   }
@@ -1012,9 +1016,14 @@ it('validates page events and preferences before forwarding speech controls', ()
     type: 'speechSettings',
     value: { enabled: true, provider: 'kokoro', voice: 'bf_emma', speed: 1.25, elevenLabsVoice: '', elevenLabsSpeed: 1 },
   });
+  view.send({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'kokoro', voice: 'bf_emma', speed: 1, listeningSpeed: 0.75, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
   view.send({ type: 'speechStop' });
   expect(speech.settings.set.mock.calls).toEqual([
     [{ enabled: true, provider: 'kokoro', voice: 'bf_emma', speed: 1.25, elevenLabsVoice: '', elevenLabsSpeed: 1 }],
+    [{ enabled: true, provider: 'kokoro', voice: 'bf_emma', speed: 1, listeningSpeed: 0.75, elevenLabsVoice: '', elevenLabsSpeed: 1 }],
   ]);
   expect(speech.stop.mock.calls).toEqual([[]]);
 });
