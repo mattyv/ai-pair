@@ -1708,6 +1708,18 @@ it('shows the local model status, path and pinned source', () => {
   expect(text('speech-model-status')).toContain('abc');
 });
 
+it('distinguishes missing, unverified and unknown model status', () => {
+  const base = { path: '/model', source: 'https://example.test', revision: 'abc', verified: false };
+  send({ type: 'speechModelStatus', value: { ...base, download: 'missing' } });
+  expect(text('speech-model-status')).toContain('Not downloaded');
+  send({ type: 'speechModelStatus', value: { ...base, download: 'installed' } });
+  expect(text('speech-model-status')).toContain('not verified');
+  send({ type: 'speechModelStatus', value: { ...base, download: 'unknown' } });
+  expect(text('speech-model-status')).toContain('unknown');
+  send({ type: 'speechModelStatusUnavailable' });
+  expect(text('speech-model-status')).toContain('unknown');
+});
+
 it('sends explicit setup, preview, stop and validated speech preferences', () => {
   send({ type: 'speechPage', pageId: 1 });
   send({ type: 'speechSupport', supported: true });

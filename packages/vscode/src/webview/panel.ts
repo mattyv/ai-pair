@@ -1149,7 +1149,10 @@ function handle(message: ToPanel): void {
       return;
     }
     case 'speechModelStatus':
-      ui.speechModelStatus.textContent = `${message.value.download === 'missing' ? 'Not downloaded' : message.value.download === 'unknown' ? 'Download status unknown' : message.value.verified ? 'Downloaded and verified' : 'Downloaded; verification failed'}. Local path: ${message.value.path}. Pinned source: ${message.value.source} (revision ${message.value.revision}).`;
+      ui.speechModelStatus.textContent = `${message.value.download === 'missing' ? 'Not downloaded' : message.value.download === 'unknown' ? 'Download status unknown' : message.value.verified ? 'Downloaded and verified' : 'Local model is not verified; the path exists'}. Local path: ${message.value.path}. Pinned source: ${message.value.source} (revision ${message.value.revision}).`;
+      return;
+    case 'speechModelStatusUnavailable':
+      ui.speechModelStatus.textContent = 'Local model status is unknown.';
       return;
     case 'speechSetupState':
       ui.speechSetup.disabled = message.pending || !speechSupported;

@@ -13,6 +13,7 @@ const fakes = vi.hoisted(() => ({
   invalidFile: false,
   readHook: undefined as ((file: string) => void) | undefined,
   statHook: undefined as ((file: string) => void) | undefined,
+  statFailure: undefined as Error | undefined,
   progressHook: undefined as (() => void) | undefined,
   cancel: undefined as (() => void) | undefined,
 }));
@@ -63,6 +64,7 @@ vi.mock('node:fs/promises', () => ({
   mkdtemp: vi.fn(async (prefix: string) => `${prefix}${++fakes.counter}`),
   stat: vi.fn(async (file: string) => {
     fakes.statHook?.(file);
+    if (fakes.statFailure !== undefined) throw fakes.statFailure;
     const data = fakes.files.get(file);
     if (data === undefined && [...fakes.files.keys()].some((entry) => entry.startsWith(`${file}/`))) return { size: 0, isFile: () => false };
     if (data === undefined) throw Object.assign(new Error('missing'), { code: 'ENOENT' });
@@ -102,6 +104,7 @@ afterEach(() => {
   fakes.invalidFile = false;
   fakes.readHook = undefined;
   fakes.statHook = undefined;
+  fakes.statFailure = undefined;
   fakes.progressHook = undefined;
   fakes.cancel = undefined;
   vi.unstubAllGlobals();
@@ -126,6 +129,11 @@ describe('speech setup', () => {
     expect(await speechModelStatus('/storage')).toMatchObject({ verified: true, download: 'installed' });
     fakes.files.set('/storage/speech/revision/config.json', new TextEncoder().encode('broken'));
     expect(await speechModelStatus('/storage')).toMatchObject({ verified: false, download: 'installed' });
+  });
+
+  it('reports unknown download status when the model path cannot be inspected', async () => {
+    fakes.statFailure = Object.assign(new Error('denied'), { code: 'EACCES' });
+    expect(await speechModelStatus('/storage')).toMatchObject({ verified: false, download: 'unknown' });
   });
 
   it('downloads and verifies all fixed assets before exposing the model directory', async () => {

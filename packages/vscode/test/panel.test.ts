@@ -1068,6 +1068,20 @@ it('reports setup and preview outcomes and ignores superseded availability check
   expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Speech setup did not complete.' });
 });
 
+it('ignores a stale model check and reports a failed current check', async () => {
+  const { panel, speech } = harness();
+  const stale = Promise.withResolvers<Awaited<ReturnType<PanelWiring['speech']['modelStatus']>>>();
+  speech.modelStatus.mockReturnValueOnce(stale.promise).mockRejectedValueOnce(new Error('failed'));
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  panel.refreshSpeechSupport();
+  await flush();
+  expect(view.posted).toContainEqual({ type: 'speechModelStatusUnavailable' });
+  stale.resolve({ path: '/stale', source: 'https://example.test', revision: 'old', verified: true, download: 'installed' });
+  await flush();
+  expect(view.posted).not.toContainEqual(expect.objectContaining({ type: 'speechModelStatus', value: expect.objectContaining({ path: '/stale' }) }));
+});
+
 it('NoSecret, TypeOK: forwards only nonsecret key actions and validated cloud selections', async () => {
   const { panel, speech } = harness();
   const view = open(panel);

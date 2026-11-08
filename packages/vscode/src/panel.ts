@@ -348,7 +348,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     this.send({ type: 'speechSupport', supported });
     void this.wiring.speech.modelStatus().then((value) => {
       if (this.speechPageId === pageId && this.speechSetupCheck === check) this.send({ type: 'speechModelStatus', value });
-    }).catch(() => {});
+    }).catch(() => {
+      if (this.speechPageId === pageId && this.speechSetupCheck === check) this.send({ type: 'speechModelStatusUnavailable' });
+    });
     if (supported) {
       void this.wiring.speech.installed().then(
         (installed) => {

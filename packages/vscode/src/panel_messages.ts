@@ -64,6 +64,7 @@ export type ToPanel =
   | { type: 'speechPage'; pageId: number }
   | { type: 'speechSupport'; supported: boolean }
   | { type: 'speechModelStatus'; value: SpeechModelStatus }
+  | { type: 'speechModelStatusUnavailable' }
   | { type: 'speechCloudSupport'; supported: boolean }
   | { type: 'speechSettings'; value: SpeechSettings }
   | { type: 'speechOutputCatalog'; value: OutputPreferenceView }
