@@ -452,6 +452,42 @@ describe('the band', () => {
     expect(text('status-text')).toBe(status);
   });
 
+  it('shows the accepted work waiting to play and clears it on the next state', () => {
+    start();
+    send({ type: 'state', state: 'typing', turn: 'agent', paused: false, ready: 2 });
+    expect(text('status-text')).toBe(`Playing: typing${LABEL_SEPARATOR}2 ready`);
+    send({ type: 'state', state: 'typing', turn: 'agent', paused: false, ready: 0 });
+    expect(text('status-text')).toBe('Playing: typing');
+  });
+
+  it('restores the ready count from replay and resets it for a new session', () => {
+    send({
+      type: 'replay',
+      events: [
+        { type: 'session', active: true, task: 'Earlier' },
+        { type: 'state', state: 'typing', turn: 'agent', paused: false, ready: 1 },
+      ],
+    });
+    expect(text('status-text')).toBe(`Playing: typing${LABEL_SEPARATOR}1 ready`);
+    send({ type: 'session', active: false, reason: 'agent' });
+    start();
+    expect(text('status-text')).toBe('Session started');
+  });
+
+  it('keeps approval distinct from ready work and preserves suspension during replay', () => {
+    send({
+      type: 'replay',
+      events: [
+        { type: 'session', active: true, task: 'Earlier' },
+        { type: 'state', state: 'typing', turn: 'agent', paused: false, ready: 2 },
+        { type: 'run', id: 1, command: 'echo hi', phase: 'confirm' },
+      ],
+    });
+    expect(text('status-text')).toBe(`Needs you${LABEL_SEPARATOR}2 ready`);
+    send({ type: 'session', active: true, suspended: true });
+    expect(text('status-text')).toBe('Suspended: waiting for the agent');
+  });
+
   it('shows a pause and a change of turn on the buttons, their labels, and their tooltips', () => {
     start();
     send({ type: 'state', state: 'paused', turn: 'programmer', paused: true });

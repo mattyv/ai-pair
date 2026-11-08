@@ -846,7 +846,7 @@ export async function run(): Promise<void> {
   const commandReport = await Promise.race([controller.listen(), sleep(8000).then(() => undefined)]);
   assert.ok(commandReport, 'listen did not return within eight seconds');
   assert.ok(Date.now() - commandStarted < 8000);
-  assert.ok(commandReport.batches.some((batch) => batch.runs?.some((run) => run.output.includes('command-delivered'))));
+  assert.ok(commandReport.batches.some((batch) => batch.runs?.some((result) => result.output.includes('command-delivered')) === true));
   await controller.end();
   console.log('CommandDelivery: a real command woke the pending listen before its heartbeat');
   await ai.update('timing', { glideMs: LONG_GLIDE_MS, glideMaxMs: LONG_GLIDE_MS }, vscode.ConfigurationTarget.Global);

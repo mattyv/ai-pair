@@ -542,3 +542,17 @@ idle gaps beyond the current preparation/playback overlap.
     report shapes and its work-ahead setting changes pacing. Adapt the focused
     readiness rule instead of importing those incompatible changes. The trial
     does not establish compatibility for the rest of the stacked series.
+
+## Ready status and companion compatibility
+
+-   Show accepted batches that have not started as ready. Decrement the count
+    when a queued batch starts, and clear it on discard or session end. The
+    count does not include the playing batch. Keep command confirmation and
+    the active state visible.
+-   Version the private workspace-to-companion transport at 2 for the added
+    status field; the public MCP protocol is unchanged. New workspace and
+    companion versions reject mismatched preparation before attachment and
+    ask the user to update both and reload. An older workspace may still
+    select its existing legacy fallback after the new companion rejects it;
+    new code cannot change that already-installed behavior. Saved panel state
+    without the count is accepted and interpreted as zero.

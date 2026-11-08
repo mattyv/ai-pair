@@ -1414,10 +1414,12 @@ export class Controller {
     this.editor.renderCursor(session ? this.cursorView(session) : undefined, state, session?.scene.focus ?? 'cursor');
     if (!session) return;
     const paused = this.pauseReasons.size > 0;
-    const key = `${state}/${session.scene.turn}/${paused}`;
+    // specs/ReadyCount.tla, Accept/Start/Discard: count accepted batches not yet playing.
+    const ready = session.queue.filter((batch) => batch.state === 'queued').length;
+    const key = `${state}/${session.scene.turn}/${paused}/${ready}`;
     if (key === this.lastPosted) return;
     this.lastPosted = key;
     this.trace?.(`status ${state}, ${session.scene.turn}'s turn${paused ? ', paused' : ''}`);
-    this.panel.post({ type: 'state', state, turn: session.scene.turn, paused });
+    this.panel.post({ type: 'state', state, turn: session.scene.turn, paused, ready });
   }
 }

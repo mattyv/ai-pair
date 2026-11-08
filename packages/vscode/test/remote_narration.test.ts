@@ -31,7 +31,7 @@ describe('remote narration port', () => {
     const port = new RemoteNarration({ epoch: 'connection', page: () => 4, timeoutMs: 100, send, nextSequence: sequence() });
     const job = port.speak('Short narration.');
     expect(send.mock.calls[0]?.[0]).toEqual({
-      version: 1,
+      version: 2,
       connectionEpoch: 'connection',
       sequence: 1,
       type: 'speak',
@@ -40,17 +40,17 @@ describe('remote narration port', () => {
       text: 'Short narration.',
     });
     expect(
-      port.ack({ version: 1, connectionEpoch: 'old', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
+      port.ack({ version: 2, connectionEpoch: 'old', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
     ).toBe(false);
     expect(
-      port.ack({ version: 1, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 3, outcome: 'ended' }),
+      port.ack({ version: 2, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 3, outcome: 'ended' }),
     ).toBe(false);
     expect(
-      port.ack({ version: 1, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
+      port.ack({ version: 2, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
     ).toBe(true);
     await job;
     expect(
-      port.ack({ version: 1, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
+      port.ack({ version: 2, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
     ).toBe(false);
   });
 
@@ -67,7 +67,7 @@ describe('remote narration port', () => {
     expect(send).toHaveBeenCalledTimes(2);
     expect(send.mock.calls[1]?.[0]).toMatchObject({ type: 'cancel', jobId: '1' });
     expect(
-      port.ack({ version: 1, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'canceled' }),
+      port.ack({ version: 2, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'canceled' }),
     ).toBe(true);
     void port.speak('Three.');
     expect(send.mock.calls[2]?.[0]).toMatchObject({ type: 'speak', jobId: '2' });
@@ -130,7 +130,7 @@ describe('remote narration port', () => {
     });
     const first = port.speak('One.');
     const terminal = {
-      version: 1,
+      version: 2,
       connectionEpoch: 'connection',
       sequence: 1,
       type: 'terminal',
@@ -157,7 +157,7 @@ describe('remote narration port', () => {
     const job = port.speak('One.');
     const callback: unknown = timers.mock.calls[0]?.[0];
     expect(
-      port.ack({ version: 1, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
+      port.ack({ version: 2, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
     ).toBe(true);
     await job;
     if (!isTimerCallback(callback)) throw new Error('No timeout callback');
@@ -188,7 +188,7 @@ describe('remote narration port', () => {
     await vi.advanceTimersByTimeAsync(59);
     expect(send).toHaveBeenCalledTimes(3);
     expect(
-      port.ack({ version: 1, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
+      port.ack({ version: 2, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
     ).toBe(true);
     await job;
   });
@@ -212,11 +212,11 @@ it('keeps a long multipart unit paused and retains its slot after timeout until 
     { type: 'resume' },
     { type: 'cancel' },
   ]);
-  expect(port.ack({ version: 1, connectionEpoch: 'old', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' })).toBe(
+  expect(port.ack({ version: 2, connectionEpoch: 'old', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' })).toBe(
     false,
   );
   expect(
-    port.ack({ version: 1, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'canceled' }),
+    port.ack({ version: 2, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'canceled' }),
   ).toBe(true);
   void port.speak('Next.');
   expect(send.mock.calls[4]?.[0]).toMatchObject({ type: 'speak', jobId: '2' });

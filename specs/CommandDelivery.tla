@@ -1,9 +1,9 @@
----- MODULE CommandDelivery ---------------------------------------------------
+---- MODULE CommandDelivery ----------------------------------------------------
 EXTENDS Naturals, FiniteSets
 
 \* A bounded queue and atomic report consumption. The interrupted head must
 \* settle before any call returns; command results wake listens and empty steps.
-CONSTANT NoCall
+CONSTANTS NoCall
 VARIABLES queue, call, news, delivered, produced, interrupted
 vars == <<queue, call, news, delivered, produced, interrupted>>
 
@@ -11,7 +11,8 @@ Init == /\ queue = 2 /\ call = NoCall /\ news = 0
         /\ delivered = 0 /\ produced = 0 /\ interrupted = FALSE
 Call(k) == /\ call = NoCall /\ call' = k
            /\ UNCHANGED <<queue, news, delivered, produced, interrupted>>
-FinishRun == /\ queue > 0 /\ queue' = queue - 1 /\ news' = news + 1 /\ produced' = produced + 1
+FinishRun == /\ queue > 0 /\ queue' = queue - 1 /\ news' = news + 1
+             /\ produced' = produced + 1
              /\ interrupted' = FALSE /\ UNCHANGED <<call, delivered>>
 FinishQuiet == /\ queue > 0 /\ queue' = queue - 1 /\ interrupted' = FALSE
                /\ UNCHANGED <<call, news, delivered, produced>>
@@ -30,12 +31,15 @@ Next == \/ \E k \in {"listen", "empty", "step", "discarded", "end"}: Call(k)
 Spec == Init /\ [][Next]_vars /\ WF_vars(Return) /\ WF_vars(FinishQuiet)
 TypeOK == /\ queue \in 0..2 /\ news \in 0..2 /\ delivered \in 0..2
           /\ produced \in 0..2
-          /\ call \in {NoCall, "listen", "empty", "step", "discarded", "end"} /\ interrupted \in BOOLEAN
+          /\ call \in {NoCall, "listen", "empty", "step", "discarded", "end"}
+          /\ interrupted \in BOOLEAN
 Conservation == produced = news + delivered
-PromptRunReady == (call \in {"listen", "empty"} /\ news > 0 /\ ~interrupted) => Ready
+PromptRunReady == (call \in {"listen", "empty"} /\ news > 0 /\ ~interrupted)
+                  => Ready
 NoEarlyDiscarded == (call = "discarded" /\ queue > 0) => ~Ready
 NoEarlyEnd == (call = "end" /\ queue > 0) => ~Ready
 NoQuietWake == (call = "listen" /\ news = 0) => ~Ready
 NoInterruptedReturn == interrupted => ~Ready
-RunDelivered == (call \in {"listen", "empty"} /\ news > 0 /\ ~interrupted) ~> news = 0
-=============================================================================
+RunDelivered == (call \in {"listen", "empty"} /\ news > 0 /\ ~interrupted)
+                ~> news = 0
+================================================================================

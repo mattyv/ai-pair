@@ -124,7 +124,8 @@ Timeout ==
     /\ call' = NoCall
     /\ inGrace' = Grace
     /\ timedOut' = TRUE
-    /\ UNCHANGED <<owesResponse, unreported, runNews, quietNews, graceExpired, absent>>
+    /\ UNCHANGED <<owesResponse, unreported, runNews, quietNews,
+                   graceExpired, absent>>
 
 \* `finishCall` after maxBlockMs, with only quiet news to report: the report
 \* is not empty, so no grace starts, and the agent has the news to act on.

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
-import { localAudioPrepared } from '@ai-pair/protocol';
+import { LOCAL_AUDIO_VERSION, localAudioPrepared } from '@ai-pair/protocol';
 import { AttachmentGate } from './attachment_gate';
 import { createCompanionSession, type CompanionSession } from './companion_session';
 
@@ -20,7 +20,14 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   context.subscriptions.push(
     gate,
-    vscode.commands.registerCommand('aiPair.localAudio.prepare', (value: unknown) => gate.prepare(value)),
+    vscode.commands.registerCommand('aiPair.localAudio.prepare', (value: unknown) => {
+      if (typeof value === 'object' && value !== null && 'version' in value && value.version !== LOCAL_AUDIO_VERSION) {
+        void vscode.window.showWarningMessage(
+          'AI Pair and AI Pair Local Audio have incompatible versions. Update both extensions and reload the window.',
+        );
+      }
+      return gate.prepare(value);
+    }),
     vscode.commands.registerCommand('aiPair.localAudio.commit', (value: unknown) => {
       const parsed = localAudioPrepared.safeParse(value);
       if (!parsed.success) return false;

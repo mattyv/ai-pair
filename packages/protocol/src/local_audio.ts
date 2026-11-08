@@ -4,7 +4,7 @@ import { localPanelAction } from './panel_action';
 import { localPanelChunk } from './panel_chunks';
 
 /** The supported workspace-to-companion protocol version. */
-export const LOCAL_AUDIO_VERSION = 1;
+export const LOCAL_AUDIO_VERSION = 2;
 
 const MAX_IDENTITY_LENGTH = 128;
 const identity = z.string().min(1).max(MAX_IDENTITY_LENGTH);

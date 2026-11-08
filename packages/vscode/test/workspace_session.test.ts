@@ -68,7 +68,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-const frame: LocalAudioFrame = { version: 1, connectionEpoch: 'epoch', sequence: 2, type: 'heartbeat' };
+const frame: LocalAudioFrame = { version: 2, connectionEpoch: 'epoch', sequence: 2, type: 'heartbeat' };
 
 describe('workspace session wiring', () => {
   it('wires callbacks and preserves ordered heartbeat and panel actions', async () => {
@@ -97,7 +97,7 @@ describe('workspace session wiring', () => {
     fake.bridgeOptions?.action({ type: 'pause' });
     expect(receiveRemote).toHaveBeenCalledTimes(2);
     fake.bridgeOptions?.terminal({
-      version: 1,
+      version: 2,
       connectionEpoch: 'epoch',
       sequence: 1,
       type: 'terminal',

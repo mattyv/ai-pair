@@ -340,6 +340,7 @@ Last updated: css, 2026-11-08.
 | `scripts/normalize_architecture.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `scripts/normalize_architecture.test.ts` | TypeScript | test | test | test | - | - | test |
 | `scripts/normalize_architecture.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `scripts/packaged_mcp_check.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
 | `scripts/release.test.ts` | TypeScript | test | test | test | test | - | test |
 | `scripts/release.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/specs_needed.sh` | Shell | - | - | - | - | - | - |
@@ -366,6 +367,8 @@ Last updated: css, 2026-11-08.
 | `specs/CodePlayback.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/CodePlayback.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/CodePlayback_Progress.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/CommandDelivery.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/CommandDelivery.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/Controller.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Controller.tla` | TLA+ | - | - | 17 of 17 actions | - | - | - |
 | `specs/DeferredMessage.cfg` | TLC config | - | - | - | - | - | - |
@@ -459,6 +462,8 @@ Last updated: css, 2026-11-08.
 | `specs/ReadingHold.tla` | TLA+ | - | - | 7 of 7 actions | - | - | - |
 | `specs/ReadingSkip.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ReadingSkip.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
+| `specs/ReadyCount.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/ReadyCount.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/RecoveryBatchIds.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/RecoveryBatchIds.tla` | TLA+ | - | - | 4 of 4 actions | - | - | - |
 | `specs/Rehearsal.cfg` | TLC config | - | - | - | - | - | - |
@@ -502,6 +507,8 @@ Last updated: css, 2026-11-08.
 | `specs/Start.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
 | `specs/StartDirectory.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/StartDirectory.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
+| `specs/StatusTransport.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/StatusTransport.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/StructuralTyping.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/StructuralTyping.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/TerminalPanel.cfg` | TLC config | - | - | - | - | - | - |

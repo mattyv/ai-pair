@@ -42,6 +42,13 @@ ExpireBeforeCommit ==
     /\ UNCHANGED <<committed, companionRegistered, lateSeen, badEarly,
                    badFallback>>
 
+\* An installed companion that did not prepare selects no owner.
+RejectInstalled ==
+    /\ phase \in {"preparing", "prepared"} /\ ~committed
+    /\ phase' = "incompatible" /\ tokenValid' = FALSE
+    /\ UNCHANGED <<committed, mainRegistered, companionRegistered, lateSeen,
+                   badEarly, badFallback>>
+
 LatePrepared ==
     /\ phase = "fallback" /\ ~lateSeen /\ lateSeen' = TRUE
     /\ companionRegistered' = IF GuardPrepare THEN companionRegistered ELSE TRUE
@@ -69,13 +76,14 @@ UnsafeFallback ==
     /\ UNCHANGED <<tokenValid, committed, companionRegistered, lateSeen,
                    badEarly>>
 
-Next == Prepare \/ Prepared \/ Commit \/ ExpireBeforeCommit \/ LatePrepared
+Next == Prepare \/ Prepared \/ Commit \/ ExpireBeforeCommit
+        \/ RejectInstalled \/ LatePrepared
         \/ Register \/ Acknowledged \/ TimeoutAfterCommit \/ UnsafeFallback
 Spec == Init /\ [][Next]_vars /\ WF_vars(TimeoutAfterCommit) /\
         WF_vars(ExpireBeforeCommit)
 TypeOK ==
     /\ phase \in {"idle", "preparing", "prepared", "committed", "attached",
-                  "fallback", "unavailable"}
+                  "fallback", "unavailable", "incompatible"}
     /\ tokenValid \in BOOLEAN /\ committed \in BOOLEAN
     /\ mainRegistered \in BOOLEAN /\ companionRegistered \in BOOLEAN
     /\ lateSeen \in BOOLEAN /\ badEarly \in BOOLEAN /\ badFallback \in BOOLEAN
@@ -87,7 +95,8 @@ CanCommit == phase = "prepared" => ENABLED Commit
 CanRegister == (committed /\ ~companionRegistered) => ENABLED Register
 CanFallback == phase \in {"preparing", "prepared"} => ENABLED ExpireBeforeCommit
 PreparationSettles == (phase \in {"preparing", "prepared"}) ~>
-    (phase \in {"committed", "fallback", "attached", "unavailable"})
+    (phase \in {"committed", "fallback", "attached",
+                "unavailable", "incompatible"})
 CommittedSettles == (phase = "committed") ~>
                     (phase \in {"attached", "unavailable"})
 ================================================================================

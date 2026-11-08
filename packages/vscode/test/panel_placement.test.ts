@@ -7,13 +7,13 @@ afterEach(() => {
 
 describe('panel placement', () => {
   it('chooses companion irrevocably before committing, including on a lost acknowledgement', async () => {
-    const prepare = vi.fn().mockResolvedValue({ version: 1, epoch: 'epoch', token: 'token' });
+    const prepare = vi.fn().mockResolvedValue({ version: 2, epoch: 'epoch', token: 'token' });
     const commit = vi.fn().mockRejectedValue(new Error('lost'));
     const placement = new PanelPlacement({ epoch: 'epoch', remote: false, timeoutMs: 100, prepare, commit });
     expect(await placement.choose()).toBe('companion');
     expect(await placement.choose()).toBe('companion');
     expect(commit).toHaveBeenCalledTimes(1);
-    expect(commit).toHaveBeenCalledWith({ version: 1, epoch: 'epoch', token: 'token' });
+    expect(commit).toHaveBeenCalledWith({ version: 2, epoch: 'epoch', token: 'token' });
   });
 
   it('falls back only before commit and ignores late prepare replies', async () => {
@@ -25,14 +25,14 @@ describe('panel placement', () => {
     const result = placement.choose();
     await vi.advanceTimersByTimeAsync(100);
     expect(await result).toBe('remote-text');
-    pending.resolve({ version: 1, epoch: 'epoch', token: 'late' });
+    pending.resolve({ version: 2, epoch: 'epoch', token: 'late' });
     await Promise.resolve();
     expect(commit).not.toHaveBeenCalled();
     expect(await placement.choose()).toBe('remote-text');
   });
 
   it('uses local legacy only for a failed or invalid preparation before commit', async () => {
-    for (const reply of [undefined, { version: 2, epoch: 'epoch', token: 'token' }, { version: 1, epoch: 'wrong', token: 'token' }]) {
+    for (const reply of [undefined, { version: 1, epoch: 'epoch', token: 'token' }, { version: 2, epoch: 'wrong', token: 'token' }]) {
       const commit = vi.fn();
       const placement = new PanelPlacement({
         epoch: 'epoch',
@@ -53,13 +53,27 @@ describe('panel placement', () => {
     });
     expect(await placement.choose()).toBe('legacy');
   });
+  it('rejects an installed incompatible companion before selecting any panel owner', async () => {
+    const commit = vi.fn();
+    const placement = new PanelPlacement({
+      epoch: 'epoch',
+      remote: false,
+      companionInstalled: true,
+      timeoutMs: 100,
+      prepare: () => Promise.resolve(undefined),
+      commit,
+    });
+    expect(await placement.choose()).toBe('incompatible');
+    expect(commit).not.toHaveBeenCalled();
+  });
+
   it('installs workspace receivers before the companion may register the provider', async () => {
     const order: string[] = [];
     const placement = new PanelPlacement({
       epoch: 'epoch',
       remote: false,
       timeoutMs: 100,
-      prepare: () => Promise.resolve({ version: 1, epoch: 'epoch', token: 'token' }),
+      prepare: () => Promise.resolve({ version: 2, epoch: 'epoch', token: 'token' }),
       beforeCommit: () => {
         order.push('ready');
       },
@@ -77,7 +91,7 @@ describe('panel placement', () => {
       epoch: 'epoch',
       remote: false,
       timeoutMs: 100,
-      prepare: () => Promise.resolve({ version: 1, epoch: 'epoch', token: 'token' }),
+      prepare: () => Promise.resolve({ version: 2, epoch: 'epoch', token: 'token' }),
       beforeCommit: () => {
         throw new Error('failed');
       },

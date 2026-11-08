@@ -183,6 +183,7 @@ let paused = false;
 let replaying = false;
 /** The session's agent is gone, and the session waits for it to come back (#25). */
 let suspended = false;
+let ready = 0;
 /** The agent's state, as the extension last reported it. */
 let state: AgentState | undefined = undefined;
 /** The programmer's selection, offered with the reply. */
@@ -429,6 +430,7 @@ function syncReading(): void {
 
 /** Changes the live status only when its text changes, avoiding repeated announcements. */
 function statusText(text: string): void {
+  if (active && !suspended && ready > 0) text += `${LABEL_SEPARATOR}${ready} ready`;
   if (ui.status.textContent !== text) ui.status.textContent = text;
 }
 
@@ -602,6 +604,7 @@ function setState(e: Extract<PanelEvent, { type: 'state' }>): void {
   // specs/CodePlayback.tla, `Finish` and `Interrupt`: no countdown survives playback.
   if (e.state !== 'read' && !e.paused) reading = undefined;
   state = e.state;
+  ready = e.ready ?? 0;
   turn = e.turn;
   paused = e.paused;
   document.body.classList.toggle('paused', paused);
@@ -689,6 +692,7 @@ function setActive(on: boolean): void {
   document.body.classList.toggle('active', on);
   ui.reply.disabled = !on && !calibrating;
   if (!on) {
+    ready = 0;
     suspended = false;
     reading = undefined;
     // specs/RunBox.tla, `EndSession`: the session ending clears the box.
@@ -1258,6 +1262,7 @@ function handle(message: ToPanel): void {
         fileCurrent();
         current = undefined;
         state = undefined;
+        ready = 0;
         ui.now.classList.add('empty');
         ui.now.textContent = `Waiting for the agent${ELLIPSIS}`;
         ui.ref.innerHTML = '';

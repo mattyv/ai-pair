@@ -918,6 +918,70 @@ describe('steps and their batches', () => {
   });
 });
 
+describe('ready count', () => {
+  it('Accurate: reports accepted queued batches and clears the count when playback starts', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    const abort = new AbortController();
+    const queued = h.controller.step(SAY, abort.signal);
+    await settle();
+    expect(posted(h).at(-1)).toMatchObject({ type: 'state', ready: 1 });
+    abort.abort();
+    await expect(queued).rejects.toMatchObject({ code: 'cancelled' });
+    const finishSecond = holdPlay();
+    finish();
+    await settle();
+    expect(posted(h).at(-1)).toMatchObject({ type: 'state', ready: 0 });
+    finishSecond();
+    await settle();
+  });
+});
+
+describe('ready count rejection', () => {
+  it('Accurate: a rejected batch is never counted as ready', async () => {
+    const h = await started();
+    const error = { kind: 'no_line' as const, message: 'No.' };
+    rehearsed({ status: 'failed', error, unplayed: SAY }, {}, [], { index: 1, action: { say: 'Hi.' }, error });
+    expect((await report(h.controller.step(SAY))).rejected).toBeDefined();
+    expect(posted(h).findLast((event) => event.type === 'state')).toMatchObject({ ready: 0 });
+  });
+});
+
+describe('ready count interruptions', () => {
+  it.each(['interrupt', 'disconnect'] as const)('Accurate: clears queued work on %s', async (action) => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    const abort = new AbortController();
+    const queued = h.controller.step(SAY, abort.signal);
+    await settle();
+    abort.abort();
+    await expect(queued).rejects.toMatchObject({ code: 'cancelled' });
+    expect(posted(h).at(-1)).toMatchObject({ type: 'state', ready: 1 });
+    if (action === 'interrupt') h.controller.userInterrupt();
+    else h.controller.disconnect();
+    expect(posted(h).findLast((event) => event.type === 'state')).toMatchObject({ ready: 0 });
+    finish({ status: 'interrupted' });
+    await settle();
+  });
+});
+
+async function commandWithLaterBatch(): Promise<{ h: Harness; finishLater: ReturnType<typeof holdPlay> }> {
+  const h = await started();
+  const finishCommand = holdPlay();
+  await report(h.controller.step([{ run: 'echo hello' }]));
+  const abort = new AbortController();
+  const queued = h.controller.step(SAY, abort.signal);
+  await settle();
+  abort.abort();
+  await expect(queued).rejects.toMatchObject({ code: 'cancelled' });
+  const finishLater = holdPlay();
+  finishCommand({ runs: [{ command: 'echo hello', output: 'hello', exit_code: 0 }] });
+  await settle();
+  return { h, finishLater };
+}
+
 describe('command result delivery', () => {
   it('PromptRunReady, Conservation: wakes a pending listen with the command result once', async () => {
     const h = await started();
@@ -959,20 +1023,24 @@ describe('command result delivery', () => {
     await settle();
   });
 
-  async function commandWithLaterBatch(): Promise<{ h: Harness; finishLater: ReturnType<typeof holdPlay> }> {
+  it('NoQuietWake: an empty step waits for later work after ordinary typing completes', async () => {
     const h = await started();
-    const finishCommand = holdPlay();
-    await report(h.controller.step([{ run: 'echo hello' }]));
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
     const abort = new AbortController();
     const queued = h.controller.step(SAY, abort.signal);
     await settle();
     abort.abort();
     await expect(queued).rejects.toMatchObject({ code: 'cancelled' });
     const finishLater = holdPlay();
-    finishCommand({ runs: [{ command: 'echo hello', output: 'hello', exit_code: 0 }] });
+    finish();
     await settle();
-    return { h, finishLater };
-  }
+    const empty = h.controller.step([]);
+    expect(await pending(empty)).toBe(true);
+    finishLater();
+    await settle();
+    expect((await report(empty)).batches.map((batch) => batch.id)).toEqual([1, 2]);
+  });
 
   it('PromptRunReady: listen returns command news while later work plays', async () => {
     const { h, finishLater } = await commandWithLaterBatch();

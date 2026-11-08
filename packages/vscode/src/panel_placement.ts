@@ -1,12 +1,13 @@
 import { localAudioPrepared, type LocalAudioPrepared } from '@ai-pair/protocol';
 
 /** The single panel owner chosen for this window. */
-export type PanelOwner = 'companion' | 'legacy' | 'remote-text';
+export type PanelOwner = 'companion' | 'legacy' | 'remote-text' | 'incompatible';
 
 /** Inputs for bounded, two-phase companion attachment. */
 export interface PanelPlacementOptions {
   epoch: string;
   remote: boolean;
+  companionInstalled?: boolean;
   timeoutMs: number;
   prepare: () => Promise<unknown>;
   beforeCommit?: () => void;
@@ -43,7 +44,7 @@ export class PanelPlacement {
     }
     const prepared = localAudioPrepared.safeParse(answer);
     if (!prepared.success || prepared.data.epoch !== this.options.epoch) {
-      return this.options.remote ? 'remote-text' : 'legacy';
+      return this.options.companionInstalled === true ? 'incompatible' : this.options.remote ? 'remote-text' : 'legacy';
     }
     // specs/PanelPlacement.tla, Commit: select companion before the registration command can run.
     try {

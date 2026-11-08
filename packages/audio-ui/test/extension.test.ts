@@ -7,6 +7,7 @@ import { createCompanionSession } from '../src/companion_session';
 const fake = vi.hoisted(() => ({
   commands: new Map<string, (value: unknown) => unknown>(),
   prepare: vi.fn(),
+  warning: vi.fn(),
   commit: vi.fn(),
   register: undefined as (() => void) | undefined,
   session: {
@@ -30,6 +31,7 @@ vi.mock('../src/attachment_gate', () => ({
   },
 }));
 vi.mock('vscode', () => ({
+  window: { showWarningMessage: fake.warning },
   commands: {
     registerCommand: (name: string, callback: (value: unknown) => unknown) => {
       fake.commands.set(name, callback);
@@ -53,7 +55,7 @@ beforeEach(() => {
 describe('local companion activation', () => {
   it('prepares without registering a provider and commits only once', () => {
     const subscriptions: vscode.Disposable[] = [];
-    fake.prepare.mockReturnValue({ version: 1, epoch: 'epoch', token: 'token' });
+    fake.prepare.mockReturnValue({ version: 2, epoch: 'epoch', token: 'token' });
     fake.commit
       .mockImplementationOnce(() => {
         fake.register?.();
@@ -65,7 +67,7 @@ describe('local companion activation', () => {
     const commit = fake.commands.get('aiPair.localAudio.commit');
     expect(prepare).toBeDefined();
     expect(commit).toBeDefined();
-    const prepared: unknown = prepare?.({ version: 1, epoch: 'epoch' });
+    const prepared: unknown = prepare?.({ version: 2, epoch: 'epoch' });
     expect(createCompanionSession).not.toHaveBeenCalled();
     expect(commit?.(prepared)).toBe(true);
     expect(fake.commands.get('aiPair.localAudio.status')?.(undefined)).toEqual({ id: 1, state: 'speaking', started: true });
@@ -73,6 +75,13 @@ describe('local companion activation', () => {
     expect(commit?.(prepared)).toBe(false);
     for (const subscription of subscriptions) subscription.dispose();
   });
+});
+
+it('warns an old workspace to update both extensions and reload', () => {
+  activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
+  fake.commands.get('aiPair.localAudio.prepare')?.({ version: 1, epoch: 'epoch' });
+  expect(fake.warning).toHaveBeenCalledWith(expect.stringMatching(/Update both extensions and reload/));
+  expect(createCompanionSession).not.toHaveBeenCalled();
 });
 
 it('rejects malformed commit and makes unattached commands safe', async () => {
@@ -93,7 +102,7 @@ it('rejects malformed commit and makes unattached commands safe', async () => {
 
 it('forwards attached commands to the local session and disposes it', async () => {
   const subscriptions: vscode.Disposable[] = [];
-  fake.prepare.mockReturnValue({ version: 1, epoch: 'epoch', token: 'token' });
+  fake.prepare.mockReturnValue({ version: 2, epoch: 'epoch', token: 'token' });
   fake.commit.mockImplementation(() => {
     fake.register?.();
     return true;

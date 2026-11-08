@@ -105,7 +105,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `OutputPreference.cfg` | ordered choice, discovery and failed persistence | holds | 648 |
 | `LocalAudioAdmission.cfg` | capability, device snapshot and cloud admission | holds | 624 |
 | `LocalAudioOwnership.cfg` | local ownership, directional sequences and lease loss | holds | 3,632 |
-| `PanelPlacement.cfg` | bounded prepare, irrevocable commit and fallback | holds | 10 |
+| `PanelPlacement.cfg` | bounded prepare, irrevocable commit and fallback | holds | 11 |
 | `SentencePipeline.cfg` | two units, three parts, pause, cancel and late callbacks | holds | 2,242 |
 | `SpeechTempo.cfg` | two units, two parts, rate changes and stale results | holds | 868 |
 | `SpeechTempo_Healthy.cfg` | two fair completed units | holds | 17 |
@@ -2405,7 +2405,9 @@ Prepare does not register a view. The main extension selects the companion
 irrevocably before sending commit; a lost acknowledgement cannot select legacy
 fallback. A preparation timeout expires the token and may fall back only
 before commit. A delayed prepare cannot register an extra view. TLC checked
-10 states and assumes fair timeouts before and after commit.
+11 states and assumes fair timeouts before and after commit. `RejectInstalled`
+models the new incompatible result without registering either owner;
+`StatusTransport` models the version guard that selects this result.
 
 The prepare-registration, late-registration and post-commit fallback negative
 controls violate `NoEarlyRegistration`, `NoDuplicateRegistration` and
@@ -2419,6 +2421,7 @@ forbidden. The negative control disables this guard and violates
 
 | Property | Test |
 |---|---|
+| `RejectInstalled` | `panel_placement.test.ts`: rejects an installed incompatible companion before selecting any panel owner. |
 | `NoFallbackAfterCommit`, `CommittedSettles` | `panel_placement.test.ts`: chooses companion irrevocably before committing, including on a lost acknowledgement. |
 | `NoEarlyRegistration`, `NoDuplicateRegistration`, `PreparationSettles` | `panel_placement.test.ts`: falls back only before commit and ignores late prepare replies; uses local legacy only for a failed or invalid preparation before commit. |
 
@@ -2801,3 +2804,23 @@ Changing the initial phase to an unrecognized value violates `TypeOK`; changing
 the mismatch result to `forwarded` violates `Safe`; disabling `Start` violates
 `Settles`. The terminal states intentionally have no outgoing action,
 so both configurations disable deadlock checking.
+
+### `ReadyCount` and `StatusTransport`: status and version boundary
+
+`ReadyCount` bounds accepted, unstarted batches to two. `shown` abstracts the
+latest emitted panel state, not instantaneous delivery to the DOM. `Start`
+is weakly fair after `Drain` stops new admissions. TLC found 8 distinct states.
+`Accurate` is tested by `controller.test.ts`: reports accepted queued batches
+and clears the count when playback starts; panel replay and reset are tested
+in `panel.test.ts`. Mutations of count update, close reset, type bounds and
+start fairness violated `Accurate`, `ClosedEmpty`, `TypeOK` and `Drains`,
+respectively.
+
+`StatusTransport` models the new endpoints' prepare/attach gate, not an old
+binary's fallback choice. TLC passes with workspace/companion versions 1/2,
+2/1 and 2/2. Bypassing the gate violates `NoMixedAttach` and
+`NoMixedDelivery`; separately suppressing the warning or matching delivery
+violates `MixedWarns` or `MatchingDelivers`. `panel_placement.test.ts`,
+`attachment_gate.test.ts`, `extension.test.ts` and `local_audio.test.ts`
+exercise rejection and guidance. An already-installed old workspace may still
+select legacy fallback, which the new companion cannot prevent.
