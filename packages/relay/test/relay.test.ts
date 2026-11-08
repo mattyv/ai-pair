@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 import { Bridge, Controller, type BridgeOptions } from '@ai-pair/core';
 import { LEFT_ARROW, RIGHT_ARROW } from '@ai-pair/core/constants';
-import { CURSOR_MARKER, PROTOCOL_VERSION } from '@ai-pair/protocol';
+import { CURSOR_MARKER, DISCOVERY_SCHEMA, PROTOCOL_VERSION } from '@ai-pair/protocol';
 import { FakeEditor, FakePanel, testConfig } from '../../core/test/fake';
 import { EditorLink, findWindows } from '../src/link';
 import { createServer, serve } from '../src/server';
@@ -58,6 +58,7 @@ beforeEach(async () => {
   bridge = new Bridge(controller, {
     dir,
     workspaceFolders: () => ['/project'],
+    runtime: { version: 'test', build: 'build-one', relayHash: 'abc' },
     trace: (line) => {
       lines.push(line);
     },
@@ -119,6 +120,11 @@ async function call(client: Client, name: string, args: Record<string, unknown> 
 
 describe('relay', () => {
   it('RuntimeIdentity Safe: refuses a legacy window before starting a session', async () => {
+    const file = bridge.file;
+    const discovery: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const legacy = DISCOVERY_SCHEMA.parse(discovery);
+    const { runtime: _runtime, ...withoutRuntime } = legacy;
+    fs.writeFileSync(file, JSON.stringify(withoutRuntime));
     const client = await connect('/project/src', undefined, { version: 'new', relayHash: 'abc' });
     const result = await call(client, 'start', {});
     expect(result.error).toBe(true);
@@ -181,7 +187,7 @@ describe('relay', () => {
     const started = await call(client, 'start', { task: 'test' });
     expect(started.error).toBe(false);
     expect(started.text).toMatch(/started/);
-    const guide = started.content[1];
+    const guide = started.content.find((part) => part.text.includes('THE GUIDE'));
     ok(guide);
     expect(guide.text).toContain('THE GUIDE');
 
@@ -212,7 +218,7 @@ describe('relay', () => {
     try {
       const client = await connect();
       const started = await call(client, 'start');
-      const rules = started.content[2];
+      const rules = started.content.find((part) => part.text.startsWith('# Project rules\n'));
       ok(rules);
       expect(rules.text).toMatch(/^# Project rules\n/);
       expect(rules.text).toContain(`## From ${path.join(home, 'GUIDE.md')}\n\nAlways say hello.`);

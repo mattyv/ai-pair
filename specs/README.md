@@ -2751,7 +2751,9 @@ this checks the model's bounded state types rather than a production enum.
 
 ### `RuntimeIdentity`: matching the relay and editor
 
-A new relay forwards a start only when the selected editor advertises the same
+The current editor always advertises its runtime identity; older discovery
+records may omit it. A new relay forwards a start only when the selected editor
+advertises the same
 version and shipped relay hash. Missing identity is a mismatch. The model
 abstracts the comparison into `Match`; it does not model the older relays that
 lack this guard or prove the authenticity of the discovery file.
@@ -2764,7 +2766,7 @@ lack this guard or prove the authenticity of the discovery file.
 | Property | Test |
 | --- | --- |
 | `TypeOK` | No direct code test: the model phase is an abstraction, not a runtime value. |
-| `Safe` | `link.test.ts`: RuntimeIdentity Safe; `relay.test.ts`: RuntimeIdentity Safe |
+| `Safe` | `link.test.ts` and `relay.test.ts`: RuntimeIdentity Safe; `integration_runtime_identity.ts`: refuses missing, different-version and different-digest identities before connecting |
 | `Settles` | `link.test.ts`: RuntimeIdentity Settles; `relay.test.ts`: RuntimeIdentity Settles |
 
 Changing the initial phase to an unrecognized value violates `TypeOK`; changing

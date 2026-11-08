@@ -42,6 +42,7 @@ import { exerciseStartup } from './integration_startup_paths';
 import { modelStatusPaths } from './integration_model_status';
 import { invalidCalibration } from './integration_invalid_calibration';
 import { badSpeechSettings } from './integration_bad_speech_settings';
+import { runtimeIdentityPaths } from './integration_runtime_identity';
 
 const EXPECTED_TODOS = `export interface Todo {
   id: number;
@@ -1326,6 +1327,7 @@ export async function run(): Promise<void> {
   // port nothing answers, one that rejects its hello, and one that answers with something not a message; a folder that
   // doesn't exist is no folder to look for (specs/Discovery.tla, `Start`, `Try`; specs/Wire.tla, `RejectHello`,
   // `SendGarbage`). The windows that aren't hold this window's folder, focused later, so they come first.
+  await runtimeIdentityPaths(api, root);
   const refused = await fakeEditor(() => undefined);
   refused.server.close();
   const rejecting = await fakeEditor((socket) => {

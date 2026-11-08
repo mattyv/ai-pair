@@ -524,3 +524,8 @@ owned completion and cancellation gates, including line/block reading and
 existing deferred-reply boundaries. Human comfort also requires a later user
 trial. Deeper queuing is deferred pending evidence that it removes meaningful
 idle gaps beyond the current preparation/playback overlap.
+
+The current editor always provides runtime identity to its bridge. The only
+production constructor supplies it, so the bridge requires it instead of
+offering an unreachable omission. The discovery schema still accepts legacy
+records without identity so a new relay can reject them with recovery guidance.
