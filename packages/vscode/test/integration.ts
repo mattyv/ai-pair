@@ -1448,7 +1448,7 @@ export async function run(): Promise<void> {
       let at = 0;
       const toggles = [...new Set([...indexes, ...initiallyPicked])]
         .filter((index) => indexes.includes(index) !== initiallyPicked.includes(index))
-        .sort((a, b) => a - b);
+        .toSorted((a, b) => a - b);
       for (const index of toggles) {
         for (; at < index; at++) {
           await vscode.commands.executeCommand('quickInput.next');
