@@ -22,6 +22,7 @@ import { controllerPaths, extensionPaths, playerPaths } from './integration_path
 import { panelPaths } from './integration_panel_paths';
 import { gapPaths } from './integration_gap_paths';
 import { codePlaybackPaths } from './integration_code_playback';
+import { preservedPlaybackPaths } from './integration_preserved_playback';
 import { corePaths } from './integration_core_paths';
 import { playerGapPaths } from './integration_player_gap_paths';
 import { runLegacySpeechPaths } from './integration_legacy_speech_paths';
@@ -1452,6 +1453,7 @@ export async function run(): Promise<void> {
 
   // Last, since they change the playback's settings: the player's and the controller's paths (#176).
   await codePlaybackPaths(api, root);
+  await preservedPlaybackPaths(api, root);
   await playerGapPaths(api, root);
   await playerFaults(api, root);
   await playerPaths(api, root);
