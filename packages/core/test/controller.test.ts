@@ -918,6 +918,60 @@ describe('steps and their batches', () => {
   });
 });
 
+describe('command result delivery', () => {
+  it('PromptRunReady, Conservation: wakes a pending listen with the command result once', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step([{ run: 'echo hello' }]));
+    const listen = h.controller.listen();
+    expect(await pending(listen)).toBe(true);
+    finish({ runs: [{ command: 'echo hello', output: 'hello', exit_code: 0 }] });
+    await settle();
+    expect(await pending(listen)).toBe(false);
+    expect((await report(listen)).batches).toEqual([
+      { id: 1, status: 'completed', runs: [{ command: 'echo hello', output: 'hello', exit_code: 0 }] },
+    ]);
+    const next = h.controller.listen();
+    expect(await pending(next)).toBe(true);
+    h.controller.userInterrupt();
+    expect((await report(next)).batches).toEqual([]);
+  });
+
+  it('PromptRunReady: an empty step returns command output while a later canceled step still plays', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step([{ run: 'false' }]));
+    const abort = new AbortController();
+    const queued = h.controller.step(SAY, abort.signal);
+    await settle();
+    abort.abort();
+    await expect(queued).rejects.toMatchObject({ code: 'cancelled' });
+    const finishSecond = holdPlay();
+    const empty = h.controller.step([]);
+    expect(await pending(empty)).toBe(true);
+    finish({ runs: [{ command: 'false', output: 'failed', exit_code: 1 }] });
+    await settle();
+    expect(await pending(empty)).toBe(false);
+    expect((await report(empty)).batches).toEqual([
+      { id: 1, status: 'completed', runs: [{ command: 'false', output: 'failed', exit_code: 1 }] },
+    ]);
+    finishSecond();
+    await settle();
+  });
+
+  it('NoQuietWake: a completed batch without a command leaves listen pending', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    const listen = h.controller.listen();
+    finish();
+    await settle();
+    expect(await pending(listen)).toBe(true);
+    h.controller.userInterrupt();
+    await report(listen);
+  });
+});
+
 describe('playing the queue', () => {
   it('leaves an edited batch unchanged when the advisory check returns no findings', async () => {
     const h = await started();

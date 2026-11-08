@@ -839,6 +839,16 @@ export async function run(): Promise<void> {
   // glide 500 ms, and at speed 20 the command starts some 50 ms into it.
   const ai = vscode.workspace.getConfiguration('aiPair');
   await ai.update('confirmCommands', false, vscode.ConfigurationTarget.Global);
+  // CommandDelivery: a real command result wakes a pending listen before the 45-second heartbeat.
+  await controller.start('command delivery');
+  await controller.step([{ run: 'sleep 1; printf command-delivered' }]);
+  const commandStarted = Date.now();
+  const commandReport = await Promise.race([controller.listen(), sleep(8000).then(() => undefined)]);
+  assert.ok(commandReport, 'listen did not return within eight seconds');
+  assert.ok(Date.now() - commandStarted < 8000);
+  assert.ok(commandReport.batches.some((batch) => batch.runs?.some((run) => run.output.includes('command-delivered'))));
+  await controller.end();
+  console.log('CommandDelivery: a real command woke the pending listen before its heartbeat');
   await ai.update('timing', { glideMs: LONG_GLIDE_MS, glideMaxMs: LONG_GLIDE_MS }, vscode.ConfigurationTarget.Global);
   fs.writeFileSync(file('glide.txt'), Array.from({ length: 300 }, (_, i) => `line ${i + 1}\n`).join(''));
   const glide = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file('glide.txt')));

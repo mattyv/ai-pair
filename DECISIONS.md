@@ -507,6 +507,11 @@ The packaged MCP harness is a test fixture: it has no production callers and
 exercises an installed VSIX through the SDK. Keep it under the VS Code test
 tree and typecheck it with the rest of that tree.
 
+The current editor always provides runtime identity to its bridge. The only
+production constructor supplies it, so the bridge requires it instead of
+offering an unreachable omission. The discovery schema still accepts legacy
+records without identity so a new relay can reject them with recovery guidance.
+
 ## Selective upstream PR 17 adoption, 2026-11-08
 
 Adopt prompt completed-command delivery and honest working, ready and approval
@@ -525,7 +530,15 @@ existing deferred-reply boundaries. Human comfort also requires a later user
 trial. Deeper queuing is deferred pending evidence that it removes meaningful
 idle gaps beyond the current preparation/playback overlap.
 
-The current editor always provides runtime identity to its bridge. The only
-production constructor supplies it, so the bridge requires it instead of
-offering an unreachable omission. The discovery schema still accepts legacy
-records without identity so a new relay can reject them with recovery guidance.
+## Command-result delivery
+
+-   Wake a pending listen or an empty step when a completed batch contains a
+    command result, even with later work queued. Completed typing and narration
+    remain quiet; discarded steps and end calls still wait for the queue to
+    drain. Interruption settlement takes precedence. This preserves the current
+    action protocol, queue depth, and speech pacing.
+-   Trial cherry-pick of BedirT's MIT-licensed `2e1f488` onto `6c075e2`
+    conflicted in all 29 touched paths. Its beat protocol changes action and
+    report shapes and its work-ahead setting changes pacing. Adapt the focused
+    readiness rule instead of importing those incompatible changes. The trial
+    does not establish compatibility for the rest of the stacked series.

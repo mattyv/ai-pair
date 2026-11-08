@@ -152,7 +152,8 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Calibration.cfg` | `MaxRounds = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
 | `PointFocus.cfg` | a point, a look-away, a closed tab, `MaxReplies = 2` replies or resumes, `DropStaleFocus = TRUE`, `RevealOnReply = FALSE` | holds | 67 |
 | `Start.cfg` | `MaxPages = 3`, `MaxEnvironmentChanges = 4`, `MaxClicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE`, `InTerminal = TRUE`, `OneAgent = TRUE`, `NoteOnClick = TRUE`, `ClearOnExit = TRUE` | holds | 242,152 |
-| `ListenGrace.cfg` | unbounded, `Grace = TRUE`, `ShowAbsent = TRUE`, `EndOnAnyCall = TRUE` | holds | 40 |
+| `ListenGrace.cfg` | unbounded, `Grace = TRUE`, `ShowAbsent = TRUE`, `EndOnAnyCall = TRUE` | holds | 80 |
+| `CommandDelivery.cfg` | queue bounded to two completions | holds | 84 |
 
 `Controller.tla` also passes at `NumBatches = 3, MaxCancels = 2` (570,008 states).
 
@@ -1358,7 +1359,7 @@ holds "thinking", "absent", and "listening".
 | `Read` | `read`: `endGrace`, and the quiet restarted at once |
 | `FailRehearsal` | a `step` answered by `rejectBatch` or `rejectUnanchored`: `serialize` ended the grace, the agent owes a response to the rejection, and the report takes the events |
 | `Timeout` | `finishCall` for a `listen` with `waiting` and no batches, events, or rejection: `startGrace` |
-| `QuietNews`, `TimeoutWithNews` | a batch completing, or an edit `interrupting` does not hold for, which wakes no `listen`; `finishCall` for a `listen` with `waiting` and such news: no grace |
+| `QuietNews`, `TimeoutWithNews` | a batch completing without a command, or an edit `interrupting` does not hold for, which wakes no `listen`; `finishCall` for a `listen` with `waiting` and such news: no grace |
 | `Return` | `finishCall` with anything else |
 | `Interrupt` | an event `interrupting` holds for: a message, an interrupt, an edit of the programmer's, a turn change |
 | `Expire` | the grace timer firing after `listenGraceMs` |
@@ -1394,6 +1395,30 @@ Every invariant and property names the test that proves the code obeys it:
 | `AbsentWithoutCall` | `controller.test.ts`: AbsentShows, AbsentWithoutCall: says the agent is not listening once no call has been open for absentMs, until it calls |
 | `AbsentShows` | `controller.test.ts`: AbsentShows, AbsentWithoutCall: says the agent is not listening once no call has been open for absentMs, until it calls |
 | `NewsSkipsGraceProp` | `controller.test.ts`: NoFalseYourMove, NewsSkipsGraceProp: shows thinking when a listen times out with a batch to report. No test times a listen out with only an edit that interrupts nothing yet |
+
+### `CommandDelivery`: prompt command results
+
+`callReady` and `ready` in `packages/core/src/controller.ts` (#27). A
+completed command wakes a listen or empty step, including while later work is
+queued. The model bounds the queue to two completions and abstracts a playing
+head and its interruption with a count and flag. Nonempty step readiness is
+a simplified head approximation; this is not a complete serialization model.
+Weak fairness of quiet completion abstracts eventual settlement of an
+interrupted head, and fairness of Return makes enabled reports eventual.
+
+| Property | Code test or check |
+|---|---|
+| `TypeOK` | TypeScript checks types |
+| `Conservation`, `PromptRunReady` | `controller.test.ts`: command result delivery tests |
+| `NoQuietWake` | `controller.test.ts`: a completed batch without a command leaves listen pending |
+| `NoEarlyEnd`, `NoEarlyDiscarded`, `NoInterruptedReturn` | Existing serialization and interruption tests; targeted new tests still needed |
+| `RunDelivered` | `controller.test.ts`: wakes a pending listen with the command result once |
+
+Mutation checks detected omitted wake (`PromptRunReady`; separately
+`RunDelivered` with the invariant disabled), lost or duplicated news
+(`Conservation`), a quiet wake (`NoQuietWake`), early end (`NoEarlyEnd`),
+early discarded step (`NoEarlyDiscarded`), and return before interrupt
+settlement (`NoInterruptedReturn`). `TypeOK` is enforced by TLC's domains.
 
 ### `EditEvents`: an edit undone, in the report
 

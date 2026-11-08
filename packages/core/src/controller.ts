@@ -186,7 +186,9 @@ function callReady(session: Session, call: Call): boolean {
     case 'step':
       // An empty step, or one whose batch was discarded, waits for the queued batches, so its report comes after the
       // batch an interrupt left playing (#219).
-      if (call.batch === undefined || call.batch.result?.status === 'discarded') return session.queue.length === 0;
+      // specs/CommandDelivery.tla, PromptRunReady: an empty step can return command news before later work.
+      if (call.batch === undefined) return session.queue.length === 0 || session.finished.some((r) => (r.runs?.length ?? 0) > 0);
+      if (call.batch.result?.status === 'discarded') return session.queue.length === 0;
       // A step's batch is done, or plays next (`AtHead`): the step returns once the one before it has (#150).
       return call.batch.state === 'done' || session.queue[0] === call.batch;
     case 'end':
@@ -195,8 +197,9 @@ function callReady(session: Session, call: Call): boolean {
       // The last kind, `listen`: a new kind would widen `call.kind` here and fail the `satisfies`.
       call.kind satisfies 'listen';
       if (session.held.length > 0) return true;
-      if (session.finished.some((r) => r.status !== 'completed')) return true;
-      // A completed batch, or an edit that interrupts nothing, doesn't wake a listen (specs/ListenGrace.tla, `QuietNews`).
+      // specs/CommandDelivery.tla, PromptRunReady: command output is actionable even while later batches play.
+      if (session.finished.some((r) => r.status !== 'completed' || (r.runs?.length ?? 0) > 0)) return true;
+      // Other completed batches and noninterrupting edits stay quiet (specs/ListenGrace.tla, `QuietNews`).
       if (session.queue.length > 0) return false;
       if (session.scene.turn === 'agent') return session.events.some(interrupting);
       // The programmer's edits during their turn wait until they pause typing (specs/Navigator.tla, `Return`).
