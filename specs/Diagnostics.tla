@@ -16,7 +16,8 @@ VARIABLES
     warned,
     caveat,
     caveatCount
-vars == <<edited, observed, available, desired, result, batches, warned, caveat, caveatCount>>
+vars == <<edited, observed, available, desired, result, batches,
+          warned, caveat, caveatCount>>
 
 TypeOK == /\ edited \in BOOLEAN
           /\ observed \in BOOLEAN
@@ -40,7 +41,8 @@ Init == /\ edited = FALSE
 
 Edit == /\ result = "none"
         /\ edited' = TRUE
-        /\ UNCHANGED <<observed, available, desired, result, batches, warned, caveat, caveatCount>>
+        /\ UNCHANGED <<observed, available, desired, result, batches,
+                       warned, caveat, caveatCount>>
 
 Finish ==
     /\ result = "none"
