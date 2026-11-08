@@ -281,11 +281,11 @@ export async function run(): Promise<void> {
     await replySettings.update('replyBehavior', undefined, vscode.ConfigurationTarget.Global);
     assert.equal(replySettings.get('replyBehavior'), 'interrupt');
     api.panelMessage({ type: 'replyBehavior', value: 'finishAction' });
-    await until(() => replySettings.get('replyBehavior') === 'finishAction');
+    await until(() => vscode.workspace.getConfiguration('aiPair').get('replyBehavior') === 'finishAction');
     api.panelMessage({ type: 'replyBehavior', value: 'invalid' });
-    assert.equal(replySettings.get('replyBehavior'), 'finishAction');
+    assert.equal(vscode.workspace.getConfiguration('aiPair').get('replyBehavior'), 'finishAction');
     api.panelMessage({ type: 'replyBehavior', value: 'interrupt' });
-    await until(() => replySettings.get('replyBehavior') === 'interrupt');
+    await until(() => vscode.workspace.getConfiguration('aiPair').get('replyBehavior') === 'interrupt');
   } finally {
     await replySettings.update('replyBehavior', previousReplyBehavior, vscode.ConfigurationTarget.Global);
   }
