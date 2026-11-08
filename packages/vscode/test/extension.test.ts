@@ -365,6 +365,7 @@ const fakes = vi.hoisted(() => {
             cancel: ReturnType<typeof vi.fn>;
           };
           accept: ReturnType<typeof vi.fn>;
+          pageReady: ReturnType<typeof vi.fn<() => boolean>>;
         }
       | undefined,
     frameAccepted: true,
