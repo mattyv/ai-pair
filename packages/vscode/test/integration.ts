@@ -18,6 +18,7 @@ import { EditorLink, findWindows } from '../../relay/src/link';
 import type { Api } from '../src/extension';
 import { DEFAULT_TIMINGS } from '../src/timings';
 import { controllerPaths, extensionPaths, playerPaths } from './integration_paths';
+import { codePlaybackPaths } from './integration_code_playback';
 
 const EXPECTED_TODOS = `export interface Todo {
   id: number;
@@ -1339,6 +1340,7 @@ export async function run(): Promise<void> {
   console.log('Set Up Agent: closed, copied for another agent, and set up Codex past a broken Claude Code file');
 
   // Last, since they change the playback's settings: the player's and the controller's paths (#176).
+  await codePlaybackPaths(api, root);
   await playerPaths(api, root);
   await controllerPaths(api, root);
   await extensionPaths(api, root);
