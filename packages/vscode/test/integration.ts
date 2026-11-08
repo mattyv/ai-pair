@@ -19,6 +19,7 @@ import { EditorLink, findWindows } from '../../relay/src/link';
 import type { Api } from '../src/extension';
 import { DEFAULT_TIMINGS } from '../src/timings';
 import { controllerPaths, extensionPaths, playerPaths } from './integration_paths';
+import { deferredSettlementPaths } from './integration_deferred_settlement';
 import { panelPaths } from './integration_panel_paths';
 import { gapPaths } from './integration_gap_paths';
 import { codePlaybackPaths } from './integration_code_playback';
@@ -1494,6 +1495,7 @@ export async function run(): Promise<void> {
   await playerFaults(api, root);
   await playerPaths(api, root);
   await controllerPaths(api, root);
+  await deferredSettlementPaths(api, root);
   await corePaths(api, root);
   await extensionPaths(api, root);
   await panelPaths(api);
