@@ -184,6 +184,8 @@ Last updated: css, 2026-11-08.
 | `packages/vscode/src/speech_credentials.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_elevenlabs.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_engine.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_local_client.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_local_protocol.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_model_manifest.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_native_output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_output_preferences.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -206,7 +208,6 @@ Last updated: css, 2026-11-08.
 | `packages/vscode/src/speech_waveform.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_worker.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_worker_host.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_worker_messages.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/terminal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.3% B 98.1% F 92.3% | - | - | - | - |
 | `packages/vscode/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/view.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 88.0% F 100.0% | - | - | - | - |
@@ -249,6 +250,9 @@ Last updated: css, 2026-11-08.
 | `packages/vscode/test/speech_elevenlabs.e2e.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_elevenlabs.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_engine.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_local.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_local_client.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_local_protocol.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_native_output.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_native_spawn.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_output_discovery.test.ts` | TypeScript | test | - | - | - | - | test |
@@ -276,7 +280,6 @@ Last updated: css, 2026-11-08.
 | `packages/vscode/test/speech_waveform.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_worker.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_worker_host.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_worker_messages.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/terminal.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/terminal_smoke_integration.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/timings.test.ts` | TypeScript | test | test | test | test | - | test |
@@ -469,6 +472,7 @@ Last updated: css, 2026-11-08.
 | `specs/WarmSynthesisWorker_Cancellation.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/WarmSynthesisWorker_Healthy.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/WarmSynthesisWorker_Retirement.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/WarmSynthesisWorker_Watchdog.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Wire.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Wire.tla` | TLA+ | - | - | 15 of 15 actions | - | - | - |
 | `specs/check.sh` | Shell | - | - | - | - | - | - |

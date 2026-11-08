@@ -3,35 +3,41 @@ import { mock } from 'vitest-mock-extended';
 import { installedSpeechModel } from '../src/speech_setup';
 import { speechRuntimeAvailable } from '../src/speech_runtime_status';
 import { SpeechService, type SpeechOutput } from '../src/speech_service';
-import type { ElevenLabsSpeechPort, SpeechSettings } from '../src/speech_types';
+import type {
+  LocalClientState,
+  LocalListener,
+  LocalSynthesisOutcome,
+  LocalSynthesisPort,
+  LocalSynthesisRequest,
+} from '../src/speech_local_client';
+import type { ElevenLabsSpeechPort, LocalSpeechFailureReason, SpeechSettings } from '../src/speech_types';
 import { decodeSpeechWav, encodeTempoWav } from '../src/speech_tempo_pcm';
 
 const fake = vi.hoisted(() => {
-  class Worker {
-    static made: Worker[] = [];
-    static failPost = false;
-    listeners = new Map<string, (...args: unknown[]) => void>();
-    postMessage = vi.fn(() => {
-      if (Worker.failPost) throw new Error('worker closed');
-    });
-    terminate = vi.fn(() => Promise.resolve(0));
-    on = vi.fn((event: string, callback: (...args: unknown[]) => void) => {
-      this.listeners.set(event, callback);
-      return this;
-    });
-    constructor(
-      readonly filename: string,
-      readonly options?: unknown,
-    ) {
-      Worker.made.push(this);
+  const Worker = vi.fn();
+  /** The inert stand-in for the real client, used by every service built without an injected one. */
+  class LocalSynthesisClient {
+    static made: Array<{ spawn: () => unknown; listener: unknown }> = [];
+    constructor(options: { spawn: () => unknown; listener: unknown }) {
+      LocalSynthesisClient.made.push(options);
     }
-    emit(event: string, value?: unknown): void {
-      this.listeners.get(event)?.(value);
+    state(): string {
+      return 'cold';
     }
+    busy(): boolean {
+      return false;
+    }
+    load(): void {}
+    synthesize(): Promise<unknown> {
+      return Promise.resolve({ status: 'failed', reason: 'unavailable' });
+    }
+    cancel(): void {}
+    retire(): void {}
   }
-  return { Worker };
+  return { Worker, LocalSynthesisClient };
 });
 vi.mock('node:worker_threads', () => ({ Worker: fake.Worker }));
+vi.mock('../src/speech_local_client', () => ({ LocalSynthesisClient: fake.LocalSynthesisClient }));
 vi.mock('../src/speech_setup', () => ({ installedSpeechModel: vi.fn() }));
 vi.mock('../src/speech_runtime_status', () => ({ speechRuntimeAvailable: vi.fn() }));
 vi.mock('../src/speech_tempo_pcm', () => ({ decodeSpeechWav: vi.fn(), encodeTempoWav: vi.fn() }));
@@ -53,6 +59,103 @@ async function settle(): Promise<void> {
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
 const originalArch = Object.getOwnPropertyDescriptor(process, 'arch');
 
+/** One request the service made of the local engine, which the test settles by hand. */
+interface LocalCall {
+  request: LocalSynthesisRequest;
+  settle: (outcome: LocalSynthesisOutcome) => void;
+  returned: boolean;
+  canceled: boolean;
+}
+
+/** A typed fake local engine whose lifecycle events the test raises; it follows the client's documented contract. */
+class LocalDouble {
+  readonly port = mock<LocalSynthesisPort>();
+  readonly calls: LocalCall[] = [];
+  phase: LocalClientState = 'cold';
+  listener?: LocalListener;
+
+  constructor() {
+    this.port.state.mockImplementation(() => this.phase);
+    this.port.busy.mockImplementation(() => this.calls.some((call) => !call.returned));
+    this.port.load.mockImplementation((modelPath) => {
+      expect(modelPath).toBeTypeOf('string');
+      this.phase = 'loading';
+    });
+    this.port.synthesize.mockImplementation((request) => {
+      const outcome = Promise.withResolvers<LocalSynthesisOutcome>();
+      this.calls.push({ request, settle: outcome.resolve, returned: false, canceled: false });
+      return outcome.promise;
+    });
+    this.port.cancel.mockImplementation(() => {
+      for (const call of this.calls) {
+        if (!call.returned && !call.canceled) {
+          call.canceled = true;
+          call.settle({ status: 'failed', reason: 'canceled' });
+        }
+      }
+    });
+    this.port.retire.mockImplementation((reason) => {
+      this.retired(reason);
+    });
+  }
+
+  /** Makes the factory the service receives. */
+  factory = (listener: LocalListener): LocalSynthesisPort => {
+    this.listener = listener;
+    return this.port;
+  };
+
+  /** The worker reported valid capabilities. */
+  ready(): void {
+    this.phase = 'ready';
+    this.listener?.ready();
+  }
+
+  /** Returns the audio of the oldest outstanding request for the unit and part, then lets promises settle. */
+  async audio(id: number, part = 0, durationMs = 1000, wav = new Uint8Array(44)): Promise<void> {
+    this.take(id, part)?.settle({ status: 'audio', wav, durationMs });
+    await settle();
+  }
+
+  /** The host reported a synthesis failure for the unit and part. */
+  async failure(id: number, part = 0): Promise<void> {
+    this.take(id, part)?.settle({ status: 'failed', reason: 'synthesis' });
+    await settle();
+  }
+
+  /** The worker was retired: it keeps the slot until released; its pending request fails. */
+  retired(reason: LocalSpeechFailureReason): void {
+    if (this.phase === 'cold' || this.phase === 'retiring') return;
+    this.phase = 'retiring';
+    for (const call of this.calls) {
+      if (!call.returned && !call.canceled) call.settle({ status: 'failed', reason });
+      call.returned = true;
+    }
+    this.listener?.retired(reason);
+  }
+
+  /** The retired worker has exited. */
+  released(): void {
+    this.phase = 'cold';
+  }
+
+  /** Requests whose unit and part match, excluding those the worker already returned. */
+  private take(id: number, part: number): LocalCall | undefined {
+    const call = this.calls.find((candidate) => !candidate.returned && candidate.request.id === id && candidate.request.part === part);
+    if (call !== undefined) call.returned = true;
+    return call;
+  }
+}
+
+/** The local engine of the service most recently built by a test. */
+let local = new LocalDouble();
+
+/** Starts a new local engine fake for the next service. */
+function newLocal(): LocalDouble {
+  local = new LocalDouble();
+  return local;
+}
+
 /** Makes a service with a live page and local preferences. */
 function harness(enabled = true) {
   Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
@@ -60,20 +163,22 @@ function harness(enabled = true) {
   const output = mock<SpeechOutput>();
   output.prepare = undefined;
   output.play.mockReturnValue(7);
+  const double = newLocal();
   const service = new SpeechService({
     runtimeDirectory: '/runtime',
     storageDirectory: '/storage',
     localDesktop: true,
     output,
+    createLocal: double.factory,
     settings: () => ({ enabled, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
   });
-  return { service, output };
+  return { service, output, local: double };
 }
 
 beforeEach(() => {
   vi.useFakeTimers();
-  fake.Worker.made.length = 0;
-  fake.Worker.failPost = false;
+  fake.LocalSynthesisClient.made.length = 0;
+  local = new LocalDouble();
   vi.mocked(installedSpeechModel).mockResolvedValue('/model');
   vi.mocked(speechRuntimeAvailable).mockResolvedValue(true);
 });
@@ -92,7 +197,7 @@ describe('SpeechService', () => {
       const { service } = harness();
       const gate = service.speak('Hello.');
       await settle();
-      expect(fake.Worker.made).toHaveLength(1);
+      expect(local.port.load).toHaveBeenCalledWith('/model');
       service.cancel();
       await gate;
     } finally {
@@ -103,7 +208,7 @@ describe('SpeechService', () => {
   it('defaults to silent behavior when disabled', async () => {
     const { service, output } = harness(false);
     await service.speak('Hello.');
-    expect(fake.Worker.made).toHaveLength(0);
+    expect(local.port.load).not.toHaveBeenCalled();
     expect(output.play).not.toHaveBeenCalled();
   });
 
@@ -111,13 +216,10 @@ describe('SpeechService', () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    expect(worker.filename).toBe('/runtime/worker.mjs');
-    expect(worker.options).toEqual({ workerData: { modelPath: '/model' } });
-    worker.emit('message', { type: 'ready' });
-    expect(worker.postMessage).toHaveBeenCalledWith({ type: 'synthesize', id: 1, text: 'Hello.', voice: 'af_heart', speed: 1 });
-    worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+    expect(local.port.load).toHaveBeenCalledWith('/model');
+    local.ready();
+    expect(local.calls.map((call) => call.request)).toEqual([{ id: 1, part: 0, final: true, text: 'Hello.', voice: 'af_heart', speed: 1 }]);
+    await local.audio(1);
     expect(output.play).toHaveBeenCalledWith(1, new Uint8Array(44), 1000);
     let done = false;
     void gate.then(() => {
@@ -137,11 +239,9 @@ describe('SpeechService', () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    worker.emit('message', { type: 'ready' });
+    local.ready();
     service.pause();
-    worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+    await local.audio(1);
     expect(output.play).not.toHaveBeenCalled();
     service.cancel();
     await gate;
@@ -149,16 +249,16 @@ describe('SpeechService', () => {
     expect(output.play).not.toHaveBeenCalled();
   });
 
-  it('times out a stuck worker and ignores its late output', async () => {
+  it('TruthfulUnavailable: a retired worker ends its unit with a fixed reason and its late output is ignored', async () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    worker.emit('message', { type: 'ready' });
-    await vi.advanceTimersByTimeAsync(20_000);
+    local.ready();
+    local.retired('timeout');
     await gate;
-    worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+    expect(output.localDiagnostic).toHaveBeenCalledWith('failed', 'timeout');
+    expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'Local speech stopped. Retry setup.');
+    await local.audio(1);
     expect(output.play).not.toHaveBeenCalled();
   });
 });
@@ -171,7 +271,7 @@ describe('SpeechService lifecycle', () => {
     });
     await service.speak('Hello.');
     expect(installedSpeechModel).not.toHaveBeenCalled();
-    expect(fake.Worker.made).toHaveLength(0);
+    expect(local.port.load).not.toHaveBeenCalled();
   });
 
   it('does not post audio when its preparing notification synchronously cancels it', async () => {
@@ -182,10 +282,8 @@ describe('SpeechService lifecycle', () => {
     });
     const gate = service.speak('Hello.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    worker.emit('message', { type: 'ready' });
-    worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+    local.ready();
+    await local.audio(1);
     await gate;
     expect(output.play).not.toHaveBeenCalled();
   });
@@ -198,10 +296,8 @@ describe('SpeechService lifecycle', () => {
     });
     const gate = service.speak('Hello.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    worker.emit('message', { type: 'ready' });
-    worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+    local.ready();
+    await local.audio(1);
     await gate;
     expect(output.control).toHaveBeenCalledWith(1, 7, 'stop');
   });
@@ -210,128 +306,63 @@ describe('SpeechService lifecycle', () => {
     const { service, output } = harness();
     const first = service.speak('First.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    worker.emit('message', { type: 'ready' });
+    local.ready();
     service.cancel();
     await first;
     await service.speak('Second.');
-    expect(worker.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ id: 2 }));
-    worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+    expect(output.status).toHaveBeenCalledWith(2, 'unavailable', expect.stringContaining('finishing'));
+    expect(local.calls).toHaveLength(1);
+    await local.audio(1);
     const third = service.speak('Third.');
-    expect(worker.postMessage).toHaveBeenCalledWith(expect.objectContaining({ id: 3, text: 'Third.' }));
-    worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+    expect(local.calls.map((call) => call.request)).toEqual([
+      expect.objectContaining({ id: 1 }),
+      expect.objectContaining({ id: 3, text: 'Third.' }),
+    ]);
+    await local.audio(1);
     expect(output.play).not.toHaveBeenCalled();
     service.cancel();
     await third;
   });
 
-  it('times out an active model load and falls back to reading', async () => {
+  it('NoCanceledResume: a unit canceled during model loading leaves the load to the worker watchdog', async () => {
+    const { service } = harness();
+    const gate = service.speak('Hello.');
+    await settle();
+    service.cancel();
+    await gate;
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(local.port.cancel).toHaveBeenCalled();
+    expect(local.port.retire).not.toHaveBeenCalled();
+    expect(local.calls).toHaveLength(0);
+  });
+
+  it('the unit deadline retires a worker that is still loading and falls back to reading', async () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
     await vi.advanceTimersByTimeAsync(20_000);
     await gate;
-    expect(worker.terminate).toHaveBeenCalledOnce();
+    expect(local.port.retire).toHaveBeenCalledExactlyOnceWith('timeout');
     expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.any(String));
   });
 
-  it('bounds a canceled model load without waiting for another request', async () => {
-    const { service } = harness();
-    const gate = service.speak('Hello.');
-    await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    service.cancel();
-    await gate;
-    await vi.advanceTimersByTimeAsync(20_000);
-    expect(worker.terminate).toHaveBeenCalledOnce();
-  });
-
-  it('does not let a duplicate ready message clear the synthesis watchdog', async () => {
-    const { service } = harness();
-    const gate = service.speak('Hello.');
-    await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    worker.emit('message', { type: 'ready' });
-    worker.emit('message', { type: 'ready' });
-    service.cancel();
-    await gate;
-    await vi.advanceTimersByTimeAsync(20_000);
-    expect(worker.terminate).toHaveBeenCalledOnce();
-  });
-
-  it('ignores a stale worker watchdog after a later synthesis starts', async () => {
-    const { service } = harness();
-    const timers = vi.spyOn(globalThis, 'setTimeout');
-    const first = service.speak('First.');
-    await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    worker.emit('message', { type: 'ready' });
-    const callback: unknown = timers.mock.calls.at(-1)?.[0];
-    service.cancel();
-    await first;
-    worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
-    const next = service.speak('Next.');
-    if (!isTimerCallback(callback)) throw new Error('No worker timeout');
-    callback();
-    expect(worker.terminate).not.toHaveBeenCalled();
-    service.cancel();
-    await next;
-    timers.mockRestore();
-  });
-
-  it('times out a canceled synthesis and waits for termination before retrying', async () => {
+  it('OneEngine: refuses a new unit while a retired worker has not exited, then loads a fresh one', async () => {
     const { service, output } = harness();
     const first = service.speak('First.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    const termination = Promise.withResolvers<number>();
-    worker.terminate.mockReturnValueOnce(termination.promise);
-    worker.emit('message', { type: 'ready' });
+    local.ready();
     service.cancel();
     await first;
-    await vi.advanceTimersByTimeAsync(20_000);
-    expect(worker.terminate).toHaveBeenCalledOnce();
+    local.retired('timeout');
     await service.speak('Second.');
-    expect(fake.Worker.made).toHaveLength(1);
-    worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
-    expect(output.play).not.toHaveBeenCalled();
-    termination.resolve(0);
-    await settle();
-    const third = service.speak('Third.');
-    await settle();
-    expect(fake.Worker.made).toHaveLength(2);
-    service.cancel();
-    await third;
-  });
-
-  it('waits for worker termination before starting another CPU job', async () => {
-    const { service, output } = harness();
-    const first = service.speak('First.');
-    await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    const termination = Promise.withResolvers<number>();
-    worker.terminate.mockReturnValueOnce(termination.promise);
-    worker.emit('message', { type: 'ready' });
-    await vi.advanceTimersByTimeAsync(20_000);
-    await first;
-    await service.speak('Second.');
-    expect(fake.Worker.made).toHaveLength(1);
+    expect(local.port.load).toHaveBeenCalledTimes(1);
     expect(output.status).toHaveBeenCalledWith(2, 'unavailable', expect.stringContaining('finishing'));
-    worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+    await local.audio(1);
     expect(output.play).not.toHaveBeenCalled();
-    termination.resolve(0);
-    await settle();
+    local.released();
     const third = service.speak('Third.');
     await settle();
-    expect(fake.Worker.made).toHaveLength(2);
+    expect(local.port.load).toHaveBeenCalledTimes(2);
     service.cancel();
     await third;
   });
@@ -350,10 +381,8 @@ describe('SpeechService lifecycle', () => {
     const { service } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    worker.emit('message', { type: 'ready' });
-    worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+    local.ready();
+    await local.audio(1);
     service.audioEvent({ id: 1, pageId: 7, event: 'started' });
     await vi.advanceTimersByTimeAsync(3000);
     service.audioEvent({ id: 1, pageId: 7, event: 'started' });
@@ -370,10 +399,8 @@ describe('SpeechService lifecycle', () => {
     const { service } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    worker.emit('message', { type: 'ready' });
-    worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+    local.ready();
+    await local.audio(1);
     service.audioEvent({ id: 1, pageId: 7, event: 'started' });
     await vi.advanceTimersByTimeAsync(3000);
     service.pause();
@@ -396,10 +423,8 @@ describe('SpeechService lifecycle', () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    worker.emit('message', { type: 'ready' });
-    worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+    local.ready();
+    await local.audio(1);
     service.audioEvent({ id: 1, pageId: 7, event: 'started' });
     if (reason === 'cancel') service.cancel();
     else service.pageClosed(7);
@@ -412,10 +437,8 @@ describe('SpeechService lifecycle', () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    worker.emit('message', { type: 'ready' });
-    worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+    local.ready();
+    await local.audio(1);
     service.pageClosed(7);
     await gate;
     expect(output.control).toHaveBeenCalledWith(1, 7, 'stop');
@@ -432,14 +455,12 @@ describe('SpeechService lifecycle', () => {
     noPage.output.play.mockReturnValue(undefined);
     const gate = noPage.service.speak('Hello.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    worker.emit('message', { type: 'ready' });
-    worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+    local.ready();
+    await local.audio(1);
     await gate;
     expect(noPage.output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('panel'));
     const invalid = noPage.service.speak('Again.');
-    worker.emit('message', { type: 'audio', id: 2, wav: new Uint8Array(43), durationMs: 1000 });
+    await local.audio(2, 0, 1000, new Uint8Array(43));
     await invalid;
     expect(noPage.output.status).toHaveBeenCalledWith(2, 'unavailable', expect.stringContaining('invalid'));
   });
@@ -458,11 +479,12 @@ describe('SpeechService failures and races', () => {
         storageDirectory: '/storage',
         localDesktop: true,
         output,
+        createLocal: newLocal().factory,
         settings: () => settings,
       });
       await service.speak('Hello.');
       expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('supported'));
-      expect(fake.Worker.made).toHaveLength(0);
+      expect(local.port.load).not.toHaveBeenCalled();
     }
   });
 
@@ -472,7 +494,7 @@ describe('SpeechService failures and races', () => {
     const gate = service.speak('Hello.');
     await settle();
     expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('runtime'));
-    expect(fake.Worker.made).toHaveLength(0);
+    expect(local.port.load).not.toHaveBeenCalled();
     await gate;
   });
 
@@ -490,11 +512,12 @@ describe('SpeechService failures and races', () => {
       storageDirectory: '/storage',
       localDesktop: true,
       output,
+      createLocal: newLocal().factory,
       settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
     });
     await service.speak('Hello.');
     expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('local Linux'));
-    expect(fake.Worker.made).toHaveLength(0);
+    expect(local.port.load).not.toHaveBeenCalled();
   });
 
   it('explains unsupported extension hosts without starting a worker', async () => {
@@ -505,22 +528,21 @@ describe('SpeechService failures and races', () => {
       storageDirectory: '/storage',
       localDesktop: false,
       output,
+      createLocal: newLocal().factory,
       settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
     });
     await service.speak('Hello.');
     expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('local Linux'));
-    expect(fake.Worker.made).toHaveLength(0);
+    expect(local.port.load).not.toHaveBeenCalled();
   });
 
   it('resumes a prepared waveform only when the global pause clears', async () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    worker.emit('message', { type: 'ready' });
+    local.ready();
     service.pause();
-    worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+    await local.audio(1);
     expect(output.play).not.toHaveBeenCalled();
     service.resume();
     expect(output.play).toHaveBeenCalledOnce();
@@ -538,10 +560,8 @@ describe('SpeechService failures and races', () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    worker.emit('message', { type: 'ready' });
-    worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+    local.ready();
+    await local.audio(1);
     service.pause();
     service.audioEvent({ id: 1, pageId: 7, event: 'started' });
     await vi.advanceTimersByTimeAsync(60_000);
@@ -551,29 +571,27 @@ describe('SpeechService failures and races', () => {
     await gate;
   });
 
-  it.each(['error', 'exit'])('falls back when a worker emits %s', async (event) => {
+  it.each(['worker_error', 'worker_exit'] as const)('falls back when the worker is retired for %s', async (reason) => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    worker.emit(event);
+    local.retired(reason);
     await gate;
     expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('stopped'));
+    expect(output.localDiagnostic).toHaveBeenCalledWith('failed', reason);
   });
 
   it('keeps a loading worker after cancellation but ignores the old request', async () => {
     const { service } = harness();
     const first = service.speak('Old.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
     service.cancel();
     await first;
     const next = service.speak('New.');
     await settle();
-    worker.emit('message', { type: 'ready' });
-    expect(worker.postMessage).toHaveBeenCalledWith(expect.objectContaining({ id: 2, text: 'New.' }));
+    expect(local.port.load).toHaveBeenCalledTimes(1);
+    local.ready();
+    expect(local.calls.map((call) => call.request)).toEqual([expect.objectContaining({ id: 2, text: 'New.' })]);
     service.cancel();
     await next;
   });
@@ -591,16 +609,13 @@ describe('SpeechService failures and races', () => {
     expect(output.status).not.toHaveBeenCalledWith(1, 'unavailable', expect.any(String));
   });
 
-  it('handles failure to send a synthesis request', async () => {
+  it('handles a client that retires a worker it could not send a request to', async () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    fake.Worker.failPost = true;
-    worker.emit('message', { type: 'ready' });
+    local.ready();
+    local.retired('worker_error');
     await gate;
-    expect(worker.terminate).toHaveBeenCalledOnce();
     expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.any(String));
   });
 
@@ -631,17 +646,16 @@ describe('SpeechService failures and races', () => {
   });
 
   it('accepts worker readiness after its requesting unit was canceled', async () => {
-    const { service } = harness();
+    const { service, output } = harness();
     const first = service.speak('Old.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
     service.cancel();
     await first;
-    worker.emit('message', { type: 'ready' });
+    local.ready();
     const next = service.speak('New.');
-    expect(worker.postMessage).toHaveBeenCalledWith(expect.objectContaining({ id: 2, text: 'New.' }));
-    worker.emit('message', { type: 'error', id: 1, message: 'Old failure.' });
+    expect(local.calls.map((call) => call.request)).toEqual([expect.objectContaining({ id: 2, text: 'New.' })]);
+    await local.failure(1);
+    expect(output.status).not.toHaveBeenCalledWith(1, 'unavailable', expect.any(String));
     service.cancel();
     await next;
   });
@@ -657,10 +671,8 @@ describe('SpeechService failures and races', () => {
     });
     const gate = service.speak('Hello.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    worker.emit('message', { type: 'ready' });
-    worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+    local.ready();
+    await local.audio(1);
     await gate;
     expect(output.control).not.toHaveBeenCalled();
     service.dispose();
@@ -671,10 +683,8 @@ describe('SpeechService failures and races', () => {
     const { service } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    worker.emit('message', { type: 'ready' });
-    worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+    local.ready();
+    await local.audio(1);
     service.audioEvent({ id: 1, pageId: 7, event: 'started' });
     service.pause();
     service.pause();
@@ -693,7 +703,7 @@ describe('SpeechService failures and races', () => {
     await gate;
     discovery.resolve('/model');
     await settle();
-    expect(fake.Worker.made).toHaveLength(0);
+    expect(local.port.load).not.toHaveBeenCalled();
     const next = harness();
     vi.mocked(installedSpeechModel).mockRejectedValueOnce(new Error('private path'));
     await next.service.speak('New.');
@@ -701,27 +711,24 @@ describe('SpeechService failures and races', () => {
     expect(JSON.stringify(next.output.status.mock.calls)).not.toContain('private path');
   });
 
-  it('handles a worker load error without an ID and ignores an old worker exit', async () => {
+  it('TruthfulUnavailable: a worker that cannot load its model ends the unit with the model_load category', async () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    worker.emit('message', { type: 'error', message: 'Load failed.' });
+    local.retired('model_load');
     await gate;
-    worker.emit('exit');
+    local.released();
     expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('stopped'));
-    expect(worker.terminate).toHaveBeenCalledOnce();
+    expect(output.localDiagnostic).toHaveBeenCalledWith('failed', 'model_load');
+    expect(local.calls).toHaveLength(0);
   });
 
   it('resumes an audio element that has not acknowledged starting yet', async () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    worker.emit('message', { type: 'ready' });
-    worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+    local.ready();
+    await local.audio(1);
     service.pageClosed(8);
     service.pause();
     service.resume();
@@ -730,26 +737,35 @@ describe('SpeechService failures and races', () => {
     await gate;
   });
 
-  it('cleans up a worker when posting its load request throws', async () => {
+  it('falls back when the client cannot start the worker, using only the allowlisted error code', async () => {
     const { service, output } = harness();
-    fake.Worker.failPost = true;
+    local.port.load.mockImplementationOnce(() => {
+      throw Object.assign(new Error('/private/path'), { code: 'EACCES' });
+    });
     await service.speak('Hello.');
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    expect(worker.terminate).toHaveBeenCalledOnce();
-    expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.any(String));
+    expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('could not start'));
+    expect(output.localDiagnostic).toHaveBeenCalledWith('failed', 'worker_permission');
+    expect(JSON.stringify(output.status.mock.calls)).not.toContain('private');
   });
 
-  it('falls back on worker errors, invalid messages, and audio play failures', async () => {
+  it('ignores a failed start whose unit was canceled meanwhile', async () => {
+    const { service, output } = harness();
+    local.port.load.mockImplementationOnce(() => {
+      service.cancel();
+      throw new Error('late');
+    });
+    await service.speak('Hello.');
+    expect(output.localDiagnostic).not.toHaveBeenCalled();
+    expect(output.status).not.toHaveBeenCalledWith(1, 'unavailable', expect.any(String));
+  });
+
+  it('falls back on a retired worker and on audio play failures', async () => {
     const first = harness();
     const gate = first.service.speak('Hello.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    worker.emit('message', { type: 'not-a-worker-reply' });
+    local.retired('worker_error');
     await gate;
     expect(first.output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('stopped'));
-    expect(worker.terminate).toHaveBeenCalledOnce();
 
     const second = harness();
     second.output.play.mockImplementation(() => {
@@ -757,26 +773,23 @@ describe('SpeechService failures and races', () => {
     });
     const next = second.service.speak('Hello.');
     await settle();
-    const nextWorker = fake.Worker.made[1];
-    if (nextWorker === undefined) throw new Error('No worker');
-    nextWorker.emit('message', { type: 'ready' });
-    nextWorker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+    local.ready();
+    await local.audio(1);
     await next;
     expect(second.output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('Audio'));
   });
 
-  it('surfaces worker and page errors without releasing another generation', async () => {
+  it('surfaces a synthesis failure and page errors without releasing another generation', async () => {
     const { service, output } = harness();
     const first = service.speak('One.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    worker.emit('message', { type: 'ready' });
-    worker.emit('message', { type: 'error', id: 1, message: 'No speakable content.' });
+    local.ready();
+    await local.failure(1);
     await first;
-    expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'No speakable content.');
+    expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'Could not speak this text. Continue reading it.');
+    expect(output.localDiagnostic).toHaveBeenCalledWith('failed', 'synthesis');
     const next = service.speak('Two.');
-    worker.emit('message', { type: 'audio', id: 2, wav: new Uint8Array(44), durationMs: 1000 });
+    await local.audio(2);
     expect(service.audioEvent({ id: 1, pageId: 7, event: 'failed' })).toBeUndefined();
     expect(service.audioEvent({ id: 2, pageId: 7, event: 'failed' })).toBe('failed');
     await next;
@@ -787,46 +800,67 @@ describe('SpeechService failures and races', () => {
     const disabled = harness(false);
     const preview = disabled.service.preview();
     await settle();
-    expect(fake.Worker.made).toHaveLength(1);
+    expect(local.port.load).toHaveBeenCalledTimes(1);
     disabled.service.cancel();
     await preview;
 
     const live = harness();
     const sample = live.service.preview();
     await settle();
-    const worker = fake.Worker.made[1];
-    if (worker === undefined) throw new Error('No worker');
-    worker.emit('message', { type: 'ready' });
+    local.ready();
     const next = live.service.speak('Live.');
     await sample;
     await next;
     expect(live.output.status).toHaveBeenCalledWith(2, 'unavailable', expect.stringContaining('finishing'));
   });
 
-  it('absorbs an error while terminating a failed worker', async () => {
+  it('NoReplay: after a failure the next explicit request sends only its own text', async () => {
     const { service } = harness();
+    const first = service.speak('Failed text.');
+    await settle();
+    local.ready();
+    await local.failure(1);
+    await first;
+    const second = service.speak('Next text.');
+    expect(local.calls.map((call) => call.request.text)).toEqual(['Failed text.', 'Next text.']);
+    service.cancel();
+    await second;
+  });
+
+  it('fails the unit visibly if the client refuses the request instead of waiting for the deadline', async () => {
+    const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
-    worker.terminate.mockRejectedValueOnce(new Error('already stopped'));
-    service.dispose();
+    local.ready();
+    local.calls[0]?.settle({ status: 'failed', reason: 'unavailable' });
     await gate;
-    await settle();
-    expect(worker.terminate).toHaveBeenCalledOnce();
+    expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'Could not speak this text. Continue reading it.');
   });
 
   it('disposes a worker and refuses new requests', async () => {
     const { service } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    const worker = fake.Worker.made[0];
-    if (worker === undefined) throw new Error('No worker');
     service.dispose();
     await gate;
-    expect(worker.terminate).toHaveBeenCalledOnce();
+    expect(local.port.retire).toHaveBeenCalledExactlyOnceWith('worker_error');
     await service.speak('Later.');
-    expect(fake.Worker.made).toHaveLength(1);
+    expect(local.port.load).toHaveBeenCalledTimes(1);
+  });
+
+  it('builds the packaged Node worker client when none is injected', () => {
+    const service = new SpeechService({
+      runtimeDirectory: '/runtime',
+      storageDirectory: '/storage',
+      localDesktop: true,
+      output: mock<SpeechOutput>(),
+      settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+    });
+    expect(service).toBeInstanceOf(SpeechService);
+    const options = fake.LocalSynthesisClient.made[0];
+    expect(options).toBeDefined();
+    options?.spawn();
+    expect(fake.Worker).toHaveBeenCalledExactlyOnceWith('/runtime/worker.mjs');
   });
 });
 
@@ -926,7 +960,7 @@ it('supports cloud on macOS without requiring the local runtime', async () => {
   cloud.synthesize.mockResolvedValue({ wav: new Uint8Array(44), durationMs: 1000 });
   const gate = service.speak('Hello.');
   await settle();
-  expect(fake.Worker.made).toHaveLength(0);
+  expect(local.port.load).not.toHaveBeenCalled();
   expect(service.audioEvent({ id: 1, pageId: 7, event: 'ended' })).toBe('ended');
   await gate;
 });
@@ -1000,7 +1034,7 @@ it('rejects unknown providers without falling back or starting a request', async
   Object.assign(settings, { provider: 'unknown' });
   await service.speak('Do not send.');
   expect(cloud.synthesize.mock.calls).toHaveLength(0);
-  expect(fake.Worker.made).toHaveLength(0);
+  expect(local.port.load).not.toHaveBeenCalled();
   expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('provider'));
 });
 
@@ -1045,10 +1079,8 @@ it('allows an existing local speech unit to survive a cloud key change', async (
   const gate = service.speak('Local.');
   await settle();
   service.invalidateCloud();
-  const worker = fake.Worker.made[0];
-  if (worker === undefined) throw new Error('No worker');
-  worker.emit('message', { type: 'ready' });
-  worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+  local.ready();
+  await local.audio(1);
   expect(service.audioEvent({ id: 1, pageId: 7, event: 'ended' })).toBe('ended');
   await gate;
 });
@@ -1099,19 +1131,18 @@ it('does not let an idle local worker failure interrupt an active cloud unit', a
     localDesktop: true,
     output,
     cloud,
+    createLocal: newLocal().factory,
     settings: () => settings,
   });
   const localGate = service.speak('Local.');
   await settle();
-  const worker = fake.Worker.made[0];
-  if (worker === undefined) throw new Error('No worker');
-  worker.emit('message', { type: 'ready' });
-  worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+  local.ready();
+  await local.audio(1);
   service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
   await localGate;
   settings.provider = 'elevenlabs';
   const cloudGate = service.speak('Cloud.');
-  worker.emit('error', new Error('old local worker stopped'));
+  local.retired('worker_error');
   pending.resolve({ wav: new Uint8Array(44), durationMs: 1000 });
   await settle();
   expect(service.audioEvent({ id: 2, pageId: 7, event: 'ended' })).toBe('ended');
@@ -1166,10 +1197,11 @@ it('blocks local speech on a non-glibc host while leaving cloud available', asyn
     kokoroSupported: false,
     output,
     cloud,
+    createLocal: newLocal().factory,
     settings: () => settings,
   });
   await service.speak('Local.');
-  expect(fake.Worker.made).toHaveLength(0);
+  expect(local.port.load).not.toHaveBeenCalled();
   settings.provider = 'elevenlabs';
   const cloudGate = service.speak('Cloud.');
   await settle();
@@ -1182,10 +1214,17 @@ it('uses local defaults for a preference saved before providers existed', async 
   output.prepare = undefined;
   const settings = { enabled: true, provider: 'kokoro' as const, voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 };
   Reflect.deleteProperty(settings, 'provider');
-  const service = new SpeechService({ runtimeDirectory: '', storageDirectory: '', localDesktop: true, output, settings: () => settings });
+  const service = new SpeechService({
+    runtimeDirectory: '',
+    storageDirectory: '',
+    localDesktop: true,
+    output,
+    createLocal: newLocal().factory,
+    settings: () => settings,
+  });
   const gate = service.speak('Local.');
   await settle();
-  expect(fake.Worker.made).toHaveLength(1);
+  expect(local.port.load).toHaveBeenCalledTimes(1);
   service.cancel();
   await gate;
 });
@@ -1207,11 +1246,11 @@ it('ignores a stale queued cloud watchdog after its request settles', async () =
 
 it('classifies a native worker failure by code without exposing error text', async () => {
   const { service, output } = harness();
+  local.port.load.mockImplementationOnce(() => {
+    throw Object.assign(new Error('/private/lib secret text'), { code: 'ERR_DLOPEN_FAILED' });
+  });
   const gate = service.speak('Synthetic.');
   await settle();
-  const worker = fake.Worker.made[0];
-  if (worker === undefined) throw new Error('No worker');
-  worker.emit('error', { code: 'ERR_DLOPEN_FAILED', message: '/private/lib secret text' });
   await gate;
   expect(output.localDiagnostic).toHaveBeenCalledWith('failed', 'worker_native');
   expect(JSON.stringify(vi.mocked(output.localDiagnostic)?.mock.calls)).not.toMatch(/private|secret/);
@@ -1221,9 +1260,7 @@ it('records a local worker-ready checkpoint before synthesis', async () => {
   const { service, output } = harness();
   const gate = service.speak('Synthetic.');
   await settle();
-  const worker = fake.Worker.made[0];
-  if (worker === undefined) throw new Error('No worker');
-  worker.emit('message', { type: 'ready' });
+  local.ready();
   expect(output.localDiagnostic).toHaveBeenCalledWith('ready', undefined);
   service.cancel();
   await gate;
@@ -1238,32 +1275,29 @@ it.each([
   [new Error('private detail'), 'worker_error'],
 ] as const)('classifies worker errors using only allowlisted codes', async (error, reason) => {
   const { service, output } = harness();
+  const thrown: unknown = error;
+  local.port.load.mockImplementationOnce(() => {
+    throw thrown;
+  });
   const gate = service.speak('Synthetic.');
   await settle();
-  const worker = fake.Worker.made[0];
-  if (worker === undefined) throw new Error('No worker');
-  worker.emit('error', error);
   await gate;
   expect(output.localDiagnostic).toHaveBeenCalledWith('failed', reason);
   expect(JSON.stringify(vi.mocked(output.localDiagnostic)?.mock.calls)).not.toMatch(/private|SOME_UNKNOWN/);
 });
 
-it('classifies model-load failure separately from an error after readiness', async () => {
+it('reports the worker category the client gives for a retirement before and after readiness', async () => {
   const first = harness();
   const firstGate = first.service.speak('Synthetic.');
   await settle();
-  const firstWorker = fake.Worker.made.at(-1);
-  if (firstWorker === undefined) throw new Error('No worker');
-  firstWorker.emit('message', { type: 'error', message: 'Could not load local speech. Retry setup.' });
+  local.retired('model_load');
   await firstGate;
   expect(first.output.localDiagnostic).toHaveBeenCalledWith('failed', 'model_load');
   const second = harness();
   const secondGate = second.service.speak('Synthetic.');
   await settle();
-  const secondWorker = fake.Worker.made.at(-1);
-  if (secondWorker === undefined) throw new Error('No worker');
-  secondWorker.emit('message', { type: 'ready' });
-  secondWorker.emit('message', { type: 'error', message: 'Invalid request.' });
+  local.ready();
+  local.retired('worker_error');
   await secondGate;
   expect(second.output.localDiagnostic).toHaveBeenCalledWith('failed', 'worker_error');
 });
@@ -1275,10 +1309,8 @@ it('does not let diagnostic callback failures interrupt local speech', async () 
   });
   const gate = service.speak('Synthetic.');
   await settle();
-  const worker = fake.Worker.made[0];
-  if (worker === undefined) throw new Error('No worker');
-  worker.emit('message', { type: 'ready' });
-  worker.emit('message', { type: 'audio', id: 1, wav: new Uint8Array(44), durationMs: 1000 });
+  local.ready();
+  await local.audio(1);
   expect(service.audioEvent({ id: 1, pageId: 7, event: 'ended' })).toBe('ended');
   await gate;
 });
@@ -1379,39 +1411,32 @@ it('does not let a canceled worker readiness bypass a newer pending output admis
   const { service, output } = harness();
   const first = service.speak('Old');
   await settle();
-  const worker = fake.Worker.made[0];
-  if (worker === undefined) throw new Error('Missing worker');
   service.cancel();
   await first;
   const pending = Promise.withResolvers<boolean>();
   output.prepare = vi.fn(() => pending.promise);
   const second = service.speak('New');
-  worker.postMessage.mockClear();
-  worker.emit('message', { type: 'ready' });
-  expect(worker.postMessage).not.toHaveBeenCalled();
+  local.ready();
+  expect(local.calls).toHaveLength(0);
   pending.resolve(false);
   await second;
-  expect(worker.postMessage).not.toHaveBeenCalled();
+  expect(local.calls).toHaveLength(0);
 });
 
 it('starts the already-ready worker exactly once after the newer admission succeeds', async () => {
   const { service, output } = harness();
   const first = service.speak('Old');
   await settle();
-  const worker = fake.Worker.made[0];
-  if (worker === undefined) throw new Error('Missing worker');
   service.cancel();
   await first;
   const pending = Promise.withResolvers<boolean>();
   output.prepare = vi.fn(() => pending.promise);
   const second = service.speak('New');
-  worker.postMessage.mockClear();
-  worker.emit('message', { type: 'ready' });
-  expect(worker.postMessage).not.toHaveBeenCalled();
+  local.ready();
+  expect(local.calls).toHaveLength(0);
   pending.resolve(true);
   await settle();
-  expect(worker.postMessage).toHaveBeenCalledTimes(1);
-  expect(worker.postMessage).toHaveBeenCalledWith({ type: 'synthesize', id: 2, text: 'New', voice: 'af_heart', speed: 1 });
+  expect(local.calls.map((call) => call.request)).toEqual([{ id: 2, part: 0, final: true, text: 'New', voice: 'af_heart', speed: 1 }]);
   service.cancel();
   await second;
 });
@@ -1444,11 +1469,8 @@ it('SentencePipeline waits for the first started acknowledgement before one look
     done = true;
   });
   await settle();
-  const worker = fake.Worker.made[0];
-  if (worker === undefined) throw new Error('No worker');
-  worker.emit('message', { type: 'ready' });
-  expect(worker.postMessage).toHaveBeenLastCalledWith({
-    type: 'synthesize',
+  local.ready();
+  expect(local.calls.at(-1)?.request).toEqual({
     id: 1,
     part: 0,
     final: false,
@@ -1456,12 +1478,11 @@ it('SentencePipeline waits for the first started acknowledgement before one look
     voice: 'af_heart',
     speed: 1,
   });
-  worker.emit('message', { type: 'audio', id: 1, part: 0, wav: new Uint8Array(44), durationMs: 1000 });
+  await local.audio(1, 0);
   expect(output.play).toHaveBeenCalledWith(1, new Uint8Array(44), 1000, 0);
-  expect(worker.postMessage).toHaveBeenCalledTimes(2);
+  expect(local.calls).toHaveLength(1);
   service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'started' });
-  expect(worker.postMessage).toHaveBeenLastCalledWith({
-    type: 'synthesize',
+  expect(local.calls.at(-1)?.request).toEqual({
     id: 1,
     part: 1,
     final: true,
@@ -1469,7 +1490,7 @@ it('SentencePipeline waits for the first started acknowledgement before one look
     voice: 'af_heart',
     speed: 1,
   });
-  worker.emit('message', { type: 'audio', id: 1, part: 1, wav: new Uint8Array(44), durationMs: 1000 });
+  await local.audio(1, 1);
   expect(output.play).toHaveBeenCalledTimes(1);
   expect(service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'ended' })).toBeUndefined();
   expect(output.play).toHaveBeenCalledTimes(2);
@@ -1489,70 +1510,62 @@ it('SentencePipeline does not dispatch the next part until its own started ackno
   output.parts = true;
   const gate = service.speak('First. Second. Third.');
   await settle();
-  const worker = fake.Worker.made[0];
-  if (worker === undefined) throw new Error('No worker');
-  worker.emit('message', { type: 'ready' });
-  worker.emit('message', { type: 'audio', id: 1, part: 0, wav: new Uint8Array(44), durationMs: 1000 });
+  local.ready();
+  await local.audio(1, 0);
   service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'started' });
   service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'ended' });
-  worker.emit('message', { type: 'audio', id: 1, part: 1, wav: new Uint8Array(44), durationMs: 1000 });
+  await local.audio(1, 1);
   service.pause();
   service.resume();
-  expect(worker.postMessage).toHaveBeenCalledTimes(3);
+  expect(local.calls).toHaveLength(2);
   service.audioEvent({ id: 1, pageId: 7, part: 1, event: 'started' });
-  expect(worker.postMessage).toHaveBeenCalledTimes(4);
+  expect(local.calls).toHaveLength(3);
   service.cancel();
   await gate;
 });
 
-it('SentencePipeline holds first synthesis while paused during model loading', async () => {
+it('NoPausedDispatch: SentencePipeline holds first synthesis while paused during model loading', async () => {
   const { service, output } = harness();
   output.parts = true;
   const gate = service.speak('First. Second.');
   await settle();
-  const worker = fake.Worker.made[0];
-  if (worker === undefined) throw new Error('No worker');
   service.pause();
-  worker.emit('message', { type: 'ready' });
-  expect(worker.postMessage).toHaveBeenCalledTimes(1);
+  local.ready();
+  expect(local.calls).toHaveLength(0);
   service.resume();
-  expect(worker.postMessage).toHaveBeenCalledTimes(2);
+  expect(local.calls).toHaveLength(1);
   service.cancel();
   await gate;
 });
 
-it('SentencePipeline ignores a stale part result without releasing the current inference', async () => {
+it('CorrectDelivery: SentencePipeline ignores a stale part result without releasing the current inference', async () => {
   const { service, output } = harness();
   output.parts = true;
   const gate = service.speak('First. Second.');
   await settle();
-  const worker = fake.Worker.made[0];
-  if (worker === undefined) throw new Error('No worker');
-  worker.emit('message', { type: 'ready' });
-  worker.emit('message', { type: 'audio', id: 1, part: 0, wav: new Uint8Array(44), durationMs: 1000 });
+  local.ready();
+  await local.audio(1, 0);
   service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'started' });
-  worker.emit('message', { type: 'audio', id: 1, part: 0, wav: new Uint8Array(44), durationMs: 1000 });
+  await local.audio(1, 0);
   service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'ended' });
   expect(output.play).toHaveBeenCalledTimes(1);
-  worker.emit('message', { type: 'audio', id: 1, part: 1, wav: new Uint8Array(44), durationMs: 1000 });
+  await local.audio(1, 1);
   expect(output.play).toHaveBeenCalledTimes(2);
   service.cancel();
   await gate;
 });
 
-it('SentencePipeline cancels a delayed lookahead on reply and ignores its result', async () => {
+it('NoCanceledResume: SentencePipeline cancels a delayed lookahead on reply and ignores its result', async () => {
   const { service, output } = harness();
   output.parts = true;
   const gate = service.speak('First. Second.');
   await settle();
-  const worker = fake.Worker.made[0];
-  if (worker === undefined) throw new Error('No worker');
-  worker.emit('message', { type: 'ready' });
-  worker.emit('message', { type: 'audio', id: 1, part: 0, wav: new Uint8Array(44), durationMs: 1000 });
+  local.ready();
+  await local.audio(1, 0);
   service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'started' });
   service.cancel();
   await gate;
-  worker.emit('message', { type: 'audio', id: 1, part: 1, wav: new Uint8Array(44), durationMs: 1000 });
+  await local.audio(1, 1);
   expect(output.play).toHaveBeenCalledTimes(1);
   expect(output.control).toHaveBeenCalledWith(1, 7, 'stop');
 });
@@ -1562,12 +1575,10 @@ it('SentencePipeline fails the whole unit if aggregate audio exceeds its bound',
   output.parts = true;
   const gate = service.speak('First. Second.');
   await settle();
-  const worker = fake.Worker.made[0];
-  if (worker === undefined) throw new Error('No worker');
-  worker.emit('message', { type: 'ready' });
-  worker.emit('message', { type: 'audio', id: 1, part: 0, wav: new Uint8Array(44), durationMs: 25_000 });
+  local.ready();
+  await local.audio(1, 0, 25_000);
   service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'started' });
-  worker.emit('message', { type: 'audio', id: 1, part: 1, wav: new Uint8Array(44), durationMs: 16_000 });
+  await local.audio(1, 1, 16_000);
   await gate;
   expect(output.play).toHaveBeenCalledTimes(1);
   expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'Generated speech was invalid; continue reading.');
@@ -1583,15 +1594,13 @@ it('SentencePipeline keeps paused model-ready speech pending past the playback-s
     done = true;
   });
   await settle();
-  const worker = fake.Worker.made[0];
-  if (worker === undefined) throw new Error('No worker');
   service.pause();
-  worker.emit('message', { type: 'ready' });
+  local.ready();
   await vi.advanceTimersByTimeAsync(21_000);
   expect(done).toBe(false);
   expect(output.status).not.toHaveBeenCalledWith(1, 'unavailable', expect.anything());
   service.resume();
-  expect(worker.postMessage).toHaveBeenCalledTimes(2);
+  expect(local.calls).toHaveLength(1);
   service.cancel();
   await gate;
 });
@@ -1604,13 +1613,11 @@ it('SentencePipeline does not launch lookahead if a status callback cancels the 
   });
   const gate = service.speak('First. Second.');
   await settle();
-  const worker = fake.Worker.made[0];
-  if (worker === undefined) throw new Error('No worker');
-  worker.emit('message', { type: 'ready' });
-  worker.emit('message', { type: 'audio', id: 1, part: 0, wav: new Uint8Array(44), durationMs: 1000 });
+  local.ready();
+  await local.audio(1, 0);
   service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'started' });
   await gate;
-  expect(worker.postMessage).toHaveBeenCalledTimes(2);
+  expect(local.calls).toHaveLength(1);
 });
 
 it('SentencePipeline fails an end acknowledgement before the part starts', async () => {
@@ -1618,13 +1625,11 @@ it('SentencePipeline fails an end acknowledgement before the part starts', async
   output.parts = true;
   const gate = service.speak('First. Second.');
   await settle();
-  const worker = fake.Worker.made[0];
-  if (worker === undefined) throw new Error('No worker');
-  worker.emit('message', { type: 'ready' });
-  worker.emit('message', { type: 'audio', id: 1, part: 0, wav: new Uint8Array(44), durationMs: 1000 });
+  local.ready();
+  await local.audio(1, 0);
   expect(service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'ended' })).toBe('failed');
   await gate;
-  expect(worker.postMessage).toHaveBeenCalledTimes(2);
+  expect(local.calls).toHaveLength(1);
 });
 
 it('SentencePipeline keeps a finished lookahead paused until the current part retires and resumes', async () => {
@@ -1632,12 +1637,10 @@ it('SentencePipeline keeps a finished lookahead paused until the current part re
   output.parts = true;
   const gate = service.speak('First. Second.');
   await settle();
-  const worker = fake.Worker.made[0];
-  if (worker === undefined) throw new Error('No worker');
-  worker.emit('message', { type: 'ready' });
-  worker.emit('message', { type: 'audio', id: 1, part: 0, wav: new Uint8Array(44), durationMs: 1000 });
+  local.ready();
+  await local.audio(1, 0);
   service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'started' });
-  worker.emit('message', { type: 'audio', id: 1, part: 1, wav: new Uint8Array(44), durationMs: 1000 });
+  await local.audio(1, 1);
   service.pause();
   service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'ended' });
   expect(output.play).toHaveBeenCalledTimes(1);
@@ -1652,13 +1655,12 @@ it('SentencePipeline discards a late synthesis error after cancellation', async 
   output.parts = true;
   const gate = service.speak('First. Second.');
   await settle();
-  const worker = fake.Worker.made[0];
-  if (worker === undefined) throw new Error('No worker');
-  worker.emit('message', { type: 'ready' });
+  local.ready();
   service.cancel();
   await gate;
-  worker.emit('message', { type: 'error', id: 1, part: 0, message: 'fixed failure' });
-  expect(output.status).not.toHaveBeenCalledWith(1, 'unavailable', 'fixed failure');
+  await local.failure(1, 0);
+  expect(output.status).not.toHaveBeenCalledWith(1, 'unavailable', expect.any(String));
+  expect(output.localDiagnostic).not.toHaveBeenCalledWith('failed', 'synthesis');
 });
 
 it('SentencePipeline resumes a model that is still loading without losing its watchdog', async () => {
@@ -1686,13 +1688,11 @@ it('SentencePipeline keeps the start watchdog frozen when admission completes wh
   service.pause();
   admission.resolve(true);
   await settle();
-  const worker = fake.Worker.made[0];
-  if (worker === undefined) throw new Error('No worker');
-  worker.emit('message', { type: 'ready' });
+  local.ready();
   await vi.advanceTimersByTimeAsync(21_000);
   expect(done).toBe(false);
   service.resume();
-  expect(worker.postMessage).toHaveBeenCalledTimes(2);
+  expect(local.calls).toHaveLength(1);
   service.cancel();
   await gate;
 });
@@ -1705,14 +1705,12 @@ it('SentencePipeline does not synthesize if a ready diagnostic cancels the unit'
   });
   const gate = service.speak('First. Second.');
   await settle();
-  const worker = fake.Worker.made[0];
-  if (worker === undefined) throw new Error('No worker');
-  worker.emit('message', { type: 'ready' });
+  local.ready();
   await gate;
-  expect(worker.postMessage).toHaveBeenCalledTimes(1);
+  expect(local.calls).toHaveLength(0);
 });
 
-function tempoHarness(listeningSpeed: number, hasTempo = true) {
+function tempoHarness(listeningSpeed: number, hasTempo = true, busy = vi.fn(() => false)) {
   const settings: SpeechSettings = {
     enabled: true,
     provider: 'elevenlabs',
@@ -1738,12 +1736,41 @@ function tempoHarness(listeningSpeed: number, hasTempo = true) {
     settings: () => settings,
     output,
     cloud: { synthesize, voices: vi.fn() },
-    ...(hasTempo ? { tempo: { transform, dispose } } : {}),
+    ...(hasTempo ? { tempo: { transform, dispose, busy } } : {}),
   });
   return { service, settings, wav, synthesize, transform, dispose, output };
 }
 
 describe('listening-speed processing', () => {
+  it('Admit: refuses a transformed unit while the previous tempo worker is still retiring', async () => {
+    const { service, synthesize, output } = tempoHarness(
+      1.25,
+      true,
+      vi.fn(() => true),
+    );
+    await service.speak('Selected text.');
+    expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'Speech is still finishing; try again shortly.');
+    expect(synthesize).not.toHaveBeenCalled();
+  });
+
+  it('admits an unchanged-rate unit even while a tempo worker is retiring', async () => {
+    const { service, synthesize, output } = tempoHarness(
+      1,
+      true,
+      vi.fn(() => true),
+    );
+    const finished = service.speak('Selected text.');
+    await vi.waitFor(() => {
+      expect(synthesize).toHaveBeenCalledOnce();
+    });
+    await vi.waitFor(() => {
+      expect(output.play).toHaveBeenCalled();
+    });
+    service.audioEvent({ id: 1, pageId: 7, event: 'started' });
+    service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+    await finished;
+  });
+
   beforeEach(() => {
     vi.useRealTimers();
     vi.mocked(decodeSpeechWav).mockReturnValue(new Int16Array([1, -1]));
@@ -1914,7 +1941,8 @@ describe('listening-speed processing', () => {
       storageDirectory: '/storage',
       localDesktop: true,
       output,
-      tempo: { transform, dispose: vi.fn().mockResolvedValue(undefined) },
+      createLocal: newLocal().factory,
+      tempo: { transform, busy: () => false, dispose: vi.fn().mockResolvedValue(undefined) },
       settings: () => ({
         enabled: true,
         provider: 'kokoro',
@@ -1927,30 +1955,28 @@ describe('listening-speed processing', () => {
     });
     const finished = service.speak('First sentence. Second sentence. Third sentence.');
     await vi.waitFor(() => {
-      expect(fake.Worker.made.at(-1)).toBeDefined();
+      expect(local.port.load).toHaveBeenCalled();
     });
-    const worker = fake.Worker.made.at(-1);
-    if (!worker) throw new Error('Missing worker');
-    worker.emit('message', { type: 'ready' });
-    worker.emit('message', { type: 'audio', id: 1, part: 0, wav: new Uint8Array(44), durationMs: 1000 });
+    local.ready();
+    await local.audio(1, 0);
     await vi.waitFor(() => {
       expect(output.play).toHaveBeenCalledTimes(1);
     });
     service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'started' });
-    expect(worker.postMessage).toHaveBeenCalledTimes(3);
-    worker.emit('message', { type: 'audio', id: 1, part: 1, wav: new Uint8Array(44), durationMs: 1000 });
+    expect(local.calls).toHaveLength(2);
+    await local.audio(1, 1);
     await vi.waitFor(() => {
       expect(transform).toHaveBeenCalledTimes(2);
     });
     service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'ended' });
-    expect(worker.postMessage).toHaveBeenCalledTimes(3);
+    expect(local.calls).toHaveLength(2);
     expect(output.play).toHaveBeenCalledTimes(1);
     second.resolve(new Int16Array([1, -1]));
     await vi.waitFor(() => {
       expect(output.play).toHaveBeenCalledTimes(2);
     });
     service.audioEvent({ id: 1, pageId: 7, part: 1, event: 'started' });
-    expect(worker.postMessage).toHaveBeenCalledTimes(4);
+    expect(local.calls).toHaveLength(3);
     service.cancel();
     await finished;
     service.dispose();

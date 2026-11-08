@@ -37,6 +37,11 @@ export class SpeechTempoClient {
 
   constructor(private readonly workerPath: string) {}
 
+  /** Reports whether a transform, even a retiring one, still owns the worker slot. */
+  busy(): boolean {
+    return this.current !== undefined;
+  }
+
   /** Transforms a copied PCM buffer under a fixed unit, part and rate. */
   transform(input: SpeechTempoTransform, signal: AbortSignal): Promise<Int16Array> {
     if (this.disposed || this.current !== undefined || signal.aborted) return Promise.reject(new Error('Speech transform unavailable.'));

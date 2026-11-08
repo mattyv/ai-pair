@@ -189,7 +189,7 @@ Code goes without a spec for one of these reasons:
 | `speech_synthesis.ts`, `speech_waveform.ts` | complete-token and waveform bounds | `ActionValidation` (`TokenBounds`, `PhonemeCoverage`); PCM encoding: Pure |
 | `speech_engine.ts` | `loadSpeechEngine` | Glue: loads the local model, tokenizer and phonemizer; offline worker integration |
 | `speech_worker_host.ts`, `speech_worker.ts` | worker admission, validation and dispatch | `Narration`; worker isolation and concrete messages: unit and integration tests |
-| `speech_worker_messages.ts`, `speech_types.ts` | schemas and settings types | Types; validated at boundaries |
+| `speech_local_protocol.ts`, `speech_types.ts` | schemas and settings types | Types; validated at boundaries |
 | `outside.ts`, `outside_watch.ts` | all | `Outside` |
 | `terminal.ts` | all | `Terminals`, `QuietTerminals`, `TerminalReuse`; typed diagnostic events: `DiagnosticsPrivacy` |
 | `view.ts` | `comfortable`, `landing`, `glideTop` | Pure; `Scroll` models `comfortable` and `landing` |

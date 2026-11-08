@@ -83,6 +83,20 @@ it('rejects canceled work immediately but keeps its slot until physical retireme
   await client.dispose();
 });
 
+it('reports busy from admission until the worker has physically retired', async () => {
+  const client = new SpeechTempoClient('/worker.mjs');
+  expect(client.busy()).toBe(false);
+  const result = client.transform(request, new AbortController().signal);
+  const worker = fake.Worker.made[0];
+  if (worker === undefined) throw new Error('No worker');
+  expect(client.busy()).toBe(true);
+  worker.emit('message', { type: 'result', epoch: 1, unitId: 1, part: 0, rate: 0.75, pcm: Int16Array.from([2]) });
+  expect(client.busy()).toBe(true);
+  worker.closed.resolve(0);
+  await result;
+  expect(client.busy()).toBe(false);
+});
+
 it('rejects a wrong-part result without exposing its contents', async () => {
   const client = new SpeechTempoClient('/worker.mjs');
   const result = client.transform(request, new AbortController().signal);

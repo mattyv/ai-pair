@@ -31,10 +31,12 @@ it('connects worker messages and replies to the validated host', async () => {
   expect(fake.on).toHaveBeenCalledWith('message', expect.any(Function));
   const handler = fake.on.mock.calls[0]?.[1];
   if (handler === undefined || fake.reply.current === undefined) throw new Error('No worker handler');
-  handler({ type: 'load', modelPath: '/model' });
-  expect(fake.receive).toHaveBeenCalledWith({ type: 'load', modelPath: '/model' });
-  fake.reply.current({ type: 'ready' });
-  expect(fake.postMessage).toHaveBeenCalledWith({ type: 'ready' });
+  const init = { type: 'init', version: 1, epoch: 1, modelPath: '/model' };
+  handler(init);
+  expect(fake.receive).toHaveBeenCalledWith(init);
+  const failure = { type: 'failure', version: 1, epoch: 1, category: 'load' };
+  fake.reply.current(failure);
+  expect(fake.postMessage).toHaveBeenCalledWith(failure);
 });
 
 it('refuses to run the worker entry outside a worker thread', async () => {

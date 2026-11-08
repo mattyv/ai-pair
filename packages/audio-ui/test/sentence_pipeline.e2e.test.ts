@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { NativeAdapter } from '../../audio-native/src/native_adapter';
 import type { AudioEvent } from '../../audio-native/src';
+import { LOCAL_CAPABILITIES } from '../../vscode/src/speech_local_protocol';
 import { SpeechService } from '../../vscode/src/speech_service';
 import { CompanionOutput } from '../src/companion_output';
 
@@ -26,6 +27,16 @@ const fake = vi.hoisted(() => {
 vi.mock('node:worker_threads', () => ({ Worker: fake.Worker }));
 vi.mock('../../vscode/src/speech_runtime_status', () => ({ speechRuntimeAvailable: vi.fn().mockResolvedValue(true) }));
 vi.mock('../../vscode/src/speech_setup', () => ({ installedSpeechModel: vi.fn().mockResolvedValue('/synthetic') }));
+
+/** Builds the ready reply of epoch 1 with the capabilities as plain arrays, as the schema requires. */
+function ready() {
+  return {
+    type: 'ready',
+    version: 1,
+    epoch: 1,
+    capabilities: { ...LOCAL_CAPABILITIES, voices: [...LOCAL_CAPABILITIES.voices], speeds: [...LOCAL_CAPABILITIES.speeds] },
+  };
+}
 
 const platform = Object.getOwnPropertyDescriptor(process, 'platform');
 const arch = Object.getOwnPropertyDescriptor(process, 'arch');
@@ -87,8 +98,11 @@ it('SentencePipeline composes one captured route through physical closes and com
   });
   const worker = fake.Worker.current;
   if (worker === undefined) throw new Error('No worker');
-  worker.emit({ type: 'ready' });
-  worker.emit({ type: 'audio', id: 1, part: 0, wav: new Uint8Array(44), durationMs: 1000 });
+  worker.emit(ready());
+  await vi.waitFor(() => {
+    expect(worker.postMessage).toHaveBeenCalledTimes(2);
+  });
+  worker.emit({ type: 'result', version: 1, epoch: 1, id: 1, part: 0, wav: new Uint8Array(44), durationMs: 1000 });
   await vi.waitFor(() => {
     expect(backend.start).toHaveBeenCalledTimes(1);
   });
@@ -96,7 +110,7 @@ it('SentencePipeline composes one captured route through physical closes and com
   await vi.waitFor(() => {
     expect(worker.postMessage).toHaveBeenCalledTimes(3);
   });
-  worker.emit({ type: 'audio', id: 1, part: 1, wav: new Uint8Array(44), durationMs: 1000 });
+  worker.emit({ type: 'result', version: 1, epoch: 1, id: 1, part: 1, wav: new Uint8Array(44), durationMs: 1000 });
   signals[0]?.('ended');
   await Promise.resolve();
   expect(backend.start).toHaveBeenCalledTimes(1);

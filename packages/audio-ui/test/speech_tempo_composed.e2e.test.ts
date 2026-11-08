@@ -5,6 +5,7 @@ import * as esbuild from 'esbuild';
 import { afterEach, expect, it, vi } from 'vitest';
 import { NativeAdapter } from '../../audio-native/src/native_adapter';
 import type { AudioEvent } from '../../audio-native/src';
+import { LOCAL_CAPABILITIES } from '../../vscode/src/speech_local_protocol';
 import { SpeechService, type SpeechOutput } from '../../vscode/src/speech_service';
 import { SpeechTempoClient } from '../../vscode/src/speech_tempo_client';
 import { encodeTempoWav } from '../../vscode/src/speech_tempo_pcm';
@@ -40,6 +41,16 @@ vi.mock('node:worker_threads', async (original) => {
 });
 vi.mock('../../vscode/src/speech_runtime_status', () => ({ speechRuntimeAvailable: vi.fn().mockResolvedValue(true) }));
 vi.mock('../../vscode/src/speech_setup', () => ({ installedSpeechModel: vi.fn().mockResolvedValue('/synthetic') }));
+
+/** Builds the ready reply of epoch 1 with the capabilities as plain arrays, as the schema requires. */
+function ready() {
+  return {
+    type: 'ready',
+    version: 1,
+    epoch: 1,
+    capabilities: { ...LOCAL_CAPABILITIES, voices: [...LOCAL_CAPABILITIES.voices], speeds: [...LOCAL_CAPABILITIES.speeds] },
+  };
+}
 
 let directory: string | undefined;
 const platform = Object.getOwnPropertyDescriptor(process, 'platform');
@@ -122,9 +133,12 @@ it('transforms two synthetic Kokoro parts in a real worker before local physical
     });
     const worker = fake.Worker.current;
     if (worker === undefined) throw new Error('No worker');
-    worker.emit({ type: 'ready' });
+    worker.emit(ready());
+    await vi.waitFor(() => {
+      expect(worker.postMessage).toHaveBeenCalledTimes(2);
+    });
     const first = encodeTempoWav(pcm, false);
-    worker.emit({ type: 'audio', id: 1, part: 0, wav: first.wav, durationMs: first.durationMs });
+    worker.emit({ type: 'result', version: 1, epoch: 1, id: 1, part: 0, wav: first.wav, durationMs: first.durationMs });
     await vi.waitFor(() => {
       expect(backend.start).toHaveBeenCalledTimes(1);
     });
@@ -134,7 +148,7 @@ it('transforms two synthetic Kokoro parts in a real worker before local physical
       expect(worker.postMessage).toHaveBeenCalledTimes(3);
     });
     const second = encodeTempoWav(pcm, true);
-    worker.emit({ type: 'audio', id: 1, part: 1, wav: second.wav, durationMs: second.durationMs });
+    worker.emit({ type: 'result', version: 1, epoch: 1, id: 1, part: 1, wav: second.wav, durationMs: second.durationMs });
     signals[0]?.('ended');
     closes[0]?.resolve();
     await vi.waitFor(() => {

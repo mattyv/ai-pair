@@ -2477,7 +2477,7 @@ abstracts PCM and does not establish speech quality or pitch preservation.
 | Property | Code test |
 |---|---|
 | `ImmutableRate` | `vscode/test/speech_service.test.ts`: snapshots listening speed, transforms once, and uses transformed duration without a second cloud request. |
-| `NoStaleResult`, `OneWorker` | `vscode/test/speech_tempo_client.test.ts`: rejects canceled work immediately but keeps its slot until physical retirement; rejects a wrong-part result without exposing its contents. |
+| `NoStaleResult`, `OneWorker` | `vscode/test/speech_tempo_client.test.ts`: rejects canceled work immediately but keeps its slot until physical retirement; rejects a wrong-part result without exposing its contents; reports busy from admission until the worker has physically retired. `vscode/test/speech_service.test.ts`: "Admit: refuses a transformed unit while the previous tempo worker is still retiring" (an unchanged-rate unit is admitted). |
 | `BoundedOutput`, `AccurateDuration` | `vscode/test/speech_service.test.ts`: fails closed when transformed audio exceeds the complete-unit duration limit; snapshots listening speed, transforms once, and uses transformed duration without a second cloud request. |
 | `FixedTail` | `vscode/test/speech_tempo_pcm.test.ts`: round trips exact signed samples and appends one final silent tail; `audio-ui/test/speech_tempo_composed.e2e.test.ts`: transforms two synthetic Kokoro parts in a real worker before local physical playback. |
 | `ReadingApprovalHeld` | `core/test/player.test.ts`: keeps held reading and command approval after speech throw; keeps held reading and command approval after speech reject. |
@@ -2493,6 +2493,12 @@ Disabling transform, play or retirement violates the associated progress
 property. Restricting retirement to the canceled phase violates cancellation
 progress when the caller times out first. Setting reading to released violates
 `ReadingApprovalHeld`. `TypeOK` is a sanity check, not independently mutated.
+The model's `failed` phase is terminal, so no unit after a failed one is explored
+(`CHECK_DEADLOCK FALSE`), a worker failure during `transforming` without a
+`Cancel` is covered only by the timeout, and `ReadingApprovalHeld` holds
+vacuously because no action touches those variables; the reading and approval
+guarantee is tested in the Player. The code bypasses the stretch for inputs under
+3,072 samples (one window of the target length), which the model abstracts.
 Synthetic tones and the retained offline corpus are not listening-quality
 validation; real speech review is still required before claiming validated rates.
 
@@ -2518,8 +2524,22 @@ FALSE` models a dispatch that still names the previous unit.
 | Invariant | Implementation mapping |
 |---|---|
 | `TypeOK` | Sanity check of the declared variable ranges. |
-| `OneEngine`, `ValidReady`, `CorrectDelivery`, `NoPausedDispatch`, `NoReplay`, `NoCanceledResume`, `TruthfulUnavailable` | Pending implementation and tests. |
-| `HealthyProgress`, `CancellationProgress`, `RetirementProgress` | Pending implementation and tests. |
+| `OneEngine` | `LocalSynthesisClient` (`speech_local_client.ts`) spawns one worker per epoch and refuses a second load, a second inference, and any replacement while the retiring worker has not exited. `SpeechWorkerHost` loads once and answers a concurrent request `busy`. Tests: `speech_local_client.test.ts` "OneEngine: ..." (one load, one inference, slot kept until the actual exit whatever `terminate` reports), `speech_worker_host.test.ts` "OneEngine: ...", `speech_service.test.ts` "OneEngine: refuses a new unit while a retired worker has not exited", `speech_local.e2e.test.ts` "NoCanceledResume: ..." (reuse after a canceled inference). |
+| `ValidReady` | The client accepts `ready` only if its capabilities equal the host constants (`LOCAL_CAPABILITIES`) and its epoch is the current one; anything else retires the worker. Tests: `speech_local_client.test.ts` "ValidReady: ...", `speech_local_protocol.test.ts` "accepts ready only with the exact capabilities of the host constants". |
+| `CorrectDelivery` | Results and failures are strict schemas; a stale epoch, unit or part, a duplicate after settlement and a result with no inference owed change nothing, and an oversized or malformed result retires the worker before it is buffered. Tests: `speech_local_client.test.ts` "CorrectDelivery: ...", `speech_worker_host.test.ts` "CorrectDelivery: ...", `speech_local_protocol.test.ts` "accepts a bounded result and rejects an oversized, undersized or malformed one before buffering", `speech_service.test.ts` "CorrectDelivery: SentencePipeline ignores a stale part result ...". |
+| `NoPausedDispatch` | Pause is the service's: `SpeechService.synthesize` does not dispatch a multi-part unit while paused. Test: `speech_service.test.ts` "NoPausedDispatch: SentencePipeline holds first synthesis while paused during model loading". |
+| `NoReplay` | A request is dispatched once with its own unit and part, and a failed or retired unit is never re-sent. Tests: `speech_local_client.test.ts` "NoReplay: a dispatch names exactly the requested unit and part, once", `speech_service.test.ts` "NoReplay: after a failure the next explicit request sends only its own text". |
+| `NoCanceledResume` | `cancel()` settles the unit's result at once and the discarded result never resumes it; nothing further is posted. Tests: `speech_local_client.test.ts` "NoCanceledResume: ...", `speech_service.test.ts` "NoCanceledResume: SentencePipeline cancels a delayed lookahead on reply and ignores its result" and "NoCanceledResume: a unit canceled during model loading ...", `speech_local.e2e.test.ts` "NoCanceledResume: a canceled inference keeps the worker owned ...". |
+| `TruthfulUnavailable` | A fatal error retires the worker, reports one fixed category to the listener, and refuses work until a new explicit load. Tests: `speech_local_client.test.ts` "TruthfulUnavailable: ...", `speech_service.test.ts` "TruthfulUnavailable: ...", `speech_local.e2e.test.ts` "TruthfulUnavailable: a fatal load error ends the unit ...". |
+| `HealthyProgress` | One load serves consecutive units; the independent watchdog bounds a load that never becomes ready. Tests: `speech_local_client.test.ts` "HealthyProgress: ...", `speech_local.e2e.test.ts` "HealthyProgress: two units share one worker and one model load ...". |
+| `CancellationProgress` | A canceled inference either returns and is discarded, or the watchdog retires the worker. Test: `speech_local_client.test.ts` "CancellationProgress: retires a canceled inference that never returns ...". |
+| `RetirementProgress` | A retired worker returns the slot to cold exactly once, at its exit. Test: `speech_local_client.test.ts` "RetirementProgress: ...". |
+
+Action mapping in the code (comments name the spec and action): `Load`, `Ready`,
+`Dispatch`/`NextPart`, `Result`/`DiscardResult`, `LateResult`, `Cancel`,
+`Retire` and `Exit` in `speech_local_client.ts`; `Load` and `Retire` in
+`speech_service.ts`. The synthesis protocol (`speech_local_protocol.ts`) is
+transport neutral; the shipped Kokoro engine keeps its Node worker thread.
 
 | Mutation | Breaks |
 |---|---|

@@ -1,6 +1,14 @@
 import * as path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import type { NarrationPort } from '@ai-pair/core';
+import { LocalSynthesisClient, type LocalListener, type LocalSynthesisOutcome, type LocalSynthesisPort } from './speech_local_client';
+import {
+  LOCAL_MAX_DURATION_MS,
+  LOCAL_MAX_WAV_BYTES,
+  LOCAL_MIN_WAV_BYTES,
+  LOCAL_WORKER_TIMEOUT_MS,
+  localWorkerError,
+} from './speech_local_protocol';
 import { installedSpeechModel } from './speech_setup';
 import { speechRuntimeAvailable } from './speech_runtime_status';
 import {
@@ -15,7 +23,6 @@ import {
   type SpeechSettings,
   type SpeechVoice,
 } from './speech_types';
-import { SPEECH_WORKER_OUTPUT } from './speech_worker_messages';
 import { speechSegments } from './speech_segments';
 import { decodeSpeechWav, encodeTempoWav } from './speech_tempo_pcm';
 import type { SpeechTempoRate } from './speech_tempo';
@@ -41,6 +48,8 @@ export interface SpeechOutput {
 /** A local, single-slot tempo worker with cancelable unit ownership. */
 export interface SpeechTempoProcessor {
   transform(request: { unitId: number; part: number; rate: SpeechTempoRate; pcm: Int16Array }, signal: AbortSignal): Promise<Int16Array>;
+  /** True while a transform, even a retiring one, still owns the worker slot. */
+  busy(): boolean;
   dispose(): Promise<void>;
 }
 
@@ -52,6 +61,8 @@ export interface SpeechServiceOptions {
   kokoroSupported?: boolean;
   cloud?: ElevenLabsSpeechPort;
   tempo?: SpeechTempoProcessor;
+  /** Makes the local synthesis engine; absent means the packaged Node worker. */
+  createLocal?: (listener: LocalListener) => LocalSynthesisPort;
   output: SpeechOutput;
   settings(): SpeechSettings;
 }
@@ -93,41 +104,37 @@ interface ActiveSpeech {
 }
 
 /** Maximum time for a worker or page to acknowledge its work. */
-const START_TIMEOUT_MS = 20_000;
+const START_TIMEOUT_MS = LOCAL_WORKER_TIMEOUT_MS;
 /** Maximum time to discover a selected output before provider requests. */
 const OUTPUT_TIMEOUT_MS = 5000;
 /** Extra unpaused time allowed after the waveform's duration. */
 const PLAYBACK_GRACE_MS = 5000;
-/** The fixed PCM WAV header length. */
-const MIN_WAV_BYTES = 44;
-/** Largest supported PCM WAV, including the thinking interval and header. */
-const MAX_WAV_BYTES = 1_948_844;
-/** Longest waveform including its 600 ms thinking interval. */
-const MAX_DURATION_MS = 40_600;
-
-/** Classifies only Node's fixed error codes; never carries the error itself. */
-function localWorkerError(error: unknown): LocalSpeechFailureReason {
-  if (typeof error !== 'object' || error === null || !('code' in error)) return 'worker_error';
-  if (error.code === 'ERR_MODULE_NOT_FOUND' || error.code === 'MODULE_NOT_FOUND') return 'worker_module';
-  if (error.code === 'ERR_DLOPEN_FAILED') return 'worker_native';
-  if (error.code === 'EACCES' || error.code === 'EPERM') return 'worker_permission';
-  return 'worker_error';
-}
+const MIN_WAV_BYTES = LOCAL_MIN_WAV_BYTES;
+const MAX_WAV_BYTES = LOCAL_MAX_WAV_BYTES;
+const MAX_DURATION_MS = LOCAL_MAX_DURATION_MS;
 
 /** Coordinates one local synthesis job and one page-owned audio buffer. */
 export class SpeechService implements NarrationPort {
   private nextId = 1;
   private current?: ActiveSpeech;
   private paused = false;
-  private worker?: Worker;
-  private workerReady = false;
-  private workerBusyId?: { id: number; part?: number };
-  private workerTimer?: ReturnType<typeof setTimeout>;
+  private readonly local: LocalSynthesisPort;
   private cloudBusy?: { id: number; controller: AbortController; timer: ReturnType<typeof setTimeout> };
-  private closing = false;
   private disposed = false;
 
-  constructor(private readonly options: SpeechServiceOptions) {}
+  constructor(private readonly options: SpeechServiceOptions) {
+    const listener: LocalListener = {
+      ready: () => {
+        this.localReady();
+      },
+      retired: (reason) => {
+        this.localRetired(reason);
+      },
+    };
+    this.local =
+      options.createLocal?.(listener) ??
+      new LocalSynthesisClient({ spawn: () => new Worker(path.join(options.runtimeDirectory, 'worker.mjs')), listener });
+  }
 
   /** Speaks an explicitly selected live unit when enabled. */
   speak(text: string): Promise<void> {
@@ -178,7 +185,14 @@ export class SpeechService implements NarrationPort {
       this.options.output.status(id, 'unavailable', 'Choose an available ElevenLabs voice and speed.');
       return Promise.resolve();
     }
-    if (this.workerBusyId !== undefined || this.closing || this.cloudBusy !== undefined) {
+    // specs/SpeechTempo.tla, Admit: a transformed unit waits for the previous transform worker to retire.
+    const listeningRate = speechListeningRate(settings.listeningSpeed);
+    if (
+      this.local.busy() ||
+      this.local.state() === 'retiring' ||
+      this.cloudBusy !== undefined ||
+      (listeningRate !== 1 && this.options.tempo?.busy() === true)
+    ) {
       this.options.output.status(id, 'unavailable', 'Speech is still finishing; try again shortly.');
       return Promise.resolve();
     }
@@ -192,7 +206,8 @@ export class SpeechService implements NarrationPort {
       part: 0,
       lookaheadAllowed: false,
       aggregateMs: 0,
-      listeningRate: speechListeningRate(settings.listeningSpeed),
+      // specs/SpeechTempo.tla, Select: the unit samples its listening rate once, here.
+      listeningRate,
       provider,
       cloudVoice: settings.elevenLabsVoice,
       voice: voice ?? 'af_heart',
@@ -286,11 +301,12 @@ export class SpeechService implements NarrationPort {
   }
 
   private async start(current: ActiveSpeech): Promise<void> {
-    if (this.workerReady && this.worker !== undefined) {
-      this.synthesize(current, this.worker);
+    const state = this.local.state();
+    if (state === 'ready') {
+      this.synthesize(current);
       return;
     }
-    if (this.worker !== undefined) return;
+    if (state !== 'cold') return;
     try {
       const available = await speechRuntimeAvailable(this.options.runtimeDirectory);
       if (this.current !== current) return;
@@ -306,52 +322,29 @@ export class SpeechService implements NarrationPort {
         this.fail(current, 'Download the Kokoro model in Settings to hear local narration.');
         return;
       }
-      const worker = new Worker(path.join(this.options.runtimeDirectory, 'worker.mjs'), { workerData: { modelPath } });
-      this.worker = worker;
-      worker.on('message', (message: unknown) => {
-        this.workerMessage(worker, message);
-      });
-      worker.on('error', (error: unknown) => {
-        this.workerFailed(worker, localWorkerError(error));
-      });
-      worker.on('exit', () => {
-        this.workerFailed(worker, 'worker_exit');
-      });
-      this.armWorker(worker);
-      worker.postMessage({ type: 'load', modelPath });
+      // specs/WarmSynthesisWorker.tla, Load: the checked model path comes from the host, never from input.
+      this.local.load(modelPath);
     } catch (error: unknown) {
       if (this.current !== current) return;
-      if (this.worker !== undefined) this.workerFailed(this.worker, localWorkerError(error));
-      else {
-        this.localDiagnostic('failed', localWorkerError(error));
-        this.fail(current, 'Local speech could not start. Retry setup.');
-      }
+      this.localDiagnostic('failed', localWorkerError(error));
+      this.fail(current, 'Local speech could not start. Retry setup.');
     }
   }
 
-  private synthesize(current: ActiveSpeech, worker: Worker): void {
-    if (this.current !== current || this.worker !== worker || (this.paused && current.multipart)) return;
+  private synthesize(current: ActiveSpeech): void {
+    if (this.current !== current || this.local.state() !== 'ready' || (this.paused && current.multipart)) return;
     const part = current.nextPart;
-    // A bounded slice is empty if an internal ordinal is invalid; the worker rejects it.
+    // A bounded slice is empty if an internal ordinal is invalid; the client rejects it.
     const text = current.parts.slice(part, part + 1).join('');
     current.nextPart++;
     if (current.phase !== 'playing') current.phase = 'synthesizing';
-    // specs/SentencePipeline.tla, Synthesize: one inference owns its unit and part.
-    this.workerBusyId = { id: current.id, ...(current.multipart ? { part } : {}) };
     if (current.phase !== 'playing') this.clearTimer(current);
-    this.armWorker(worker);
-    try {
-      worker.postMessage({
-        type: 'synthesize',
-        id: current.id,
-        text,
-        voice: current.voice,
-        speed: current.speed,
-        ...(current.multipart ? { part, final: part === current.parts.length - 1 } : {}),
+    // specs/SentencePipeline.tla, Synthesize: one inference owns its unit and part.
+    void this.local
+      .synthesize({ id: current.id, part, final: part === current.parts.length - 1, text, voice: current.voice, speed: current.speed })
+      .then((outcome) => {
+        this.localOutcome(current, part, outcome);
       });
-    } catch {
-      this.workerFailed(worker);
-    }
   }
 
   /** Starts at most one lookahead after the prior part actually started. */
@@ -363,51 +356,43 @@ export class SpeechService implements NarrationPort {
       !current.lookaheadAllowed ||
       current.buffered !== undefined ||
       current.processing !== undefined ||
-      this.workerBusyId !== undefined ||
-      this.worker === undefined ||
+      this.local.busy() ||
+      this.local.state() !== 'ready' ||
       current.nextPart >= current.parts.length
     ) {
       return;
     }
-    this.synthesize(current, this.worker);
+    this.synthesize(current);
   }
 
-  private workerMessage(worker: Worker, raw: unknown): void {
-    if (worker !== this.worker) return;
-    const parsed = SPEECH_WORKER_OUTPUT.safeParse(raw);
-    if (!parsed.success) {
-      this.workerFailed(worker);
-      return;
-    }
-    const message = parsed.data;
+  /** The client reported valid capabilities: records the checkpoint and starts a unit that waits for it. */
+  private localReady(): void {
     const current = this.current;
-    if (message.type === 'ready') {
-      if (this.workerReady) return;
-      this.clearWorkerTimer();
-      this.workerReady = true;
-      this.localDiagnostic('ready');
-      if (current !== undefined && current.phase === 'loading') this.synthesize(current, worker);
-      return;
+    this.localDiagnostic('ready');
+    if (current !== undefined && current.phase === 'loading') this.synthesize(current);
+  }
+
+  /** Applies one inference outcome to the unit that asked for it, if that unit is still current. */
+  private localOutcome(current: ActiveSpeech, part: number, outcome: LocalSynthesisOutcome): void {
+    // specs/SentencePipeline.tla, SynthDone: a stale outcome cannot touch another unit.
+    if (this.current !== current) return;
+    if (outcome.status === 'audio') {
+      this.receiveAudio(current, part, outcome, part === current.parts.length - 1);
+    } else {
+      // A retirement already ended the unit through localRetired, and a cancellation is the
+      // service's own, so a failure that reaches a current unit is a synthesis the client refused.
+      this.localDiagnostic('failed', 'synthesis');
+      this.fail(current, 'Could not speak this text. Continue reading it.');
     }
-    if (message.type === 'error' && message.id === undefined) {
-      this.workerFailed(worker, this.workerReady ? 'worker_error' : 'model_load');
-      return;
+  }
+
+  /** The worker was retired or exited: the unit it served is over, and nothing is replayed. */
+  private localRetired(reason: LocalSpeechFailureReason): void {
+    const current = this.current;
+    if (current?.provider === 'kokoro') {
+      this.localDiagnostic('failed', reason);
+      this.fail(current, 'Local speech stopped. Retry setup.');
     }
-    const busy = this.workerBusyId;
-    // specs/SentencePipeline.tla, SynthDone: stale part results cannot clear another request.
-    if (busy === undefined || message.id !== busy.id || message.part !== busy.part) return;
-    this.workerBusyId = undefined;
-    this.clearWorkerTimer();
-    if (message.type === 'error') {
-      if (current?.id === message.id) {
-        this.localDiagnostic('failed', 'synthesis');
-        this.fail(current, message.message);
-      }
-      return;
-    }
-    if (current?.id !== message.id) return;
-    const part = message.part ?? 0;
-    this.receiveAudio(current, part, { wav: message.wav, durationMs: message.durationMs }, part === current.parts.length - 1);
   }
 
   /** Applies listening speed locally before exposing a waveform to playback. */
@@ -430,6 +415,7 @@ export class SpeechService implements NarrationPort {
       this.fail(current, 'Listening speed is unavailable; continue reading.');
       return;
     }
+    // specs/SpeechTempo.tla, Transform: one unit and part own the one transform.
     const processing = { part, controller: new AbortController() };
     current.processing = processing;
     if (current.phase !== 'playing') current.phase = 'transforming';
@@ -462,6 +448,7 @@ export class SpeechService implements NarrationPort {
 
   /** Bounds the complete transformed unit and buffers at most one next part. */
   private acceptAudio(current: ActiveSpeech, part: number, audio: { wav: Uint8Array; durationMs: number }): void {
+    // specs/SpeechTempo.tla, Result and Play: duration and the aggregate bound come from the transformed samples.
     if (
       audio.wav.length < MIN_WAV_BYTES ||
       audio.wav.length > MAX_WAV_BYTES ||
@@ -592,7 +579,7 @@ export class SpeechService implements NarrationPort {
       this.options.output.status(current.id, current.started ? 'speaking' : 'preparing');
       this.lookahead(current);
     } else {
-      if (current.phase === 'loading' && this.workerReady && this.worker !== undefined) this.synthesize(current, this.worker);
+      if (current.phase === 'loading' && this.local.state() === 'ready') this.synthesize(current);
       else {
         if (current.multipart && current.phase === 'loading') this.arm(current, current.remaining);
         this.lookahead(current);
@@ -618,21 +605,7 @@ export class SpeechService implements NarrationPort {
     this.disposed = true;
     this.cancel();
     void this.options.tempo?.dispose().catch(() => {});
-    if (this.worker !== undefined) this.workerFailed(this.worker);
-  }
-
-  /** Bounds model loading and inference independently of the visible speech gate. */
-  private armWorker(worker: Worker): void {
-    this.clearWorkerTimer();
-    const timer = setTimeout(() => {
-      if (this.workerTimer === timer) this.workerFailed(worker, 'timeout');
-    }, START_TIMEOUT_MS);
-    this.workerTimer = timer;
-  }
-
-  private clearWorkerTimer(): void {
-    if (this.workerTimer !== undefined) clearTimeout(this.workerTimer);
-    this.workerTimer = undefined;
+    this.local.retire('worker_error');
   }
 
   private arm(current: ActiveSpeech, ms: number): void {
@@ -640,8 +613,10 @@ export class SpeechService implements NarrationPort {
     current.remaining = ms;
     current.deadline = Date.now() + ms;
     current.timer = setTimeout(() => {
-      if ((current.phase === 'loading' || current.phase === 'synthesizing') && this.worker !== undefined) {
-        this.workerFailed(this.worker, 'timeout');
+      const state = this.local.state();
+      if ((current.phase === 'loading' || current.phase === 'synthesizing') && (state === 'loading' || state === 'ready')) {
+        // specs/WarmSynthesisWorker.tla, Retire: the unit's deadline also retires a worker that is still busy.
+        this.local.retire('timeout');
       } else {
         if (current.provider === 'kokoro') this.localDiagnostic('failed', 'timeout');
         this.fail(current, 'Speech timed out; continue reading.');
@@ -670,7 +645,10 @@ export class SpeechService implements NarrationPort {
     if (this.current !== current) return;
     this.current = undefined;
     if (current.provider === 'elevenlabs' && this.cloudBusy?.id === current.id) this.cloudBusy.controller.abort();
+    // specs/SpeechTempo.tla, Cancel: abort invalidates the transform; the worker slot retires on its own.
     current.processing?.controller.abort();
+    // specs/WarmSynthesisWorker.tla, Cancel: the result is invalid now; the worker stays owned until it returns.
+    this.local.cancel();
     this.clearTimer(current);
     if (current.pageId !== undefined) this.options.output.control(current.id, current.pageId, 'stop');
     else this.options.output.cancel?.(current.id);
@@ -684,25 +662,6 @@ export class SpeechService implements NarrationPort {
       this.options.output.localDiagnostic?.(phase, reason);
     } catch {
       /* Observability is best effort. */
-    }
-  }
-
-  private workerFailed(worker: Worker, reason: LocalSpeechFailureReason = 'worker_error'): void {
-    if (worker !== this.worker) return;
-    this.clearWorkerTimer();
-    this.worker = undefined;
-    this.workerReady = false;
-    this.workerBusyId = undefined;
-    this.closing = true;
-    void worker
-      .terminate()
-      .catch(() => {})
-      .finally(() => {
-        this.closing = false;
-      });
-    if (this.current?.provider === 'kokoro') {
-      this.localDiagnostic('failed', reason);
-      this.fail(this.current, 'Local speech stopped. Retry setup.');
     }
   }
 }

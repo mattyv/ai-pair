@@ -27,7 +27,7 @@ it('transforms tail-free provider PCM and adds exactly one final tail', async ()
     }),
     output,
     cloud: { synthesize: vi.fn().mockResolvedValue(provider), voices: vi.fn() },
-    tempo: { transform, dispose: vi.fn().mockResolvedValue(undefined) },
+    tempo: { transform, busy: () => false, dispose: vi.fn().mockResolvedValue(undefined) },
   });
   const finished = service.speak('A short sentence.');
   await vi.waitFor(() => {
