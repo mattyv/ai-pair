@@ -496,6 +496,8 @@ Last updated: css, 2026-11-08.
 | `specs/SpeechWorker.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/Start.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Start.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
+| `specs/StartDirectory.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/StartDirectory.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/StructuralTyping.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/StructuralTyping.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/TerminalPanel.cfg` | TLC config | - | - | - | - | - | - |
