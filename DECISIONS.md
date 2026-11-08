@@ -397,3 +397,11 @@ Issue discussions and working notes hold the detailed evidence and history.
     before activation and return controlled provider responses. They exercise
     the real client, catalog and settings without sending the synthetic key
     to the network; they do not establish live account voice availability.
+
+## CI ONNX Runtime installation, 2026-11-08
+
+-   Set `ONNXRUNTIME_NODE_INSTALL_CUDA=skip` in the CI and VSIX workflows.
+    Speech selects the CPU execution provider, which is packaged with the npm
+    dependency; skipping the unused CUDA download avoids an external GPU
+    artifact dependency during CI. This setting applies to CI only and does
+    not change developer installations or ONNX Runtime versions.

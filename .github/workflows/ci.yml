@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+# Speech runs on CPU; do not download unused CUDA provider binaries.
+env:
+  ONNXRUNTIME_NODE_INSTALL_CUDA: skip
+
 jobs:
   check:
     # Debian trixie, in a container: it packages kcov, which the shell tests' coverage needs and

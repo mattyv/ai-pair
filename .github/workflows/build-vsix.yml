@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+# Speech runs on CPU; do not download unused CUDA provider binaries.
+env:
+  ONNXRUNTIME_NODE_INSTALL_CUDA: skip
+
 jobs:
   native:
     uses: ./.github/workflows/native-audio.yml

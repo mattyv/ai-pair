@@ -471,18 +471,34 @@ async function foreignTerminalExecution(api: Api): Promise<void> {
     );
     const terminal = vscode.window.terminals.at(-1);
     assert.ok(terminal?.shellIntegration, 'Pair terminal has no shell integration');
-    const foreign = terminal.shellIntegration.executeCommand('printf foreign-terminal-command');
-    const ended = Promise.withResolvers<void>();
+    const command = 'printf foreign-terminal-command';
+    const ended = Promise.withResolvers<vscode.TerminalShellExecution>();
     const listener = vscode.window.onDidEndTerminalShellExecution((event) => {
-      if (event.execution === foreign) ended.resolve();
+      if (event.terminal === terminal && event.execution.commandLine.value === command) {
+        ended.resolve(event.execution);
+      }
     });
     try {
-      await Promise.race([
+      const foreign = terminal.shellIntegration.executeCommand(command);
+      const output = (async () => {
+        let text = '';
+        for await (const chunk of foreign.read()) text += chunk;
+        return text;
+      })();
+      const completed = await Promise.race([
         ended.promise,
         sleep(INTERRUPT_WAIT_MS).then(() => {
           throw new Error('foreign shell command did not end');
         }),
       ]);
+      assert.equal(completed, foreign);
+      const text = await Promise.race([
+        output,
+        sleep(INTERRUPT_WAIT_MS).then(() => {
+          throw new Error('foreign shell output did not close');
+        }),
+      ]);
+      assert.match(text, /foreign-terminal-command/);
     } finally {
       listener.dispose();
     }
