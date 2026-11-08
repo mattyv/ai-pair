@@ -498,6 +498,7 @@ test('Settings copies diagnostics only on request and suspended status explains 
     )
     .toEqual([{ type: 'copyDiagnostics' }]);
   await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Settings' })).toBeFocused();
   await post({ type: 'session', active: true, task: 'Previous' });
   await post({ type: 'session', active: true, task: 'Previous', suspended: true });
   const status = page.locator('[data-ui=status-text]');
