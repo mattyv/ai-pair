@@ -43,11 +43,10 @@ export async function commandDeliveryPaths(api: Api): Promise<void> {
     previousTrace?.(line);
   };
   controller.setConfirmCommands(false);
-  controller.setSpeed(20);
   try {
     for (const kind of ['listen', 'empty step'] as const) {
       traces.length = 0;
-      const historyStart = api.history().length;
+      const priorHistory = new Set(api.history());
       await controller.start(`command delivery ${kind}`);
       const first = await controller.step([{ run: 'sleep 2; printf command-delivery-first' }]);
       assert.equal(first.submitted?.status, 'playing');
@@ -58,10 +57,7 @@ export async function commandDeliveryPaths(api: Api): Promise<void> {
       );
       await waitFor(() => traces.some((line) => line.startsWith('batch 2 queued:')), 'later batch was not accepted');
       assert.ok(
-        api
-          .history()
-          .slice(historyStart)
-          .some((event) => event.type === 'state' && event.ready === 1),
+        api.history().some((event) => !priorHistory.has(event) && event.type === 'state' && event.ready === 1),
         'queued work was not shown as ready',
       );
       cancel.abort();
@@ -103,7 +99,6 @@ export async function commandDeliveryPaths(api: Api): Promise<void> {
     }
     controller.trace = previousTrace;
     controller.setConfirmCommands(confirmCommands);
-    controller.setSpeed(1);
     await waitFor(() => vscode.window.terminals.every((terminal) => originalTerminals.has(terminal)), 'test terminals did not close');
   }
 }
