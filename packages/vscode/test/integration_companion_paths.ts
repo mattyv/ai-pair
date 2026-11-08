@@ -4,6 +4,7 @@ import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 import { localSpeechReport } from '@ai-pair/protocol';
 import type { Api } from '../src/extension';
+import { prepareRecovery, verifyRecovery } from './integration_recovery_restart';
 
 async function until(condition: () => boolean, description: string): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt++) {
@@ -37,12 +38,14 @@ export async function run(): Promise<void> {
       api.history().some((event) => event.type === 'programmer' && event.text === 'retained companion reply'),
       'the workspace did not restore the visible session history',
     );
+    await verifyRecovery(api);
     await api.controller.end();
     console.log('the restarted companion restored the suspended session and its visible history');
     return;
   }
 
   await api.controller.start('companion integration');
+  if (process.env.AI_PAIR_COMPANION_RESTART === 'prepare') await prepareRecovery(api);
   api.panelMessage({ type: 'reply', text: 'retained companion reply', attach: false });
   await until(() => api.history().some((event) => event.type === 'programmer' && event.text === 'retained companion reply'), 'the reply');
   assert.ok(api.history().length > 0, 'the workspace retained no session history');
