@@ -503,6 +503,10 @@ Archi revision 17 records this boundary and its older-relay limitation. Its
 source passed Archi 1.5.1 validation; the regenerated standalone HTML opened
 in Chromium without page errors and displayed its diagrams.
 
+The packaged MCP harness is a test fixture: it has no production callers and
+exercises an installed VSIX through the SDK. Keep it under the VS Code test
+tree and typecheck it with the rest of that tree.
+
 ## Selective upstream PR 17 adoption, 2026-11-08
 
 Adopt prompt completed-command delivery and honest working, ready and approval

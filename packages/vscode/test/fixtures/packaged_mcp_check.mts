@@ -1,5 +1,5 @@
 // Exercises the installed extension's generated launcher against an isolated VS Code workspace.
-// Usage: node scripts/packaged_mcp_check.ts LAUNCHER WORKSPACE OUTSIDE EXPECTED_VERSION
+// Usage: node packages/vscode/test/fixtures/packaged_mcp_check.mts LAUNCHER WORKSPACE OUTSIDE EXPECTED_VERSION
 // Start VS Code with the packaged extension and a fresh AI_PAIR_HOME before running this script.
 // In that isolated profile, set aiPair.confirmCommands to false so pwd can run unattended.
 import * as assert from 'node:assert/strict';

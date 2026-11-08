@@ -106,7 +106,7 @@ Last updated: css, 2026-11-08.
 | `packages/core/src/typing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/test/bridge.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/controller.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/core/test/diagnostic_delivery.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/core/test/diagnostic_delivery.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/core/test/diff.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/fake.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/lines.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -114,7 +114,7 @@ Last updated: css, 2026-11-08.
 | `packages/core/test/player.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/rehearsal.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/session.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
-| `packages/core/test/speech_reminder.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/core/test/speech_reminder.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/core/test/structural_typing.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/core/test/text.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/timeline.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -232,30 +232,31 @@ Last updated: css, 2026-11-08.
 | `packages/vscode/test/diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/editor.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/extension.test.ts` | TypeScript | test | test | test | test | - | test |
+| `packages/vscode/test/fixtures/packaged_mcp_check.mts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/fixtures/tempo_schema_fake.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/vscode/test/integration_bad_speech_settings.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/integration_catalog_paths.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/integration_bad_speech_settings.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_catalog_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_code_playback.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_companion_faults.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/integration_companion_paths.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/integration_companion_faults.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_companion_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_core_paths.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_deferred_settlement.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/integration_deferred_settlement.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/integration_gap_paths.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_invalid_calibration.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/integration_legacy_speech_paths.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/integration_model_status.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/integration_no_workspace.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/integration_invalid_calibration.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_legacy_speech_paths.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_model_status.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/integration_no_workspace.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_panel_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_paths.ts` | TypeScript | test | test | test | test | - | test |
-| `packages/vscode/test/integration_player_faults.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/integration_player_gap_paths.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/integration_preserved_playback.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/integration_recovery_restart.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/integration_restricted_runtime.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/integration_speech_reminder.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/integration_startup_paths.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/integration_terminal_cleanup.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/integration_player_faults.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_player_gap_paths.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_preserved_playback.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/integration_recovery_restart.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/integration_restricted_runtime.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_speech_reminder.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/integration_startup_paths.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_terminal_cleanup.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/launcher.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/output.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/outside.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -290,8 +291,8 @@ Last updated: css, 2026-11-08.
 | `packages/vscode/test/speech_pcm.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_pcm.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_phonemizer_bridge.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/speech_platform.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/speech_readiness.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_platform.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_readiness.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_runtime.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_segments.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_service.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -339,7 +340,6 @@ Last updated: css, 2026-11-08.
 | `scripts/normalize_architecture.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `scripts/normalize_architecture.test.ts` | TypeScript | test | test | test | - | - | test |
 | `scripts/normalize_architecture.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `scripts/packaged_mcp_check.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
 | `scripts/release.test.ts` | TypeScript | test | test | test | test | - | test |
 | `scripts/release.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/specs_needed.sh` | Shell | - | - | - | - | - | - |
@@ -369,13 +369,13 @@ Last updated: css, 2026-11-08.
 | `specs/Controller.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Controller.tla` | TLA+ | - | - | 17 of 17 actions | - | - | - |
 | `specs/DeferredMessage.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/DeferredMessage.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/DeferredMessage.tla` | TLA+ | - | - | 4 of 4 actions | - | - | - |
 | `specs/Diagnostics.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Diagnostics.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
 | `specs/DiagnosticsCopy.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/DiagnosticsCopy.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/DiagnosticsFaultIsolation.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/DiagnosticsFaultIsolation.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/DiagnosticsFaultIsolation.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/DiagnosticsPrivacy.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/DiagnosticsPrivacy.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/DiagnosticsPrivacy_Speech.cfg` | TLC config | - | - | - | - | - | - |
@@ -408,7 +408,7 @@ Last updated: css, 2026-11-08.
 | `specs/LocalPanelReplay.tla` | TLA+ | - | - | 7 of 7 actions | - | - | - |
 | `specs/LocalPanelReplay_Delivery.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ModelStatus.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/ModelStatus.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/ModelStatus.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/MultipartAudioLease.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/MultipartAudioLease.tla` | TLA+ | - | - | 15 of 15 actions | - | - | - |
 | `specs/MultipartAudioLease_Healthy.cfg` | TLC config | - | - | - | - | - | - |
@@ -460,7 +460,7 @@ Last updated: css, 2026-11-08.
 | `specs/ReadingSkip.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ReadingSkip.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
 | `specs/RecoveryBatchIds.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/RecoveryBatchIds.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/RecoveryBatchIds.tla` | TLA+ | - | - | 4 of 4 actions | - | - | - |
 | `specs/Rehearsal.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Rehearsal.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/Reload.cfg` | TLC config | - | - | - | - | - | - |
@@ -470,7 +470,7 @@ Last updated: css, 2026-11-08.
 | `specs/RunBox.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/RunBox.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
 | `specs/RuntimeIdentity.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/RuntimeIdentity.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/RuntimeIdentity.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/RuntimeIdentity_Mismatch.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Scroll.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Scroll.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
@@ -485,9 +485,9 @@ Last updated: css, 2026-11-08.
 | `specs/SpeechPage.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechPage.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/SpeechPlatformEvidence.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/SpeechPlatformEvidence.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/SpeechPlatformEvidence.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/SpeechReminder.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/SpeechReminder.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/SpeechReminder.tla` | TLA+ | - | - | 4 of 4 actions | - | - | - |
 | `specs/SpeechSettings.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechSettings.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/SpeechSetup.cfg` | TLC config | - | - | - | - | - | - |
@@ -501,7 +501,7 @@ Last updated: css, 2026-11-08.
 | `specs/Start.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Start.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
 | `specs/StartDirectory.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/StartDirectory.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/StartDirectory.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/StructuralTyping.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/StructuralTyping.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/TerminalPanel.cfg` | TLC config | - | - | - | - | - | - |
