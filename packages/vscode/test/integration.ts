@@ -285,6 +285,9 @@ export async function run(): Promise<void> {
   ]);
   await until(() => deferred.getText().length > 0 && deferred.getText().length < 12);
   api.panelMessage({ type: 'reply', text: 'Wait', defer: true });
+  const deferredSaved = controller.saved;
+  assert.ok(deferredSaved, 'the queued reply has a saved session');
+  assert.deepEqual(deferredSaved.events, [{ kind: 'message', text: 'Wait' }]);
   const deferredReport = await controller.step([]);
   assert.equal(deferred.getText(), 'abcdefghijkl');
   assert.deepEqual(deferredReport.events, [{ kind: 'message', text: 'Wait' }]);
@@ -294,7 +297,11 @@ export async function run(): Promise<void> {
   );
   assert.deepEqual(deferredReport.batches[0]?.unplayed, [{ say: 'Later.' }]);
   await controller.end();
-  console.log('NoEarlyDelivery: deferred reply waits for the current typing action');
+  controller.revive(deferredSaved);
+  const revivedReply = await controller.start(undefined, deferredSaved.scene.root);
+  assert.deepEqual(revivedReply.events, [{ kind: 'message', text: 'Wait' }]);
+  await controller.end();
+  console.log('NoEarlyDelivery, Store: deferred reply waits for typing and survives reload');
 
   fs.writeFileSync(file('other.txt'), 'before\n');
   const other = await vscode.workspace.openTextDocument(file('other.txt'));
