@@ -1475,7 +1475,8 @@ export async function run(): Promise<void> {
   await setUpAgents([]);
   // A multi-agent choice writes both isolated configurations from scratch.
   fs.rmSync(path.join(agents, 'codex'), { recursive: true, force: true });
-  await setUpAgents([1, 2], [0]);
+  fs.mkdirSync(path.join(agents, 'codex'));
+  await setUpAgents([1, 2], [0, 1]);
   const openCodeFile = path.join(agents, 'xdg', 'opencode', 'opencode.json');
   const openCode = z
     .object({ mcp: z.object({ pair: z.object({ type: z.literal('local'), command: z.tuple([z.string()]), enabled: z.literal(true) }) }) })
