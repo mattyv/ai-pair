@@ -240,6 +240,7 @@ Last updated: css, 2026-11-08.
 | `packages/vscode/test/integration_companion_faults.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/test/integration_companion_paths.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/test/integration_core_paths.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_deferred_settlement.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/integration_gap_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_invalid_calibration.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/test/integration_legacy_speech_paths.ts` | TypeScript | test | test | - | - | - | test |
@@ -329,6 +330,7 @@ Last updated: css, 2026-11-08.
 | `scripts/coverage_report.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/coverage_shell.sh` | Shell | - | - | - | - | - | - |
 | `scripts/coverage_swift.sh` | Shell | - | - | - | - | - | - |
+| `scripts/download_tlc.sh` | Shell | - | - | - | - | - | - |
 | `scripts/lint_shell.sh` | Shell | - | - | - | - | - | - |
 | `scripts/lint_tla.test.ts` | TypeScript | test | test | test | test | test | test |
 | `scripts/lint_tla.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
