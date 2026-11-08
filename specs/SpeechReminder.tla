@@ -1,4 +1,4 @@
----- MODULE SpeechReminder ----------------------------------------------------
+---- MODULE SpeechReminder -----------------------------------------------------
 (******************************************************************************)
 (* Count accepted batches, and remind only when speech is currently ready.  *)
 (******************************************************************************)
@@ -9,7 +9,8 @@ vars == <<count, ready, reminder, selected, owed>>
 
 TypeOK == /\ count \in 0..3 /\ ready \in BOOLEAN
           /\ reminder \in BOOLEAN /\ selected \in BOOLEAN /\ owed \in BOOLEAN
-Init == /\ count = 0 /\ ready = FALSE /\ reminder = FALSE /\ selected = FALSE /\ owed = FALSE
+Init == /\ count = 0 /\ ready = FALSE /\ reminder = FALSE
+        /\ selected = FALSE /\ owed = FALSE
 Batch(spoken) ==
     /\ spoken \in BOOLEAN
     /\ selected' = spoken
@@ -27,4 +28,4 @@ Spec == Init /\ [][Next]_vars
 ReminderOnlyReady == reminder => ready
 SelectedResets == selected => count = 0
 DueIsReminded == owed => reminder
-=============================================================================
+================================================================================
