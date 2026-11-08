@@ -2688,3 +2688,26 @@ order.
 TLC mutations changed the action state outside its domain, delivered a reply
 early, let urgent input avoid interruption, and removed action fairness; each
 violated its corresponding property.
+
+### `SpeechReminder`: reminders for selected speech
+
+`SpeechReminder.tla` counts accepted unspoken batches up to three, resets on
+selected speech, and gates the next reminder on current readiness. A report
+that emits a reminder resets the count. Readiness abstracts the local checks
+and cannot guarantee future synthesis or playback.
+
+| Invariant | Test |
+| --- | --- |
+| `TypeOK` | `speech_reminder.test.ts`: count and report cases |
+| `ReminderOnlyReady` | `speech_reminder.test.ts`: reminds after three unspoken batches only when ready, then counts again |
+| `SelectedResets` | `speech_reminder.test.ts`: resets its count on a selected narration |
+| `DueIsReminded` | `speech_reminder.test.ts`: reminds after three unspoken batches only when ready, then counts again |
+
+With the readiness gate removed, `ReminderOnlyReady` fails. With the selected
+reset removed, `SelectedResets` fails. With reminder emission disabled,
+`DueIsReminded` fails. `TypeOK` bounds the counter and state types; removing
+its counter cap permits the count to leave its declared range.
+
+| Configuration | Bounds | Distinct states | Result |
+| --- | --- | ---: | --- |
+| `SpeechReminder.cfg` | Three batches; Boolean readiness and selection | 11 | Pass |

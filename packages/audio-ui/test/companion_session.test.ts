@@ -114,6 +114,7 @@ vi.mock('../src/speech_host', () => ({
       panelSpeech: { keySet: fake.keySet, keyRemove: fake.keyRemove, preview: fake.preview },
       output: { stopAndWait: fake.stopOutput },
       observation: fake.observation,
+      ready: () => Promise.resolve(true),
       dispose: fake.hostDispose,
     };
   },
@@ -184,6 +185,8 @@ it('registers one provider and forwards local commands and diagnostics', async (
   expect(fake.preview).toHaveBeenCalledOnce();
   fake.observation.mockReturnValue({ id: 1, state: 'speaking', started: true });
   expect(current.observation()).toMatchObject({ id: 1 });
+  expect(await current.ready('wrong')).toBe(false);
+  expect(await current.ready('epoch')).toBe(true);
   expect(current.diagnostics()).toMatchObject({ version: 'test', build: 'test-build' });
   fake.hostOptions?.diagnostic({ kind: 'test' });
   expect(fake.diagnostic).toHaveBeenCalledWith({ kind: 'test' });
@@ -197,6 +200,7 @@ it('registers one provider and forwards local commands and diagnostics', async (
   await fake.channelOptions?.send({ version: 1, connectionEpoch: 'epoch', sequence: 2, type: 'heartbeat' });
   expect(fake.execute).toHaveBeenCalledOnce();
   current.dispose();
+  expect(await current.ready('epoch')).toBe(false);
   expect(fake.providerDispose).toHaveBeenCalledOnce();
   expect(fake.hostDispose).toHaveBeenCalledOnce();
   expect(fake.narrationDispose).toHaveBeenCalledOnce();

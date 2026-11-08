@@ -5,6 +5,10 @@ import { CURSOR_MARKER, type Report } from '@ai-pair/protocol';
 import { ELLIPSIS, RANGE_DASH } from '@ai-pair/core/constants';
 import { renderFile, renderReport } from '../src/render';
 
+it('renders an actionable speech reminder', () => {
+  expect(renderReport({ batches: [], events: [], turn: 'agent', speechReminder: true }, 'step')).toContain('speak: true');
+});
+
 function report(r: Partial<Report>): Report {
   return { batches: [], events: [], turn: 'agent', ...r };
 }

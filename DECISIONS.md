@@ -442,3 +442,14 @@ snapshots cannot recover IDs that have already left that list. Workspace
 storage is asynchronous,
 so a crash before its latest write can still reuse an ID. This change does not
 replay interrupted work and does not address terminal command IDs (issue #11).
+
+## Speech reminders, 2026-11-08
+
+-   Treat one concise selected narration per batch as the usual shape, while
+    preserving the one-selection and 45-word limits and the programmer's
+    control of speech. After three accepted batches without a selection, a
+    step report may remind the agent once and restart the count.
+-   Gate the reminder on current local settings, provider prerequisites and
+    output readiness. The companion answers an epoch-bound readiness query;
+    no text, key or audio crosses it and no provider request is made. A local
+    check cannot guarantee that a provider or audio device will succeed later.

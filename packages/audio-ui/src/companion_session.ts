@@ -33,6 +33,7 @@ export interface CompanionSession {
   keyRemove(): Promise<void>;
   preview(): Promise<void>;
   observation(): LocalSpeechObservation | undefined;
+  ready(epoch: unknown): Promise<boolean>;
   diagnostics(): LocalSpeechReport | undefined;
   dispose(): void;
 }
@@ -205,6 +206,7 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
     keyRemove: () => host.panelSpeech.keyRemove(),
     preview: () => host.panelSpeech.preview(),
     observation: () => host.observation(),
+    ready: async (requestedEpoch) => requestedEpoch === epoch && !closed && (await host.ready()) && !closed,
     diagnostics: () => {
       const snapshot = diagnostics.snapshot();
       const report = localSpeechReport.safeParse({ version: snapshot.version, build: snapshot.build, events: snapshot.events });

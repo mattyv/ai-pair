@@ -14,6 +14,7 @@ import type { SpeechDiagnosticEvent } from '../../vscode/src/diagnostics';
 import { createSpeechHost } from '../src/speech_host';
 
 const fakes = vi.hoisted(() => ({
+  readiness: vi.fn<(options: import('../../vscode/src/speech_readiness').SpeechReadiness) => Promise<boolean>>().mockResolvedValue(true),
   platform: vi.fn<() => import('../../vscode/src/speech_platform').SpeechPlatformResult>().mockReturnValue({ supported: true }),
   config: new Map<string, unknown>(),
   update: vi.fn().mockResolvedValue(undefined),
@@ -50,6 +51,7 @@ const fakes = vi.hoisted(() => ({
   installed: vi.fn().mockResolvedValue(undefined),
   setup: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock('../../vscode/src/speech_readiness', () => ({ speechReady: fakes.readiness }));
 vi.mock('../../vscode/src/speech_platform', () => ({ localSpeechPlatform: fakes.platform }));
 vi.mock('vscode', () => ({
   env: {
@@ -601,4 +603,18 @@ it('constructs the listening-speed worker from the fixed local extension path', 
   const { host } = harness();
   expect(tempoPaths).toEqual(['/extension/dist/speech/tempo_worker.mjs']);
   host.dispose();
+});
+
+it('passes local readiness facts to the readiness check', async () => {
+  const { host } = harness();
+  expect(await host.ready()).toBe(true);
+  const facts = fakes.readiness.mock.lastCall?.[0];
+  expect(facts).toBeDefined();
+  expect(facts?.settings().enabled).toBe(false);
+  expect(facts?.desktop()).toBe(true);
+  await expect(facts?.key()).resolves.toBe(false);
+  await expect(facts?.model()).resolves.toBe(false);
+  expect(facts?.local()).toBe(false);
+  host.dispose();
+  expect(facts?.desktop()).toBe(false);
 });

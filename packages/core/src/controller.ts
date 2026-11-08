@@ -33,6 +33,7 @@ import {
 import { followChange, rehearse, type Rehearsal } from './rehearsal';
 import { fileLines } from './text';
 import { Timeline } from './timeline';
+import { SpeechReminder } from './speech_reminder';
 import { defaultConfig, type Config, type Timeouts } from './config';
 import { defaultTiming, glideDuration, withOverrides } from './timing';
 
@@ -103,6 +104,7 @@ export function isSavedSession(v: unknown): v is SavedSession {
 
 interface Session {
   task?: string;
+  speechReminder: SpeechReminder;
   scene: Scene;
   player: Player;
   /** Batches not yet finished; the head may be playing. */
@@ -352,6 +354,7 @@ export class Controller {
     const s: Session = {
       task,
       scene,
+      speechReminder: new SpeechReminder(),
       player: new Player(scene, {
         editor: this.editor,
         panel: this.panel,
@@ -462,7 +465,7 @@ export class Controller {
       // A selected unit cannot queue behind another selected unit, even while speech is disabled.
       if (!session.stale && !session.ended && session.held.length === 0) {
         const selected = actions.flatMap((action, index) => (selectedSpeech(action) ? [{ action, index: index + 1 }] : []));
-        const outstanding = session.queue.some((batch) => batch.actions.some(selectedSpeech));
+        const outstanding = session.queue.some((batch) => batch.actions.some((action) => selectedSpeech(action)));
         const rejected = selected.length > 1 ? selected[1] : outstanding ? selected[0] : undefined;
         if (rejected !== undefined) {
           const message =
@@ -488,6 +491,7 @@ export class Controller {
       if (current === true) {
         const queued: QueuedBatch = { id: this.nextBatchId++, actions, state: 'queued', after: rehearsal.after };
         session.queue.push(queued);
+        session.speechReminder.batch(actions.some((action) => selectedSpeech(action)));
         this.trace?.(`batch ${queued.id} queued: ${actions.length} actions`);
         if (anchor?.anchored === true) session.anchorNeeded = false;
         this.kick(session);
@@ -1093,7 +1097,7 @@ export class Controller {
     this.trace?.(`report to ${call.kind}: ${describeReport(report)}`);
     // specs/Serialize.tla, `HandBack`: the report is handed back after the commit.
     // `Deliver` in specs/Controller.tla, unless the agent canceled meanwhile: the relay hands the report back (`Bounce`).
-    void this.withCursor(session, report).then(call.resolve, () => {
+    void this.withCursor(session, report, call.kind === 'step').then(call.resolve, () => {
       call.resolve(report);
     });
   }
@@ -1133,7 +1137,11 @@ export class Controller {
   }
 
   /** Adds the cursor's line to the report, unless it's where the agent last saw it, in a report's code or cursor. */
-  private async withCursor(session: Session, report: Report): Promise<Report> {
+  private async withCursor(session: Session, report: Report, step = false): Promise<Report> {
+    if (step && session.speechReminder.due() && this.narration?.ready !== undefined) {
+      const ready = await this.narration.ready().catch(() => false);
+      if (session.speechReminder.report(ready)) report = { ...report, speechReminder: true };
+    }
     for (const b of report.batches) {
       const line = b.code?.lines.find((l) => l.text.includes(CURSOR_MARKER));
       if (b.code && line) session.seenCursor = `${b.code.file}:${line.number}:${line.text}`;

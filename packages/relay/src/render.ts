@@ -182,6 +182,9 @@ export function renderReport(report: Report, tool: ReportingTool): string {
   for (const b of report.batches) {
     sections.push(renderBatch(b));
   }
+  if (report.speechReminder) {
+    sections.push('Speech is available. Consider marking one concise `say` with `speak: true` in your next batch.');
+  }
   if (report.submitted) sections.push(`Batch ${report.submitted.id} is ${report.submitted.status}.`);
   if (report.rejected) sections.push(renderRejected(report.rejected));
   if (report.cursor) sections.push(`Your cursor, in ${report.cursor.file}:\n${renderCode(report.cursor)}`);

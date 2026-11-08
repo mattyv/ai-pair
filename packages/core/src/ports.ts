@@ -4,6 +4,8 @@ import type { Excerpt, PauseReason, Turn } from '@ai-pair/protocol';
 
 /** Controls one optional live narration without owning reading or command decisions. */
 export interface NarrationPort {
+  /** Reports whether enabled narration is currently available. */
+  ready?: () => Promise<boolean>;
   /** Speaks one displayed unit and resolves on completion, cancellation, or text-only fallback. */
   speak: (text: string) => Promise<void>;
   /** Pauses audio or prevents a prepared waveform from starting. */

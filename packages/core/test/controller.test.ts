@@ -608,6 +608,32 @@ describe('a session the agent leaves, and comes back to', () => {
   });
 });
 
+describe('speech reminders', () => {
+  it('nudges on the third accepted unspoken batch only while speech is ready', async () => {
+    const narration = mock<NarrationPort>();
+    narration.ready = vi.fn().mockResolvedValue(true);
+    const h = harness({}, {}, narration);
+    await h.controller.start('A task.');
+    expect((await report(h.controller.step([{ say: 'One.' }]))).speechReminder).toBeUndefined();
+    expect((await report(h.controller.step([{ say: 'Two.' }]))).speechReminder).toBeUndefined();
+    expect((await report(h.controller.step([{ say: 'Three.' }]))).speechReminder).toBe(true);
+  });
+});
+
+it('withholds reminders when speech is unavailable and resets after selected speech', async () => {
+  const narration = mock<NarrationPort>();
+  const ready = vi.fn().mockResolvedValue(false);
+  narration.ready = ready;
+  const h = harness({}, {}, narration);
+  await h.controller.start('A task.');
+  for (let index = 0; index < 3; index++) {
+    expect((await report(h.controller.step([{ say: 'Text.' }]))).speechReminder).toBeUndefined();
+  }
+  ready.mockResolvedValue(true);
+  await report(h.controller.step([{ say: 'Selected.', speak: true }]));
+  expect((await report(h.controller.step([{ say: 'Text.' }]))).speechReminder).toBeUndefined();
+});
+
 describe('steps and their batches', () => {
   it('rejects another flagged batch while selected narration is outstanding', async () => {
     const h = await started();
