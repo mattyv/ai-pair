@@ -716,7 +716,7 @@ export async function editorDiagnosticsFailure(api: Api): Promise<void> {
 }
 
 /** A late EditorPort diagnostic cannot attach an old edit to a replacement session. */
-async function delayedDiagnosticsAfterReplacement(api: Api): Promise<void> {
+export async function delayedDiagnosticsAfterReplacement(api: Api): Promise<void> {
   const folder = vscode.workspace.workspaceFolders?.[0];
   assert.ok(folder, 'workspace not found');
   const name = 'integration-diagnostics-replaced.txt';
@@ -728,6 +728,7 @@ async function delayedDiagnosticsAfterReplacement(api: Api): Promise<void> {
   const entered = Promise.withResolvers<void>();
   const release = Promise.withResolvers<void>();
   const settled = Promise.withResolvers<void>();
+  const oldWarning = 'Delayed diagnostic from the old session';
   controller.setSpeed(20);
   try {
     await controller.start('old diagnostic session');
@@ -739,7 +740,8 @@ async function delayedDiagnosticsAfterReplacement(api: Api): Promise<void> {
         entered.resolve();
         await release.promise;
         try {
-          return await diagnostics(file);
+          const checked = await diagnostics(file);
+          return { ...checked, warnings: [...checked.warnings, oldWarning] };
         } finally {
           settled.resolve();
         }
@@ -747,7 +749,7 @@ async function delayedDiagnosticsAfterReplacement(api: Api): Promise<void> {
     });
     const first = await controller.step([{ move: { file: name, line: 1, to: 'line_end' } }, { type_fast: `x${CURSOR_MARKER}` }]);
     const oldId = first.submitted?.id;
-    assert.notEqual(oldId, undefined, 'the old edit did not start');
+    assert.equal(oldId, 1, 'the old session must start with batch 1');
     await Promise.race([
       entered.promise,
       sleep(INTERRUPT_WAIT_MS).then(() => {
@@ -769,13 +771,14 @@ async function delayedDiagnosticsAfterReplacement(api: Api): Promise<void> {
     await controller.read(name);
     const submission = await controller.step([{ move: { file: name, line: 1, to: 'line_end' } }, { type_fast: `y${CURSOR_MARKER}` }]);
     const report = await controller.step([]);
+    assert.equal(submission.submitted?.id, 1, 'the fresh replacement must start with batch 1');
+    const batches = [...submission.batches, ...report.batches];
+    assert.equal(batches.length, 1, JSON.stringify(batches));
+    assert.equal(batches[0]?.id, 1);
+    assert.equal(batches[0]?.status, 'completed');
     assert.ok(
-      report.batches.some((batch) => batch.status === 'completed'),
-      JSON.stringify(report),
-    );
-    assert.ok(
-      [...submission.batches, ...report.batches].every((batch) => batch.id !== oldId),
-      'the old batch reached the replacement session',
+      batches.every((batch) => batch.warnings?.includes(oldWarning) !== true),
+      'the old diagnostic reached the replacement session',
     );
     assert.equal(fs.readFileSync(filename, 'utf8'), 'axy\n');
     console.log('late diagnostics from an ended session do not affect its replacement');
