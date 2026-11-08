@@ -2,9 +2,9 @@
   "version": 1,
   "bundleId": "277c3415-7b74-4008-8be4-8c14ae6d41dd",
   "revision": {
-    "number": 17,
+    "number": 18,
     "updatedAt": "2026-11-08T00:00:00.000Z",
-    "summary": "Match relay and editor runtime identity before starting a session"
+    "summary": "Preserve runtime identity and show queued work across compatible companion versions"
   },
   "diagrams": [
     {
@@ -9636,7 +9636,7 @@
           "local-panel": [
             {
               "id": "placement-commit",
-              "text": "Prepare cannot register a view. Commit selects one panel owner for the window; a lost acknowledgement cannot register a legacy fallback. The two-extension arrangement was demonstrated in an isolated SSH window.",
+              "text": "Prepare cannot register a view. Private protocol version 2 carries accepted queued-batch counts. A new workspace rejects an installed incompatible companion before selecting an owner; the new companion rejects old workspace requests and asks for both extensions to be updated and the window reloaded. An already-installed old workspace may still choose its own legacy fallback. Commit selects one owner; a lost acknowledgement cannot register a legacy fallback.",
               "ts": 0
             }
           ],

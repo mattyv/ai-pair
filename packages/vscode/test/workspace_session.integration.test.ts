@@ -20,7 +20,7 @@ describe('workspace companion session', () => {
       lost,
     });
     expect(
-      session.accept({ version: 1, connectionEpoch: 'epoch', sequence: 1, type: 'panelAction', pageEpoch: 1, action: { type: 'ready' } }),
+      session.accept({ version: 2, connectionEpoch: 'epoch', sequence: 1, type: 'panelAction', pageEpoch: 1, action: { type: 'ready' } }),
     ).toBe(true);
     expect(attach).toHaveBeenCalledTimes(1);
     expect(receive).toHaveBeenCalledWith(1, { type: 'ready' });
@@ -42,10 +42,10 @@ describe('workspace companion session', () => {
       send,
       lost: vi.fn<() => void>(),
     });
-    session.accept({ version: 1, connectionEpoch: 'epoch', sequence: 1, type: 'panelAction', pageEpoch: 1, action: { type: 'ready' } });
+    session.accept({ version: 2, connectionEpoch: 'epoch', sequence: 1, type: 'panelAction', pageEpoch: 1, action: { type: 'ready' } });
     const speaking = session.narration.speak('Hello.');
     expect(
-      session.accept({ version: 1, connectionEpoch: 'epoch', sequence: 2, type: 'terminal', pageEpoch: 1, jobId: '1', outcome: 'ended' }),
+      session.accept({ version: 2, connectionEpoch: 'epoch', sequence: 2, type: 'terminal', pageEpoch: 1, jobId: '1', outcome: 'ended' }),
     ).toBe(true);
     await speaking;
     session.dispose();
@@ -62,12 +62,12 @@ describe('workspace companion session', () => {
       send,
       lost: vi.fn<() => void>(),
     });
-    session.accept({ version: 1, connectionEpoch: 'epoch', sequence: 1, type: 'panelAction', pageEpoch: 1, action: { type: 'ready' } });
+    session.accept({ version: 2, connectionEpoch: 'epoch', sequence: 1, type: 'panelAction', pageEpoch: 1, action: { type: 'ready' } });
     const old = session.narration.speak('Old.');
-    session.accept({ version: 1, connectionEpoch: 'epoch', sequence: 2, type: 'panelAction', pageEpoch: 2, action: { type: 'ready' } });
+    session.accept({ version: 2, connectionEpoch: 'epoch', sequence: 2, type: 'panelAction', pageEpoch: 2, action: { type: 'ready' } });
     await old;
     expect(
-      session.accept({ version: 1, connectionEpoch: 'epoch', sequence: 3, type: 'terminal', pageEpoch: 1, jobId: '1', outcome: 'failed' }),
+      session.accept({ version: 2, connectionEpoch: 'epoch', sequence: 3, type: 'terminal', pageEpoch: 1, jobId: '1', outcome: 'failed' }),
     ).toBe(true);
     const next = session.narration.speak('New.');
     await Promise.resolve();

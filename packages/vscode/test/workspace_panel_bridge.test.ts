@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { WorkspacePanelBridge } from '../src/workspace_panel_bridge';
 
-const base = { version: 1, connectionEpoch: 'epoch' };
+const base = { version: 2, connectionEpoch: 'epoch' };
 
 describe('workspace panel bridge', () => {
   it('accepts only ordered current-page actions and terminal acknowledgements', () => {

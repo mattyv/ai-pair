@@ -105,7 +105,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `OutputPreference.cfg` | ordered choice, discovery and failed persistence | holds | 648 |
 | `LocalAudioAdmission.cfg` | capability, device snapshot and cloud admission | holds | 624 |
 | `LocalAudioOwnership.cfg` | local ownership, directional sequences and lease loss | holds | 3,632 |
-| `PanelPlacement.cfg` | bounded prepare, irrevocable commit and fallback | holds | 10 |
+| `PanelPlacement.cfg` | bounded prepare, irrevocable commit and fallback | holds | 11 |
 | `SentencePipeline.cfg` | two units, three parts, pause, cancel and late callbacks | holds | 2,242 |
 | `SpeechTempo.cfg` | two units, two parts, rate changes and stale results | holds | 868 |
 | `SpeechTempo_Healthy.cfg` | two fair completed units | holds | 17 |
@@ -152,7 +152,8 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Calibration.cfg` | `MaxRounds = 2` calibrations, `AwaitStore = TRUE` | holds | 46 |
 | `PointFocus.cfg` | a point, a look-away, a closed tab, `MaxReplies = 2` replies or resumes, `DropStaleFocus = TRUE`, `RevealOnReply = FALSE` | holds | 67 |
 | `Start.cfg` | `MaxPages = 3`, `MaxEnvironmentChanges = 4`, `MaxClicks = 2`, `DropStale = TRUE`, `ReaskOnSetUp = TRUE`, `InTerminal = TRUE`, `OneAgent = TRUE`, `NoteOnClick = TRUE`, `ClearOnExit = TRUE` | holds | 242,152 |
-| `ListenGrace.cfg` | unbounded, `Grace = TRUE`, `ShowAbsent = TRUE`, `EndOnAnyCall = TRUE` | holds | 40 |
+| `ListenGrace.cfg` | unbounded, `Grace = TRUE`, `ShowAbsent = TRUE`, `EndOnAnyCall = TRUE` | holds | 80 |
+| `CommandDelivery.cfg` | queue bounded to two completions | holds | 84 |
 
 `Controller.tla` also passes at `NumBatches = 3, MaxCancels = 2` (570,008 states).
 
@@ -1068,7 +1069,7 @@ Each behavioral invariant was checked with a mutation and then restored:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | TypeScript checks these types |
-| `OnlyEdited`, `ObserveWhenAvailable`, `OutcomeUnchanged`, `Advisory` | `controller.test.ts`: OnlyEdited, Advisory: reports diagnostics only for files actually edited and does not reject the batch |
+| `OnlyEdited`, `ObserveWhenAvailable`, `OutcomeUnchanged`, `Advisory` | `controller.test.ts`: OnlyEdited, Advisory: reports diagnostics only for files actually edited and does not reject the batch; `integration_render_diagnostic.ts`: a real editor advisory reaches the agent through the relay |
 | `CaveatNeedsEdit`, `CaveatRecorded`, `CaveatOnce`, `CaveatOnFirstEdit` | `controller.test.ts`: reports Pylance diagnostics on every batch but the snapshot caveat only once per session |
 
 ### `Draft`: the reply box's pause, across the view's page
@@ -1353,12 +1354,13 @@ holds "thinking", "absent", and "listening".
 
 | Spec | Code |
 |---|---|
-| `Status` | `state()` with the queue empty |
+| `Status` | `state()` with the queue empty; the panel labels thinking as "Waiting for agent" |
 | `Call` | a call that blocks arriving: `serialize` counting it in `openCalls`, ending the quiet with `endQuiet` and the grace with `endGrace`, then `block()`; `close` ends both |
 | `Read` | `read`: `endGrace`, and the quiet restarted at once |
 | `FailRehearsal` | a `step` answered by `rejectBatch` or `rejectUnanchored`: `serialize` ended the grace, the agent owes a response to the rejection, and the report takes the events |
 | `Timeout` | `finishCall` for a `listen` with `waiting` and no batches, events, or rejection: `startGrace` |
-| `QuietNews`, `TimeoutWithNews` | a batch completing, or an edit `interrupting` does not hold for, which wakes no `listen`; `finishCall` for a `listen` with `waiting` and such news: no grace |
+| `QuietNews`, `TimeoutWithNews` | a batch completing without a command, or an edit `interrupting` does not hold for, which wakes no `listen`; `finishCall` for a `listen` with `waiting` and such news: no grace |
+| `RunNews`, `RunDelivered` | `callReady` and `finishCall` for completed command results; `controller.test.ts`: wakes a pending listen with the command result once |
 | `Return` | `finishCall` with anything else |
 | `Interrupt` | an event `interrupting` holds for: a message, an interrupt, an edit of the programmer's, a turn change |
 | `Expire` | the grace timer firing after `listenGraceMs` |
@@ -1394,6 +1396,32 @@ Every invariant and property names the test that proves the code obeys it:
 | `AbsentWithoutCall` | `controller.test.ts`: AbsentShows, AbsentWithoutCall: says the agent is not listening once no call has been open for absentMs, until it calls |
 | `AbsentShows` | `controller.test.ts`: AbsentShows, AbsentWithoutCall: says the agent is not listening once no call has been open for absentMs, until it calls |
 | `NewsSkipsGraceProp` | `controller.test.ts`: NoFalseYourMove, NewsSkipsGraceProp: shows thinking when a listen times out with a batch to report. No test times a listen out with only an edit that interrupts nothing yet |
+
+### `CommandDelivery`: prompt command results
+
+`callReady` and `ready` in `packages/core/src/controller.ts` (#27). A
+completed command wakes a listen or empty step, including while later work is
+queued. The model bounds the queue to two completions and abstracts a playing
+head and its interruption with a count and flag. Nonempty step readiness is
+a simplified head approximation; this is not a complete serialization model.
+Weak fairness of quiet completion abstracts eventual settlement of an
+interrupted head, and fairness of Return makes enabled reports eventual.
+
+| Property | Code test or check |
+|---|---|
+| `TypeOK` | TypeScript checks types |
+| `Conservation`, `PromptRunReady` | `controller.test.ts`: command result delivery tests; `integration_command_delivery.ts`: real listen and empty step return a command result once while later work plays |
+| `NoQuietWake` | `controller.test.ts`: a completed batch without a command leaves listen pending; `integration_command_delivery.ts`: an empty step waits for later work after quiet completion |
+| `NoEarlyEnd` | `controller.test.ts`: command news does not let end return before later work finishes |
+| `NoEarlyDiscarded` | `controller.test.ts`: command news does not let a discarded step return before the interrupted head |
+| `NoInterruptedReturn` | `controller.test.ts`: command news waits until the interrupted head settles |
+| `RunDelivered` | `controller.test.ts`: wakes a pending listen with the command result once |
+
+Mutation checks detected omitted wake (`PromptRunReady`; separately
+`RunDelivered` with the invariant disabled), lost or duplicated news
+(`Conservation`), a quiet wake (`NoQuietWake`), early end (`NoEarlyEnd`),
+early discarded step (`NoEarlyDiscarded`), and return before interrupt
+settlement (`NoInterruptedReturn`). `TypeOK` is enforced by TLC's domains.
 
 ### `EditEvents`: an edit undone, in the report
 
@@ -2377,7 +2405,9 @@ Prepare does not register a view. The main extension selects the companion
 irrevocably before sending commit; a lost acknowledgement cannot select legacy
 fallback. A preparation timeout expires the token and may fall back only
 before commit. A delayed prepare cannot register an extra view. TLC checked
-10 states and assumes fair timeouts before and after commit.
+11 states and assumes fair timeouts before and after commit. `RejectInstalled`
+models the new incompatible result without registering either owner;
+`StatusTransport` models the version guard that selects this result.
 
 The prepare-registration, late-registration and post-commit fallback negative
 controls violate `NoEarlyRegistration`, `NoDuplicateRegistration` and
@@ -2391,6 +2421,7 @@ forbidden. The negative control disables this guard and violates
 
 | Property | Test |
 |---|---|
+| `RejectInstalled` | `panel_placement.test.ts`: rejects an installed incompatible companion before selecting any panel owner; `integration_workspace_incompatible.ts`: a synthetic companion refusal shows the warning without committing or previewing. |
 | `NoFallbackAfterCommit`, `CommittedSettles` | `panel_placement.test.ts`: chooses companion irrevocably before committing, including on a lost acknowledgement. |
 | `NoEarlyRegistration`, `NoDuplicateRegistration`, `PreparationSettles` | `panel_placement.test.ts`: falls back only before commit and ignores late prepare replies; uses local legacy only for a failed or invalid preparation before commit. |
 
@@ -2773,3 +2804,31 @@ Changing the initial phase to an unrecognized value violates `TypeOK`; changing
 the mismatch result to `forwarded` violates `Safe`; disabling `Start` violates
 `Settles`. The terminal states intentionally have no outgoing action,
 so both configurations disable deadlock checking.
+
+### `ReadyCount` and `StatusTransport`: status and version boundary
+
+`ReadyCount` bounds accepted, unstarted batches to two. `shown` abstracts the
+latest emitted panel state, not instantaneous delivery to the DOM. `Start`
+is weakly fair after `Drain` stops new admissions. TLC found 8 distinct states.
+`Accurate` is tested by `controller.test.ts`: reports accepted queued batches
+and clears the count when playback starts; panel replay and reset are tested
+in `panel.test.ts`. Mutations of count update, close reset, type bounds and
+start fairness violated `Accurate`, `ClosedEmpty`, `TypeOK` and `Drains`,
+respectively.
+
+`StatusTransport` models the new endpoints' prepare/attach gate, not an old
+binary's fallback choice. `StatusTransport.cfg` checks workspace/companion
+versions 2/1; `StatusTransport_Matching.cfg` checks 2/2 and exercises `Send`.
+An additional 1/2 mismatch was checked separately.
+
+| Configuration | Versions | Distinct states |
+| --- | --- | ---: |
+| `StatusTransport.cfg` | 2/1 | 2 |
+| `StatusTransport_Matching.cfg` | 2/2 | 3 |
+
+Bypassing the gate violates `NoMixedAttach` and
+`NoMixedDelivery`; separately suppressing the warning or matching delivery
+violates `MixedWarns` or `MatchingDelivers`. `panel_placement.test.ts`,
+`attachment_gate.test.ts`, `extension.test.ts` and `local_audio.test.ts`
+exercise rejection and guidance. An already-installed old workspace may still
+select legacy fallback, which the new companion cannot prevent.

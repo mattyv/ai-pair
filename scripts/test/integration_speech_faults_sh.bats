@@ -24,20 +24,23 @@ FAKE
   export NODE_V8_COVERAGE="${BATS_TEST_TMPDIR}/coverage"
 }
 
-@test "runs both speech fixtures in separate profiles with isolated storage and no audio" {
+@test "runs speech fixtures in separate profiles with isolated storage and no audio" {
   run bash "${ROOT}/packages/vscode/scripts/integration_speech_faults.sh" \
     "${ROOT}" "${BATS_TEST_TMPDIR}/run" "${BATS_TEST_TMPDIR}" \
     "${BATS_TEST_TMPDIR}/bin/code" "${ROOT}/packages/vscode" --no-sandbox
   [ "${status}" -eq 0 ]
-  [ "$(wc -l <"${RECORD}")" -eq 4 ]
+  [ "$(wc -l <"${RECORD}")" -eq 6 ]
   grep -q 'integration_catalog_paths.js' "${RECORD}"
   grep -q 'integration_companion_faults.js' "${RECORD}"
+  grep -q 'integration_companion_version.js' "${RECORD}"
+  grep -q 'integration_workspace_incompatible.js' "${RECORD}"
+  [ "$(grep -c -- '--remote-debugging-port=0' "${RECORD}")" -eq 2 ]
   grep -q 'integration_no_workspace.js' "${RECORD}"
   grep -q 'integration_restricted_runtime.js' "${RECORD}"
   ! grep 'integration_no_workspace.js' "${RECORD}" | grep -Fq "${BATS_TEST_TMPDIR}/run/speech-faults/integration_no_workspace/workspace"
-  [ "$(grep -c -- '--shared-data-dir=' "${RECORD}")" -eq 4 ]
-  [ "$(grep -c -- '--password-store=basic' "${RECORD}")" -eq 4 ]
-  [ "$(grep -c "${NODE_V8_COVERAGE}" "${RECORD}.env")" -eq 4 ]
+  [ "$(grep -c -- '--shared-data-dir=' "${RECORD}")" -eq 6 ]
+  [ "$(grep -c -- '--password-store=basic' "${RECORD}")" -eq 6 ]
+  [ "$(grep -c "${NODE_V8_COVERAGE}" "${RECORD}.env")" -eq 6 ]
   grep -q 'unix:/nonexistent ai-pair-integration-no-audio' "${RECORD}.env"
   [ ! -e "${BATS_TEST_TMPDIR}/run/speech-faults" ]
 }
@@ -55,7 +58,7 @@ FAKE
     "${ROOT}" "${BATS_TEST_TMPDIR}/run" "${BATS_TEST_TMPDIR}" \
     "${BATS_TEST_TMPDIR}/bin/code" "${ROOT}/packages/vscode"
   [ "${status}" -eq 0 ]
-  [ "$(wc -l <"${RECORD}")" -eq 2 ]
+  [ "$(wc -l <"${RECORD}")" -eq 4 ]
   ! grep -q 'integration_catalog_paths.js' "${RECORD}"
   ! grep -q -- '--password-store=basic' "${RECORD}"
 }

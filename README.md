@@ -169,9 +169,10 @@ each group. Reading speed and the main pace adjust those pauses; click or hold
 the reading ring to finish or pause one. Typing remains the default.
 
 The status shows when playback is **Paused** or **Playing**. Reading pauses,
-command confirmations, your turn and suspended sessions remain distinct. The
-cursor is yellow and pulsing when the agent has just spoken and is waiting for
-you to read.
+command confirmations, your turn and suspended sessions remain distinct. A
+ready count shows accepted work that has not started, and completed command
+results promptly reach a waiting agent. The cursor is yellow and pulsing when
+the agent has just spoken and is waiting for you to read.
 
 **Try it without an agent:** *AI Pair: Play Demo Session* plays a scripted
 session that adds a small API to an Express app, which it creates in

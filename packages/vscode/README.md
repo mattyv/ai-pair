@@ -170,7 +170,10 @@ pair on..."). In Claude Code you can also run `/mcp__pair__start`.
     pause after each message to your own pace.
 
 The status distinguishes **Paused** and **Playing** from reading, command
-confirmation, your turn and a suspended session. Typing handles CRLF line
+confirmation, your turn and a suspended session. The ready count shows accepted
+batches that have not started. Command results reach a waiting agent promptly.
+Keep AI Pair and its Local Audio companion updated together and reload after an
+upgrade. Typing handles CRLF line
 endings consistently while preserving standalone carriage returns. Structural
 newlines and single-close moves are explicit; other typing remains literal.
 

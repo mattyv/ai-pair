@@ -158,7 +158,7 @@ export type PanelEvent =
   | { type: 'session'; active: false; reason: 'agent' | 'programmer' | 'disconnected'; summary?: string }
   | { type: 'say'; text: string }
   | { type: 'reading'; ms: number; id?: number; owner?: 'code' }
-  | { type: 'state'; state: AgentState; turn: Turn; paused: boolean }
+  | { type: 'state'; state: AgentState; turn: Turn; paused: boolean; ready?: number }
   | { type: 'programmer'; text: string; ref?: Ref }
   | { type: 'turn'; to: Turn; message?: string; ref?: Ref }
   | { type: 'interrupt' }

@@ -28,6 +28,7 @@ const panelEvent = z.union([
     state: z.enum(['typing', 'read', 'running', 'thinking', 'absent', 'paused', 'listening', 'navigator']),
     turn,
     paused: z.boolean(),
+    ready: z.number().int().nonnegative().optional(),
   }),
   z.strictObject({ type: z.literal('programmer'), text, ref: reference.optional() }),
   z.strictObject({ type: z.literal('turn'), to: turn, message: text.optional(), ref: reference.optional() }),

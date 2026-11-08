@@ -918,6 +918,182 @@ describe('steps and their batches', () => {
   });
 });
 
+describe('ready count', () => {
+  it('Accurate: reports accepted queued batches and clears the count when playback starts', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    const abort = new AbortController();
+    const queued = h.controller.step(SAY, abort.signal);
+    await settle();
+    expect(posted(h).at(-1)).toMatchObject({ type: 'state', ready: 1 });
+    abort.abort();
+    await expect(queued).rejects.toMatchObject({ code: 'cancelled' });
+    const finishSecond = holdPlay();
+    finish();
+    await settle();
+    expect(posted(h).at(-1)).toMatchObject({ type: 'state', ready: 0 });
+    finishSecond();
+    await settle();
+  });
+});
+
+describe('ready count rejection', () => {
+  it('Accurate: a rejected batch is never counted as ready', async () => {
+    const h = await started();
+    const error = { kind: 'no_line' as const, message: 'No.' };
+    rehearsed({ status: 'failed', error, unplayed: SAY }, {}, [], { index: 1, action: { say: 'Hi.' }, error });
+    expect((await report(h.controller.step(SAY))).rejected).toBeDefined();
+    expect(posted(h).findLast((event) => event.type === 'state')).toMatchObject({ ready: 0 });
+  });
+});
+
+describe('ready count interruptions', () => {
+  it.each(['interrupt', 'disconnect'] as const)('Accurate: clears queued work on %s', async (action) => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    const abort = new AbortController();
+    const queued = h.controller.step(SAY, abort.signal);
+    await settle();
+    abort.abort();
+    await expect(queued).rejects.toMatchObject({ code: 'cancelled' });
+    expect(posted(h).at(-1)).toMatchObject({ type: 'state', ready: 1 });
+    if (action === 'interrupt') h.controller.userInterrupt();
+    else h.controller.disconnect();
+    expect(posted(h).findLast((event) => event.type === 'state')).toMatchObject({ ready: 0 });
+    finish({ status: 'interrupted' });
+    await settle();
+  });
+});
+
+async function commandWithLaterBatch(): Promise<{ h: Harness; finishLater: ReturnType<typeof holdPlay> }> {
+  const h = await started();
+  const finishCommand = holdPlay();
+  await report(h.controller.step([{ run: 'echo hello' }]));
+  const abort = new AbortController();
+  const queued = h.controller.step(SAY, abort.signal);
+  await settle();
+  abort.abort();
+  await expect(queued).rejects.toMatchObject({ code: 'cancelled' });
+  const finishLater = holdPlay();
+  finishCommand({ runs: [{ command: 'echo hello', output: 'hello', exit_code: 0 }] });
+  await settle();
+  return { h, finishLater };
+}
+
+describe('command result delivery', () => {
+  it('PromptRunReady, Conservation: wakes a pending listen with the command result once', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step([{ run: 'echo hello' }]));
+    const listen = h.controller.listen();
+    expect(await pending(listen)).toBe(true);
+    finish({ runs: [{ command: 'echo hello', output: 'hello', exit_code: 0 }] });
+    await settle();
+    expect(await pending(listen)).toBe(false);
+    expect((await report(listen)).batches).toEqual([
+      { id: 1, status: 'completed', runs: [{ command: 'echo hello', output: 'hello', exit_code: 0 }] },
+    ]);
+    const next = h.controller.listen();
+    expect(await pending(next)).toBe(true);
+    h.controller.userInterrupt();
+    expect((await report(next)).batches).toEqual([]);
+  });
+
+  it('PromptRunReady: an empty step returns command output while a later canceled step still plays', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step([{ run: 'false' }]));
+    const abort = new AbortController();
+    const queued = h.controller.step(SAY, abort.signal);
+    await settle();
+    abort.abort();
+    await expect(queued).rejects.toMatchObject({ code: 'cancelled' });
+    const finishSecond = holdPlay();
+    const empty = h.controller.step([]);
+    expect(await pending(empty)).toBe(true);
+    finish({ runs: [{ command: 'false', output: 'failed', exit_code: 1 }] });
+    await settle();
+    expect(await pending(empty)).toBe(false);
+    expect((await report(empty)).batches).toEqual([
+      { id: 1, status: 'completed', runs: [{ command: 'false', output: 'failed', exit_code: 1 }] },
+    ]);
+    finishSecond();
+    await settle();
+  });
+
+  it('NoQuietWake: an empty step waits for later work after ordinary typing completes', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    const abort = new AbortController();
+    const queued = h.controller.step(SAY, abort.signal);
+    await settle();
+    abort.abort();
+    await expect(queued).rejects.toMatchObject({ code: 'cancelled' });
+    const finishLater = holdPlay();
+    finish();
+    await settle();
+    const empty = h.controller.step([]);
+    expect(await pending(empty)).toBe(true);
+    finishLater();
+    await settle();
+    expect((await report(empty)).batches.map((batch) => batch.id)).toEqual([1, 2]);
+  });
+
+  it('PromptRunReady: listen returns command news while later work plays', async () => {
+    const { h, finishLater } = await commandWithLaterBatch();
+    const listen = h.controller.listen();
+    await settle();
+    expect(await pending(listen)).toBe(false);
+    expect((await report(listen)).batches[0]?.runs?.[0]?.output).toBe('hello');
+    finishLater();
+    await settle();
+  });
+
+  it('NoInterruptedReturn: command news waits until the interrupted head settles', async () => {
+    const { h, finishLater } = await commandWithLaterBatch();
+    h.controller.userInterrupt();
+    const listen = h.controller.listen();
+    expect(await pending(listen)).toBe(true);
+    finishLater({ status: 'interrupted' });
+    await settle();
+    expect((await report(listen)).batches.map((batch) => batch.status)).toEqual(['completed', 'interrupted']);
+  });
+
+  it('NoEarlyEnd: command news does not let end return before later work finishes', async () => {
+    const { h, finishLater } = await commandWithLaterBatch();
+    const end = h.controller.end();
+    expect(await pending(end)).toBe(true);
+    finishLater();
+    await settle();
+    expect((await report(end)).batches.map((batch) => batch.id)).toEqual([1, 2]);
+  });
+
+  it('NoEarlyDiscarded: command news does not let a discarded step return before the interrupted head', async () => {
+    const { h, finishLater } = await commandWithLaterBatch();
+    h.controller.userInterrupt();
+    const discarded = h.controller.step(SAY);
+    expect(await pending(discarded)).toBe(true);
+    finishLater({ status: 'interrupted' });
+    await settle();
+    expect((await report(discarded)).batches.map((batch) => batch.status)).toEqual(['completed', 'interrupted', 'discarded']);
+  });
+
+  it('NoQuietWake: a completed batch without a command leaves listen pending', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    const listen = h.controller.listen();
+    finish();
+    await settle();
+    expect(await pending(listen)).toBe(true);
+    h.controller.userInterrupt();
+    await report(listen);
+  });
+});
+
 describe('playing the queue', () => {
   it('leaves an edited batch unchanged when the advisory check returns no findings', async () => {
     const h = await started();

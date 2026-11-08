@@ -499,13 +499,19 @@ these identities and the editor build. Hashes identify local builds; they do not
 attest to trust. Relays already running from older releases cannot perform this
 check and may need to be restarted after every window is updated.
 
-Archi revision 17 records this boundary and its older-relay limitation. Its
-source passed Archi 1.5.1 validation; the regenerated standalone HTML opened
-in Chromium without page errors and displayed its diagrams.
+Archi revision 18 retains revision 17's runtime identity boundary and adds
+the companion status and compatibility change. Its source passed Archi 1.5.1
+validation; the regenerated standalone HTML opened in Chromium without page
+errors and displayed its diagrams.
 
 The packaged MCP harness is a test fixture: it has no production callers and
 exercises an installed VSIX through the SDK. Keep it under the VS Code test
 tree and typecheck it with the rest of that tree.
+
+The current editor always provides runtime identity to its bridge. The only
+production constructor supplies it, so the bridge requires it instead of
+offering an unreachable omission. The discovery schema still accepts legacy
+records without identity so a new relay can reject them with recovery guidance.
 
 ## Selective upstream PR 17 adoption, 2026-11-08
 
@@ -525,7 +531,29 @@ existing deferred-reply boundaries. Human comfort also requires a later user
 trial. Deeper queuing is deferred pending evidence that it removes meaningful
 idle gaps beyond the current preparation/playback overlap.
 
-The current editor always provides runtime identity to its bridge. The only
-production constructor supplies it, so the bridge requires it instead of
-offering an unreachable omission. The discovery schema still accepts legacy
-records without identity so a new relay can reject them with recovery guidance.
+## Command-result delivery
+
+-   Wake a pending listen or an empty step when a completed batch contains a
+    command result, even with later work queued. Completed typing and narration
+    remain quiet; discarded steps and end calls still wait for the queue to
+    drain. Interruption settlement takes precedence. This preserves the current
+    action protocol, queue depth, and speech pacing.
+-   Trial cherry-pick of BedirT's MIT-licensed `2e1f488` onto `6c075e2`
+    conflicted in all 29 touched paths. Its beat protocol changes action and
+    report shapes and its work-ahead setting changes pacing. Adapt the focused
+    readiness rule instead of importing those incompatible changes. The trial
+    does not establish compatibility for the rest of the stacked series.
+
+## Ready status and companion compatibility
+
+-   Show accepted batches that have not started as ready. Decrement the count
+    when a queued batch starts, and clear it on discard or session end. The
+    count does not include the playing batch. Keep command confirmation and
+    the active state visible.
+-   Version the private workspace-to-companion transport at 2 for the added
+    status field; the public MCP protocol is unchanged. New workspace and
+    companion versions reject mismatched preparation before attachment and
+    ask the user to update both and reload. An older workspace may still
+    select its existing legacy fallback after the new companion rejects it;
+    new code cannot change that already-installed behavior. Saved panel state
+    without the count is accepted and interpreted as zero.

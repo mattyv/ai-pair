@@ -357,6 +357,7 @@ const fakes = vi.hoisted(() => {
     commands: new Map<string, (value?: unknown) => unknown>(),
     providerRegistered: vi.fn(),
     companionAvailable: false,
+    companionInstalled: false,
     placementChoice: undefined as Promise<import('../src/panel_placement').PanelOwner> | undefined,
     session: undefined as
       | {
@@ -388,6 +389,7 @@ const fakes = vi.hoisted(() => {
 });
 
 vi.mock('vscode', () => ({
+  extensions: { getExtension: () => (fakes.companionInstalled ? {} : undefined) },
   ConfigurationTarget: { Global: 1 },
   UIKind: { Desktop: 1 },
   workspace: {
@@ -461,7 +463,7 @@ vi.mock('vscode', () => ({
         value !== null &&
         'epoch' in value
       ) {
-        return Promise.resolve({ version: 1, epoch: value.epoch, token: 'token' });
+        return Promise.resolve({ version: 2, epoch: value.epoch, token: 'token' });
       }
       if (name === 'aiPair.localAudio.diagnostics' && fakes.companionAvailable) {
         if (fakes.diagnosticsReject) return Promise.reject(new Error('private'));
@@ -491,8 +493,9 @@ vi.mock('../src/panel_placement', () => ({
     constructor(private readonly options: import('../src/panel_placement').PanelPlacementOptions) {
       fakes.placementOptions = options;
     }
-    choose(): Promise<'companion' | 'legacy' | 'remote-text'> {
+    choose(): Promise<import('../src/panel_placement').PanelOwner> {
       if (fakes.placementChoice !== undefined) return fakes.placementChoice;
+      if (this.options.companionInstalled === true) return Promise.resolve('incompatible');
       if (fakes.companionAvailable) {
         this.options.beforeCommit?.();
         return Promise.resolve('companion');
@@ -628,6 +631,7 @@ beforeEach(() => {
   fakes.made.arms = true;
   fakes.answer = undefined;
   fakes.companionAvailable = false;
+  fakes.companionInstalled = false;
   fakes.placementChoice = undefined;
   fakes.session = undefined;
   fakes.frameAccepted = true;
@@ -1637,6 +1641,19 @@ it('never discovers native outputs on a remote host', async () => {
   fakes.remoteName = undefined;
 });
 
+it('blocks an installed incompatible companion without registering a fallback provider', async () => {
+  fakes.companionInstalled = true;
+  const h = activated();
+  await h.api.ready;
+  expect(fakes.placementOptions?.companionInstalled).toBe(true);
+  await expect(fakes.placementOptions?.prepare()).rejects.toThrow('missing command');
+  expect(fakes.providerRegistered).not.toHaveBeenCalled();
+  expect(h.api.speechPageReady()).toBe(false);
+  expect(fakes.infos).toContain('AI Pair and AI Pair Local Audio could not connect. Update both extensions and reload the window.');
+  await h.api.previewSpeech();
+  expect(fakes.commandCalls.some(([name]) => name === 'aiPair.localAudio.preview')).toBe(false);
+});
+
 it('selects the local companion without registering a workspace panel provider', async () => {
   fakes.companionAvailable = true;
   const h = activated();
@@ -1716,7 +1733,7 @@ it('routes companion controls, keys, frame acknowledgements and connection notic
   await command('aiPair.removeElevenLabsKey');
   expect(fakes.commandCalls.map(([name]) => name)).toContain('aiPair.localAudio.keySet');
   expect(fakes.commandCalls.map(([name]) => name)).toContain('aiPair.localAudio.keyRemove');
-  const frame = { version: 1 as const, connectionEpoch: 'test-epoch', sequence: 1, type: 'heartbeat' as const };
+  const frame = { version: 2 as const, connectionEpoch: 'test-epoch', sequence: 1, type: 'heartbeat' as const };
   await expect(options.send(frame)).resolves.toBeUndefined();
   fakes.frameAccepted = false;
   await expect(options.send(frame)).rejects.toThrow('not accepted');
@@ -1732,7 +1749,7 @@ it('exposes fixed prepare and commit commands and merges only valid local diagno
   await h.api.ready;
   const placement = fakes.placementOptions;
   if (placement === undefined) throw new Error('No placement');
-  const prepared = { version: 1 as const, epoch: 'test-epoch', token: 'token' };
+  const prepared = { version: 2 as const, epoch: 'test-epoch', token: 'token' };
   await expect(placement.prepare()).resolves.toEqual(prepared);
   await expect(placement.commit(prepared)).resolves.toBe(true);
   for (const mode of ['invalid', 'rejected']) {
@@ -1775,7 +1792,7 @@ it('keeps companion command failures private and does not change panel ownership
   await h.api.ready;
   const placement = fakes.placementOptions;
   if (placement === undefined) throw new Error('No placement');
-  const prepared = { version: 1 as const, epoch: 'test-epoch', token: 'token' };
+  const prepared = { version: 2 as const, epoch: 'test-epoch', token: 'token' };
   fakes.failedCommands.add('aiPair.localAudio.prepare');
   fakes.failedCommands.add('aiPair.localAudio.commit');
   fakes.failedCommands.add('aiPair.localAudio.keySet');

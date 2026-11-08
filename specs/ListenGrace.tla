@@ -9,7 +9,8 @@
 (* `ShowAbsent`, once no call has been open for absentMs, the status is       *)
 (* "absent" ("Agent isn't listening") until the agent calls again (#149).     *)
 (* A listen that times out with only news that wakes no listen (a batch that  *)
-(* completed, an edit that interrupts nothing) starts no grace (#200).        *)
+(* completed without a command, an edit that interrupts nothing) starts no   *)
+(* grace (#200). A completed command wakes a pending listen (#27).            *)
 (******************************************************************************)
 EXTENDS PairDefs
 
@@ -31,15 +32,15 @@ VARIABLES
     owesResponse, \* the agent was handed something to act on, and has not
                   \* called since
     unreported,   \* the programmer did something not yet reported
-    quietNews,    \* news not yet reported that wakes no listen: a batch that
-                  \* completed, or an edit that interrupts nothing
+    runNews,      \* a completed command result awaiting a report
+    quietNews,    \* completed non-command work or a noninterrupting edit
     timedOut,     \* the agent's last listen timed out empty, and it has not
                   \* called since
     graceExpired, \* listenGraceMs passed since that timeout
     absent        \* absentMs passed since the agent's last call ended, with no
                   \* call since
 
-vars == <<call, inGrace, owesResponse, unreported, quietNews, timedOut,
+vars == <<call, inGrace, owesResponse, unreported, runNews, quietNews, timedOut,
           graceExpired, absent>>
 
 --------------------------------------------------------------------------------
@@ -50,6 +51,7 @@ TypeOK ==
     /\ inGrace \in BOOLEAN
     /\ owesResponse \in BOOLEAN
     /\ unreported \in BOOLEAN
+    /\ runNews \in BOOLEAN
     /\ quietNews \in BOOLEAN
     /\ timedOut \in BOOLEAN
     /\ graceExpired \in BOOLEAN
@@ -69,6 +71,7 @@ Init ==
     /\ inGrace = FALSE
     /\ owesResponse = FALSE
     /\ unreported = FALSE
+    /\ runNews = FALSE
     /\ quietNews = FALSE
     /\ timedOut = FALSE
     /\ graceExpired = FALSE
@@ -84,7 +87,7 @@ Call(kind) ==
     /\ timedOut' = FALSE
     /\ graceExpired' = FALSE
     /\ absent' = FALSE
-    /\ UNCHANGED <<unreported, quietNews>>
+    /\ UNCHANGED <<unreported, runNews, quietNews>>
 
 \* The agent calls `read`, which settles at once: it ends the quiet, and with
 \* EndOnAnyCall the grace.
@@ -95,7 +98,7 @@ Read ==
     /\ timedOut' = FALSE
     /\ graceExpired' = FALSE
     /\ absent' = FALSE
-    /\ UNCHANGED <<call, unreported, quietNews>>
+    /\ UNCHANGED <<call, unreported, runNews, quietNews>>
 
 \* The agent calls `step`, and the batch is refused at once (rejectBatch,
 \* rejectUnanchored), without `block()`: it owes a response to the rejection.
@@ -105,6 +108,7 @@ FailRehearsal ==
     /\ inGrace' = IF EndOnAnyCall THEN FALSE ELSE inGrace
     /\ owesResponse' = TRUE
     /\ unreported' = FALSE
+    /\ runNews' = FALSE
     /\ quietNews' = FALSE
     /\ timedOut' = FALSE
     /\ graceExpired' = FALSE
@@ -116,10 +120,12 @@ Timeout ==
     /\ call = "listen"
     /\ ~unreported
     /\ ~quietNews
+    /\ ~runNews
     /\ call' = NoCall
     /\ inGrace' = Grace
     /\ timedOut' = TRUE
-    /\ UNCHANGED <<owesResponse, unreported, quietNews, graceExpired, absent>>
+    /\ UNCHANGED <<owesResponse, unreported, runNews, quietNews,
+                   graceExpired, absent>>
 
 \* `finishCall` after maxBlockMs, with only quiet news to report: the report
 \* is not empty, so no grace starts, and the agent has the news to act on.
@@ -127,8 +133,10 @@ TimeoutWithNews ==
     /\ call = "listen"
     /\ ~unreported
     /\ quietNews
+    /\ ~runNews
     /\ call' = NoCall
     /\ owesResponse' = TRUE
+    /\ runNews' = FALSE
     /\ quietNews' = FALSE
     /\ UNCHANGED <<inGrace, unreported, timedOut, graceExpired, absent>>
 
@@ -136,11 +144,12 @@ TimeoutWithNews ==
 \* or a step's.
 Return ==
     /\ call # NoCall
-    /\ (call = "stepOrEnd" \/ unreported)
+    /\ (call = "stepOrEnd" \/ unreported \/ runNews)
     /\ call' = NoCall
     /\ inGrace' = FALSE
     /\ owesResponse' = TRUE
     /\ unreported' = FALSE
+    /\ runNews' = FALSE
     /\ quietNews' = FALSE
     /\ UNCHANGED <<timedOut, graceExpired, absent>>
 
@@ -149,7 +158,7 @@ Return ==
 Interrupt ==
     /\ ~unreported
     /\ unreported' = TRUE
-    /\ UNCHANGED <<call, inGrace, owesResponse, quietNews, timedOut,
+    /\ UNCHANGED <<call, inGrace, owesResponse, runNews, quietNews, timedOut,
                    graceExpired, absent>>
 
 \* A batch completes, or a tool edits a file no batch is going to edit: news
@@ -157,8 +166,15 @@ Interrupt ==
 QuietNews ==
     /\ ~quietNews
     /\ quietNews' = TRUE
-    /\ UNCHANGED <<call, inGrace, owesResponse, unreported, timedOut,
+    /\ UNCHANGED <<call, inGrace, owesResponse, unreported, runNews, timedOut,
                    graceExpired, absent>>
+
+\* A completed command is actionable news for a pending listen.
+RunNews ==
+    /\ ~runNews
+    /\ runNews' = TRUE
+    /\ UNCHANGED <<call, inGrace, owesResponse, unreported, quietNews,
+                   timedOut, graceExpired, absent>>
 
 \* listenGraceMs pass: the grace timer fires.
 Expire ==
@@ -166,7 +182,7 @@ Expire ==
     /\ ~graceExpired
     /\ inGrace' = FALSE
     /\ graceExpired' = TRUE
-    /\ UNCHANGED <<call, owesResponse, unreported, quietNews, timedOut,
+    /\ UNCHANGED <<call, owesResponse, unreported, runNews, quietNews, timedOut,
                    absent>>
 
 \* absentMs pass with no call open: the panel says the agent isn't listening
@@ -176,7 +192,7 @@ GoAbsent ==
     /\ call = NoCall
     /\ ~absent
     /\ absent' = TRUE
-    /\ UNCHANGED <<call, inGrace, owesResponse, unreported, quietNews,
+    /\ UNCHANGED <<call, inGrace, owesResponse, unreported, runNews, quietNews,
                    timedOut, graceExpired>>
 
 Next ==
@@ -188,12 +204,13 @@ Next ==
     \/ Return
     \/ Interrupt
     \/ QuietNews
+    \/ RunNews
     \/ Expire
     \/ GoAbsent
 
 \* The grace timer and the quiet timer fire once armed, whether or not the
 \* agent calls again.
-Fairness == WF_vars(Expire) /\ WF_vars(GoAbsent)
+Fairness == WF_vars(Expire) /\ WF_vars(GoAbsent) /\ WF_vars(Return)
 
 Spec == Init /\ [][Next]_vars /\ Fairness
 
@@ -217,6 +234,9 @@ NoFlicker == (timedOut /\ ~graceExpired
 \* A listen that returns with news to report starts no grace (#200).
 NewsSkipsGraceProp ==
     [][(call = "listen" /\ call' = NoCall /\ quietNews) => ~inGrace']_vars
+
+\* A command result held while listening is eventually delivered.
+RunDelivered == (call = "listen" /\ runNews) ~> ~runNews
 
 \* The grace ends, whether or not the agent calls again. Code whose grace never
 \* ended would fail it, so it says something must happen.

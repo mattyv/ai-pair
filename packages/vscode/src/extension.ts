@@ -11,7 +11,7 @@ import {
   type SavedSession,
   type NarrationPort,
 } from '@ai-pair/core';
-import { discoveryDir, localSpeechReport, type LocalSpeechReport } from '@ai-pair/protocol';
+import { discoveryDir, LOCAL_AUDIO_VERSION, localSpeechReport, type LocalSpeechReport } from '@ai-pair/protocol';
 import { playDemo } from './demo';
 import { VsCodeEditor } from './editor';
 import { Diagnostics } from './diagnostics';
@@ -827,8 +827,12 @@ export function activate(context: vscode.ExtensionContext): Api {
   const placement = new PanelPlacement({
     epoch: connectionEpoch,
     remote: vscode.env.remoteName !== undefined,
+    companionInstalled: vscode.extensions.getExtension('michalstrba.ai-pair-local-audio') !== undefined,
     timeoutMs: COMPANION_PREPARE_TIMEOUT_MS,
-    prepare: () => Promise.resolve(vscode.commands.executeCommand('aiPair.localAudio.prepare', { version: 1, epoch: connectionEpoch })),
+    prepare: () =>
+      Promise.resolve(
+        vscode.commands.executeCommand('aiPair.localAudio.prepare', { version: LOCAL_AUDIO_VERSION, epoch: connectionEpoch }),
+      ),
     beforeCommit: () => {
       owner = 'companion';
       if (shuttingDown) throw new Error('Window is closing.');
@@ -855,6 +859,12 @@ export function activate(context: vscode.ExtensionContext): Api {
     if (shuttingDown) return;
     owner = chosen;
     if (chosen === 'companion') return;
+    if (chosen === 'incompatible') {
+      void vscode.window.showWarningMessage(
+        'AI Pair and AI Pair Local Audio could not connect. Update both extensions and reload the window.',
+      );
+      return;
+    }
     if (chosen === 'legacy') selectedNarration = speech;
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider(NarrationPanel.viewId, panel, {

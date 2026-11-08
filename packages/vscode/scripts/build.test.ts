@@ -2,6 +2,7 @@
 // manifest it refuses. Solitary: esbuild and the file system are fakes; the script runs afresh on each import.
 
 import * as fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import * as esbuild from 'esbuild';
 import { stageSpeechRuntime } from './speech_runtime.mts';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -63,7 +64,12 @@ it('bundles the extension, the page script, the page styles, and the relay, with
     logLevel: 'warning',
     mainFields: ['module', 'main'],
   };
-  const relayHash = '"6752cea788aba4230b054a6bef39be6d6bc8f806f28763eff8ced8b28b917fa2"';
+  const relayHash = JSON.stringify(
+    createHash('sha256')
+      .update(JSON.stringify({ version: '1.2.3' }))
+      .digest('hex'),
+  );
+  expect(fs.readFileSync).toHaveBeenCalledWith('dist/relay.js');
   const buildId = builds().at(-1)?.define?.AI_PAIR_BUILD_ID;
   expect(buildId).toMatch(/^"[a-f0-9]{16}"$/);
   expect(builds()).toEqual([

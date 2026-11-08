@@ -174,7 +174,7 @@ function routing(): Routing {
 it('registers one provider and forwards local commands and diagnostics', async () => {
   const current = session();
   expect(fake.register).toHaveBeenCalledOnce();
-  expect(fake.attach).toHaveBeenCalledWith({ version: 1, connectionEpoch: 'epoch', sequence: 1, type: 'attach' });
+  expect(fake.attach).toHaveBeenCalledWith({ version: 2, connectionEpoch: 'epoch', sequence: 1, type: 'attach' });
   fake.accept.mockReturnValue(true);
   expect(current.accept({ frame: 'test' })).toBe(true);
   await current.keySet();
@@ -197,7 +197,7 @@ it('registers one provider and forwards local commands and diagnostics', async (
   expect(fake.narrationOptions?.page()).toBe(7);
   expect(fake.narrationOptions?.observation()).toMatchObject({ id: 1 });
   expect(fake.narrationOptions?.nextSequence()).toBe(1);
-  await fake.channelOptions?.send({ version: 1, connectionEpoch: 'epoch', sequence: 2, type: 'heartbeat' });
+  await fake.channelOptions?.send({ version: 2, connectionEpoch: 'epoch', sequence: 2, type: 'heartbeat' });
   expect(fake.execute).toHaveBeenCalledOnce();
   current.dispose();
   expect(await current.ready('epoch')).toBe(false);
@@ -265,7 +265,7 @@ it('forwards a deferred reply without canceling local narration', () => {
 
 it('delivers complete panel updates and ignores heartbeats', () => {
   const current = session();
-  const common = { version: 1 as const, connectionEpoch: 'epoch', sequence: 2 };
+  const common = { version: 2 as const, connectionEpoch: 'epoch', sequence: 2 };
   fake.connectionOptions?.receive({ ...common, type: 'heartbeat' });
   expect(fake.receiveNarration).not.toHaveBeenCalled();
   const speak = { ...common, type: 'pause' as const, jobId: 'one', pageEpoch: 7 };

@@ -7,10 +7,14 @@ beforeEach(() => {
   fake.problem.mockReset();
 });
 
-const base = { version: 1, connectionEpoch: 'connection-1', sequence: 1 };
+const base = { version: 2, connectionEpoch: 'connection-1', sequence: 1 };
 const owner = { jobId: 'job-1', pageEpoch: 1 };
 
 describe('local audio command frames', () => {
+  it('accepts version 2 and rejects older companion frames', () => {
+    expect(localAudioFrame.safeParse({ ...base, version: 2, type: 'attach' }).success).toBe(true);
+    expect(localAudioFrame.safeParse({ ...base, version: 1, type: 'attach' }).success).toBe(false);
+  });
   it('accepts the bounded commands and terminal acknowledgements', () => {
     for (const frame of [
       { ...base, type: 'attach' },
@@ -29,7 +33,7 @@ describe('local audio command frames', () => {
 
   it('rejects wrong versions, unknown commands, extra keys and invalid identities', () => {
     for (const frame of [
-      { ...base, type: 'attach', version: 2 },
+      { ...base, type: 'attach', version: 1 },
       { ...base, type: 'exec', command: 'arbitrary' },
       { ...base, type: 'panelAction', pageEpoch: 1, action: { type: 'speechKeySet' } },
       { ...base, type: 'attach', secret: 'must not cross' },
