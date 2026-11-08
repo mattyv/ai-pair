@@ -104,7 +104,7 @@ const actionSchema = z.union(
         .boolean()
         .optional()
         .describe(
-          'Select concise narration for speech even if you do not know the setting. Playback occurs only when the programmer enables speech. Use at most one spoken say per batch and wait for the previous selected narration and report. The selected provider handles playback; the text remains visible when disabled.',
+          'Select concise narration for speech: normally mark one useful say in each batch, even if you do not know the setting. Playback occurs only when the programmer enables speech. Use at most one spoken say per batch and wait for the previous selected narration and report. The selected provider handles playback; the text remains visible when disabled.',
         ),
     }).superRefine((narration, ctx) => {
       if (narration.speak === true) {

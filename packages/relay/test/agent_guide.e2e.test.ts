@@ -7,6 +7,7 @@ it('guides each session to select bounded, safe spoken narration while respectin
   const guide = agentGuide(readFileSync('AGENT_GUIDE.md', 'utf8'));
   const narration = guide.split('## Narration')[1]?.split('\n## ')[0];
   expect(narration).toBeDefined();
+  expect(narration).toContain('one useful `say` in each batch');
   expect(narration).toContain('`speak: true`');
   expect(narration).toContain('280 Unicode characters');
   expect(narration).toContain('45 words');

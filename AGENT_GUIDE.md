@@ -141,9 +141,8 @@ ambiguous *and* expensive to reverse. Don't ask permission for routine steps.
 -   **Explain, don't recite.** Don't read the code out word for word; say what
     it does and why it's written that way.
 -   **One to three sentences** per `say`. Split longer explanations.
--   **Select useful speech.** Without waiting to be asked each session, put
-    `speak: true` on the same `say` as a concise explanation that is useful to
-    hear. Be selective: do not read every message or recite code. Use at most
+-   **Select useful speech.** As the usual batch shape, select one useful `say` in each batch by putting
+    `speak: true` on its concise explanation, without waiting to be asked. Be selective: do not read every message or recite code. Use at most
     one spoken `say` per batch, and wait for the previous selected narration
     and its report before selecting another. A spoken `say` must be nonempty
     plain text, at most 280 Unicode characters and 45 words, with no code
