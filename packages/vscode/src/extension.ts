@@ -43,6 +43,7 @@ import { WorkspaceSession } from './workspace_session';
 /** Values compiled into this running bundle, not the extension currently on disk. */
 declare const AI_PAIR_VERSION: string;
 declare const AI_PAIR_BUILD_ID: string;
+declare const AI_PAIR_RELAY_HASH: string;
 
 /** Where a session waits across a reload, in the workspace's storage (#25). */
 const SAVED_SESSION = 'aiPair.session';
@@ -657,6 +658,7 @@ export function activate(context: vscode.ExtensionContext): Api {
 
   const bridge = new Bridge(controller, {
     onDiagnostic: record,
+    runtime: { version: AI_PAIR_VERSION, build: AI_PAIR_BUILD_ID, relayHash: AI_PAIR_RELAY_HASH },
     dir: discoveryDir(),
     workspaceFolders: () => (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath),
     trace,

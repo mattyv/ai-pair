@@ -2747,3 +2747,24 @@ this checks the model's bounded state types rather than a production enum.
 | `Authoritative` | `relay.test.ts`: uses the harness root when no working directory is given, and rejects an unmatched explicit directory; `server.test.ts`: rejects missing and non-directory explicit paths before contacting the editor |
 | `RejectedWithoutSelection` | `server.test.ts`: rejects missing and non-directory explicit paths before contacting the editor |
 | `Finishes` | `relay.test.ts`: uses the harness root when no working directory is given, and rejects an unmatched explicit directory |
+
+### `RuntimeIdentity`: matching the relay and editor
+
+A new relay forwards a start only when the selected editor advertises the same
+version and shipped relay hash. Missing identity is a mismatch. The model
+abstracts the comparison into `Match`; it does not model the older relays that
+lack this guard or prove the authenticity of the discovery file.
+
+| Configuration | Result | Distinct states |
+| --- | --- | ---: |
+| `RuntimeIdentity.cfg` | holds, matching | 2 |
+| `RuntimeIdentity_Mismatch.cfg` | holds, mismatching | 2 |
+
+| Property | Test |
+| --- | --- |
+| `Safe` | `link.test.ts`: RuntimeIdentity Safe; `relay.test.ts`: RuntimeIdentity Safe |
+| `Settles` | `link.test.ts`: RuntimeIdentity Settles; `relay.test.ts`: RuntimeIdentity Settles |
+
+Changing the mismatch result to `forwarded` violates `Safe`; disabling `Start`
+violates `Settles`. The terminal states intentionally have no outgoing action,
+so both configurations disable deadlock checking.

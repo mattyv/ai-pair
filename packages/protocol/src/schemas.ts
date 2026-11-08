@@ -224,6 +224,8 @@ export const DISCOVERY_SCHEMA = z.object({
   port: z.number(),
   token: z.string(),
   protocolVersion: z.number(),
+  /** Identity of the extension and the relay it shipped. */
+  runtime: z.object({ version: z.string(), build: z.string(), relayHash: z.string() }).optional(),
   /** Epoch milliseconds. */
   lastFocused: z.number(),
 });

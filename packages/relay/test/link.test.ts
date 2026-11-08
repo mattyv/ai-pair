@@ -589,3 +589,36 @@ describe('workspace', () => {
     expect(new EditorLink('/work', DIR).workspace('/work/app/src')).toEqual({ folder: '/work/app/src', root: '/work/app' });
   });
 });
+
+describe('runtime identity', () => {
+  it('RuntimeIdentity Safe: refuses a missing or different editor identity before opening a socket', async () => {
+    window('old', ['/project']);
+    const link = new EditorLink('/project', DIR, { version: 'new', relayHash: 'abc' });
+    await expect(link.call('start', {})).rejects.toThrow('Runtime mismatch');
+    expect(fakes.FakeSocket.made).toHaveLength(0);
+  });
+
+  it('RuntimeIdentity Safe: rejects different versions or relay hashes', async () => {
+    for (const runtime of [
+      { version: 'old', build: 'one', relayHash: 'abc' },
+      { version: 'new', build: 'two', relayHash: 'different' },
+    ]) {
+      window('different', ['/project'], { runtime });
+      const link = new EditorLink('/project', DIR, { version: 'new', relayHash: 'abc' });
+      await expect(link.call('start', {})).rejects.toThrow('Runtime mismatch');
+    }
+    expect(fakes.FakeSocket.made).toHaveLength(0);
+  });
+
+  it('RuntimeIdentity Settles: accepts a matching runtime and exposes its identity after welcome', async () => {
+    const runtime = { version: 'new', build: 'build', relayHash: 'abc' };
+    window('matching', ['/project'], { runtime });
+    const link = new EditorLink('/project', DIR, { version: 'new', relayHash: 'abc' });
+    const call = link.call('start', {});
+    welcome(lastSocket());
+    expect(link.activeRuntime).toEqual(runtime);
+    await settle();
+    lastSocket().receive({ type: 'result', id: 1, result: REPORT });
+    await expect(call).resolves.toEqual(REPORT);
+  });
+});

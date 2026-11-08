@@ -488,3 +488,13 @@ an editor before it can be used; this does not add external workspace support.
     VS Code does not confirm that a snapshot reflects the latest edit, even when
     it contains a diagnostic. A restarted or reloaded session may repeat the
     caveat.
+
+## Relay and editor runtime identity
+
+A new relay checks the selected window's extension version and the SHA-256 of
+its shipped relay against the version and actual relay bundle running in the
+MCP process before opening a connection. Missing or different identities fail
+closed with update, reload, and reconnect guidance. Successful starts report
+these identities and the editor build. Hashes identify local builds; they do not
+attest to trust. Relays already running from older releases cannot perform this
+check and may need to be restarted after every window is updated.

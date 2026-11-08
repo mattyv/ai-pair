@@ -57,7 +57,11 @@ function unitThresholds(): Record<string, FileThresholds> {
 // oxlint-disable-next-line import/no-default-export
 export default defineConfig({
   // The relay's version, which the extension's build defines from its manifest.
-  define: { AI_PAIR_VERSION: JSON.stringify('test'), AI_PAIR_BUILD_ID: JSON.stringify('test-build') },
+  define: {
+    AI_PAIR_VERSION: JSON.stringify('test'),
+    AI_PAIR_BUILD_ID: JSON.stringify('test-build'),
+    AI_PAIR_RELAY_HASH: JSON.stringify('test-relay-hash'),
+  },
   test: {
     // Only vitest's tests: Playwright's are *.spec.ts, under test/visual.
     include: ['**/*.test.ts'],

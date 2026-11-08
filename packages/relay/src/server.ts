@@ -29,6 +29,7 @@ export interface ServeOptions {
   cwd: string;
   dir: string;
   stdin: NodeJS.ReadableStream;
+  runtime?: { version: string; relayHash: string };
 }
 
 /** Returns the agent-facing part of AGENT_GUIDE.md: everything after the first horizontal rule. */
@@ -95,6 +96,12 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
       // that doesn't fit its schema throws, and reaches the agent as an internal error.
       const text = tool === 'read' ? renderFile(FILE_CONTENT_SCHEMA.parse(result)) : renderReport(REPORT_SCHEMA.parse(result), tool);
       const content: CallToolResult['content'] = [{ type: 'text', text }];
+      if (tool === 'start' && link.activeRuntime !== undefined) {
+        content.push({
+          type: 'text',
+          text: `Runtime: relay ${AI_PAIR_VERSION}; editor ${link.activeRuntime.version} (build ${link.activeRuntime.build}); relay SHA-256 ${link.activeRuntime.relayHash}.`,
+        });
+      }
       if (tool === 'start') content.push({ type: 'text', text: `# Pairing guide\n\n${guide}` });
       if (tool === 'start' && guides.length > 0) content.push({ type: 'text', text: renderGuides(guides, shownPath) });
       return { content };
@@ -168,8 +175,8 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
  * signals two seconds later), and closes the server and the link. The process then exits normally, so V8 writes its
  * coverage in the integration run (#163).
  */
-export async function serve({ transport, guide, cwd, dir, stdin }: ServeOptions): Promise<void> {
-  const link = new EditorLink(cwd, dir);
+export async function serve({ transport, guide, cwd, dir, stdin, runtime }: ServeOptions): Promise<void> {
+  const link = new EditorLink(cwd, dir, runtime);
   const server = createServer(link, guide, cwd);
   await server.connect(transport);
   await new Promise<void>((resolve) => {

@@ -75,9 +75,9 @@ afterEach(async () => {
 });
 
 /** Connects a client to a new relay server over an in-memory transport; `roots`: the harness's roots, as file URLs, if it has them. */
-async function connect(cwd = '/project/src', roots?: string[]): Promise<Client> {
+async function connect(cwd = '/project/src', roots?: string[], runtime?: { version: string; relayHash: string }): Promise<Client> {
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
-  const server = createServer(new EditorLink(cwd, dir), 'THE GUIDE', cwd);
+  const server = createServer(new EditorLink(cwd, dir, runtime), 'THE GUIDE', cwd);
   await server.connect(serverSide);
   const client = new Client({ name: 'test', version: '0' }, { capabilities: roots === undefined ? {} : { roots: {} } });
   if (roots !== undefined) client.setRequestHandler(ListRootsRequestSchema, () => ({ roots: roots.map((uri) => ({ uri })) }));
@@ -118,6 +118,30 @@ async function call(client: Client, name: string, args: Record<string, unknown> 
 }
 
 describe('relay', () => {
+  it('RuntimeIdentity Safe: refuses a legacy window before starting a session', async () => {
+    const client = await connect('/project/src', undefined, { version: 'new', relayHash: 'abc' });
+    const result = await call(client, 'start', {});
+    expect(result.error).toBe(true);
+    expect(result.text).toContain('runtime_mismatch');
+    expect(controller.isActive).toBe(false);
+  });
+
+  it('RuntimeIdentity Settles: starts with matching identity and reports active versions', async () => {
+    bridge.dispose();
+    bridge = new Bridge(controller, {
+      dir,
+      workspaceFolders: () => ['/project'],
+      calibrate: () => true,
+      runtime: { version: 'test', build: 'build-one', relayHash: 'abc' },
+    });
+    await bridge.start();
+    const client = await connect('/project/src', undefined, { version: 'test', relayHash: 'abc' });
+    const result = await call(client, 'start', {});
+    expect(result.error).toBe(false);
+    expect(JSON.stringify(result.content)).toContain('editor test (build build-one)');
+    expect(JSON.stringify(result.content)).toContain('relay SHA-256 abc');
+  });
+
   it('lists the tools and the prompt, with short instructions', async () => {
     const client = await connect();
     const tools = await client.listTools();
