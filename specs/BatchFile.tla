@@ -29,7 +29,7 @@ VARIABLES
     cursorFile,    \* the agent's cursor's file, or NoFile: kept from batch to
                    \* batch
     namedFile,     \* the file the batch named, or NoFile (playing.named)
-    edited,        \* the batch has edited (playing.edited)
+    edited,        \* the batch has edited a file
     actionsPlayed, \* actions played in this batch
     stopped,       \* the batch stopped at an action it refused
     actedIn,       \* the file the last action acted in, or NoFile
@@ -106,9 +106,9 @@ ActAtCursor(kind, namedAfter) ==
          /\ UNCHANGED <<cursorFile, stopped>>
 
 \* One action of the batch, of kind `kind`, with `file`, or NoFile for none
-\* given. It is rejected when it names a second file, or names the batch's
-\* file after its first edit. `namedAfter` is the batch's file after it, and
-\* `looksIn` is
+\* given. It is rejected when it names a second file. An edit without a named
+\* file is already rejected by ActAtCursor. `namedAfter` is the batch's file
+\* after it, and `looksIn` is
 \* fileOf: the file given, else the named one (with FallBackToNamed), else
 \* the cursor's. CASE's OTHER arm is `type`, `type_fast`, and `delete`.
 Act(kind, file) ==
@@ -122,12 +122,10 @@ Act(kind, file) ==
         /\ actionsPlayed' = actionsPlayed + 1
         /\ IF naming /\ namedFile # NoFile /\ file # namedFile
            THEN Stop
-           ELSE IF naming /\ namedFile = NoFile /\ edited
-                THEN Stop
-                ELSE CASE kind \in {"say", "run"} -> Say
-                       [] kind \in NamingKinds -> ActInFile(kind, namedAfter,
-                                                            looksIn)
-                       [] OTHER -> ActAtCursor(kind, namedAfter)
+           ELSE CASE kind \in {"say", "run"} -> Say
+                  [] kind \in NamingKinds -> ActInFile(kind, namedAfter,
+                                                       looksIn)
+                  [] OTHER -> ActAtCursor(kind, namedAfter)
 
 \* The batch ends (played through, or rejected) and the next starts, with the
 \* cursor where it is.

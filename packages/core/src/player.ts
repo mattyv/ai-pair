@@ -114,9 +114,8 @@ interface Playing {
   runs: RunResult[];
   /** The lines its report shows. */
   sightings: Sighting[];
-  /** The file it names, in `move`, `select` or `point`, and whether it has edited yet. */
+  /** The file it names, in `move`, `select` or `point`. */
   named?: string;
-  edited: boolean;
   /** The text its edits changed, tracked through later edits. */
   span?: Range;
   moved: boolean;
@@ -214,7 +213,6 @@ export class Player {
       editedFiles: new Set(),
       runs: [],
       sightings: [],
-      edited: false,
       moved: false,
     };
     this.playing = playing;
@@ -370,7 +368,7 @@ export class Player {
         `One action per object, got ${kinds.map((k) => `\`${k}\``).join(' and ')}: make them separate actions, in order.`,
       );
     }
-    // specs/BatchFile.tla, `Act`: naming a second file, or a file after the first edit, is a `Stop`.
+    // specs/BatchFile.tla, `Act`: naming a second file is a `Stop`.
     const named = this.names(action, playing);
     if (typeof named === 'object') return named;
     const fields = fieldsProblem(action);
@@ -534,7 +532,6 @@ export class Player {
       // read the selection only now (#49): specs/Turns.tla, `TakeEffect`, and specs/Player.tla, `Finish`.
       if (this.stage.pacing.isInterrupted) return { kind: 'interrupted' };
       const { start, end } = scene.selection;
-      playing.edited = true;
       this.clearPoint();
       scene.cursor.offset = start;
       scene.selection = undefined;
@@ -665,7 +662,6 @@ export class Player {
     const { editor } = this.stage;
     if (!scene.cursor) return fail('no_cursor', "Your cursor isn't in a file yet; `move` first.");
     const cursor = scene.cursor;
-    playing.edited = true;
     await editor.show(cursor.file);
     this.clearPoint();
 
@@ -803,12 +799,6 @@ export class Player {
       return fail(
         'invalid_action',
         `A batch works in one file, but this one names ${this.displayPath(playing.named)} and ${this.displayPath(path)}. Start a new batch where it switches files.`,
-      );
-    }
-    if (playing.named === undefined && playing.edited) {
-      return fail(
-        'invalid_action',
-        "A batch works in one file: name it (in `move`, `select` or `point`) before the batch's first edit. Start a new batch where it switches files.",
       );
     }
     playing.named = path;

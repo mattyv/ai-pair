@@ -454,16 +454,11 @@ describe('actions the player refuses', () => {
     });
   });
 
-  it('Act: refuses a second file in a batch, and a file named after its first edit', async () => {
+  it('Act: refuses a second file in a batch', async () => {
     const h = harness({ files: { 'a.ts': 'x\n', 'b.ts': 'y\n' } });
     expect((await played(h, [moveTo(1), { select: { file: 'b.ts', line: 1, text: 'y' } }])).result.error).toEqual({
       kind: 'invalid_action',
       message: 'A batch works in one file, but this one names a.ts and b.ts. Start a new batch where it switches files.',
-    });
-    expect((await played(h, [{ type: `z${CURSOR_MARKER}` }, { point: { file: 'a.ts', line: 1, text: 'z' } }])).result.error).toEqual({
-      kind: 'invalid_action',
-      message:
-        "A batch works in one file: name it (in `move`, `select` or `point`) before the batch's first edit. Start a new batch where it switches files.",
     });
   });
 

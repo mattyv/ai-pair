@@ -993,7 +993,11 @@ file without moving the cursor, so with the cursor
 elsewhere an action without `file` looked in the cursor's file, and a `type` or
 `delete` edited it. `FallBackToNamed` and `CursorInNamed` are the fix for #58.
 Every editing batch must now name its file before the first edit (#6). The model
-refuses the edit; the controller preflights the batch before any action plays.
+abstracts the controller's preflight as refusing the edit; the controller rejects
+such a batch before rehearsal or playback. Its accepted queue cannot reach the
+player's former late-naming guard: after an edit, the batch already has a named
+file, which the player does not clear within that batch. Direct calls to the
+internal player are not the public controller admission path.
 
 | Spec | Code |
 |---|---|
@@ -1001,7 +1005,7 @@ refuses the edit; the controller preflights the batch before any action plays.
 | `Say` | a `say` or `run`, which act in no file |
 | `ActInFile` | `move`, `select` and `point` in the file `fileOf` gives; only `move` and `select` move the cursor |
 | `ActAtCursor` | `type`, `newline` and `delete` at the cursor, rejected without a named file or with the cursor outside it, and a `delete` with nothing selected (`no_selection`) |
-| `Stop` | an action that fails: two files named, a file named after an edit, `no_cursor`, the cursor outside the named file, or a `delete` with nothing selected; the other ways an action fails (a text not found, the programmer's turn) are other specs' |
+| `Stop` | an action that fails: two files named, an edit without a prior file name, `no_cursor`, the cursor outside the named file, or a `delete` with nothing selected; the other ways an action fails (a text not found, the programmer's turn) are other specs' |
 | `EndBatch` | a new `Playing` for the next batch; the cursor stays |
 
 Each invariant and property was proved to bite with a mutation of a copy of the
@@ -1023,9 +1027,13 @@ test's title carries its name:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `ActsInNamedFile` | `session.e2e.test.ts`: ActsInNamedFile: looks in the file its batch named for an action without `file`, not the cursor's; ActsInNamedFile: looks in the file its batch named before the agent's cursor is in any file; ActsInNamedFile: rejects a type or delete with the cursor outside the file its batch named, editing nothing; `player.test.ts`: Act: refuses a second file in a batch, and a file named after its first edit; ActAtCursor: refuses a type or delete when the cursor is in another file than the batch's |
+| `ActsInNamedFile` | `session.e2e.test.ts`: ActsInNamedFile: looks in the file its batch named for an action without `file`, not the cursor's; ActsInNamedFile: looks in the file its batch named before the agent's cursor is in any file; ActsInNamedFile: rejects a type or delete with the cursor outside the file its batch named, editing nothing; `player.test.ts`: Act: refuses a second file in a batch; ActAtCursor: refuses a type or delete when the cursor is in another file than the batch's |
 | `EditAtCursorProp` | `session.e2e.test.ts`: EditAtCursorProp, EditRequiresNamed: types and deletes only after naming the cursor's file; `player.test.ts`: EditAtCursorProp: refuses a move, select, point, or type before the cursor is anywhere, and a delete with nothing selected |
 | `EditRequiresNamed` | `controller.test.ts`: EditRequiresNamed: refuses an unnamed editing batch before rehearsal, while allowing named edits and non-editing batches; `session.e2e.test.ts`: EditAtCursorProp, EditRequiresNamed: types and deletes only after naming the cursor's file |
+
+After removing the unreachable late-name branch, TLC still checks 8,610
+generated / 330 distinct states. Each mutation above was rerun with its stated
+result; the public late-name rejection remains covered by `integration_paths.ts`.
 
 ### `Diagnostics`: advisory checks after edits
 

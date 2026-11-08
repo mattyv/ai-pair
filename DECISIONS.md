@@ -361,3 +361,16 @@ Issue discussions and working notes hold the detailed evidence and history.
     implementations; it does not permit observer errors to change operation
     outcomes. Exercise the actual bundled boundary through a real Controller
     consumer, and keep its model and independent unit tests.
+
+## Batch file admission, 2026-11-08
+
+-   The controller rejects an editing batch that names its file only after its
+    first edit, before rehearsal or playback. Remove the player's duplicate
+    late-name guard and its bookkeeping because accepted production batches
+    cannot reach it. Keep the player guard against naming a second file and the
+    public controller rejection. Direct calls to the internal player are not a
+    substitute for controller admission.
+-   The `BatchFile` model retains the file-before-edit invariant and its existing
+    negative controls. The verified unreachable branch removal leaves its
+    reachable state count unchanged; the native integration case still checks
+    the public late-name rejection.
