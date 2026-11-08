@@ -40493,8 +40493,8 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 },
                 {
                   id: "worker",
-                  label: "Local synthesis\nOne inference and one lookahead",
-                  files: ["packages/vscode/src/speech_worker_host.ts"],
+                  label: "Warm local client\nOne inference and one lookahead",
+                  files: ["packages/vscode/src/speech_local_client.ts", "packages/vscode/src/speech_worker_host.ts"],
                   x: 1040,
                   y: 80,
                 },
@@ -40548,7 +40548,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 worker: [
                   {
                     id: "provider-boundary",
-                    text: "Local Kokoro uses the bounded multipart path. ElevenLabs retains one request per unit; legacy output stays one waveform. No future narration is synthesized.",
+                    text: "Local Kokoro uses the bounded multipart path through one warm worker: one load, one inference at a time, one lookahead part. ElevenLabs retains one request per unit; legacy output stays one waveform. No future narration is synthesized.",
                     ts: 0,
                   },
                 ],
@@ -40595,7 +40595,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 },
                 {
                   id: "dsp",
-                  label: "Experimental tempo transform\nBounded PCM in a worker thread",
+                  label: "Experimental tempo transform\nTransient-aware overlap-add in a worker",
                   files: ["packages/vscode/src/speech_tempo.ts", "packages/vscode/src/speech_tempo_worker.ts"],
                   x: 1040,
                   y: 430,
@@ -40619,7 +40619,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 { from: "settings", to: "service", label: "next-unit rate" },
                 { from: "service", to: "client", label: "tail-free PCM" },
                 { from: "client", to: "dsp", label: "epoch / unit / part" },
-                { from: "dsp", to: "framing", label: "owned PCM result" },
+                { from: "dsp", to: "framing", label: "PCM result" },
                 { from: "framing", to: "output", label: "bounded WAV" },
               ],
               groups: [],
@@ -40627,7 +40627,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 service: [
                   {
                     id: "tempo-contract",
-                    text: "Rate 1.0 bypasses the transform byte for byte. Listening speed does not change code pace, the reading clock or provider requests. Settings changes affect a later unit.",
+                    text: "Rate 1.0 bypasses the transform byte for byte, and so does an input under 3072 samples. Admission of a new unit waits while a tempo worker is still retiring. Listening speed does not change code pace, the reading clock or provider requests. Settings changes affect a later unit.",
                     ts: 0,
                   },
                 ],
@@ -40641,7 +40641,94 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 dsp: [
                   {
                     id: "tempo-evidence",
-                    text: "Synthetic tone and offline speech metrics are distinct from human listening validation. The control is experimental; source and packaged review remain release gates.",
+                    text: "Synthetic tone and offline speech metrics are distinct from human listening validation. The control is experimental; source and packaged review remain release gates. Transients are detected and kept from smearing across the overlap.",
+                    ts: 0,
+                  },
+                ],
+              },
+            },
+          },
+          {
+            id: "warm-local-synthesis",
+            name: "Warm local synthesis",
+            type: "architecture",
+            origin: "llm",
+            generation: { focus: "Versioned warm worker protocol and ownership; implementation under review" },
+            doc: {
+              type: "architecture",
+              autoLayoutApplied: true,
+              nodes: [
+                {
+                  id: "service",
+                  label: "Speech service\nAdmits a unit only when the slot is free",
+                  files: ["packages/vscode/src/speech_service.ts"],
+                  x: 40,
+                  y: 80,
+                },
+                {
+                  id: "client",
+                  label: "Local synthesis client\nOne warm worker per epoch",
+                  files: ["packages/vscode/src/speech_local_client.ts"],
+                  x: 540,
+                  y: 80,
+                },
+                {
+                  id: "protocol",
+                  label: "Worker protocol\nStrict versioned frames",
+                  files: ["packages/vscode/src/speech_local_protocol.ts"],
+                  x: 1040,
+                  y: 80,
+                },
+                {
+                  id: "worker",
+                  label: "Worker thread\nInit once, echo the epoch",
+                  files: ["packages/vscode/src/speech_worker_host.ts", "packages/vscode/src/speech_worker.ts"],
+                  x: 1040,
+                  y: 430,
+                },
+                {
+                  id: "retirement",
+                  label: "Retirement slot\nHeld until the exit event",
+                  files: ["packages/vscode/src/speech_local_client.ts"],
+                  x: 540,
+                  y: 430,
+                },
+                {
+                  id: "watchdog",
+                  label: "Independent watchdog\nLoad and inference deadline",
+                  files: ["packages/vscode/src/speech_local_client.ts"],
+                  x: 40,
+                  y: 430,
+                },
+              ],
+              edges: [
+                { from: "service", to: "client", label: "init / synthesize / cancel" },
+                { from: "client", to: "protocol", label: "zod request" },
+                { from: "protocol", to: "worker", label: "epoch / unit / part" },
+                { from: "worker", to: "retirement", label: "result / failure / exit" },
+                { from: "watchdog", to: "retirement", label: "deadline retires" },
+                { from: "retirement", to: "service", label: "slot released" },
+              ],
+              groups: [],
+              comments: {
+                client: [
+                  {
+                    id: "ownership",
+                    text: "Cancel invalidates the result at once but the inference keeps ownership until its result arrives or the watchdog retires the worker. Stale, duplicate and late responses change nothing.",
+                    ts: 0,
+                  },
+                ],
+                protocol: [
+                  {
+                    id: "protocol-bounds",
+                    text: "Ready reports capabilities the client checks against its own constants. Failures carry one fixed category (load, synthesis, protocol, busy), never free text. Spec: WarmSynthesisWorker.",
+                    ts: 0,
+                  },
+                ],
+                worker: [
+                  {
+                    id: "not-claimed",
+                    text: "Not claimed: no new engine, no persistent synthesis cache, and ElevenLabs is unchanged. The shipped transport is a Node worker thread behind an injected factory.",
                     ts: 0,
                   },
                 ],

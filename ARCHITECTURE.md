@@ -336,20 +336,72 @@ official MCP TypeScript SDK.
 
 ## Bounded sentence narration
 
-The sentence pipeline is being implemented on this feature branch. The Archi
-`Sentence narration` diagram records its ownership boundaries. One admitted text
-retains one reading clock and one concrete output lease. Local Kokoro may
-synthesize one next sentence while the current part plays; each physical output
-must retire before the next starts. ElevenLabs keeps its single-request path.
-These changes require final review and packaged verification before release.
+Bounded sentence pipelining is implemented for local Kokoro narration. The Archi
+`Sentence narration` diagram records its ownership boundaries.
+
+-   One admitted narration text keeps one reading clock and one concrete output
+    lease for all of its parts. Showing the text, the reading pace and command
+    approval do not depend on sentence boundaries.
+-   `speech_segments.ts` splits the text into at most four parts, each an exact
+    slice of the source. The last part takes any remainder, and text that cannot
+    be split with certainty stays whole.
+-   The warm local client synthesizes one next part while the current part
+    plays, so there is at most one inference and one part of lookahead. Each
+    physical output retires before the next part starts, and the unit finishes
+    only on its final part.
+-   Only text already admitted for the unit is synthesized. Future cloud
+    narration is never synthesized ahead, and an explanation is never dropped to
+    catch up.
+-   ElevenLabs keeps one request per unit, and the legacy output path stays one
+    waveform.
+
+The pipeline still needs final review and packaged verification before release.
+
+## Warm local synthesis worker
+
+One warm worker thread serves local Kokoro synthesis for each epoch. The Archi
+`Warm local synthesis` diagram shows the boundaries; the TLA+ model is
+`specs/WarmSynthesisWorker.tla`.
+
+-   `speech_local_protocol.ts` defines the protocol with strict zod schemas:
+    `init`, `ready` (with capabilities), `synthesize`, `result`, `failure` and
+    `shutdown`. Every frame carries the protocol version, and every request and
+    response carries the epoch, the unit id and the part ordinal. A failure
+    carries one of four fixed categories (`load`, `synthesis`, `protocol`,
+    `busy`), never free text.
+-   `speech_local_client.ts` (`LocalSynthesisClient`) owns the worker through
+    an injected factory. It loads the model once and runs one inference at a
+    time. The worker's `ready` capabilities must equal the client's own
+    constants.
+-   A cancel invalidates the in-flight result at once, but the inference keeps
+    ownership of the worker until its result arrives or an independent watchdog
+    retires the worker.
+-   A retiring worker holds the slot until its actual exit event. Only then can
+    a replacement start.
+-   The client rejects stale, duplicate and late responses, and the text of a
+    canceled or retired inference is never replayed.
+-   `SpeechService` drives the client in place of inline worker handling.
+    Admitting a unit waits until the local slot is free.
+
+This is not a new engine, and it adds no persistent synthesis cache.
+ElevenLabs synthesis is unchanged. The shipped transport is a Node worker
+thread; the factory keeps the client independent of it.
 
 ## Independent listening speed
 
-The experimental listening-rate implementation snapshots its rate once per
-narration unit. It processes tail-free mono PCM in a local worker, then frames
-the actual transformed samples and appends the fixed thinking tail once. Rate
-1.0 bypasses processing byte for byte. The existing synthesis-speed controls,
-reading clock and code pace remain separate. Worker cancellation retains the
-slot until termination, and stale unit or part responses cannot restart audio.
-The Archi `Speech tempo` diagram shows the implementation boundaries under
-review; offline metrics do not establish human listening quality.
+The listening-rate control is experimental. It snapshots its rate once per
+narration unit. A separate tempo worker processes the tail-free mono PCM with a
+transient-aware overlap-add transform, which keeps the pitch. The service then
+frames the actual transformed samples and appends the fixed thinking tail once.
+
+-   Rate 1.0 bypasses processing byte for byte. So does an input shorter than
+    3072 samples, which stays within one window of every target length.
+-   Admitting a unit at a rate other than 1.0 waits until the tempo worker has
+    retired, as well as the local synthesis slot.
+-   Cancellation keeps the tempo worker's slot until it actually terminates, and
+    stale unit or part responses cannot restart audio.
+-   The synthesis-speed controls, the reading clock and the code pace stay
+    separate from listening speed.
+
+The Archi `Speech tempo` diagram shows the boundaries. Offline metrics do not
+establish human listening quality.
