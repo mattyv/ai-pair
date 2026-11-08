@@ -2584,3 +2584,46 @@ disabling the watchdog alone violates the watchdog configuration while the
 discard-fair one still holds, so neither fairness assumption hides the other.
 `EnableNextPart` is distinct from `EnableDispatch`.
 The model does not prove actual audio quality or operating-system process exit.
+
+## Diagnostic fault isolation
+
+`DiagnosticsFaultIsolation` models one synchronous diagnostic attempt at one
+of the bridge, controller, and terminal call sites. The observer can be absent,
+return normally, or throw. A caught exception must not escape or stop the
+surrounding business operation. Weak fairness requires both the attempt and the
+completion to occur; it does not model a callback that never returns, asynchronous
+rejection, reentrancy, or changes the callback itself makes to shared state.
+Call sites must preserve the receiver used by the existing invocation.
+
+| Property | Implementation and test mapping |
+|---|---|
+| `TypeOK` | Sanity check of the bounded state. |
+| `NoEscapedException` | `diagnostic_delivery.test.ts`: "isolates a throwing observer from the operation". Its absent-observer and original-receiver tests cover the other modeled choices; bridge, controller, and terminal delegate to the helper. |
+| `BusinessCompletes` | `integration_gap_paths.ts`: `diagnosticObserverFailure` starts, pauses, resumes, and ends a real controller session with a throwing observer. Equivalent bridge and terminal integration cases are not yet mapped. |
+
+TLC checked 19 generated and 19 distinct states with `GuardCatch` and
+`EnableAttempt` true. Setting `GuardCatch` false violates `NoEscapedException`
+on a throwing observer; setting `EnableAttempt` false violates
+`BusinessCompletes` with a stuttering behavior. Both mutations were checked
+independently and discarded.
+
+## Speech platform evidence
+
+`SpeechPlatformEvidence` checks one local host for Linux x64 and positive
+evidence of the running process's GNU libc. A missing or failed process report
+can use independently verified process mappings; unknown evidence fails closed.
+Desktop and remote-host placement remain separate caller checks. The model
+abstracts the bounded probe and does not prove the operating system's mappings
+are truthful.
+
+| Property | Implementation and test mapping |
+|---|---|
+| `TypeOK` | Sanity check of the bounded state. |
+| `PositiveEvidence` | `speech_platform.test.ts`: positive report or mappings are required; musl and missing evidence are rejected. |
+| `RecognizesEvidence` | `speech_platform.test.ts`: accepts a valid runtime report and current-process GNU mappings, including versioned and Snap paths. |
+| `CheckCompletes` | `speech_platform.test.ts`: the fixed process-maps reader rejects oversized or unreadable input and closes its descriptor. |
+
+TLC checked 19 generated and 19 distinct states. Disabling `GuardEvidence`
+violates `PositiveEvidence`; disabling `EnableCheck` violates
+`CheckCompletes`; disabling `EnablePositive` violates `RecognizesEvidence`.
+All three mutations were discarded.

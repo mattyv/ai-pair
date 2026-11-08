@@ -12,6 +12,15 @@ setup() {
   export ENV_RECORD="${BATS_TEST_TMPDIR}/code.env"
   cat >"${FAKE}/code" <<'CODE'
 #!/bin/bash
+if [[ "$*" == *integration_companion_paths.js* ]]; then
+  RECORD="${RECORD}.companion"
+  ENV_RECORD="${ENV_RECORD}.companion"
+  for arg in "$@"; do
+    case "${arg}" in
+      --extensions-dir=*) test -f "${arg#*=}/michalstrba.ai-pair-local-audio/dist/extension.js" || exit 9 ;;
+    esac
+  done
+fi
 printf '%s\n' "$@" >"${RECORD}"
 env | grep -E '^(NODE_V8_COVERAGE|ELECTRON_RUN_AS_NODE|AI_PAIR_HOME|HOME|PATH|CODEX_HOME|TMPDIR)=' >"${ENV_RECORD}" || true
 CODE
@@ -84,4 +93,17 @@ CODE
   run --separate-stderr bash "${ROOT}/packages/vscode/scripts/integration.sh" --coverage
   [[ "${status}" -eq 1 ]]
   [[ "${stderr}" == *'packages/core/src/bridge.ts: integration lines not measured, minimum 1%'* ]]
+}
+
+
+@test "coverage also runs the real companion package in a separate profile using the same V8 directory" {
+  run --separate-stderr bash "${ROOT}/packages/vscode/scripts/integration.sh" --coverage
+  [[ "${status}" -eq 0 ]] || { printf "%s\n%s\n" "${output}" "${stderr}"; return 1; }
+  [[ -f "${RECORD}.companion" ]]
+  grep -q '^--extensionTestsPath=.*/dist-test/integration_companion_paths.js$' "${RECORD}.companion"
+  local legacy_user companion_user
+  legacy_user="$(sed -n 's/^--user-data-dir=//p' "${RECORD}")"
+  companion_user="$(sed -n 's/^--user-data-dir=//p' "${RECORD}.companion")"
+  [[ -n "${legacy_user}" && -n "${companion_user}" && "${legacy_user}" != "${companion_user}" ]]
+  grep -q "^NODE_V8_COVERAGE=${COVERAGE_ROOT}/integration/v8\$" "${ENV_RECORD}.companion"
 }

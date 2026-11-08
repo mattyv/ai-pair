@@ -6,13 +6,11 @@
 # bundle, c8 reports it against the sources, in coverage/integration/, and the
 # run fails below the file's minimums in coverage_thresholds.json (#161).
 set -e
-
 readonly MAC_CODE='/Applications/Visual Studio Code.app/Contents/MacOS/Code'
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 readonly ROOT
 # COVERAGE_ROOT: where the reports go; the repository's coverage/ by default.
 readonly COVERAGE_DIR="${COVERAGE_ROOT:-${ROOT}/coverage}/integration"
-
 cd "$(dirname "$0")/.."
 coverage=0
 if [[ "${1:-}" == '--coverage' ]]; then
@@ -66,15 +64,37 @@ TMPDIR="${TMP_FILES}" CLAUDE_CONFIG_DIR="${TMP}/agents/claude" \
   --extensionDevelopmentPath="${EXTENSION_PATH}" \
   --extensionTestsPath="${PWD}/dist-test/integration.js" \
   "${TMP}/workspace"
+# The companion needs its own profile and workspace. Install the real package
+# before main activation and retain source maps for c8.
+(cd "${ROOT}" && npm run build --workspace=packages/audio-ui --silent)
+mkdir -p "${TMP}/companion-extensions" "${TMP}/companion-workspace"
+ln -s "${ROOT}/packages/audio-ui" \
+  "${TMP}/companion-extensions/michalstrba.ai-pair-local-audio"
+npx esbuild test/integration_companion_paths.ts --bundle --platform=node \
+  --format=cjs --target=node22 --external:vscode \
+  --outfile=dist-test/integration_companion_paths.js --log-level=warning
+TMPDIR="${TMP_FILES}" AI_PAIR_HOME="${TMP}/companion-home" \
+  CLAUDE_CONFIG_DIR="${TMP}/companion-agents/claude" \
+  CODEX_HOME="${TMP}/companion-agents/codex" \
+  XDG_CONFIG_HOME="${TMP}/companion-agents/xdg" \
+  PULSE_SERVER='unix:/nonexistent' \
+  PIPEWIRE_REMOTE='ai-pair-integration-no-audio' \
+  PATH='/usr/bin:/bin:/usr/sbin:/sbin' \
+  "${CODE}" "${CODE_ARGS[@]}" \
+  --user-data-dir="${TMP}/companion-user" \
+  --extensions-dir="${TMP}/companion-extensions" \
+  --disable-workspace-trust --skip-welcome --skip-release-notes \
+  --extensionDevelopmentPath="${EXTENSION_PATH}" \
+  --extensionTestsPath="${PWD}/dist-test/integration_companion_paths.js" \
+  "${TMP}/companion-workspace"
 if ((coverage)); then
-  # The bundle is selected before c8 follows its source map back to the
-  # sources; the report script keeps ours and drops node_modules. From the
-  # root, since c8 matches paths against the cwd.
+  # c8 resolves bundled coverage through the source maps from the root.
   (
     cd "${ROOT}" && npx c8 report --temp-directory "${COVERAGE_DIR}/v8" \
       --reports-dir "${COVERAGE_DIR}" \
       --reporter text-summary --reporter lcov --reporter json-summary \
-      --include 'packages/vscode/dist/**' --all=false \
+      --include 'packages/vscode/dist/**' \
+      --include 'packages/audio-ui/dist/**' --all=false \
       && node scripts/coverage_report.ts --integration --check
   )
 fi

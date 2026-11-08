@@ -703,3 +703,23 @@ it('EligibleFinishes, IneligibleKeepsReading: finishes the requested delay witho
   expect(panel.says()).toEqual(['A message to read.', 'Next message.']);
   await until(controller.step([]));
 });
+
+function observerThrows(this: unknown): void {
+  throw new Error('observer failed');
+}
+
+it('preserves the real controller session when a diagnostic observer throws', async () => {
+  const { controller } = setup({});
+  const observer = vi.fn(observerThrows);
+  controller.onDiagnostic = observer;
+  const report = await controller.start();
+  expect(report.turn).toBe('agent');
+  controller.pause('away');
+  expect(controller.isPaused).toBe(true);
+  controller.resume('away');
+  expect(controller.isPaused).toBe(false);
+  controller.disconnect();
+  expect(controller.isSuspended).toBe(true);
+  expect(observer).toHaveBeenCalled();
+  expect(observer.mock.contexts.every((receiver) => receiver === controller)).toBe(true);
+});

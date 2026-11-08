@@ -25,6 +25,7 @@ import { SpeechOutputPreferences } from './speech_output_preferences';
 import { ElevenLabsClient } from './speech_elevenlabs';
 import { installedSpeechModel, setupSpeech } from './speech_setup';
 import { speechRuntimeAvailable } from './speech_runtime_status';
+import { localSpeechPlatform } from './speech_platform';
 import { speechListeningRate, type SpeechSettings } from './speech_types';
 import type { SpeechState } from './panel_messages';
 import type { OutsideChanges } from './outside';
@@ -124,20 +125,10 @@ function once<T>(f: (arg: T) => void): (arg: T) => void {
 
 /** The bundled runtime supports only a local Linux x64 glibc extension host. */
 function speechSupported(): boolean {
-  if (
-    vscode.env.remoteName !== undefined ||
-    vscode.env.uiKind !== vscode.UIKind.Desktop ||
-    process.platform !== 'linux' ||
-    process.arch !== 'x64'
-  ) {
+  if (vscode.env.remoteName !== undefined || vscode.env.uiKind !== vscode.UIKind.Desktop || !localSpeechPlatform().supported) {
     return false;
   }
-  try {
-    const report = process.report?.getReport();
-    return isRecord(report) && isRecord(report.header) && typeof report.header.glibcVersionRuntime === 'string';
-  } catch {
-    return false;
-  }
+  return true;
 }
 
 /** Offers local companion installation for a remote workspace. */
@@ -435,7 +426,7 @@ export function activate(context: vscode.ExtensionContext): Api {
           const available = (await installedSpeechModel(context.globalStorageUri.fsPath)) !== undefined;
           diagnostics.record({
             kind: 'speech',
-            event: 'capability',
+            event: 'setup',
             provider: 'kokoro',
             phase: available ? 'ready' : 'blocked',
             ...(available ? {} : { reason: 'not_ready' as const }),

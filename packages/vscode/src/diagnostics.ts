@@ -15,6 +15,10 @@ export interface SpeechDiagnosticEvent {
 }
 export type SpeechDiagnosticReason =
   | 'unsupported'
+  | 'host_platform'
+  | 'host_arch'
+  | 'libc_unknown'
+  | 'libc_report_failed'
   | 'no_key'
   | 'no_voice'
   | 'not_ready'
@@ -52,6 +56,10 @@ const SPEECH_PHASE = new Set(['received', 'blocked', 'dispatched', 'ready', 'fai
 const SPEECH_PROVIDER = new Set(['kokoro', 'elevenlabs', 'unknown']);
 const SPEECH_REASON = new Set([
   'unsupported',
+  'host_platform',
+  'host_arch',
+  'libc_unknown',
+  'libc_report_failed',
   'no_key',
   'no_voice',
   'not_ready',

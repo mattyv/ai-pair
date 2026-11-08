@@ -27,3 +27,5 @@ export { planTyping, readingChars, readingTime } from './typing';
 export type { CodePlayback } from './typing';
 export { defaultTiming, withOverrides, type Cadence, type Reading, type Timing, type TimingOverrides } from './timing';
 export { Bridge, type BridgeOptions } from './bridge';
+
+export { reportDiagnostic } from './diagnostic_delivery';

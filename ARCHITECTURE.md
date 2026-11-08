@@ -11,7 +11,7 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes the local-audio architecture and 0.20.0 development work.
+Status: describes the 0.20.1 implementation on this feature branch.
 
 The source is `.archi/ai-pair.json`. To regenerate the page with
 Archi-Techture 1.5.1, set `ARCHI_TO_HTML` to its `out/tools/archi-to-html.js`
@@ -405,3 +405,20 @@ frames the actual transformed samples and appends the fixed thinking tail once.
 
 The Archi `Speech tempo` diagram shows the boundaries. Offline metrics do not
 establish human listening quality.
+
+## Local runtime support evidence
+
+Kokoro support requires a local Linux x64 host and positive GNU libc evidence.
+The shared platform detector checks Node's runtime report first, then reads
+bounded mappings of the same running process if the report is unavailable. It
+accepts exact GNU libc and loader records, including older versioned names;
+musl, deleted, malformed, oversized and inaccessible evidence remains blocked.
+The main host retains its remote-workspace guard; the local UI companion checks
+its own process. Only fixed reason codes enter diagnostics. Model presence is
+reported as setup state, separately from platform capability. This fallback
+does not prove compatibility with every glibc layout or native library build.
+
+Synchronous diagnostic observer errors are isolated by one shared core helper.
+Callers retain their original receivers and read the current callback for each
+event. The helper suppresses thrown observer errors while preserving operation
+progress; it does not prevent intentional reentrant side effects.

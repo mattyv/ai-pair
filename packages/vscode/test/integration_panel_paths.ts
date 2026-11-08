@@ -27,7 +27,7 @@ async function sendAll(api: Api, messages: readonly unknown[]): Promise<void> {
   await sleep(SETTLE_MS);
 }
 
-/** Sends the panel each message its page may post, in the ways the page and a damaged page post them. */
+/** Sends trusted page-shaped messages, including invalid values that the receiving cases explicitly check. */
 export async function panelPaths(api: Api): Promise<void> {
   const { controller } = api;
   const settings = vscode.workspace.getConfiguration('aiPair');

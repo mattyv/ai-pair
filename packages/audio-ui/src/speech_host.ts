@@ -9,6 +9,7 @@ import { SpeechCredentials } from '../../vscode/src/speech_credentials';
 import { ElevenLabsClient } from '../../vscode/src/speech_elevenlabs';
 import { SpeechOutputPreferences, type OutputPreferenceView } from '../../vscode/src/speech_output_preferences';
 import { speechRuntimeAvailable } from '../../vscode/src/speech_runtime_status';
+import { localSpeechPlatform } from '../../vscode/src/speech_platform';
 import { SpeechService } from '../../vscode/src/speech_service';
 import { SpeechTempoClient } from '../../vscode/src/speech_tempo_client';
 import { installedSpeechModel, setupSpeech } from '../../vscode/src/speech_setup';
@@ -52,25 +53,6 @@ export interface SpeechHost {
   dispose(): void;
 }
 
-/** Returns whether the packaged Kokoro runtime can run on this UI host. */
-function kokoroPlatform(): boolean {
-  if (process.platform !== 'linux' || process.arch !== 'x64') return false;
-  try {
-    const report = process.report?.getReport();
-    return (
-      typeof report === 'object' &&
-      report !== null &&
-      'header' in report &&
-      typeof report.header === 'object' &&
-      report.header !== null &&
-      'glibcVersionRuntime' in report.header &&
-      typeof report.header.glibcVersionRuntime === 'string'
-    );
-  } catch {
-    return false;
-  }
-}
-
 /** Returns the local AI Pair configuration. */
 function config(): vscode.WorkspaceConfiguration {
   return vscode.workspace.getConfiguration('aiPair');
@@ -80,7 +62,8 @@ function config(): vscode.WorkspaceConfiguration {
 export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
   const { context, adapter } = options;
   const desktop = vscode.env.uiKind === vscode.UIKind.Desktop;
-  const platform = desktop && kokoroPlatform();
+  const platformResult = desktop ? localSpeechPlatform() : { supported: false as const, reason: 'host_platform' as const };
+  const platform = platformResult.supported;
   const runtimeDirectory = path.join(context.extensionPath, 'dist', 'speech');
   let runtimeAvailable = false;
   let disposed = false;
@@ -317,7 +300,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
       event: 'capability',
       provider: 'kokoro',
       phase: platform && available ? 'ready' : 'blocked',
-      ...(!platform ? { reason: 'unsupported' as const } : !available ? { reason: 'not_ready' as const } : {}),
+      ...(!platformResult.supported ? { reason: platformResult.reason } : !available ? { reason: 'not_ready' as const } : {}),
     });
     options.panel()?.refreshSpeechSupport();
   });

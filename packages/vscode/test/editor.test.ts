@@ -311,7 +311,12 @@ function listening(name: string): number {
 /** Makes the editor in ROOT for AGENT, over a mock controller, and returns both. */
 function made() {
   const controller = mock<Controller>();
-  const editor = new VsCodeEditor(ROOT, AGENT, () => controller);
+  const editor = new VsCodeEditor(
+    ROOT,
+    AGENT,
+    () => controller,
+    () => false,
+  );
   return { editor, controller };
 }
 

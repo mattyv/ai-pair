@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: integration, 2026-11-08.
+Last updated: css, 2026-11-08.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -37,31 +37,31 @@ Last updated: integration, 2026-11-08.
 | `packages/audio-native/src/protocol.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/audio-native/src/stage.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/audio-native/src/verified_backend.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/audio-native/test/admission.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-native/test/admission.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-native/test/factory.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-native/test/factory.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-native/test/helper_backend.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-native/test/helper_catalog.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-native/test/helper_location.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-native/test/helper_manifest.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-native/test/helper_manifest.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-native/test/linux_backend.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-native/test/linux_default.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-native/test/multipart_native_adapter.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-native/test/native_adapter.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-native/test/native_adapter.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-native/test/ownership.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-native/test/ownership.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-native/test/playback.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-native/test/protocol.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-native/test/stage.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-native/test/stage.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-native/test/verified_backend.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-native/test/admission.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-native/test/admission.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-native/test/factory.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-native/test/factory.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-native/test/helper_backend.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-native/test/helper_catalog.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-native/test/helper_location.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-native/test/helper_manifest.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-native/test/helper_manifest.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-native/test/linux_backend.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-native/test/linux_default.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-native/test/multipart_native_adapter.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-native/test/native_adapter.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-native/test/native_adapter.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-native/test/ownership.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-native/test/ownership.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-native/test/playback.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-native/test/protocol.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-native/test/stage.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-native/test/stage.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-native/test/verified_backend.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/scripts/build.mts` | TypeScript | - | - | - | - | - | - |
 | `packages/audio-ui/scripts/build_identity.mts` | TypeScript | - | - | - | - | - | - |
 | `packages/audio-ui/scripts/speech_runtime.mts` | TypeScript | - | - | - | - | - | - |
-| `packages/audio-ui/scripts/speech_runtime.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-ui/scripts/speech_runtime.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/src/attachment_gate.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/audio-ui/src/companion_narration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/audio-ui/src/companion_output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -69,26 +69,27 @@ Last updated: integration, 2026-11-08.
 | `packages/audio-ui/src/extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/audio-ui/src/local_connection.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/audio-ui/src/speech_host.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/audio-ui/test/attachment_gate.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-ui/test/bridge.integration.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-ui/test/build_identity.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-ui/test/companion_narration.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-ui/test/companion_output.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-ui/test/companion_session.integration.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-ui/test/companion_session.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-ui/test/extension.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-ui/test/local_connection.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-ui/test/native_output.integration.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-ui/test/packaging.integration.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-ui/test/sentence_pipeline.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-ui/test/speech_host.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-ui/test/speech_host.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-ui/test/speech_tempo_composed.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/audio-ui/test/worker_diagnostics.integration.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/core/src/bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.9% B 98.1% F 100.0% | - | - | - | - |
+| `packages/audio-ui/test/attachment_gate.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/bridge.integration.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/build_identity.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/companion_narration.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/companion_output.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/companion_session.integration.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/companion_session.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/extension.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/local_connection.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/native_output.integration.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/packaging.integration.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/sentence_pipeline.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/speech_host.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/speech_host.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/speech_tempo_composed.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/worker_diagnostics.integration.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/core/src/bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 99.4% B 99.0% F 100.0% | - | - | - | - |
 | `packages/core/src/config.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/constants.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/core/src/controller.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 99.7% B 98.7% F 100.0% | - | - | - | - |
+| `packages/core/src/controller.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 99.8% B 99.4% F 100.0% | - | - | - | - |
+| `packages/core/src/diagnostic_delivery.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/core/src/diff.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 94.7% B 81.8% F 100.0% | - | - | - | - |
 | `packages/core/src/index.ts` | TypeScript | - | - | - | - | - | - |
 | `packages/core/src/lines.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.5% F 100.0% | - | - | - | - |
@@ -104,6 +105,7 @@ Last updated: integration, 2026-11-08.
 | `packages/core/src/typing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/test/bridge.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/controller.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/core/test/diagnostic_delivery.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/core/test/diff.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/fake.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/lines.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -126,13 +128,13 @@ Last updated: integration, 2026-11-08.
 | `packages/protocol/src/paths.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 83.3% F 100.0% | - | - | - | - |
 | `packages/protocol/src/schemas.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/wire.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/protocol/test/command_channel.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/protocol/test/command_channel.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/index.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/protocol/test/local_audio.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/protocol/test/local_diagnostics.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/protocol/test/panel_action.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/protocol/test/panel_chunks.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/protocol/test/panel_update.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/protocol/test/local_audio.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/protocol/test/local_diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/protocol/test/panel_action.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/protocol/test/panel_chunks.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/protocol/test/panel_update.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/paths.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/protocol/test/wire.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/src/guide.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.6% B 88.2% F 100.0% | - | - | - | - |
@@ -143,7 +145,7 @@ Last updated: integration, 2026-11-08.
 | `packages/relay/src/server.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 93.0% B 87.8% F 88.9% | - | - | - | - |
 | `packages/relay/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 50.0% F 100.0% | - | - | - | - |
 | `packages/relay/src/tools.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/relay/test/agent_guide.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/relay/test/agent_guide.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/relay/test/guide.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/link.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/relay.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -166,7 +168,7 @@ Last updated: integration, 2026-11-08.
 | `packages/vscode/src/calibration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.2% F 100.0% | - | - | - | - |
 | `packages/vscode/src/demo.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.8% B 83.9% F 100.0% | - | - | - | - |
 | `packages/vscode/src/diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.4% B 65.0% F 100.0% | - | - | - | - |
-| `packages/vscode/src/editor.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.2% B 89.8% F 96.2% | - | - | - | - |
+| `packages/vscode/src/editor.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.2% B 89.8% F 100.0% | - | - | - | - |
 | `packages/vscode/src/extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 85.7% B 80.1% F 88.2% | - | - | - | - |
 | `packages/vscode/src/output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 93.2% B 91.7% F 100.0% | - | - | - | - |
 | `packages/vscode/src/outside.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.5% F 100.0% | - | - | - | - |
@@ -193,6 +195,7 @@ Last updated: integration, 2026-11-08.
 | `packages/vscode/src/speech_output_types.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_pcm.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 52.0% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_phonemizer_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_platform.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_runtime_status.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 90.0% B 33.3% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_segments.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 43.6% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_service.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 55.0% B 40.0% F 59.4% | - | - | - | - |
@@ -208,7 +211,7 @@ Last updated: integration, 2026-11-08.
 | `packages/vscode/src/speech_waveform.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 57.8% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_worker.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_worker_host.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/terminal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.8% B 91.3% F 88.2% | - | - | - | - |
+| `packages/vscode/src/terminal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 97.3% B 92.4% F 100.0% | - | - | - | - |
 | `packages/vscode/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/view.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 88.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 148 of 148 rules matched |
@@ -224,13 +227,15 @@ Last updated: integration, 2026-11-08.
 | `packages/vscode/test/diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/editor.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/extension.test.ts` | TypeScript | test | test | test | test | - | test |
-| `packages/vscode/test/fixtures/tempo_schema_fake.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/fixtures/tempo_schema_fake.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/vscode/test/integration_code_playback.ts` | TypeScript | - | test | - | - | - | - |
-| `packages/vscode/test/integration_core_paths.ts` | TypeScript | - | test | - | - | - | - |
-| `packages/vscode/test/integration_gap_paths.ts` | TypeScript | - | test | - | - | - | - |
-| `packages/vscode/test/integration_panel_paths.ts` | TypeScript | - | test | - | - | - | - |
+| `packages/vscode/test/integration_code_playback.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_companion_paths.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/integration_core_paths.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_gap_paths.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_panel_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_paths.ts` | TypeScript | test | test | test | test | - | test |
+| `packages/vscode/test/integration_player_gap_paths.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/launcher.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/output.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/outside.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -238,13 +243,13 @@ Last updated: integration, 2026-11-08.
 | `packages/vscode/test/page.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/panel.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/panel_html.test.ts` | TypeScript | test | test | test | test | - | test |
-| `packages/vscode/test/panel_placement.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/panel_update_sender.integration.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/panel_update_sender.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/panel_placement.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/panel_update_sender.integration.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/panel_update_sender.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/passage.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/python_diagnostics.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/python_diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/remote_narration.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/remote_narration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/setup.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/smoke_integration.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_audio.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -254,33 +259,34 @@ Last updated: integration, 2026-11-08.
 | `packages/vscode/test/speech_elevenlabs.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_elevenlabs.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_engine.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/speech_local.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/speech_local_client.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/speech_local_protocol.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/speech_native_output.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/speech_native_spawn.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/speech_output_discovery.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/speech_output_preferences.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/speech_output_router.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/speech_local.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_local_client.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_local_protocol.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_native_output.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_native_spawn.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_output_discovery.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_output_preferences.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_output_router.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_pcm.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_pcm.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_phonemizer_bridge.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_platform.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_runtime.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/speech_segments.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/speech_segments.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_service.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_setup.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_setup_fs.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_smoke_integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_smoke_integration.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_synthesis.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/speech_tempo.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/speech_tempo_client.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/speech_tempo_client.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/speech_tempo_framing.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/speech_tempo_messages.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/speech_tempo_pcm.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/speech_tempo_worker.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/speech_tempo_worker_host.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/speech_tempo.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_tempo_client.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_tempo_client.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_tempo_framing.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_tempo_messages.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_tempo_pcm.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_tempo_worker.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_tempo_worker_host.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_waveform.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_worker.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_worker_host.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -291,9 +297,9 @@ Last updated: integration, 2026-11-08.
 | `packages/vscode/test/visual/chat_order.spec.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/visual/panel.spec.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/webview/panel.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/vscode/test/workspace_panel_bridge.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/workspace_session.integration.test.ts` | TypeScript | test | test | - | - | - | test |
-| `packages/vscode/test/workspace_session.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/workspace_panel_bridge.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/workspace_session.integration.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/workspace_session.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/vendor/kokoro_phonemize.d.mts` | TypeScript | - | - | - | - | - | - |
 | `playwright.config.ts` | TypeScript | - | - | - | - | - | - |
 | `scripts/check_ascii.test.ts` | TypeScript | test | test | test | test | - | test |
@@ -308,7 +314,7 @@ Last updated: integration, 2026-11-08.
 | `scripts/lint_tla.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/lint_web.test.ts` | TypeScript | test | test | test | test | - | test |
 | `scripts/lint_web.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `scripts/normalize_architecture.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
+| `scripts/normalize_architecture.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `scripts/normalize_architecture.test.ts` | TypeScript | test | test | test | - | - | test |
 | `scripts/normalize_architecture.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/release.test.ts` | TypeScript | test | test | test | test | - | test |
@@ -321,7 +327,7 @@ Last updated: integration, 2026-11-08.
 | `specs/Anchor.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Anchor.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
 | `specs/AudioOutput.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/AudioOutput.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/AudioOutput.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/BatchFile.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/BatchFile.tla` | TLA+ | - | - | 4 of 4 actions | - | - | - |
 | `specs/Bridge.cfg` | TLC config | - | - | - | - | - | - |
@@ -342,6 +348,8 @@ Last updated: integration, 2026-11-08.
 | `specs/Diagnostics.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
 | `specs/DiagnosticsCopy.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/DiagnosticsCopy.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
+| `specs/DiagnosticsFaultIsolation.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/DiagnosticsFaultIsolation.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/DiagnosticsPrivacy.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/DiagnosticsPrivacy.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/DiagnosticsPrivacy_Speech.cfg` | TLC config | - | - | - | - | - | - |
@@ -367,34 +375,34 @@ Last updated: integration, 2026-11-08.
 | `specs/ListeningHint.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ListeningHint.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/LocalAudioAdmission.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/LocalAudioAdmission.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/LocalAudioAdmission.tla` | TLA+ | - | - | 13 of 13 actions | - | - | - |
 | `specs/LocalAudioOwnership.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/LocalAudioOwnership.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/LocalAudioOwnership.tla` | TLA+ | - | - | 14 of 14 actions | - | - | - |
 | `specs/LocalPanelReplay.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/LocalPanelReplay.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/LocalPanelReplay.tla` | TLA+ | - | - | 7 of 7 actions | - | - | - |
 | `specs/LocalPanelReplay_Delivery.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/MultipartAudioLease.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/MultipartAudioLease.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/MultipartAudioLease.tla` | TLA+ | - | - | 15 of 15 actions | - | - | - |
 | `specs/MultipartAudioLease_Healthy.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Narration.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Narration.tla` | TLA+ | - | - | 20 of 20 actions | - | - | - |
 | `specs/Navigator.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Navigator.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/OutputAdmission.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/OutputAdmission.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/OutputAdmission.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/OutputHandoff.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/OutputHandoff.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/OutputHandoff.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
 | `specs/OutputPreference.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/OutputPreference.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/OutputPreference.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/OutputReplacement.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/OutputReplacement.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/OutputReplacement.tla` | TLA+ | - | - | 7 of 7 actions | - | - | - |
 | `specs/Outside.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Outside.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/PairDefs.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/Panel.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Panel.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
 | `specs/PanelPlacement.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/PanelPlacement.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/PanelPlacement.tla` | TLA+ | - | - | 9 of 10 actions (never: UnsafeFallback) | - | - | - |
 | `specs/PanelReplay.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/PanelReplay.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/PanelScroll.cfg` | TLC config | - | - | - | - | - | - |
@@ -434,7 +442,7 @@ Last updated: integration, 2026-11-08.
 | `specs/Scroll.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Scroll.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/SentencePipeline.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/SentencePipeline.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/SentencePipeline.tla` | TLA+ | - | - | 18 of 18 actions | - | - | - |
 | `specs/SentencePipeline_Canceled.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SentencePipeline_Healthy.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Serialize.cfg` | TLC config | - | - | - | - | - | - |
@@ -443,12 +451,14 @@ Last updated: integration, 2026-11-08.
 | `specs/SettingsAccess.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/SpeechPage.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechPage.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
+| `specs/SpeechPlatformEvidence.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/SpeechPlatformEvidence.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/SpeechSettings.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechSettings.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/SpeechSetup.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechSetup.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
 | `specs/SpeechTempo.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/SpeechTempo.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/SpeechTempo.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/SpeechTempo_Canceled.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechTempo_Healthy.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechWorker.cfg` | TLC config | - | - | - | - | - | - |
@@ -472,7 +482,7 @@ Last updated: integration, 2026-11-08.
 | `specs/TypingEol.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/TypingEol.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/WarmSynthesisWorker.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/WarmSynthesisWorker.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/WarmSynthesisWorker.tla` | TLA+ | - | - | 16 of 16 actions | - | - | - |
 | `specs/WarmSynthesisWorker_Cancellation.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/WarmSynthesisWorker_Healthy.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/WarmSynthesisWorker_Retirement.cfg` | TLC config | - | - | - | - | - | - |

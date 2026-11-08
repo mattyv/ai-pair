@@ -199,6 +199,13 @@
       "functions": 100
     }
   },
+  "packages/core/src/diagnostic_delivery.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/core/src/diff.ts": {
     "unit": {
       "lines": 100,
@@ -717,6 +724,13 @@
     }
   },
   "packages/vscode/src/speech_pcm.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/speech_platform.ts": {
     "unit": {
       "lines": 100,
       "branches": 100,

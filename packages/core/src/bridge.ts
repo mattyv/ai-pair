@@ -17,6 +17,7 @@ import {
   type Passage,
   type RelayMessage,
 } from '@ai-pair/protocol';
+import { reportDiagnostic } from './diagnostic_delivery';
 import type { Controller } from './controller';
 import type { DiagnosticEvent } from './ports';
 import { LEFT_ARROW, RIGHT_ARROW } from './constants';
@@ -191,13 +192,9 @@ export class Bridge {
     this.server.close();
   }
 
-  /** Records diagnostics without affecting a connection if an observer fails. */
+  /** Reports diagnostics without allowing an observer to affect the operation. */
   private diagnostic(event: DiagnosticEvent): void {
-    try {
-      this.options.onDiagnostic?.(event);
-    } catch {
-      // Diagnostic observers cannot change connection behavior.
-    }
+    reportDiagnostic(this.options.onDiagnostic, event, this.options);
   }
 
   private accept(ws: WebSocket): void {

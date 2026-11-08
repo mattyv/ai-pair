@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.20.1
+
+-   Verify local Kokoro platform support using bounded evidence from the running
+    process when Node's system report is unavailable. Keep unsupported or
+    unverified hosts blocked, with a more specific diagnostic reason.
+
 ## 0.20.0
 
 -   Pipeline local Kokoro narration as bounded sentence parts while retaining

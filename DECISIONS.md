@@ -340,3 +340,24 @@ Issue discussions and working notes hold the detailed evidence and history.
     worker, so ordinary use is unaffected. A replacement that survives an exit
     needs the engine in a separate process, which is deliberately not part of
     this release.
+
+## Local Kokoro support detection, 2026-11-08
+
+-   A user on the Ubuntu host reported working ElevenLabs but repeated local
+    Kokoro `unsupported` diagnostics on 0.20.0. This isolates a support gate; it
+    does not yet establish the exact host condition. The earlier detector used
+    only Node's system report and classified missing evidence as unsupported.
+-   Retain Linux x64 and host-placement checks. If the report is unavailable,
+    accept only bounded positive GNU libc evidence from this process's mappings;
+    a system getconf command could describe a different runtime. Keep musl,
+    unknown, failed or incomplete evidence blocked. Copy only fixed failure
+    categories, not reports, mappings, paths or environment values.
+-   Model-presence diagnostics describe setup, separately from executable
+    platform/runtime capability. A model cached by the workspace extension does
+    not establish support on the local companion.
+-   Centralize synchronous diagnostic exception isolation in one shared helper
+    while preserving dynamic callback lookup and the original receiver. This
+    retains the existing fault boundary and removes duplicated catch
+    implementations; it does not permit observer errors to change operation
+    outcomes. Exercise the actual bundled boundary through a real Controller
+    consumer, and keep its model and independent unit tests.

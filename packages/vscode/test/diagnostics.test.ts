@@ -7,6 +7,18 @@ afterEach(() => {
 });
 
 describe('diagnostics', () => {
+  it('retains only fixed platform failure reasons', () => {
+    const diagnostics = new Diagnostics({ version: '1', build: 'test' });
+    for (const reason of ['host_platform', 'host_arch', 'libc_unknown', 'libc_report_failed'] as const) {
+      diagnostics.record({ kind: 'speech', event: 'capability', phase: 'blocked', provider: 'kokoro', reason });
+    }
+    expect(diagnostics.snapshot().events.map((event) => ('reason' in event ? event.reason : undefined))).toEqual([
+      'host_platform',
+      'host_arch',
+      'libc_unknown',
+      'libc_report_failed',
+    ]);
+  });
   it('starts with unavailable states and records typed events in order', () => {
     vi.useFakeTimers();
     vi.setSystemTime(1234);

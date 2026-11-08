@@ -12,6 +12,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import * as vscode from 'vscode';
 import { WebSocket, WebSocketServer } from 'ws';
+import { z } from 'zod';
 import { CURSOR_MARKER, discoveryDir, fieldsProblem, PROTOCOL_VERSION, typeProblem, type Report, type ToolName } from '@ai-pair/protocol';
 import { LEFT_ARROW } from '@ai-pair/core/constants';
 import { EditorLink, findWindows } from '../../relay/src/link';
@@ -22,6 +23,7 @@ import { panelPaths } from './integration_panel_paths';
 import { gapPaths } from './integration_gap_paths';
 import { codePlaybackPaths } from './integration_code_playback';
 import { corePaths } from './integration_core_paths';
+import { playerGapPaths } from './integration_player_gap_paths';
 
 const EXPECTED_TODOS = `export interface Todo {
   id: number;
@@ -459,6 +461,19 @@ export async function run(): Promise<void> {
       assert.equal(answer.rejected.error.message, expected, JSON.stringify(action));
     }
   }
+  // An action that is no object, a place that is none, and a file that is no string reach the editor from a link too:
+  // each is answered with a report, not an exception.
+  // Written as JSON, the way a link sends them, since a literal null is none of this code's.
+  const malformed: unknown = JSON.parse(
+    '[null, 5, "move", {"move": 5}, {"select": null}, {"point": "x"}, {"move": {"file": 5, "line": 1, "to": "line_end"}}]',
+  );
+  assert.ok(Array.isArray(malformed));
+  for (const action of malformed as unknown[]) {
+    const answer = await refusing.call('step', { actions: [action] });
+    const rejected = z.object({ rejected: z.object({ error: z.object({ kind: z.string() }) }) }).safeParse(answer);
+    assert.ok(rejected.success, `malformed action was not rejected: ${JSON.stringify(action)} => ${JSON.stringify(answer)}`);
+    assert.equal(rejected.data.rejected.error.kind, 'invalid_action', JSON.stringify(action));
+  }
   const window = findWindows([root], discoveryDir()).windows[0];
   const raw = new WebSocket(`ws://127.0.0.1:${window.port}`);
   const frames: string[] = [];
@@ -573,6 +588,20 @@ export async function run(): Promise<void> {
   waiter.socket.close();
   await waiter.closed;
   controller.endSession();
+  await sleep(300);
+  // Replacing an ended session transfers ownership even if the old socket stays open.
+  const oldOwner = await greeted();
+  assert.match(JSON.stringify(await ask(oldOwner, 1, 'start', { cwd: root })), /^\{"type":"result"/);
+  controller.endSession();
+  const newOwner = await greeted();
+  assert.match(JSON.stringify(await ask(newOwner, 1, 'start', { cwd: root })), /^\{"type":"result"/);
+  assert.match(JSON.stringify(await ask(oldOwner, 2, 'read', { file: 'other.txt' })), /"code":"no_session"/);
+  oldOwner.socket.close();
+  await oldOwner.closed;
+  assert.match(JSON.stringify(await ask(newOwner, 2, 'read', { file: 'other.txt' })), /^\{"type":"result"/);
+  await ask(newOwner, 3, 'end', {});
+  newOwner.socket.close();
+  await newOwner.closed;
   await sleep(300);
   // A discovery file the window can't write is reported, and the window goes on (#9; specs/Discovery.tla, `OpenWindow`
   // unlisted). A regular file where the folder was fails the write even for root, as in a container.
@@ -1394,6 +1423,7 @@ export async function run(): Promise<void> {
 
   // Last, since they change the playback's settings: the player's and the controller's paths (#176).
   await codePlaybackPaths(api, root);
+  await playerGapPaths(api, root);
   await playerPaths(api, root);
   await controllerPaths(api, root);
   await corePaths(api, root);

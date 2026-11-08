@@ -20,9 +20,11 @@ import { setTimings } from '../src/timings';
 import { watchOutside } from '../src/outside_watch';
 import { settingSpeed } from '../src/panel_html';
 import { speechRuntimeAvailable } from '../src/speech_runtime_status';
+import { localSpeechPlatform } from '../src/speech_platform';
 import type { SpeechOutput } from '../src/speech_service';
 import type { PanelWiring } from '../src/panel';
 import type { CatalogView } from '../src/speech_catalog';
+vi.mock('../src/speech_platform', () => ({ localSpeechPlatform: vi.fn() }));
 import type { SpeechSettings } from '../src/speech_types';
 import type { OutputPreferenceWiring } from '../src/speech_output_preferences';
 import type { SpeechOutputRouter } from '../src/speech_output_router';
@@ -610,18 +612,8 @@ function changed(...names: string[]): void {
 }
 
 /** Save and simulate the supported host without depending on the CI machine. */
-const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
-const originalArch = Object.getOwnPropertyDescriptor(process, 'arch');
-const diagnosticReport = process.report.getReport();
-if (!('header' in diagnosticReport) || typeof diagnosticReport.header !== 'object' || diagnosticReport.header === null) {
-  throw new Error('The process report has no header.');
-}
-Object.defineProperty(diagnosticReport.header, 'glibcVersionRuntime', { value: '2.35', configurable: true });
-
 beforeEach(() => {
-  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
-  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
-  vi.spyOn(process.report, 'getReport').mockReturnValue(diagnosticReport);
+  vi.mocked(localSpeechPlatform).mockReturnValue({ supported: true });
   fakes.folders = [{ uri: { fsPath: '/project' } }];
   fakes.made.starting = Promise.resolve();
   fakes.made.arms = true;
@@ -643,8 +635,6 @@ afterEach(() => {
   vi.useRealTimers();
   vi.clearAllMocks();
   vi.restoreAllMocks();
-  if (originalPlatform !== undefined) Object.defineProperty(process, 'platform', originalPlatform);
-  if (originalArch !== undefined) Object.defineProperty(process, 'arch', originalArch);
   fakes.listeners.clear();
   fakes.remoteName = undefined;
   fakes.settings.clear();
@@ -955,6 +945,14 @@ describe('activate', () => {
     expect(h.panel.refreshSpeechSupport.mock.calls).toEqual([[]]);
   });
 
+  it('reports an installed model as setup, not host capability', async () => {
+    const h = activated();
+    const diagnostics = last(fakes.made.diagnostics);
+    vi.mocked(installedSpeechModel).mockResolvedValueOnce('/verified/model');
+    expect(await h.panel.wiring.speech.installed()).toBe(true);
+    expect(diagnostics.record.mock.calls).toContainEqual([{ kind: 'speech', event: 'setup', provider: 'kokoro', phase: 'ready' }]);
+  });
+
   it('enables speech controls once the packaged runtime is available', async () => {
     vi.mocked(speechRuntimeAvailable).mockResolvedValue(true);
     const h = activated();
@@ -965,9 +963,7 @@ describe('activate', () => {
   });
 
   it('disables local speech when the host platform report fails', () => {
-    vi.spyOn(process.report, 'getReport').mockImplementationOnce(() => {
-      throw new Error('unavailable');
-    });
+    vi.mocked(localSpeechPlatform).mockReturnValueOnce({ supported: false, reason: 'libc_report_failed' });
     const h = activated();
     expect(h.panel.wiring.speech.supported()).toBe(false);
   });

@@ -10,6 +10,10 @@ const speechEvent = z.strictObject({
   reason: z
     .enum([
       'unsupported',
+      'host_platform',
+      'host_arch',
+      'libc_unknown',
+      'libc_report_failed',
       'no_key',
       'no_voice',
       'not_ready',

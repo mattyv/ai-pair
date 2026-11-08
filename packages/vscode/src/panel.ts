@@ -401,12 +401,13 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
 
   /**
    * Handles a message as if the current page had posted it, for the integration test's `Api.panelMessage`:
-   * the same handler as the webview's, so each case's own guards validate the message. Anything that is not
-   * an object with a string `type` is dropped, as the page never posts one.
+   * the same handler as the webview's. Tests supply trusted page-shaped messages: this is not a schema
+   * validator, and the handler assumes the page supplies correctly typed fields for some message types.
+   * Anything that is not an object with a string `type` is dropped, as the page never posts one.
    */
   receiveFromPage(message: unknown): void {
     if (typeof message !== 'object' || message === null || !('type' in message) || typeof message.type !== 'string') return;
-    // The page's messages are untyped at runtime too: each case checks its own fields.
+    // The webview and this test seam both supply trusted page-shaped messages.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     this.receive(message as FromPanel, this.speechPageId);
   }

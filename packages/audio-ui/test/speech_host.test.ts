@@ -14,6 +14,7 @@ import type { SpeechDiagnosticEvent } from '../../vscode/src/diagnostics';
 import { createSpeechHost } from '../src/speech_host';
 
 const fakes = vi.hoisted(() => ({
+  platform: vi.fn<() => import('../../vscode/src/speech_platform').SpeechPlatformResult>().mockReturnValue({ supported: true }),
   config: new Map<string, unknown>(),
   update: vi.fn().mockResolvedValue(undefined),
   choice: vi.fn<() => import('../../vscode/src/speech_output_types').OutputChoice>().mockReturnValue({ kind: 'default' }),
@@ -49,6 +50,7 @@ const fakes = vi.hoisted(() => ({
   installed: vi.fn().mockResolvedValue(undefined),
   setup: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock('../../vscode/src/speech_platform', () => ({ localSpeechPlatform: fakes.platform }));
 vi.mock('vscode', () => ({
   env: {
     get uiKind() {
@@ -144,6 +146,7 @@ vi.mock('../src/companion_output', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  fakes.platform.mockReturnValue({ supported: true });
   fakes.config.clear();
   fakes.uiKind = 1;
   fakes.update.mockReset().mockResolvedValue(undefined);
@@ -484,23 +487,20 @@ it('supports a ready local runtime and suppresses stale key failures', async () 
   host.dispose();
 });
 
-it('treats non-Linux and an unavailable process report as unsupported', () => {
-  const platform = Object.getOwnPropertyDescriptor(process, 'platform');
-  try {
-    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
-    const mac = harness();
-    expect(mac.host.panelSpeech.supported()).toBe(false);
-    mac.host.dispose();
-  } finally {
-    if (platform !== undefined) Object.defineProperty(process, 'platform', platform);
-  }
-  const report = vi.spyOn(process.report, 'getReport').mockImplementation(() => {
-    throw new Error('unavailable');
-  });
+it('reports unavailable process evidence without exposing host details', async () => {
+  fakes.platform.mockReturnValue({ supported: false, reason: 'libc_report_failed' });
   const host = harness();
   expect(host.host.panelSpeech.supported()).toBe(false);
+  await vi.waitFor(() => {
+    expect(host.diagnostic).toHaveBeenCalledWith({
+      kind: 'speech',
+      event: 'capability',
+      phase: 'blocked',
+      provider: 'kokoro',
+      reason: 'libc_report_failed',
+    });
+  });
   host.host.dispose();
-  report.mockRestore();
 });
 
 it('cancels on disable without invalidating the unchanged provider', () => {

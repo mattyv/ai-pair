@@ -3,7 +3,7 @@
 
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { samePath, type CommandDiagnostic, type CommandOutcome, type RunOptions } from '@ai-pair/core';
+import { reportDiagnostic, samePath, type CommandDiagnostic, type CommandOutcome, type RunOptions } from '@ai-pair/core';
 import { MAX_OUTPUT, outcomeOf, Tail } from './output';
 import { timings } from './timings';
 
@@ -91,7 +91,7 @@ export class PairTerminals implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[];
 
   constructor(
-    private readonly showAutomatically: () => boolean = () => false,
+    private readonly showAutomatically: () => boolean,
     private readonly onDiagnostic?: (event: CommandDiagnostic) => void,
   ) {
     this.disposables = [
@@ -199,13 +199,9 @@ export class PairTerminals implements vscode.Disposable {
     }
   }
 
-  /** Records diagnostics without affecting the command if an observer fails. */
+  /** Reports diagnostics without allowing an observer to affect the command. */
   private diagnostic(event: CommandDiagnostic): void {
-    try {
-      this.onDiagnostic?.(event);
-    } catch {
-      // Diagnostic observers cannot change command behavior.
-    }
+    reportDiagnostic(this.onDiagnostic, event, this);
   }
 
   /** Shows the terminal associated with a current command, if available. */

@@ -14,6 +14,7 @@ import {
   type Report,
   type Turn,
 } from '@ai-pair/protocol';
+import { reportDiagnostic } from './diagnostic_delivery';
 import { boundedDiff, lineChanges } from './diff';
 import { LineIds, type Sighting } from './lines';
 import { agentPath, displayPath, Player, type Failure, type Scene } from './player';
@@ -268,13 +269,9 @@ export class Controller {
   /** Receives allowlisted lifecycle facts, without session text. */
   onDiagnostic?: (event: DiagnosticEvent) => void;
 
-  /** Records diagnostics without allowing an observer to affect the session. */
+  /** Reports diagnostics without allowing an observer to affect the operation. */
   private diagnostic(event: DiagnosticEvent): void {
-    try {
-      this.onDiagnostic?.(event);
-    } catch {
-      // Diagnostic observers cannot change session behavior.
-    }
+    reportDiagnostic(this.onDiagnostic, event, this);
   }
 
   /** Where the session's interactions are logged: statuses, batches, pauses, interrupts, edits, reports (#149). */

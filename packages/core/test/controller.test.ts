@@ -1,3 +1,4 @@
+import { reportDiagnostic } from '../src/diagnostic_delivery';
 // The controller on its own: sessions, the batch queue, calls and their reports, the programmer's input, pauses,
 // and the panel's status (specs/Controller.tla, specs/Serialize.tla, specs/ListenGrace.tla, specs/Navigator.tla,
 // specs/Resume.tla, specs/Anchor.tla, specs/EditEvents.tla, specs/Rehearsal.tla, specs/Timeline.tla). Solitary: the
@@ -139,6 +140,11 @@ const SAY: Action[] = [{ say: 'Hi.' }];
 /** A move that anchors the cursor, with its file and line. */
 const ANCHORED: Action = { move: { file: 'a.ts', line: 1, to: 'line_end' } };
 
+vi.mock('../src/diagnostic_delivery', () => ({
+  reportDiagnostic: vi.fn((observer: ((event: unknown) => void) | undefined, event: unknown, receiver: unknown) =>
+    observer?.call(receiver, event),
+  ),
+}));
 vi.mock('@ai-pair/protocol', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@ai-pair/protocol')>()),
   ToolError: fakes.FakeToolError,
@@ -395,17 +401,16 @@ describe('isSavedSession', () => {
 });
 
 describe('diagnostic events', () => {
-  it('keeps session behavior unchanged if the diagnostic observer throws', async () => {
+  it('delegates each diagnostic with the current observer and controller receiver', async () => {
     const h = harness();
-    h.controller.onDiagnostic = () => {
-      throw new Error('observer');
-    };
-    const result = await h.controller.start();
-    expect(result.turn).toBe('agent');
+    const first = vi.fn<(event: DiagnosticEvent) => void>();
+    const second = vi.fn<(event: DiagnosticEvent) => void>();
+    h.controller.onDiagnostic = first;
+    await h.controller.start();
+    expect(reportDiagnostic).toHaveBeenCalledWith(first, expect.anything(), h.controller);
+    h.controller.onDiagnostic = second;
     h.controller.pause('away');
-    h.controller.resume('away');
-    h.controller.disconnect();
-    expect(h.controller.isSuspended).toBe(true);
+    expect(reportDiagnostic).toHaveBeenCalledWith(second, expect.anything(), h.controller);
   });
 
   it('does not flood diagnostics with duplicate pause notifications', async () => {

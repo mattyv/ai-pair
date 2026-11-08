@@ -16,6 +16,7 @@ import {
   ToolError,
   type EditorMessage,
 } from '@ai-pair/protocol';
+import { reportDiagnostic } from '../src/diagnostic_delivery';
 import { Bridge, type BridgeController, type BridgeOptions } from '../src/bridge';
 import { LEFT_ARROW, RIGHT_ARROW } from '../src/constants';
 import type { DiagnosticEvent } from '../src/ports';
@@ -141,6 +142,11 @@ const FILE_CONTENT = FILE_CONTENT_SCHEMA.parse({
   end: { final_newline: true },
 });
 
+vi.mock('../src/diagnostic_delivery', () => ({
+  reportDiagnostic: vi.fn((observer: ((event: unknown) => void) | undefined, event: unknown, receiver: unknown) =>
+    observer?.call(receiver, event),
+  ),
+}));
 vi.mock('ws', () => ({ WebSocketServer: fakes.FakeServer }));
 vi.mock('node:fs', () => ({
   mkdirSync: vi.fn(),
@@ -292,14 +298,17 @@ describe('diagnostic events', () => {
     expect(all).not.toContainEqual({ kind: 'request', connectionId: 1, id: 9, method: 'step', phase: 'replied' });
   });
 
-  it('does not affect connections if the diagnostic observer throws', async () => {
-    const { server } = await started({
-      onDiagnostic: () => {
-        throw new Error('observer');
-      },
+  it('delegates diagnostics with the current observer and options receiver', async () => {
+    const second = vi.fn<(event: DiagnosticEvent) => void>();
+    const first = vi.fn(function (this: BridgeOptions) {
+      expect(this.dir).toBe(DIR);
+      this.onDiagnostic = second;
     });
-    const socket = await owner(server);
-    expect(lastSent(socket)).toEqual({ type: 'result', id: 1, result: REPORT });
+    const { server } = await started({ onDiagnostic: first });
+    await owner(server);
+    expect(first).toHaveBeenCalledOnce();
+    expect(second).toHaveBeenCalled();
+    expect(reportDiagnostic).toHaveBeenCalledWith(second, expect.anything(), expect.objectContaining({ dir: DIR }));
   });
 
   it('clears the old owner diagnostic if a replacement start closes mid-flight', async () => {

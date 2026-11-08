@@ -2,9 +2,9 @@
   "version": 1,
   "bundleId": "277c3415-7b74-4008-8be4-8c14ae6d41dd",
   "revision": {
-    "number": 12,
+    "number": 13,
     "updatedAt": "2026-11-08T00:00:00.000Z",
-    "summary": "Warm local synthesis client and versioned worker protocol; tempo and sentence narration refreshed"
+    "summary": "Current-process local speech support and shared diagnostic fault isolation"
   },
   "diagrams": [
     {
@@ -607,7 +607,8 @@
               "packages/core/src/lines.ts",
               "packages/core/src/diff.ts",
               "packages/core/src/config.ts",
-              "packages/core/src/timeline.ts"
+              "packages/core/src/timeline.ts",
+              "packages/core/src/diagnostic_delivery.ts"
             ],
             "group": "session",
             "x": 610.5,
@@ -9464,7 +9465,8 @@
             "files": [
               "packages/audio-ui/src/speech_host.ts",
               "packages/audio-ui/src/companion_narration.ts",
-              "packages/vscode/src/speech_service.ts"
+              "packages/vscode/src/speech_service.ts",
+              "packages/vscode/src/speech_platform.ts"
             ],
             "group": "desktop",
             "x": 1040,
@@ -9625,6 +9627,11 @@
             {
               "id": "placement-privacy",
               "text": "Speech settings, key entry, SecretStorage and output preferences stay on the UI host. Audio bytes and keys are excluded from workspace transport. Reading and command approval remain workspace-owned.",
+              "ts": 0
+            },
+            {
+              "id": "platform-evidence",
+              "text": "Verify the local Linux x64 runtime using Node report evidence, then bounded mappings of this same process if needed. Accept only positive GNU libc and loader evidence; keep musl, unknown, deleted or inaccessible evidence blocked. Reports and mapping paths are not copied to diagnostics.",
               "ts": 0
             }
           ],
