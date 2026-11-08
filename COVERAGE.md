@@ -339,6 +339,7 @@ Last updated: css, 2026-11-08.
 | `scripts/normalize_architecture.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `scripts/normalize_architecture.test.ts` | TypeScript | test | test | test | - | - | test |
 | `scripts/normalize_architecture.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `scripts/packaged_mcp_check.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
 | `scripts/release.test.ts` | TypeScript | test | test | test | test | - | test |
 | `scripts/release.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/specs_needed.sh` | Shell | - | - | - | - | - | - |
@@ -468,6 +469,9 @@ Last updated: css, 2026-11-08.
 | `specs/Resume.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/RunBox.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/RunBox.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
+| `specs/RuntimeIdentity.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/RuntimeIdentity.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/RuntimeIdentity_Mismatch.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Scroll.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Scroll.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/SentencePipeline.cfg` | TLC config | - | - | - | - | - | - |

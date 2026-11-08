@@ -36861,7 +36861,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
             origin: "llm",
             generation: {
               focus:
-                "Session Startup and Window Discovery \u2014 The agent harness launches the relay (pair-mcp via a launcher written by the extension), which reads the bridge's per-window discovery files, picks the best live VS Code window by workspace folder, opens an authenticated WebSocket (hello/token/version handshake), and calls `start`, which also loads project guides and begins or resumes a Controller session.",
+                "Session Startup and Window Discovery \u2014 The agent harness launches the relay (pair-mcp via a launcher written by the extension), which reads the bridge's per-window discovery files, picks the best live VS Code window by workspace folder, opens an authenticated WebSocket (hello/token/version handshake), and calls `start`, which also loads project guides and begins or resumes a Controller session. The relay requires the selected editor version and relay SHA-256 to match before forwarding a start; a missing or mismatched identity fails with recovery guidance. Already-running older relays cannot enforce this check.",
             },
             doc: {
               type: "dataflow",
@@ -36914,7 +36914,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 },
                 {
                   id: "link",
-                  label: "Editor Link\nWebSocket handshake and calls",
+                  label: "Editor Link\nChecks runtime identity before calls",
                   files: ["packages/relay/src/link.ts", "packages/relay/src/timings.ts"],
                   group: "relay",
                   x: 457,
@@ -36922,7 +36922,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 },
                 {
                   id: "disc",
-                  label: "Discovery Files\nPer-window port, token, folders",
+                  label: "Discovery Files\nPort, token, folders, runtime identity",
                   files: ["packages/core/src/bridge.ts", "packages/protocol/src/wire.ts", "packages/protocol/src/schemas.ts"],
                   group: "editor",
                   x: 133,

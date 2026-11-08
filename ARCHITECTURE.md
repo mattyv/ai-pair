@@ -184,7 +184,13 @@ editor may be opened after the harness. To find the window it:
     never falls back to another candidate.
 3.  Picks the window whose workspace folder contains it (the longest match). On
     a tie, it picks the most recently focused.
-4.  Connects and authenticates with the token and protocol version.
+4.  Checks the selected window's extension version and relay digest against
+    the running relay. Missing or mismatched identity fails with update and
+    reconnect guidance before forwarding a call.
+5.  Connects and authenticates with the token and protocol version.
+
+Older relays already running cannot enforce the identity check; restart them
+after updating and reloading every window.
 
 If no window matches, `start` fails with a clear message: "Open
 `/Users/me/projects/todo-app` in VS Code with the extension installed."

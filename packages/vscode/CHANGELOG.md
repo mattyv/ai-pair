@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.21.3
+
+-   Reject a relay whose version or packaged runtime differs from the running
+    editor, with guidance to restart pairing.
+-   Restart batch numbering for a fresh session while preserving it on resume.
+
 ## 0.21.2
 
 -   Route pairing requests only to the VS Code workspace matching their working
