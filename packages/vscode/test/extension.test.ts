@@ -277,6 +277,7 @@ const fakes = vi.hoisted(() => {
     readonly showTerminalPreference = vi.fn();
     readonly showCalibration = vi.fn();
     readonly showTimings = vi.fn();
+    readonly receiveFromPage = vi.fn();
     readonly restoreHistory = vi.fn();
     readonly focusReply = vi.fn();
     readonly askStart = vi.fn();
@@ -1372,6 +1373,12 @@ describe('the session across a reload', () => {
     h.api.setTimings({ saveMs: 1 });
     expect(vi.mocked(setTimings)).toHaveBeenCalledWith({ saveMs: 1 });
     expect(h.panel.showTimings).toHaveBeenCalledOnce();
+  });
+
+  it('panelMessage: hands the panel the message as its page would post it', () => {
+    const h = activated();
+    h.api.panelMessage({ type: 'pause' });
+    expect(h.panel.receiveFromPage).toHaveBeenCalledWith({ type: 'pause' });
   });
 });
 

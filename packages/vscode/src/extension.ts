@@ -89,6 +89,8 @@ export interface Api {
   history: () => readonly PanelEvent[];
   /** Sets the extension's own delays (timings.ts), for a test that cannot wait the shipped ones out. */
   setTimings: (overrides: Partial<Timings>) => void;
+  /** Hands the panel a message as its page would post it: the webview's own handler, which checks each message. */
+  panelMessage: (message: unknown) => void;
 }
 
 function config(): vscode.WorkspaceConfiguration {
@@ -875,6 +877,9 @@ export function activate(context: vscode.ExtensionContext): Api {
     setTimings: (overrides) => {
       setTimings(overrides);
       panel.showTimings();
+    },
+    panelMessage: (message) => {
+      panel.receiveFromPage(message);
     },
   };
 }

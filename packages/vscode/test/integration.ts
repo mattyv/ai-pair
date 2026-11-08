@@ -18,6 +18,8 @@ import { EditorLink, findWindows } from '../../relay/src/link';
 import type { Api } from '../src/extension';
 import { DEFAULT_TIMINGS } from '../src/timings';
 import { controllerPaths, extensionPaths, playerPaths } from './integration_paths';
+import { panelPaths } from './integration_panel_paths';
+import { gapPaths } from './integration_gap_paths';
 import { codePlaybackPaths } from './integration_code_playback';
 import { corePaths } from './integration_core_paths';
 
@@ -75,6 +77,9 @@ const ABSENT_MS = 45_000;
 const GRACE_SLACK_MS = 1000;
 /** The navigator's idle time, as the default is. */
 const NAVIGATOR_IDLE_MS = 3000;
+
+/** How long the panel gets to see a selection the test changed. */
+const SELECTION_SETTLE_MS = 100;
 
 /** A relay's socket the test drives by hand: the frames the bridge answers with, one at a time, and its close. */
 interface RawSocket {
@@ -1138,6 +1143,50 @@ export async function run(): Promise<void> {
     assert.equal(refused.isError, true, JSON.stringify(action));
   }
   console.log(`the relay's schema refused ${schemaRefusals.length} malformed actions`);
+  // What the agent reads back: a command's output in each form, a spoken say (speech is off), a file read whole, in
+  // part, past its end, and with unsaved changes, and the programmer's selection sent with a reply and a turn.
+  const rendered = path.join(root, 'render.txt');
+  fs.writeFileSync(rendered, 'first line\nsecond line\nthird line\n');
+  await toolAll('start', { task: 'render' });
+  controller.setConfirmCommands(false);
+  const commandsRan = await toolAll('step', {
+    actions: [
+      { say: 'Running some commands.', speak: true },
+      { run: "printf '%s\\n' '```'" },
+      { run: 'true' },
+      { run: 'sleep 2', wait: 0.3 },
+    ],
+  });
+  const reported = `${commandsRan}\n${await toolAll('listen')}`;
+  assert.match(reported, /Ran `true`.*no output/);
+  assert.match(reported, /Output:\n````/);
+  assert.match(reported, /still running in its terminal/);
+  assert.match(await tool('read', { file: 'render.txt' }), /^render\.txt:\n1 {2}first line/);
+  assert.match(await tool('read', { file: 'render.txt', from_line: 2, to_line: 2 }), /second line/);
+  assert.match(await tool('read', { file: 'render.txt', from_line: 50, to_line: 60 }), /\(end of file\)/);
+  assert.match(await tool('read', { file: 'render.txt', from_line: 3, to_line: 2 }), /no lines in this range/);
+  const renderEditor = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(rendered));
+  await renderEditor.edit((edit) => {
+    edit.insert(new vscode.Position(0, 0), 'unsaved ');
+  });
+  assert.match(await tool('read', { file: 'render.txt' }), /with unsaved changes in the editor/);
+  await vscode.commands.executeCommand('workbench.action.files.revert');
+  renderEditor.selection = new vscode.Selection(0, 0, 1, 'second'.length);
+  await sleep(SELECTION_SETTLE_MS);
+  api.panelMessage({ type: 'reply', text: 'about this', attach: true });
+  renderEditor.selection = new vscode.Selection(2, 0, 2, 'third'.length);
+  await sleep(SELECTION_SETTLE_MS);
+  api.panelMessage({ type: 'reply', text: 'and this', attach: true });
+  const selectionsSent = await tool('listen');
+  assert.match(selectionsSent, /About the code they had selected, render\.txt lines 1-2:/);
+  assert.match(selectionsSent, /About the code they had selected, render\.txt line 3:/);
+  api.panelMessage({ type: 'turn' });
+  api.panelMessage({ type: 'turn', message: 'your move', attach: true });
+  const turns = await tool('listen');
+  assert.match(turns, /took the turn/);
+  assert.match(turns, /handed the turn back to you:\n> your move/);
+  await tool('end', { summary: 'Done.' });
+  console.log('the relay: a command in each form, a file read in each form, and a selection sent with a reply and a turn');
   await agent.close();
   // The run's log, in the user data folder next to the workspace (scripts/integration.sh).
   const logs = path.join(root, '..', 'user', 'logs');
@@ -1349,6 +1398,8 @@ export async function run(): Promise<void> {
   await controllerPaths(api, root);
   await corePaths(api, root);
   await extensionPaths(api, root);
+  await panelPaths(api);
+  await gapPaths(api);
 
   // The window's file and its sockets go with it, at exit: here the file is gone already, and a socket is still open
   // (specs/Discovery.tla, `CloseWindow`).

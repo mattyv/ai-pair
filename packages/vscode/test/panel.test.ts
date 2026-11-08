@@ -643,6 +643,16 @@ describe('receive', () => {
     expect(view.posted).toContainEqual({ type: 'chatOrder', value: 'oldestFirst' });
   });
 
+  it('receiveFromPage: handles an object with a string type as the page would, and drops anything else', () => {
+    const { panel, controller } = harness();
+    panel.receiveFromPage({ type: 'pause' });
+    expect(controller.pause.mock.calls).toEqual([[]]);
+    for (const other of [undefined, JSON.parse('null') as unknown, 'pause', 7, { kind: 'pause' }, { type: 7 }]) {
+      panel.receiveFromPage(other);
+    }
+    expect(controller.pause.mock.calls).toEqual([[]]);
+  });
+
   it('OnlyOnRequest and RequestedCompletes: copies only when asked and reports either outcome', async () => {
     const { panel, copyDiagnostics } = harness();
     const view = open(panel);

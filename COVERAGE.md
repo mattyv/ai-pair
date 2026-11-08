@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: css, 2026-11-08.
+Last updated: integration, 2026-11-08.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -37,31 +37,31 @@ Last updated: css, 2026-11-08.
 | `packages/audio-native/src/protocol.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/audio-native/src/stage.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/audio-native/src/verified_backend.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/audio-native/test/admission.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-native/test/admission.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-native/test/factory.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-native/test/factory.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-native/test/helper_backend.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-native/test/helper_catalog.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-native/test/helper_location.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-native/test/helper_manifest.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-native/test/helper_manifest.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-native/test/linux_backend.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-native/test/linux_default.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-native/test/multipart_native_adapter.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-native/test/native_adapter.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-native/test/native_adapter.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-native/test/ownership.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-native/test/ownership.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-native/test/playback.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-native/test/protocol.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-native/test/stage.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-native/test/stage.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-native/test/verified_backend.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/audio-native/test/admission.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-native/test/admission.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-native/test/factory.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-native/test/factory.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-native/test/helper_backend.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-native/test/helper_catalog.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-native/test/helper_location.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-native/test/helper_manifest.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-native/test/helper_manifest.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-native/test/linux_backend.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-native/test/linux_default.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-native/test/multipart_native_adapter.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-native/test/native_adapter.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-native/test/native_adapter.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-native/test/ownership.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-native/test/ownership.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-native/test/playback.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-native/test/protocol.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-native/test/stage.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-native/test/stage.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-native/test/verified_backend.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/audio-ui/scripts/build.mts` | TypeScript | - | - | - | - | - | - |
 | `packages/audio-ui/scripts/build_identity.mts` | TypeScript | - | - | - | - | - | - |
 | `packages/audio-ui/scripts/speech_runtime.mts` | TypeScript | - | - | - | - | - | - |
-| `packages/audio-ui/scripts/speech_runtime.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/audio-ui/scripts/speech_runtime.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/audio-ui/src/attachment_gate.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/audio-ui/src/companion_narration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/audio-ui/src/companion_output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -69,39 +69,39 @@ Last updated: css, 2026-11-08.
 | `packages/audio-ui/src/extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/audio-ui/src/local_connection.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/audio-ui/src/speech_host.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/audio-ui/test/attachment_gate.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-ui/test/bridge.integration.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-ui/test/build_identity.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-ui/test/companion_narration.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-ui/test/companion_output.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-ui/test/companion_session.integration.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-ui/test/companion_session.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-ui/test/extension.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-ui/test/local_connection.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-ui/test/native_output.integration.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-ui/test/packaging.integration.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-ui/test/sentence_pipeline.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-ui/test/speech_host.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-ui/test/speech_host.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-ui/test/speech_tempo_composed.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/audio-ui/test/worker_diagnostics.integration.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/core/src/bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/audio-ui/test/attachment_gate.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-ui/test/bridge.integration.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-ui/test/build_identity.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-ui/test/companion_narration.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-ui/test/companion_output.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-ui/test/companion_session.integration.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-ui/test/companion_session.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-ui/test/extension.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-ui/test/local_connection.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-ui/test/native_output.integration.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-ui/test/packaging.integration.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-ui/test/sentence_pipeline.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-ui/test/speech_host.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-ui/test/speech_host.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-ui/test/speech_tempo_composed.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/audio-ui/test/worker_diagnostics.integration.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/core/src/bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.9% B 98.1% F 100.0% | - | - | - | - |
 | `packages/core/src/config.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/constants.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/core/src/controller.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/core/src/controller.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 99.7% B 98.7% F 100.0% | - | - | - | - |
 | `packages/core/src/diff.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 94.7% B 81.8% F 100.0% | - | - | - | - |
 | `packages/core/src/index.ts` | TypeScript | - | - | - | - | - | - |
 | `packages/core/src/lines.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.5% F 100.0% | - | - | - | - |
 | `packages/core/src/paths.ts` | TypeScript | - | - | - | - | - | - |
 | `packages/core/src/places.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/core/src/player.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 99.4% F 100.0% | - | - | - | - |
+| `packages/core/src/player.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.9% B 97.0% F 100.0% | - | - | - | - |
 | `packages/core/src/ports.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/rehearsal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/core/src/structural_typing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/core/src/structural_typing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 35.4% B 68.8% F 100.0% | - | - | - | - |
 | `packages/core/src/text.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/core/src/timeline.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.7% F 100.0% | - | - | - | - |
+| `packages/core/src/timeline.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 97.4% F 100.0% | - | - | - | - |
 | `packages/core/src/timing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/core/src/typing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.3% B 95.7% F 100.0% | - | - | - | - |
+| `packages/core/src/typing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/test/bridge.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/controller.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/diff.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -111,39 +111,39 @@ Last updated: css, 2026-11-08.
 | `packages/core/test/player.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/rehearsal.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/session.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
-| `packages/core/test/structural_typing.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/core/test/structural_typing.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/core/test/text.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/timeline.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/timing.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/typing.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/protocol/src/command_channel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/protocol/src/command_channel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 39.7% B 100.0% F 0.0% | - | - | - | - |
 | `packages/protocol/src/index.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/protocol/src/local_audio.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/protocol/src/local_diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/protocol/src/panel_action.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/protocol/src/panel_chunks.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/protocol/src/panel_update.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/protocol/src/local_audio.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/protocol/src/local_diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/protocol/src/panel_action.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/protocol/src/panel_chunks.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 0.0% | - | - | - | - |
+| `packages/protocol/src/panel_update.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/paths.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 83.3% F 100.0% | - | - | - | - |
 | `packages/protocol/src/schemas.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/wire.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/protocol/test/command_channel.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/protocol/test/command_channel.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/protocol/test/index.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/protocol/test/local_audio.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/protocol/test/local_diagnostics.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/protocol/test/panel_action.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/protocol/test/panel_chunks.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/protocol/test/panel_update.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/protocol/test/local_audio.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/protocol/test/local_diagnostics.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/protocol/test/panel_action.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/protocol/test/panel_chunks.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/protocol/test/panel_update.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/protocol/test/paths.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/protocol/test/wire.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/relay/src/guide.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.6% B 88.9% F 100.0% | - | - | - | - |
+| `packages/relay/src/guide.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.6% B 88.2% F 100.0% | - | - | - | - |
 | `packages/relay/src/link.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/relay/src/main.ts` | TypeScript | - | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/relay/src/md.d.ts` | TypeScript | - | - | - | - | - | - |
-| `packages/relay/src/render.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 67.4% B 52.2% F 69.2% | - | - | - | - |
-| `packages/relay/src/server.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 93.0% B 84.8% F 88.9% | - | - | - | - |
+| `packages/relay/src/render.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 85.1% B 76.3% F 100.0% | - | - | - | - |
+| `packages/relay/src/server.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 93.0% B 87.8% F 88.9% | - | - | - | - |
 | `packages/relay/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 50.0% F 100.0% | - | - | - | - |
 | `packages/relay/src/tools.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/relay/test/agent_guide.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/relay/test/agent_guide.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/relay/test/guide.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/link.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/relay.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -162,70 +162,74 @@ Last updated: css, 2026-11-08.
 | `packages/vscode/scripts/speech_runtime.mts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/scripts/vscode_bin.mts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/scripts/vscode_bin.test.ts` | TypeScript | test | test | test | test | - | test |
-| `packages/vscode/src/agents.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 81.1% B 66.7% F 87.2% | - | - | - | - |
-| `packages/vscode/src/calibration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 71.7% B 88.9% F 50.0% | - | - | - | - |
+| `packages/vscode/src/agents.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 74.7% B 66.7% F 76.9% | - | - | - | - |
+| `packages/vscode/src/calibration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.2% F 100.0% | - | - | - | - |
 | `packages/vscode/src/demo.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.8% B 83.9% F 100.0% | - | - | - | - |
-| `packages/vscode/src/diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/editor.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.3% B 90.7% F 97.9% | - | - | - | - |
-| `packages/vscode/src/extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 93.0% B 92.7% F 83.8% | - | - | - | - |
-| `packages/vscode/src/output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 93.2% B 90.9% F 100.0% | - | - | - | - |
-| `packages/vscode/src/outside.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/vscode/src/diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.4% B 65.0% F 100.0% | - | - | - | - |
+| `packages/vscode/src/editor.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.2% B 89.8% F 96.2% | - | - | - | - |
+| `packages/vscode/src/extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 85.7% B 80.1% F 88.2% | - | - | - | - |
+| `packages/vscode/src/output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 93.2% B 91.7% F 100.0% | - | - | - | - |
+| `packages/vscode/src/outside.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.5% F 100.0% | - | - | - | - |
 | `packages/vscode/src/outside_watch.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 96.5% F 100.0% | - | - | - | - |
-| `packages/vscode/src/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 66.8% B 58.7% F 83.3% | - | - | - | - |
+| `packages/vscode/src/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 83.0% B 84.8% F 75.6% | - | - | - | - |
 | `packages/vscode/src/panel_html.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 80.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/panel_messages.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
-| `packages/vscode/src/panel_placement.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/panel_update_sender.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/panel_placement.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 83.0% B 50.0% F 100.0% | - | - | - | - |
+| `packages/vscode/src/panel_update_sender.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 39.0% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/passage.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/vscode/src/python_diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/remote_narration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 83.8% B 84.2% F 83.3% | - | - | - | - |
-| `packages/vscode/src/speech_catalog.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_credentials.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_elevenlabs.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/python_diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.3% B 62.5% F 100.0% | - | - | - | - |
+| `packages/vscode/src/remote_narration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 45.1% B 100.0% F 0.0% | - | - | - | - |
+| `packages/vscode/src/setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 82.5% B 74.2% F 66.7% | - | - | - | - |
+| `packages/vscode/src/speech_catalog.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 91.2% B 43.5% F 100.0% | - | - | - | - |
+| `packages/vscode/src/speech_credentials.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 85.1% B 100.0% F 75.0% | - | - | - | - |
+| `packages/vscode/src/speech_elevenlabs.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 50.2% B 23.1% F 88.9% | - | - | - | - |
 | `packages/vscode/src/speech_engine.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_local_client.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_local_protocol.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_model_manifest.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_native_output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_output_preferences.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_output_router.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_local_client.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 47.5% B 62.5% F 31.3% | - | - | - | - |
+| `packages/vscode/src/speech_local_protocol.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.2% B 100.0% F 50.0% | - | - | - | - |
+| `packages/vscode/src/speech_model_manifest.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/vscode/src/speech_native_output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 27.5% B 100.0% F 27.3% | - | - | - | - |
+| `packages/vscode/src/speech_output_preferences.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 66.9% B 51.9% F 87.5% | - | - | - | - |
+| `packages/vscode/src/speech_output_router.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 58.3% B 47.0% F 80.0% | - | - | - | - |
 | `packages/vscode/src/speech_output_types.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_pcm.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_pcm.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 52.0% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_phonemizer_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_runtime_status.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_segments.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_service.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_runtime_status.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 90.0% B 33.3% F 100.0% | - | - | - | - |
+| `packages/vscode/src/speech_segments.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 43.6% B 100.0% F 0.0% | - | - | - | - |
+| `packages/vscode/src/speech_service.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 55.0% B 40.0% F 59.4% | - | - | - | - |
+| `packages/vscode/src/speech_setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 22.6% B 28.6% F 33.3% | - | - | - | - |
 | `packages/vscode/src/speech_synthesis.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_tempo.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_tempo_client.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_tempo_messages.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_tempo_pcm.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_tempo.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/vscode/src/speech_tempo_client.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 36.0% B 66.7% F 25.0% | - | - | - | - |
+| `packages/vscode/src/speech_tempo_messages.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/vscode/src/speech_tempo_pcm.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 37.5% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_tempo_worker.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_tempo_worker_host.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_types.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_waveform.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_types.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/vscode/src/speech_waveform.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 57.8% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_worker.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_worker_host.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/terminal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.3% B 98.1% F 92.3% | - | - | - | - |
+| `packages/vscode/src/terminal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.8% B 91.3% F 88.2% | - | - | - | - |
 | `packages/vscode/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/view.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 88.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 148 of 148 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/speech_audio.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/workspace_panel_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/workspace_session.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/workspace_panel_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 43.8% B 100.0% F 0.0% | - | - | - | - |
+| `packages/vscode/src/workspace_session.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 54.2% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/test/agents.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/calibration.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/css.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/vscode/test/diagnostics.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/editor.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/extension.test.ts` | TypeScript | test | test | test | test | - | test |
-| `packages/vscode/test/fixtures/tempo_schema_fake.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/fixtures/tempo_schema_fake.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/test/integration.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/vscode/test/integration_code_playback.ts` | TypeScript | - | test | - | - | - | - |
+| `packages/vscode/test/integration_core_paths.ts` | TypeScript | - | test | - | - | - | - |
+| `packages/vscode/test/integration_gap_paths.ts` | TypeScript | - | test | - | - | - | - |
+| `packages/vscode/test/integration_panel_paths.ts` | TypeScript | - | test | - | - | - | - |
 | `packages/vscode/test/integration_paths.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/launcher.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/output.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -234,62 +238,62 @@ Last updated: css, 2026-11-08.
 | `packages/vscode/test/page.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/panel.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/panel_html.test.ts` | TypeScript | test | test | test | test | - | test |
-| `packages/vscode/test/panel_placement.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/panel_update_sender.integration.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/panel_update_sender.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/panel_placement.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/panel_update_sender.integration.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/panel_update_sender.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/test/passage.test.ts` | TypeScript | test | test | test | test | - | test |
-| `packages/vscode/test/python_diagnostics.e2e.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/python_diagnostics.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/remote_narration.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/python_diagnostics.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/python_diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/remote_narration.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/test/setup.test.ts` | TypeScript | test | test | test | test | - | test |
-| `packages/vscode/test/smoke_integration.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_audio.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_cached_assets.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_catalog.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_credentials.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_elevenlabs.e2e.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_elevenlabs.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_engine.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_local.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_local_client.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_local_protocol.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_native_output.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_native_spawn.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_output_discovery.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_output_preferences.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_output_router.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_pcm.e2e.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_pcm.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_phonemizer_bridge.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_runtime.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_segments.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_service.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_setup.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_setup_fs.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_smoke_integration.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_smoke_integration.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_synthesis.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_tempo.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_tempo_client.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_tempo_client.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_tempo_framing.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_tempo_messages.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_tempo_pcm.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_tempo_worker.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_tempo_worker_host.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_waveform.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_worker.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/speech_worker_host.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/smoke_integration.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_audio.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_cached_assets.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_catalog.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_credentials.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_elevenlabs.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_elevenlabs.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_engine.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_local.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/speech_local_client.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/speech_local_protocol.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/speech_native_output.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/speech_native_spawn.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/speech_output_discovery.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/speech_output_preferences.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/speech_output_router.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/speech_pcm.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_pcm.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_phonemizer_bridge.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_runtime.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_segments.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/speech_service.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_setup.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_setup_fs.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_smoke_integration.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_smoke_integration.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_synthesis.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_tempo.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/speech_tempo_client.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/speech_tempo_client.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/speech_tempo_framing.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/speech_tempo_messages.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/speech_tempo_pcm.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/speech_tempo_worker.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/speech_tempo_worker_host.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/speech_waveform.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_worker.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_worker_host.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/terminal.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/vscode/test/terminal_smoke_integration.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/terminal_smoke_integration.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/timings.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/view.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/vscode/test/visual/chat_order.spec.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/visual/chat_order.spec.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/visual/panel.spec.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/webview/panel.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/vscode/test/workspace_panel_bridge.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/workspace_session.integration.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/workspace_session.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/workspace_panel_bridge.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/workspace_session.integration.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/workspace_session.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/vendor/kokoro_phonemize.d.mts` | TypeScript | - | - | - | - | - | - |
 | `playwright.config.ts` | TypeScript | - | - | - | - | - | - |
 | `scripts/check_ascii.test.ts` | TypeScript | test | test | test | test | - | test |
@@ -304,8 +308,8 @@ Last updated: css, 2026-11-08.
 | `scripts/lint_tla.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/lint_web.test.ts` | TypeScript | test | test | test | test | - | test |
 | `scripts/lint_web.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `scripts/normalize_architecture.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `scripts/normalize_architecture.test.ts` | TypeScript | test | - | test | - | - | test |
+| `scripts/normalize_architecture.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
+| `scripts/normalize_architecture.test.ts` | TypeScript | test | test | test | - | - | test |
 | `scripts/normalize_architecture.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/release.test.ts` | TypeScript | test | test | test | test | - | test |
 | `scripts/release.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
