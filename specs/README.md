@@ -2367,6 +2367,11 @@ controls violate `NoEarlyRegistration`, `NoDuplicateRegistration` and
 `NoFallbackAfterCommit`. Disabling the precommit timeout violates
 `PreparationSettles`.
 
+`UnsafeFallback` never fires in the checked configuration because
+`GuardFallback` is true: falling back to the legacy panel after commit is
+forbidden. The negative control disables this guard and violates
+`NoFallbackAfterCommit`; it does not represent supported production behavior.
+
 | Property | Test |
 |---|---|
 | `NoFallbackAfterCommit`, `CommittedSettles` | `panel_placement.test.ts`: chooses companion irrevocably before committing, including on a lost acknowledgement. |
