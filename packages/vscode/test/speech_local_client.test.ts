@@ -74,7 +74,7 @@ function request(id = 1, part = 0, final = true): LocalSynthesisRequest {
 function harness() {
   const made: FakeWorker[] = [];
   const listener: LocalListener = { ready: vi.fn<() => void>(), retired: vi.fn<(reason: string) => void>() };
-  const spawn = vi.fn<() => WorkerLike>(() => {
+  const spawn = vi.fn<(modelPath: string) => WorkerLike>(() => {
     const worker = new FakeWorker();
     made.push(worker);
     return worker;
@@ -109,6 +109,8 @@ describe('LocalSynthesisClient loading', () => {
       client.load('/model');
     }).toThrow('already');
     expect(spawn).toHaveBeenCalledTimes(1);
+    // The transport receives the same host-checked model so it can hand it to its worker's bootstrap.
+    expect(spawn).toHaveBeenCalledWith('/model');
     expect(made[0]?.sent).toHaveLength(1);
   });
 

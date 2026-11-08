@@ -133,7 +133,11 @@ export class SpeechService implements NarrationPort {
     };
     this.local =
       options.createLocal?.(listener) ??
-      new LocalSynthesisClient({ spawn: () => new Worker(path.join(options.runtimeDirectory, 'worker.mjs')), listener });
+      new LocalSynthesisClient({
+        // The pinned phonemizer bridge reads the verified model directory from workerData.
+        spawn: (modelPath) => new Worker(path.join(options.runtimeDirectory, 'worker.mjs'), { workerData: { modelPath } }),
+        listener,
+      });
   }
 
   /** Speaks an explicitly selected live unit when enabled. */

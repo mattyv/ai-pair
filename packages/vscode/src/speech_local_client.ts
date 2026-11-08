@@ -55,7 +55,8 @@ export interface LocalSynthesisPort {
 
 /** Inputs of the client: the transport factory and the owner to report to. */
 export interface LocalSynthesisClientOptions {
-  spawn(): WorkerLike;
+  /** Starts the transport; the model directory is also handed over for its bootstrap (e.g. worker data). */
+  spawn(modelPath: string): WorkerLike;
   listener: LocalListener;
 }
 
@@ -92,7 +93,7 @@ export class LocalSynthesisClient implements LocalSynthesisPort {
       throw new Error('The local worker is already started.');
     }
     // specs/WarmSynthesisWorker.tla, Load: only a cold or dead slot starts a new epoch.
-    const worker = this.options.spawn();
+    const worker = this.options.spawn(modelPath);
     const epoch = ++this.epoch;
     this.worker = worker;
     this.phase = 'loading';

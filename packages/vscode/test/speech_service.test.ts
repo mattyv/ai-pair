@@ -18,8 +18,8 @@ const fake = vi.hoisted(() => {
   const Worker = vi.fn();
   /** The inert stand-in for the real client, used by every service built without an injected one. */
   class LocalSynthesisClient {
-    static made: Array<{ spawn: () => unknown; listener: unknown }> = [];
-    constructor(options: { spawn: () => unknown; listener: unknown }) {
+    static made: Array<{ spawn: (modelPath: string) => unknown; listener: unknown }> = [];
+    constructor(options: { spawn: (modelPath: string) => unknown; listener: unknown }) {
       LocalSynthesisClient.made.push(options);
     }
     state(): string {
@@ -862,8 +862,9 @@ describe('SpeechService failures and races', () => {
     expect(service).toBeInstanceOf(SpeechService);
     const options = fake.LocalSynthesisClient.made[0];
     expect(options).toBeDefined();
-    options?.spawn();
-    expect(fake.Worker).toHaveBeenCalledExactlyOnceWith('/runtime/worker.mjs');
+    // The pinned phonemizer bridge reads the verified model directory from workerData.
+    options?.spawn('/storage/speech/model');
+    expect(fake.Worker).toHaveBeenCalledExactlyOnceWith('/runtime/worker.mjs', { workerData: { modelPath: '/storage/speech/model' } });
   });
 });
 
