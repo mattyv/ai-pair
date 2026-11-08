@@ -3,8 +3,8 @@
 ## 0.22.0
 
 -   Show queued work alongside the current pairing status.
--   Require a matching AI Pair extension for the private panel and audio
-    connection. Update both extensions and reload after upgrading.
+-   Require compatible private connection versions for the panel and audio.
+    Update both extensions and reload after upgrading.
 
 ## 0.20.1
 

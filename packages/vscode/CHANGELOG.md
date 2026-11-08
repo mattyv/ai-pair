@@ -5,8 +5,8 @@
 -   Deliver completed command output to a waiting agent promptly, including
     while later work is queued.
 -   Show queued work and waiting, approval, and playback states in the panel.
--   Require matching AI Pair and Local Audio companion versions; update both
-    and reload when their private connection is incompatible.
+-   Require compatible private connection versions for AI Pair and Local
+    Audio. Update both extensions and reload if they cannot connect.
 
 ## 0.21.3
 
