@@ -2735,10 +2735,12 @@ filesystem and editor matching as booleans. TLC checks 32 distinct states with
 Changing a rejected selection to `fallback` violates
 `RejectedWithoutSelection`. That invariant abstracts selection; the unit tests
 also check that discovery, guide reads, and editor calls never happen on invalid
-input.
+input. Setting a successful request phase to `unknown` violates `TypeOK`;
+this checks the model's bounded state types rather than a production enum.
 
 | Property | Test |
 | --- | --- |
+| `TypeOK` | `server.test.ts`: rejects missing and non-directory explicit paths before contacting the editor; `relay.test.ts`: works in the folder the agent gives, when the harness started the relay somewhere else (these exercise valid and invalid inputs, not a production phase enum) |
 | `Authoritative` | `relay.test.ts`: uses the harness root when no working directory is given, and rejects an unmatched explicit directory; `server.test.ts`: rejects missing and non-directory explicit paths before contacting the editor |
 | `RejectedWithoutSelection` | `server.test.ts`: rejects missing and non-directory explicit paths before contacting the editor |
 | `Finishes` | `relay.test.ts`: uses the harness root when no working directory is given, and rejects an unmatched explicit directory |
