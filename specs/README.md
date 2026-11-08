@@ -2724,7 +2724,10 @@ its counter cap permits the count to leave its declared range.
 `server.ts` validates an explicit directory and selects only it; omitted
 directories use client roots and the relay directory. The model abstracts
 filesystem and editor matching as booleans. TLC checks 32 distinct states with
-`StartDirectory.cfg`. `Strict = FALSE` produces an `Authoritative` violation.
+`StartDirectory.cfg`. `Strict = FALSE` produces an `Authoritative` violation. Changing a rejected
+selection to `fallback` violates `RejectedWithoutSelection`. That invariant
+abstracts selection; the unit tests also check that discovery, guide reads, and
+editor calls never happen on invalid input.
 
 | Property | Test |
 | --- | --- |

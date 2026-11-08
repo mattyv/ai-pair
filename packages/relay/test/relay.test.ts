@@ -526,6 +526,17 @@ describe('relay', () => {
     expect((await call(client, 'read', { file: 'a.ts' })).error).toBe(true);
   });
 
+  it('keeps the active session when a second start requests an unmatched directory', async () => {
+    const client = await connect();
+    expect((await call(client, 'start')).error).toBe(false);
+    const rejected = await call(client, 'start', { cwd: dir });
+    expect(rejected.error).toBe(true);
+    expect(rejected.text).toContain(dir);
+    await call(client, 'step', { actions: [{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `hi${CURSOR_MARKER}` }] });
+    await call(client, 'step', { actions: [] });
+    expect(editor.text('src/a.ts')).toBe('hi');
+  });
+
   it('ExitsAfterShutdown: serves until stdin ends, then closes the server and the link (#163)', async () => {
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
     // The stdio transport reads stdin, so it flows, and its end is seen.

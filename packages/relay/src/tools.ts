@@ -200,7 +200,9 @@ export const TOOLS = {
       cwd: z
         .string()
         .optional()
-        .describe('Your working directory, as an absolute path. The paths you give and get during the session are relative to it.'),
+        .describe(
+          'Your existing working directory as an absolute path inside an open editor workspace. If omitted, the relay discovers one from client roots or its own directory. Session paths are relative to the chosen directory.',
+        ),
     },
   },
   step: {

@@ -8,6 +8,7 @@ import * as fs from 'node:fs';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { CallToolResult, JSONRPCMessage, RequestId } from '@modelcontextprotocol/sdk/types.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { mock } from 'vitest-mock-extended';
 import { FILE_CONTENT_SCHEMA, REPORT_SCHEMA, type FileContent, type Report } from '@ai-pair/protocol';
 import { readGuides, renderGuides } from '../src/guide';
 import { EditorLink, RelayError } from '../src/link';
@@ -255,11 +256,16 @@ describe('createServer', () => {
     vi.mocked(fs.statSync).mockImplementationOnce(() => {
       throw new Error('missing');
     });
-    expect((await call(sdk, 'start', { cwd: '/missing' })).isError).toBe(true);
-    vi.mocked(fs.statSync).mockReturnValueOnce({ isDirectory: () => false } as fs.Stats);
+    const missing = await call(sdk, 'start', { cwd: '/missing' });
+    expect(missing.isError).toBe(true);
+    expect(texts(missing)).toEqual(['invalid_cwd: The working directory is not an existing directory: /missing']);
+    const file = mock<fs.Stats>();
+    file.isDirectory.mockReturnValue(false);
+    vi.mocked(fs.statSync).mockReturnValueOnce(file);
     expect((await call(sdk, 'start', { cwd: '/file' })).isError).toBe(true);
     expect(link.locate).not.toHaveBeenCalled();
     expect(link.call).not.toHaveBeenCalled();
+    expect(readGuides).not.toHaveBeenCalled();
   });
 
   it('leaves out a folder that is not absolute, the roots of a harness that has none or fails to list them, and rules with no guides', async () => {

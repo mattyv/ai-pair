@@ -1335,6 +1335,10 @@ export async function run(): Promise<void> {
   assert.equal(relocated.failed, false, relocated.text);
   // A folder only a window that isn't one holds: every window fails, and the first failure is the answer.
   const outsider = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-pair-outsider-'));
+  const outsideStart = await called(fooled, 'start', { task: 'outside workspace', cwd: outsider });
+  assert.ok(outsideStart.failed && outsideStart.text.startsWith('no_editor:'), outsideStart.text);
+  assert.ok(outsideStart.text.includes(outsider), outsideStart.text);
+  assert.deepEqual(fs.readdirSync(outsider), []);
   fakes.push(fakeWindow('outside', [outsider], refused.port));
   const nowhere = await called(fooled, 'start', { task: 'outside', cwd: outsider });
   assert.ok(nowhere.failed && nowhere.text.startsWith("no_editor: Couldn't connect to the editor: "), nowhere.text);
