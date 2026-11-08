@@ -1419,9 +1419,10 @@ export async function run(): Promise<void> {
     }
     await running;
   }
-  await vscode.env.clipboard.writeText('');
+  const clipboardBefore = 'ai-pair integration: picker was closed';
+  await vscode.env.clipboard.writeText(clipboardBefore);
   await setUpAgents([]);
-  assert.equal(await vscode.env.clipboard.readText(), '');
+  assert.equal(await vscode.env.clipboard.readText(), clipboardBefore);
   await setUpAgents([5]);
   const copied: unknown = JSON.parse(await vscode.env.clipboard.readText());
   assert.deepEqual(copied, { mcpServers: { pair: { command: api.launcher, args: [] } } });
