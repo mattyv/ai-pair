@@ -615,6 +615,8 @@ it('passes local readiness facts to the readiness check', async () => {
   await expect(facts?.key()).resolves.toBe(false);
   await expect(facts?.model()).resolves.toBe(false);
   expect(facts?.local()).toBe(false);
+  await Promise.resolve();
+  expect(facts?.output()).toBe(true);
   host.dispose();
   expect(facts?.desktop()).toBe(false);
 });

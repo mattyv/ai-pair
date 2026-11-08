@@ -67,3 +67,35 @@ it('checks cloud credentials and rejects stale settings after an asynchronous ch
     }),
   ).toBe(false);
 });
+
+it('rejects readiness when output or local runtime disappears during a model check', async () => {
+  const settings: SpeechSettings = {
+    enabled: true,
+    provider: 'kokoro',
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: '',
+    elevenLabsSpeed: 1,
+  };
+  let output = true;
+  let local = true;
+  const options = {
+    settings: () => settings,
+    desktop: () => true,
+    local: () => local,
+    output: () => output,
+    model: () => Promise.resolve(true),
+    key: () => Promise.resolve(true),
+  };
+  const first = Promise.withResolvers<boolean>();
+  const outputCheck = speechReady({ ...options, model: () => first.promise });
+  output = false;
+  first.resolve(true);
+  expect(await outputCheck).toBe(false);
+  output = true;
+  const second = Promise.withResolvers<boolean>();
+  const runtimeCheck = speechReady({ ...options, model: () => second.promise });
+  local = false;
+  second.resolve(true);
+  expect(await runtimeCheck).toBe(false);
+});

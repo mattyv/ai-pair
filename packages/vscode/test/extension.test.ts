@@ -1642,6 +1642,7 @@ it('holds narration and secret changes while placement is pending, then selects 
   const choice = Promise.withResolvers<'legacy'>();
   fakes.placementChoice = choice.promise;
   const h = activated();
+  expect(await h.controller.narration.ready?.()).toBe(false);
   await h.controller.narration.speak('pending');
   h.controller.narration.pause();
   h.controller.narration.resume();
@@ -1654,6 +1655,14 @@ it('holds narration and secret changes while placement is pending, then selects 
   const speech = last(fakes.made.speech);
   expect(await h.controller.narration.ready?.()).toBe(false);
   expect(speechReady).toHaveBeenCalledOnce();
+  const facts = vi.mocked(speechReady).mock.lastCall?.[0];
+  if (facts === undefined) throw new Error('No readiness facts');
+  expect(facts.settings().enabled).toBe(false);
+  expect(facts.desktop()).toBe(true);
+  expect(typeof facts.local()).toBe('boolean');
+  expect(facts.output()).toBe(true);
+  await expect(facts.model()).resolves.toBe(false);
+  await expect(facts.key()).resolves.toBe(false);
   await h.controller.narration.speak('legacy');
   h.controller.narration.pause();
   h.controller.narration.resume();

@@ -142,9 +142,11 @@ const SAY: Action[] = [{ say: 'Hi.' }];
 const ANCHORED: Action = { move: { file: 'a.ts', line: 1, to: 'line_end' } };
 
 vi.mock('../src/speech_reminder', () => ({
-  SpeechReminder: vi.fn(function () {
-    return fakes.reminder;
-  }),
+  SpeechReminder: class {
+    batch = fakes.reminder.batch;
+    due = fakes.reminder.due;
+    report = fakes.reminder.report;
+  },
 }));
 vi.mock('../src/diagnostic_delivery', () => ({
   reportDiagnostic: vi.fn((observer: ((event: unknown) => void) | undefined, event: unknown, receiver: unknown) =>
@@ -630,6 +632,17 @@ describe('speech reminders', () => {
     fakes.reminder.due.mockReturnValue(false);
     await report(h.controller.step([{ say: 'Selected.', speak: true }]));
     expect(fakes.reminder.batch).toHaveBeenLastCalledWith(true);
+  });
+
+  it('treats a failed readiness check as unavailable', async () => {
+    const narration = mock<NarrationPort>();
+    narration.ready = vi.fn().mockRejectedValue(new Error('unavailable'));
+    fakes.reminder.due.mockReturnValue(true);
+    fakes.reminder.report.mockReturnValue(false);
+    const h = harness({}, {}, narration);
+    await h.controller.start('A task.');
+    expect((await report(h.controller.step([{ say: 'One.' }]))).speechReminder).toBeUndefined();
+    expect(fakes.reminder.report).toHaveBeenCalledWith(false);
   });
 
   it('does not query readiness until the counter is due', async () => {
