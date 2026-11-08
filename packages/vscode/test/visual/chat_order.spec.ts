@@ -764,3 +764,17 @@ test('speech output selection is explicit, independent of provider and never pre
   await expect(output.getByRole('option', { name: 'Saved output unavailable' })).toBeAttached();
   await expect(dialog.getByRole('button', { name: 'Preview voice' })).toBeDisabled();
 });
+
+test('approval and queued work remain readable in a narrow panel', async ({ page }) => {
+  await page.setViewportSize({ width: 240, height: 640 });
+  const post = await load(page);
+  await post({ type: 'session', active: true, task: 'Review queued work' });
+  await post({ type: 'state', state: 'typing', turn: 'agent', paused: false, ready: 1 });
+  await post({ type: 'run', id: 1, command: 'echo hello', phase: 'confirm' });
+  const status = page.locator('[data-ui="status-text"]');
+  await expect(status).toHaveText('Needs you - 1 ready');
+  const bounds = await status.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect((bounds?.x ?? 240) + (bounds?.width ?? 240)).toBeLessThanOrEqual(240);
+  await page.screenshot({ path: '/tmp/ai-pair-27-ready-approval.png' });
+});

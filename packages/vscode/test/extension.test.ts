@@ -495,11 +495,7 @@ vi.mock('../src/panel_placement', () => ({
     }
     choose(): Promise<import('../src/panel_placement').PanelOwner> {
       if (fakes.placementChoice !== undefined) return fakes.placementChoice;
-      if (this.options.companionInstalled === true) {
-        return vi
-          .importActual<typeof import('../src/panel_placement')>('../src/panel_placement')
-          .then(({ PanelPlacement }) => new PanelPlacement(this.options).choose());
-      }
+      if (this.options.companionInstalled === true) return Promise.resolve('incompatible');
       if (fakes.companionAvailable) {
         this.options.beforeCommit?.();
         return Promise.resolve('companion');
@@ -1650,6 +1646,7 @@ it('blocks an installed incompatible companion without registering a fallback pr
   const h = activated();
   await h.api.ready;
   expect(fakes.placementOptions?.companionInstalled).toBe(true);
+  await expect(fakes.placementOptions?.prepare()).rejects.toThrow('missing command');
   expect(fakes.providerRegistered).not.toHaveBeenCalled();
   expect(h.api.speechPageReady()).toBe(false);
   expect(fakes.infos).toContain('AI Pair and AI Pair Local Audio could not connect. Update both extensions and reload the window.');
