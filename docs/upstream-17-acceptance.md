@@ -21,30 +21,30 @@ not retroactively protect an already-running old relay.
 
 ## Command-result delivery
 
-- A completed command wakes a waiting `listen` or applicable empty `step` on
+-   A completed command wakes a waiting `listen` or applicable empty `step` on
   the next normal controller update, without waiting for the heartbeat.
-- Deterministic tests keep the heartbeat pending and prove the result is
+-   Deterministic tests keep the heartbeat pending and prove the result is
   delivered after command completion, including when another batch remains.
-- Success, nonzero exit and command failure arrive once, without lost reports.
-- Ordinary completed typing does not wake `listen`.
-- Nonempty `step`, `end`, human-turn edit debounce and interruption settlement
+-   Success, nonzero exit and command failure arrive once, without lost reports.
+-   Ordinary completed typing does not wake `listen`.
+-   Nonempty `step`, `end`, human-turn edit debounce and interruption settlement
   retain their contracts. Early results must not acknowledge an interruption
   before its playing batch has settled.
-- The model distinguishes command news from quiet completion, consumes news
+-   The model distinguishes command news from quiet completion, consumes news
   atomically, and proves eventual delivery under fair report handling.
   Mutations must expose lost wakeups, duplicate delivery, quiet-news wakeups
   and premature `end` completion.
 
 ## Status
 
-- Distinguish accepted work waiting to play, actual command approval, and an
+-   Distinguish accepted work waiting to play, actual command approval, and an
   active agent outside a waiting call. No-call state is not proof of thinking.
-- Ready count equals accepted, unplayed waiting batches and changes on start,
+-   Ready count equals accepted, unplayed waiting batches and changes on start,
   completion, interruption, failure and disconnect. Rejected or discarded work
   never contributes.
-- Approval status exists only while a decision is pending and clears on every
+-   Approval status exists only while a decision is pending and clears on every
   terminal path, including cancellation and session end.
-- Existing disconnected, absent, paused, reading, running and human-turn states
+-   Existing disconnected, absent, paused, reading, running and human-turn states
   remain intelligible. New indicators do not conceal these states.
 
 ## Optional beats deferred
