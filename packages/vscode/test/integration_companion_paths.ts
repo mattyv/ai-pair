@@ -118,11 +118,10 @@ export async function run(): Promise<void> {
   await vscode.commands.executeCommand('workbench.action.webview.reloadWebviewAction');
   await until(() => !api.controller.isPaused && api.speechPageReady(), 'the reloaded companion webview');
   if (process.env.AI_PAIR_COMPANION_RESTART === 'prepare') {
-    await until(() => api.saved()?.task === 'companion integration', 'the persisted session');
-    // History is written alongside the session; allow the workspace storage write to finish before Code exits.
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 1000);
-    });
+    await until(
+      () => api.saved()?.nextBatchId === 2 && api.saved()?.finished.length === 0,
+      'the reported batch allocation in workspace storage',
+    );
   } else {
     await api.controller.end();
   }
