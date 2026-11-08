@@ -9803,7 +9803,7 @@
           },
           {
             "id": "dsp",
-            "label": "Experimental tempo transform\nTransient-aware overlap-add in a worker",
+            "label": "Experimental tempo transform\nTransient-aware overlap-add",
             "files": ["packages/vscode/src/speech_tempo.ts", "packages/vscode/src/speech_tempo_worker.ts"],
             "x": 1040,
             "y": 430
@@ -9935,7 +9935,7 @@
           {
             "from": "service",
             "to": "client",
-            "label": "init / synthesize / cancel"
+            "label": "requests"
           },
           {
             "from": "client",
@@ -9950,7 +9950,7 @@
           {
             "from": "worker",
             "to": "retirement",
-            "label": "result / failure / exit"
+            "label": "results"
           },
           {
             "from": "watchdog",

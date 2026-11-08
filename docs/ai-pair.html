@@ -40595,7 +40595,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 },
                 {
                   id: "dsp",
-                  label: "Experimental tempo transform\nTransient-aware overlap-add in a worker",
+                  label: "Experimental tempo transform\nTransient-aware overlap-add",
                   files: ["packages/vscode/src/speech_tempo.ts", "packages/vscode/src/speech_tempo_worker.ts"],
                   x: 1040,
                   y: 430,
@@ -40702,10 +40702,10 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 },
               ],
               edges: [
-                { from: "service", to: "client", label: "init / synthesize / cancel" },
+                { from: "service", to: "client", label: "requests" },
                 { from: "client", to: "protocol", label: "zod request" },
                 { from: "protocol", to: "worker", label: "epoch / unit / part" },
-                { from: "worker", to: "retirement", label: "result / failure / exit" },
+                { from: "worker", to: "retirement", label: "results" },
                 { from: "watchdog", to: "retirement", label: "deadline retires" },
                 { from: "retirement", to: "service", label: "slot released" },
               ],
