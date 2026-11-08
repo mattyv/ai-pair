@@ -1018,6 +1018,12 @@ describe('playing the queue', () => {
     expect(player().play).toHaveBeenCalledOnce();
   });
 
+  it('FinishAction: leaves playback alone when no reply is queued', async () => {
+    await started();
+    stage().afterAction?.();
+    expect(timeline().interrupt).not.toHaveBeenCalled();
+  });
+
   it('SendDeferred and FinishAction: holds multiple replies until the action boundary', async () => {
     const h = await started();
     const finish = holdPlay();
