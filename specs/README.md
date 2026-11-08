@@ -2817,8 +2817,16 @@ start fairness violated `Accurate`, `ClosedEmpty`, `TypeOK` and `Drains`,
 respectively.
 
 `StatusTransport` models the new endpoints' prepare/attach gate, not an old
-binary's fallback choice. TLC passes with workspace/companion versions 1/2,
-2/1 and 2/2. Bypassing the gate violates `NoMixedAttach` and
+binary's fallback choice. `StatusTransport.cfg` checks workspace/companion
+versions 2/1; `StatusTransport_Matching.cfg` checks 2/2 and exercises `Send`.
+An additional 1/2 mismatch was checked separately.
+
+| Configuration | Versions | Distinct states |
+| --- | --- | ---: |
+| `StatusTransport.cfg` | 2/1 | 2 |
+| `StatusTransport_Matching.cfg` | 2/2 | 3 |
+
+Bypassing the gate violates `NoMixedAttach` and
 `NoMixedDelivery`; separately suppressing the warning or matching delivery
 violates `MixedWarns` or `MatchingDelivers`. `panel_placement.test.ts`,
 `attachment_gate.test.ts`, `extension.test.ts` and `local_audio.test.ts`

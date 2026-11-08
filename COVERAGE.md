@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: css, 2026-11-08.
+Last updated: tla, 2026-11-08.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -238,10 +238,10 @@ Last updated: css, 2026-11-08.
 | `packages/vscode/test/integration_bad_speech_settings.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_catalog_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_code_playback.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_command_delivery.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/integration_command_delivery.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/integration_companion_faults.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_companion_paths.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_companion_version.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/integration_companion_version.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/integration_core_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_deferred_settlement.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/integration_gap_paths.ts` | TypeScript | test | test | test | - | - | test |
@@ -249,20 +249,20 @@ Last updated: css, 2026-11-08.
 | `packages/vscode/test/integration_legacy_speech_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_model_status.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/integration_no_workspace.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_notification.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/integration_notification.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/integration_panel_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_paths.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/integration_player_faults.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_player_gap_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_preserved_playback.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/integration_recovery_restart.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/integration_render_diagnostic.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/integration_render_diagnostic.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/integration_restricted_runtime.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_runtime_identity.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/integration_runtime_identity.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/integration_speech_reminder.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/integration_startup_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_terminal_cleanup.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_workspace_incompatible.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/integration_workspace_incompatible.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/launcher.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/output.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/outside.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -270,7 +270,7 @@ Last updated: css, 2026-11-08.
 | `packages/vscode/test/page.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/panel.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/panel_html.test.ts` | TypeScript | test | test | test | test | - | test |
-| `packages/vscode/test/panel_placement.integration.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/panel_placement.integration.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/panel_placement.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/panel_update_sender.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/panel_update_sender.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -374,7 +374,7 @@ Last updated: css, 2026-11-08.
 | `specs/CodePlayback.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/CodePlayback_Progress.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/CommandDelivery.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/CommandDelivery.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/CommandDelivery.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/Controller.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Controller.tla` | TLA+ | - | - | 17 of 17 actions | - | - | - |
 | `specs/DeferredMessage.cfg` | TLC config | - | - | - | - | - | - |
@@ -406,7 +406,7 @@ Last updated: css, 2026-11-08.
 | `specs/LineIdentity.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/LineIdentity.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/ListenGrace.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/ListenGrace.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
+| `specs/ListenGrace.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
 | `specs/ListeningHint.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ListeningHint.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/LocalAudioAdmission.cfg` | TLC config | - | - | - | - | - | - |
@@ -439,7 +439,7 @@ Last updated: css, 2026-11-08.
 | `specs/Panel.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Panel.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
 | `specs/PanelPlacement.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/PanelPlacement.tla` | TLA+ | - | - | 9 of 10 actions (never: UnsafeFallback) | - | - | - |
+| `specs/PanelPlacement.tla` | TLA+ | - | - | 10 of 11 actions (never: UnsafeFallback) | - | - | - |
 | `specs/PanelReplay.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/PanelReplay.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/PanelScroll.cfg` | TLC config | - | - | - | - | - | - |
@@ -469,7 +469,7 @@ Last updated: css, 2026-11-08.
 | `specs/ReadingSkip.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ReadingSkip.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
 | `specs/ReadyCount.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/ReadyCount.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/ReadyCount.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/RecoveryBatchIds.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/RecoveryBatchIds.tla` | TLA+ | - | - | 4 of 4 actions | - | - | - |
 | `specs/Rehearsal.cfg` | TLC config | - | - | - | - | - | - |
@@ -514,7 +514,8 @@ Last updated: css, 2026-11-08.
 | `specs/StartDirectory.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/StartDirectory.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/StatusTransport.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/StatusTransport.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/StatusTransport.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
+| `specs/StatusTransport_Matching.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/StructuralTyping.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/StructuralTyping.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/TerminalPanel.cfg` | TLC config | - | - | - | - | - | - |
