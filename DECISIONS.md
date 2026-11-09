@@ -581,3 +581,16 @@ Protocol version 2 therefore remains unchanged. An older companion does not
 offer the new controls. The public MCP protocol is unchanged. The companion
 panel routing test verifies that these controls stay local. GPU readiness still
 requires a fresh verified launch capability and a working GPU inference worker.
+
+## Separate GPU model and runtime
+
+Keep the CPU q8 model and cache unchanged. GPU setup uses a separately pinned
+FP32 model from the same upstream revision, requiring an additional download of
+325,532,232 bytes. The q8 GPU candidate failed on a second input length; the
+FP32 candidate passed the reviewed varied-input software test. GPU setup
+copies and re-verifies the shared tokenizer and phonemizer assets into its own
+cache before atomic installation. This evidence does not establish physical GPU
+compatibility, which remains pending. The GPU child uses separately bundled
+Node 22.23.4 on Linux x64, subject to the exact runtime manifest and trusted
+loader verification gates. The GPU bundle
+requires glibc 2.28 or newer; it does not install a driver.

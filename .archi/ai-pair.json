@@ -10022,11 +10022,11 @@
     },
     {
       "id": "gpu-local-synthesis",
-      "name": "GPU local synthesis",
+      "name": "GPU local synthesis (experimental)",
       "type": "architecture",
       "origin": "llm",
       "generation": {
-        "focus": "GPU setup, fresh launch proof, isolated inference and retirement; integration in progress"
+        "focus": "Experimental GPU setup, separate FP32 model and isolated Node worker; physical hardware validation pending"
       },
       "doc": {
         "type": "architecture",
@@ -10052,8 +10052,8 @@
           },
           {
             "id": "assets",
-            "label": "Pinned local assets\nRuntime and model verification",
-            "files": ["packages/vscode/src/speech_gpu_assets.ts", "packages/audio-ui/scripts/gpu_runtime.mts"],
+            "label": "GPU FP32 model\nAdditional pinned download",
+            "files": ["packages/vscode/src/speech_gpu_model.ts", "packages/vscode/src/speech_gpu_assets.ts"],
             "x": 1360,
             "y": 80
           },
@@ -10084,7 +10084,7 @@
           },
           {
             "id": "worker",
-            "label": "Isolated GPU worker\nOffline q8 inference",
+            "label": "Isolated GPU worker\nOffline FP32 inference",
             "files": [
               "packages/vscode/src/speech_gpu_worker.ts",
               "packages/vscode/src/speech_gpu_worker_host.ts",
@@ -10099,6 +10099,13 @@
             "files": ["packages/vscode/src/speech_gpu_transport.ts"],
             "x": 700,
             "y": 720
+          },
+          {
+            "id": "node-runtime",
+            "label": "Bundled Node runtime\nGPU-only local process",
+            "files": ["packages/audio-ui/scripts/gpu_runtime.mts", "packages/vscode/src/speech_gpu_client.ts"],
+            "x": 1360,
+            "y": 1040
           }
         ],
         "edges": [
@@ -10144,6 +10151,11 @@
             "from": "retirement",
             "to": "service",
             "label": "release after reap"
+          },
+          {
+            "from": "node-runtime",
+            "to": "worker",
+            "label": "executes"
           }
         ],
         "groups": [],
@@ -10158,7 +10170,7 @@
           "worker": [
             {
               "id": "boundary",
-              "text": "The worker has a restricted environment and uses the GPU-only local runtime. Readiness requires the mapped loader and physical-device proofs; no host hardware is asserted by this diagram.",
+              "text": "The worker uses a separately bundled Node runtime and pinned FP32 model with a restricted environment. Readiness requires mapped-loader and physical-device proofs; physical GPU validation is pending.",
               "ts": 0
             }
           ]

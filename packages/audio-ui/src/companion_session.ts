@@ -11,6 +11,7 @@ import {
 import { createLocalAudioAdapter } from '../../audio-native/src/factory';
 import { NarrationPanel } from '../../vscode/src/panel';
 import { Diagnostics } from '../../vscode/src/diagnostics';
+import { createGpuProofRunner } from '../../vscode/src/speech_gpu_proof_runner';
 import { CompanionNarration } from './companion_narration';
 import { LocalConnection } from './local_connection';
 import { createSpeechHost, type LocalSpeechObservation, type SpeechHost } from './speech_host';
@@ -81,6 +82,7 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
   host = createSpeechHost({
     context,
     connectionEpoch: epoch,
+    gpuProof: (capability, kind) => createGpuProofRunner(capability)(kind),
     adapter: createLocalAudioAdapter(context.extensionPath),
     page: () => panel?.speechReadyPageId(),
     panel: () => panel,

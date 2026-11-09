@@ -20,6 +20,7 @@ interface HostOptions {
   page(): number | undefined;
   panel(): unknown;
   diagnostic(event: unknown): void;
+  gpuProof?: import('../../vscode/src/speech_gpu_binding').GpuBindingDependencies['proof'];
 }
 interface NarrationOptions {
   page(): number | undefined;
@@ -30,6 +31,8 @@ interface NarrationOptions {
 }
 
 const fake = vi.hoisted(() => ({
+  proof: vi.fn<() => Promise<import('../../vscode/src/speech_gpu_check').GpuProbeResult>>().mockResolvedValue('failed'),
+  proofCapability: undefined as import('../../vscode/src/speech_gpu_client').GpuLaunchCapability | undefined,
   routing: undefined as Routing | undefined,
   connectionOptions: undefined as ConnectionOptions | undefined,
   channelOptions: undefined as ChannelOptions | undefined,
@@ -102,6 +105,12 @@ vi.mock('../../vscode/src/panel', () => ({
       return 7;
     }
     showRemoteUpdate = fake.showUpdate;
+  },
+}));
+vi.mock('../../vscode/src/speech_gpu_proof_runner', () => ({
+  createGpuProofRunner: (capability: import('../../vscode/src/speech_gpu_client').GpuLaunchCapability) => {
+    fake.proofCapability = capability;
+    return fake.proof;
   },
 }));
 vi.mock('../src/speech_host', () => ({
@@ -392,5 +401,14 @@ it('closes local audio and warns when the outbound command channel is lost', () 
   expect(fake.hostDispose).toHaveBeenCalledOnce();
   expect(fake.connectionDispose).toHaveBeenCalledOnce();
   expect(fake.warning).toHaveBeenCalledWith('AI Pair lost its local audio connection. Reload the window to reconnect.');
+  current.dispose();
+});
+
+it('supplies the isolated GPU proof runner to the local speech host', async () => {
+  const current = session();
+  const capability = mock<import('../../vscode/src/speech_gpu_client').GpuLaunchCapability>();
+  expect(await fake.hostOptions?.gpuProof?.(capability, 'tiny')).toBe('failed');
+  expect(fake.proofCapability).toBe(capability);
+  expect(fake.proof).toHaveBeenCalledWith('tiny');
   current.dispose();
 });

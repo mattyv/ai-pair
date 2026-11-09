@@ -4,7 +4,15 @@ export type SpeechComputeMode = 'cpu' | 'auto' | 'gpu';
 export type SpeechComputeBackend = 'none' | 'cpu' | 'gpu';
 /** Fixed, safe explanations for an unavailable GPU. */
 export type GpuUnavailableReason =
-  'unsupported' | 'runtime_missing' | 'untrusted_driver' | 'no_hardware' | 'inconclusive' | 'model_missing' | 'probe_failed' | 'timeout';
+  | 'busy'
+  | 'unsupported'
+  | 'runtime_missing'
+  | 'untrusted_driver'
+  | 'no_hardware'
+  | 'inconclusive'
+  | 'model_missing'
+  | 'probe_failed'
+  | 'timeout';
 /** Progress reported during the explicitly requested setup check. */
 export interface GpuCheckProgress {
   stage: 'download' | 'verify' | 'check';

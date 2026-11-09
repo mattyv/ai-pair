@@ -597,6 +597,9 @@ export function activate(context: vscode.ExtensionContext): Api {
     actualBackend: (value) => {
       compute.actual(value);
     },
+    gpuCheck: (value) => {
+      compute.reportUnavailable(value.reason);
+    },
     output: outputRouter,
   });
   const narration: NarrationPort = {

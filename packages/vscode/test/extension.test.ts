@@ -172,6 +172,7 @@ const fakes = vi.hoisted(() => {
         cloudDiagnostic?: (reason: 'auth') => void;
         computeMode: () => import('../src/speech_compute_types').SpeechComputeMode;
         actualBackend: (value: import('../src/speech_compute_types').SpeechComputeBackend) => void;
+        gpuCheck: (value: import('../src/speech_compute_types').GpuCheck) => void;
       },
     ) {
       made.speech.push(this);
@@ -557,6 +558,9 @@ vi.mock('../src/speech_compute', () => ({
     actual(actualBackend: import('../src/speech_compute_types').SpeechComputeBackend): void {
       this.value = { ...this.value, actualBackend };
       this.publish(this.value);
+    }
+    reportUnavailable(reason: import('../src/speech_compute_types').GpuUnavailableReason): void {
+      this.value = { ...this.value, gpuCheck: { phase: 'unavailable', reason } }; this.publish(this.value);
     }
     async check(): Promise<void> {
       this.value = { ...this.value, gpuCheck: await this.probe() };
@@ -1892,6 +1896,8 @@ it('persists compute mode and keeps an unavailable GPU check fail-closed', async
   expect(service.options.computeMode()).toBe('cpu');
   service.options.actualBackend('cpu');
   expect(compute.computeState().actualBackend).toBe('cpu');
+  service.options.gpuCheck({ phase: 'unavailable', reason: 'runtime_missing' });
+  expect(compute.computeState().gpuCheck).toEqual({ phase: 'unavailable', reason: 'runtime_missing' });
   compute.computeMode('gpu');
   expect(compute.computeState().requestedMode).toBe('gpu');
   await vi.waitFor(() => {

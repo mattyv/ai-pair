@@ -14,8 +14,23 @@ import type { SpeechDiagnosticEvent } from '../../vscode/src/diagnostics';
 import { createSpeechHost } from '../src/speech_host';
 
 const fakes = vi.hoisted(() => ({
+  gpuClientFactory: vi.fn(),
+  gpuSlotBusy: vi.fn<() => boolean>().mockReturnValue(false),
+  retireIdleGpu: vi.fn<() => void>(),
+  gpuFlowResult: vi
+    .fn<() => Promise<import('../../vscode/src/speech_compute_types').GpuCheck>>()
+    .mockResolvedValue({ phase: 'unavailable', reason: 'probe_failed' }),
+  gpuFlow: undefined as import('../../vscode/src/speech_gpu_setup_flow').GpuSetupFlowOptions | undefined,
+  gpuPreflight: vi.fn().mockResolvedValue({ phase: 'ready' }),
+  gpuIssue: vi.fn().mockResolvedValue({ check: { phase: 'unavailable', reason: 'probe_failed' } }),
+  gpuInstalled: vi.fn().mockResolvedValue('/gpu'),
+  gpuDownload: vi.fn().mockResolvedValue('/gpu'),
   speechOptions: undefined as
-    Pick<import('../../vscode/src/speech_service').SpeechServiceOptions, 'computeMode' | 'actualBackend'> | undefined,
+    | Pick<
+        import('../../vscode/src/speech_service').SpeechServiceOptions,
+        'computeMode' | 'actualBackend' | 'gpuCheck' | 'gpuCapability' | 'createGpu' | 'gpuExternalBusy'
+      >
+    | undefined,
   cloudDiagnostic: undefined as ((reason: 'auth') => void) | undefined,
   readiness: vi.fn<(options: import('../../vscode/src/speech_readiness').SpeechReadiness) => Promise<boolean>>().mockResolvedValue(true),
   platform: vi.fn<() => import('../../vscode/src/speech_platform').SpeechPlatformResult>().mockReturnValue({ supported: true }),
@@ -59,7 +74,9 @@ vi.mock('../../vscode/src/speech_compute', () => ({
     private value: import('../../vscode/src/speech_compute_types').SpeechComputeState;
     constructor(
       requested: unknown,
-      private readonly probe: () => Promise<import('../../vscode/src/speech_compute_types').GpuCheck>,
+      private readonly probe: (
+        progress: (value: import('../../vscode/src/speech_compute_types').GpuCheckProgress) => void,
+      ) => Promise<import('../../vscode/src/speech_compute_types').GpuCheck>,
       private readonly changed: (value: import('../../vscode/src/speech_compute_types').SpeechComputeState) => void,
     ) {
       this.value = {
@@ -79,10 +96,25 @@ vi.mock('../../vscode/src/speech_compute', () => ({
       this.value = { ...this.value, actualBackend };
       this.changed(this.value);
     }
-    async check(): Promise<void> {
-      this.value = { ...this.value, gpuCheck: await this.probe() };
+    reportUnavailable(reason: import('../../vscode/src/speech_compute_types').GpuUnavailableReason): void {
+      this.value = { ...this.value, gpuCheck: { phase: 'unavailable', reason } };
       this.changed(this.value);
     }
+    async check(): Promise<void> {
+      this.value = { ...this.value, gpuCheck: await this.probe(() => {}) };
+      this.changed(this.value);
+    }
+  },
+}));
+vi.mock('../../vscode/src/speech_gpu_client', () => ({ createGpuSynthesisClient: fakes.gpuClientFactory }));
+vi.mock('../../vscode/src/speech_gpu_host_binding', () => ({
+  createGpuHostBinding: () => ({ preflight: fakes.gpuPreflight, issue: fakes.gpuIssue }),
+}));
+vi.mock('../../vscode/src/speech_gpu_model', () => ({ installedGpuModel: fakes.gpuInstalled, setupGpuModel: fakes.gpuDownload }));
+vi.mock('../../vscode/src/speech_gpu_setup_flow', () => ({
+  setupGpuFlow: (options: import('../../vscode/src/speech_gpu_setup_flow').GpuSetupFlowOptions) => {
+    fakes.gpuFlow = options;
+    return fakes.gpuFlowResult();
   },
 }));
 vi.mock('../../vscode/src/speech_readiness', () => ({ speechReady: fakes.readiness }));
@@ -113,12 +145,14 @@ vi.mock('../../vscode/src/speech_service', () => ({
     constructor(
       options: { cloudDiagnostic?: (reason: 'auth') => void } & Pick<
         import('../../vscode/src/speech_service').SpeechServiceOptions,
-        'computeMode' | 'actualBackend'
+        'computeMode' | 'actualBackend' | 'gpuCheck' | 'gpuCapability' | 'createGpu' | 'gpuExternalBusy'
       >,
     ) {
       fakes.cloudDiagnostic = options.cloudDiagnostic;
       fakes.speechOptions = options;
     }
+    gpuSlotBusy = fakes.gpuSlotBusy;
+    retireIdleGpu = fakes.retireIdleGpu;
     cancel = fakes.cancel;
     invalidateCloud = fakes.invalidateCloud;
     audioEvent = fakes.audioEvent;
@@ -209,7 +243,11 @@ beforeEach(() => {
 });
 
 /** Creates a local host with typed isolated collaborators. */
-function harness(capabilities?: () => Promise<import('../../audio-native/src').AudioCapabilities>) {
+function harness(
+  capabilities?: () => Promise<import('../../audio-native/src').AudioCapabilities>,
+  gpuProof?: import('../../vscode/src/speech_gpu_binding').GpuBindingDependencies['proof'],
+  enableGpuInference = false,
+) {
   // The solitary fixture implements the VS Code context methods this module calls.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const context = {
@@ -250,6 +288,8 @@ function harness(capabilities?: () => Promise<import('../../audio-native/src').A
     context,
     adapter,
     connectionEpoch: 'epoch',
+    ...(gpuProof === undefined ? {} : { gpuProof }),
+    enableGpuInference,
     page: () => 1,
     panel: () => panel,
     diagnostic,
@@ -671,6 +711,8 @@ it('persists the compute choice and runs an explicit GPU check without assuming 
   expect(fakes.speechOptions?.computeMode?.()).toBe('cpu');
   fakes.speechOptions?.actualBackend?.('cpu');
   expect(host.panelSpeech.computeState().actualBackend).toBe('cpu');
+  fakes.speechOptions?.gpuCheck?.({ phase: 'unavailable', reason: 'runtime_missing' });
+  expect(host.panelSpeech.computeState().gpuCheck).toEqual({ phase: 'unavailable', reason: 'runtime_missing' });
   host.panelSpeech.computeMode('gpu');
   expect(fakes.cancel).toHaveBeenCalled();
   await vi.waitFor(() => {
@@ -742,4 +784,125 @@ it('ignores a stale compute save failure and normalizes stored and external choi
   fakes.config.set('speech.computeMode', 'gpu');
   fakes.configChanged?.({ affectsConfiguration: () => true });
   expect(host.panelSpeech.computeState().requestedMode).toBe('gpu');
+});
+
+it('routes explicit GPU setup through preflight, model installation, fresh proof and disposal cancellation', async () => {
+  const { host } = harness(undefined, () => Promise.resolve('failed'));
+  host.panelSpeech.checkGpuSetup();
+  await vi.waitFor(() => {
+    expect(fakes.gpuFlow).toBeDefined();
+  });
+  const flow = fakes.gpuFlow;
+  if (flow === undefined) throw new Error('Missing GPU setup flow');
+  expect(await flow.preflight()).toEqual({ phase: 'ready' });
+  await flow.cpuModel();
+  expect(fakes.installed).toHaveBeenCalledWith('/storage');
+  expect(await flow.gpuModel()).toBe('/gpu');
+  await flow.download(() => {});
+  expect(fakes.gpuDownload).toHaveBeenCalledWith('/storage', expect.objectContaining({ signal: flow.signal }));
+  expect(await flow.verify('/gpu')).toEqual({ phase: 'unavailable', reason: 'probe_failed' });
+  fakes.gpuIssue.mockResolvedValueOnce({ check: { phase: 'ready' }, capability: { modelDirectory: '/other' } });
+  expect(await flow.verify('/gpu')).toEqual({ phase: 'unavailable', reason: 'model_missing' });
+  fakes.gpuIssue.mockResolvedValueOnce({ check: { phase: 'ready' }, capability: { modelDirectory: '/gpu' } });
+  expect(await flow.verify('/gpu')).toEqual({ phase: 'ready' });
+  host.dispose();
+  expect(flow.signal.aborted).toBe(true);
+  fakes.speechOptions?.actualBackend?.('none');
+});
+
+it('enables GPU inference only with an explicit reviewed gate and fresh host capability', async () => {
+  const { host } = harness(undefined, () => Promise.resolve('failed'), /* enableGpuInference= */ true);
+  const capability: import('../../vscode/src/speech_gpu_client').GpuLaunchCapability = {
+    modelDirectory: '/gpu',
+    runtimeDirectory: '/runtime',
+    executablePath: '/node',
+    loaderPath: '/loader',
+    loaderSha256: 'a'.repeat(64),
+    environment: { LANG: 'C', VK_DRIVER_FILES: '/driver', VK_LOADER_LAYERS_DISABLE: '~all~' },
+  };
+  fakes.gpuIssue.mockResolvedValueOnce({ check: { phase: 'ready' }, capability });
+  expect(await fakes.speechOptions?.gpuCapability?.()).toEqual({ check: { phase: 'ready' }, capability });
+  const listener = { ready: vi.fn(), retired: vi.fn() };
+  fakes.speechOptions?.createGpu?.(capability, listener);
+  expect(fakes.gpuClientFactory).toHaveBeenCalledWith({ capability, listener });
+  host.dispose();
+});
+
+it('NoSuccessorBeforeReap: serializes explicit setup and speech admission proof', async () => {
+  const { host } = harness(undefined, () => Promise.resolve('failed'), /* enableGpuInference= */ true);
+  const setup = Promise.withResolvers<import('../../vscode/src/speech_compute_types').GpuCheck>();
+  fakes.gpuFlowResult.mockReturnValueOnce(setup.promise);
+  host.panelSpeech.checkGpuSetup();
+  await vi.waitFor(() => {
+    expect(fakes.gpuFlow).toBeDefined();
+  });
+  expect(fakes.speechOptions?.gpuExternalBusy?.()).toBe(false);
+  const preflight = Promise.withResolvers<import('../../vscode/src/speech_compute_types').GpuCheck>();
+  fakes.gpuPreflight.mockReturnValueOnce(preflight.promise);
+  const checking = fakes.gpuFlow?.preflight();
+  expect(fakes.speechOptions?.gpuExternalBusy?.()).toBe(true);
+  preflight.resolve({ phase: 'ready' });
+  await checking;
+  expect(fakes.speechOptions?.gpuExternalBusy?.()).toBe(false);
+  expect(await fakes.speechOptions?.gpuCapability?.()).toEqual({ check: { phase: 'checking' } });
+  expect(fakes.gpuIssue).not.toHaveBeenCalled();
+  setup.resolve({ phase: 'unavailable', reason: 'probe_failed' });
+  await vi.waitFor(() => {
+    expect(host.panelSpeech.computeState().gpuCheck.phase).toBe('unavailable');
+  });
+  expect(fakes.speechOptions?.gpuExternalBusy?.()).toBe(false);
+  const admission = Promise.withResolvers<import('../../vscode/src/speech_gpu_capability').GpuCapabilityResult>();
+  fakes.gpuIssue.mockReturnValueOnce(admission.promise);
+  const pending = fakes.speechOptions?.gpuCapability?.();
+  host.panelSpeech.checkGpuSetup();
+  await vi.waitFor(() => {
+    expect(host.panelSpeech.computeState().gpuCheck).toEqual({ phase: 'unavailable', reason: 'busy' });
+  });
+  admission.resolve({ check: { phase: 'unavailable', reason: 'probe_failed' } });
+  await pending;
+  host.dispose();
+});
+
+it('does not run GPU setup while an inference worker still owns the slot', async () => {
+  const { host } = harness(undefined, () => Promise.resolve('failed'), /* enableGpuInference= */ true);
+  fakes.gpuSlotBusy.mockReturnValue(true);
+  fakes.gpuFlow = undefined;
+  host.panelSpeech.checkGpuSetup();
+  await vi.waitFor(() => {
+    expect(host.panelSpeech.computeState().gpuCheck).toEqual({ phase: 'unavailable', reason: 'busy' });
+  });
+  expect(fakes.gpuFlow).toBeUndefined();
+  expect(fakes.retireIdleGpu).toHaveBeenCalledOnce();
+  host.dispose();
+  fakes.gpuSlotBusy.mockReturnValue(false);
+});
+
+it('drops a setup proof that settles after the host is disposed', async () => {
+  const { host, panel } = harness(undefined, () => Promise.resolve('failed'), /* enableGpuInference= */ true);
+  const pending = Promise.withResolvers<import('../../vscode/src/speech_compute_types').GpuCheck>();
+  fakes.gpuFlowResult.mockReturnValueOnce(pending.promise);
+  host.panelSpeech.checkGpuSetup();
+  await vi.waitFor(() => {
+    expect(fakes.gpuFlow).toBeDefined();
+  });
+  host.dispose();
+  const updates = panel.showSpeechComputeState.mock.calls.length;
+  pending.resolve({ phase: 'ready' });
+  await vi.waitFor(() => {
+    expect(host.panelSpeech.computeState().gpuCheck).toEqual({ phase: 'unavailable', reason: 'inconclusive' });
+  });
+  expect(panel.showSpeechComputeState).toHaveBeenCalledTimes(updates);
+});
+
+it('does not offer GPU setup from a non-desktop host', async () => {
+  fakes.uiKind = 2;
+  const { host } = harness(undefined, () => Promise.resolve('failed'), /* enableGpuInference= */ true);
+  fakes.gpuFlow = undefined;
+  host.panelSpeech.checkGpuSetup();
+  await vi.waitFor(() => {
+    expect(host.panelSpeech.computeState().gpuCheck).toEqual({ phase: 'unavailable', reason: 'unsupported' });
+  });
+  expect(fakes.gpuFlow).toBeUndefined();
+  host.dispose();
+  fakes.uiKind = 1;
 });

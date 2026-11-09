@@ -723,6 +723,34 @@
       "functions": 100
     }
   },
+  "packages/vscode/src/speech_gpu_model.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/speech_gpu_model_error.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/speech_gpu_model_manifest.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/speech_gpu_setup_flow.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/vscode/src/speech_local_client.ts": {
     "unit": {
       "lines": 100,
@@ -759,6 +787,13 @@
     }
   },
   "packages/vscode/src/speech_segments.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/speech_service.ts": {
     "unit": {
       "lines": 100,
       "branches": 100,

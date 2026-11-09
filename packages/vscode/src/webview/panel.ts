@@ -1066,6 +1066,7 @@ function handle(message: ToPanel): void {
     case 'speechComputeState': {
       const { requestedMode, actualBackend, gpuCheck } = message.value;
       const reasons = {
+        busy: 'GPU speech is still finishing. Try again shortly.',
         unsupported: 'GPU speech is unsupported on this host.',
         runtime_missing: 'GPU runtime is missing.',
         untrusted_driver: 'GPU driver could not be trusted.',
@@ -1092,7 +1093,8 @@ function handle(message: ToPanel): void {
           : progress.total === undefined
             ? `: ${progress.current}`
             : `: ${progress.current} of ${progress.total}`;
-      const detail = progress === undefined ? '' : ` ${progress.stage}${counts}.`;
+      const unit = progress?.stage === 'download' && progress.current !== undefined ? ' bytes' : '';
+      const detail = progress === undefined ? '' : ` ${progress.stage}${counts}${unit}.`;
       ui.gpuStatus.textContent = `Requested: ${requestedMode.toUpperCase()}. Actual backend: ${actualBackend.toUpperCase()}. ${status}${detail}`;
       return;
     }

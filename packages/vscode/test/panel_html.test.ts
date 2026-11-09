@@ -195,7 +195,10 @@ it('offers Kokoro compute choices and an explicit GPU setup check in Settings', 
   expect(Array.from(select?.querySelectorAll('option') ?? []).map((option) => option.value)).toEqual(['cpu', 'auto', 'gpu']);
   expect(select?.closest('[data-ui="speech-local"]')).not.toBeNull();
   expect(page.querySelector('[data-ui="gpu-status"]')?.getAttribute('role')).toBe('status');
-  expect(page.querySelector('[data-ui="gpu-check"]')?.textContent).toContain('Check GPU setup');
+  expect(page.querySelector('[data-ui="gpu-check"]')?.textContent).toContain('Set up GPU');
+  expect(page.querySelector('[data-ui="gpu-model-info"]')?.textContent).toContain('326 MB');
+  expect(page.querySelector('[data-ui="gpu-model-info"]')?.textContent).toContain('additional');
+  expect(page.querySelector('[data-ui="gpu-model-info"]')?.textContent).toContain('CPU model');
 });
 
 it('offers explicit cloud controls without exposing a key input', () => {

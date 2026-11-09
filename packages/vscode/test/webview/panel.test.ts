@@ -2386,6 +2386,7 @@ it('renders GPU checks and allows only the supported compute choices', () => {
 
 it('shows a fixed explanation for every GPU check failure and reports setup progress', () => {
   const reasons = {
+    busy: 'still finishing',
     unsupported: 'unsupported',
     runtime_missing: 'runtime is missing',
     untrusted_driver: 'driver could not be trusted',
@@ -2396,6 +2397,7 @@ it('shows a fixed explanation for every GPU check failure and reports setup prog
     timeout: 'timed out',
   } as const;
   for (const reason of [
+    'busy',
     'unsupported',
     'runtime_missing',
     'untrusted_driver',
@@ -2420,7 +2422,7 @@ it('shows a fixed explanation for every GPU check failure and reports setup prog
       gpuCheck: { phase: 'checking', progress: { stage: 'download', current: 2, total: 5 } },
     },
   });
-  expect(text('gpu-status')).toContain('download: 2 of 5');
+  expect(text('gpu-status')).toContain('download: 2 of 5 bytes');
   send({
     type: 'speechComputeState',
     value: { requestedMode: 'gpu', actualBackend: 'none', gpuCheck: { phase: 'checking', progress: { stage: 'verify', current: 2 } } },

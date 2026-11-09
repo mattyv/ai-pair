@@ -1,7 +1,8 @@
 ---- MODULE GpuSynthesisProcess ------------------------------------------------
 EXTENDS Naturals
 
-\* A child process owns inference until exit. Proof is consumed at launch.
+\* A child owns inference until exit. Verification covers both the loader
+\* and the selected driver, before ready and before each audio result.
 CONSTANTS GuardProof, GuardReap, GuardEpoch, GuardPlayback, GuardKill,
           GuardLoader
 VARIABLES proof, phase, epoch, child, request, canceled, audio, fallback,

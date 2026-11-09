@@ -142,9 +142,10 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
           <option value="gpu">GPU</option>
         </select>
       </label>
+      <p data-ui="gpu-model-info">GPU setup requires the CPU model and downloads an additional pinned model of about 326 MB if needed.</p>
       <p data-ui="gpu-status" role="status">GPU setup has not been checked. Actual backend: none.</p>
-      <div class="settings-actions"><button type="button" data-ui="gpu-check" class="soft">Check GPU setup</button></div>
-      <p>Optional setup downloads a local voice model of about 94 MB.</p>
+      <div class="settings-actions"><button type="button" data-ui="gpu-check" class="soft">Set up GPU</button></div>
+      <p>CPU setup downloads a local voice model of about 94 MB.</p>
       <p data-ui="speech-model-status">Checking model verification...</p>
       <div class="settings-actions">
         <button type="button" data-ui="speech-setup" class="soft" disabled>Download Kokoro model</button>

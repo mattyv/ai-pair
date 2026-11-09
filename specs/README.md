@@ -110,6 +110,8 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `SpeechTempo.cfg` | two units, two parts, rate changes and stale results | holds | 868 |
 | `SpeechTempo_Healthy.cfg` | two fair completed units | holds | 17 |
 | `SpeechTempo_Canceled.cfg` | fair retirement after cancellation or timeout | holds | 11 |
+| `GpuProcessSlot.cfg` | shared inference and proof child ownership | holds | 5 |
+| `GpuSynthesisProcess.cfg` | verified child, stale epochs, loader and retirement | holds | 132 |
 | `WarmSynthesisWorker.cfg` | two epochs, two units and parts, stale and late completions, cancel between parts | holds | 440 |
 | `WarmSynthesisWorker_Healthy.cfg` | two units reuse one healthy worker | holds | 11 |
 | `WarmSynthesisWorker_Cancellation.cfg` | canceled inference returns and is discarded | holds | 440 |
@@ -2217,6 +2219,19 @@ stuck rollback violate the corresponding safety or progress property.
 | `NoLostPrevious` | `speech_setup_fs.test.ts`: restores the previous directory if commit rename fails; preserves the backup directory if rollback also fails. |
 | `SetupProgress` | `speech_setup.test.ts`: times out a stalled download and cleans staging. |
 
+The same model applies to the separate GPU FP32 cache. Setup copies the pinned
+shared files from the verified CPU cache, verifies those copies and the GPU
+model, and commits a separate directory. The CPU q8 model is not changed.
+The model's limitation on concurrent setup processes also applies here.
+
+| Property | GPU model test |
+|---|---|
+| `InstalledOnlyIfVerified` | `speech_gpu_model.test.ts`: InstalledOnlyIfVerified: installs the separate verified GPU model only after explicit setup; `speech_gpu_model.integration.test.ts` verifies real file operations with small test assets. |
+| `NoBadInstall` | `speech_gpu_model.test.ts`: NoBadInstall: rejects oversize, truncated, or corrupted bytes and a changed shared asset. |
+| `CancelledDoesNotInstall` | `speech_gpu_model.test.ts`: CancelledDoesNotInstall: honors cancellation while copying shared assets and before dispatching replacement. |
+| `NoLostPrevious` | `speech_gpu_model.test.ts`: NoLostPrevious: restores an older GPU cache if the atomic replacement fails. |
+| `SetupProgress` | `speech_gpu_model.test.ts`: SetupProgress: bounds a stalled model request and cleans staging after timeout. |
+
 ### `SpeechSettings`: credentials and account voices
 
 The model captures two immutable catalog request identities and credential
@@ -2836,3 +2851,53 @@ violates `MixedWarns` or `MatchingDelivers`. `panel_placement.test.ts`,
 `attachment_gate.test.ts`, `extension.test.ts` and `local_audio.test.ts`
 exercise rejection and guidance. An already-installed old workspace may still
 select legacy fallback, which the new companion cannot prevent.
+
+### `GpuSetup`: preflight, download and hardware proof
+
+The model requires trusted runtime and physical-device preflight before the
+optional GPU download, then bounds the negative control, tiny graph and model
+proofs. `GpuSetup.cfg` checked 56 distinct states, including `CheckSettles`.
+The preflight-bypass mutation violates `PreflightBeforeDownload`; mutations
+bypassing the negative control, allowing explicit GPU CPU fallback, or starting
+a successor before retirement violate their respective safety properties.
+Physical GPU availability and real audio quality are not established by TLC.
+
+| Property | Test |
+|---|---|
+| `TypeOK`, `GpuVerified` | `speech_gpu_check.test.ts`: GpuVerified: requires trust, physical device, negative control, tiny graph and model; `speech_gpu_admission.integration.test.ts`: runs verified setup then dispatches a GPU unit through a controlled worker port. |
+| `PreflightBeforeDownload` | `speech_gpu_setup_flow.test.ts`: PreflightBeforeDownload: does not download when preflight or the CPU model is unavailable; `speech_gpu_model.integration.test.ts`: runs physical preflight before downloading a model and reports byte progress through the real setup flow. |
+| `ExplicitNoFallback` | `speech_service.test.ts`: ExplicitNoFallback: refuses explicit GPU before starting a CPU worker. |
+| `NoSuccessorBeforeReap`, `CheckSettles` | `speech_gpu_process.test.ts`: NoSuccessorBeforeReap, CheckSettles: kills a timed-out child and waits for its exit before settling; `speech_service.test.ts`: NoSuccessorBeforeReap: keeps a canceled GPU proof slot until the proof settles. |
+
+### `GpuSynthesisProcess`: isolated GPU ownership
+
+The model bounds two process epochs and requires a fresh verified capability
+before each spawn. The child verifies its mapped Vulkan loader before ready and
+before each audio result. Cancellation retires the process; no successor or
+fallback starts before its close event. It models both graceful disposal and
+forced termination. `audio` abstracts a result already handed off, so
+prohibiting fallback after it is more conservative than the runtime rule
+against replay after playback starts. `RetirementProgress` assumes the
+operating system eventually reports exit after forced termination; the
+implementation holds the slot if it does not.
+
+TLC checked 132 distinct states. Removing any of the proof, reaping, epoch,
+loader or playback guards violates `Safe`; disabling forced termination
+violates `RetirementProgress`. The unit tests for `speech_gpu_client.ts`,
+`speech_gpu_transport.ts`, `speech_gpu_worker_runtime.ts`, and
+`speech_gpu_verified_engine.ts` exercise the concrete boundary. The separate
+`speech_gpu_process.e2e.test.ts` starts a real synthetic child, tests warm reuse,
+and verifies cancellation retains ownership until forced termination and close.
+The model does not establish actual GPU hardware availability or audio quality.
+
+### `GpuProcessSlot`: shared GPU child ownership
+
+The shared slot abstracts inference, proof and physical-device checks as one
+process owner. Contending work receives a retryable busy result immediately. A
+result does not free the slot; only the child's close event does. TLC checked
+five states and an early-release mutation violates `Safe`. `BusyResponds`
+models a prompt refusal; `Reaped` assumes the operating system eventually
+reports a child close. Unit and integration tests for `speech_gpu_slot.ts`,
+`speech_gpu_client.ts`, and `speech_gpu_proof_runner.ts` exercise the in-
+process lease and reaping boundary. The model does not coordinate separate
+extension-host processes.

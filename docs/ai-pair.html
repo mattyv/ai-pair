@@ -40762,10 +40762,12 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
           },
           {
             id: "gpu-local-synthesis",
-            name: "GPU local synthesis",
+            name: "GPU local synthesis (experimental)",
             type: "architecture",
             origin: "llm",
-            generation: { focus: "GPU setup, fresh launch proof, isolated inference and retirement; integration in progress" },
+            generation: {
+              focus: "Experimental GPU setup, separate FP32 model and isolated Node worker; physical hardware validation pending",
+            },
             doc: {
               type: "architecture",
               autoLayoutApplied: true,
@@ -40790,8 +40792,8 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 },
                 {
                   id: "assets",
-                  label: "Pinned local assets\nRuntime and model verification",
-                  files: ["packages/vscode/src/speech_gpu_assets.ts", "packages/audio-ui/scripts/gpu_runtime.mts"],
+                  label: "GPU FP32 model\nAdditional pinned download",
+                  files: ["packages/vscode/src/speech_gpu_model.ts", "packages/vscode/src/speech_gpu_assets.ts"],
                   x: 1360,
                   y: 80,
                 },
@@ -40822,7 +40824,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 },
                 {
                   id: "worker",
-                  label: "Isolated GPU worker\nOffline q8 inference",
+                  label: "Isolated GPU worker\nOffline FP32 inference",
                   files: [
                     "packages/vscode/src/speech_gpu_worker.ts",
                     "packages/vscode/src/speech_gpu_worker_host.ts",
@@ -40838,6 +40840,13 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                   x: 700,
                   y: 720,
                 },
+                {
+                  id: "node-runtime",
+                  label: "Bundled Node runtime\nGPU-only local process",
+                  files: ["packages/audio-ui/scripts/gpu_runtime.mts", "packages/vscode/src/speech_gpu_client.ts"],
+                  x: 1360,
+                  y: 1040,
+                },
               ],
               edges: [
                 { from: "settings", to: "setup", label: "check" },
@@ -40849,6 +40858,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 { from: "client", to: "worker" },
                 { from: "worker", to: "retirement", label: "exit / result" },
                 { from: "retirement", to: "service", label: "release after reap" },
+                { from: "node-runtime", to: "worker", label: "executes" },
               ],
               groups: [],
               comments: {
@@ -40862,7 +40872,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 worker: [
                   {
                     id: "boundary",
-                    text: "The worker has a restricted environment and uses the GPU-only local runtime. Readiness requires the mapped loader and physical-device proofs; no host hardware is asserted by this diagram.",
+                    text: "The worker uses a separately bundled Node runtime and pinned FP32 model with a restricted environment. Readiness requires mapped-loader and physical-device proofs; physical GPU validation is pending.",
                     ts: 0,
                   },
                 ],

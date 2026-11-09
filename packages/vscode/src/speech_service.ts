@@ -26,7 +26,9 @@ import {
 import { speechSegments } from './speech_segments';
 import { decodeSpeechWav, encodeTempoWav } from './speech_tempo_pcm';
 import type { SpeechTempoRate } from './speech_tempo';
-import type { SpeechComputeBackend, SpeechComputeMode } from './speech_compute_types';
+import type { GpuCheck, SpeechComputeBackend, SpeechComputeMode } from './speech_compute_types';
+import type { GpuCapabilityResult } from './speech_gpu_capability';
+import { GpuProcessBusyError, type GpuLaunchCapability } from './speech_gpu_client';
 
 /** The panel operations used by local speech; audio is never added to history. */
 export interface SpeechOutput {
@@ -105,6 +107,14 @@ export interface SpeechServiceOptions {
   computeMode?: () => SpeechComputeMode;
   /** Reports the local worker's observed backend. */
   actualBackend?: (value: SpeechComputeBackend) => void;
+  /** Requests fresh GPU proof before starting a GPU worker. */
+  gpuCapability?: () => Promise<GpuCapabilityResult>;
+  /** Creates an isolated GPU worker using the fresh capability. */
+  createGpu?: (capability: GpuLaunchCapability, listener: LocalListener) => LocalSynthesisPort;
+  /** Reports fixed GPU availability when Auto falls back. */
+  gpuCheck?: (value: Extract<GpuCheck, { phase: 'unavailable' }>) => void;
+  /** Reports a setup proof or download that owns the shared GPU slot. */
+  gpuExternalBusy?: () => boolean;
 }
 
 /** An acknowledgement from the page that received a particular generation. */
@@ -128,6 +138,7 @@ interface ActiveSpeech {
   listeningRate: SpeechTempoRate;
   processing?: { part: number; controller: AbortController };
   provider: SpeechProvider;
+  computeMode: SpeechComputeMode;
   cloudVoice: string;
   voice: SpeechVoice;
   speed: number;
@@ -158,7 +169,10 @@ export class SpeechService implements NarrationPort {
   private nextId = 1;
   private current?: ActiveSpeech;
   private paused = false;
-  private readonly local: LocalSynthesisPort;
+  private local: LocalSynthesisPort;
+  private readonly cpuLocal: LocalSynthesisPort;
+  private localBackend: 'cpu' | 'gpu' = 'cpu';
+  private gpuProofBusy = false;
   private cloudBusy?: { id: number; controller: AbortController; timer: ReturnType<typeof setTimeout> };
   private disposed = false;
 
@@ -171,13 +185,26 @@ export class SpeechService implements NarrationPort {
         this.localRetired(reason);
       },
     };
-    this.local =
+    this.cpuLocal =
       options.createLocal?.(listener) ??
       new LocalSynthesisClient({
         // The pinned phonemizer bridge reads the verified model directory from workerData.
         spawn: (modelPath) => new Worker(path.join(options.runtimeDirectory, 'worker.mjs'), { workerData: { modelPath } }),
         listener,
       });
+    this.local = this.cpuLocal;
+  }
+
+  /** Reports whether a GPU proof or worker still owns its slot. */
+  gpuSlotBusy(): boolean {
+    return this.gpuProofBusy || (this.localBackend === 'gpu' && this.local.state() !== 'cold');
+  }
+
+  /** Retires an idle GPU worker before a new explicit setup check. */
+  retireIdleGpu(): void {
+    if (this.current === undefined && this.localBackend === 'gpu' && this.local.state() === 'ready') {
+      this.local.retire('worker_exit');
+    }
   }
 
   /** Speaks an explicitly selected live unit when enabled. */
@@ -212,7 +239,12 @@ export class SpeechService implements NarrationPort {
       return Promise.resolve();
     }
     // specs/GpuSetup.tla, ExplicitNoFallback: explicit GPU must never fall back to the CPU worker.
-    if (provider === 'kokoro' && this.options.computeMode?.() === 'gpu') {
+    const computeMode = this.options.computeMode?.() ?? 'cpu';
+    if (
+      provider === 'kokoro' &&
+      computeMode === 'gpu' &&
+      (this.options.gpuCapability === undefined || this.options.createGpu === undefined)
+    ) {
       this.options.output.status(id, 'unavailable', 'GPU speech is not available. Check GPU setup.');
       return Promise.resolve();
     }
@@ -237,6 +269,7 @@ export class SpeechService implements NarrationPort {
     // specs/SpeechTempo.tla, Admit: a transformed unit waits for the previous transform worker to retire.
     const listeningRate = speechListeningRate(settings.listeningSpeed);
     if (
+      (provider === 'kokoro' && (this.gpuProofBusy || this.options.gpuExternalBusy?.() === true)) ||
       this.local.busy() ||
       this.local.state() === 'retiring' ||
       this.cloudBusy !== undefined ||
@@ -258,6 +291,7 @@ export class SpeechService implements NarrationPort {
       // specs/SpeechTempo.tla, Select: the unit samples its listening rate once, here.
       listeningRate,
       provider,
+      computeMode,
       cloudVoice: settings.elevenLabsVoice,
       voice: voice ?? 'af_heart',
       speed: provider === 'elevenlabs' ? settings.elevenLabsSpeed : settings.speed,
@@ -361,6 +395,97 @@ export class SpeechService implements NarrationPort {
   }
 
   private async start(current: ActiveSpeech): Promise<void> {
+    if (current.computeMode !== 'cpu' && this.options.gpuCapability !== undefined && this.options.createGpu !== undefined) {
+      await this.startGpu(current);
+      return;
+    }
+    if (current.computeMode === 'auto') this.options.gpuCheck?.({ phase: 'unavailable', reason: 'runtime_missing' });
+    this.startCpu(current);
+  }
+
+  /** Switches only after the previous worker has been reaped. */
+  private startCpu(current: ActiveSpeech): void {
+    if (this.localBackend === 'gpu') {
+      if (this.local.state() !== 'cold') {
+        this.local.retire('worker_exit');
+        this.fail(current, 'Speech is still finishing; try again shortly.');
+        return;
+      }
+      this.local = this.cpuLocal;
+      this.localBackend = 'cpu';
+    }
+    void this.startCpuWorker(current);
+  }
+
+  /** Requests fresh capability before creating a new isolated GPU worker. */
+  private async startGpu(current: ActiveSpeech): Promise<void> {
+    if (this.localBackend === 'gpu' && this.local.state() === 'ready') {
+      this.synthesize(current);
+      return;
+    }
+    if (this.local.state() !== 'cold') {
+      this.local.retire('worker_exit');
+      this.fail(current, 'Speech is still finishing; try again shortly.');
+      return;
+    }
+    let result: GpuCapabilityResult | undefined;
+    this.gpuProofBusy = true;
+    try {
+      // specs/GpuSynthesisProcess.tla, Spawn: each GPU worker requires fresh proof.
+      result = await this.options.gpuCapability?.();
+    } catch (error) {
+      if (this.current !== current) return;
+      if (error instanceof GpuProcessBusyError) {
+        this.fail(current, 'Speech is still finishing; try again shortly.');
+        return;
+      }
+      this.options.gpuCheck?.({ phase: 'unavailable', reason: 'probe_failed' });
+      if (current.computeMode === 'auto') this.startCpu(current);
+      else this.fail(current, 'GPU speech is not available. Check GPU setup.');
+      return;
+    } finally {
+      // specs/GpuSynthesisProcess.tla, Reap: proof owns its slot until it settles.
+      this.gpuProofBusy = false;
+    }
+    if (this.current !== current) return;
+    if (result?.check.phase === 'checking' || (result?.check.phase === 'unavailable' && result.check.reason === 'busy')) {
+      this.fail(current, 'Speech is still finishing; try again shortly.');
+      return;
+    }
+    if (result?.check.phase !== 'ready' || result.capability === undefined || this.options.createGpu === undefined) {
+      const check: Extract<GpuCheck, { phase: 'unavailable' }> =
+        result?.check.phase === 'unavailable' ? result.check : { phase: 'unavailable', reason: 'inconclusive' };
+      this.options.gpuCheck?.(check);
+      if (current.computeMode === 'auto') this.startCpu(current);
+      else this.fail(current, 'GPU speech is not available. Check GPU setup.');
+      return;
+    }
+    try {
+      const listener: LocalListener = {
+        ready: () => {
+          this.localReady();
+        },
+        retired: (reason) => {
+          this.localRetired(reason);
+        },
+      };
+      this.local = this.options.createGpu(result.capability, listener);
+      this.localBackend = 'gpu';
+      this.local.load(result.capability.modelDirectory);
+    } catch (error) {
+      this.local.retire('worker_error');
+      if (this.current === current) {
+        this.fail(
+          current,
+          error instanceof GpuProcessBusyError
+            ? 'Speech is still finishing; try again shortly.'
+            : 'GPU speech could not start. Check GPU setup.',
+        );
+      }
+    }
+  }
+
+  private async startCpuWorker(current: ActiveSpeech): Promise<void> {
     const state = this.local.state();
     if (state === 'ready') {
       this.synthesize(current);
@@ -427,7 +552,7 @@ export class SpeechService implements NarrationPort {
 
   /** The client reported valid capabilities: records the checkpoint and starts a unit that waits for it. */
   private localReady(): void {
-    this.options.actualBackend?.('cpu');
+    this.options.actualBackend?.(this.localBackend);
     const current = this.current;
     this.localDiagnostic('ready');
     if (current !== undefined && current.phase === 'loading') this.synthesize(current);
