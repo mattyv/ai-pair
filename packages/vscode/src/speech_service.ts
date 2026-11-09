@@ -156,6 +156,8 @@ interface ActiveSpeech {
 
 /** Maximum time for a worker or page to acknowledge its work. */
 const START_TIMEOUT_MS = LOCAL_WORKER_TIMEOUT_MS;
+// Three 120-second proof stages plus the physical probe and scheduling allowance.
+const GPU_PROOF_TIMEOUT_MS = 400_000;
 /** Maximum time to discover a selected output before provider requests. */
 const OUTPUT_TIMEOUT_MS = 5000;
 /** Extra unpaused time allowed after the waveform's duration. */
@@ -318,7 +320,7 @@ export class SpeechService implements NarrationPort {
     current.phase = 'loading';
     if (current.provider === 'elevenlabs') this.startCloud(current);
     else {
-      if (!this.paused || !current.multipart) this.arm(current, START_TIMEOUT_MS);
+      this.armStartup(current, START_TIMEOUT_MS);
       void this.start(current);
     }
   }
@@ -429,6 +431,7 @@ export class SpeechService implements NarrationPort {
       return;
     }
     let result: GpuCapabilityResult | undefined;
+    this.armStartup(current, GPU_PROOF_TIMEOUT_MS);
     this.gpuProofBusy = true;
     try {
       // specs/GpuSynthesisProcess.tla, Spawn: each GPU worker requires fresh proof.
@@ -440,8 +443,10 @@ export class SpeechService implements NarrationPort {
         return;
       }
       this.options.gpuCheck?.({ phase: 'unavailable', reason: 'probe_failed' });
-      if (current.computeMode === 'auto') this.startCpu(current);
-      else this.fail(current, 'GPU speech is not available. Check GPU setup.');
+      if (current.computeMode === 'auto') {
+        this.armStartup(current, START_TIMEOUT_MS);
+        this.startCpu(current);
+      } else this.fail(current, 'GPU speech is not available. Check GPU setup.');
       return;
     } finally {
       // specs/GpuSynthesisProcess.tla, Reap: proof owns its slot until it settles.
@@ -456,8 +461,10 @@ export class SpeechService implements NarrationPort {
       const check: Extract<GpuCheck, { phase: 'unavailable' }> =
         result?.check.phase === 'unavailable' ? result.check : { phase: 'unavailable', reason: 'inconclusive' };
       this.options.gpuCheck?.(check);
-      if (current.computeMode === 'auto') this.startCpu(current);
-      else this.fail(current, 'GPU speech is not available. Check GPU setup.');
+      if (current.computeMode === 'auto') {
+        this.armStartup(current, START_TIMEOUT_MS);
+        this.startCpu(current);
+      } else this.fail(current, 'GPU speech is not available. Check GPU setup.');
       return;
     }
     try {
@@ -469,6 +476,7 @@ export class SpeechService implements NarrationPort {
           this.localRetired(reason);
         },
       };
+      this.armStartup(current, START_TIMEOUT_MS);
       this.local = this.options.createGpu(result.capability, listener);
       this.localBackend = 'gpu';
       this.local.load(result.capability.modelDirectory);
@@ -793,6 +801,10 @@ export class SpeechService implements NarrationPort {
     this.cancel();
     void this.options.tempo?.dispose().catch(() => {});
     this.local.retire('worker_error');
+  }
+
+  private armStartup(current: ActiveSpeech, ms: number): void {
+    if (!this.paused || !current.multipart) this.arm(current, ms);
   }
 
   private arm(current: ActiveSpeech, ms: number): void {

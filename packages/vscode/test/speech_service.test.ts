@@ -2181,6 +2181,35 @@ it('ExplicitNoFallback: refuses CPU when GPU proof fails and Auto reports its CP
   await pending;
 });
 
+it('GpuVerified: accepts a fresh proof that takes longer than the worker startup deadline', async () => {
+  vi.useFakeTimers();
+  const { service, gpu, authorize, capability } = gpuHarness(() => 'gpu');
+  const proof = Promise.withResolvers<import('../src/speech_gpu_capability').GpuCapabilityResult>();
+  authorize.mockReturnValue(proof.promise);
+  const pending = service.speak('Hello.');
+  await vi.advanceTimersByTimeAsync(21_000);
+  proof.resolve({ check: { phase: 'ready' }, capability });
+  await settle();
+  expect(gpu.port.load).toHaveBeenCalledWith('/gpu-model');
+  service.cancel();
+  await pending;
+  vi.useRealTimers();
+});
+
+it('NoStaleProof: times out a stuck proof without launching its late result', async () => {
+  vi.useFakeTimers();
+  const { service, gpu, authorize, capability } = gpuHarness(() => 'gpu');
+  const proof = Promise.withResolvers<import('../src/speech_gpu_capability').GpuCapabilityResult>();
+  authorize.mockReturnValue(proof.promise);
+  const pending = service.speak('Hello.');
+  await vi.advanceTimersByTimeAsync(400_000);
+  await pending;
+  proof.resolve({ check: { phase: 'ready' }, capability });
+  await settle();
+  expect(gpu.port.load).not.toHaveBeenCalled();
+  vi.useRealTimers();
+});
+
 it('NoStaleProof: ignores a GPU capability that arrives after cancellation', async () => {
   const { service, gpu, authorize, capability } = gpuHarness(() => 'gpu');
   const proof = Promise.withResolvers<import('../src/speech_gpu_capability').GpuCapabilityResult>();
