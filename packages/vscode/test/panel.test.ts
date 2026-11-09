@@ -1447,7 +1447,9 @@ it('routes GPU setup requests and compute choices to the local service', () => {
   const view = open(panel);
   view.send({ type: 'ready' });
   view.send({ type: 'speechComputeMode', value: 'gpu' });
+  view.receive({ type: 'speechComputeMode', value: 'invalid' });
   view.send({ type: 'checkGpuSetup' });
+  expect(speech.computeMode).toHaveBeenCalledOnce();
   expect(speech.computeMode).toHaveBeenCalledWith('gpu');
   expect(speech.checkGpuSetup).toHaveBeenCalledOnce();
 });

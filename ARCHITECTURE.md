@@ -28,6 +28,12 @@ The normalizer preserves the diagram data while formatting the export and
 representing Unicode with context-appropriate escapes. Validate the bundle
 with Archi's `validate-archi.js` and check the regenerated page in a browser.
 
+The GPU local synthesis diagram records the setup, proof and isolated worker
+boundaries under construction. On 2026-11-09, Archi 1.5.1 validated the source,
+the export was regenerated, and both normalizer test suites passed. An
+isolated headless Chromium render showed the GPU diagram with no page errors;
+the screenshot was inspected for layout. Physical GPU validation is pending.
+
 ## Components
 
 ```text
@@ -445,7 +451,8 @@ shows the same guidance. An already-installed older workspace can still
 select its own legacy fallback. The public MCP protocol is unchanged.
 
 GPU compute selection and setup status are local speech controls. The companion
-handles them in its own panel without adding private transport frames, so this
-change does not alter version 2 or the public MCP protocol. An older companion
+handles actions in its own panel, and the generic sender filters unsupported
+updates; neither produces a private transport frame. This leaves version 2
+and the public MCP protocol unchanged. An older companion
 does not offer the GPU controls. The companion panel routing test verifies the
 local boundary.

@@ -14,6 +14,8 @@ import type { SpeechDiagnosticEvent } from '../../vscode/src/diagnostics';
 import { createSpeechHost } from '../src/speech_host';
 
 const fakes = vi.hoisted(() => ({
+  speechOptions: undefined as
+    Pick<import('../../vscode/src/speech_service').SpeechServiceOptions, 'computeMode' | 'actualBackend'> | undefined,
   cloudDiagnostic: undefined as ((reason: 'auth') => void) | undefined,
   readiness: vi.fn<(options: import('../../vscode/src/speech_readiness').SpeechReadiness) => Promise<boolean>>().mockResolvedValue(true),
   platform: vi.fn<() => import('../../vscode/src/speech_platform').SpeechPlatformResult>().mockReturnValue({ supported: true }),
@@ -108,8 +110,14 @@ vi.mock('vscode', () => ({
 }));
 vi.mock('../../vscode/src/speech_service', () => ({
   SpeechService: class {
-    constructor(options: { cloudDiagnostic?: (reason: 'auth') => void }) {
+    constructor(
+      options: { cloudDiagnostic?: (reason: 'auth') => void } & Pick<
+        import('../../vscode/src/speech_service').SpeechServiceOptions,
+        'computeMode' | 'actualBackend'
+      >,
+    ) {
       fakes.cloudDiagnostic = options.cloudDiagnostic;
+      fakes.speechOptions = options;
     }
     cancel = fakes.cancel;
     invalidateCloud = fakes.invalidateCloud;
@@ -660,6 +668,9 @@ it('passes local readiness facts to the readiness check', async () => {
 it('persists the compute choice and runs an explicit GPU check without assuming readiness', async () => {
   const { host, panel } = harness();
   expect(host.panelSpeech.computeState().requestedMode).toBe('cpu');
+  expect(fakes.speechOptions?.computeMode?.()).toBe('cpu');
+  fakes.speechOptions?.actualBackend?.('cpu');
+  expect(host.panelSpeech.computeState().actualBackend).toBe('cpu');
   host.panelSpeech.computeMode('gpu');
   expect(fakes.cancel).toHaveBeenCalled();
   await vi.waitFor(() => {
@@ -701,4 +712,34 @@ it('keeps the latest compute choice across pending saves and restores it after a
   fakes.config.set('speech.computeMode', 'cpu');
   fakes.configChanged?.({ affectsConfiguration: () => true });
   expect(host.panelSpeech.computeState().requestedMode).toBe('cpu');
+});
+
+it('ignores a stale compute save failure and normalizes stored and external choices', async () => {
+  const { host } = harness();
+  const stale = Promise.withResolvers<void>();
+  fakes.update.mockReturnValueOnce(stale.promise);
+  host.panelSpeech.computeMode('auto');
+  host.panelSpeech.computeMode('gpu');
+  stale.reject(new Error('private'));
+  await vi.waitFor(() => {
+    expect(fakes.update).toHaveBeenCalledTimes(2);
+  });
+  expect(fakes.errorMessage).not.toHaveBeenCalled();
+  fakes.config.set('speech.computeMode', 'gpu');
+  fakes.update.mockRejectedValueOnce(new Error('private'));
+  host.panelSpeech.computeMode('cpu');
+  await vi.waitFor(() => {
+    expect(fakes.errorMessage).toHaveBeenCalledOnce();
+  });
+  expect(host.panelSpeech.computeState().requestedMode).toBe('gpu');
+  fakes.config.set('speech.computeMode', 'invalid');
+  fakes.update.mockRejectedValueOnce(new Error('private'));
+  host.panelSpeech.computeMode('auto');
+  await vi.waitFor(() => {
+    expect(fakes.errorMessage).toHaveBeenCalledTimes(2);
+  });
+  expect(host.panelSpeech.computeState().requestedMode).toBe('cpu');
+  fakes.config.set('speech.computeMode', 'gpu');
+  fakes.configChanged?.({ affectsConfiguration: () => true });
+  expect(host.panelSpeech.computeState().requestedMode).toBe('gpu');
 });

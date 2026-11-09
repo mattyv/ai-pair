@@ -78,6 +78,15 @@ it('keeps speech disabled by default and retains a missing local device', async 
     panel: () => panel,
     diagnostic: vi.fn<(event: SpeechDiagnosticEvent) => void>(),
   });
+  host.panelSpeech.computeMode('gpu');
+  await host.speech.preview();
+  expect(panel.showSpeechStatus).toHaveBeenCalledWith(expect.any(Number), 'unavailable', 'GPU speech is not available. Check GPU setup.');
+  expect(host.panelSpeech.computeState().actualBackend).toBe('none');
+  host.panelSpeech.checkGpuSetup();
+  await vi.waitFor(() => {
+    expect(host.panelSpeech.computeState().gpuCheck).toEqual({ phase: 'unavailable', reason: 'runtime_missing' });
+  });
+  host.panelSpeech.computeMode('cpu');
   await host.speech.speak('hello');
   expect(admit).not.toHaveBeenCalled();
   expect(secrets.get).not.toHaveBeenCalled();

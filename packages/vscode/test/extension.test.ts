@@ -170,6 +170,8 @@ const fakes = vi.hoisted(() => {
         output: SpeechOutput;
         localDesktop: boolean;
         cloudDiagnostic?: (reason: 'auth') => void;
+        computeMode: () => import('../src/speech_compute_types').SpeechComputeMode;
+        actualBackend: (value: import('../src/speech_compute_types').SpeechComputeBackend) => void;
       },
     ) {
       made.speech.push(this);
@@ -1886,6 +1888,10 @@ it('persists compute mode and keeps an unavailable GPU check fail-closed', async
   const h = activated();
   const compute = h.panel.wiring.speech;
   expect(compute.computeState().requestedMode).toBe('cpu');
+  const service = last(fakes.made.speech);
+  expect(service.options.computeMode()).toBe('cpu');
+  service.options.actualBackend('cpu');
+  expect(compute.computeState().actualBackend).toBe('cpu');
   compute.computeMode('gpu');
   expect(compute.computeState().requestedMode).toBe('gpu');
   await vi.waitFor(() => {
@@ -1933,4 +1939,26 @@ it('preserves the latest compute choice through writes and rolls back a failed l
   fakes.settings.set('speech.computeMode', 'auto');
   changed('speech');
   expect(h.panel.wiring.speech.computeState().requestedMode).toBe('auto');
+});
+
+it('ignores an older failed compute save and normalizes an invalid saved choice', async () => {
+  const h = activated();
+  const stale = Promise.withResolvers<void>();
+  fakes.computeGate = stale.promise;
+  h.panel.wiring.speech.computeMode('auto');
+  h.panel.wiring.speech.computeMode('gpu');
+  stale.reject(new Error('private'));
+  await vi.waitFor(() => {
+    expect(fakes.settings.get('speech.computeMode')).toBe('gpu');
+  });
+  expect(fakes.errors).not.toContain('Could not save speech compute mode.');
+  fakes.settings.set('speech.computeMode', 'invalid');
+  const failed = Promise.withResolvers<void>();
+  fakes.computeGate = failed.promise;
+  h.panel.wiring.speech.computeMode('auto');
+  failed.reject(new Error('private'));
+  await vi.waitFor(() => {
+    expect(fakes.errors).toContain('Could not save speech compute mode.');
+  });
+  expect(h.panel.wiring.speech.computeState().requestedMode).toBe('cpu');
 });

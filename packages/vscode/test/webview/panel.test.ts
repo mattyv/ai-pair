@@ -2370,6 +2370,10 @@ it('renders GPU checks and allows only the supported compute choices', () => {
     select.dispatchEvent(new window.Event('change'));
     expect(posted()).toContainEqual({ type: 'speechComputeMode', value });
   }
+  select.value = '';
+  const beforeInvalid = posted().length;
+  select.dispatchEvent(new window.Event('change'));
+  expect(posted()).toHaveLength(beforeInvalid);
   send({ type: 'speechComputeState', value: { requestedMode: 'gpu', actualBackend: 'none', gpuCheck: { phase: 'checking' } } });
   expect(text('gpu-status')).toContain('Checking');
   expect(element('gpu-check')).toHaveProperty('disabled', true);
@@ -2417,4 +2421,9 @@ it('shows a fixed explanation for every GPU check failure and reports setup prog
     },
   });
   expect(text('gpu-status')).toContain('download: 2 of 5');
+  send({
+    type: 'speechComputeState',
+    value: { requestedMode: 'gpu', actualBackend: 'none', gpuCheck: { phase: 'checking', progress: { stage: 'verify', current: 2 } } },
+  });
+  expect(text('gpu-status')).toContain('verify: 2');
 });
