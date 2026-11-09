@@ -1314,6 +1314,7 @@ function handle(message: ToPanel): void {
           return;
         }
         // specs/Resume.tla, `Start`: a new session replaces any old suspension.
+        clearRun();
         suspended = false;
         fileCurrent();
         current = undefined;

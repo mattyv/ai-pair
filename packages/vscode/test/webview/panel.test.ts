@@ -657,6 +657,18 @@ describe('the run box (specs/RunBox.tla)', () => {
     expect(boxShown()).toBe(false);
   });
 
+  it('Clears: a new session removes an old approval without deciding it', () => {
+    runPhase('confirm');
+    send({ type: 'session', active: true, suspended: true });
+    expect(boxShown()).toBe(true);
+    send({ type: 'session', active: true, resumed: true });
+    expect(boxShown()).toBe(true);
+    send({ type: 'session', active: true, task: 'New session' });
+    expect(boxShown()).toBe(false);
+    click(element('run-go'));
+    expect(posted()).not.toContainEqual(expect.objectContaining({ type: 'runDecision' }));
+  });
+
   it("leaves the box alone when another command's run ends", () => {
     runPhase('confirm');
     send({ type: 'run', id: 2, command: 'ls', phase: 'done' });
