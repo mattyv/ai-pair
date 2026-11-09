@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.23.2
+
+-   Correct distorted GPU voice output by routing one affected model operation
+    through the CPU while keeping the remaining GPU checks and computation.
+
+## 0.23.1
+
+-   Fix GPU worker communication when VS Code and its bundled worker use
+    different Node and V8 versions.
+
+## 0.23.0
+
+-   Add experimental local Kokoro GPU setup with a separate pinned model,
+    physical-device checks, and a guarded isolated inference worker. CPU
+    remains the default. Physical AMD hardware validation is pending.
+
 ## 0.22.1
 
 -   Show a more specific, safe reason when ElevenLabs narration fails and

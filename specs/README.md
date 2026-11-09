@@ -110,6 +110,8 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `SpeechTempo.cfg` | two units, two parts, rate changes and stale results | holds | 868 |
 | `SpeechTempo_Healthy.cfg` | two fair completed units | holds | 17 |
 | `SpeechTempo_Canceled.cfg` | fair retirement after cancellation or timeout | holds | 11 |
+| `GpuProcessSlot.cfg` | shared inference and proof child ownership | holds | 5 |
+| `GpuSynthesisProcess.cfg` | verified child, stale epochs, loader and retirement | holds | 132 |
 | `WarmSynthesisWorker.cfg` | two epochs, two units and parts, stale and late completions, cancel between parts | holds | 440 |
 | `WarmSynthesisWorker_Healthy.cfg` | two units reuse one healthy worker | holds | 11 |
 | `WarmSynthesisWorker_Cancellation.cfg` | canceled inference returns and is discarded | holds | 440 |
@@ -141,7 +143,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Rehearsal.cfg` | `MaxLines = 3` lines, `MaxOthers = 2` changes by others, `MaxProgrammerEdits = 1`, `MaxBatches = 2` batches, `MaxQueued = 2` queued, either turn, `ReportWaitsForQueue = TRUE` | holds, in about 200 seconds | 6,721,044 |
 | `BatchFile.cfg` | files `sourceFile`, `destinationFile`, and `otherFile`, `MaxActions = 4` actions a batch, `FallBackToNamed = TRUE`, `CursorInNamed = TRUE`, a selection or none | holds | 330 |
 | `Diagnostics.cfg` | `MaxBatches = 3`, provider available or not, completed, interrupted, and failed batches | holds | 168 |
-| `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await | holds | 3,077 |
+| `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await, including a rejected typing edit | holds | 3,115 |
 | `Player.cfg` | `MaxEdits = 2` | holds | 26 |
 | `LineIdentity.cfg` | texts up to 4 characters, inserts up to 2 | holds (checked as `ASSUME`s) | |
 | `Places.cfg` | texts up to 5 characters, needles up to 3 | holds (`ASSUME`s) | |
@@ -475,7 +477,7 @@ test's title carries its name:
 | `NoUnmarkedRepeat` | `controller.test.ts`: NoUnmarkedRepeat: says a returned report may repeat one already seen, and marks each returned rejection the agent may have seen; `relay.test.ts`: DroppedHandedBack, NoUnmarkedRepeat: hands back a report the agent canceled after the relay answered it, saying it may repeat (#67); RepeatsMarked, NoUnmarkedRepeat: delivers a report again, saying it may repeat, when the agent cancels after taking it (#67) |
 | `HeldMeansStale` | `controller.test.ts`: HeldMeansStale, BatchesDelivered: reports a returned rejection again, discarding steps until it has |
 | `PlaysKnowingEvents` | `controller.test.ts`: PlaysKnowingEvents: discards a batch planned before an interruption the agent has not seen |
-| `PlaysAfterCompleted` | `controller.test.ts`: PlaysAfterCompleted: discards the queued batches behind one that didn't complete, and takes none of its lines; `player.test.ts`: PlaysAfterCompleted, PlaysNothingTwice, StopAtCheck: hands back what's left of a type cut short, before the marker or after it, and nothing if none was typed; `link.test.ts`: PlaysAfterCompleted: sends the next call only after a canceled call's report is handed back (#59) |
+| `PlaysAfterCompleted` | `controller.test.ts`: PlaysAfterCompleted: discards the queued batches behind one that didn't complete, and takes none of its lines; `player.test.ts`: RejectInterruptedEdit: returns the untyped suffix and restores the cursor through a programmer edit; PlaysAfterCompleted, PlaysNothingTwice, StopAtCheck: hands back what's left of a type cut short, before the marker or after it, and nothing if none was typed; `link.test.ts`: PlaysAfterCompleted: sends the next call only after a canceled call's report is handed back (#59) |
 | `BatchesDelivered` | `controller.test.ts`: CancelKeepsBatch, BatchesDelivered: keeps a canceled step's batch queued and reports it later; BatchesDelivered: keeps an ended session until its returned rejections are reported, one per call; HeldMeansStale, BatchesDelivered: reports a returned rejection again, discarding steps until it has; `relay.test.ts`: BatchesDelivered: reports the rejection of a step canceled during its rehearsal (#28) |
 | `EventsDelivered` | `controller.test.ts`: CancelReleases, ChainProgresses, EventsDelivered: releases a blocked call without consuming the report; EndDelivered, EventsDelivered: reports a returned report again after the programmer ended the session with it (#60); EventsDelivered: returns once something interrupts, and not for a quiet edit by others; `relay.test.ts`: EventsDelivered: cancels a blocked call without losing the report, even when racing |
 | `QuietDelivered` | `controller.test.ts`: NotWhileTyping, EditsReported, QuietDelivered: waits in the programmer's turn until they pause typing, or hand the turn back |
@@ -930,6 +932,7 @@ as played (`ConsumeRun`).
 | `StopBeforeAction` | the loop in `actions` checking `isInterrupted` before each action |
 | `TakeEffect`, `Proceed` | the action's steps in `perform`: an effect, an await, or a check that finds no interrupt |
 | `StopAtCheck` | a check that finds the timeline interrupted: a sleep's result, `confirm`, or `notStarted`; a `type` cut after a chunk returns its `chunksLeft` |
+| `RejectInterruptedEdit` | an in-flight typing edit is rejected after interruption; the rejected chunk remains unplayed |
 | `StopWhileRunning` | `run` interrupted while its command runs on: `consumed` |
 | `FinishAction` | the loop in `actions` going on to the next action |
 | `Stop` | `stopped(id, unplayed, effect)`: `discarded` unless an earlier action changed the screen (the `effect` flag in `actions`), or this one typed part of its text or left its command running |
@@ -943,6 +946,7 @@ the model, run in TLC and then reverted:
 | `Complete` reports a fifth status, "done" | `TypeOK` |
 | `RestOnly = FALSE`: a cut `type` returns all of its text | `PlaysNothingTwice` |
 | `ConsumeRun = FALSE`: an interrupted `run` whose command runs on is returned as unplayed | `PlaysNothingTwice` |
+| `RejectInterruptedEdit` returns the entire type after an earlier chunk played | `PlaysNothingTwice` |
 | `StopBeforeAction` ignores the earlier actions' effects | `DiscardedMeansNothing` |
 | an await never returns: `Proceed` leaves `pc` as it was | `EventuallyReported` |
 
@@ -951,7 +955,7 @@ Every invariant and property names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `PlaysNothingTwice` | `session.e2e.test.ts`: PlaysNothingTwice: returns what's left of a type cut inside its second part; PlaysNothingTwice, DiscardedMeansNothing: stops waiting when the programmer interrupts, reporting the command as still running; `player.test.ts`: PlaysAfterCompleted, PlaysNothingTwice, StopAtCheck: hands back what's left of a type cut short, before the marker or after it, and nothing if none was typed; StopWhileRunning: reports a command running on, posts its exit when it ends, and counts it as played when interrupted |
+| `PlaysNothingTwice` | `session.e2e.test.ts`: PlaysNothingTwice: returns what's left of a type cut inside its second part; PlaysNothingTwice, DiscardedMeansNothing: stops waiting when the programmer interrupts, reporting the command as still running; `player.test.ts`: RejectInterruptedEdit: returns the untyped suffix and restores the cursor through a programmer edit; PlaysAfterCompleted, PlaysNothingTwice, StopAtCheck: hands back what's left of a type cut short, before the marker or after it, and nothing if none was typed; StopWhileRunning: reports a command running on, posts its exit when it ends, and counts it as played when interrupted |
 | `DiscardedMeansNothing` | `session.e2e.test.ts`: DiscardedMeansNothing: discards a batch interrupted after a type with nothing to type, which changed nothing (specs/Actions.tla); PlaysNothingTwice, DiscardedMeansNothing: stops waiting when the programmer interrupts, reporting the command as still running; `player.test.ts`: Stop: discards a batch interrupted before its first action, and reports no code for it |
 | `EventuallyReported` | `session.e2e.test.ts`: EventuallyReported: runs a command, reporting its output and exit code with the batch; `player.test.ts`: SaveAndRun: saves the batch first, runs in the root, waits as long as asked within the most, and reports the run |
 
@@ -2217,6 +2221,19 @@ stuck rollback violate the corresponding safety or progress property.
 | `NoLostPrevious` | `speech_setup_fs.test.ts`: restores the previous directory if commit rename fails; preserves the backup directory if rollback also fails. |
 | `SetupProgress` | `speech_setup.test.ts`: times out a stalled download and cleans staging. |
 
+The same model applies to the separate GPU FP32 cache. Setup copies the pinned
+shared files from the verified CPU cache, verifies those copies and the GPU
+model, and commits a separate directory. The CPU q8 model is not changed.
+The model's limitation on concurrent setup processes also applies here.
+
+| Property | GPU model test |
+|---|---|
+| `InstalledOnlyIfVerified` | `speech_gpu_model.test.ts`: InstalledOnlyIfVerified: installs the separate verified GPU model only after explicit setup; `speech_gpu_model.integration.test.ts` verifies real file operations with small test assets. |
+| `NoBadInstall` | `speech_gpu_model.test.ts`: NoBadInstall: rejects oversize, truncated, or corrupted bytes and a changed shared asset. |
+| `CancelledDoesNotInstall` | `speech_gpu_model.test.ts`: CancelledDoesNotInstall: honors cancellation while copying shared assets and before dispatching replacement. |
+| `NoLostPrevious` | `speech_gpu_model.test.ts`: NoLostPrevious: restores an older GPU cache if the atomic replacement fails. |
+| `SetupProgress` | `speech_gpu_model.test.ts`: SetupProgress: bounds a stalled model request and cleans staging after timeout. |
+
 ### `SpeechSettings`: credentials and account voices
 
 The model captures two immutable catalog request identities and credential
@@ -2836,3 +2853,78 @@ violates `MixedWarns` or `MatchingDelivers`. `panel_placement.test.ts`,
 `attachment_gate.test.ts`, `extension.test.ts` and `local_audio.test.ts`
 exercise rejection and guidance. An already-installed old workspace may still
 select legacy fallback, which the new companion cannot prevent.
+
+### `GpuSetup`: preflight, download and hardware proof
+
+The model requires trusted runtime and physical-device preflight before the
+optional GPU download, then bounds the negative control, tiny graph and model
+proofs. `GpuSetup.cfg` checked 74 distinct states, including `CheckSettles`.
+The preflight-bypass mutation violates `PreflightBeforeDownload`; mutations
+bypassing the negative control, allowing explicit GPU CPU fallback, or starting
+a successor before retirement violate their respective safety properties.
+The symlink-safe gate mutation violates `TrustedSymlinkChain`. Negative-control
+and positive-driver mapping bypasses violate `DriverIdentity`. Physical GPU
+availability and real audio quality are not established by TLC. The model
+abstracts execution-provider placement: model inference retains GPU admission
+and proofs while one known operation runs on CPU. Strict probes still forbid
+CPU fallback; `speech_gpu_options.test.ts` checks both policies.
+
+| Property | Test |
+|---|---|
+| `TypeOK`, `GpuVerified` | `speech_gpu_check.test.ts`: GpuVerified: requires trust, physical device, negative control, tiny graph and model; `speech_gpu_admission.integration.test.ts`: runs verified setup then dispatches a GPU unit through a controlled worker port. |
+| `PreflightBeforeDownload` | `speech_gpu_setup_flow.test.ts`: PreflightBeforeDownload: does not download when preflight or the CPU model is unavailable; `speech_gpu_model.integration.test.ts`: runs physical preflight before downloading a model and reports byte progress through the real setup flow. |
+| `TrustedSymlinkChain` | `speech_gpu_trust.test.ts`: TrustedSymlinkChain: rejects a user-owned intermediate symlink even when the final target is trusted. |
+| `DriverIdentity` | `speech_gpu_driver_identity.test.ts`: DriverIdentity: accepts only the exact mapped Radeon device, inode and hash; DriverIdentity: requires no Radeon driver mapping in the invalid-ICD control. |
+| `ExplicitNoFallback` | `speech_service.test.ts`: ExplicitNoFallback: refuses explicit GPU before starting a CPU worker. |
+| `NoSuccessorBeforeReap`, `CheckSettles` | `speech_gpu_process.test.ts`: NoSuccessorBeforeReap, CheckSettles: kills a timed-out child and waits for its exit before settling; `speech_service.test.ts`: NoSuccessorBeforeReap: keeps a canceled GPU proof slot until the proof settles. |
+
+### `GpuMappedIcd`: mapped driver classification
+
+`GpuMappedIcd.cfg` checks 67 distinct states with three mapped objects. `Safe`
+and `NegativeSafe` require classification independent of filenames, with no
+extra or unreadable ICD in either positive or negative checks. Disabling the
+classification guard violates `NegativeSafe`. The `NeverAdmit` and
+`NeverAcceptNegative` properties are intentionally false reachability witnesses
+for valid positive and negative paths. The model does not establish physical
+AMD compatibility or sandbox native code.
+
+| Property | Test |
+|---|---|
+| `Safe`, `NegativeSafe` | `speech_gpu_driver_identity.test.ts`: Safe, NegativeSafe: rejects a renamed extra ICD instead of relying on its filename; `speech_gpu_elf.integration.test.ts`: Safe, NegativeSafe: rejects a valid ICD mapped under an unrelated filename. |
+
+### `GpuSynthesisProcess`: isolated GPU ownership
+
+The model bounds two process epochs and requires a fresh verified capability
+before each spawn. The child verifies its mapped Vulkan loader before ready and
+before each audio result. Cancellation retires the process; no successor or
+fallback starts before its close event. It models both graceful disposal and
+forced termination. `audio` abstracts a result already handed off, so
+prohibiting fallback after it is more conservative than the runtime rule
+against replay after playback starts. `RetirementProgress` assumes the
+operating system eventually reports exit after forced termination; the
+implementation holds the slot if it does not.
+
+TLC checked 132 distinct states. Removing any of the proof, reaping, epoch,
+loader or playback guards violates `Safe`; disabling forced termination
+violates `RetirementProgress`. The unit tests for `speech_gpu_client.ts`,
+`speech_gpu_transport.ts`, `speech_gpu_worker_runtime.ts`, and
+`speech_gpu_verified_engine.ts` exercise the concrete boundary. The separate
+`speech_gpu_process.e2e.test.ts` starts a real synthetic child, tests warm reuse,
+and verifies cancellation retains ownership until forced termination and close.
+The model does not establish actual GPU hardware availability or audio quality.
+The IPC wire encoding changes without changing the modeled ownership, proof,
+or retirement behavior. GPU IPC codec tests cover bounded byte round trips and
+rejection of malformed messages.
+
+### `GpuProcessSlot`: shared GPU child ownership
+
+The shared slot abstracts inference, proof and physical-device checks as one
+process owner. Contending work receives a retryable busy result immediately. A
+result does not free the slot; only the child's close event does. TLC checked
+five states and an early-release mutation violates `Safe`. `BusyResponds`
+models a prompt refusal; `Reaped` assumes the operating system eventually
+reports a child close. Unit and integration tests for `speech_gpu_slot.ts`,
+`speech_gpu_client.ts`, and `speech_gpu_proof_runner.ts` exercise the in-
+process lease and reaping boundary. The model does not coordinate separate
+extension-host processes. `Result` never fires in the checked configuration
+because `GuardClose` is true; it exists only to model the early-release mutation.

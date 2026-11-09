@@ -11,7 +11,7 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes the 0.22.0 implementation on this feature branch.
+Status: describes the experimental 0.23.0 implementation on this feature branch.
 
 The source is `.archi/ai-pair.json`. To regenerate the page with
 Archi-Techture 1.5.1, set `ARCHI_TO_HTML` to its `out/tools/archi-to-html.js`
@@ -27,6 +27,13 @@ node --input-type=module -e 'import {readFile,writeFile} from "node:fs/promises"
 The normalizer preserves the diagram data while formatting the export and
 representing Unicode with context-appropriate escapes. Validate the bundle
 with Archi's `validate-archi.js` and check the regenerated page in a browser.
+
+The GPU local synthesis diagram records the setup, proof and isolated worker
+boundaries under construction. On 2026-11-09, Archi 1.5.1 validated the source,
+the export was regenerated, and both normalizer test suites passed. An
+isolated headless Chromium render showed the GPU diagram with no page errors;
+the screenshot was inspected for layout. One supplied AMD system has since
+been tested; broader hardware validation remains open.
 
 ## Components
 
@@ -443,3 +450,10 @@ incompatible companion before selecting an owner and asks for both extensions
 to be updated and reloaded. The new companion rejects older preparation and
 shows the same guidance. An already-installed older workspace can still
 select its own legacy fallback. The public MCP protocol is unchanged.
+
+GPU compute selection and setup status are local speech controls. The companion
+handles actions in its own panel, and the generic sender filters unsupported
+updates; neither produces a private transport frame. This leaves version 2
+and the public MCP protocol unchanged. An older companion
+does not offer the GPU controls. The companion panel routing test verifies the
+local boundary.

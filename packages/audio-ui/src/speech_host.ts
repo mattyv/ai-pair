@@ -11,6 +11,14 @@ import { SpeechOutputPreferences, type OutputPreferenceView } from '../../vscode
 import { speechRuntimeAvailable } from '../../vscode/src/speech_runtime_status';
 import { localSpeechPlatform } from '../../vscode/src/speech_platform';
 import { SpeechService } from '../../vscode/src/speech_service';
+import { SpeechCompute } from '../../vscode/src/speech_compute';
+import { createGpuHostBinding } from '../../vscode/src/speech_gpu_host_binding';
+import { MAX_GPU_WORKER_DETAILS } from '@ai-pair/protocol';
+import { createGpuSynthesisClient } from '../../vscode/src/speech_gpu_client';
+import { installedGpuModel, setupGpuModel } from '../../vscode/src/speech_gpu_model';
+import { setupGpuFlow } from '../../vscode/src/speech_gpu_setup_flow';
+import type { GpuBindingDependencies } from '../../vscode/src/speech_gpu_binding';
+import type { SpeechComputeState } from '../../vscode/src/speech_compute_types';
 import { speechReady } from '../../vscode/src/speech_readiness';
 import { SpeechTempoClient } from '../../vscode/src/speech_tempo_client';
 import { installedSpeechModel, setupSpeech, speechModelStatus } from '../../vscode/src/speech_setup';
@@ -23,6 +31,7 @@ export interface SpeechHostPanel {
   showSpeechOutputCatalog(value: OutputPreferenceView): void;
   showSpeechCatalog(value: CatalogView): void;
   showSpeechSettings(value: SpeechSettings): void;
+  showSpeechComputeState(value: SpeechComputeState): void;
   showSpeechStatus(id: number, state: SpeechState, message?: string): void;
   refreshSpeechSupport(): void;
 }
@@ -35,6 +44,10 @@ export interface SpeechHostOptions {
   page: () => number | undefined;
   panel: () => SpeechHostPanel | undefined;
   diagnostic: (event: SpeechDiagnosticEvent) => void;
+  /** Provides the isolated proof runner when the packaged worker is available. */
+  gpuProof?: GpuBindingDependencies['proof'];
+  /** Enables GPU inference only after the packaged path is reviewed and verified. */
+  enableGpuInference?: boolean;
 }
 
 /** Sanitized local speech lifecycle facts for integration observation. */
@@ -51,6 +64,7 @@ export interface SpeechHost {
   output: CompanionOutput;
   panelSpeech: PanelWiring['speech'];
   observation(): LocalSpeechObservation | undefined;
+  gpuDiagnostics(): import('@ai-pair/protocol').GpuDiagnostics;
   ready(): Promise<boolean>;
   dispose(): void;
 }
@@ -85,6 +99,79 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
   let previewCapture = false;
   let previewId: number | undefined;
   let previewSequence = 0;
+  const setupAbort = new AbortController();
+  const binding =
+    !desktop || options.gpuProof === undefined
+      ? undefined
+      : createGpuHostBinding({
+          extensionPath: context.extensionPath,
+          storageDirectory: context.globalStorageUri.fsPath,
+          platform: process.platform,
+          arch: process.arch,
+          proof: options.gpuProof,
+        });
+  let gpuBusy = false;
+  let gpuProcessBusy = false;
+  /** Marks only the subprocess portion, so downloads do not pause ordinary speech. */
+  async function duringGpuCheck<T>(operation: () => Promise<T>): Promise<T> {
+    gpuProcessBusy = true;
+    try {
+      return await operation();
+    } finally {
+      gpuProcessBusy = false;
+    }
+  }
+  /** Holds the setup/admission slot until its asynchronous proof has settled. */
+  async function exclusiveGpu<T>(operation: () => Promise<T>): Promise<T | undefined> {
+    if (disposed || gpuBusy) return undefined;
+    gpuBusy = true;
+    try {
+      const value = await operation();
+      return disposed ? undefined : value;
+    } finally {
+      gpuBusy = false;
+    }
+  }
+  let gpuStage: 'idle' | 'preflight' | 'model' | 'verify' | 'admission' = 'idle';
+  const gpuWorkerDetails: Array<import('../../vscode/src/speech_gpu_client').GpuWorkerDetail> = [];
+  const compute = new SpeechCompute(
+    config().get('speech.computeMode'),
+    (progress) => {
+      gpuStage = 'preflight';
+      if (!desktop) return Promise.resolve({ phase: 'unavailable', reason: 'unsupported' });
+      if (binding === undefined) return Promise.resolve({ phase: 'unavailable', reason: 'runtime_missing' });
+      if (speech.gpuSlotBusy()) {
+        speech.retireIdleGpu();
+        return Promise.resolve({ phase: 'unavailable', reason: 'busy' });
+      }
+      return exclusiveGpu(() =>
+        setupGpuFlow({
+          preflight: () => duringGpuCheck(binding.preflight),
+          cpuModel: () => {
+            gpuStage = 'model';
+            return installedSpeechModel(context.globalStorageUri.fsPath);
+          },
+          gpuModel: () => installedGpuModel(context.globalStorageUri.fsPath),
+          download: (report) => setupGpuModel(context.globalStorageUri.fsPath, { signal: setupAbort.signal, progress: report }),
+          verify: async (directory) => {
+            gpuStage = 'verify';
+            const result = await duringGpuCheck(binding.issue);
+            if (result.check.phase !== 'ready') return result.check;
+            return result.capability?.modelDirectory === directory ? result.check : { phase: 'unavailable', reason: 'model_missing' };
+          },
+          signal: setupAbort.signal,
+          progress,
+        }),
+      ).then((value) => value ?? { phase: 'unavailable', reason: disposed ? 'inconclusive' : 'busy' });
+    },
+    (value) => {
+      if (!disposed) options.panel()?.showSpeechComputeState(value);
+    },
+    options.enableGpuInference === true,
+  );
+  let computeGeneration = 0;
+  let computeTail: Promise<void> = Promise.resolve();
+  let computePending = false;
   let previewProvider: 'kokoro' | 'elevenlabs' = 'kokoro';
 
   function stored(): SpeechSettings {
@@ -295,6 +382,36 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     kokoroSupported: platform,
     cloud,
     settings: settings.get,
+    ...(options.enableGpuInference === true && binding !== undefined
+      ? {
+          gpuCapability: async () => {
+            gpuStage = 'admission';
+            return (await exclusiveGpu(() => duringGpuCheck(binding.issue))) ?? { check: { phase: 'checking' } };
+          },
+          createGpu: (
+            gpuCapability: import('../../vscode/src/speech_gpu_client').GpuLaunchCapability,
+            listener: import('../../vscode/src/speech_local_client').LocalListener,
+          ) => {
+            gpuWorkerDetails.length = 0;
+            return createGpuSynthesisClient({
+              capability: gpuCapability,
+              listener,
+              detail: (value) => {
+                gpuWorkerDetails.push(value);
+                if (gpuWorkerDetails.length > MAX_GPU_WORKER_DETAILS) gpuWorkerDetails.shift();
+              },
+            });
+          },
+        }
+      : {}),
+    gpuExternalBusy: () => gpuProcessBusy,
+    computeMode: () => compute.state().requestedMode,
+    actualBackend: (value) => {
+      compute.actual(value);
+    },
+    gpuCheck: (value) => {
+      compute.reportUnavailable(value.reason);
+    },
     output,
   });
   void speechRuntimeAvailable(runtimeDirectory).then((available) => {
@@ -320,6 +437,30 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     () => {},
   );
   const panelSpeech: PanelWiring['speech'] = {
+    computeState: () => compute.state(),
+    computeMode: (value) => {
+      speech.cancel();
+      compute.select(value);
+      const current = ++computeGeneration;
+      computePending = true;
+      const save = computeTail.then(() => config().update('speech.computeMode', value, vscode.ConfigurationTarget.Global));
+      computeTail = save.catch(() => {});
+      void save.then(
+        () => {
+          if (current === computeGeneration) computePending = false;
+        },
+        () => {
+          if (current !== computeGeneration) return;
+          computePending = false;
+          const storedMode: unknown = config().get('speech.computeMode');
+          compute.select(storedMode === 'auto' || storedMode === 'gpu' ? storedMode : 'cpu');
+          void vscode.window.showErrorMessage('Could not save speech compute mode.');
+        },
+      );
+    },
+    checkGpuSetup: () => {
+      void compute.check();
+    },
     outputView: () => preferences.view(),
     outputReady,
     outputRetired: () => {},
@@ -383,6 +524,14 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     }),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (!event.affectsConfiguration('aiPair.speech')) return;
+      if (!computePending) {
+        const mode: unknown = config().get('speech.computeMode');
+        const next = mode === 'auto' || mode === 'gpu' ? mode : 'cpu';
+        if (next !== compute.state().requestedMode) {
+          speech.cancel();
+          compute.select(next);
+        }
+      }
       const current = settings.get();
       // specs/ProviderChoice.tla, External: persistence echoes cannot override a pending choice.
       if (pending === undefined) {
@@ -401,6 +550,17 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     output,
     panelSpeech,
     observation: () => (observation === undefined ? undefined : { ...observation }),
+    gpuDiagnostics: () => {
+      const { requestedMode, actualBackend, gpuCheck } = compute.state();
+      const check = gpuCheck.phase === 'unavailable' ? gpuCheck : { phase: gpuCheck.phase };
+      return {
+        requestedMode,
+        actualBackend,
+        check,
+        stage: gpuStage,
+        ...(gpuWorkerDetails.length === 0 ? {} : { workerDetails: [...gpuWorkerDetails] }),
+      };
+    },
     ready: () =>
       speechReady({
         settings: settings.get,
@@ -412,6 +572,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
       }),
     dispose: () => {
       disposed = true;
+      setupAbort.abort();
       subscriptions.forEach((subscription) => {
         subscription.dispose();
       });

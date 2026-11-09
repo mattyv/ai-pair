@@ -2,7 +2,7 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.22.1",
+  "version": "0.23.2",
   "publisher": "michalstrba",
   "private": true,
   "license": "MIT",
@@ -185,6 +185,17 @@
           ],
           "default": "kokoro",
           "description": "Speech provider. ElevenLabs sends selected narration and previews to its service.",
+          "scope": "application"
+        },
+        "aiPair.speech.computeMode": {
+          "type": "string",
+          "enum": [
+            "cpu",
+            "auto",
+            "gpu"
+          ],
+          "default": "cpu",
+          "description": "Kokoro compute mode. GPU requires verified local setup.",
           "scope": "application"
         },
         "aiPair.speech.elevenLabsVoice": {

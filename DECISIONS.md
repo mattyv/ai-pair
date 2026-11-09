@@ -10,6 +10,14 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   GPT-6.1 Terra agents write code and tests; GPT-6 Astra agents review them.
     Resolve findings and verify the resulting changes before reporting completion.
 
+## Interrupted typing edits
+
+-   If an in-flight typing edit is rejected after interruption, report only
+    the untyped remainder and restore the cursor and selection through the
+    programmer's changes. A rejection without interruption remains a failure.
+    Line identities are conservatively forgotten after a rejected edit, so
+    earlier line references may need to be read again.
+
 ## Cloud speech failure reporting
 
 -   Report only fixed ElevenLabs failure categories for ordinary narration and
@@ -571,3 +579,56 @@ idle gaps beyond the current preparation/playback overlap.
     select its existing legacy fallback after the new companion rejects it;
     new code cannot change that already-installed behavior. Saved panel state
     without the count is accepted and interpreted as zero.
+
+## Local GPU controls and companion compatibility
+
+Keep the GPU mode, setup check, and compute status in the local speech host.
+The companion handles actions locally; its generic sender filters unsupported
+updates, so neither action nor status becomes a workspace-to-companion frame.
+Protocol version 2 therefore remains unchanged. An older companion does not
+offer the new controls. The public MCP protocol is unchanged. The companion
+panel routing test verifies that these controls stay local. GPU readiness still
+requires a fresh verified launch capability and a working GPU inference worker.
+
+## Separate GPU model and runtime
+
+Keep the CPU q8 model and cache unchanged. GPU setup uses a separately pinned
+FP32 model from the same upstream revision, requiring an additional download of
+325,532,232 bytes. The q8 GPU candidate failed on a second input length; the
+FP32 candidate passed the reviewed varied-input software test. GPU setup
+copies and re-verifies the shared tokenizer and phonemizer assets into its own
+cache before atomic installation. This evidence does not establish physical GPU
+compatibility, which remains pending. The GPU child uses separately bundled
+Node 22.23.4 on Linux x64, subject to the exact runtime manifest and trusted
+loader verification gates. The GPU bundle
+requires glibc 2.28 or newer; it does not install a driver.
+
+The experimental GPU path requires a trusted, root-owned Vulkan loader and
+Radeon driver. The capability carries the driver's canonical path, digest,
+device and inode; positive checks must verify the mapped identity before
+readiness and audio. The no-adapter negative control verifies the loader without
+requiring the Radeon driver. The exact loader preload is confined to the child.
+Root-owned native dependencies remain a trust assumption, and these checks do
+not sandbox native code. The guarded path is enabled for an experimental host
+trial after review; physical AMD validation remains required before describing
+GPU support as a
+validated release. Fresh proof has its own bounded deadline, separate from the
+worker startup deadline.
+
+## GPU process IPC encoding
+
+Use JSON IPC for GPU proof and synthesis children so the extension host and
+the separately bundled Node runtime do not depend on matching V8 serialization
+versions. Encode WAV bytes as canonical base64 and enforce the existing WAV
+size and response schema bounds before handing data to the client. The wire
+format adds base64 overhead; it does not replace loader, driver, or model proof.
+
+## GPU model operation placement
+
+Route the pinned model's `ups.1/ConvTranspose` operation to CPU in both the
+model proof and inference sessions. A same-input isolated test on the tested
+Linux AMD system reproduced substantial WebGPU error at that operation. A
+profiled original-model test placed that operation on CPU while retaining GPU
+execution elsewhere; its raw waveform closely matched the CPU reference.
+Strict negative and tiny graph proofs still forbid CPU fallback. This evidence
+does not establish subjective audio quality or compatibility on other hardware.

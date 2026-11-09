@@ -151,6 +151,12 @@ it wants spoken; their written text remains visible. Voice speed is independent
 of code pace and the reading timer. Both reading and speech must finish before
 playback advances, so audio cannot rush a held reading interval.
 
+Kokoro compute defaults to CPU. The experimental GPU option uses a separate
+pinned model and an isolated local worker. Settings discloses the additional
+model download and displays the requested mode, actual backend and setup
+status. Auto may use CPU when GPU verification fails; explicit GPU does not
+silently fall back. The GPU path remains subject to physical AMD validation.
+
 For ElevenLabs, Settings explains that selected text and previews leave the
 machine and consume account credits. Add or replace a key through VS Code's
 native masked prompt, then load account voices and choose one. No preview plays

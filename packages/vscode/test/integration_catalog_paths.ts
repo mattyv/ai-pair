@@ -8,6 +8,7 @@ import type { Report } from '@ai-pair/protocol';
 import type { Api } from '../src/extension';
 import { cloudCompanionHost } from './integration_cloud_companion_host';
 import { cloudServicePaths } from './integration_cloud_service_paths';
+import { gpuProcessPaths } from './integration_gpu_process';
 
 const report = z.object({ events: z.array(z.looseObject({ kind: z.string(), seq: z.number() })) });
 
@@ -216,6 +217,7 @@ export async function run(): Promise<void> {
     assert.doesNotMatch(JSON.stringify(failures), /private provider response|ai-pair-integration-dummy-key/);
     await cloudCompanionHost();
     await cloudServicePaths();
+    await gpuProcessPaths();
 
     for (const reason of ['auth', 'network', 'invalid']) {
       mode = reason;

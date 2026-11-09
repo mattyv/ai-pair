@@ -11,7 +11,7 @@ import {
   type SavedSession,
   type NarrationPort,
 } from '@ai-pair/core';
-import { discoveryDir, LOCAL_AUDIO_VERSION, localSpeechReport, type LocalSpeechReport } from '@ai-pair/protocol';
+import { discoveryDir, gpuDiagnostics, LOCAL_AUDIO_VERSION, localSpeechReport, type LocalSpeechReport } from '@ai-pair/protocol';
 import { playDemo } from './demo';
 import { VsCodeEditor } from './editor';
 import { Diagnostics } from './diagnostics';
@@ -28,6 +28,7 @@ import { installedSpeechModel, setupSpeech, speechModelStatus } from './speech_s
 import { speechRuntimeAvailable } from './speech_runtime_status';
 import { localSpeechPlatform } from './speech_platform';
 import { speechListeningRate, type SpeechSettings } from './speech_types';
+import { SpeechCompute } from './speech_compute';
 import type { SpeechState } from './panel_messages';
 import type { OutsideChanges } from './outside';
 import { watchOutside } from './outside_watch';
@@ -37,7 +38,7 @@ import { claudeStarter, setUpAgent, writeLauncher } from './setup';
 import { setTimings, timings, type Timings } from './timings';
 import { Calibration } from './calibration';
 import { builtInPassage, type Passage } from './passage';
-import { PanelPlacement, type PanelOwner } from './panel_placement';
+import { PanelPlacement, type PanelOwner, type PanelPrepareFailure } from './panel_placement';
 import { WorkspaceSession } from './workspace_session';
 
 /** Values compiled into this running bundle, not the extension currently on disk. */
@@ -219,6 +220,16 @@ export function activate(context: vscode.ExtensionContext): Api {
       void config().update(CODE_PLAYBACK, value, vscode.ConfigurationTarget.Global);
     },
   };
+  const compute = new SpeechCompute(
+    config().get('speech.computeMode'),
+    () => Promise.resolve({ phase: 'unavailable', reason: 'runtime_missing' }),
+    (value) => {
+      panel.showSpeechComputeState(value);
+    },
+  );
+  let computeGeneration = 0;
+  let computeTail: Promise<void> = Promise.resolve();
+  let computePending = false;
   let pendingSpeechSettings: SpeechSettings | undefined;
   let speechSaveGeneration = 0;
   let speechSaveTail: Promise<void> = Promise.resolve();
@@ -395,9 +406,41 @@ export function activate(context: vscode.ExtensionContext): Api {
         } catch {
           // Copy the workspace facts even when the local report is unavailable.
         }
-        await vscode.env.clipboard.writeText(JSON.stringify({ ...snapshot, localSpeech }));
+        let gpu: import('@ai-pair/protocol').GpuDiagnostics | undefined;
+        try {
+          const raw: unknown = await vscode.commands.executeCommand('aiPair.localAudio.gpuDiagnostics');
+          const parsed = gpuDiagnostics.safeParse(raw);
+          if (parsed.success) gpu = parsed.data;
+        } catch {
+          // Older companions do not provide this optional command.
+        }
+        await vscode.env.clipboard.writeText(JSON.stringify({ ...snapshot, localSpeech, ...(gpu === undefined ? {} : { gpu }) }));
       },
       speech: {
+        computeState: () => compute.state(),
+        computeMode: (value) => {
+          speech.cancel();
+          compute.select(value);
+          const current = ++computeGeneration;
+          computePending = true;
+          const computeSave = computeTail.then(() => config().update('speech.computeMode', value, vscode.ConfigurationTarget.Global));
+          computeTail = computeSave.catch(() => {});
+          void computeSave.then(
+            () => {
+              if (current === computeGeneration) computePending = false;
+            },
+            () => {
+              if (current !== computeGeneration) return;
+              computePending = false;
+              const stored: unknown = config().get('speech.computeMode');
+              compute.select(stored === 'auto' || stored === 'gpu' ? stored : 'cpu');
+              void vscode.window.showErrorMessage('Could not save speech compute mode.');
+            },
+          );
+        },
+        checkGpuSetup: () => {
+          void compute.check();
+        },
         outputView: () => outputPreferences.view(),
         outputReady: () => outputPreferences.ready(),
         outputRetired: (id, pageId) => {
@@ -558,6 +601,13 @@ export function activate(context: vscode.ExtensionContext): Api {
     localDesktop: cloudSupported,
     kokoroSupported: localSpeechSupported,
     settings: speechSettings.get,
+    computeMode: () => compute.state().requestedMode,
+    actualBackend: (value) => {
+      compute.actual(value);
+    },
+    gpuCheck: (value) => {
+      compute.reportUnavailable(value.reason);
+    },
     output: outputRouter,
   });
   const narration: NarrationPort = {
@@ -741,6 +791,14 @@ export function activate(context: vscode.ExtensionContext): Api {
     editor,
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('aiPair.speech')) {
+        if (!computePending) {
+          const mode: unknown = config().get('speech.computeMode');
+          const next = mode === 'auto' || mode === 'gpu' ? mode : 'cpu';
+          if (next !== compute.state().requestedMode) {
+            speech.cancel();
+            compute.select(next);
+          }
+        }
         const current = speechSettings.get();
         // specs/ProviderChoice.tla, External: persistence echoes cannot undo a pending choice.
         if (pendingSpeechSettings === undefined) {
@@ -827,6 +885,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       },
     },
   );
+  let prepareFailure: PanelPrepareFailure | undefined;
   const placement = new PanelPlacement({
     epoch: connectionEpoch,
     remote: vscode.env.remoteName !== undefined,
@@ -836,6 +895,12 @@ export function activate(context: vscode.ExtensionContext): Api {
       Promise.resolve(
         vscode.commands.executeCommand('aiPair.localAudio.prepare', { version: LOCAL_AUDIO_VERSION, epoch: connectionEpoch }),
       ),
+    failure: (reason) => {
+      prepareFailure = reason;
+      if (vscode.extensions.getExtension('michalstrba.ai-pair-local-audio') !== undefined) {
+        log.info(`Local Audio preparation failed: ${reason}`);
+      }
+    },
     beforeCommit: () => {
       owner = 'companion';
       if (shuttingDown) throw new Error('Window is closing.');
@@ -863,8 +928,17 @@ export function activate(context: vscode.ExtensionContext): Api {
     owner = chosen;
     if (chosen === 'companion') return;
     if (chosen === 'incompatible') {
+      const detail: Record<PanelPrepareFailure, string> = {
+        timeout: 'The Local Audio extension did not respond in time.',
+        activation_failure: 'The Local Audio extension could not be started.',
+        invalid_response: 'The Local Audio extension sent an invalid response.',
+        protocol_mismatch: 'The extensions use incompatible protocol versions.',
+        epoch_mismatch: 'The Local Audio extension returned an unexpected session.',
+      };
       void vscode.window.showWarningMessage(
-        'AI Pair and AI Pair Local Audio could not connect. Update both extensions and reload the window.',
+        prepareFailure === undefined
+          ? 'AI Pair and AI Pair Local Audio could not connect. Update both extensions and reload the window.'
+          : `AI Pair and AI Pair Local Audio could not connect. ${detail[prepareFailure]} See the AI Pair output for details.`,
       );
       return;
     }

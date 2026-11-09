@@ -201,3 +201,5 @@ export * from './panel_update';
 export * from './panel_chunks';
 export * from './command_channel';
 export * from './local_diagnostics';
+
+export * from './gpu_diagnostics';

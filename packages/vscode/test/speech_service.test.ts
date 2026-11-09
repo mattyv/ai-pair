@@ -4,6 +4,7 @@ import { LOCAL_PROTOCOL_VERSION, LOCAL_REQUEST } from '../src/speech_local_proto
 import { installedSpeechModel } from '../src/speech_setup';
 import { speechRuntimeAvailable } from '../src/speech_runtime_status';
 import { SpeechService, type SpeechOutput } from '../src/speech_service';
+import { GpuProcessBusyError } from '../src/speech_gpu_client';
 import type {
   LocalClientState,
   LocalListener,
@@ -39,6 +40,7 @@ const fake = vi.hoisted(() => {
 });
 vi.mock('node:worker_threads', () => ({ Worker: fake.Worker }));
 vi.mock('../src/speech_local_client', () => ({ LocalSynthesisClient: fake.LocalSynthesisClient }));
+vi.mock('../src/speech_gpu_client', () => ({ GpuProcessBusyError: class extends Error {} }));
 vi.mock('../src/speech_setup', () => ({ installedSpeechModel: vi.fn() }));
 vi.mock('../src/speech_runtime_status', () => ({ speechRuntimeAvailable: vi.fn() }));
 vi.mock('../src/speech_tempo_pcm', () => ({ decodeSpeechWav: vi.fn(), encodeTempoWav: vi.fn() }));
@@ -160,7 +162,7 @@ function newLocal(): LocalDouble {
 }
 
 /** Makes a service with a live page and local preferences. */
-function harness(enabled = true) {
+function harness(enabled = true, computeMode: () => 'cpu' | 'auto' | 'gpu' = () => 'cpu') {
   Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
   Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
   const output = mock<SpeechOutput>();
@@ -173,6 +175,7 @@ function harness(enabled = true) {
     localDesktop: true,
     output,
     createLocal: double.factory,
+    computeMode,
     settings: () => ({ enabled, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
   });
   return { service, output, local: double };
@@ -2058,4 +2061,482 @@ describe('listening-speed processing', () => {
     await finished;
     service.dispose();
   });
+});
+
+it('ExplicitNoFallback: refuses explicit GPU before starting a CPU worker', async () => {
+  const { service, output, local: engine } = harness(true, () => 'gpu');
+  await service.speak('Hello.');
+  expect(engine.port.load).not.toHaveBeenCalled();
+  expect(engine.port.synthesize).not.toHaveBeenCalled();
+  expect(output.status).toHaveBeenCalledWith(expect.any(Number), 'unavailable', 'GPU speech is not available. Check GPU setup.');
+});
+
+it('reports the CPU backend when its worker becomes ready and clears it on retirement', async () => {
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
+  const backend = vi.fn<(value: import('../src/speech_compute_types').SpeechComputeBackend) => void>();
+  const engine = newLocal();
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    createLocal: engine.factory,
+    actualBackend: backend,
+    output: mock<SpeechOutput>(),
+    settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+  });
+  const speech = service.speak('Hello.');
+  await settle();
+  engine.listener?.ready();
+  expect(backend).toHaveBeenCalledWith('cpu');
+  engine.listener?.retired('worker_exit');
+  expect(backend).toHaveBeenLastCalledWith('none');
+  await speech;
+});
+
+it('GpuVerified: dispatches only through a freshly authorized GPU worker and reports its actual backend', async () => {
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
+  const cpu = new LocalDouble();
+  const gpu = new LocalDouble();
+  const actual = vi.fn<(value: import('../src/speech_compute_types').SpeechComputeBackend) => void>();
+  const capability = mock<import('../src/speech_gpu_client').GpuLaunchCapability>({ modelDirectory: '/gpu-model' });
+  const authorize = vi.fn().mockResolvedValue({ check: { phase: 'ready' }, capability });
+  const createGpu = vi.fn((value: typeof capability, listener: LocalListener) => {
+    expect(value).toBe(capability);
+    return gpu.factory(listener);
+  });
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    createLocal: cpu.factory,
+    gpuCapability: authorize,
+    createGpu,
+    computeMode: () => 'gpu',
+    actualBackend: actual,
+    output,
+    settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+  });
+  const pending = service.speak('Hello.');
+  await settle();
+  expect(authorize).toHaveBeenCalledOnce();
+  expect(gpu.port.load).toHaveBeenCalledWith('/gpu-model');
+  expect(cpu.port.load).not.toHaveBeenCalled();
+  gpu.ready();
+  expect(actual).toHaveBeenCalledWith('gpu');
+  expect(gpu.port.synthesize).toHaveBeenCalledOnce();
+  service.cancel();
+  await pending;
+});
+
+/** Makes a service with separate controlled CPU and GPU workers. */
+function gpuHarness(mode: () => 'cpu' | 'auto' | 'gpu') {
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
+  const cpu = new LocalDouble();
+  const gpu = new LocalDouble();
+  const capability = mock<import('../src/speech_gpu_client').GpuLaunchCapability>({ modelDirectory: '/gpu-model' });
+  const authorize = vi
+    .fn<() => Promise<import('../src/speech_gpu_capability').GpuCapabilityResult>>()
+    .mockResolvedValue({ check: { phase: 'ready' }, capability });
+  const actual = vi.fn<(value: import('../src/speech_compute_types').SpeechComputeBackend) => void>();
+  const checked = vi.fn<(value: import('../src/speech_compute_types').GpuCheck) => void>();
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    createLocal: cpu.factory,
+    gpuCapability: authorize,
+    createGpu: (verified, listener) => {
+      expect(verified).toBe(capability);
+      return gpu.factory(listener);
+    },
+    computeMode: mode,
+    actualBackend: actual,
+    gpuCheck: checked,
+    output,
+    settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+  });
+  return { service, cpu, gpu, capability, authorize, actual, checked, output };
+}
+
+it('ExplicitNoFallback: refuses CPU when GPU proof fails and Auto reports its CPU fallback reason', async () => {
+  let mode: 'gpu' | 'auto' = 'gpu';
+  const { service, cpu, gpu, authorize, checked } = gpuHarness(() => mode);
+  authorize.mockResolvedValue({ check: { phase: 'unavailable', reason: 'no_hardware' } });
+  await service.speak('Hello.');
+  expect(cpu.port.load).not.toHaveBeenCalled();
+  expect(gpu.port.load).not.toHaveBeenCalled();
+  mode = 'auto';
+  const pending = service.speak('Hello.');
+  await settle();
+  expect(checked).toHaveBeenLastCalledWith({ phase: 'unavailable', reason: 'no_hardware' });
+  expect(cpu.port.load).toHaveBeenCalledWith('/model');
+  service.cancel();
+  await pending;
+});
+
+it('GpuVerified: accepts a fresh proof that takes longer than the worker startup deadline', async () => {
+  vi.useFakeTimers();
+  const { service, gpu, authorize, capability } = gpuHarness(() => 'gpu');
+  const proof = Promise.withResolvers<import('../src/speech_gpu_capability').GpuCapabilityResult>();
+  authorize.mockReturnValue(proof.promise);
+  const pending = service.speak('Hello.');
+  await vi.advanceTimersByTimeAsync(21_000);
+  proof.resolve({ check: { phase: 'ready' }, capability });
+  await settle();
+  expect(gpu.port.load).toHaveBeenCalledWith('/gpu-model');
+  service.cancel();
+  await pending;
+  vi.useRealTimers();
+});
+
+it('GpuVerified: preserves the proof deadline when multipart admission completes while paused', async () => {
+  vi.useFakeTimers();
+  const { service, gpu, authorize, capability, output } = gpuHarness(() => 'gpu');
+  output.parts = true;
+  const admission = Promise.withResolvers<boolean>();
+  output.prepare = vi.fn().mockReturnValue(admission.promise);
+  const proof = Promise.withResolvers<import('../src/speech_gpu_capability').GpuCapabilityResult>();
+  authorize.mockReturnValue(proof.promise);
+  const pending = service.speak('First. Second.');
+  service.pause();
+  admission.resolve(true);
+  await settle();
+  service.resume();
+  await vi.advanceTimersByTimeAsync(21_000);
+  proof.resolve({ check: { phase: 'ready' }, capability });
+  await settle();
+  expect(gpu.port.load).toHaveBeenCalledWith('/gpu-model');
+  service.cancel();
+  await pending;
+  vi.useRealTimers();
+});
+
+it('NoStaleProof: times out a stuck proof without launching its late result', async () => {
+  vi.useFakeTimers();
+  const { service, gpu, authorize, capability } = gpuHarness(() => 'gpu');
+  const proof = Promise.withResolvers<import('../src/speech_gpu_capability').GpuCapabilityResult>();
+  authorize.mockReturnValue(proof.promise);
+  const pending = service.speak('Hello.');
+  await vi.advanceTimersByTimeAsync(400_000);
+  await pending;
+  proof.resolve({ check: { phase: 'ready' }, capability });
+  await settle();
+  expect(gpu.port.load).not.toHaveBeenCalled();
+  vi.useRealTimers();
+});
+
+it('NoStaleProof: ignores a GPU capability that arrives after cancellation', async () => {
+  const { service, gpu, authorize, capability } = gpuHarness(() => 'gpu');
+  const proof = Promise.withResolvers<import('../src/speech_gpu_capability').GpuCapabilityResult>();
+  authorize.mockReturnValue(proof.promise);
+  const pending = service.speak('Hello.');
+  service.cancel();
+  proof.resolve({ check: { phase: 'ready' }, capability });
+  await settle();
+  expect(gpu.port.load).not.toHaveBeenCalled();
+  await pending;
+});
+
+it('NoSuccessorBeforeReap: waits for a CPU worker to exit before starting a GPU worker', async () => {
+  let mode: 'cpu' | 'gpu' = 'cpu';
+  const { service, cpu, gpu, authorize } = gpuHarness(() => mode);
+  const first = service.speak('CPU.');
+  await settle();
+  cpu.ready();
+  service.cancel();
+  await cpu.audio(1);
+  await first;
+  mode = 'gpu';
+  await service.speak('GPU.');
+  expect(cpu.port.retire).toHaveBeenCalledOnce();
+  expect(authorize).not.toHaveBeenCalled();
+  expect(gpu.port.load).not.toHaveBeenCalled();
+  await service.speak('Still retiring.');
+  expect(authorize).not.toHaveBeenCalled();
+  cpu.released();
+  const next = service.speak('GPU after exit.');
+  await settle();
+  expect(authorize).toHaveBeenCalledOnce();
+  expect(gpu.port.load).toHaveBeenCalledWith('/gpu-model');
+  service.cancel();
+  await next;
+});
+
+it('reports why Auto uses CPU when no GPU adapter is available', async () => {
+  const checked = vi.fn<(value: import('../src/speech_compute_types').GpuCheck) => void>();
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
+  const cpu = new LocalDouble();
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    createLocal: cpu.factory,
+    computeMode: () => 'auto',
+    gpuCheck: checked,
+    output,
+    settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+  });
+  const pending = service.speak('Hello.');
+  await settle();
+  expect(checked).toHaveBeenCalledWith({ phase: 'unavailable', reason: 'runtime_missing' });
+  expect(cpu.port.load).toHaveBeenCalledWith('/model');
+  service.cancel();
+  await pending;
+});
+
+it('falls back in Auto when GPU proof rejects before a worker starts', async () => {
+  const { service, cpu, gpu, authorize, checked } = gpuHarness(() => 'auto');
+  authorize.mockRejectedValue(new Error('private'));
+  const pending = service.speak('Hello.');
+  await settle();
+  expect(checked).toHaveBeenCalledWith({ phase: 'unavailable', reason: 'probe_failed' });
+  expect(cpu.port.load).toHaveBeenCalledWith('/model');
+  expect(gpu.port.load).not.toHaveBeenCalled();
+  service.cancel();
+  await pending;
+});
+
+it('NoReplayAfterDispatch: never retries a failed GPU unit on CPU', async () => {
+  const { service, cpu, gpu } = gpuHarness(() => 'auto');
+  const unit = service.speak('Hello.');
+  await settle();
+  gpu.ready();
+  await gpu.failure(1);
+  await unit;
+  expect(cpu.port.load).not.toHaveBeenCalled();
+  expect(cpu.port.synthesize).not.toHaveBeenCalled();
+});
+
+it('NoSuccessorBeforeReap: retires a warm GPU before starting CPU', async () => {
+  let mode: 'cpu' | 'gpu' = 'gpu';
+  const { service, cpu, gpu, output } = gpuHarness(() => mode);
+  output.play.mockReturnValue(7);
+  const first = service.speak('GPU.');
+  await settle();
+  gpu.ready();
+  await gpu.audio(1);
+  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+  await first;
+  mode = 'cpu';
+  await service.speak('CPU.');
+  expect(gpu.port.retire).toHaveBeenCalledOnce();
+  expect(cpu.port.load).not.toHaveBeenCalled();
+  await service.speak('Still retiring.');
+  expect(cpu.port.load).not.toHaveBeenCalled();
+  gpu.released();
+  const next = service.speak('CPU after exit.');
+  await settle();
+  expect(cpu.port.load).toHaveBeenCalledWith('/model');
+  service.cancel();
+  await next;
+});
+
+it('reuses a verified warm GPU worker without starting a second process', async () => {
+  const { service, gpu, authorize, output } = gpuHarness(() => 'gpu');
+  output.play.mockReturnValue(7);
+  const first = service.speak('One.');
+  await settle();
+  gpu.ready();
+  await gpu.audio(1);
+  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+  await first;
+  const next = service.speak('Two.');
+  await settle();
+  expect(authorize).toHaveBeenCalledOnce();
+  expect(gpu.port.load).toHaveBeenCalledOnce();
+  expect(gpu.port.synthesize).toHaveBeenCalledTimes(2);
+  service.cancel();
+  await next;
+});
+
+it('rejects a stale failed GPU proof and fails closed on a current proof exception', async () => {
+  const { service, gpu, authorize, checked } = gpuHarness(() => 'gpu');
+  const proof = Promise.withResolvers<import('../src/speech_gpu_capability').GpuCapabilityResult>();
+  authorize.mockReturnValueOnce(proof.promise);
+  const stale = service.speak('Stale.');
+  service.cancel();
+  proof.reject(new Error('private'));
+  await settle();
+  await stale;
+  expect(checked).not.toHaveBeenCalled();
+  authorize.mockRejectedValueOnce(new Error('private'));
+  await service.speak('Current.');
+  expect(checked).toHaveBeenCalledWith({ phase: 'unavailable', reason: 'probe_failed' });
+  expect(gpu.port.load).not.toHaveBeenCalled();
+});
+
+it('rejects GPU ready without a capability and retires a worker that fails to start', async () => {
+  const { service, gpu, authorize, checked } = gpuHarness(() => 'gpu');
+  authorize.mockResolvedValueOnce({ check: { phase: 'ready' } });
+  await service.speak('No capability.');
+  expect(checked).toHaveBeenCalledWith({ phase: 'unavailable', reason: 'inconclusive' });
+  gpu.port.load.mockImplementationOnce(() => {
+    throw new Error('private');
+  });
+  await service.speak('Start fails.');
+  expect(gpu.port.retire).toHaveBeenCalledWith('worker_error');
+});
+
+it('does not fail a unit twice if GPU retirement settles it during a launch error', async () => {
+  const { service, gpu, output } = gpuHarness(() => 'gpu');
+  gpu.port.load.mockImplementationOnce(() => {
+    gpu.phase = 'loading';
+    throw new Error('private');
+  });
+  await service.speak('Hello.');
+  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'Local speech stopped. Retry setup.');
+  expect(output.status).not.toHaveBeenCalledWith(1, 'unavailable', 'GPU speech could not start. Check GPU setup.');
+});
+
+it('NoSuccessorBeforeReap: keeps a canceled GPU proof slot until the proof settles', async () => {
+  const { service, gpu, authorize, capability, output } = gpuHarness(() => 'gpu');
+  const proof = Promise.withResolvers<import('../src/speech_gpu_capability').GpuCapabilityResult>();
+  authorize.mockReturnValueOnce(proof.promise);
+  const first = service.speak('First.');
+  service.cancel();
+  await first;
+  await service.speak('Second.');
+  expect(authorize).toHaveBeenCalledOnce();
+  expect(output.status).toHaveBeenCalledWith(2, 'unavailable', 'Speech is still finishing; try again shortly.');
+  proof.resolve({ check: { phase: 'ready' }, capability });
+  await settle();
+  expect(gpu.port.load).not.toHaveBeenCalled();
+  const third = service.speak('Third.');
+  await settle();
+  expect(authorize).toHaveBeenCalledTimes(2);
+  expect(gpu.port.load).toHaveBeenCalledWith('/gpu-model');
+  service.cancel();
+  await third;
+});
+
+it('NoSuccessorBeforeReap: Auto waits while another GPU check owns the slot', async () => {
+  const { service, cpu, gpu, authorize, output } = gpuHarness(() => 'auto');
+  authorize.mockResolvedValue({ check: { phase: 'checking' } });
+  await service.speak('Hello.');
+  expect(cpu.port.load).not.toHaveBeenCalled();
+  expect(gpu.port.load).not.toHaveBeenCalled();
+  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'Speech is still finishing; try again shortly.');
+});
+
+it('reports the GPU slot occupied through proof, worker life and retirement', async () => {
+  const { service, gpu, authorize, capability } = gpuHarness(() => 'gpu');
+  const proof = Promise.withResolvers<import('../src/speech_gpu_capability').GpuCapabilityResult>();
+  authorize.mockReturnValueOnce(proof.promise);
+  const unit = service.speak('Hello.');
+  expect(service.gpuSlotBusy()).toBe(true);
+  proof.resolve({ check: { phase: 'ready' }, capability });
+  await settle();
+  expect(service.gpuSlotBusy()).toBe(true);
+  gpu.ready();
+  service.cancel();
+  gpu.retired('worker_exit');
+  expect(service.gpuSlotBusy()).toBe(true);
+  gpu.released();
+  expect(service.gpuSlotBusy()).toBe(false);
+  await unit;
+});
+
+it('NoSuccessorBeforeReap: reports retryable GPU slot contention without CPU fallback', async () => {
+  const { service, gpu, cpu, output } = gpuHarness(() => 'auto');
+  gpu.port.load.mockImplementationOnce(() => {
+    throw new GpuProcessBusyError();
+  });
+  await service.speak('Hello.');
+  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'Speech is still finishing; try again shortly.');
+  expect(cpu.port.load).not.toHaveBeenCalled();
+});
+
+it('GpuVerified: requests fresh proof for each new GPU worker epoch', async () => {
+  const { service, gpu, authorize, output } = gpuHarness(() => 'gpu');
+  output.play.mockReturnValue(7);
+  const first = service.speak('One.');
+  await settle();
+  gpu.ready();
+  await gpu.audio(1);
+  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+  await first;
+  gpu.retired('worker_exit');
+  gpu.released();
+  const second = service.speak('Two.');
+  await settle();
+  expect(authorize).toHaveBeenCalledTimes(2);
+  expect(gpu.port.load).toHaveBeenCalledTimes(2);
+  service.cancel();
+  await second;
+});
+
+it('retires an idle warm GPU worker for an explicit setup check', async () => {
+  const { service, gpu, output } = gpuHarness(() => 'gpu');
+  output.play.mockReturnValue(7);
+  const unit = service.speak('Hello.');
+  await settle();
+  gpu.ready();
+  service.retireIdleGpu();
+  expect(gpu.port.retire).not.toHaveBeenCalled();
+  await gpu.audio(1);
+  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+  await unit;
+  service.retireIdleGpu();
+  expect(gpu.port.retire).toHaveBeenCalledOnce();
+  expect(service.gpuSlotBusy()).toBe(true);
+  gpu.released();
+  expect(service.gpuSlotBusy()).toBe(false);
+});
+
+it('NoSuccessorBeforeReap: blocks CPU speech while a separate GPU setup owns the slot', async () => {
+  const cpu = new LocalDouble();
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    createLocal: cpu.factory,
+    gpuExternalBusy: () => true,
+    output,
+    settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+  });
+  await service.speak('Hello.');
+  expect(cpu.port.load).not.toHaveBeenCalled();
+  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'Speech is still finishing; try again shortly.');
+});
+
+it('keeps cloud narration available during a local GPU setup check', async () => {
+  const cloud = mock<ElevenLabsSpeechPort>();
+  cloud.synthesize.mockResolvedValue({ wav: new Uint8Array(44), durationMs: 100 });
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  output.play.mockReturnValue(7);
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    cloud,
+    gpuExternalBusy: () => true,
+    output,
+    settings: () => ({ enabled: true, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: 'voice', elevenLabsSpeed: 1 }),
+  });
+  const unit = service.speak('Hello.');
+  await settle();
+  expect(cloud.synthesize.mock.calls).toHaveLength(1);
+  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+  await unit;
+});
+
+it('NoSuccessorBeforeReap: never falls back when fresh GPU proof reports a busy slot', async () => {
+  const { service, cpu, authorize, output } = gpuHarness(() => 'auto');
+  authorize.mockRejectedValue(new GpuProcessBusyError());
+  await service.speak('Hello.');
+  expect(cpu.port.load).not.toHaveBeenCalled();
+  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'Speech is still finishing; try again shortly.');
 });

@@ -72,7 +72,18 @@
           <option value="1.5">1.5x</option>
         </select>
       </label>
-      <p>Optional setup downloads a local voice model of about 94 MB.</p>
+      <label class="settings-field">Kokoro compute
+        <select data-ui="speech-compute">
+          <option value="cpu">CPU</option>
+          <option value="auto">Auto (use CPU if GPU is unavailable)</option>
+          <option value="gpu">GPU</option>
+        </select>
+      </label>
+      <p data-ui="gpu-model-info">GPU support is experimental. Setup requires the CPU model and downloads
+        an additional pinned model of about 326 MB if needed.</p>
+      <p data-ui="gpu-status" role="status">GPU setup has not been checked. Actual backend: none.</p>
+      <div class="settings-actions"><button type="button" data-ui="gpu-check" class="soft">Set up GPU</button></div>
+      <p>CPU setup downloads a local voice model of about 94 MB.</p>
       <p data-ui="speech-model-status">Checking model verification...</p>
       <div class="settings-actions">
         <button type="button" data-ui="speech-setup" class="soft" disabled>Download Kokoro model</button>

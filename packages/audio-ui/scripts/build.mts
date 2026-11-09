@@ -1,6 +1,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as esbuild from 'esbuild';
+import { execFileSync } from 'node:child_process';
+import { stageGpuRuntime } from './gpu_runtime.mts';
+import { gpuManifest } from './gpu_manifest.mts';
 import { stageAssets } from '../../audio-native/src/stage.ts';
 import { stageCompanionSpeech } from './speech_runtime.mts';
 import { companionBuildIdentity, type CompanionBuildInput } from './build_identity.mts';
@@ -31,6 +34,35 @@ await esbuild.build({
   outfile: 'dist/panel.css',
 });
 await stageCompanionSpeech({ platform: process.platform, arch: process.arch, source: '../../node_modules', destination: 'dist/speech' });
+
+const gpuSource = process.env.AI_PAIR_GPU_RUNTIME_SOURCE ?? 'gpu-runtime/node_modules';
+const gpuNode = process.env.AI_PAIR_GPU_NODE_SOURCE ?? 'gpu-runtime/node_modules/.gpu-node';
+let gpuAssets: ReturnType<typeof gpuManifest> = [];
+if (process.platform === 'linux' && process.arch === 'x64' && fs.existsSync(gpuSource) && fs.existsSync(path.join(gpuNode, 'bin/node'))) {
+  await stageGpuRuntime({
+    platform: process.platform,
+    arch: process.arch,
+    source: gpuSource,
+    nodeDirectory: gpuNode,
+    destination: 'dist/speech-gpu',
+  });
+  execFileSync('cc', [
+    '-std=c11',
+    '-O2',
+    '-Wall',
+    '-Wextra',
+    '-Werror',
+    '-I../vscode/native/vulkan/include',
+    '../vscode/native/gpu_probe.c',
+    '-ldl',
+    '-o',
+    'dist/speech-gpu/gpu_probe',
+  ]);
+  gpuAssets = gpuManifest('dist/speech-gpu');
+} else if (universal) {
+  throw new Error('A Linux x64 GPU runtime source is required for a universal release.');
+}
+
 if (assetDirectory !== undefined && assetDirectory !== '') await stageAssets(assetDirectory, process.cwd(), universal);
 else if (universal) throw new Error('AI_PAIR_NATIVE_ASSETS is required for a universal companion package.');
 const manifest: unknown = JSON.parse(fs.readFileSync('package.json', 'utf8'));
@@ -48,7 +80,11 @@ const extensionOptions: esbuild.BuildOptions = {
   external: ['vscode'],
   entryPoints: ['src/extension.ts'],
   outfile: 'dist/extension.js',
-  define: { AI_PAIR_VERSION: JSON.stringify(manifest.version), AI_PAIR_BUILD_ID: JSON.stringify('pending') },
+  define: {
+    AI_PAIR_VERSION: JSON.stringify(manifest.version),
+    AI_PAIR_BUILD_ID: JSON.stringify('pending'),
+    AI_PAIR_GPU_ASSETS: JSON.stringify(gpuAssets),
+  },
 };
 const preliminary = await esbuild.build({ ...extensionOptions, write: false });
 const inputs: CompanionBuildInput[] = [{ name: 'mode', content: production ? 'production' : 'development' }];
@@ -76,10 +112,15 @@ function addDirectory(directory: string): void {
   }
 }
 addDirectory('dist/speech');
+if (fs.existsSync('dist/speech-gpu')) addDirectory('dist/speech-gpu');
 addDirectory('third_party');
 if (fs.existsSync('dist/audio-native')) addDirectory('dist/audio-native');
 const buildId = companionBuildIdentity(inputs);
 await esbuild.build({
   ...extensionOptions,
-  define: { AI_PAIR_VERSION: JSON.stringify(manifest.version), AI_PAIR_BUILD_ID: JSON.stringify(buildId) },
+  define: {
+    AI_PAIR_VERSION: JSON.stringify(manifest.version),
+    AI_PAIR_BUILD_ID: JSON.stringify(buildId),
+    AI_PAIR_GPU_ASSETS: JSON.stringify(gpuAssets),
+  },
 });

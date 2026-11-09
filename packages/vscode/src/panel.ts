@@ -1,4 +1,5 @@
 import type { SpeechModelStatus } from './speech_setup';
+import type { SpeechComputeMode, SpeechComputeState } from './speech_compute_types';
 // The narration panel: a webview view in the secondary side bar. See "Narration panel" in DESIGN.md.
 
 import * as vscode from 'vscode';
@@ -28,6 +29,8 @@ const LOCAL_SPEECH_MESSAGES: ReadonlySet<string> = new Set([
   'speechOutputRefresh',
   'speechOutputSelect',
   'speechSettings',
+  'speechComputeMode',
+  'checkGpuSetup',
   'speechKeySet',
   'speechKeyRemove',
   'speechVoicesLoad',
@@ -57,6 +60,9 @@ export interface PanelWiring {
   /** Copies the sanitized diagnostics snapshot on explicit request. */
   copyDiagnostics: () => Promise<void>;
   speech: {
+    computeState: () => SpeechComputeState;
+    computeMode: (value: SpeechComputeMode) => void;
+    checkGpuSetup: () => void;
     outputView: () => OutputPreferenceView;
     outputReady: () => boolean;
     outputRetired: (id: number, pageId: number) => void;
@@ -148,6 +154,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   private send(message: ToPanel): void {
     if (this.remote !== undefined) this.remote.send(message);
     else void this.view?.webview.postMessage(message);
+  }
+
+  /** Sends the local compute state to the current page. */
+  showSpeechComputeState(value: SpeechComputeState): void {
+    this.send({ type: 'speechComputeState', value });
   }
 
   /** Syncs the persisted terminal preference to the page. */
@@ -401,6 +412,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     this.speechPageReady = true;
     this.send({ type: 'speechPage', pageId });
     this.showSpeechSettings(this.wiring.speech.settings.get());
+    this.showSpeechComputeState(this.wiring.speech.computeState());
     this.showSpeechOutputCatalog(this.wiring.speech.outputView());
     const supported = this.wiring.speech.cloudSupported();
     this.wiring.speech.diagnostic({
@@ -473,6 +485,12 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         return;
       case 'speechOutputSelect':
         this.wiring.speech.outputSelect(message.choice);
+        return;
+      case 'speechComputeMode':
+        if (message.value === 'cpu' || message.value === 'auto' || message.value === 'gpu') this.wiring.speech.computeMode(message.value);
+        return;
+      case 'checkGpuSetup':
+        this.wiring.speech.checkGpuSetup();
         return;
       case 'speechSettings':
         if (

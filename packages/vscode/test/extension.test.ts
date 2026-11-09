@@ -170,6 +170,9 @@ const fakes = vi.hoisted(() => {
         output: SpeechOutput;
         localDesktop: boolean;
         cloudDiagnostic?: (reason: 'auth') => void;
+        computeMode: () => import('../src/speech_compute_types').SpeechComputeMode;
+        actualBackend: (value: import('../src/speech_compute_types').SpeechComputeBackend) => void;
+        gpuCheck: (value: import('../src/speech_compute_types').GpuCheck) => void;
       },
     ) {
       made.speech.push(this);
@@ -271,6 +274,7 @@ const fakes = vi.hoisted(() => {
     readonly showReplyBehavior = vi.fn();
     readonly showCodePlayback = vi.fn();
     readonly showSpeechSettings = vi.fn<(value: SpeechSettings) => void>();
+    readonly showSpeechComputeState = vi.fn();
     readonly showSpeechKeyStatus = vi.fn();
     readonly showSpeechCatalog = vi.fn();
     readonly showSpeechOutputCatalog = vi.fn();
@@ -354,6 +358,7 @@ const fakes = vi.hoisted(() => {
     settings: new Map<string, unknown>(),
     delaySettings: false,
     providerGate: undefined as Promise<void> | undefined,
+    computeGate: undefined as Promise<void> | undefined,
     updated: [] as Array<[string, unknown, unknown]>,
     commands: new Map<string, (value?: unknown) => unknown>(),
     providerRegistered: vi.fn(),
@@ -373,6 +378,9 @@ const fakes = vi.hoisted(() => {
         }
       | undefined,
     frameAccepted: true,
+    // The companion can return any untrusted value.
+    // oxlint-disable-next-line typescript/no-unnecessary-type-assertion
+    gpuSnapshot: undefined as unknown,
     diagnosticsInvalid: false,
     diagnosticsReject: false,
     placementOptions: undefined as import('../src/panel_placement').PanelPlacementOptions | undefined,
@@ -407,6 +415,13 @@ vi.mock('vscode', () => ({
       inspect: (key: string) => ({ globalValue: fakes.settings.get(key) }),
       update: (key: string, value: unknown, target: unknown) => {
         fakes.updated.push([key, value, target]);
+        if (key === 'speech.computeMode' && fakes.computeGate !== undefined) {
+          const gate = fakes.computeGate;
+          fakes.computeGate = undefined;
+          return gate.then(() => {
+            fakes.settings.set(key, value);
+          });
+        }
         if (key === 'speech.provider' && fakes.providerGate !== undefined) {
           const gate = fakes.providerGate;
           fakes.providerGate = undefined;
@@ -466,6 +481,7 @@ vi.mock('vscode', () => ({
       ) {
         return Promise.resolve({ version: 2, epoch: value.epoch, token: 'token' });
       }
+      if (name === 'aiPair.localAudio.gpuDiagnostics' && fakes.companionAvailable) return Promise.resolve(fakes.gpuSnapshot);
       if (name === 'aiPair.localAudio.diagnostics' && fakes.companionAvailable) {
         if (fakes.diagnosticsReject) return Promise.reject(new Error('private'));
         return Promise.resolve(fakes.diagnosticsInvalid ? { secret: 'private' } : { version: '0.19.0', build: 'abcdef', events: [] });
@@ -522,6 +538,41 @@ vi.mock('../src/editor', () => ({ VsCodeEditor: fakes.FakeEditor }));
 vi.mock('../src/diagnostics', () => ({ Diagnostics: fakes.FakeDiagnostics }));
 vi.mock('../src/speech_runtime_status', () => ({ speechRuntimeAvailable: vi.fn(() => Promise.resolve(false)) }));
 vi.mock('../src/speech_readiness', () => ({ speechReady: vi.fn().mockResolvedValue(false) }));
+vi.mock('../src/speech_compute', () => ({
+  SpeechCompute: class {
+    private value: import('../src/speech_compute_types').SpeechComputeState;
+    constructor(
+      requested: unknown,
+      private readonly probe: () => Promise<import('../src/speech_compute_types').GpuCheck>,
+      private readonly publish: (value: import('../src/speech_compute_types').SpeechComputeState) => void,
+    ) {
+      this.value = {
+        requestedMode: requested === 'auto' || requested === 'gpu' ? requested : 'cpu',
+        actualBackend: 'none',
+        gpuCheck: { phase: 'idle' },
+      };
+    }
+    state(): import('../src/speech_compute_types').SpeechComputeState {
+      return this.value;
+    }
+    select(requestedMode: import('../src/speech_compute_types').SpeechComputeMode): void {
+      this.value = { ...this.value, requestedMode };
+      this.publish(this.value);
+    }
+    actual(actualBackend: import('../src/speech_compute_types').SpeechComputeBackend): void {
+      this.value = { ...this.value, actualBackend };
+      this.publish(this.value);
+    }
+    reportUnavailable(reason: import('../src/speech_compute_types').GpuUnavailableReason): void {
+      this.value = { ...this.value, gpuCheck: { phase: 'unavailable', reason } };
+      this.publish(this.value);
+    }
+    async check(): Promise<void> {
+      this.value = { ...this.value, gpuCheck: await this.probe() };
+      this.publish(this.value);
+    }
+  },
+}));
 vi.mock('../src/speech_service', () => ({ SpeechService: fakes.FakeSpeech }));
 vi.mock('../src/speech_elevenlabs', () => ({ ElevenLabsClient: fakes.FakeCloudClient }));
 vi.mock('../src/speech_credentials', () => ({ SpeechCredentials: fakes.FakeCredentials }));
@@ -636,6 +687,7 @@ beforeEach(() => {
   fakes.placementChoice = undefined;
   fakes.session = undefined;
   fakes.frameAccepted = true;
+  fakes.gpuSnapshot = undefined;
   fakes.diagnosticsInvalid = false;
   fakes.diagnosticsReject = false;
   fakes.placementOptions = undefined;
@@ -1655,6 +1707,21 @@ it('blocks an installed incompatible companion without registering a fallback pr
   expect(fakes.commandCalls.some(([name]) => name === 'aiPair.localAudio.preview')).toBe(false);
 });
 
+it('reports a sanitized companion preparation failure in the warning and output', async () => {
+  fakes.companionInstalled = true;
+  const choice = Promise.withResolvers<import('../src/panel_placement').PanelOwner>();
+  fakes.placementChoice = choice.promise;
+  const h = activated();
+  fakes.placementOptions?.failure?.('timeout');
+  choice.resolve('incompatible');
+  await h.api.ready;
+  expect(fakes.infos).toContain(
+    'AI Pair and AI Pair Local Audio could not connect. The Local Audio extension did not respond in time. See the AI Pair output for details.',
+  );
+  fakes.companionInstalled = false;
+  fakes.placementOptions?.failure?.('invalid_response');
+});
+
 it('selects the local companion without registering a workspace panel provider', async () => {
   fakes.companionAvailable = true;
   const h = activated();
@@ -1669,6 +1736,23 @@ it('selects the local companion without registering a workspace panel provider',
   const copied = vi.mocked(vscode.env.clipboard, { deep: true }).writeText.mock.calls.at(-1)?.[0];
   expect(copied).toContain('localSpeech');
   expect(copied).toContain('abcdef');
+});
+
+it('copies only a validated optional GPU snapshot', async () => {
+  fakes.companionAvailable = true;
+  const h = activated();
+  await h.api.ready;
+  fakes.gpuSnapshot = {
+    requestedMode: 'gpu',
+    actualBackend: 'none',
+    check: { phase: 'unavailable', reason: 'no_hardware' },
+    stage: 'preflight',
+  };
+  await h.panel.wiring.copyDiagnostics();
+  expect(vi.mocked(vscode.env.clipboard).writeText.mock.calls.at(-1)?.[0]).toContain('"reason":"no_hardware"');
+  fakes.gpuSnapshot = { path: '/private' };
+  await h.panel.wiring.copyDiagnostics();
+  expect(vi.mocked(vscode.env.clipboard).writeText.mock.calls.at(-1)?.[0]).not.toContain('/private');
 });
 
 it('holds narration and secret changes while placement is pending, then selects legacy', async () => {
@@ -1842,6 +1926,28 @@ it('constructs the legacy listening-speed worker from the fixed extension path',
   expect(tempoPaths).toEqual(['/ext/dist/speech/tempo_worker.mjs']);
 });
 
+it('persists compute mode and keeps an unavailable GPU check fail-closed', async () => {
+  const h = activated();
+  const compute = h.panel.wiring.speech;
+  expect(compute.computeState().requestedMode).toBe('cpu');
+  const service = last(fakes.made.speech);
+  expect(service.options.computeMode()).toBe('cpu');
+  service.options.actualBackend('cpu');
+  expect(compute.computeState().actualBackend).toBe('cpu');
+  service.options.gpuCheck({ phase: 'unavailable', reason: 'runtime_missing' });
+  expect(compute.computeState().gpuCheck).toEqual({ phase: 'unavailable', reason: 'runtime_missing' });
+  compute.computeMode('gpu');
+  expect(compute.computeState().requestedMode).toBe('gpu');
+  await vi.waitFor(() => {
+    expect(fakes.settings.get('speech.computeMode')).toBe('gpu');
+  });
+  compute.checkGpuSetup();
+  await vi.waitFor(() => {
+    expect(compute.computeState().gpuCheck).toEqual({ phase: 'unavailable', reason: 'runtime_missing' });
+  });
+  expect(h.panel.showSpeechComputeState).toHaveBeenCalled();
+});
+
 it('records cloud narration failure diagnostics', () => {
   activated();
   last(fakes.made.speech).options.cloudDiagnostic?.('auth');
@@ -1852,4 +1958,51 @@ it('records cloud narration failure diagnostics', () => {
     phase: 'failed',
     reason: 'auth',
   });
+});
+
+it('preserves the latest compute choice through writes and rolls back a failed latest choice', async () => {
+  const h = activated();
+  const gate = Promise.withResolvers<void>();
+  fakes.computeGate = gate.promise;
+  h.panel.wiring.speech.computeMode('auto');
+  h.panel.wiring.speech.computeMode('gpu');
+  changed('speech');
+  expect(h.panel.wiring.speech.computeState().requestedMode).toBe('gpu');
+  gate.resolve();
+  await vi.waitFor(() => {
+    expect(fakes.settings.get('speech.computeMode')).toBe('gpu');
+  });
+  const failing = Promise.withResolvers<void>();
+  fakes.computeGate = failing.promise;
+  h.panel.wiring.speech.computeMode('cpu');
+  failing.reject(new Error('private'));
+  await vi.waitFor(() => {
+    expect(fakes.errors).toContain('Could not save speech compute mode.');
+  });
+  expect(h.panel.wiring.speech.computeState().requestedMode).toBe('gpu');
+  fakes.settings.set('speech.computeMode', 'auto');
+  changed('speech');
+  expect(h.panel.wiring.speech.computeState().requestedMode).toBe('auto');
+});
+
+it('ignores an older failed compute save and normalizes an invalid saved choice', async () => {
+  const h = activated();
+  const stale = Promise.withResolvers<void>();
+  fakes.computeGate = stale.promise;
+  h.panel.wiring.speech.computeMode('auto');
+  h.panel.wiring.speech.computeMode('gpu');
+  stale.reject(new Error('private'));
+  await vi.waitFor(() => {
+    expect(fakes.settings.get('speech.computeMode')).toBe('gpu');
+  });
+  expect(fakes.errors).not.toContain('Could not save speech compute mode.');
+  fakes.settings.set('speech.computeMode', 'invalid');
+  const failed = Promise.withResolvers<void>();
+  fakes.computeGate = failed.promise;
+  h.panel.wiring.speech.computeMode('auto');
+  failed.reject(new Error('private'));
+  await vi.waitFor(() => {
+    expect(fakes.errors).toContain('Could not save speech compute mode.');
+  });
+  expect(h.panel.wiring.speech.computeState().requestedMode).toBe('cpu');
 });

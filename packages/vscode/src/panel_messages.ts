@@ -3,6 +3,7 @@
 import type { CodePlayback, PanelEvent, Ref } from '@ai-pair/core';
 import type { CalibrationView } from './calibration';
 import type { SpeechSettings } from './speech_types';
+import type { SpeechComputeMode, SpeechComputeState } from './speech_compute_types';
 import type { SpeechModelStatus } from './speech_setup';
 import type { CatalogView } from './speech_catalog';
 import type { OutputChoice } from './speech_output_types';
@@ -22,7 +23,8 @@ export type FromPanel =
   | { type: 'speechOutputRefresh' }
   | { type: 'speechOutputSelect'; choice: OutputChoice }
   | { type: 'speechSettings'; value: SpeechSettings }
-  | { type: 'speechSetup' | 'speechPreview' | 'speechStop' }
+  | { type: 'speechSetup' | 'speechPreview' | 'speechStop' | 'checkGpuSetup' }
+  | { type: 'speechComputeMode'; value: SpeechComputeMode }
   | { type: 'speechKeySet' | 'speechKeyRemove' | 'speechVoicesLoad' | 'speechVoicesMore' }
   | { type: 'speechPageHidden' | 'speechPageVisible'; pageId: number }
   | { type: 'speechRetired'; id: number; pageId: number }
@@ -68,6 +70,7 @@ export type ToPanel =
   | { type: 'speechModelStatusUnavailable' }
   | { type: 'speechCloudSupport'; supported: boolean }
   | { type: 'speechSettings'; value: SpeechSettings }
+  | { type: 'speechComputeState'; value: SpeechComputeState }
   | { type: 'speechOutputCatalog'; value: OutputPreferenceView }
   | { type: 'speechKeyStatus'; hasKey: boolean }
   | { type: 'speechCatalog'; value: CatalogView }

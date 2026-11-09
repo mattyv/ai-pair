@@ -657,6 +657,18 @@ describe('the run box (specs/RunBox.tla)', () => {
     expect(boxShown()).toBe(false);
   });
 
+  it('Clears: a new session removes an old approval without deciding it', () => {
+    runPhase('confirm');
+    send({ type: 'session', active: true, suspended: true });
+    expect(boxShown()).toBe(true);
+    send({ type: 'session', active: true, resumed: true });
+    expect(boxShown()).toBe(true);
+    send({ type: 'session', active: true, task: 'New session' });
+    expect(boxShown()).toBe(false);
+    click(element('run-go'));
+    expect(posted()).not.toContainEqual(expect.objectContaining({ type: 'runDecision' }));
+  });
+
   it("leaves the box alone when another command's run ends", () => {
     runPhase('confirm');
     send({ type: 'run', id: 2, command: 'ls', phase: 'done' });
@@ -2348,4 +2360,114 @@ it('saves listening speed independently of both provider synthesis speeds', () =
       listeningSpeed: 1.25,
     },
   });
+});
+
+it('shows the requested and actual Kokoro compute backend and starts an explicit check', () => {
+  send({
+    type: 'speechComputeState',
+    value: { requestedMode: 'auto', actualBackend: 'cpu', gpuCheck: { phase: 'unavailable', reason: 'no_hardware' } },
+  });
+  expect(text('gpu-status')).toContain('CPU');
+  expect(text('gpu-status')).toContain('No compatible GPU');
+  expect(element('speech-compute')).toHaveProperty('value', 'auto');
+  click(element('gpu-check'));
+  expect(posted()).toContainEqual({ type: 'checkGpuSetup' });
+});
+
+it('renders GPU checks and allows only the supported compute choices', () => {
+  const select = ui('speech-compute');
+  if (!(select instanceof window.HTMLSelectElement)) throw new TypeError('Missing compute select');
+  for (const value of ['cpu', 'auto', 'gpu']) {
+    select.value = value;
+    select.dispatchEvent(new window.Event('change'));
+    expect(posted()).toContainEqual({ type: 'speechComputeMode', value });
+  }
+  select.value = '';
+  const beforeInvalid = posted().length;
+  select.dispatchEvent(new window.Event('change'));
+  expect(posted()).toHaveLength(beforeInvalid);
+  send({ type: 'speechComputeState', value: { requestedMode: 'gpu', actualBackend: 'none', gpuCheck: { phase: 'checking' } } });
+  expect(text('gpu-status')).toContain('Checking');
+  expect(element('gpu-check')).toHaveProperty('disabled', true);
+  send({ type: 'speechComputeState', value: { requestedMode: 'gpu', actualBackend: 'gpu', gpuCheck: { phase: 'ready' } } });
+  expect(text('gpu-status')).toContain('ready');
+  expect(element('gpu-check')).toHaveProperty('disabled', false);
+  send({ type: 'speechComputeState', value: { requestedMode: 'cpu', actualBackend: 'none', gpuCheck: { phase: 'idle' } } });
+  expect(text('gpu-status')).toContain('not been checked');
+});
+
+it('shows a fixed explanation for every GPU check failure and reports setup progress', () => {
+  const reasons = {
+    busy: 'still finishing',
+    unsupported: 'unsupported',
+    runtime_missing: 'runtime is missing',
+    untrusted_driver: 'driver could not be trusted',
+    no_hardware: 'No compatible GPU',
+    inconclusive: 'could not be confirmed',
+    model_missing: 'model is missing',
+    probe_failed: 'check failed',
+    timeout: 'timed out',
+  } as const;
+  for (const reason of [
+    'busy',
+    'unsupported',
+    'runtime_missing',
+    'untrusted_driver',
+    'no_hardware',
+    'inconclusive',
+    'model_missing',
+    'probe_failed',
+    'timeout',
+  ] as const) {
+    const explanation = reasons[reason];
+    send({
+      type: 'speechComputeState',
+      value: { requestedMode: 'auto', actualBackend: 'cpu', gpuCheck: { phase: 'unavailable', reason } },
+    });
+    expect(text('gpu-status')).toContain(explanation);
+  }
+  send({
+    type: 'speechComputeState',
+    value: {
+      requestedMode: 'gpu',
+      actualBackend: 'none',
+      gpuCheck: { phase: 'checking', progress: { stage: 'download', current: 123_456_789, total: 325_532_232 } },
+    },
+  });
+  expect(text('gpu-status')).toContain('download: 123.5 MB of 325.5 MB (38%)');
+  send({
+    type: 'speechComputeState',
+    value: {
+      requestedMode: 'gpu',
+      actualBackend: 'none',
+      gpuCheck: { phase: 'checking', progress: { stage: 'download', current: Number.NaN, total: 0 } },
+    },
+  });
+  expect(text('gpu-status')).toContain('download: 0.0 MB');
+  expect(text('gpu-status')).not.toMatch(/NaN|Infinity/);
+  send({
+    type: 'speechComputeState',
+    value: { requestedMode: 'gpu', actualBackend: 'none', gpuCheck: { phase: 'checking', progress: { stage: 'download', current: 1 } } },
+  });
+  expect(text('gpu-status')).toContain('download: 0.0 MB');
+  send({
+    type: 'speechComputeState',
+    value: { requestedMode: 'gpu', actualBackend: 'none', gpuCheck: { phase: 'checking', progress: { stage: 'verify' } } },
+  });
+  expect(text('gpu-status')).toContain('verify.');
+  send({
+    type: 'speechComputeState',
+    value: {
+      requestedMode: 'gpu',
+      actualBackend: 'none',
+      gpuCheck: { phase: 'checking', progress: { stage: 'verify', current: 1, total: 2 } },
+    },
+  });
+  expect(text('gpu-status')).toContain('verify: 1 of 2');
+
+  send({
+    type: 'speechComputeState',
+    value: { requestedMode: 'gpu', actualBackend: 'none', gpuCheck: { phase: 'checking', progress: { stage: 'verify', current: 2 } } },
+  });
+  expect(text('gpu-status')).toContain('verify: 2');
 });

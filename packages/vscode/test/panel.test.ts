@@ -131,6 +131,9 @@ interface Harness {
       get: ReturnType<typeof vi.fn<() => import('../src/speech_types').SpeechSettings>>;
       set: ReturnType<typeof vi.fn>;
     };
+    computeState: ReturnType<typeof vi.fn<() => import('../src/speech_compute_types').SpeechComputeState>>;
+    computeMode: ReturnType<typeof vi.fn<(value: import('../src/speech_compute_types').SpeechComputeMode) => void>>;
+    checkGpuSetup: ReturnType<typeof vi.fn<() => void>>;
     diagnostic: ReturnType<typeof vi.fn<(event: import('../src/diagnostics').SpeechDiagnosticEvent) => void>>;
     outputView: ReturnType<typeof vi.fn>;
     outputReady: ReturnType<typeof vi.fn<() => boolean>>;
@@ -201,6 +204,13 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
       })),
       set: vi.fn(),
     },
+    computeState: vi.fn<() => import('../src/speech_compute_types').SpeechComputeState>(() => ({
+      requestedMode: 'cpu',
+      actualBackend: 'none',
+      gpuCheck: { phase: 'idle' },
+    })),
+    computeMode: vi.fn<(value: import('../src/speech_compute_types').SpeechComputeMode) => void>(),
+    checkGpuSetup: vi.fn<() => void>(),
     diagnostic: vi.fn<(event: import('../src/diagnostics').SpeechDiagnosticEvent) => void>(),
     outputView: vi.fn(() => ({ supported: false, devices: [], selected: { kind: 'default' as const } })),
     outputReady: vi.fn(() => true),
@@ -622,6 +632,7 @@ describe('receive', () => {
         type: 'speechSettings',
         value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
       },
+      { type: 'speechComputeState', value: { requestedMode: 'cpu', actualBackend: 'none', gpuCheck: { phase: 'idle' } } },
       { type: 'speechOutputCatalog', value: { supported: false, devices: [], selected: { kind: 'default' } } },
       { type: 'speechCloudSupport', supported: true },
       { type: 'speechSupport', supported: true },
@@ -648,7 +659,7 @@ describe('receive', () => {
     chatOrder.get.mockReturnValue('oldestFirst');
     const view = open(panel);
     view.send({ type: 'ready' });
-    expect(view.posted.slice(5, 8)).toEqual([
+    expect(view.posted.slice(6, 9)).toEqual([
       { type: 'chatOrder', value: 'oldestFirst' },
       { type: 'replyBehavior', value: 'interrupt' },
       { type: 'replay', events: [] },
@@ -1380,6 +1391,19 @@ describe('companion panel port', () => {
     expect(view.posted).toContainEqual({ type: 'say', text: 'From workspace.' });
     panel.showRemoteUpdate({ type: 'speechAudio', wavBase64: 'secret' });
     expect(view.posted).not.toContainEqual({ type: 'speechAudio', wavBase64: 'secret' });
+    view.send({ type: 'speechComputeMode', value: 'auto' });
+    view.send({ type: 'checkGpuSetup' });
+    expect(speech.computeMode).toHaveBeenCalledWith('auto');
+    expect(speech.checkGpuSetup).toHaveBeenCalledOnce();
+    panel.showSpeechComputeState({
+      requestedMode: 'auto',
+      actualBackend: 'cpu',
+      gpuCheck: { phase: 'unavailable', reason: 'no_hardware' },
+    });
+    expect(view.posted).toContainEqual({
+      type: 'speechComputeState',
+      value: { requestedMode: 'auto', actualBackend: 'cpu', gpuCheck: { phase: 'unavailable', reason: 'no_hardware' } },
+    });
     view.send({ type: 'speechStop' });
     expect(speech.stop).toHaveBeenCalledTimes(1);
     expect(controllerAccessor).not.toHaveBeenCalled();
@@ -1416,4 +1440,16 @@ describe('companion panel port', () => {
     open(first.panel);
     expect(closed).toHaveBeenCalledTimes(1);
   });
+});
+
+it('routes GPU setup requests and compute choices to the local service', () => {
+  const { panel, speech } = harness();
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  view.send({ type: 'speechComputeMode', value: 'gpu' });
+  view.receive({ type: 'speechComputeMode', value: 'invalid' });
+  view.send({ type: 'checkGpuSetup' });
+  expect(speech.computeMode).toHaveBeenCalledOnce();
+  expect(speech.computeMode).toHaveBeenCalledWith('gpu');
+  expect(speech.checkGpuSetup).toHaveBeenCalledOnce();
 });

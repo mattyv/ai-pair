@@ -809,6 +809,67 @@ describe('type', () => {
     });
   });
 
+  it('RejectInterruptedEdit: returns the untyped suffix and restores the cursor through a programmer edit', async () => {
+    const h = harness({ files: { 'a.ts': 'xy' }, scene: { cursor: { file: A, offset: 1 } } });
+    h.editor.edit
+      .mockImplementationOnce((file, offset, deleteLength, text) => {
+        const old = h.files.get(file) ?? '';
+        h.files.set(file, old.slice(0, offset) + text + old.slice(offset + deleteLength));
+        return Promise.resolve();
+      })
+      .mockImplementationOnce(() => {
+        h.files.set(A, `!${h.files.get(A) ?? ''}`);
+        h.player.transform(A, { offset: 0, deleteLength: 0, text: '!' });
+        h.pacing.interrupt();
+        return Promise.reject(new Error('The edit was rejected.'));
+      });
+    const { result } = await played(h, [{ type: `ab${CURSOR_MARKER}c` }, { say: 'After.' }]);
+    expect(result).toMatchObject({ status: 'interrupted', unplayed: [{ type: `b${CURSOR_MARKER}c` }, { say: 'After.' }] });
+    expect(h.files.get(A)).toBe('!xay');
+    expect(h.scene.cursor?.offset).toBe(3);
+  });
+
+  it('RejectInterruptedEdit: restores a transformed selection when the first grouped edit is rejected', async () => {
+    const h = harness({ files: { 'a.ts': 'wxyz' }, scene: { cursor: { file: A, offset: 3 }, selection: { start: 1, end: 3 } } });
+    h.stage.codePlayback = () => 'blocks';
+    vi.mocked(groupTyping).mockReturnValueOnce([{ text: 'ab', delay: 0 }]);
+    h.editor.edit.mockImplementationOnce(() => {
+      h.files.set(A, '!wxyz');
+      h.player.transform(A, { offset: 0, deleteLength: 0, text: '!' });
+      h.pacing.interrupt();
+      return Promise.reject(new Error('The edit was rejected.'));
+    });
+    const { result } = await played(h, [{ type: `a${CURSOR_MARKER}b` }]);
+    expect(result).toMatchObject({ status: 'discarded', unplayed: [{ type: `a${CURSOR_MARKER}b` }] });
+    expect(h.scene.cursor?.offset).toBe(4);
+    expect(h.scene.selection).toEqual({ start: 2, end: 4 });
+    expect(h.lines.forget.mock.calls).toEqual([[A]]);
+  });
+
+  it('RejectInterruptedEdit: preserves the marker when rejection follows text after it', async () => {
+    const h = harness({ files: { 'a.ts': '' }, scene: { cursor: { file: A, offset: 0 } } });
+    h.editor.edit
+      .mockImplementationOnce((file, offset, deleteLength, text) => {
+        const old = h.files.get(file) ?? '';
+        h.files.set(file, old.slice(0, offset) + text + old.slice(offset + deleteLength));
+        return Promise.resolve();
+      })
+      .mockImplementationOnce(() => {
+        h.pacing.interrupt();
+        return Promise.reject(new Error('The edit was rejected.'));
+      });
+    const { result } = await played(h, [{ type_fast: `${CURSOR_MARKER}ab` }]);
+    expect(result).toMatchObject({ status: 'interrupted', unplayed: [{ type_fast: `${CURSOR_MARKER}b` }] });
+    expect(h.scene.cursor?.offset).toBe(1);
+  });
+
+  it('RejectInterruptedEdit: keeps an editor rejection without interruption as a failure', async () => {
+    const h = harness({ files: { 'a.ts': 'xy' }, scene: { cursor: { file: A, offset: 1 } } });
+    h.editor.edit.mockRejectedValueOnce(new Error('The edit was rejected.'));
+    const { result } = await played(h, [{ type: `a${CURSOR_MARKER}` }]);
+    expect(result).toMatchObject({ status: 'failed', error: { kind: 'invalid_action', message: 'The edit was rejected.' } });
+  });
+
   it('takes the pointed code away when it types', async () => {
     const h = harness({ files: { 'a.ts': 'x' }, scene: { cursor: { file: A, offset: 1 }, point: { file: A, start: 0, end: 1 } } });
     await played(h, [{ type: `y${CURSOR_MARKER}` }]);

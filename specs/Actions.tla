@@ -11,6 +11,7 @@
 (*               here if interrupted                                          *)
 (*   "effect"    something the programmer sees: a keystroke, a delete, a      *)
 (*               command, a move                                              *)
+(*   "edit"      a typing edit, rejected after interruption                  *)
 (*   "consumed"  `run`: interrupted while its command runs on, the command    *)
 (*               counts as played                                             *)
 (******************************************************************************)
@@ -48,8 +49,8 @@ Steps(k) ==
                "await",
                "check", "effect">>
       [] k = "type" ->
-             <<"await", "await", "await", "await", "check", "effect", "await",
-               "check", "effect">>
+             <<"await", "await", "await", "await", "check", "edit", "await",
+               "check", "edit">>
       [] k = "type0" -> <<"await", "await", "await">>
       [] k = "delete" -> <<"await", "await", "check", "effect", "await">>
       [] k = "run" ->
@@ -57,7 +58,7 @@ Steps(k) ==
                "consumed">>
 
 \* How many effects an action of kind k has when it plays in full.
-FullEffects(k) == Len(SelectSeq(Steps(k), LAMBDA s : s = "effect"))
+FullEffects(k) == Len(SelectSeq(Steps(k), LAMBDA s : s \in {"effect", "edit"}))
 
 \* How many steps the longest action has; the maximum is unique.
 MostSteps ==
@@ -160,7 +161,7 @@ StopBeforeAction ==
 \* command, a move.
 TakeEffect ==
     /\ CanStep
-    /\ CurrentStep = "effect"
+    /\ CurrentStep \in {"effect", "edit"}
     /\ pc' = pc + 1
     /\ effectsPlayed' = [effectsPlayed EXCEPT ![action] = @ + 1]
     /\ UNCHANGED <<batch, action, interrupted, result>>
@@ -175,6 +176,17 @@ StopAtCheck ==
     /\ IF effectsPlayed[action] > 0 /\ RestOnly
        THEN Stop(action, FullEffects(batch[action]) - effectsPlayed[action],
                  TRUE)
+       ELSE Stop(action, 0, AnyEffect(action - 1))
+    /\ UNCHANGED <<batch, action, pc, effectsPlayed, interrupted>>
+
+\* A rejected in-flight type edit after an interrupt did not take effect.
+RejectInterruptedEdit ==
+    /\ CanStep
+    /\ CurrentStep = "edit"
+    /\ interrupted
+    /\ IF effectsPlayed[action] > 0 /\ RestOnly
+       THEN Stop(action,
+                 FullEffects(batch[action]) - effectsPlayed[action], TRUE)
        ELSE Stop(action, 0, AnyEffect(action - 1))
     /\ UNCHANGED <<batch, action, pc, effectsPlayed, interrupted>>
 
@@ -226,6 +238,7 @@ Next ==
     \/ StopBeforeAction
     \/ TakeEffect
     \/ StopAtCheck
+    \/ RejectInterruptedEdit
     \/ StopWhileRunning
     \/ Proceed
     \/ FinishAction
