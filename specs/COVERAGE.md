@@ -195,6 +195,9 @@ Code goes without a spec for one of these reasons:
 | `speech_tempo.ts`, `speech_tempo_pcm.ts` | pitch-preserving time stretch and PCM framing | `SpeechTempo` (ownership, bounds, tail); the signal processing itself: unit tests and synthetic signals, not listening quality |
 | `speech_tempo_client.ts`, `speech_tempo_messages.ts`, `speech_tempo_worker.ts`, `speech_tempo_worker_host.ts` | tempo worker ownership, messages and bootstrap | `SpeechTempo`; unit and real-worker tests |
 | `speech_engine.ts` | `loadSpeechEngine` | Glue: loads the local model, tokenizer and phonemizer; offline worker integration |
+| `speech_gpu_client.ts`, `speech_gpu_transport.ts` | verified launch, cancel, process retirement | `GpuSynthesisProcess`; unit and real-child integration tests |
+| `speech_gpu_worker.ts`, `speech_gpu_worker_runtime.ts`, `speech_gpu_worker_host.ts` | isolated IPC, loader proof and disposal | `GpuSynthesisProcess`; unit and composed tests |
+| `speech_gpu_verified_engine.ts`, `speech_gpu_engine.ts`, `speech_gpu_phonemizer_bridge.ts` | verified GPU engine and offline phonemizer | `GpuSynthesisProcess`; pinned assets, model format and audio fidelity: unit and hardware tests |
 | `speech_local_client.ts` | worker epoch, ownership, cancellation and retirement until exit | `WarmSynthesisWorker`; unit and composed tests |
 | `speech_worker_host.ts`, `speech_worker.ts` | worker admission, validation and dispatch | `WarmSynthesisWorker`; worker isolation and concrete messages: unit and integration tests |
 | `speech_local_protocol.ts`, `speech_types.ts` | schemas and settings types | Types; validated at boundaries |
