@@ -797,7 +797,10 @@ test('experimental GPU setup remains readable and explicit in a narrow Settings 
     value: { requestedMode: 'auto', actualBackend: 'cpu', gpuCheck: { phase: 'unavailable', reason: 'no_hardware' } },
   });
   await expect(dialog.getByRole('status').filter({ hasText: 'No compatible GPU' })).toContainText('Actual backend: CPU');
-  const widths = await dialog.evaluate((element) => [element.scrollWidth, element.clientWidth]);
+  const widths = await dialog.evaluate((element: { scrollWidth: number; clientWidth: number }) => [
+    element.scrollWidth,
+    element.clientWidth,
+  ]);
   expect(widths[0]).toBeLessThanOrEqual(widths[1] ?? 0);
   const messages = await page.evaluate(() => {
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
