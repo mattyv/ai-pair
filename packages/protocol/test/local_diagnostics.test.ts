@@ -17,7 +17,7 @@ describe('local speech diagnostics', () => {
       localSpeechDiagnostics.safeParse([
         { kind: 'speech', event: 'preview', phase: 'ready', provider: 'kokoro', seq: 1, time: 1, text: 'private' },
       ]).success,
-    ).toBe(true);
+    ).toBe(false);
     expect(
       localSpeechDiagnostics.safeParse(
         Array.from({ length: 101 }, () => ({ kind: 'speech', event: 'preview', phase: 'ready', provider: 'kokoro', seq: 1, time: 1 })),
@@ -26,18 +26,8 @@ describe('local speech diagnostics', () => {
   });
 });
 
-it('accepts narration failures and strips private extra fields', () => {
-  const event = {
-    kind: 'speech',
-    event: 'narration',
-    phase: 'failed',
-    provider: 'elevenlabs',
-    reason: 'auth',
-    seq: 1,
-    time: 1,
-    text: 'private',
-  };
-  expect(localSpeechDiagnostics.parse([event])).toEqual([
-    { kind: 'speech', event: 'narration', phase: 'failed', provider: 'elevenlabs', reason: 'auth', seq: 1, time: 1 },
-  ]);
+it('accepts fixed narration failures and rejects private extra fields', () => {
+  const event = { kind: 'speech', event: 'narration', phase: 'failed', provider: 'elevenlabs', reason: 'auth', seq: 1, time: 1 };
+  expect(localSpeechDiagnostics.parse([event])).toEqual([event]);
+  expect(localSpeechDiagnostics.safeParse([{ ...event, text: 'private' }]).success).toBe(false);
 });

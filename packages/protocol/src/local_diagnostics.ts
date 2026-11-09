@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /** Maximum locally retained speech lifecycle facts in a copied report. */
 const MAX_LOCAL_SPEECH_EVENTS = 100;
-const speechEvent = z.object({
+const speechEvent = z.strictObject({
   kind: z.literal('speech'),
   event: z.enum(['preview', 'catalog', 'setup', 'capability', 'runtime', 'narration']),
   phase: z.enum(['received', 'blocked', 'dispatched', 'ready', 'failed']),

@@ -626,7 +626,8 @@ it('passes local readiness facts to the readiness check', async () => {
 });
 
 it('records cloud narration failures in companion diagnostics', () => {
-  const { diagnostic } = harness();
+  const { host, diagnostic } = harness();
   fakes.cloudDiagnostic?.('auth');
   expect(diagnostic).toHaveBeenCalledWith({ kind: 'speech', event: 'narration', provider: 'elevenlabs', phase: 'failed', reason: 'auth' });
+  host.dispose();
 });
