@@ -1081,7 +1081,7 @@ it('cancels cloud work when credentials change and discards the late response', 
 });
 
 it('releases a hung cloud request at its watchdog without reviving late output', async () => {
-  const { cloud, service, output } = cloudHarness();
+  const { cloud, service, output, cloudDiagnostic } = cloudHarness();
   const pending = Promise.withResolvers<{ wav: Uint8Array; durationMs: number }>();
   cloud.synthesize.mockReturnValue(pending.promise);
   const gate = service.speak('Hello.');
@@ -1091,6 +1091,7 @@ it('releases a hung cloud request at its watchdog without reviving late output',
   pending.resolve({ wav: new Uint8Array(44), durationMs: 1000 });
   await settle();
   expect(output.play).not.toHaveBeenCalled();
+  expect(cloudDiagnostic.mock.calls).toEqual([['timeout']]);
 });
 
 it('falls back safely for invalid cloud audio and sanitized provider failures', async () => {
@@ -1160,7 +1161,7 @@ it('allows an existing local speech unit to survive a cloud key change', async (
 });
 
 it('does not report a late rejected cloud request after cancellation', async () => {
-  const { cloud, service, output } = cloudHarness();
+  const { cloud, service, output, cloudDiagnostic } = cloudHarness();
   const pending = Promise.withResolvers<{ wav: Uint8Array; durationMs: number }>();
   cloud.synthesize.mockReturnValue(pending.promise);
   const gate = service.speak('Hello.');
@@ -1170,10 +1171,11 @@ it('does not report a late rejected cloud request after cancellation', async () 
   pending.reject(new Error('late'));
   await settle();
   expect(output.status).not.toHaveBeenCalled();
+  expect(cloudDiagnostic).not.toHaveBeenCalled();
 });
 
 it('expires a canceled request that ignores abort, without another status update', async () => {
-  const { cloud, service, output } = cloudHarness();
+  const { cloud, service, output, cloudDiagnostic } = cloudHarness();
   const pending = Promise.withResolvers<{ wav: Uint8Array; durationMs: number }>();
   cloud.synthesize.mockReturnValue(pending.promise);
   const gate = service.speak('Hello.');
@@ -1182,6 +1184,7 @@ it('expires a canceled request that ignores abort, without another status update
   output.status.mockClear();
   await vi.advanceTimersByTimeAsync(20_000);
   expect(output.status).not.toHaveBeenCalled();
+  expect(cloudDiagnostic).not.toHaveBeenCalled();
 });
 
 it('does not let an idle local worker failure interrupt an active cloud unit', async () => {
