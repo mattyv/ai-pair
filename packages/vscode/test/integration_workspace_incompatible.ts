@@ -14,7 +14,9 @@ export async function run(): Promise<void> {
     await api.ready;
     const stats: unknown = await vscode.commands.executeCommand('aiPair.localAudio.syntheticStats');
     assert.deepEqual(stats, { prepare: 1, commit: 0, preview: 0 });
-    await expectNotification('AI Pair and AI Pair Local Audio could not connect. Update both extensions and reload the window.');
+    await expectNotification(
+      'AI Pair and AI Pair Local Audio could not connect. The Local Audio extension sent an invalid response. See the AI Pair output for details.',
+    );
     assert.equal(api.speechPageReady(), false);
     assert.equal(api.speechStatus(), undefined);
     await api.previewSpeech();
