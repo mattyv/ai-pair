@@ -17,11 +17,27 @@ describe('local speech diagnostics', () => {
       localSpeechDiagnostics.safeParse([
         { kind: 'speech', event: 'preview', phase: 'ready', provider: 'kokoro', seq: 1, time: 1, text: 'private' },
       ]).success,
-    ).toBe(false);
+    ).toBe(true);
     expect(
       localSpeechDiagnostics.safeParse(
         Array.from({ length: 101 }, () => ({ kind: 'speech', event: 'preview', phase: 'ready', provider: 'kokoro', seq: 1, time: 1 })),
       ).success,
     ).toBe(false);
   });
+});
+
+it('accepts narration failures and strips private extra fields', () => {
+  const event = {
+    kind: 'speech',
+    event: 'narration',
+    phase: 'failed',
+    provider: 'elevenlabs',
+    reason: 'auth',
+    seq: 1,
+    time: 1,
+    text: 'private',
+  };
+  expect(localSpeechDiagnostics.parse([event])).toEqual([
+    { kind: 'speech', event: 'narration', phase: 'failed', provider: 'elevenlabs', reason: 'auth', seq: 1, time: 1 },
+  ]);
 });
