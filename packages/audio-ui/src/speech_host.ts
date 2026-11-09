@@ -90,7 +90,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
   let previewSequence = 0;
   const compute = new SpeechCompute(
     config().get('speech.computeMode'),
-    async () => ({ phase: 'unavailable', reason: 'runtime_missing' }),
+    () => Promise.resolve({ phase: 'unavailable', reason: 'runtime_missing' }),
     (value) => {
       options.panel()?.showSpeechComputeState(value);
     },
@@ -352,8 +352,8 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
         () => {
           if (current !== computeGeneration) return;
           computePending = false;
-          const stored: unknown = config().get('speech.computeMode');
-          compute.select(stored === 'auto' || stored === 'gpu' ? stored : 'cpu');
+          const storedMode: unknown = config().get('speech.computeMode');
+          compute.select(storedMode === 'auto' || storedMode === 'gpu' ? storedMode : 'cpu');
           void vscode.window.showErrorMessage('Could not save speech compute mode.');
         },
       );

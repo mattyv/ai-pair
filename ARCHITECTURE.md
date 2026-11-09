@@ -443,3 +443,9 @@ incompatible companion before selecting an owner and asks for both extensions
 to be updated and reloaded. The new companion rejects older preparation and
 shows the same guidance. An already-installed older workspace can still
 select its own legacy fallback. The public MCP protocol is unchanged.
+
+GPU compute selection and setup status are local speech controls. The companion
+handles them in its own panel without adding private transport frames, so this
+change does not alter version 2 or the public MCP protocol. An older companion
+does not offer the GPU controls. The companion panel routing test verifies the
+local boundary.

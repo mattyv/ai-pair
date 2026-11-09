@@ -678,3 +678,27 @@ it('records cloud narration failures in companion diagnostics', () => {
   expect(diagnostic).toHaveBeenCalledWith({ kind: 'speech', event: 'narration', provider: 'elevenlabs', phase: 'failed', reason: 'auth' });
   host.dispose();
 });
+
+it('keeps the latest compute choice across pending saves and restores it after a failed save', async () => {
+  const { host } = harness();
+  const first = Promise.withResolvers<void>();
+  fakes.update.mockReturnValueOnce(first.promise);
+  host.panelSpeech.computeMode('auto');
+  host.panelSpeech.computeMode('gpu');
+  fakes.configChanged?.({ affectsConfiguration: () => true });
+  expect(host.panelSpeech.computeState().requestedMode).toBe('gpu');
+  first.resolve();
+  await vi.waitFor(() => {
+    expect(fakes.update).toHaveBeenCalledTimes(2);
+  });
+  fakes.config.set('speech.computeMode', 'auto');
+  fakes.update.mockRejectedValueOnce(new Error('private'));
+  host.panelSpeech.computeMode('gpu');
+  await vi.waitFor(() => {
+    expect(fakes.errorMessage).toHaveBeenCalledWith('Could not save speech compute mode.');
+  });
+  expect(host.panelSpeech.computeState().requestedMode).toBe('auto');
+  fakes.config.set('speech.computeMode', 'cpu');
+  fakes.configChanged?.({ affectsConfiguration: () => true });
+  expect(host.panelSpeech.computeState().requestedMode).toBe('cpu');
+});

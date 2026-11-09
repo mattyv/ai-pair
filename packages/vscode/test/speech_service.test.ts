@@ -2062,17 +2062,17 @@ describe('listening-speed processing', () => {
 });
 
 it('ExplicitNoFallback: refuses explicit GPU before starting a CPU worker', async () => {
-  const { service, output, local } = harness(true, () => 'gpu');
+  const { service, output, local: engine } = harness(true, () => 'gpu');
   await service.speak('Hello.');
-  expect(local.port.load).not.toHaveBeenCalled();
-  expect(local.port.synthesize).not.toHaveBeenCalled();
+  expect(engine.port.load).not.toHaveBeenCalled();
+  expect(engine.port.synthesize).not.toHaveBeenCalled();
   expect(output.status).toHaveBeenCalledWith(expect.any(Number), 'unavailable', 'GPU speech is not available. Check GPU setup.');
 });
 
 it('reports the CPU backend when its worker becomes ready and clears it on retirement', async () => {
   Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
   Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
-  const backend = vi.fn();
+  const backend = vi.fn<(value: import('../src/speech_compute_types').SpeechComputeBackend) => void>();
   const engine = newLocal();
   const service = new SpeechService({
     runtimeDirectory: '/runtime',

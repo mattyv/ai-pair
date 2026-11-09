@@ -355,6 +355,7 @@ const fakes = vi.hoisted(() => {
     settings: new Map<string, unknown>(),
     delaySettings: false,
     providerGate: undefined as Promise<void> | undefined,
+    computeGate: undefined as Promise<void> | undefined,
     updated: [] as Array<[string, unknown, unknown]>,
     commands: new Map<string, (value?: unknown) => unknown>(),
     providerRegistered: vi.fn(),
@@ -408,6 +409,13 @@ vi.mock('vscode', () => ({
       inspect: (key: string) => ({ globalValue: fakes.settings.get(key) }),
       update: (key: string, value: unknown, target: unknown) => {
         fakes.updated.push([key, value, target]);
+        if (key === 'speech.computeMode' && fakes.computeGate !== undefined) {
+          const gate = fakes.computeGate;
+          fakes.computeGate = undefined;
+          return gate.then(() => {
+            fakes.settings.set(key, value);
+          });
+        }
         if (key === 'speech.provider' && fakes.providerGate !== undefined) {
           const gate = fakes.providerGate;
           fakes.providerGate = undefined;
@@ -529,7 +537,7 @@ vi.mock('../src/speech_compute', () => ({
     constructor(
       requested: unknown,
       private readonly probe: () => Promise<import('../src/speech_compute_types').GpuCheck>,
-      private readonly changed: (value: import('../src/speech_compute_types').SpeechComputeState) => void,
+      private readonly publish: (value: import('../src/speech_compute_types').SpeechComputeState) => void,
     ) {
       this.value = {
         requestedMode: requested === 'auto' || requested === 'gpu' ? requested : 'cpu',
@@ -542,15 +550,15 @@ vi.mock('../src/speech_compute', () => ({
     }
     select(requestedMode: import('../src/speech_compute_types').SpeechComputeMode): void {
       this.value = { ...this.value, requestedMode };
-      this.changed(this.value);
+      this.publish(this.value);
     }
     actual(actualBackend: import('../src/speech_compute_types').SpeechComputeBackend): void {
       this.value = { ...this.value, actualBackend };
-      this.changed(this.value);
+      this.publish(this.value);
     }
     async check(): Promise<void> {
       this.value = { ...this.value, gpuCheck: await this.probe() };
-      this.changed(this.value);
+      this.publish(this.value);
     }
   },
 }));
@@ -1900,4 +1908,29 @@ it('records cloud narration failure diagnostics', () => {
     phase: 'failed',
     reason: 'auth',
   });
+});
+
+it('preserves the latest compute choice through writes and rolls back a failed latest choice', async () => {
+  const h = activated();
+  const gate = Promise.withResolvers<void>();
+  fakes.computeGate = gate.promise;
+  h.panel.wiring.speech.computeMode('auto');
+  h.panel.wiring.speech.computeMode('gpu');
+  changed('speech');
+  expect(h.panel.wiring.speech.computeState().requestedMode).toBe('gpu');
+  gate.resolve();
+  await vi.waitFor(() => {
+    expect(fakes.settings.get('speech.computeMode')).toBe('gpu');
+  });
+  const failing = Promise.withResolvers<void>();
+  fakes.computeGate = failing.promise;
+  h.panel.wiring.speech.computeMode('cpu');
+  failing.reject(new Error('private'));
+  await vi.waitFor(() => {
+    expect(fakes.errors).toContain('Could not save speech compute mode.');
+  });
+  expect(h.panel.wiring.speech.computeState().requestedMode).toBe('gpu');
+  fakes.settings.set('speech.computeMode', 'auto');
+  changed('speech');
+  expect(h.panel.wiring.speech.computeState().requestedMode).toBe('auto');
 });

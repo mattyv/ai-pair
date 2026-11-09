@@ -571,3 +571,13 @@ idle gaps beyond the current preparation/playback overlap.
     select its existing legacy fallback after the new companion rejects it;
     new code cannot change that already-installed behavior. Saved panel state
     without the count is accepted and interpreted as zero.
+
+## Local GPU controls and companion compatibility
+
+Keep the GPU mode, setup check, and compute status in the local speech host.
+They are handled by the companion's local panel and do not enter the strict
+workspace-to-companion action or update frames. Protocol version 2 therefore
+remains unchanged; an older companion does not offer the new controls. The
+public MCP protocol is unchanged. The companion panel routing test verifies
+that these controls stay local. GPU readiness still requires a fresh verified
+launch capability and a working GPU inference worker.

@@ -1391,6 +1391,19 @@ describe('companion panel port', () => {
     expect(view.posted).toContainEqual({ type: 'say', text: 'From workspace.' });
     panel.showRemoteUpdate({ type: 'speechAudio', wavBase64: 'secret' });
     expect(view.posted).not.toContainEqual({ type: 'speechAudio', wavBase64: 'secret' });
+    view.send({ type: 'speechComputeMode', value: 'auto' });
+    view.send({ type: 'checkGpuSetup' });
+    expect(speech.computeMode).toHaveBeenCalledWith('auto');
+    expect(speech.checkGpuSetup).toHaveBeenCalledOnce();
+    panel.showSpeechComputeState({
+      requestedMode: 'auto',
+      actualBackend: 'cpu',
+      gpuCheck: { phase: 'unavailable', reason: 'no_hardware' },
+    });
+    expect(view.posted).toContainEqual({
+      type: 'speechComputeState',
+      value: { requestedMode: 'auto', actualBackend: 'cpu', gpuCheck: { phase: 'unavailable', reason: 'no_hardware' } },
+    });
     view.send({ type: 'speechStop' });
     expect(speech.stop).toHaveBeenCalledTimes(1);
     expect(controllerAccessor).not.toHaveBeenCalled();

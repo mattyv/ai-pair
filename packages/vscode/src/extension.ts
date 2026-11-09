@@ -222,7 +222,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   };
   const compute = new SpeechCompute(
     config().get('speech.computeMode'),
-    async () => ({ phase: 'unavailable', reason: 'runtime_missing' }),
+    () => Promise.resolve({ phase: 'unavailable', reason: 'runtime_missing' }),
     (value) => {
       panel.showSpeechComputeState(value);
     },
@@ -415,9 +415,9 @@ export function activate(context: vscode.ExtensionContext): Api {
           compute.select(value);
           const current = ++computeGeneration;
           computePending = true;
-          const save = computeTail.then(() => config().update('speech.computeMode', value, vscode.ConfigurationTarget.Global));
-          computeTail = save.catch(() => {});
-          void save.then(
+          const computeSave = computeTail.then(() => config().update('speech.computeMode', value, vscode.ConfigurationTarget.Global));
+          computeTail = computeSave.catch(() => {});
+          void computeSave.then(
             () => {
               if (current === computeGeneration) computePending = false;
             },

@@ -2391,7 +2391,16 @@ it('shows a fixed explanation for every GPU check failure and reports setup prog
     probe_failed: 'check failed',
     timeout: 'timed out',
   } as const;
-  for (const reason of Object.keys(reasons) as Array<keyof typeof reasons>) {
+  for (const reason of [
+    'unsupported',
+    'runtime_missing',
+    'untrusted_driver',
+    'no_hardware',
+    'inconclusive',
+    'model_missing',
+    'probe_failed',
+    'timeout',
+  ] as const) {
     const explanation = reasons[reason];
     send({
       type: 'speechComputeState',
