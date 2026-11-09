@@ -169,6 +169,7 @@ const fakes = vi.hoisted(() => {
         settings: () => { enabled: boolean; provider: string; voice: string; speed: number };
         output: SpeechOutput;
         localDesktop: boolean;
+        cloudDiagnostic?: (reason: 'auth') => void;
       },
     ) {
       made.speech.push(this);
@@ -1887,4 +1888,16 @@ it('persists compute mode and keeps an unavailable GPU check fail-closed', async
     expect(compute.computeState().gpuCheck).toEqual({ phase: 'unavailable', reason: 'runtime_missing' });
   });
   expect(h.panel.showSpeechComputeState).toHaveBeenCalled();
+});
+
+it('records cloud narration failure diagnostics', () => {
+  activated();
+  last(fakes.made.speech).options.cloudDiagnostic?.('auth');
+  expect(last(fakes.made.diagnostics).record).toHaveBeenCalledWith({
+    kind: 'speech',
+    event: 'narration',
+    provider: 'elevenlabs',
+    phase: 'failed',
+    reason: 'auth',
+  });
 });

@@ -6,6 +6,8 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { z } from 'zod';
 import type { Report } from '@ai-pair/protocol';
 import type { Api } from '../src/extension';
+import { cloudCompanionHost } from './integration_cloud_companion_host';
+import { cloudServicePaths } from './integration_cloud_service_paths';
 
 const report = z.object({ events: z.array(z.looseObject({ kind: z.string(), seq: z.number() })) });
 
@@ -81,6 +83,9 @@ export async function run(): Promise<void> {
         const url = new URL(typeof input === 'string' || input instanceof URL ? input.toString() : input.url);
         if (url.hostname !== 'api.elevenlabs.io') return realFetch(input, init);
         requests++;
+        if (url.origin === 'https://api.elevenlabs.io' && url.pathname === '/v1/text-to-speech/test_voice' && init?.method === 'POST') {
+          return Promise.resolve(new Response('private provider response', { status: 429 }));
+        }
         if (url.origin !== 'https://api.elevenlabs.io' || url.pathname !== '/v2/voices' || init?.method !== 'GET') {
           return Promise.reject(new Error('Unexpected ElevenLabs request'));
         }
@@ -191,6 +196,26 @@ export async function run(): Promise<void> {
     } finally {
       await agent.close();
     }
+
+    // The native host records the safe category from a real SpeechService request.
+    const previousNarration = Math.max(0, ...(await events(api)).map((event) => event.seq));
+    await api.previewSpeech();
+    const failures = await events(api);
+    assert.ok(
+      failures.some(
+        (event) =>
+          event.seq > previousNarration &&
+          event.kind === 'speech' &&
+          event.event === 'narration' &&
+          event.provider === 'elevenlabs' &&
+          event.phase === 'failed' &&
+          event.reason === 'rate',
+      ),
+      'the main host did not copy the cloud narration failure',
+    );
+    assert.doesNotMatch(JSON.stringify(failures), /private provider response|ai-pair-integration-dummy-key/);
+    await cloudCompanionHost();
+    await cloudServicePaths();
 
     for (const reason of ['auth', 'network', 'invalid']) {
       mode = reason;

@@ -298,6 +298,9 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     },
   });
   speech = new SpeechService({
+    cloudDiagnostic: (reason) => {
+      options.diagnostic({ kind: 'speech', event: 'narration', provider: 'elevenlabs', phase: 'failed', reason });
+    },
     runtimeDirectory,
     tempo: new SpeechTempoClient(path.join(runtimeDirectory, 'tempo_worker.mjs')),
     storageDirectory: context.globalStorageUri.fsPath,

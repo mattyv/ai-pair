@@ -8,7 +8,7 @@ export const MAX_DIAGNOSTIC_EVENTS = 100;
 /** Speech facts are fixed enums only; no voice IDs, text or secrets. */
 export interface SpeechDiagnosticEvent {
   kind: 'speech';
-  event: 'preview' | 'catalog' | 'setup' | 'capability' | 'runtime';
+  event: 'preview' | 'catalog' | 'setup' | 'capability' | 'runtime' | 'narration';
   phase: 'received' | 'blocked' | 'dispatched' | 'ready' | 'failed';
   provider: 'kokoro' | 'elevenlabs' | 'unknown';
   reason?: SpeechDiagnosticReason;
@@ -51,7 +51,7 @@ const CONNECTION = new Set(['connected', 'disconnected']);
 const PAUSE_REASON = new Set(['programmer', 'reply', 'away', 'calibrate']);
 const REQUEST_METHOD = new Set(['start', 'step', 'listen', 'end', 'read', 'calibrate', 'unknown']);
 const REQUEST_PHASE = new Set(['received', 'replied', 'failed', 'cancelled']);
-const SPEECH_EVENT = new Set(['preview', 'catalog', 'setup', 'capability', 'runtime']);
+const SPEECH_EVENT = new Set(['preview', 'catalog', 'setup', 'capability', 'runtime', 'narration']);
 const SPEECH_PHASE = new Set(['received', 'blocked', 'dispatched', 'ready', 'failed']);
 const SPEECH_PROVIDER = new Set(['kokoro', 'elevenlabs', 'unknown']);
 const SPEECH_REASON = new Set([

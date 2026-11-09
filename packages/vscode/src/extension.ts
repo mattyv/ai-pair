@@ -583,6 +583,9 @@ export function activate(context: vscode.ExtensionContext): Api {
     audioEvent: handleSpeechEvent,
   });
   speech = new SpeechService({
+    cloudDiagnostic: (reason) => {
+      diagnostics.record({ kind: 'speech', event: 'narration', provider: 'elevenlabs', phase: 'failed', reason });
+    },
     runtimeDirectory: path.join(context.extensionPath, 'dist', 'speech'),
     tempo: new SpeechTempoClient(path.join(context.extensionPath, 'dist', 'speech', 'tempo_worker.mjs')),
     cloud,

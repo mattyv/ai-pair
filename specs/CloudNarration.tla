@@ -12,11 +12,12 @@ CONSTANTS
 VARIABLES provider, key, epoch, generation, request, requestEpoch, active,
           aborted, ready, playing, failed, sent, reading, approval,
           invalidSend, staleAccepted, overlap, gatesChanged, restarted,
-          retried, dispatched
+          retried, dispatched, diagnostic, staleDiagnosticChanged
 vars == <<provider, key, epoch, generation, request, requestEpoch, active,
           aborted, ready, playing, failed, sent, reading, approval,
           invalidSend, staleAccepted, overlap, gatesChanged, restarted,
-          retried, dispatched>>
+          retried, dispatched, diagnostic,
+                   staleDiagnosticChanged>>
 
 TypeOK ==
     /\ provider \in {"local", "cloud"}
@@ -29,6 +30,9 @@ TypeOK ==
     /\ overlap \in BOOLEAN /\ gatesChanged \in BOOLEAN
     /\ restarted \in BOOLEAN /\ retried \in BOOLEAN
     /\ dispatched \in BOOLEAN
+    /\ staleDiagnosticChanged \in BOOLEAN
+    /\ diagnostic \in {"none", "key", "auth", "rate", "network",
+                         "timeout", "invalid", "canceled", "unknown"}
 
 Init ==
     /\ provider = "local" /\ key = FALSE /\ epoch = 0 /\ generation = 0
@@ -37,7 +41,8 @@ Init ==
     /\ sent = FALSE /\ reading = TRUE /\ approval = TRUE
     /\ invalidSend = FALSE /\ staleAccepted = FALSE /\ overlap = FALSE
     /\ gatesChanged = FALSE /\ restarted = FALSE /\ retried = FALSE
-    /\ dispatched = FALSE
+    /\ dispatched = FALSE /\ diagnostic = "none"
+    /\ staleDiagnosticChanged = FALSE
 
 Choose ==
     /\ provider' \in {"local", "cloud"} /\ provider' # provider
@@ -45,7 +50,8 @@ Choose ==
     /\ ready' = FALSE /\ playing' = FALSE
     /\ UNCHANGED <<key, epoch, generation, request, requestEpoch, failed,
                    sent, reading, approval, invalidSend, staleAccepted,
-                   overlap, gatesChanged, restarted, retried, dispatched>>
+                   overlap, gatesChanged, restarted, retried, dispatched,
+                   diagnostic, staleDiagnosticChanged>>
 
 Credential ==
     /\ epoch < 2 /\ epoch' = epoch + 1 /\ key' = ~key
@@ -53,7 +59,8 @@ Credential ==
     /\ ready' = FALSE /\ playing' = FALSE
     /\ UNCHANGED <<provider, generation, request, requestEpoch, failed,
                    sent, reading, approval, invalidSend, staleAccepted,
-                   overlap, gatesChanged, restarted, retried, dispatched>>
+                   overlap, gatesChanged, restarted, retried, dispatched,
+                   diagnostic, staleDiagnosticChanged>>
 
 Start ==
     /\ generation < 2 /\ ~active /\ (~GuardSingle \/ request = 0)
@@ -64,7 +71,8 @@ Start ==
     /\ playing' = FALSE /\ overlap' = (overlap \/ (request # 0))
     /\ UNCHANGED <<provider, key, epoch, sent, reading, approval,
                    invalidSend, staleAccepted, gatesChanged, restarted,
-                   retried>>
+                   retried, diagnostic,
+                   staleDiagnosticChanged>>
 
 Dispatch ==
     /\ request # 0 /\ ~dispatched
@@ -76,14 +84,16 @@ Dispatch ==
                           (requestEpoch # epoch))
     /\ UNCHANGED <<provider, key, epoch, generation, request, requestEpoch,
                    active, aborted, ready, playing, failed, reading, approval,
-                   overlap, gatesChanged, restarted, retried>>
+                   overlap, gatesChanged, restarted, retried, diagnostic,
+                   staleDiagnosticChanged>>
 
 Cancel ==
     /\ active /\ active' = FALSE /\ aborted' = ((request # 0) \/ aborted)
     /\ ready' = FALSE /\ playing' = FALSE
     /\ UNCHANGED <<provider, key, epoch, generation, request, requestEpoch,
                    failed, sent, reading, approval, invalidSend, staleAccepted,
-                   overlap, gatesChanged, restarted, retried, dispatched>>
+                   overlap, gatesChanged, restarted, retried, dispatched,
+                   diagnostic, staleDiagnosticChanged>>
 
 Response ==
     /\ request # 0 /\ dispatched
@@ -94,11 +104,19 @@ Response ==
     /\ request' = 0 /\ aborted' = FALSE /\ dispatched' = FALSE
     /\ UNCHANGED <<provider, key, epoch, generation, requestEpoch, active,
                    playing, failed, sent, reading, approval, invalidSend,
-                   overlap, gatesChanged, restarted, retried>>
+                   overlap, gatesChanged, restarted, retried, diagnostic,
+                   staleDiagnosticChanged>>
 
 Error ==
     /\ request # 0 /\ dispatched /\ request' = 0 /\ active' = FALSE
     /\ failed' = TRUE /\ dispatched' = FALSE
+    /\ diagnostic' \in IF active /\ ~aborted
+                          THEN {"key", "auth", "rate", "network", "timeout",
+                                "invalid", "canceled", "unknown"}
+                          ELSE {diagnostic}
+    /\ staleDiagnosticChanged' =
+         (staleDiagnosticChanged \/ ((~active \/ aborted) /\
+                                      diagnostic' # diagnostic))
     /\ aborted' = FALSE /\ ready' = FALSE /\ playing' = FALSE
     /\ reading' = IF GuardGates THEN reading ELSE FALSE
     /\ approval' = IF GuardGates THEN approval ELSE FALSE
@@ -114,14 +132,16 @@ Play ==
     /\ UNCHANGED <<provider, key, epoch, generation, request, requestEpoch,
                    active, aborted, failed, sent, reading, approval,
                    invalidSend, staleAccepted, overlap, gatesChanged,
-                   retried, dispatched>>
+                   retried, dispatched, diagnostic,
+                   staleDiagnosticChanged>>
 
 Finish ==
     /\ playing /\ playing' = FALSE /\ active' = FALSE
     /\ UNCHANGED <<provider, key, epoch, generation, request, requestEpoch,
                    aborted, ready, failed, sent, reading, approval, invalidSend,
                    staleAccepted, overlap, gatesChanged, restarted,
-                   retried, dispatched>>
+                   retried, dispatched, diagnostic,
+                   staleDiagnosticChanged>>
 
 Retry ==
     /\ ~GuardRetry /\ failed /\ request = 0 /\ request' = generation
@@ -129,11 +149,16 @@ Retry ==
     /\ UNCHANGED <<provider, key, epoch, generation, requestEpoch, active,
                    aborted, ready, playing, failed, sent, reading, approval,
                    invalidSend, staleAccepted, overlap, gatesChanged, restarted,
-                   dispatched>>
+                   dispatched, diagnostic,
+                   staleDiagnosticChanged>>
 
 Timeout ==
     /\ request # 0 /\ (~HealthyKey \/ dispatched \/ aborted \/ ~active)
     /\ request' = 0 /\ active' = FALSE
+    /\ diagnostic' = IF active /\ ~aborted THEN "timeout" ELSE diagnostic
+    /\ staleDiagnosticChanged' =
+         (staleDiagnosticChanged \/ ((~active \/ aborted) /\
+                                      diagnostic' # diagnostic))
     /\ aborted' = FALSE /\ dispatched' = FALSE /\ failed' = TRUE
     /\ ready' = FALSE /\ playing' = FALSE
     /\ UNCHANGED <<provider, key, epoch, generation, requestEpoch, sent,
@@ -144,6 +169,7 @@ Next == Choose \/ Credential \/ Start \/ Dispatch \/ Cancel \/ Response \/
         Error \/ Timeout \/ Play \/ Finish \/ Retry
 Spec == Init /\ [][Next]_vars /\ WF_vars(Start) /\ WF_vars(Dispatch) /\
         WF_vars(Timeout) /\ WF_vars(Play)
+NoStaleDiagnostic == ~staleDiagnosticChanged
 SafeSend == ~invalidSend
 NoStale == ~staleAccepted
 NoOverlap == ~overlap
