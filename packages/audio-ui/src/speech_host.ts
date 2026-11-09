@@ -13,6 +13,7 @@ import { localSpeechPlatform } from '../../vscode/src/speech_platform';
 import { SpeechService } from '../../vscode/src/speech_service';
 import { SpeechCompute } from '../../vscode/src/speech_compute';
 import { createGpuHostBinding } from '../../vscode/src/speech_gpu_host_binding';
+import { MAX_GPU_WORKER_DETAILS } from '@ai-pair/protocol';
 import { createGpuSynthesisClient } from '../../vscode/src/speech_gpu_client';
 import { installedGpuModel, setupGpuModel } from '../../vscode/src/speech_gpu_model';
 import { setupGpuFlow } from '../../vscode/src/speech_gpu_setup_flow';
@@ -63,6 +64,7 @@ export interface SpeechHost {
   output: CompanionOutput;
   panelSpeech: PanelWiring['speech'];
   observation(): LocalSpeechObservation | undefined;
+  gpuDiagnostics(): import('@ai-pair/protocol').GpuDiagnostics;
   ready(): Promise<boolean>;
   dispose(): void;
 }
@@ -130,9 +132,12 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
       gpuBusy = false;
     }
   }
+  let gpuStage: 'idle' | 'preflight' | 'model' | 'verify' | 'admission' = 'idle';
+  const gpuWorkerDetails: Array<import('../../vscode/src/speech_gpu_client').GpuWorkerDetail> = [];
   const compute = new SpeechCompute(
     config().get('speech.computeMode'),
     (progress) => {
+      gpuStage = 'preflight';
       if (!desktop) return Promise.resolve({ phase: 'unavailable', reason: 'unsupported' });
       if (binding === undefined) return Promise.resolve({ phase: 'unavailable', reason: 'runtime_missing' });
       if (speech.gpuSlotBusy()) {
@@ -142,10 +147,14 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
       return exclusiveGpu(() =>
         setupGpuFlow({
           preflight: () => duringGpuCheck(binding.preflight),
-          cpuModel: () => installedSpeechModel(context.globalStorageUri.fsPath),
+          cpuModel: () => {
+            gpuStage = 'model';
+            return installedSpeechModel(context.globalStorageUri.fsPath);
+          },
           gpuModel: () => installedGpuModel(context.globalStorageUri.fsPath),
           download: (report) => setupGpuModel(context.globalStorageUri.fsPath, { signal: setupAbort.signal, progress: report }),
           verify: async (directory) => {
+            gpuStage = 'verify';
             const result = await duringGpuCheck(binding.issue);
             if (result.check.phase !== 'ready') return result.check;
             return result.capability?.modelDirectory === directory ? result.check : { phase: 'unavailable', reason: 'model_missing' };
@@ -375,11 +384,24 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     settings: settings.get,
     ...(options.enableGpuInference === true && binding !== undefined
       ? {
-          gpuCapability: async () => (await exclusiveGpu(() => duringGpuCheck(binding.issue))) ?? { check: { phase: 'checking' } },
+          gpuCapability: async () => {
+            gpuStage = 'admission';
+            return (await exclusiveGpu(() => duringGpuCheck(binding.issue))) ?? { check: { phase: 'checking' } };
+          },
           createGpu: (
             gpuCapability: import('../../vscode/src/speech_gpu_client').GpuLaunchCapability,
             listener: import('../../vscode/src/speech_local_client').LocalListener,
-          ) => createGpuSynthesisClient({ capability: gpuCapability, listener }),
+          ) => {
+            gpuWorkerDetails.length = 0;
+            return createGpuSynthesisClient({
+              capability: gpuCapability,
+              listener,
+              detail: (value) => {
+                gpuWorkerDetails.push(value);
+                if (gpuWorkerDetails.length > MAX_GPU_WORKER_DETAILS) gpuWorkerDetails.shift();
+              },
+            });
+          },
         }
       : {}),
     gpuExternalBusy: () => gpuProcessBusy,
@@ -528,6 +550,17 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     output,
     panelSpeech,
     observation: () => (observation === undefined ? undefined : { ...observation }),
+    gpuDiagnostics: () => {
+      const { requestedMode, actualBackend, gpuCheck } = compute.state();
+      const check = gpuCheck.phase === 'unavailable' ? gpuCheck : { phase: gpuCheck.phase };
+      return {
+        requestedMode,
+        actualBackend,
+        check,
+        stage: gpuStage,
+        ...(gpuWorkerDetails.length === 0 ? {} : { workerDetails: [...gpuWorkerDetails] }),
+      };
+    },
     ready: () =>
       speechReady({
         settings: settings.get,

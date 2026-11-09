@@ -36,6 +36,7 @@ export interface CompanionSession {
   observation(): LocalSpeechObservation | undefined;
   ready(epoch: unknown): Promise<boolean>;
   diagnostics(): LocalSpeechReport | undefined;
+  gpuDiagnostics(): import('@ai-pair/protocol').GpuDiagnostics;
   dispose(): void;
 }
 
@@ -216,6 +217,7 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
     preview: () => host.panelSpeech.preview(),
     observation: () => host.observation(),
     ready: async (requestedEpoch) => requestedEpoch === epoch && !closed && (await host.ready()) && !closed,
+    gpuDiagnostics: () => host.gpuDiagnostics(),
     diagnostics: () => {
       const snapshot = diagnostics.snapshot();
       const report = localSpeechReport.safeParse({ version: snapshot.version, build: snapshot.build, events: snapshot.events });

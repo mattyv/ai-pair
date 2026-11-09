@@ -14,7 +14,7 @@ import type { SpeechDiagnosticEvent } from '../../vscode/src/diagnostics';
 import { createSpeechHost } from '../src/speech_host';
 
 const fakes = vi.hoisted(() => ({
-  gpuClientFactory: vi.fn(),
+  gpuClientFactory: vi.fn<typeof import('../../vscode/src/speech_gpu_client').createGpuSynthesisClient>(),
   gpuSlotBusy: vi.fn<() => boolean>().mockReturnValue(false),
   retireIdleGpu: vi.fn<() => void>(),
   gpuFlowResult: vi
@@ -786,6 +786,22 @@ it('ignores a stale compute save failure and normalizes stored and external choi
   expect(host.panelSpeech.computeState().requestedMode).toBe('gpu');
 });
 
+it('exposes a bounded GPU failure snapshot for copied diagnostics', async () => {
+  fakes.gpuFlowResult.mockResolvedValueOnce({ phase: 'unavailable', reason: 'no_hardware' });
+  const { host } = harness(undefined, () => Promise.resolve('failed'), true);
+  host.panelSpeech.computeMode('gpu');
+  host.panelSpeech.checkGpuSetup();
+  await vi.waitFor(() => {
+    expect(host.gpuDiagnostics()).toEqual({
+      requestedMode: 'gpu',
+      actualBackend: 'none',
+      check: { phase: 'unavailable', reason: 'no_hardware' },
+      stage: 'preflight',
+    });
+  });
+  host.dispose();
+});
+
 it('routes explicit GPU setup through preflight, model installation, fresh proof and disposal cancellation', async () => {
   const { host } = harness(undefined, () => Promise.resolve('failed'));
   host.panelSpeech.checkGpuSetup();
@@ -828,7 +844,12 @@ it('enables GPU inference only with an explicit reviewed gate and fresh host cap
   expect(await fakes.speechOptions?.gpuCapability?.()).toEqual({ check: { phase: 'ready' }, capability });
   const listener = { ready: vi.fn(), retired: vi.fn() };
   fakes.speechOptions?.createGpu?.(capability, listener);
-  expect(fakes.gpuClientFactory).toHaveBeenCalledWith({ capability, listener });
+  expect(fakes.gpuClientFactory.mock.calls[0]?.[0].capability).toBe(capability);
+  expect(fakes.gpuClientFactory.mock.calls[0]?.[0].listener).toBe(listener);
+  const detail = fakes.gpuClientFactory.mock.calls[0]?.[0].detail;
+  detail?.('spawn_error');
+  detail?.('exit_nonzero');
+  expect(host.gpuDiagnostics().workerDetails).toEqual(['spawn_error', 'exit_nonzero']);
   host.dispose();
 });
 

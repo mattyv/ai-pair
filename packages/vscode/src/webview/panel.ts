@@ -1089,11 +1089,13 @@ function handle(message: ToPanel): void {
       const progress = gpuCheck.phase === 'checking' ? gpuCheck.progress : undefined;
       let detail = '';
       if (progress?.stage === 'download' && progress.current !== undefined) {
-        const current = Number.isFinite(progress.current) ? Math.max(0, progress.current) : 0;
+        const downloadedBytes = Number.isFinite(progress.current) ? Math.max(0, progress.current) : 0;
         const total = progress.total !== undefined && Number.isFinite(progress.total) ? Math.max(0, progress.total) : 0;
-        const downloaded = total > 0 ? Math.min(current, total) : current;
-        detail = ` download: ${(downloaded / 1_000_000).toFixed(1)} MB`;
-        if (total > 0) detail += ` of ${(total / 1_000_000).toFixed(1)} MB (${Math.round((downloaded / total) * 100)}%)`;
+        const downloaded = total > 0 ? Math.min(downloadedBytes, total) : downloadedBytes;
+        const bytesPerMb = 1_000_000;
+        const percentage = 100;
+        detail = ` download: ${(downloaded / bytesPerMb).toFixed(1)} MB`;
+        if (total > 0) detail += ` of ${(total / bytesPerMb).toFixed(1)} MB (${Math.round((downloaded / total) * percentage)}%)`;
         detail += '.';
       } else if (progress !== undefined) {
         const counts =

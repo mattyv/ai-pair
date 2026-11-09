@@ -11,7 +11,7 @@ import {
   type SavedSession,
   type NarrationPort,
 } from '@ai-pair/core';
-import { discoveryDir, LOCAL_AUDIO_VERSION, localSpeechReport, type LocalSpeechReport } from '@ai-pair/protocol';
+import { discoveryDir, gpuDiagnostics, LOCAL_AUDIO_VERSION, localSpeechReport, type LocalSpeechReport } from '@ai-pair/protocol';
 import { playDemo } from './demo';
 import { VsCodeEditor } from './editor';
 import { Diagnostics } from './diagnostics';
@@ -406,7 +406,15 @@ export function activate(context: vscode.ExtensionContext): Api {
         } catch {
           // Copy the workspace facts even when the local report is unavailable.
         }
-        await vscode.env.clipboard.writeText(JSON.stringify({ ...snapshot, localSpeech }));
+        let gpu: import('@ai-pair/protocol').GpuDiagnostics | undefined;
+        try {
+          const raw: unknown = await vscode.commands.executeCommand('aiPair.localAudio.gpuDiagnostics');
+          const parsed = gpuDiagnostics.safeParse(raw);
+          if (parsed.success) gpu = parsed.data;
+        } catch {
+          // Older companions do not provide this optional command.
+        }
+        await vscode.env.clipboard.writeText(JSON.stringify({ ...snapshot, localSpeech, ...(gpu === undefined ? {} : { gpu }) }));
       },
       speech: {
         computeState: () => compute.state(),

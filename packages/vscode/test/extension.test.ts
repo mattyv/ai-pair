@@ -378,6 +378,9 @@ const fakes = vi.hoisted(() => {
         }
       | undefined,
     frameAccepted: true,
+    // The companion can return any untrusted value.
+    // oxlint-disable-next-line typescript/no-unnecessary-type-assertion
+    gpuSnapshot: undefined as unknown,
     diagnosticsInvalid: false,
     diagnosticsReject: false,
     placementOptions: undefined as import('../src/panel_placement').PanelPlacementOptions | undefined,
@@ -478,6 +481,7 @@ vi.mock('vscode', () => ({
       ) {
         return Promise.resolve({ version: 2, epoch: value.epoch, token: 'token' });
       }
+      if (name === 'aiPair.localAudio.gpuDiagnostics' && fakes.companionAvailable) return Promise.resolve(fakes.gpuSnapshot);
       if (name === 'aiPair.localAudio.diagnostics' && fakes.companionAvailable) {
         if (fakes.diagnosticsReject) return Promise.reject(new Error('private'));
         return Promise.resolve(fakes.diagnosticsInvalid ? { secret: 'private' } : { version: '0.19.0', build: 'abcdef', events: [] });
@@ -683,6 +687,7 @@ beforeEach(() => {
   fakes.placementChoice = undefined;
   fakes.session = undefined;
   fakes.frameAccepted = true;
+  fakes.gpuSnapshot = undefined;
   fakes.diagnosticsInvalid = false;
   fakes.diagnosticsReject = false;
   fakes.placementOptions = undefined;
@@ -1729,6 +1734,23 @@ it('selects the local companion without registering a workspace panel provider',
   const copied = vi.mocked(vscode.env.clipboard, { deep: true }).writeText.mock.calls.at(-1)?.[0];
   expect(copied).toContain('localSpeech');
   expect(copied).toContain('abcdef');
+});
+
+it('copies only a validated optional GPU snapshot', async () => {
+  fakes.companionAvailable = true;
+  const h = activated();
+  await h.api.ready;
+  fakes.gpuSnapshot = {
+    requestedMode: 'gpu',
+    actualBackend: 'none',
+    check: { phase: 'unavailable', reason: 'no_hardware' },
+    stage: 'preflight',
+  };
+  await h.panel.wiring.copyDiagnostics();
+  expect(vi.mocked(vscode.env.clipboard).writeText.mock.calls.at(-1)?.[0]).toContain('"reason":"no_hardware"');
+  fakes.gpuSnapshot = { path: '/private' };
+  await h.panel.wiring.copyDiagnostics();
+  expect(vi.mocked(vscode.env.clipboard).writeText.mock.calls.at(-1)?.[0]).not.toContain('/private');
 });
 
 it('holds narration and secret changes while placement is pending, then selects legacy', async () => {
