@@ -40799,11 +40799,12 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 },
                 {
                   id: "probe",
-                  label: "Isolated GPU probe\nDevice and loader checks",
+                  label: "Isolated GPU probe\nDevice, loader and driver proof",
                   files: [
                     "packages/vscode/native/gpu_probe.c",
                     "packages/vscode/src/speech_gpu_process.ts",
                     "packages/vscode/src/speech_gpu_loader.ts",
+                    "packages/vscode/src/speech_gpu_driver_identity.ts",
                   ],
                   x: 1360,
                   y: 400,
@@ -40872,7 +40873,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 worker: [
                   {
                     id: "boundary",
-                    text: "The worker uses a separately bundled Node runtime and pinned FP32 model with a restricted environment. Readiness requires mapped-loader and physical-device proofs; physical GPU validation is pending.",
+                    text: "The worker uses a separately bundled Node runtime, pinned FP32 model and a restricted child-only environment. Readiness requires mapped loader and driver identity proofs; physical GPU validation is pending.",
                     ts: 0,
                   },
                 ],

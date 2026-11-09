@@ -818,7 +818,11 @@ it('enables GPU inference only with an explicit reviewed gate and fresh host cap
     executablePath: '/node',
     loaderPath: '/loader',
     loaderSha256: 'a'.repeat(64),
-    environment: { LANG: 'C', VK_DRIVER_FILES: '/driver', VK_LOADER_LAYERS_DISABLE: '~all~' },
+    driverPath: '/driver-library',
+    driverSha256: 'b'.repeat(64),
+    driverDevice: '1',
+    driverInode: '2',
+    environment: { LANG: 'C', VK_DRIVER_FILES: '/driver', VK_LOADER_LAYERS_DISABLE: '~all~', LD_PRELOAD: '/loader' },
   };
   fakes.gpuIssue.mockResolvedValueOnce({ check: { phase: 'ready' }, capability });
   expect(await fakes.speechOptions?.gpuCapability?.()).toEqual({ check: { phase: 'ready' }, capability });

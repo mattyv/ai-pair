@@ -723,6 +723,20 @@
       "functions": 100
     }
   },
+  "packages/vscode/src/speech_gpu_binding.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/speech_gpu_capability.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/vscode/src/speech_gpu_model.ts": {
     "unit": {
       "lines": 100,

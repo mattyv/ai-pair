@@ -594,3 +594,12 @@ compatibility, which remains pending. The GPU child uses separately bundled
 Node 22.23.4 on Linux x64, subject to the exact runtime manifest and trusted
 loader verification gates. The GPU bundle
 requires glibc 2.28 or newer; it does not install a driver.
+
+The experimental GPU path requires a trusted, root-owned Vulkan loader and
+Radeon driver. The capability carries the driver's canonical path, digest,
+device and inode; positive checks must verify the mapped identity before
+readiness and audio. The no-adapter negative control verifies the loader without
+requiring the Radeon driver. The exact loader preload is confined to the child.
+Root-owned native dependencies remain a trust assumption, and these checks do
+not sandbox native code. Physical AMD validation and security review remain
+required before enabling GPU inference.
