@@ -939,6 +939,7 @@ function cloudHarness() {
   const output = mock<SpeechOutput>();
   output.prepare = undefined;
   output.play.mockReturnValue(7);
+  const cloudDiagnostic = vi.fn<(reason: string) => void>();
   const settings = {
     enabled: true,
     provider: 'elevenlabs' as const,
@@ -953,10 +954,79 @@ function cloudHarness() {
     localDesktop: true,
     output,
     cloud,
+    cloudDiagnostic,
     settings: () => settings,
   });
-  return { cloud, output, service, settings };
+  return { cloud, output, service, settings, cloudDiagnostic };
 }
+
+it('reports a categorized second failure and accepts the next narration', async () => {
+  const { cloud, service, output, cloudDiagnostic } = cloudHarness();
+  cloud.synthesize.mockResolvedValueOnce({ wav: new Uint8Array(44), durationMs: 1000 });
+  cloud.synthesize.mockRejectedValueOnce({ kind: 'rate', message: 'private provider response' });
+  cloud.synthesize.mockResolvedValueOnce({ wav: new Uint8Array(44), durationMs: 1000 });
+  const first = service.speak('First private text.');
+  await settle();
+  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+  await first;
+  await service.speak('Second private text.');
+  expect(output.status).toHaveBeenCalledWith(2, 'unavailable', expect.stringContaining('rate'));
+  expect(cloudDiagnostic).toHaveBeenCalledWith('rate');
+  const third = service.speak('Third private text.');
+  await settle();
+  expect(cloud.synthesize.mock.calls).toHaveLength(3);
+  expect(output.play).toHaveBeenCalledTimes(2);
+  service.audioEvent({ id: 3, pageId: 7, event: 'ended' });
+  await third;
+  expect(JSON.stringify(cloudDiagnostic.mock.calls)).not.toContain('private');
+});
+
+it.each([
+  ['key', 'no_key', 'API key'],
+  ['auth', 'auth', 'authorize'],
+  ['rate', 'rate', 'rate limit'],
+  ['network', 'network', 'service returned an error'],
+  ['timeout', 'timeout', 'timed out'],
+  ['invalid', 'invalid', 'invalid response or request'],
+  ['unexpected', 'unknown', 'unavailable'],
+])('reports the fixed %s cloud category without provider details', async (kind, reason, message) => {
+  const { cloud, service, output, cloudDiagnostic } = cloudHarness();
+  cloud.synthesize.mockRejectedValueOnce({ kind, message: 'private key and response' });
+  await service.speak('private narration');
+  expect(cloudDiagnostic).toHaveBeenCalledWith(reason);
+  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining(message));
+  expect(JSON.stringify(output.status.mock.calls)).not.toContain('private');
+});
+
+it('settles an unexpected canceled result without an unavailable banner', async () => {
+  const { cloud, service, output, cloudDiagnostic } = cloudHarness();
+  cloud.synthesize.mockRejectedValueOnce({ kind: 'canceled' });
+  await service.speak('Canceled.');
+  expect(cloudDiagnostic).toHaveBeenCalledWith('canceled');
+  expect(output.status).not.toHaveBeenCalledWith(1, 'unavailable', expect.anything());
+  expect(output.status).toHaveBeenCalledWith(1, 'idle');
+});
+
+it('ignores a synchronous provider throw after cancellation', async () => {
+  const { cloud, service, output, cloudDiagnostic } = cloudHarness();
+  cloud.synthesize.mockImplementationOnce(() => {
+    service.cancel();
+    throw new Error('private');
+  });
+  await service.speak('Canceled.');
+  expect(cloudDiagnostic).not.toHaveBeenCalled();
+  expect(output.status).not.toHaveBeenCalledWith(1, 'unavailable', expect.anything());
+});
+
+it('keeps failure handling working when diagnostics throw', async () => {
+  const { cloud, service, output, cloudDiagnostic } = cloudHarness();
+  cloudDiagnostic.mockImplementation(() => {
+    throw new Error('private');
+  });
+  cloud.synthesize.mockRejectedValueOnce({ kind: 'network' });
+  await service.speak('Failure.');
+  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('service returned an error'));
+});
 
 it('supports cloud on macOS without requiring the local runtime', async () => {
   Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
@@ -1011,7 +1081,7 @@ it('cancels cloud work when credentials change and discards the late response', 
 });
 
 it('releases a hung cloud request at its watchdog without reviving late output', async () => {
-  const { cloud, service, output } = cloudHarness();
+  const { cloud, service, output, cloudDiagnostic } = cloudHarness();
   const pending = Promise.withResolvers<{ wav: Uint8Array; durationMs: number }>();
   cloud.synthesize.mockReturnValue(pending.promise);
   const gate = service.speak('Hello.');
@@ -1021,6 +1091,7 @@ it('releases a hung cloud request at its watchdog without reviving late output',
   pending.resolve({ wav: new Uint8Array(44), durationMs: 1000 });
   await settle();
   expect(output.play).not.toHaveBeenCalled();
+  expect(cloudDiagnostic.mock.calls).toEqual([['timeout']]);
 });
 
 it('falls back safely for invalid cloud audio and sanitized provider failures', async () => {
@@ -1090,7 +1161,7 @@ it('allows an existing local speech unit to survive a cloud key change', async (
 });
 
 it('does not report a late rejected cloud request after cancellation', async () => {
-  const { cloud, service, output } = cloudHarness();
+  const { cloud, service, output, cloudDiagnostic } = cloudHarness();
   const pending = Promise.withResolvers<{ wav: Uint8Array; durationMs: number }>();
   cloud.synthesize.mockReturnValue(pending.promise);
   const gate = service.speak('Hello.');
@@ -1100,10 +1171,11 @@ it('does not report a late rejected cloud request after cancellation', async () 
   pending.reject(new Error('late'));
   await settle();
   expect(output.status).not.toHaveBeenCalled();
+  expect(cloudDiagnostic).not.toHaveBeenCalled();
 });
 
 it('expires a canceled request that ignores abort, without another status update', async () => {
-  const { cloud, service, output } = cloudHarness();
+  const { cloud, service, output, cloudDiagnostic } = cloudHarness();
   const pending = Promise.withResolvers<{ wav: Uint8Array; durationMs: number }>();
   cloud.synthesize.mockReturnValue(pending.promise);
   const gate = service.speak('Hello.');
@@ -1112,6 +1184,7 @@ it('expires a canceled request that ignores abort, without another status update
   output.status.mockClear();
   await vi.advanceTimersByTimeAsync(20_000);
   expect(output.status).not.toHaveBeenCalled();
+  expect(cloudDiagnostic).not.toHaveBeenCalled();
 });
 
 it('does not let an idle local worker failure interrupt an active cloud unit', async () => {

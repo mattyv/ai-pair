@@ -25,3 +25,9 @@ describe('local speech diagnostics', () => {
     ).toBe(false);
   });
 });
+
+it('accepts fixed narration failures and rejects private extra fields', () => {
+  const event = { kind: 'speech', event: 'narration', phase: 'failed', provider: 'elevenlabs', reason: 'auth', seq: 1, time: 1 };
+  expect(localSpeechDiagnostics.parse([event])).toEqual([event]);
+  expect(localSpeechDiagnostics.safeParse([{ ...event, text: 'private' }]).success).toBe(false);
+});

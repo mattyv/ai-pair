@@ -187,3 +187,21 @@ it('records only allowlisted local runtime failure codes', () => {
   ]);
   expect(JSON.stringify(diagnostics.snapshot())).not.toMatch(/private|secret/);
 });
+
+it('retains narration failure metadata and strips private fields', () => {
+  const diagnostics = new Diagnostics({ version: '1', build: 'b' });
+  const event: unknown = {
+    kind: 'speech',
+    event: 'narration',
+    phase: 'failed',
+    provider: 'elevenlabs',
+    reason: 'network',
+    body: 'private',
+  };
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  diagnostics.record(event as DiagnosticEvent);
+  expect(diagnostics.snapshot().events).toMatchObject([
+    { kind: 'speech', event: 'narration', phase: 'failed', provider: 'elevenlabs', reason: 'network' },
+  ]);
+  expect(JSON.stringify(diagnostics.snapshot())).not.toContain('private');
+});

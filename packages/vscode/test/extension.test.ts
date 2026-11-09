@@ -169,6 +169,7 @@ const fakes = vi.hoisted(() => {
         settings: () => { enabled: boolean; provider: string; voice: string; speed: number };
         output: SpeechOutput;
         localDesktop: boolean;
+        cloudDiagnostic?: (reason: 'auth') => void;
       },
     ) {
       made.speech.push(this);
@@ -1839,4 +1840,16 @@ it('constructs the legacy listening-speed worker from the fixed extension path',
   tempoPaths.length = 0;
   activated();
   expect(tempoPaths).toEqual(['/ext/dist/speech/tempo_worker.mjs']);
+});
+
+it('records cloud narration failure diagnostics', () => {
+  activated();
+  last(fakes.made.speech).options.cloudDiagnostic?.('auth');
+  expect(last(fakes.made.diagnostics).record).toHaveBeenCalledWith({
+    kind: 'speech',
+    event: 'narration',
+    provider: 'elevenlabs',
+    phase: 'failed',
+    reason: 'auth',
+  });
 });

@@ -14,6 +14,7 @@ import type { SpeechDiagnosticEvent } from '../../vscode/src/diagnostics';
 import { createSpeechHost } from '../src/speech_host';
 
 const fakes = vi.hoisted(() => ({
+  cloudDiagnostic: undefined as ((reason: 'auth') => void) | undefined,
   readiness: vi.fn<(options: import('../../vscode/src/speech_readiness').SpeechReadiness) => Promise<boolean>>().mockResolvedValue(true),
   platform: vi.fn<() => import('../../vscode/src/speech_platform').SpeechPlatformResult>().mockReturnValue({ supported: true }),
   config: new Map<string, unknown>(),
@@ -76,6 +77,9 @@ vi.mock('vscode', () => ({
 }));
 vi.mock('../../vscode/src/speech_service', () => ({
   SpeechService: class {
+    constructor(options: { cloudDiagnostic?: (reason: 'auth') => void }) {
+      fakes.cloudDiagnostic = options.cloudDiagnostic;
+    }
     cancel = fakes.cancel;
     invalidateCloud = fakes.invalidateCloud;
     audioEvent = fakes.audioEvent;
@@ -619,4 +623,11 @@ it('passes local readiness facts to the readiness check', async () => {
   expect(facts?.output()).toBe(true);
   host.dispose();
   expect(facts?.desktop()).toBe(false);
+});
+
+it('records cloud narration failures in companion diagnostics', () => {
+  const { host, diagnostic } = harness();
+  fakes.cloudDiagnostic?.('auth');
+  expect(diagnostic).toHaveBeenCalledWith({ kind: 'speech', event: 'narration', provider: 'elevenlabs', phase: 'failed', reason: 'auth' });
+  host.dispose();
 });

@@ -10,6 +10,20 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   GPT-6.1 Terra agents write code and tests; GPT-6 Astra agents review them.
     Resolve findings and verify the resulting changes before reporting completion.
 
+## Cloud speech failure reporting
+
+-   Report only fixed ElevenLabs failure categories for ordinary narration and
+    previews, including on the local companion. User-facing messages do not
+    assume that an authorization response proves the key is invalid. These
+    categories do not identify the root cause within a provider response; no
+    request text, credentials, response body or URL is recorded. A canceled
+    request ends silently, and no automatic retry incurs another request.
+-   Keep the audio and ownership protocol version unchanged for the optional
+    narration diagnostic event. An older workspace may reject a newer
+    companion's diagnostic report; its existing workspace report remains
+    available. Update both extensions for complete diagnostics. Preserve the
+    strict report schema rather than accepting unknown fields.
+
 ## Session batch IDs
 
 -   Number batches from one within each fresh session; resuming a saved or

@@ -53,6 +53,39 @@ export interface SpeechTempoProcessor {
   dispose(): Promise<void>;
 }
 
+/** Fixed, non-sensitive cloud request failure categories. */
+export type CloudSpeechFailureReason = 'no_key' | 'auth' | 'rate' | 'network' | 'timeout' | 'invalid' | 'canceled' | 'unknown';
+
+/** Maps only recognized provider categories; never forwards exception text. */
+function cloudFailureReason(error: unknown): CloudSpeechFailureReason {
+  const kind = typeof error === 'object' && error !== null && 'kind' in error ? error.kind : undefined;
+  if (kind === 'key') return 'no_key';
+  if (kind === 'auth' || kind === 'rate' || kind === 'network' || kind === 'timeout' || kind === 'invalid' || kind === 'canceled') {
+    return kind;
+  }
+  return 'unknown';
+}
+
+/** Gives the programmer a fixed explanation without exposing provider data. */
+function cloudFailureMessage(reason: Exclude<CloudSpeechFailureReason, 'canceled'>): string {
+  switch (reason) {
+    case 'no_key':
+      return 'Cloud speech needs an ElevenLabs API key.';
+    case 'auth':
+      return 'ElevenLabs could not authorize this request. Check your key, voice and account access.';
+    case 'rate':
+      return 'ElevenLabs rate limit reached. Continue reading and try again later.';
+    case 'network':
+      return 'Cloud speech could not reach ElevenLabs or the service returned an error.';
+    case 'timeout':
+      return 'Cloud speech timed out; continue reading.';
+    case 'invalid':
+      return 'Cloud speech received an invalid response or request.';
+    default:
+      return 'Cloud speech is unavailable. Continue reading.';
+  }
+}
+
 /** Inputs needed by the speech service. */
 export interface SpeechServiceOptions {
   runtimeDirectory: string;
@@ -60,6 +93,8 @@ export interface SpeechServiceOptions {
   localDesktop: boolean;
   kokoroSupported?: boolean;
   cloud?: ElevenLabsSpeechPort;
+  /** Records a sanitized failure for preview and ordinary narration. */
+  cloudDiagnostic?: (reason: CloudSpeechFailureReason) => void;
   tempo?: SpeechTempoProcessor;
   /** Makes the local synthesis engine; absent means the packaged Node worker. */
   createLocal?: (listener: LocalListener) => LocalSynthesisPort;
@@ -263,7 +298,7 @@ export class SpeechService implements NarrationPort {
   private startCloud(current: ActiveSpeech): void {
     const cloud = this.options.cloud;
     if (cloud === undefined) {
-      this.fail(current, 'Cloud speech is unavailable. Check your key, voice and account.');
+      this.failCloud(current, 'unknown');
       return;
     }
     const controller = new AbortController();
@@ -271,7 +306,7 @@ export class SpeechService implements NarrationPort {
       if (this.cloudBusy?.id !== current.id) return;
       controller.abort();
       this.cloudBusy = undefined;
-      if (this.current === current) this.fail(current, 'Cloud speech timed out; continue reading.');
+      if (this.current === current) this.failCloud(current, 'timeout');
     }, START_TIMEOUT_MS);
     this.cloudBusy = { id: current.id, controller, timer };
     current.phase = 'synthesizing';
@@ -287,15 +322,26 @@ export class SpeechService implements NarrationPort {
           if (this.current !== current || controller.signal.aborted) return;
           this.receiveAudio(current, 0, audio, true);
         },
-        () => {
+        (error: unknown) => {
           release();
-          if (this.current === current) this.fail(current, 'Cloud speech is unavailable. Check your key, voice and account.');
+          if (this.current === current) this.failCloud(current, cloudFailureReason(error));
         },
       );
-    } catch {
+    } catch (error: unknown) {
       release();
-      this.fail(current, 'Cloud speech is unavailable. Check your key, voice and account.');
+      this.failCloud(current, cloudFailureReason(error));
     }
+  }
+
+  private failCloud(current: ActiveSpeech, reason: CloudSpeechFailureReason): void {
+    if (this.current !== current) return;
+    try {
+      this.options.cloudDiagnostic?.(reason);
+    } catch {
+      /* Observability must not change speech behavior. */
+    }
+    if (reason === 'canceled') this.finish(current);
+    else this.fail(current, cloudFailureMessage(reason));
   }
 
   /** A credential change invalidates current cloud audio and pending requests. */

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.22.1
+
+-   Show a more specific, safe reason when ElevenLabs narration fails and
+    include its failure category in copied speech diagnostics.
+
 ## 0.22.0
 
 -   Deliver completed command output to a waiting agent promptly, including

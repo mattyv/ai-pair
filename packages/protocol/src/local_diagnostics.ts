@@ -4,7 +4,7 @@ import { z } from 'zod';
 const MAX_LOCAL_SPEECH_EVENTS = 100;
 const speechEvent = z.strictObject({
   kind: z.literal('speech'),
-  event: z.enum(['preview', 'catalog', 'setup', 'capability', 'runtime']),
+  event: z.enum(['preview', 'catalog', 'setup', 'capability', 'runtime', 'narration']),
   phase: z.enum(['received', 'blocked', 'dispatched', 'ready', 'failed']),
   provider: z.enum(['kokoro', 'elevenlabs', 'unknown']),
   reason: z

@@ -1,5 +1,8 @@
 import * as http from 'node:http';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
+
+vi.mock('../src/speech_setup', () => ({ installedSpeechModel: vi.fn() }));
+vi.mock('../src/speech_runtime_status', () => ({ speechRuntimeAvailable: vi.fn() }));
 import { ElevenLabsClient } from '../src/speech_elevenlabs';
 
 let server: http.Server | undefined;
@@ -64,4 +67,62 @@ it('observes cancellation of an in-flight streamed request', async () => {
   controller.abort();
   await expect(result).rejects.toMatchObject({ kind: 'canceled' });
   await closed.promise;
+});
+
+it('preserves a cloud rate failure between successful narration requests', async () => {
+  let requests = 0;
+  const client = await localClient((request, response) => {
+    void request;
+    requests++;
+    if (requests === 2) {
+      response.writeHead(429);
+      response.end('private provider response');
+    } else {
+      response.writeHead(200, { 'content-type': 'audio/pcm' });
+      response.end(Buffer.from([1, 0]));
+    }
+  });
+  const { SpeechService } = await import('../src/speech_service');
+  const { Diagnostics } = await import('../src/diagnostics');
+  const diagnostics = new Diagnostics({ version: 'test', build: 'test' });
+  const statuses: string[] = [];
+  let played = Promise.withResolvers<number>();
+  const speech = new SpeechService({
+    runtimeDirectory: '',
+    storageDirectory: '',
+    localDesktop: true,
+    cloud: client,
+    cloudDiagnostic: (reason) => {
+      diagnostics.record({ kind: 'speech', event: 'narration', provider: 'elevenlabs', phase: 'failed', reason });
+    },
+    settings: () => ({ enabled: true, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: 'voice', elevenLabsSpeed: 1 }),
+    output: {
+      play: (id) => {
+        played.resolve(id);
+        return 1;
+      },
+      control: () => {},
+      status: (id, state, message) => {
+        void id;
+        void state;
+        if (message !== undefined) statuses.push(message);
+      },
+    },
+  });
+  const first = speech.speak('Private first narration.');
+  speech.audioEvent({ id: await played.promise, pageId: 1, event: 'ended' });
+  await first;
+  await speech.speak('Private second narration.');
+  expect(statuses).toContain('ElevenLabs rate limit reached. Continue reading and try again later.');
+  const snapshot = diagnostics.snapshot();
+  expect(snapshot.events).toContainEqual(
+    expect.objectContaining({ event: 'narration', provider: 'elevenlabs', phase: 'failed', reason: 'rate' }),
+  );
+  expect(JSON.stringify(snapshot)).not.toMatch(/private/i);
+  played = Promise.withResolvers<number>();
+  const third = speech.speak('Private third narration.');
+  speech.audioEvent({ id: await played.promise, pageId: 1, event: 'ended' });
+  await third;
+  expect(requests).toBe(3);
+  speech.dispose();
 });
