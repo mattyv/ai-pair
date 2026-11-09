@@ -2196,6 +2196,28 @@ it('GpuVerified: accepts a fresh proof that takes longer than the worker startup
   vi.useRealTimers();
 });
 
+it('GpuVerified: preserves the proof deadline when multipart admission completes while paused', async () => {
+  vi.useFakeTimers();
+  const { service, gpu, authorize, capability, output } = gpuHarness(() => 'gpu');
+  output.parts = true;
+  const admission = Promise.withResolvers<boolean>();
+  output.prepare = vi.fn().mockReturnValue(admission.promise);
+  const proof = Promise.withResolvers<import('../src/speech_gpu_capability').GpuCapabilityResult>();
+  authorize.mockReturnValue(proof.promise);
+  const pending = service.speak('First. Second.');
+  service.pause();
+  admission.resolve(true);
+  await settle();
+  service.resume();
+  await vi.advanceTimersByTimeAsync(21_000);
+  proof.resolve({ check: { phase: 'ready' }, capability });
+  await settle();
+  expect(gpu.port.load).toHaveBeenCalledWith('/gpu-model');
+  service.cancel();
+  await pending;
+  vi.useRealTimers();
+});
+
 it('NoStaleProof: times out a stuck proof without launching its late result', async () => {
   vi.useFakeTimers();
   const { service, gpu, authorize, capability } = gpuHarness(() => 'gpu');

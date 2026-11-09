@@ -804,6 +804,8 @@ export class SpeechService implements NarrationPort {
   }
 
   private armStartup(current: ActiveSpeech, ms: number): void {
+    this.clearTimer(current);
+    current.remaining = ms;
     if (!this.paused || !current.multipart) this.arm(current, ms);
   }
 
