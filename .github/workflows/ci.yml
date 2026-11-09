@@ -138,7 +138,11 @@ jobs:
         if: always()
         with:
           name: coverage-integration
-          path: coverage/integration
+          path: |
+            coverage/integration/lcov.info
+            coverage/integration/coverage-summary.json
+            coverage/integration/v8/**
+            COVERAGE.md
 
   specs:
     runs-on: ubuntu-latest

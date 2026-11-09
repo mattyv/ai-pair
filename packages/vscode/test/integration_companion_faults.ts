@@ -1,7 +1,7 @@
 // Real companion command failures injected only at VS Code's command transport.
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
-import { localSpeechReport } from '@ai-pair/protocol';
+import { gpuDiagnostics, localSpeechReport } from '@ai-pair/protocol';
 import type { Api } from '../src/extension';
 
 /** Exercises the main extension's handling of failed companion commands. */
@@ -16,11 +16,15 @@ export async function companionFaults(api: Api): Promise<void> {
   let lostWarnings = 0;
   let target = '';
   let failures = 0;
+  let invalidGpu = false;
   const errors: string[] = [];
   try {
     Object.defineProperty(vscode.commands, 'executeCommand', {
       ...executeDescriptor,
       value: (command: string, ...args: unknown[]) => {
+        if (command === 'aiPair.localAudio.gpuDiagnostics' && invalidGpu) {
+          return Promise.resolve({ path: '/private/gpu-secret' });
+        }
         if (command === target && command === 'aiPair.localAudio.frame') {
           target = '';
           failures++;
@@ -82,10 +86,33 @@ export async function companionFaults(api: Api): Promise<void> {
       'workspace session diagnostics are absent',
     );
     assert.equal(failures, 3);
+    assert.ok('gpu' in unavailable, 'the valid GPU report was omitted');
+    gpuDiagnostics.parse(unavailable.gpu);
+
+    // Invalid reports and older companions' missing commands must not leak raw data.
+    for (const mode of ['invalid', 'missing'] as const) {
+      await vscode.env.clipboard.writeText('');
+      invalidGpu = mode === 'invalid';
+      if (mode === 'missing') target = 'aiPair.localAudio.gpuDiagnostics';
+      api.panelMessage({ type: 'copyDiagnostics' });
+      copied = '';
+      for (let attempt = 0; attempt < 100 && copied === ''; attempt++) {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 50);
+        });
+        copied = await vscode.env.clipboard.readText();
+      }
+      const report: unknown = JSON.parse(copied);
+      assert.ok(report !== null && typeof report === 'object' && 'localSpeech' in report);
+      assert.ok(!('gpu' in report), `${mode} GPU report was included`);
+      assert.ok(!copied.includes('/private/gpu-secret'), 'raw GPU data leaked');
+    }
+    invalidGpu = false;
+    assert.equal(failures, 4);
 
     target = 'aiPair.localAudio.preview';
     await assert.rejects(api.previewSpeech(), /injected companion transport failure/);
-    assert.equal(failures, 4);
+    assert.equal(failures, 5);
     const before = localSpeechReport.parse(await execute('aiPair.localAudio.diagnostics'));
     const sequence = Math.max(0, ...before.events.map((event) => event.seq));
     await execute('aiPair.removeElevenLabsKey');
@@ -122,7 +149,7 @@ export async function companionFaults(api: Api): Promise<void> {
         setTimeout(resolve, 100);
       });
     }
-    assert.equal(failures, 5, 'the real frame boundary was not reached');
+    assert.equal(failures, 6, 'the real frame boundary was not reached');
     assert.equal(lostWarnings, 1, 'the lost connection warning was not shown');
     assert.ok(api.history().some((event) => event.type === 'programmer' && event.text === 'retained after frame refusal'));
   } finally {
