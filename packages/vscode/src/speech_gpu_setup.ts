@@ -11,6 +11,7 @@ export interface GpuSetupDependencies {
 }
 
 const PROOF_REASONS: Record<GpuProofFailure, GpuUnavailableReason> = {
+  busy: 'busy',
   trust: 'untrusted_driver',
   enumerate: 'no_hardware',
   negative: 'inconclusive',

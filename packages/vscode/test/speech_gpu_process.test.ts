@@ -20,7 +20,7 @@ describe('GPU process supervision', () => {
     fake.emit('close', 0);
     expect(await result).toBe('passed');
   });
-  it('kills a timed-out child and waits for its exit before settling', async () => {
+  it('NoSuccessorBeforeReap, CheckSettles: kills a timed-out child and waits for its exit before settling', async () => {
     vi.useFakeTimers();
     try {
       const fake = child();
@@ -40,7 +40,9 @@ describe('GPU process supervision', () => {
     vi.useFakeTimers();
     try {
       const fake = child();
-      vi.mocked(fake.process.kill).mockImplementation(() => { throw new Error('private'); });
+      vi.mocked(fake.process.kill).mockImplementation(() => {
+        throw new Error('private');
+      });
       const done = vi.fn();
       const result = runGpuProcess(() => fake.process, 10).then(done);
       await vi.advanceTimersByTimeAsync(10);
@@ -48,7 +50,9 @@ describe('GPU process supervision', () => {
       fake.emit('close');
       await result;
       expect(done).toHaveBeenCalledWith('timeout');
-    } finally { vi.useRealTimers(); }
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it('waits for close after a child error and returns failure', async () => {
     const fake = child();

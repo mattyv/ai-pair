@@ -1,3 +1,5 @@
+import { GpuProcessBusyError } from './speech_gpu_slot';
+
 /** A separate, supervised proof step and its bounded result. */
 export type GpuProbeResult = 'passed' | 'rejected' | 'failed' | 'timeout';
 
@@ -12,7 +14,7 @@ export interface GpuProbe {
 }
 
 /** The first proof that could not be established. */
-export type GpuProofFailure = 'trust' | 'enumerate' | 'negative' | 'tiny' | 'model' | 'timeout';
+export type GpuProofFailure = 'trust' | 'enumerate' | 'negative' | 'tiny' | 'model' | 'timeout' | 'busy';
 
 /** The outcome of checking all prerequisites. */
 export type GpuProof = { phase: 'ready' } | { phase: 'unavailable'; reason: GpuProofFailure };
@@ -32,7 +34,7 @@ export async function checkGpu(probe: GpuProbe): Promise<GpuProof> {
       if (result !== (kind === 'negative' ? 'rejected' : 'passed')) return { phase: 'unavailable', reason: stage };
     }
     return { phase: 'ready' };
-  } catch {
-    return { phase: 'unavailable', reason: stage };
+  } catch (error: unknown) {
+    return { phase: 'unavailable', reason: error instanceof GpuProcessBusyError ? 'busy' : stage };
   }
 }

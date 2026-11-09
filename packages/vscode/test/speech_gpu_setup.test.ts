@@ -1,32 +1,52 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import { checkGpuSetup, type GpuSetupDependencies } from '../src/speech_gpu_setup';
 
-function dependencies(): GpuSetupDependencies {
-  return { supported: true, runtimeAvailable: vi.fn().mockResolvedValue(true), modelAvailable: vi.fn().mockResolvedValue(true),
-    inferenceAvailable: true, probe: { trust: vi.fn().mockResolvedValue(true), enumerate: vi.fn().mockResolvedValue(true),
-      run: vi.fn().mockImplementation((kind: string) => Promise.resolve(kind === 'negative' ? 'rejected' : 'passed')) } };
-}
+const fake = vi.hoisted(() => ({
+  check: vi.fn<(probe: import('../src/speech_gpu_check').GpuProbe) => Promise<import('../src/speech_gpu_check').GpuProof>>(),
+}));
+vi.mock('../src/speech_gpu_check', () => ({ checkGpu: fake.check }));
 
-describe('GPU setup adapter', () => {
-  it('never reports ready until runtime, model, inference and all hardware proofs pass', async () => {
-    expect(await checkGpuSetup(dependencies())).toEqual({ phase: 'ready' });
-    const unsupported = dependencies(); unsupported.supported = false;
-    expect(await checkGpuSetup(unsupported)).toEqual({ phase: 'unavailable', reason: 'unsupported' });
-    const noRuntime = dependencies(); vi.mocked(noRuntime.runtimeAvailable).mockResolvedValue(false);
-    expect(await checkGpuSetup(noRuntime)).toEqual({ phase: 'unavailable', reason: 'runtime_missing' });
-    const noModel = dependencies(); vi.mocked(noModel.modelAvailable).mockResolvedValue(false);
-    expect(await checkGpuSetup(noModel)).toEqual({ phase: 'unavailable', reason: 'model_missing' });
-    const noInference = dependencies(); noInference.inferenceAvailable = false;
-    expect(await checkGpuSetup(noInference)).toEqual({ phase: 'unavailable', reason: 'runtime_missing' });
-  });
-  it('maps proof failures and hides exception details', async () => {
-    for (const [stage, reason] of [['trust', 'untrusted_driver'], ['enumerate', 'no_hardware']] as const) {
-      const deps = dependencies(); vi.mocked(deps.probe[stage]).mockResolvedValue(false);
-      expect(await checkGpuSetup(deps)).toEqual({ phase: 'unavailable', reason });
-    }
-    const deps = dependencies(); vi.mocked(deps.probe.run).mockResolvedValue('timeout');
-    expect(await checkGpuSetup(deps)).toEqual({ phase: 'unavailable', reason: 'timeout' });
-    vi.mocked(deps.runtimeAvailable).mockRejectedValue(new Error('private'));
-    expect(await checkGpuSetup(deps)).toEqual({ phase: 'unavailable', reason: 'runtime_missing' });
-  });
+function dependencies(): GpuSetupDependencies {
+  return {
+    supported: true,
+    inferenceAvailable: true,
+    runtimeAvailable: vi.fn<() => Promise<boolean>>().mockResolvedValue(true),
+    modelAvailable: vi.fn<() => Promise<boolean>>().mockResolvedValue(true),
+    probe: { trust: vi.fn(), enumerate: vi.fn(), run: vi.fn() },
+  };
+}
+beforeEach(() => {
+  vi.clearAllMocks();
+  fake.check.mockResolvedValue({ phase: 'ready' });
+});
+
+it('requires supported runtime and model before asking for hardware proof', async () => {
+  const value = dependencies();
+  expect(await checkGpuSetup(value)).toEqual({ phase: 'ready' });
+  expect(fake.check).toHaveBeenCalledWith(value.probe);
+  value.supported = false;
+  expect(await checkGpuSetup(value)).toEqual({ phase: 'unavailable', reason: 'unsupported' });
+  value.supported = true;
+  value.inferenceAvailable = false;
+  expect(await checkGpuSetup(value)).toEqual({ phase: 'unavailable', reason: 'runtime_missing' });
+  value.inferenceAvailable = true;
+  vi.mocked(value.runtimeAvailable).mockResolvedValueOnce(false).mockRejectedValueOnce(new Error('private'));
+  expect(await checkGpuSetup(value)).toEqual({ phase: 'unavailable', reason: 'runtime_missing' });
+  expect(await checkGpuSetup(value)).toEqual({ phase: 'unavailable', reason: 'runtime_missing' });
+  vi.mocked(value.modelAvailable).mockResolvedValueOnce(false).mockRejectedValueOnce(new Error('private'));
+  expect(await checkGpuSetup(value)).toEqual({ phase: 'unavailable', reason: 'model_missing' });
+  expect(await checkGpuSetup(value)).toEqual({ phase: 'unavailable', reason: 'model_missing' });
+});
+
+it.each([
+  ['busy', 'busy'],
+  ['trust', 'untrusted_driver'],
+  ['enumerate', 'no_hardware'],
+  ['negative', 'inconclusive'],
+  ['tiny', 'probe_failed'],
+  ['model', 'probe_failed'],
+  ['timeout', 'timeout'],
+] as const)('maps proof failure %s to %s', async (failure, reason) => {
+  fake.check.mockResolvedValueOnce({ phase: 'unavailable', reason: failure });
+  expect(await checkGpuSetup(dependencies())).toEqual({ phase: 'unavailable', reason });
 });

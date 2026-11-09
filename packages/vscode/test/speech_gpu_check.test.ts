@@ -1,3 +1,4 @@
+import { GpuProcessBusyError } from '../src/speech_gpu_slot';
 import { describe, expect, it, vi } from 'vitest';
 import { checkGpu, type GpuProbe } from '../src/speech_gpu_check';
 
@@ -21,11 +22,13 @@ describe('GPU setup proof', () => {
   it('GpuVerified: fails closed at each failed proof', async () => {
     for (const stage of ['trust', 'enumerate', 'negative', 'tiny', 'model'] as const) {
       const runner = probe();
-      if (stage === 'trust' || stage === 'enumerate') vi.mocked(runner[stage]).mockResolvedValue(false);
-      else
+      if (stage === 'trust' || stage === 'enumerate') {
+        vi.mocked(runner[stage]).mockResolvedValue(false);
+      } else {
         vi.mocked(runner.run).mockImplementation((kind) =>
           Promise.resolve(kind === stage ? 'failed' : kind === 'negative' ? 'rejected' : 'passed'),
         );
+      }
       expect(await checkGpu(runner)).toEqual({ phase: 'unavailable', reason: stage });
     }
   });
@@ -44,4 +47,13 @@ describe('GPU setup proof', () => {
     vi.mocked(runner.trust).mockRejectedValue(new Error('private driver path'));
     expect(await checkGpu(runner)).toEqual({ phase: 'unavailable', reason: 'trust' });
   });
+});
+
+it('reports a retryable busy outcome when another GPU child owns the slot', async () => {
+  const runner = probe();
+  vi.mocked(runner.enumerate).mockRejectedValueOnce(new GpuProcessBusyError());
+  expect(await checkGpu(runner)).toEqual({ phase: 'unavailable', reason: 'busy' });
+  const proof = probe();
+  vi.mocked(proof.run).mockRejectedValueOnce(new GpuProcessBusyError());
+  expect(await checkGpu(proof)).toEqual({ phase: 'unavailable', reason: 'busy' });
 });
