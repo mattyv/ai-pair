@@ -1,9 +1,18 @@
 #include <vulkan/vulkan.h>
 #include <stdlib.h>
+#include <dlfcn.h>
 #include <string.h>
 
+static VkResult VKAPI_CALL version(uint32_t *result) {
+  const char *kind = getenv("FAKE_GPU");
+  if (kind && strcmp(kind, "version_fail") == 0) return VK_ERROR_INITIALIZATION_FAILED;
+  *result = kind && strcmp(kind, "old_loader") == 0 ? VK_MAKE_API_VERSION(0, 1, 3, 233) : VK_MAKE_API_VERSION(0, 1, 3, 234);
+  return VK_SUCCESS;
+}
+static void *driver_handle;
+static void *extra_driver_handle;
 static VkResult VKAPI_CALL create(const VkInstanceCreateInfo *info, const VkAllocationCallbacks *alloc, VkInstance *instance) {
-  (void)info; (void)alloc; if (getenv("FAKE_GPU") && strcmp(getenv("FAKE_GPU"), "create_fail") == 0) return VK_ERROR_INITIALIZATION_FAILED; *instance = (VkInstance)1; return VK_SUCCESS;
+  (void)info; (void)alloc; if (getenv("FAKE_DRIVER")) driver_handle = dlopen(getenv("FAKE_DRIVER"), RTLD_NOW); if (getenv("FAKE_EXTRA_DRIVER")) extra_driver_handle = dlopen(getenv("FAKE_EXTRA_DRIVER"), RTLD_NOW); if (getenv("FAKE_GPU") && strcmp(getenv("FAKE_GPU"), "create_fail") == 0) return VK_ERROR_INITIALIZATION_FAILED; *instance = (VkInstance)1; return VK_SUCCESS;
 }
 static VkResult VKAPI_CALL enumerate(VkInstance instance, uint32_t *count, VkPhysicalDevice *devices) {
   (void)instance;
@@ -21,11 +30,12 @@ static void VKAPI_CALL properties(VkPhysicalDevice device, VkPhysicalDevicePrope
   info->vendorID = kind && strcmp(kind, "other") == 0 ? 0x8086 : 0x1002;
   info->deviceType = kind && strcmp(kind, "software") == 0 ? VK_PHYSICAL_DEVICE_TYPE_CPU : kind && strcmp(kind, "virtual") == 0 ? VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU : kind && strcmp(kind, "unknown") == 0 ? VK_PHYSICAL_DEVICE_TYPE_OTHER : kind && strcmp(kind, "discrete") == 0 ? VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU : VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
 }
-static void VKAPI_CALL destroy(VkInstance instance, const VkAllocationCallbacks *alloc) { (void)instance; (void)alloc; }
+static void VKAPI_CALL destroy(VkInstance instance, const VkAllocationCallbacks *alloc) { (void)instance; (void)alloc; if (driver_handle) dlclose(driver_handle); if (extra_driver_handle) dlclose(extra_driver_handle); }
 VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL vkGetInstanceProcAddr(VkInstance instance, const char *name) {
   (void)instance;
   const char *kind = getenv("FAKE_GPU");
   if (kind && strcmp(kind, "missing_symbol") == 0) return NULL;
+  if (strcmp(name, "vkEnumerateInstanceVersion") == 0) return kind && strcmp(kind, "missing_version") == 0 ? NULL : (PFN_vkVoidFunction)version;
   if (strcmp(name, "vkCreateInstance") == 0) return (PFN_vkVoidFunction)create;
   if (strcmp(name, "vkEnumeratePhysicalDevices") == 0) return (PFN_vkVoidFunction)enumerate;
   if (strcmp(name, "vkGetPhysicalDeviceProperties") == 0) return (PFN_vkVoidFunction)properties;

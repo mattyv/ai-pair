@@ -1,5 +1,10 @@
 import * as path from 'node:path';
 
+/** Group and other write permissions disqualify a system path. */
+const UNTRUSTED_WRITE_BITS = 0o022;
+/** Matches Linux's bound on symlink resolution. */
+const MAX_SYMLINK_HOPS = 40;
+
 /** File metadata required to verify a system-owned path. */
 export interface SystemPathStat {
   uid: number;
@@ -7,29 +12,40 @@ export interface SystemPathStat {
   symlink: boolean;
 }
 
-/** Filesystem operations used to inspect the path and each symlink target. */
+/** Filesystem operations used to inspect every component and symlink hop. */
 export interface SystemPathAccess {
-  realpath: (value: string) => Promise<string>;
+  readlink: (value: string) => Promise<string>;
   lstat: (value: string) => Promise<SystemPathStat>;
 }
 
-/** Rejects non-root-owned or writable files, directories and symlink targets. */
+/** Rejects any non-root-owned or writable component of a system path's resolution. */
 export async function trustedSystemPath(value: string, fs: SystemPathAccess): Promise<boolean> {
   if (!path.isAbsolute(value) || path.normalize(value) !== value) return false;
-  const pending = [value];
-  const checked = new Set<string>();
+  const pending = value.split('/').filter((part) => part !== '');
+  let current = '/';
+  let links = 0;
   try {
+    const root = await fs.lstat(current);
+    if (root.uid !== 0 || root.symlink || (root.mode & UNTRUSTED_WRITE_BITS) !== 0) return false;
     while (pending.length > 0) {
-      const current = pending.pop();
-      if (current === undefined || checked.has(current)) continue;
-      checked.add(current);
-      const stat = await fs.lstat(current);
-      if (stat.uid !== 0 || (!stat.symlink && (stat.mode & 0o022) !== 0)) return false;
-      const resolved = await fs.realpath(current);
-      if (!path.isAbsolute(resolved)) return false;
-      if (!checked.has(resolved)) pending.push(resolved);
-      const parent = path.dirname(current);
-      if (parent !== current && !checked.has(parent)) pending.push(parent);
+      const part = pending.shift();
+      if (part === undefined || part === '' || part === '.') continue;
+      if (part === '..') {
+        current = path.dirname(current);
+        continue;
+      }
+      const next = path.join(current, part);
+      const info = await fs.lstat(next);
+      if (info.uid !== 0 || (!info.symlink && (info.mode & UNTRUSTED_WRITE_BITS) !== 0)) return false;
+      if (!info.symlink) {
+        current = next;
+        continue;
+      }
+      if (++links > MAX_SYMLINK_HOPS) return false;
+      const target = await fs.readlink(next);
+      if (target === '') return false;
+      if (path.isAbsolute(target)) current = '/';
+      pending.unshift(...target.split('/'));
     }
     return true;
   } catch {

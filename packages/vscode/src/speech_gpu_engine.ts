@@ -1,7 +1,8 @@
-import { env, Tensor } from '@huggingface/transformers';
+import { AutoTokenizer, env, StyleTextToSpeech2Model, Tensor } from '@huggingface/transformers';
 import { KokoroTTS } from 'kokoro-js';
 import { phonemize } from '../vendor/kokoro_phonemize.mjs';
 import type { DisposableGpuEngine } from './speech_gpu_worker_host';
+import { gpuSessionOptions } from './speech_gpu_options';
 
 /** Checks the Transformers 4 vocabulary interface before using it. */
 function hasVocabulary(value: unknown): value is { get_vocab(): unknown } {
@@ -16,7 +17,11 @@ function hasVocabulary(value: unknown): value is { get_vocab(): unknown } {
 export async function loadGpuSpeechEngine(modelPath: string): Promise<DisposableGpuEngine<Tensor>> {
   env.allowRemoteModels = false;
   env.allowLocalModels = true;
-  const model = await KokoroTTS.from_pretrained(modelPath, { dtype: 'fp32', device: 'webgpu' });
+  const [base, loadedTokenizer] = await Promise.all([
+    StyleTextToSpeech2Model.from_pretrained(modelPath, { dtype: 'fp32', device: 'webgpu', session_options: gpuSessionOptions(false) }),
+    AutoTokenizer.from_pretrained(modelPath),
+  ]);
+  const model = new KokoroTTS(base, loadedTokenizer);
   return {
     engine: {
       phonemize,

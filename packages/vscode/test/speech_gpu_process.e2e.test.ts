@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createGpuSynthesisClient } from '../src/speech_gpu_client';
 import { LOCAL_CAPABILITIES } from '../src/speech_local_protocol';
+import { tryAcquireGpuProcessSlot } from '../src/speech_gpu_slot';
 
 let directory: string | undefined;
 afterEach(async () => {
@@ -37,7 +38,8 @@ it('keeps a separate warm process and reaps it before reuse after cancellation',
       executablePath: process.execPath,
       loaderPath: path.join(directory, 'loader'),
       loaderSha256: 'a'.repeat(64),
-      environment: { LANG: 'C', VK_DRIVER_FILES: path.join(directory, 'icd'), VK_LOADER_LAYERS_DISABLE: '~all~' },
+      driverPath: path.join(directory, 'driver'), driverSha256: 'b'.repeat(64), driverDevice: '42', driverInode: '99',
+      environment: { LANG: 'C', VK_DRIVER_FILES: path.join(directory, 'icd'), VK_LOADER_LAYERS_DISABLE: '~all~', LD_PRELOAD: path.join(directory, 'loader') },
     },
   });
   try {
@@ -51,7 +53,10 @@ it('keeps a separate warm process and reaps it before reuse after cancellation',
     client.cancel();
     expect((await second).status).toBe('failed');
     expect(client.state()).toBe('retiring');
-    expect(() =>{  client.load(modelDirectory); }).toThrow();
+    expect(tryAcquireGpuProcessSlot()).toBeUndefined();
+    expect(() => {
+      client.load(modelDirectory);
+    }).toThrow();
     await vi.waitFor(
       () => {
         expect(client.state()).toBe('cold');
@@ -59,6 +64,9 @@ it('keeps a separate warm process and reaps it before reuse after cancellation',
       { timeout: 5000 },
     );
     expect(listener.retired).toHaveBeenCalledOnce();
+    const release = tryAcquireGpuProcessSlot();
+    expect(release).toBeDefined();
+    release?.();
   } finally {
     client.retire('worker_exit');
     await vi.waitFor(

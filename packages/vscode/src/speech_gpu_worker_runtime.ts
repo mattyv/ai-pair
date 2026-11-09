@@ -1,10 +1,11 @@
 import * as path from 'node:path';
+import type { GpuDriverIdentity } from './speech_gpu_driver_identity';
 import { LOCAL_PROTOCOL_VERSION, type LocalResponse } from './speech_local_protocol';
 import type { SpeechTokens } from './speech_synthesis';
 import { loadVerifiedGpuSpeechEngine } from './speech_gpu_verified_engine';
 import { GpuWorkerHost, type DisposableGpuEngine } from './speech_gpu_worker_host';
 
-const GPU_ARGUMENT_COUNT = 3;
+const GPU_ARGUMENT_COUNT = 7;
 
 /** The IPC operations exposed to the isolated process bootstrap. */
 export interface GpuWorkerChannel {
@@ -20,9 +21,10 @@ export function attachGpuWorker<T extends SpeechTokens>(
   dependencies: {
     load(path: string): Promise<DisposableGpuEngine<T>>;
     verify(path: string, sha256: string): Promise<boolean>;
+    verifyDriver(identity: GpuDriverIdentity, loaderPath: string): Promise<boolean>;
   },
 ): void {
-  const [loaderPath, loaderSha256, verifiedModel] = args;
+  const [loaderPath, loaderSha256, verifiedModel, driverPath, driverSha256, driverDevice, driverInode] = args;
   if (
     args.length !== GPU_ARGUMENT_COUNT ||
     verifiedModel === undefined ||
@@ -30,7 +32,11 @@ export function attachGpuWorker<T extends SpeechTokens>(
     loaderPath === undefined ||
     !path.isAbsolute(loaderPath) ||
     loaderSha256 === undefined ||
-    !/^[a-f0-9]{64}$/.test(loaderSha256)
+    !/^[a-f0-9]{64}$/.test(loaderSha256) ||
+    driverPath === undefined || !path.isAbsolute(driverPath) ||
+    driverSha256 === undefined || !/^[a-f0-9]{64}$/.test(driverSha256) ||
+    driverDevice === undefined || !/^[0-9]+$/.test(driverDevice) ||
+    driverInode === undefined || !/^[0-9]+$/.test(driverInode)
   ) {
     throw new Error('Invalid GPU loader identity.');
   }
@@ -43,6 +49,8 @@ export function attachGpuWorker<T extends SpeechTokens>(
         { path: loaderPath, sha256: loaderSha256 },
         {
           ...dependencies,
+          verify: async (loader, digest) => (await dependencies.verify(loader, digest)) &&
+            (await dependencies.verifyDriver({ path: driverPath, sha256: driverSha256, device: driverDevice, inode: driverInode }, loaderPath)),
           proofFailed: () => {
             loaderCompromised = true;
           },

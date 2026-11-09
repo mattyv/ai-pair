@@ -1,0 +1,1 @@
+{"name":"ai-pair-gpu-runtime","version":"0.0.0","private":true,"type":"module","dependencies":{"@huggingface/transformers":"4.2.0","kokoro-js":"1.2.1"},"overrides":{"kokoro-js":{"@huggingface/transformers":"4.2.0"}}}

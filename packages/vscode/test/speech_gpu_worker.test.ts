@@ -5,15 +5,17 @@ const fake = vi.hoisted(() => ({
   attach: vi.fn<(channel: GpuWorkerChannel, args: string[], dependencies: unknown) => void>(),
   load: vi.fn(),
   verify: vi.fn(),
+  verifyDriver: vi.fn(),
 }));
 vi.mock('../src/speech_gpu_worker_runtime', () => ({ attachGpuWorker: fake.attach }));
 vi.mock('../src/speech_gpu_engine', () => ({ loadGpuSpeechEngine: fake.load }));
+vi.mock('../src/speech_gpu_driver_identity', () => ({ verifyMappedGpuDriver: fake.verifyDriver }));
 vi.mock('../src/speech_gpu_loader', () => ({ verifyMappedVulkanLoader: fake.verify }));
 
 it('attaches the child runtime with its verified loader identity and IPC', async () => {
   await import('../src/speech_gpu_worker');
   expect(fake.attach).toHaveBeenCalledOnce();
-  expect(fake.attach.mock.calls[0]?.[2]).toEqual({ load: fake.load, verify: fake.verify });
+  expect(fake.attach.mock.calls[0]?.[2]).toEqual({ load: fake.load, verify: fake.verify, verifyDriver: fake.verifyDriver });
   const channel = fake.attach.mock.calls[0]?.[0];
   if (channel === undefined) throw new Error('Missing channel');
   const message = vi.fn<(value: unknown) => void>();

@@ -1,3 +1,4 @@
+import { verifyMappedGpuDriver } from './speech_gpu_driver_identity';
 import { loadGpuSpeechEngine } from './speech_gpu_engine';
 import { verifyMappedVulkanLoader } from './speech_gpu_loader';
 import { attachGpuWorker } from './speech_gpu_worker_runtime';
@@ -17,5 +18,5 @@ attachGpuWorker(
     },
   },
   process.argv.slice(2),
-  { load: loadGpuSpeechEngine, verify: verifyMappedVulkanLoader },
+  { load: loadGpuSpeechEngine, verify: verifyMappedVulkanLoader, verifyDriver: verifyMappedGpuDriver },
 );
