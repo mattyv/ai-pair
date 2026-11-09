@@ -37,3 +37,10 @@ it('rejects unlisted and missing files before trusting the runtime', async () =>
   vi.mocked(access.list).mockResolvedValue([]);
   expect(await verifyGpuAssets('/gpu/runtime', [asset], access)).toBe(false);
 });
+
+it('rejects an empty asset manifest before reading the runtime', async () => {
+  const access: GpuAssetAccess = { list: vi.fn(), read: vi.fn() };
+  expect(await verifyGpuAssets('/gpu/runtime', [], access)).toBe(false);
+  expect(access.list).not.toHaveBeenCalled();
+  expect(access.read).not.toHaveBeenCalled();
+});

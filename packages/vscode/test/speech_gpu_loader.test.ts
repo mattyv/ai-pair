@@ -19,6 +19,7 @@ function access(maps = line): LoaderAccess {
 
 it('accepts the one mapped loader with matching path, inode, device and hash', async () => {
   expect(await verifyMappedVulkanLoader(file, hash, access())).toBe(true);
+  expect(await verifyMappedVulkanLoader(file, hash, access(`${line}7f000-80000 r-xp 00000000 08:01 42 /usr/lib/libc.so.6\n`))).toBe(true);
 });
 
 it('rejects absent, replaced, ambiguous, deleted or untrusted loader evidence', async () => {

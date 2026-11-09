@@ -45,16 +45,24 @@ export async function verifyMappedVulkanLoader(
     for (const line of maps.split('\n')) {
       const match = /^\S+\s+\S+\s+\S+\s+([\da-f]+):([\da-f]+)\s+(\d+)\s+(\/.*)$/.exec(line);
       if (match === null) continue;
-      const [, major, minor, inode, file] = match;
-      if (file === undefined || !/\/libvulkan\.so(?:\.\d+)*(?: \(deleted\))?$/.test(file)) continue;
-      if (major === undefined || minor === undefined || inode === undefined || file !== expectedPath) return false;
+      // The regex has four mandatory capture groups, and size was checked below.
+      /* oxlint-disable typescript/no-non-null-assertion */
+      const major = match[1]!;
+      const minor = match[2]!;
+      const inode = match[3]!;
+      const file = match[4]!;
+      if (!/\/libvulkan\.so(?:\.\d+)*(?: \(deleted\))?$/.test(file)) continue;
+      if (file !== expectedPath) return false;
       candidates.add(`${major}:${minor}:${inode}`);
     }
     if (candidates.size !== 1) return false;
-    const id = [...candidates][0];
-    if (id === undefined) return false;
-    const [major, minor, inode] = id.split(':');
-    if (major === undefined || minor === undefined || inode === undefined) return false;
+    // A single candidate contains exactly the three mandatory numeric captures.
+    const id = [...candidates][0]!;
+    const parts = id.split(':');
+    const major = parts[0]!;
+    const minor = parts[1]!;
+    const inode = parts[2]!;
+    /* oxlint-enable typescript/no-non-null-assertion */
     const actual = await access.stat(expectedPath);
     const deviceMajor = ((actual.device >> EIGHT_BITS) & MAJOR_LOW_MASK) | ((actual.device >> THIRTY_TWO_BITS) & MAJOR_HIGH_MASK);
     const deviceMinor = (actual.device & BYTE_MASK) | ((actual.device >> TWELVE_BITS) & MINOR_HIGH_MASK);
