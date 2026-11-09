@@ -10026,7 +10026,7 @@
       "type": "architecture",
       "origin": "llm",
       "generation": {
-        "focus": "Experimental GPU setup, separate FP32 model and isolated Node worker; physical hardware validation pending"
+        "focus": "Experimental GPU setup, separate FP32 model and isolated Node worker; one AMD host tested; broader validation open"
       },
       "doc": {
         "type": "architecture",
@@ -10325,7 +10325,7 @@
           "worker": [
             {
               "id": "boundary",
-              "text": "The worker uses a separately bundled Node runtime, pinned FP32 model and a restricted child-only environment. Readiness requires mapped loader and driver identity proofs; physical GPU validation is pending.",
+              "text": "The worker uses a separately bundled Node runtime, pinned FP32 model and a restricted child-only environment. Readiness requires mapped loader and driver identity proofs; one AMD host has been tested; broader validation remains open.",
               "ts": 0
             },
             {

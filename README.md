@@ -29,7 +29,8 @@ It adds:
     requires the CPU model and may download an additional pinned model of about
     326 MB. It checks the local runtime, physical AMD device and driver before
     reporting readiness. CPU remains the default; Auto can fall back to CPU,
-    while GPU mode fails closed. Physical AMD validation is pending.
+    while GPU mode fails closed. One supplied AMD system has been tested;
+    broader hardware validation remains open.
 -   Bounded sentence pipelining for local Kokoro in the audio companion. The
     first sentence can play while one following part is prepared. The complete
     selected text, reading countdown and output device stay fixed for the unit.

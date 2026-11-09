@@ -32,7 +32,8 @@ The GPU local synthesis diagram records the setup, proof and isolated worker
 boundaries under construction. On 2026-11-09, Archi 1.5.1 validated the source,
 the export was regenerated, and both normalizer test suites passed. An
 isolated headless Chromium render showed the GPU diagram with no page errors;
-the screenshot was inspected for layout. Physical GPU validation is pending.
+the screenshot was inspected for layout. One supplied AMD system has since
+been tested; broader hardware validation remains open.
 
 ## Components
 
