@@ -1087,14 +1087,23 @@ function handle(message: ToPanel): void {
               ? 'Checking GPU setup...'
               : 'GPU setup has not been checked.';
       const progress = gpuCheck.phase === 'checking' ? gpuCheck.progress : undefined;
-      const counts =
-        progress?.current === undefined
-          ? ''
-          : progress.total === undefined
-            ? `: ${progress.current}`
-            : `: ${progress.current} of ${progress.total}`;
-      const unit = progress?.stage === 'download' && progress.current !== undefined ? ' bytes' : '';
-      const detail = progress === undefined ? '' : ` ${progress.stage}${counts}${unit}.`;
+      let detail = '';
+      if (progress?.stage === 'download' && progress.current !== undefined) {
+        const current = Number.isFinite(progress.current) ? Math.max(0, progress.current) : 0;
+        const total = progress.total !== undefined && Number.isFinite(progress.total) ? Math.max(0, progress.total) : 0;
+        const downloaded = total > 0 ? Math.min(current, total) : current;
+        detail = ` download: ${(downloaded / 1_000_000).toFixed(1)} MB`;
+        if (total > 0) detail += ` of ${(total / 1_000_000).toFixed(1)} MB (${Math.round((downloaded / total) * 100)}%)`;
+        detail += '.';
+      } else if (progress !== undefined) {
+        const counts =
+          progress.current === undefined
+            ? ''
+            : progress.total === undefined
+              ? `: ${progress.current}`
+              : `: ${progress.current} of ${progress.total}`;
+        detail = ` ${progress.stage}${counts}.`;
+      }
       ui.gpuStatus.textContent = `Requested: ${requestedMode.toUpperCase()}. Actual backend: ${actualBackend.toUpperCase()}. ${status}${detail}`;
       return;
     }
