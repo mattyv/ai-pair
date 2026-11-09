@@ -18,6 +18,11 @@ Issue discussions and working notes hold the detailed evidence and history.
     categories do not identify the root cause within a provider response; no
     request text, credentials, response body or URL is recorded. A canceled
     request ends silently, and no automatic retry incurs another request.
+-   Keep the audio and ownership protocol version unchanged for the optional
+    narration diagnostic event. An older workspace may reject a newer
+    companion's diagnostic report; its existing workspace report remains
+    available. Update both extensions for complete diagnostics. Preserve the
+    strict report schema rather than accepting unknown fields.
 
 ## Session batch IDs
 
