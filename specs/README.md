@@ -143,7 +143,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Rehearsal.cfg` | `MaxLines = 3` lines, `MaxOthers = 2` changes by others, `MaxProgrammerEdits = 1`, `MaxBatches = 2` batches, `MaxQueued = 2` queued, either turn, `ReportWaitsForQueue = TRUE` | holds, in about 200 seconds | 6,721,044 |
 | `BatchFile.cfg` | files `sourceFile`, `destinationFile`, and `otherFile`, `MaxActions = 4` actions a batch, `FallBackToNamed = TRUE`, `CursorInNamed = TRUE`, a selection or none | holds | 330 |
 | `Diagnostics.cfg` | `MaxBatches = 3`, provider available or not, completed, interrupted, and failed batches | holds | 168 |
-| `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await | holds | 3,077 |
+| `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await, including a rejected typing edit | holds | 3,115 |
 | `Player.cfg` | `MaxEdits = 2` | holds | 26 |
 | `LineIdentity.cfg` | texts up to 4 characters, inserts up to 2 | holds (checked as `ASSUME`s) | |
 | `Places.cfg` | texts up to 5 characters, needles up to 3 | holds (`ASSUME`s) | |
@@ -477,7 +477,7 @@ test's title carries its name:
 | `NoUnmarkedRepeat` | `controller.test.ts`: NoUnmarkedRepeat: says a returned report may repeat one already seen, and marks each returned rejection the agent may have seen; `relay.test.ts`: DroppedHandedBack, NoUnmarkedRepeat: hands back a report the agent canceled after the relay answered it, saying it may repeat (#67); RepeatsMarked, NoUnmarkedRepeat: delivers a report again, saying it may repeat, when the agent cancels after taking it (#67) |
 | `HeldMeansStale` | `controller.test.ts`: HeldMeansStale, BatchesDelivered: reports a returned rejection again, discarding steps until it has |
 | `PlaysKnowingEvents` | `controller.test.ts`: PlaysKnowingEvents: discards a batch planned before an interruption the agent has not seen |
-| `PlaysAfterCompleted` | `controller.test.ts`: PlaysAfterCompleted: discards the queued batches behind one that didn't complete, and takes none of its lines; `player.test.ts`: PlaysAfterCompleted, PlaysNothingTwice, StopAtCheck: hands back what's left of a type cut short, before the marker or after it, and nothing if none was typed; `link.test.ts`: PlaysAfterCompleted: sends the next call only after a canceled call's report is handed back (#59) |
+| `PlaysAfterCompleted` | `controller.test.ts`: PlaysAfterCompleted: discards the queued batches behind one that didn't complete, and takes none of its lines; `player.test.ts`: RejectInterruptedEdit: returns the untyped suffix and restores the cursor through a programmer edit; PlaysAfterCompleted, PlaysNothingTwice, StopAtCheck: hands back what's left of a type cut short, before the marker or after it, and nothing if none was typed; `link.test.ts`: PlaysAfterCompleted: sends the next call only after a canceled call's report is handed back (#59) |
 | `BatchesDelivered` | `controller.test.ts`: CancelKeepsBatch, BatchesDelivered: keeps a canceled step's batch queued and reports it later; BatchesDelivered: keeps an ended session until its returned rejections are reported, one per call; HeldMeansStale, BatchesDelivered: reports a returned rejection again, discarding steps until it has; `relay.test.ts`: BatchesDelivered: reports the rejection of a step canceled during its rehearsal (#28) |
 | `EventsDelivered` | `controller.test.ts`: CancelReleases, ChainProgresses, EventsDelivered: releases a blocked call without consuming the report; EndDelivered, EventsDelivered: reports a returned report again after the programmer ended the session with it (#60); EventsDelivered: returns once something interrupts, and not for a quiet edit by others; `relay.test.ts`: EventsDelivered: cancels a blocked call without losing the report, even when racing |
 | `QuietDelivered` | `controller.test.ts`: NotWhileTyping, EditsReported, QuietDelivered: waits in the programmer's turn until they pause typing, or hand the turn back |
@@ -932,6 +932,7 @@ as played (`ConsumeRun`).
 | `StopBeforeAction` | the loop in `actions` checking `isInterrupted` before each action |
 | `TakeEffect`, `Proceed` | the action's steps in `perform`: an effect, an await, or a check that finds no interrupt |
 | `StopAtCheck` | a check that finds the timeline interrupted: a sleep's result, `confirm`, or `notStarted`; a `type` cut after a chunk returns its `chunksLeft` |
+| `RejectInterruptedEdit` | an in-flight typing edit is rejected after interruption; the rejected chunk remains unplayed |
 | `StopWhileRunning` | `run` interrupted while its command runs on: `consumed` |
 | `FinishAction` | the loop in `actions` going on to the next action |
 | `Stop` | `stopped(id, unplayed, effect)`: `discarded` unless an earlier action changed the screen (the `effect` flag in `actions`), or this one typed part of its text or left its command running |
@@ -945,6 +946,7 @@ the model, run in TLC and then reverted:
 | `Complete` reports a fifth status, "done" | `TypeOK` |
 | `RestOnly = FALSE`: a cut `type` returns all of its text | `PlaysNothingTwice` |
 | `ConsumeRun = FALSE`: an interrupted `run` whose command runs on is returned as unplayed | `PlaysNothingTwice` |
+| `RejectInterruptedEdit` returns the entire type after an earlier chunk played | `PlaysNothingTwice` |
 | `StopBeforeAction` ignores the earlier actions' effects | `DiscardedMeansNothing` |
 | an await never returns: `Proceed` leaves `pc` as it was | `EventuallyReported` |
 
@@ -953,7 +955,7 @@ Every invariant and property names the test that proves the code obeys it:
 | Invariant | Proved by |
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
-| `PlaysNothingTwice` | `session.e2e.test.ts`: PlaysNothingTwice: returns what's left of a type cut inside its second part; PlaysNothingTwice, DiscardedMeansNothing: stops waiting when the programmer interrupts, reporting the command as still running; `player.test.ts`: PlaysAfterCompleted, PlaysNothingTwice, StopAtCheck: hands back what's left of a type cut short, before the marker or after it, and nothing if none was typed; StopWhileRunning: reports a command running on, posts its exit when it ends, and counts it as played when interrupted |
+| `PlaysNothingTwice` | `session.e2e.test.ts`: PlaysNothingTwice: returns what's left of a type cut inside its second part; PlaysNothingTwice, DiscardedMeansNothing: stops waiting when the programmer interrupts, reporting the command as still running; `player.test.ts`: RejectInterruptedEdit: returns the untyped suffix and restores the cursor through a programmer edit; PlaysAfterCompleted, PlaysNothingTwice, StopAtCheck: hands back what's left of a type cut short, before the marker or after it, and nothing if none was typed; StopWhileRunning: reports a command running on, posts its exit when it ends, and counts it as played when interrupted |
 | `DiscardedMeansNothing` | `session.e2e.test.ts`: DiscardedMeansNothing: discards a batch interrupted after a type with nothing to type, which changed nothing (specs/Actions.tla); PlaysNothingTwice, DiscardedMeansNothing: stops waiting when the programmer interrupts, reporting the command as still running; `player.test.ts`: Stop: discards a batch interrupted before its first action, and reports no code for it |
 | `EventuallyReported` | `session.e2e.test.ts`: EventuallyReported: runs a command, reporting its output and exit code with the batch; `player.test.ts`: SaveAndRun: saves the batch first, runs in the root, waits as long as asked within the most, and reports the run |
 

@@ -13,8 +13,10 @@ export async function playerFaults(api: Api, root: string): Promise<void> {
   const name = path.basename(filename);
   const show = Object.getOwnPropertyDescriptor(editor, 'show');
   const save = Object.getOwnPropertyDescriptor(editor, 'save');
+  const edit = Object.getOwnPropertyDescriptor(editor, 'edit');
   const realShow = editor.show.bind(editor);
   const realSave = editor.save.bind(editor);
+  const realEdit = editor.edit.bind(editor);
   fs.writeFileSync(filename, 'start\n');
   controller.setSpeed(20);
   controller.setCodePlayback('typing');
@@ -69,7 +71,34 @@ export async function playerFaults(api: Api, root: string): Promise<void> {
     else Object.defineProperty(editor, 'save', save);
     await realSave(filename);
     assert.equal(fs.readFileSync(filename, 'utf8'), 'start!\n');
+
+    let edits = 0;
+    Object.defineProperty(editor, 'edit', {
+      configurable: true,
+      value: async (...args: Parameters<typeof editor.edit>) => {
+        edits++;
+        if (edits === 2) {
+          const doc = await vscode.workspace.openTextDocument(filename);
+          const change = new vscode.WorkspaceEdit();
+          change.insert(doc.uri, new vscode.Position(0, 0), '// mine\n');
+          assert.equal(await vscode.workspace.applyEdit(change), true);
+          throw new Error('injected edit rejection');
+        }
+        await realEdit(...args);
+      },
+    });
+    const queued = await controller.step([{ move: { file: name, line: 1, to: 'line_end' } }, { type: `ab${CURSOR_MARKER}c` }]);
+    assert.equal(queued.rejected, undefined, JSON.stringify(queued));
+    const interrupted = await controller.step([]);
+    assert.equal(edits, 2, JSON.stringify(interrupted));
+    assert.equal(interrupted.batches[0]?.status, 'interrupted');
+    assert.deepEqual(interrupted.batches[0]?.unplayed, [{ type: `b${CURSOR_MARKER}c` }]);
+    assert.equal((await vscode.workspace.openTextDocument(filename)).getText(), '// mine\nstart!a\n');
+    if (edit === undefined) Reflect.deleteProperty(editor, 'edit');
+    else Object.defineProperty(editor, 'edit', edit);
   } finally {
+    if (edit === undefined) Reflect.deleteProperty(editor, 'edit');
+    else Object.defineProperty(editor, 'edit', edit);
     if (show === undefined) Reflect.deleteProperty(editor, 'show');
     else Object.defineProperty(editor, 'show', show);
     if (save === undefined) Reflect.deleteProperty(editor, 'save');

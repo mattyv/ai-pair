@@ -2,6 +2,9 @@
 
 ## 0.23.2
 
+-   Preserve the untyped remainder when a programmer edit interrupts typing
+    and the editor rejects the in-flight edit.
+
 -   Correct distorted GPU voice output by routing one affected model operation
     through the CPU while keeping the remaining GPU checks and computation.
 

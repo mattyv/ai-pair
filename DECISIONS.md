@@ -10,6 +10,14 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   GPT-6.1 Terra agents write code and tests; GPT-6 Astra agents review them.
     Resolve findings and verify the resulting changes before reporting completion.
 
+## Interrupted typing edits
+
+-   If an in-flight typing edit is rejected after interruption, report only
+    the untyped remainder and restore the cursor and selection through the
+    programmer's changes. A rejection without interruption remains a failure.
+    Line identities are conservatively forgotten after a rejected edit, so
+    earlier line references may need to be read again.
+
 ## Cloud speech failure reporting
 
 -   Report only fixed ElevenLabs failure categories for ordinary narration and

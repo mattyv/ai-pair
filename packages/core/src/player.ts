@@ -188,6 +188,7 @@ export class Player {
   commandRunning = false;
   private playing?: Playing;
   private readingId?: number;
+  private pendingEdit?: { file: string; cursor: number; selection?: { start: number; end: number }; span?: Range; touched: boolean };
 
   constructor(
     readonly scene: Scene,
@@ -301,6 +302,12 @@ export class Player {
   transform(file: string, change: Change): void {
     transformScene(this.scene, file, change);
     const map = mapThrough(change);
+    const pending = this.pendingEdit;
+    if (pending?.file === file) {
+      pending.cursor = map(pending.cursor);
+      if (pending.selection) pending.selection = { start: map(pending.selection.start), end: map(pending.selection.end) };
+      if (pending.span?.file === file) pending.span = { file, start: map(pending.span.start), end: map(pending.span.end) };
+    }
     const playing = this.playing;
     if (!playing) return;
     const { span } = playing;
@@ -695,6 +702,14 @@ export class Player {
       const insert = eol === '\n' ? chunk.text : chunk.text.replaceAll('\n', eol);
       const start = scene.selection ? scene.selection.start : cursor.offset;
       const deleteLength = scene.selection ? scene.selection.end - scene.selection.start : 0;
+      const pending = {
+        file: cursor.file,
+        cursor: cursor.offset,
+        selection: scene.selection,
+        span: playing.span,
+        touched: playing.touched.has(cursor.file),
+      };
+      this.pendingEdit = pending;
       // Move the cursor before awaiting, so programmer edits arriving meanwhile transform the right position.
       cursor.offset = start + insert.length;
       if (mode !== 'typing' && i === chunks.length - 1 && after !== '') {
@@ -713,25 +728,43 @@ export class Player {
       const change = { offset: start, deleteLength, text: insert };
       this.touch(playing, cursor.file, change);
       const options = { undoStopBefore: i === 0, undoStopAfter: i === chunks.length - 1 };
-      if (mode === 'typing' || chunk.text === '') {
-        await this.edit(cursor.file, change, options);
-      } else {
-        // specs/LineIdentity.tla, ApplyChange: follow the same atomic edits as typing,
-        // even though VS Code receives the whole visible group in one edit.
-        let grouped = '';
-        let offset = start;
-        let remainingDelete = deleteLength;
-        while (grouped.length < chunk.text.length) {
-          // Each group is made from consecutive atoms of this dense plan.
-          // oxlint-disable-next-line typescript/no-non-null-assertion -- the group consists of these atoms
-          const atom = atoms[atomIndex++]!;
-          const text = eol === '\n' ? atom.text : atom.text.replaceAll('\n', eol);
-          this.stage.lines.apply(cursor.file, { offset, deleteLength: remainingDelete, text });
-          offset += text.length;
-          remainingDelete = 0;
-          grouped += atom.text;
+      try {
+        if (mode === 'typing' || chunk.text === '') {
+          await this.edit(cursor.file, change, options);
+        } else {
+          // specs/LineIdentity.tla, ApplyChange: follow the same atomic edits as typing,
+          // even though VS Code receives the whole visible group in one edit.
+          let grouped = '';
+          let offset = start;
+          let remainingDelete = deleteLength;
+          while (grouped.length < chunk.text.length) {
+            // Each group is made from consecutive atoms of this dense plan.
+            // oxlint-disable-next-line typescript/no-non-null-assertion -- the group consists of these atoms
+            const atom = atoms[atomIndex++]!;
+            const text = eol === '\n' ? atom.text : atom.text.replaceAll('\n', eol);
+            this.stage.lines.apply(cursor.file, { offset, deleteLength: remainingDelete, text });
+            offset += text.length;
+            remainingDelete = 0;
+            grouped += atom.text;
+          }
+          await editor.edit(cursor.file, start, deleteLength, insert, options);
         }
-        await editor.edit(cursor.file, start, deleteLength, insert, options);
+      } catch (error) {
+        cursor.offset = pending.cursor;
+        scene.selection = pending.selection;
+        playing.span = pending.span;
+        if (!pending.touched) playing.touched.delete(cursor.file);
+        this.stage.lines.forget(cursor.file);
+        if (!this.stage.pacing.isInterrupted) throw error;
+        // specs/Actions.tla, RejectInterruptedEdit: the rejected chunk remains unplayed.
+        if (typed === '') return { kind: 'interrupted' };
+        const rest =
+          typed.length <= before.length
+            ? before.slice(typed.length) + CURSOR_MARKER + after
+            : CURSOR_MARKER + after.slice(typed.length - before.length);
+        return { kind: 'interrupted', rest: fast ? { type_fast: rest } : { type: rest } };
+      } finally {
+        this.pendingEdit = undefined;
       }
       playing.editedFiles.add(cursor.file);
       typed += chunk.text;
