@@ -26,7 +26,7 @@ jobs:
       - name: Install Debian's packages
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends ca-certificates curl git kcov libatomic1 shellcheck xz-utils
+          apt-get install -y --no-install-recommends build-essential ca-certificates curl git kcov libatomic1 shellcheck xz-utils
       - uses: actions/checkout@v7
       # The checkout's safe-directory entry lives in a temporary config that goes with its step; the
       # scripts run git too, as the container's root over files another user owns.
