@@ -38,7 +38,7 @@ import { claudeStarter, setUpAgent, writeLauncher } from './setup';
 import { setTimings, timings, type Timings } from './timings';
 import { Calibration } from './calibration';
 import { builtInPassage, type Passage } from './passage';
-import { PanelPlacement, type PanelOwner } from './panel_placement';
+import { PanelPlacement, type PanelOwner, type PanelPrepareFailure } from './panel_placement';
 import { WorkspaceSession } from './workspace_session';
 
 /** Values compiled into this running bundle, not the extension currently on disk. */
@@ -877,6 +877,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       },
     },
   );
+  let prepareFailure: PanelPrepareFailure | undefined;
   const placement = new PanelPlacement({
     epoch: connectionEpoch,
     remote: vscode.env.remoteName !== undefined,
@@ -886,6 +887,12 @@ export function activate(context: vscode.ExtensionContext): Api {
       Promise.resolve(
         vscode.commands.executeCommand('aiPair.localAudio.prepare', { version: LOCAL_AUDIO_VERSION, epoch: connectionEpoch }),
       ),
+    failure: (reason) => {
+      prepareFailure = reason;
+      if (vscode.extensions.getExtension('michalstrba.ai-pair-local-audio') !== undefined) {
+        log.info(`Local Audio preparation failed: ${reason}`);
+      }
+    },
     beforeCommit: () => {
       owner = 'companion';
       if (shuttingDown) throw new Error('Window is closing.');
@@ -913,8 +920,17 @@ export function activate(context: vscode.ExtensionContext): Api {
     owner = chosen;
     if (chosen === 'companion') return;
     if (chosen === 'incompatible') {
+      const detail: Record<PanelPrepareFailure, string> = {
+        timeout: 'The Local Audio extension did not respond in time.',
+        activation_failure: 'The Local Audio extension could not be started.',
+        invalid_response: 'The Local Audio extension sent an invalid response.',
+        protocol_mismatch: 'The extensions use incompatible protocol versions.',
+        epoch_mismatch: 'The Local Audio extension returned an unexpected session.',
+      };
       void vscode.window.showWarningMessage(
-        'AI Pair and AI Pair Local Audio could not connect. Update both extensions and reload the window.',
+        prepareFailure === undefined
+          ? 'AI Pair and AI Pair Local Audio could not connect. Update both extensions and reload the window.'
+          : `AI Pair and AI Pair Local Audio could not connect. ${detail[prepareFailure]} See the AI Pair output for details.`,
       );
       return;
     }

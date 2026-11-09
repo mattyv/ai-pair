@@ -560,7 +560,8 @@ vi.mock('../src/speech_compute', () => ({
       this.publish(this.value);
     }
     reportUnavailable(reason: import('../src/speech_compute_types').GpuUnavailableReason): void {
-      this.value = { ...this.value, gpuCheck: { phase: 'unavailable', reason } }; this.publish(this.value);
+      this.value = { ...this.value, gpuCheck: { phase: 'unavailable', reason } };
+      this.publish(this.value);
     }
     async check(): Promise<void> {
       this.value = { ...this.value, gpuCheck: await this.probe() };
@@ -1699,6 +1700,19 @@ it('blocks an installed incompatible companion without registering a fallback pr
   expect(fakes.infos).toContain('AI Pair and AI Pair Local Audio could not connect. Update both extensions and reload the window.');
   await h.api.previewSpeech();
   expect(fakes.commandCalls.some(([name]) => name === 'aiPair.localAudio.preview')).toBe(false);
+});
+
+it('reports a sanitized companion preparation failure in the warning and output', async () => {
+  fakes.companionInstalled = true;
+  const choice = Promise.withResolvers<import('../src/panel_placement').PanelOwner>();
+  fakes.placementChoice = choice.promise;
+  const h = activated();
+  fakes.placementOptions?.failure?.('timeout');
+  choice.resolve('incompatible');
+  await h.api.ready;
+  expect(fakes.infos).toContain(
+    'AI Pair and AI Pair Local Audio could not connect. The Local Audio extension did not respond in time. See the AI Pair output for details.',
+  );
 });
 
 it('selects the local companion without registering a workspace panel provider', async () => {

@@ -67,6 +67,54 @@ describe('panel placement', () => {
     expect(commit).not.toHaveBeenCalled();
   });
 
+  it('reports sanitized preparation failure categories without committing', async () => {
+    const cases: Array<[() => Promise<unknown>, string]> = [
+      [() => Promise.reject(new Error('private path')), 'activation_failure'],
+      [() => Promise.resolve({ version: 1, epoch: 'epoch', token: 'token' }), 'protocol_mismatch'],
+      [() => Promise.resolve({ version: 2, epoch: 'wrong', token: 'token' }), 'epoch_mismatch'],
+      [() => Promise.resolve({ unexpected: true }), 'invalid_response'],
+    ];
+    for (const [prepare, reason] of cases) {
+      const failure = vi.fn<(reason: import('../src/panel_placement').PanelPrepareFailure) => void>();
+      const commit = vi.fn();
+      const placement = new PanelPlacement({
+        epoch: 'epoch',
+        remote: false,
+        companionInstalled: true,
+        timeoutMs: 100,
+        prepare,
+        commit,
+        failure,
+      });
+      expect(await placement.choose()).toBe('incompatible');
+      expect(failure).toHaveBeenCalledExactlyOnceWith(reason);
+      expect(commit).not.toHaveBeenCalled();
+    }
+  });
+
+  it('reports timeout without committing a late response', async () => {
+    vi.useFakeTimers();
+    const pending = Promise.withResolvers<unknown>();
+    const failure = vi.fn<(reason: import('../src/panel_placement').PanelPrepareFailure) => void>();
+    const commit = vi.fn();
+    const placement = new PanelPlacement({
+      epoch: 'epoch',
+      remote: false,
+      companionInstalled: true,
+      timeoutMs: 100,
+      prepare: () => pending.promise,
+      commit,
+      failure,
+    });
+    const result = placement.choose();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await result).toBe('incompatible');
+    expect(failure).toHaveBeenCalledExactlyOnceWith('timeout');
+    pending.resolve({ version: 2, epoch: 'epoch', token: 'token' });
+    await Promise.resolve();
+    expect(commit).not.toHaveBeenCalled();
+  });
+
   it('installs workspace receivers before the companion may register the provider', async () => {
     const order: string[] = [];
     const placement = new PanelPlacement({
