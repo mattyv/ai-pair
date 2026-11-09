@@ -3,7 +3,7 @@ import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { CURSOR_MARKER } from '@ai-pair/protocol';
+import { CURSOR_MARKER, type Action } from '@ai-pair/protocol';
 import type { Api } from '../src/extension';
 
 /** Exercises arbitrary rejection values at real player editor boundaries. */
@@ -96,6 +96,100 @@ export async function playerFaults(api: Api, root: string): Promise<void> {
     assert.equal((await vscode.workspace.openTextDocument(filename)).getText(), '// mine\nstart!a\n');
     if (edit === undefined) Reflect.deleteProperty(editor, 'edit');
     else Object.defineProperty(editor, 'edit', edit);
+
+    const cases: Array<{
+      name: string;
+      mode: 'typing' | 'lines';
+      initial: Action;
+      typing: Action;
+      rejectAt: number;
+      interrupt: boolean;
+      expectedText: string;
+      expectedRest: Action;
+      status: 'interrupted' | 'failed';
+    }> = [
+      {
+        name: 'selection',
+        mode: 'typing',
+        initial: { select: { file: name, line: 1, text: 'start' } },
+        typing: { type: `x${CURSOR_MARKER}` },
+        rejectAt: 1,
+        interrupt: true,
+        expectedText: '// mine\nstart\n',
+        expectedRest: { type: `x${CURSOR_MARKER}` },
+        status: 'interrupted',
+      },
+      {
+        name: 'after marker fast',
+        mode: 'typing',
+        initial: { move: { file: name, line: 1, to: 'line_end' } },
+        typing: { type_fast: `a${CURSOR_MARKER}bc` },
+        rejectAt: 3,
+        interrupt: true,
+        expectedText: '// mine\nstartab\n',
+        expectedRest: { type_fast: `${CURSOR_MARKER}c` },
+        status: 'interrupted',
+      },
+      {
+        name: 'grouped',
+        mode: 'lines',
+        initial: { move: { file: name, line: 1, to: 'line_end' } },
+        typing: { type: `a${CURSOR_MARKER}b\nc` },
+        rejectAt: 2,
+        interrupt: true,
+        expectedText: '// mine\nstartab\n\n',
+        expectedRest: { type: `${CURSOR_MARKER}c` },
+        status: 'interrupted',
+      },
+      {
+        name: 'ordinary rejection',
+        mode: 'typing',
+        initial: { move: { file: name, line: 1, to: 'line_end' } },
+        typing: { type: `x${CURSOR_MARKER}` },
+        rejectAt: 1,
+        interrupt: false,
+        expectedText: 'start\n',
+        expectedRest: { type: `x${CURSOR_MARKER}` },
+        status: 'failed',
+      },
+    ];
+    for (const test of cases) {
+      controller.endSession();
+      const document = await vscode.workspace.openTextDocument(filename);
+      const reset = new vscode.WorkspaceEdit();
+      reset.replace(document.uri, new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length)), 'start\n');
+      assert.equal(await vscode.workspace.applyEdit(reset), true);
+      await document.save();
+      controller.setCodePlayback(test.mode);
+      await controller.start(`edit rejection ${test.name}`);
+      await controller.read(name);
+      let attempts = 0;
+      Object.defineProperty(editor, 'edit', {
+        configurable: true,
+        value: async (...args: Parameters<typeof editor.edit>) => {
+          attempts++;
+          if (attempts === test.rejectAt) {
+            if (test.interrupt) {
+              const change = new vscode.WorkspaceEdit();
+              change.insert(document.uri, new vscode.Position(0, 0), '// mine\n');
+              assert.equal(await vscode.workspace.applyEdit(change), true);
+            }
+            throw new Error('injected edit rejection');
+          }
+          await realEdit(...args);
+        },
+      });
+      const submitted = await controller.step([test.initial, test.typing]);
+      assert.equal(submitted.rejected, undefined, `${test.name}: ${JSON.stringify(submitted)}`);
+      const result = await controller.step([]);
+      assert.equal(attempts, test.rejectAt, test.name);
+      assert.equal(result.batches[0]?.status, test.status, `${test.name}: ${JSON.stringify(result)}`);
+      assert.deepEqual(result.batches[0]?.unplayed, [test.expectedRest], test.name);
+      if (!test.interrupt) assert.equal(result.batches[0]?.error?.message, 'injected edit rejection');
+      assert.equal(document.getText(), test.expectedText, test.name);
+      if (edit === undefined) Reflect.deleteProperty(editor, 'edit');
+      else Object.defineProperty(editor, 'edit', edit);
+    }
   } finally {
     if (edit === undefined) Reflect.deleteProperty(editor, 'edit');
     else Object.defineProperty(editor, 'edit', edit);
