@@ -94,8 +94,8 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `ModelStatus.cfg` | installed and missing model, verification | holds | 4 |
 | `SpeechSetup.cfg` | two files; install, cancellation and rollback outcomes | holds | 42 |
 | `SpeechPage.cfg` | two page identities and two narration units | holds | 28 |
-| `CloudNarration.cfg` | two generations, provider and credential epochs | holds | 59 |
-| `CloudNarration_Healthy.cfg` | two generations with a healthy key read | holds | 59 |
+| `CloudNarration.cfg` | two generations, provider and credential epochs | holds | 264 |
+| `CloudNarration_Healthy.cfg` | two generations with a healthy key read | holds | 251 |
 | `SpeechSettings.cfg` | two credential reads and catalog requests | holds | 50,968 |
 | `ProviderChoice.cfg` | two ordered settings writes and credential change | holds | 122 |
 | `AudioOutput.cfg` | native jobs, route changes and retirement | holds | 3,180 |
