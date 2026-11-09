@@ -15,7 +15,7 @@ function access(maps = mapping): DriverIdentityAccess {
     read: () => Promise.resolve(bytes),
   };
 }
-it('accepts only the exact mapped Radeon device, inode and hash', async () => {
+it('DriverIdentity: accepts only the exact mapped Radeon device, inode and hash', async () => {
   expect(await verifyMappedGpuDriver(identity, '/trusted/loader', access())).toBe(true);
 
   for (const maps of [
@@ -32,7 +32,7 @@ it('accepts only the exact mapped Radeon device, inode and hash', async () => {
   expect(await verifyMappedGpuDriver({ ...identity, device: '2050' }, '/trusted/loader', access())).toBe(false);
   expect(await verifyMappedGpuDriver({ ...identity, inode: '43' }, '/trusted/loader', access())).toBe(false);
 });
-it('requires no Radeon driver mapping in the invalid-ICD control', async () => {
+it('DriverIdentity: requires no Radeon driver mapping in the invalid-ICD control', async () => {
   expect(await verifyNoGpuDriver('/trusted/loader', access(''))).toBe(true);
   expect(await verifyNoGpuDriver('/trusted/loader', access(mapping))).toBe(false);
   expect(await verifyNoGpuDriver('/trusted/loader', access(mapping.replace(file, `${file} (deleted)`)))).toBe(false);

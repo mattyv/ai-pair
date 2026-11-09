@@ -39,7 +39,7 @@ describe('GPU system file trust', () => {
     expect(fs.lstat).toHaveBeenCalledWith('/opt/link');
     expect(fs.lstat).toHaveBeenCalledWith('/usr/lib/target');
   });
-  it('rejects a user-owned intermediate symlink even when the final target is trusted', async () => {
+  it('TrustedSymlinkChain: rejects a user-owned intermediate symlink even when the final target is trusted', async () => {
     const fs = access();
     vi.mocked(fs.readlink).mockImplementation((name) => Promise.resolve(name === '/usr/lib/link' ? '/tmp/user/hop' : '/usr/lib/target'));
     vi.mocked(fs.lstat).mockImplementation((name) =>
