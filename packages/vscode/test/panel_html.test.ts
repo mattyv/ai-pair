@@ -199,6 +199,7 @@ it('offers Kokoro compute choices and an explicit GPU setup check in Settings', 
   expect(page.querySelector('[data-ui="gpu-model-info"]')?.textContent).toContain('326 MB');
   expect(page.querySelector('[data-ui="gpu-model-info"]')?.textContent).toContain('additional');
   expect(page.querySelector('[data-ui="gpu-model-info"]')?.textContent).toContain('CPU model');
+  expect(page.querySelector('[data-ui="gpu-model-info"]')?.textContent).toContain('experimental');
 });
 
 it('offers explicit cloud controls without exposing a key input', () => {

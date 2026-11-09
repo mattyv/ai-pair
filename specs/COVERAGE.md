@@ -196,6 +196,7 @@ Code goes without a spec for one of these reasons:
 | `speech_tempo_client.ts`, `speech_tempo_messages.ts`, `speech_tempo_worker.ts`, `speech_tempo_worker_host.ts` | tempo worker ownership, messages and bootstrap | `SpeechTempo`; unit and real-worker tests |
 | `speech_engine.ts` | `loadSpeechEngine` | Glue: loads the local model, tokenizer and phonemizer; offline worker integration |
 | `speech_gpu_setup_flow.ts`, `speech_gpu_model.ts` | preflight, download and atomic GPU cache installation | `GpuSetup`, `SpeechSetup`; unit and temporary-files integration tests |
+| `speech_gpu_driver_identity.ts`, `speech_gpu_elf.ts` | mapped ICD classification and identity | `GpuMappedIcd`, `GpuSetup`; unit and native proof tests |
 | `speech_gpu_slot.ts`, `speech_gpu_proof_runner.ts`, `speech_gpu_proof_worker.ts` | shared child lease, proof and retirement | `GpuProcessSlot`, `GpuSetup`; unit and native proof tests |
 | `speech_gpu_client.ts`, `speech_gpu_transport.ts` | verified launch, cancel, process retirement | `GpuSynthesisProcess`; unit and real-child integration tests |
 | `speech_gpu_worker.ts`, `speech_gpu_worker_runtime.ts`, `speech_gpu_worker_host.ts` | isolated IPC, loader proof and disposal | `GpuSynthesisProcess`; unit and composed tests |

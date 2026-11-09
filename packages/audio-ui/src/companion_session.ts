@@ -82,6 +82,7 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
   host = createSpeechHost({
     context,
     connectionEpoch: epoch,
+    enableGpuInference: true,
     gpuProof: (capability, kind) => createGpuProofRunner(capability)(kind),
     adapter: createLocalAudioAdapter(context.extensionPath),
     page: () => panel?.speechReadyPageId(),

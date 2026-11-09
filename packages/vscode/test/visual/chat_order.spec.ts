@@ -778,3 +778,32 @@ test('approval and queued work remain readable in a narrow panel', async ({ page
   expect(bounds).not.toBeNull();
   expect((bounds?.x ?? 240) + (bounds?.width ?? 240)).toBeLessThanOrEqual(240);
 });
+
+test('experimental GPU setup remains readable and explicit in a narrow Settings dialog', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 360, height: 600 });
+  const post = await load(page);
+  await post({ type: 'speechComputeState', value: { requestedMode: 'cpu', actualBackend: 'none', gpuCheck: { phase: 'idle' } } });
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Settings' });
+  const compute = dialog.getByRole('combobox', { name: 'Kokoro compute' });
+  await compute.scrollIntoViewIfNeeded();
+  await expect(compute).toHaveValue('cpu');
+  await expect(dialog.getByText(/GPU support is experimental/)).toBeVisible();
+  await expect(dialog.getByText(/326 MB/)).toBeVisible();
+  await compute.selectOption('auto');
+  await dialog.getByRole('button', { name: 'Set up GPU' }).click();
+  await post({
+    type: 'speechComputeState',
+    value: { requestedMode: 'auto', actualBackend: 'cpu', gpuCheck: { phase: 'unavailable', reason: 'no_hardware' } },
+  });
+  await expect(dialog.getByRole('status').filter({ hasText: 'No compatible GPU' })).toContainText('Actual backend: CPU');
+  const widths = await dialog.evaluate((element) => [element.scrollWidth, element.clientWidth]);
+  expect(widths[0]).toBeLessThanOrEqual(widths[1] ?? 0);
+  const messages = await page.evaluate(() => {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    return (globalThis as unknown as { messages: Array<{ type: string; value?: string }> }).messages;
+  });
+  expect(messages).toContainEqual({ type: 'speechComputeMode', value: 'auto' });
+  expect(messages).toContainEqual({ type: 'checkGpuSetup' });
+  await dialog.screenshot({ path: testInfo.outputPath('gpu-settings.png') });
+});

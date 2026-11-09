@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.23.0
+
+-   Add experimental local Kokoro GPU setup with a separate pinned model,
+    physical-device checks, and a guarded isolated inference worker. CPU
+    remains the default. Physical AMD hardware validation is pending.
+
 ## 0.22.1
 
 -   Show a more specific, safe reason when ElevenLabs narration fails and

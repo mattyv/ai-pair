@@ -2856,18 +2856,36 @@ select legacy fallback, which the new companion cannot prevent.
 
 The model requires trusted runtime and physical-device preflight before the
 optional GPU download, then bounds the negative control, tiny graph and model
-proofs. `GpuSetup.cfg` checked 56 distinct states, including `CheckSettles`.
+proofs. `GpuSetup.cfg` checked 74 distinct states, including `CheckSettles`.
 The preflight-bypass mutation violates `PreflightBeforeDownload`; mutations
 bypassing the negative control, allowing explicit GPU CPU fallback, or starting
 a successor before retirement violate their respective safety properties.
-Physical GPU availability and real audio quality are not established by TLC.
+The symlink-safe gate mutation violates `TrustedSymlinkChain`. Negative-control
+and positive-driver mapping bypasses violate `DriverIdentity`. Physical GPU
+availability and real audio quality are not established by TLC.
 
 | Property | Test |
 |---|---|
 | `TypeOK`, `GpuVerified` | `speech_gpu_check.test.ts`: GpuVerified: requires trust, physical device, negative control, tiny graph and model; `speech_gpu_admission.integration.test.ts`: runs verified setup then dispatches a GPU unit through a controlled worker port. |
 | `PreflightBeforeDownload` | `speech_gpu_setup_flow.test.ts`: PreflightBeforeDownload: does not download when preflight or the CPU model is unavailable; `speech_gpu_model.integration.test.ts`: runs physical preflight before downloading a model and reports byte progress through the real setup flow. |
+| `TrustedSymlinkChain` | `speech_gpu_trust.test.ts`: TrustedSymlinkChain: rejects a user-owned intermediate symlink even when the final target is trusted. |
+| `DriverIdentity` | `speech_gpu_driver_identity.test.ts`: DriverIdentity: accepts only the exact mapped Radeon device, inode and hash; DriverIdentity: requires no Radeon driver mapping in the invalid-ICD control. |
 | `ExplicitNoFallback` | `speech_service.test.ts`: ExplicitNoFallback: refuses explicit GPU before starting a CPU worker. |
 | `NoSuccessorBeforeReap`, `CheckSettles` | `speech_gpu_process.test.ts`: NoSuccessorBeforeReap, CheckSettles: kills a timed-out child and waits for its exit before settling; `speech_service.test.ts`: NoSuccessorBeforeReap: keeps a canceled GPU proof slot until the proof settles. |
+
+### `GpuMappedIcd`: mapped driver classification
+
+`GpuMappedIcd.cfg` checks 67 distinct states with three mapped objects. `Safe`
+and `NegativeSafe` require classification independent of filenames, with no
+extra or unreadable ICD in either positive or negative checks. Disabling the
+classification guard violates `NegativeSafe`. The `NeverAdmit` and
+`NeverAcceptNegative` properties are intentionally false reachability witnesses
+for valid positive and negative paths. The model does not establish physical
+AMD compatibility or sandbox native code.
+
+| Property | Test |
+|---|---|
+| `Safe`, `NegativeSafe` | `speech_gpu_driver_identity.test.ts`: Safe, NegativeSafe: rejects a renamed extra ICD instead of relying on its filename; `speech_gpu_elf.integration.test.ts`: Safe, NegativeSafe: rejects a valid ICD mapped under an unrelated filename. |
 
 ### `GpuSynthesisProcess`: isolated GPU ownership
 

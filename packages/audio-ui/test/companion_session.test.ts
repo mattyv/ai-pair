@@ -21,6 +21,7 @@ interface HostOptions {
   panel(): unknown;
   diagnostic(event: unknown): void;
   gpuProof?: import('../../vscode/src/speech_gpu_binding').GpuBindingDependencies['proof'];
+  enableGpuInference?: boolean;
 }
 interface NarrationOptions {
   page(): number | undefined;
@@ -407,6 +408,7 @@ it('closes local audio and warns when the outbound command channel is lost', () 
 it('supplies the isolated GPU proof runner to the local speech host', async () => {
   const current = session();
   const capability = mock<import('../../vscode/src/speech_gpu_client').GpuLaunchCapability>();
+  expect(fake.hostOptions?.enableGpuInference).toBe(true);
   expect(await fake.hostOptions?.gpuProof?.(capability, 'tiny')).toBe('failed');
   expect(fake.proofCapability).toBe(capability);
   expect(fake.proof).toHaveBeenCalledWith('tiny');

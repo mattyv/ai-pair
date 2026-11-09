@@ -24,6 +24,12 @@ It adds:
     Settings show the model path, pinned source and latest verification result.
     Local speech requires a supported local Linux x64 desktop with glibc, such
     as Ubuntu; the rest of Pair works without speech.
+-   Experimental GPU acceleration for Kokoro on supported Linux x64 systems.
+    In Settings, select **Auto** or **GPU** and choose **Set up GPU**. Setup
+    requires the CPU model and may download an additional pinned model of about
+    326 MB. It checks the local runtime, physical AMD device and driver before
+    reporting readiness. CPU remains the default; Auto can fall back to CPU,
+    while GPU mode fails closed. Physical AMD validation is pending.
 -   Bounded sentence pipelining for local Kokoro in the audio companion. The
     first sentence can play while one following part is prepared. The complete
     selected text, reading countdown and output device stay fixed for the unit.
