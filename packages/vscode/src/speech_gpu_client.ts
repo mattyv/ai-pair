@@ -21,9 +21,13 @@ export interface GpuLaunchCapability {
   readonly environment: Readonly<{ LANG: 'C'; VK_DRIVER_FILES: string; VK_LOADER_LAYERS_DISABLE: '~all~'; LD_PRELOAD: string }>;
 }
 
+/** Fixed local-only lifecycle details; no process output or values are retained. */
+export type GpuWorkerDetail = 'loading' | 'ready' | 'synthesizing' | 'spawn_error' | 'ipc_error' | 'exit_zero' | 'exit_nonzero' | 'signal_segv' | 'signal_abort' | 'signal_kill' | 'signal_other';
+
 /** Constructs an isolated GPU worker client for one verified capability. */
-export function createGpuSynthesisClient(options: { listener: LocalListener; capability: GpuLaunchCapability }): LocalSynthesisPort {
+export function createGpuSynthesisClient(options: { listener: LocalListener; capability: GpuLaunchCapability; detail?: (value: GpuWorkerDetail) => void }): LocalSynthesisPort {
   const { runtimeDirectory, modelDirectory, executablePath, loaderPath, loaderSha256, driverPath, driverSha256, driverDevice, driverInode, environment } = options.capability;
+  function report(value: GpuWorkerDetail): void { try { options.detail?.(value); } catch { /* Diagnostics must not affect the worker. */ } }
   if (
     ![runtimeDirectory, modelDirectory, executablePath, loaderPath, driverPath, environment.VK_DRIVER_FILES].every((value) => path.isAbsolute(value)) ||
     !/^[a-f0-9]{64}$/.test(loaderSha256) || !/^[a-f0-9]{64}$/.test(driverSha256) ||
@@ -36,7 +40,7 @@ export function createGpuSynthesisClient(options: { listener: LocalListener; cap
     ELECTRON_RUN_AS_NODE: '1',
   };
   const local = new LocalSynthesisClient({
-    listener: options.listener,
+    listener: { ...options.listener, ready: () => { report('ready'); options.listener.ready(); } },
     spawn: (modelPath) => {
       if (modelPath !== modelDirectory) throw new Error('GPU model does not match verified capability.');
       const release = tryAcquireGpuProcessSlot();
@@ -51,13 +55,23 @@ export function createGpuSynthesisClient(options: { listener: LocalListener; cap
           stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
         });
       } catch (error: unknown) {
+        report('spawn_error');
         release();
         throw error;
       }
-      child.on('close', release);
+      child.on('close', (code, signal) => {
+        const detail: GpuWorkerDetail = signal === 'SIGSEGV' ? 'signal_segv' : signal === 'SIGABRT' ? 'signal_abort' :
+          signal === 'SIGKILL' ? 'signal_kill' : signal !== null ? 'signal_other' : code === 0 ? 'exit_zero' : 'exit_nonzero';
+        report(detail);
+        release();
+      });
+      child.on('error', () => { report('spawn_error'); });
       const adapter: GpuChildProcess = {
         send: (message, callback) => {
-          child.send(LOCAL_REQUEST.parse(message), callback);
+          child.send(LOCAL_REQUEST.parse(message), (error) => {
+            if (error !== null) report('ipc_error');
+            callback(error);
+          });
         },
         kill: (signal) => child.kill(signal),
         on: (event, listener) => {
@@ -74,9 +88,10 @@ export function createGpuSynthesisClient(options: { listener: LocalListener; cap
     busy: () => local.busy(),
     load: (modelPath) => {
       if (modelPath !== modelDirectory) throw new Error('GPU model does not match verified capability.');
+      report('loading');
       local.load(modelPath);
     },
-    synthesize: (request) => local.synthesize(request),
+    synthesize: (request) => { report('synthesizing'); return local.synthesize(request); },
     cancel: () => {
       if (!local.busy() && local.state() !== 'loading') return;
       local.cancel();

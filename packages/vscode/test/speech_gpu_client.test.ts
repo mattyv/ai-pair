@@ -1,3 +1,4 @@
+/* oxlint-disable unicorn/no-null -- Node child process close and send callbacks use null. */
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createGpuSynthesisClient, GpuProcessBusyError } from '../src/speech_gpu_client';
 import type { WorkerLike } from '../src/speech_local_client';
@@ -179,4 +180,57 @@ it('releases the reserved slot when fork fails synchronously', () => {
     spawn('/verified/model');
   }).toThrow();
   expect(release).toHaveBeenCalledOnce();
+});
+
+it.each([
+  [0, null, 'exit_zero'],
+  [7, null, 'exit_nonzero'],
+  [null, 'SIGSEGV', 'signal_segv'],
+  [null, 'SIGABRT', 'signal_abort'],
+  [null, 'SIGKILL', 'signal_kill'],
+  [null, 'SIGTERM', 'signal_other'],
+] as const)('reports only the fixed GPU process close category', (code, signal, category) => {
+  const events = new Map<string, Array<(...args: unknown[]) => void>>();
+  fake.fork.mockReturnValue({
+    on: (event: string, callback: (...args: unknown[]) => void) => { events.set(event, [...(events.get(event) ?? []), callback]); },
+    send: vi.fn(), kill: vi.fn(),
+  });
+  const detail = vi.fn<(value: import('../src/speech_gpu_client').GpuWorkerDetail) => void>();
+  createGpuSynthesisClient({ listener, capability, detail });
+  const options: unknown = fake.LocalSynthesisClient.mock.calls[0]?.[0];
+  if (typeof options !== 'object' || options === null || !('spawn' in options) || !isSpawn(options.spawn)) throw new Error('No spawn');
+  options.spawn('/verified/model');
+  for (const callback of events.get('close') ?? []) callback(code, signal);
+  expect(detail).toHaveBeenCalledWith(category);
+});
+
+it('reports safe startup phases and ignores diagnostic callback errors', () => {
+  const detail = vi.fn((value: import('../src/speech_gpu_client').GpuWorkerDetail) => { void value; throw new Error('private diagnostic failure'); });
+  const client = createGpuSynthesisClient({ listener, capability, detail });
+  client.load('/verified/model');
+  void client.synthesize({ id: 1, part: 0, final: true, text: 'safe', voice: 'af_heart', speed: 1 });
+  const options: unknown = fake.LocalSynthesisClient.mock.calls[0]?.[0];
+  if (typeof options !== 'object' || options === null || !('listener' in options) || typeof options.listener !== 'object' || options.listener === null || !('ready' in options.listener) || typeof options.listener.ready !== 'function') throw new Error('No listener');
+  if (!isSpawn(options.listener.ready)) throw new Error('No ready callback');
+  const ready = options.listener.ready;
+  ready('');
+  expect(detail.mock.calls.map(([value]) => value)).toEqual(['loading', 'synthesizing', 'ready']);
+  expect(listener.ready).toHaveBeenCalledOnce();
+});
+
+it('reports fixed spawn and IPC errors without exposing their text', () => {
+  const callbacks = new Map<string, (...args: unknown[]) => void>();
+  fake.fork.mockReturnValue({
+    on: (event: string, callback: (...args: unknown[]) => void) => { callbacks.set(event, callback); },
+    send: (message: unknown, callback: (error: Error | null) => void) => { void message; callback(new Error('private IPC detail')); },
+    kill: vi.fn(),
+  });
+  const detail = vi.fn<(value: import('../src/speech_gpu_client').GpuWorkerDetail) => void>();
+  createGpuSynthesisClient({ listener, capability, detail });
+  const options: unknown = fake.LocalSynthesisClient.mock.calls[0]?.[0];
+  if (typeof options !== 'object' || options === null || !('spawn' in options) || !isSpawn(options.spawn)) throw new Error('No spawn');
+  options.spawn('/verified/model');
+  fake.adapter?.send({ type: 'shutdown', version: 1 }, () => {});
+  callbacks.get('error')?.(new Error('private spawn detail'));
+  expect(detail.mock.calls).toEqual([['ipc_error'], ['spawn_error']]);
 });
