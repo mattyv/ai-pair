@@ -2924,4 +2924,5 @@ models a prompt refusal; `Reaped` assumes the operating system eventually
 reports a child close. Unit and integration tests for `speech_gpu_slot.ts`,
 `speech_gpu_client.ts`, and `speech_gpu_proof_runner.ts` exercise the in-
 process lease and reaping boundary. The model does not coordinate separate
-extension-host processes.
+extension-host processes. `Result` never fires in the checked configuration
+because `GuardClose` is true; it exists only to model the early-release mutation.
