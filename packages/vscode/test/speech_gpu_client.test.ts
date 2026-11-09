@@ -118,7 +118,7 @@ it('starts only the isolated worker with an allowlisted environment', () => {
     ['/verified/libvulkan.so', 'a'.repeat(64), '/verified/model', '/verified/driver.so', 'b'.repeat(64), '42', '99'],
     expect.objectContaining({
       execPath: '/verified/node',
-      serialization: 'advanced',
+      serialization: 'json',
       execArgv: [],
       env: { LANG: 'C', VK_DRIVER_FILES: '/verified/icd.json', VK_LOADER_LAYERS_DISABLE: '~all~', LD_PRELOAD: '/verified/libvulkan.so', ELECTRON_RUN_AS_NODE: '1' },
     }),

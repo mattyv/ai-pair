@@ -2862,7 +2862,10 @@ bypassing the negative control, allowing explicit GPU CPU fallback, or starting
 a successor before retirement violate their respective safety properties.
 The symlink-safe gate mutation violates `TrustedSymlinkChain`. Negative-control
 and positive-driver mapping bypasses violate `DriverIdentity`. Physical GPU
-availability and real audio quality are not established by TLC.
+availability and real audio quality are not established by TLC. The model
+abstracts execution-provider placement: model inference retains GPU admission
+and proofs while one known operation runs on CPU. Strict probes still forbid
+CPU fallback; `speech_gpu_options.test.ts` checks both policies.
 
 | Property | Test |
 |---|---|
@@ -2907,6 +2910,9 @@ violates `RetirementProgress`. The unit tests for `speech_gpu_client.ts`,
 `speech_gpu_process.e2e.test.ts` starts a real synthetic child, tests warm reuse,
 and verifies cancellation retains ownership until forced termination and close.
 The model does not establish actual GPU hardware availability or audio quality.
+The IPC wire encoding changes without changing the modeled ownership, proof,
+or retirement behavior. GPU IPC codec tests cover bounded byte round trips and
+rejection of malformed messages.
 
 ### `GpuProcessSlot`: shared GPU child ownership
 

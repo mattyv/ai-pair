@@ -53,6 +53,7 @@ it('loads the FP32 model offline on WebGPU and releases it on disposal', async (
     device: 'webgpu',
     session_options: { executionProviders: ['webgpu'], extra: { ep: { webgpuexecutionprovider: { dawnBackendType: 'Vulkan' } } } },
   });
+  expect(fake.options).toHaveBeenCalledWith(false);
   expect(fake.tokenizer).toHaveBeenCalledWith('/verified/model');
   const tokens = loaded.engine.tokenize('a');
   expect(await loaded.engine.generate(tokens, 'af_heart', 1)).toEqual({ samples: new Float32Array([0.5]), rate: 24_000 });

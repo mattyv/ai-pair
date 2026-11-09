@@ -40776,8 +40776,8 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                   id: "settings",
                   label: "Local Settings\nRequested and actual mode",
                   files: ["packages/vscode/src/panel.ts", "packages/vscode/src/speech_compute.ts", "packages/vscode/src/webview/panel.ts"],
-                  x: 40,
-                  y: 80,
+                  x: 427,
+                  y: 16,
                 },
                 {
                   id: "setup",
@@ -40786,16 +40786,17 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                     "packages/vscode/src/speech_gpu_setup.ts",
                     "packages/vscode/src/speech_gpu_check.ts",
                     "packages/vscode/src/speech_gpu_trust.ts",
+                    "packages/vscode/src/speech_gpu_options.ts",
                   ],
-                  x: 700,
-                  y: 80,
+                  x: 207,
+                  y: 326,
                 },
                 {
                   id: "assets",
                   label: "GPU FP32 model\nAdditional pinned download",
                   files: ["packages/vscode/src/speech_gpu_model.ts", "packages/vscode/src/speech_gpu_assets.ts"],
-                  x: 1360,
-                  y: 80,
+                  x: 16,
+                  y: 500,
                 },
                 {
                   id: "probe",
@@ -40806,22 +40807,26 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                     "packages/vscode/src/speech_gpu_loader.ts",
                     "packages/vscode/src/speech_gpu_driver_identity.ts",
                   ],
-                  x: 1360,
-                  y: 400,
+                  x: 408,
+                  y: 500,
                 },
                 {
                   id: "service",
                   label: "Speech admission\nFresh proof before GPU load",
                   files: ["packages/vscode/src/speech_service.ts"],
-                  x: 40,
-                  y: 400,
+                  x: 817,
+                  y: 171,
                 },
                 {
                   id: "client",
                   label: "GPU synthesis client\nCapability and process ownership",
-                  files: ["packages/vscode/src/speech_gpu_client.ts", "packages/vscode/src/speech_gpu_transport.ts"],
-                  x: 700,
-                  y: 400,
+                  files: [
+                    "packages/vscode/src/speech_gpu_client.ts",
+                    "packages/vscode/src/speech_gpu_transport.ts",
+                    "packages/vscode/src/speech_gpu_ipc.ts",
+                  ],
+                  x: 817,
+                  y: 326,
                 },
                 {
                   id: "worker",
@@ -40830,36 +40835,102 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                     "packages/vscode/src/speech_gpu_worker.ts",
                     "packages/vscode/src/speech_gpu_worker_host.ts",
                     "packages/vscode/src/speech_gpu_engine.ts",
+                    "packages/vscode/src/speech_gpu_ipc.ts",
+                    "packages/vscode/src/speech_gpu_options.ts",
                   ],
-                  x: 1360,
-                  y: 720,
+                  x: 1028,
+                  y: 500,
                 },
                 {
                   id: "retirement",
                   label: "Retirement\nHold slot until process exit",
                   files: ["packages/vscode/src/speech_gpu_transport.ts"],
-                  x: 700,
-                  y: 720,
+                  x: 1147,
+                  y: 655,
                 },
                 {
                   id: "node-runtime",
                   label: "Bundled Node runtime\nGPU-only local process",
                   files: ["packages/audio-ui/scripts/gpu_runtime.mts", "packages/vscode/src/speech_gpu_client.ts"],
-                  x: 1360,
-                  y: 1040,
+                  x: 1229,
+                  y: 326,
                 },
               ],
               edges: [
-                { from: "settings", to: "setup", label: "check" },
-                { from: "setup", to: "assets", label: "verify" },
-                { from: "setup", to: "probe" },
-                { from: "settings", to: "service", label: "requested mode" },
-                { from: "service", to: "setup", label: "fresh proof" },
-                { from: "service", to: "client", label: "capability" },
-                { from: "client", to: "worker" },
-                { from: "worker", to: "retirement", label: "exit / result" },
-                { from: "retirement", to: "service", label: "release after reap" },
-                { from: "node-runtime", to: "worker", label: "executes" },
+                {
+                  from: "settings",
+                  to: "setup",
+                  label: "check",
+                  vertices: [
+                    { x: 361.5, y: 131.5 },
+                    { x: 361.5, y: 209 },
+                    { x: 361.5, y: 286.5 },
+                  ],
+                  labelPosition: { distance: 0.6309408438915051, offset: { x: 0, y: 0 } },
+                },
+                {
+                  from: "setup",
+                  to: "assets",
+                  label: "verify",
+                  vertices: [{ x: 196, y: 451 }],
+                  labelPosition: { distance: 0.7157053640411, offset: { x: 0, y: 0 } },
+                },
+                { from: "setup", to: "probe", vertices: [{ x: 598, y: 451 }] },
+                {
+                  from: "settings",
+                  to: "service",
+                  label: "requested mode",
+                  vertices: [{ x: 1007, y: 131.5 }],
+                  labelPosition: { distance: 0.854596176553675, offset: { x: 0, y: 0 } },
+                },
+                {
+                  from: "service",
+                  to: "setup",
+                  label: "fresh proof",
+                  vertices: [{ x: 742, y: 286.5 }],
+                  labelPosition: { distance: 0.4384645083072709, offset: { x: 0, y: 0 } },
+                },
+                {
+                  from: "service",
+                  to: "client",
+                  label: "capability",
+                  vertices: [{ x: 1007, y: 286.5 }],
+                  labelPosition: { distance: 0.5, offset: { x: 0, y: 0 } },
+                },
+                {
+                  from: "client",
+                  to: "worker",
+                  label: "JSON IPC requests; bounded base64 WAV responses",
+                  vertices: [{ x: 1007, y: 451 }],
+                  labelPosition: { distance: 0.28091964360759875, offset: { x: 0, y: 0 } },
+                },
+                {
+                  from: "worker",
+                  to: "retirement",
+                  label: "exit / result",
+                  vertices: [{ x: 1212, y: 615.5 }],
+                  labelPosition: { distance: 0.36971959641259944, offset: { x: 0, y: 0 } },
+                },
+                {
+                  from: "retirement",
+                  to: "service",
+                  label: "release after reap",
+                  vertices: [
+                    { x: 1631, y: 615.5 },
+                    { x: 1631, y: 538 },
+                    { x: 1631, y: 451 },
+                    { x: 1631, y: 364 },
+                    { x: 1631, y: 286.5 },
+                  ],
+                  labelPosition: { distance: 0.35299572907123933, offset: { x: 0, y: 0 } },
+                },
+                {
+                  from: "node-runtime",
+                  to: "worker",
+                  label: "executes",
+                  vertices: [{ x: 1417, y: 451 }],
+                  labelPosition: { distance: 0.28091964360759875, offset: { x: 0, y: 0 } },
+                },
               ],
               groups: [],
               comments: {
@@ -40874,6 +40945,11 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                   {
                     id: "boundary",
                     text: "The worker uses a separately bundled Node runtime, pinned FP32 model and a restricted child-only environment. Readiness requires mapped loader and driver identity proofs; physical GPU validation is pending.",
+                    ts: 0,
+                  },
+                  {
+                    id: "gpu-ups1-policy",
+                    text: "Model proof and synthesis route the pinned model ups.1 ConvTranspose node to CPU to avoid reproduced WebGPU numerical corruption. Other model work remains on GPU; strict prerequisite probes and loader, driver, model, and physical-device verification remain unchanged.",
                     ts: 0,
                   },
                 ],
@@ -41873,6 +41949,9 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
       var tourNodes = []
       var tourIndex = 0
       var tourActive = false
+      // A merge-request view with a diagram note opens its tour on that note ("Story", index -1)
+      // before the numbered stops. tourNodes stays node-only so positionOverlays() is unaffected.
+      var tourHasIntro = false
       // User-resized comment-bubble dimensions, keyed by node id, so a drag-resize
       // survives positionOverlays() rebuilding the overlay (same early-init reason as above).
       var bubbleSizes = {}
@@ -44594,7 +44673,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
         // Update tour button visibility based on whether any nodes have a step
         var tourBtn = document.getElementById("tour-btn")
         if (tourBtn) {
-          tourBtn.style.display = tourNodes.length > 0 ? "" : "none"
+          tourBtn.style.display = tourAvailable() ? "" : "none"
         }
       }
 
@@ -45246,12 +45325,12 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
             buildTourNodes()
             var tourBtnEl = document.getElementById("tour-btn")
             if (tourBtnEl) {
-              tourBtnEl.style.display = tourNodes.length > 0 ? "" : "none"
+              tourBtnEl.style.display = tourAvailable() ? "" : "none"
             }
-            if (wasTouring && sameDiagram && tourNodes.length > 0) {
+            if (wasTouring && sameDiagram && tourAvailable()) {
               // Restore the tour at the step we were on (re-find by node id in case steps
               // changed). Re-renders the panel so a just-added comment is visible.
-              var restoreIdx = 0
+              var restoreIdx = tourIndex === -1 && tourHasIntro ? -1 : 0
               for (var ti = 0; ti < tourNodes.length; ti++) {
                 if (tourNodes[ti].id === prevTourNodeId) {
                   restoreIdx = ti
@@ -45678,6 +45757,11 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
           .sort(function (a, b) {
             return a.step - b.step
           })
+        tourHasIntro = activeDiagramOrigin() === "mr" && ((currentDoc.comments || {})[DIAGRAM_NOTE_KEY] || []).length > 0
+      }
+
+      function tourAvailable() {
+        return tourNodes.length > 0 || tourHasIntro
       }
 
       buildTourNodes()
@@ -45697,10 +45781,20 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
       }
 
       function tourGoTo(i) {
-        if (tourNodes.length === 0) {
+        if (!tourAvailable()) {
           return
         }
-        tourIndex = Math.max(0, Math.min(i, tourNodes.length - 1))
+        tourIndex = Math.max(tourHasIntro ? -1 : 0, Math.min(i, tourNodes.length - 1))
+        if (tourIndex === -1) {
+          clearTourHighlight()
+          selectedCellId = DIAGRAM_NOTE_KEY
+          renderPanel(DIAGRAM_NOTE_KEY)
+          var introCounter = document.getElementById("tour-counter")
+          if (introCounter) {
+            introCounter.textContent = "Story"
+          }
+          return
+        }
         var tourNode = tourNodes[tourIndex]
         var nodeId = tourNode.id
         clearTourHighlight()
@@ -45730,7 +45824,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
       }
 
       function tourStart() {
-        if (tourNodes.length === 0) {
+        if (!tourAvailable()) {
           return
         }
         tourActive = true
@@ -45739,7 +45833,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
           tourOverlay.style.display = "flex"
         }
         expandSidePanel() // surface each node's note as the tour walks them
-        tourGoTo(0)
+        tourGoTo(tourHasIntro ? -1 : 0)
       }
 
       function tourStop() {
@@ -45753,7 +45847,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
       var tourBtn = document.getElementById("tour-btn")
       if (tourBtn) {
-        tourBtn.style.display = tourNodes.length > 0 ? "" : "none"
+        tourBtn.style.display = tourAvailable() ? "" : "none"
         tourBtn.addEventListener("click", tourStart)
       }
 

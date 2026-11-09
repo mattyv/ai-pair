@@ -605,3 +605,21 @@ not sandbox native code. The guarded path is enabled for an experimental host tr
 physical AMD validation remains required before describing GPU support as a
 validated release. Fresh proof has its own bounded deadline, separate from the
 worker startup deadline.
+
+## GPU process IPC encoding
+
+Use JSON IPC for GPU proof and synthesis children so the extension host and
+the separately bundled Node runtime do not depend on matching V8 serialization
+versions. Encode WAV bytes as canonical base64 and enforce the existing WAV
+size and response schema bounds before handing data to the client. The wire
+format adds base64 overhead; it does not replace loader, driver, or model proof.
+
+## GPU model operation placement
+
+Route the pinned model's `ups.1/ConvTranspose` operation to CPU in both the
+model proof and inference sessions. A same-input isolated test on the tested
+Linux AMD system reproduced substantial WebGPU error at that operation. A
+profiled original-model test placed that operation on CPU while retaining GPU
+execution elsewhere; its raw waveform closely matched the CPU reference.
+Strict negative and tiny graph proofs still forbid CPU fallback. This evidence
+does not establish subjective audio quality or compatibility on other hardware.

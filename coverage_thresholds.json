@@ -737,6 +737,13 @@
       "functions": 100
     }
   },
+  "packages/vscode/src/speech_gpu_ipc.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/vscode/src/speech_gpu_model.ts": {
     "unit": {
       "lines": 100,
@@ -752,6 +759,13 @@
     }
   },
   "packages/vscode/src/speech_gpu_model_manifest.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/speech_gpu_options.ts": {
     "unit": {
       "lines": 100,
       "branches": 100,

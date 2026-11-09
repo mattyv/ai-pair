@@ -45,7 +45,7 @@ export function createGpuProofRunner(capability: GpuLaunchCapability): (kind: 'n
               execPath: capability.executablePath,
               execArgv: [],
               env,
-              serialization: 'advanced',
+              serialization: 'json',
               stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
             });
           } catch {

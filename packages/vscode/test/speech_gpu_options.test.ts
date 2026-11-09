@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest';
 import { gpuSessionOptions } from '../src/speech_gpu_options';
 
-it('forces Vulkan for model and strict tiny graph sessions', () => {
+it('routes only the affected model node to CPU while strict probes stay GPU-only', () => {
   expect(gpuSessionOptions(false)).toEqual({
-    executionProviders: ['webgpu'],
+    executionProviders: [{ name: 'webgpu', forceCpuNodeNames: ['/decoder/decoder/generator/ups.1/ConvTranspose'] }],
     extra: { ep: { webgpuexecutionprovider: { dawnBackendType: 'Vulkan' } } },
   });
   expect(gpuSessionOptions(true)).toEqual({

@@ -190,6 +190,8 @@ Last updated: tla, 2026-11-08.
 | `packages/vscode/src/speech_credentials.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_elevenlabs.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 81.2% B 72.6% F 88.9% | - | - | - | - |
 | `packages/vscode/src/speech_engine.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_gpu_ipc.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_gpu_options.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_local_client.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 47.5% B 62.5% F 31.3% | - | - | - | - |
 | `packages/vscode/src/speech_local_protocol.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.2% B 100.0% F 50.0% | - | - | - | - |
 | `packages/vscode/src/speech_model_manifest.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |

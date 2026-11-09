@@ -1,3 +1,4 @@
+import { decodeGpuResponse } from './speech_gpu_ipc';
 import type { WorkerLike } from './speech_local_client';
 
 /** The bounded process operations used by the synthesis transport. */
@@ -19,7 +20,7 @@ export class GpuProcessTransport implements WorkerLike {
 
   constructor(private readonly child: GpuChildProcess) {
     child.on('message', (value) => {
-      this.listeners.get('message')?.(value);
+      this.listeners.get('message')?.(decodeGpuResponse(value));
     });
     child.on('error', (value) => {
       this.listeners.get('error')?.(value);

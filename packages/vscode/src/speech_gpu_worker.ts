@@ -1,3 +1,4 @@
+import { encodeGpuResponse } from './speech_gpu_ipc';
 import { verifyMappedGpuDriver } from './speech_gpu_driver_identity';
 import { loadGpuSpeechEngine } from './speech_gpu_engine';
 import { verifyMappedVulkanLoader } from './speech_gpu_loader';
@@ -11,7 +12,7 @@ attachGpuWorker(
     },
     send: (message) => {
       if (process.send === undefined || !process.connected) throw new Error('GPU worker IPC is unavailable.');
-      process.send(message);
+      process.send(encodeGpuResponse(message));
     },
     close: () => {
       if (process.connected) process.disconnect();

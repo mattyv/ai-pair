@@ -51,7 +51,7 @@ export function createGpuSynthesisClient(options: { listener: LocalListener; cap
           execPath: executablePath,
           execArgv: [],
           env,
-          serialization: 'advanced',
+          serialization: 'json',
           stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
         });
       } catch (error: unknown) {

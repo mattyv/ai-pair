@@ -23,7 +23,7 @@ it('keeps a separate warm process and reaps it before reuse after cancellation',
         epoch = message.epoch;
         process.send({ type: 'ready', version: 1, epoch, capabilities: ${JSON.stringify(LOCAL_CAPABILITIES)} });
       } else if (message.type === 'synthesize' && message.id === 1) {
-        process.send({ type: 'result', version: 1, epoch, id: message.id, part: message.part, wav: new Uint8Array(44), durationMs: 1 });
+        process.send({ type: 'result', version: 1, epoch, id: message.id, part: message.part, wav: Buffer.from(Array.from({ length: 44 }, (_, index) => index)).toString('base64'), durationMs: 1 });
       }
       // A hung child deliberately ignores shutdown so the parent must kill it.
     });
@@ -38,8 +38,16 @@ it('keeps a separate warm process and reaps it before reuse after cancellation',
       executablePath: process.execPath,
       loaderPath: path.join(directory, 'loader'),
       loaderSha256: 'a'.repeat(64),
-      driverPath: path.join(directory, 'driver'), driverSha256: 'b'.repeat(64), driverDevice: '42', driverInode: '99',
-      environment: { LANG: 'C', VK_DRIVER_FILES: path.join(directory, 'icd'), VK_LOADER_LAYERS_DISABLE: '~all~', LD_PRELOAD: path.join(directory, 'loader') },
+      driverPath: path.join(directory, 'driver'),
+      driverSha256: 'b'.repeat(64),
+      driverDevice: '42',
+      driverInode: '99',
+      environment: {
+        LANG: 'C',
+        VK_DRIVER_FILES: path.join(directory, 'icd'),
+        VK_LOADER_LAYERS_DISABLE: '~all~',
+        LD_PRELOAD: path.join(directory, 'loader'),
+      },
     },
   });
   try {
@@ -49,6 +57,7 @@ it('keeps a separate warm process and reaps it before reuse after cancellation',
     });
     const first = await client.synthesize({ id: 1, part: 0, text: 'Synthetic.', voice: 'af_heart', speed: 1, final: true });
     expect(first.status).toBe('audio');
+    if (first.status === 'audio') expect(first.wav).toEqual(Uint8Array.from({ length: 44 }, (_, index) => index));
     const second = client.synthesize({ id: 2, part: 0, text: 'Synthetic.', voice: 'af_heart', speed: 1, final: true });
     client.cancel();
     expect((await second).status).toBe('failed');

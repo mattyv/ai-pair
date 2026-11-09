@@ -86,6 +86,7 @@ it('adapts the tiny session and its fixed tensor without forwarding unchecked fe
     return false;
   });
   expect(await runGpuProofWorker('tiny', options)).toBe('failed');
+  expect(fake.options).toHaveBeenCalledWith(true);
   expect(session.run).toHaveBeenCalledOnce();
   expect(session.release).toHaveBeenCalledOnce();
 });
@@ -101,6 +102,8 @@ it('bounds and reads a single proof profile and adapts model tensors', async () 
     expect(model).toBe(options.model);
     expect(prefix).toBe(options.profilePrefix);
     const adapted = await dependencies.create(options.model, options.profilePrefix);
+    expect(fake.options).toHaveBeenCalledWith(false);
+    expect(fake.create).toHaveBeenCalledWith(options.model, { strict: false, enableProfiling: true, profileFilePrefix: options.profilePrefix });
     const first = dependencies.tensor('int64', new BigInt64Array(1), [1]);
     const second = dependencies.tensor('float32', new Float32Array(1), [1]);
     await adapted.run({ first, second });

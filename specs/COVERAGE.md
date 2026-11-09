@@ -197,8 +197,8 @@ Code goes without a spec for one of these reasons:
 | `speech_engine.ts` | `loadSpeechEngine` | Glue: loads the local model, tokenizer and phonemizer; offline worker integration |
 | `speech_gpu_setup_flow.ts`, `speech_gpu_model.ts` | preflight, download and atomic GPU cache installation | `GpuSetup`, `SpeechSetup`; unit and temporary-files integration tests |
 | `speech_gpu_driver_identity.ts`, `speech_gpu_elf.ts` | mapped ICD classification and identity | `GpuMappedIcd`, `GpuSetup`; unit and native proof tests |
-| `speech_gpu_slot.ts`, `speech_gpu_proof_runner.ts`, `speech_gpu_proof_worker.ts` | shared child lease, proof and retirement | `GpuProcessSlot`, `GpuSetup`; unit and native proof tests |
-| `speech_gpu_client.ts`, `speech_gpu_transport.ts` | verified launch, cancel, process retirement | `GpuSynthesisProcess`; unit and real-child integration tests |
+| `speech_gpu_slot.ts`, `speech_gpu_proof_runner.ts`, `speech_gpu_proof_worker.ts`, `speech_gpu_options.ts` | shared child lease, proof and retirement | `GpuProcessSlot`, `GpuSetup`; unit and native proof tests |
+| `speech_gpu_client.ts`, `speech_gpu_transport.ts`, `speech_gpu_ipc.ts` | verified launch, bounded IPC, cancel, process retirement | `GpuSynthesisProcess`; unit and real-child integration tests |
 | `speech_gpu_worker.ts`, `speech_gpu_worker_runtime.ts`, `speech_gpu_worker_host.ts` | isolated IPC, loader proof and disposal | `GpuSynthesisProcess`; unit and composed tests |
 | `speech_gpu_verified_engine.ts`, `speech_gpu_engine.ts`, `speech_gpu_phonemizer_bridge.ts` | verified GPU engine and offline phonemizer | `GpuSynthesisProcess`; pinned assets, model format and audio fidelity: unit and hardware tests |
 | `speech_local_client.ts` | worker epoch, ownership, cancellation and retirement until exit | `WarmSynthesisWorker`; unit and composed tests |

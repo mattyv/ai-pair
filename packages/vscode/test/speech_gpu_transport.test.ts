@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+vi.mock('../src/speech_gpu_ipc', () => ({ decodeGpuResponse: (value: unknown) => value }));
 import { GpuProcessTransport, type GpuChildProcess } from '../src/speech_gpu_transport';
 
 /** A controllable process whose close event represents actual OS retirement. */
