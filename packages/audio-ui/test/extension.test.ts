@@ -44,6 +44,7 @@ vi.mock('../src/companion_session', () => ({
     ...fake.session,
     observation: () => ({ id: 1, state: 'speaking', started: true }),
     diagnostics: () => ({ version: 'test', build: 'test-build', events: [] }),
+    gpuDiagnostics: () => ({ stage: 'idle' }),
   })),
 }));
 
@@ -94,6 +95,7 @@ it('rejects malformed commit and makes unattached commands safe', async () => {
   expect(fake.commands.get('aiPair.localAudio.status')?.(undefined)).toBeUndefined();
   await expect(fake.commands.get('aiPair.localAudio.ready')?.('epoch')).resolves.toBe(false);
   expect(fake.commands.get('aiPair.localAudio.diagnostics')?.(undefined)).toBeUndefined();
+  expect(fake.commands.get('aiPair.localAudio.gpuDiagnostics')?.(undefined)).toBeUndefined();
   await expect(fake.commands.get('aiPair.localAudio.keySet')?.(undefined)).resolves.toBeUndefined();
   await expect(fake.commands.get('aiPair.localAudio.keyRemove')?.(undefined)).resolves.toBeUndefined();
   await expect(fake.commands.get('aiPair.localAudio.preview')?.(undefined)).resolves.toBeUndefined();
@@ -117,6 +119,7 @@ it('forwards attached commands to the local session and disposes it', async () =
   await expect(fake.commands.get('aiPair.localAudio.ready')?.('epoch')).resolves.toBe(true);
   expect(fake.session.ready).toHaveBeenCalledWith('epoch');
   expect(fake.commands.get('aiPair.localAudio.diagnostics')?.(undefined)).toEqual({ version: 'test', build: 'test-build', events: [] });
+  expect(fake.commands.get('aiPair.localAudio.gpuDiagnostics')?.(undefined)).toEqual({ stage: 'idle' });
   expect(fake.session.accept).toHaveBeenCalledWith({ message: 'safe' });
   expect(fake.session.keySet).toHaveBeenCalledOnce();
   expect(fake.session.keyRemove).toHaveBeenCalledOnce();

@@ -38,7 +38,12 @@ describe.skipIf(process.platform !== 'linux')('native Vulkan device proof', () =
     copyFileSync(`${dir}/fake.so`, `${dir}/libvulkan_radeon.so`);
     copyFileSync(`${dir}/fake.so`, `${dir}/libvulkan_lvp.so`);
     copyFileSync(`${dir}/fake.so`, `${dir}/renamed-driver.so`);
-    for (const name of ['vk_icdGetInstanceProcAddr', 'vk_icdNegotiateLoaderICDInterfaceVersion', 'vkGetInstanceProcAddr', 'unrelated_export']) {
+    for (const name of [
+      'vk_icdGetInstanceProcAddr',
+      'vk_icdNegotiateLoaderICDInterfaceVersion',
+      'vkGetInstanceProcAddr',
+      'unrelated_export',
+    ]) {
       writeFileSync(`${dir}/${name}.c`, `void ${name}(void) {}`);
       execFileSync('cc', ['-shared', '-fPIC', `${dir}/${name}.c`, '-o', `${dir}/${name}.so`]);
     }
@@ -130,7 +135,8 @@ describe.skipIf(process.platform !== 'linux')('native Vulkan device proof', () =
   });
 
   it.each(['vk_icdGetInstanceProcAddr', 'vk_icdNegotiateLoaderICDInterfaceVersion', 'vkGetInstanceProcAddr'])(
-    'rejects an additional renamed DSO defining %s', (name) => {
+    'rejects an additional renamed DSO defining %s',
+    (name) => {
       const result = spawnSync(`${dir}/probe`, probeArgs(), {
         env: { FAKE_GPU: 'amd', FAKE_DRIVER: `${dir}/libvulkan_radeon.so`, FAKE_EXTRA_DRIVER: `${dir}/${name}.so` },
         timeout: 5000,

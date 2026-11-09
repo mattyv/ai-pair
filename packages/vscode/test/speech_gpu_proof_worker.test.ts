@@ -103,7 +103,11 @@ it('bounds and reads a single proof profile and adapts model tensors', async () 
     expect(prefix).toBe(options.profilePrefix);
     const adapted = await dependencies.create(options.model, options.profilePrefix);
     expect(fake.options).toHaveBeenCalledWith(false);
-    expect(fake.create).toHaveBeenCalledWith(options.model, { strict: false, enableProfiling: true, profileFilePrefix: options.profilePrefix });
+    expect(fake.create).toHaveBeenCalledWith(options.model, {
+      strict: false,
+      enableProfiling: true,
+      profileFilePrefix: options.profilePrefix,
+    });
     const first = dependencies.tensor('int64', new BigInt64Array(1), [1]);
     const second = dependencies.tensor('float32', new Float32Array(1), [1]);
     await adapted.run({ first, second });
@@ -172,7 +176,21 @@ it.each([
     callback(null);
   });
   try {
-    process.argv = ['node', 'worker', '--ai-pair-gpu-proof', 'tiny', '/graph', '/model', '/tmp/profile', '/loader', 'a'.repeat(64), '/driver', 'b'.repeat(64), '42', '99'];
+    process.argv = [
+      'node',
+      'worker',
+      '--ai-pair-gpu-proof',
+      'tiny',
+      '/graph',
+      '/model',
+      '/tmp/profile',
+      '/loader',
+      'a'.repeat(64),
+      '/driver',
+      'b'.repeat(64),
+      '42',
+      '99',
+    ];
     Object.defineProperty(process, 'send', { configurable: true, value: send });
     Object.defineProperty(process, 'connected', { configurable: true, value: true });
     Object.defineProperty(process, 'disconnect', { configurable: true, value: disconnect });
@@ -209,7 +227,21 @@ it.each([
   const connectedDescriptor = Object.getOwnPropertyDescriptor(process, 'connected');
   const send = vi.fn();
   try {
-    process.argv = ['node', 'worker', '--ai-pair-gpu-proof', kind, '/graph', '/model', '/tmp/profile', '/loader', 'a'.repeat(64), '/driver', 'b'.repeat(64), '42', '99'];
+    process.argv = [
+      'node',
+      'worker',
+      '--ai-pair-gpu-proof',
+      kind,
+      '/graph',
+      '/model',
+      '/tmp/profile',
+      '/loader',
+      'a'.repeat(64),
+      '/driver',
+      'b'.repeat(64),
+      '42',
+      '99',
+    ];
     Object.defineProperty(process, 'send', { configurable: true, value: send });
     Object.defineProperty(process, 'connected', { configurable: true, value: false });
     if (kind === 'model') fake.model.mockResolvedValueOnce(true);
@@ -246,7 +278,10 @@ it('rejects the negative control when a GPU driver remains mapped', async () => 
 it('requires the exact mapped driver during positive proof', async () => {
   fake.loader.mockResolvedValue(true);
   fake.driver.mockResolvedValue(false);
-  fake.tiny.mockImplementation(async (graph, dependencies) => { void graph; return dependencies.loader(); });
+  fake.tiny.mockImplementation(async (graph, dependencies) => {
+    void graph;
+    return dependencies.loader();
+  });
   expect(await runGpuProofWorker('tiny', options)).toBe('failed');
   expect(fake.driver).toHaveBeenCalledWith(options.driver, options.loaderPath);
   expect(fake.noDriver).not.toHaveBeenCalled();

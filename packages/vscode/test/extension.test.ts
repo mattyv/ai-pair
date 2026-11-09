@@ -1718,6 +1718,8 @@ it('reports a sanitized companion preparation failure in the warning and output'
   expect(fakes.infos).toContain(
     'AI Pair and AI Pair Local Audio could not connect. The Local Audio extension did not respond in time. See the AI Pair output for details.',
   );
+  fakes.companionInstalled = false;
+  fakes.placementOptions?.failure?.('invalid_response');
 });
 
 it('selects the local companion without registering a workspace panel provider', async () => {

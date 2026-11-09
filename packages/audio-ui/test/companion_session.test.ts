@@ -124,6 +124,7 @@ vi.mock('../src/speech_host', () => ({
       panelSpeech: { keySet: fake.keySet, keyRemove: fake.keyRemove, preview: fake.preview },
       output: { stopAndWait: fake.stopOutput },
       observation: fake.observation,
+      gpuDiagnostics: () => ({ stage: 'idle' }),
       ready: () => Promise.resolve(true),
       dispose: fake.hostDispose,
     };
@@ -198,6 +199,7 @@ it('registers one provider and forwards local commands and diagnostics', async (
   expect(await current.ready('wrong')).toBe(false);
   expect(await current.ready('epoch')).toBe(true);
   expect(current.diagnostics()).toMatchObject({ version: 'test', build: 'test-build' });
+  expect(current.gpuDiagnostics()).toEqual({ stage: 'idle' });
   fake.hostOptions?.diagnostic({ kind: 'test' });
   expect(fake.diagnostic).toHaveBeenCalledWith({ kind: 'test' });
   expect(fake.hostOptions?.page()).toBe(7);

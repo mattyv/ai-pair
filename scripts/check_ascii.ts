@@ -9,8 +9,9 @@ import * as path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 
-// Preserve the exact prebuilt libstdc++ binary; all other code stays checked.
-const SKIPPED = /^(package-lock\.json|.*\.(png|gif)|packages\/vscode\/vendor\/libstdcxx\/libstdc\+\+\.so\.6)$/;
+// Preserve exact bundled binaries; all other code stays checked.
+const SKIPPED =
+  /^(package-lock\.json|.*\.(png|gif)|packages\/vscode\/vendor\/libstdcxx\/libstdc\+\+\.so\.6|packages\/vscode\/native\/gpu_probe\.onnx)$/;
 
 const ASCII_DELETE = 0x7f; // the last ASCII code point
 const HEX = 16;

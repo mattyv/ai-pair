@@ -46,17 +46,24 @@ function driverMappings(maps: string): Array<{ major: string; minor: string; ino
     const match = /^\S+\s+(\S+)\s+\S+\s+([\da-f]+):([\da-f]+)\s+(\d+)\s+(\/.*)$/.exec(line);
     if (match === null || !String(match[1]).includes('x')) continue;
     const [, , major, minor, inode, file] = match;
-    if (major === undefined || minor === undefined || inode === undefined || file === undefined || file.endsWith(' (deleted)')) throw new Error('Invalid GPU mapping.');
+    if (major === undefined || minor === undefined || inode === undefined || file === undefined || file.endsWith(' (deleted)')) {
+      throw new Error('Invalid GPU mapping.');
+    }
     const entry = { major, minor, inode, file };
     const old = found.get(file);
-    if (old !== undefined && (old.major !== major || old.minor !== minor || old.inode !== inode)) throw new Error('Conflicting GPU mapping.');
+    if (old !== undefined && (old.major !== major || old.minor !== minor || old.inode !== inode)) {
+      throw new Error('Conflicting GPU mapping.');
+    }
     found.set(file, entry);
     if (found.size > MAX_MAPPED_FILES) throw new Error('Too many mapped files.');
   }
   return [...found.values()];
 }
 
-async function matchingMapping(entry: { major: string; minor: string; inode: string; file: string }, access: DriverIdentityAccess): Promise<boolean> {
+async function matchingMapping(
+  entry: { major: string; minor: string; inode: string; file: string },
+  access: DriverIdentityAccess,
+): Promise<boolean> {
   const actual = await access.stat(entry.file);
   const major = ((actual.device >> EIGHT_BITS) & MAJOR_LOW_MASK) | ((actual.device >> THIRTY_TWO_BITS) & MAJOR_HIGH_MASK);
   const minor = (actual.device & BYTE_MASK) | ((actual.device >> TWELVE_BITS) & MINOR_HIGH_MASK);
@@ -64,9 +71,21 @@ async function matchingMapping(entry: { major: string; minor: string; inode: str
 }
 
 /** Confirms the process maps only the exact, still-identical trusted Radeon ICD. */
-export async function verifyMappedGpuDriver(identity: GpuDriverIdentity, loaderPath: string, access: DriverIdentityAccess = systemAccess): Promise<boolean> {
-  if (!path.isAbsolute(identity.path) || path.normalize(identity.path) !== identity.path || !path.isAbsolute(loaderPath) ||
-      !/^[a-f0-9]{64}$/.test(identity.sha256) || !/^\d+$/.test(identity.device) || !/^\d+$/.test(identity.inode)) return false;
+export async function verifyMappedGpuDriver(
+  identity: GpuDriverIdentity,
+  loaderPath: string,
+  access: DriverIdentityAccess = systemAccess,
+): Promise<boolean> {
+  if (
+    !path.isAbsolute(identity.path) ||
+    path.normalize(identity.path) !== identity.path ||
+    !path.isAbsolute(loaderPath) ||
+    !/^[a-f0-9]{64}$/.test(identity.sha256) ||
+    !/^\d+$/.test(identity.device) ||
+    !/^\d+$/.test(identity.inode)
+  ) {
+    return false;
+  }
   try {
     const mappings = driverMappings(await access.maps());
     let expected = false;
@@ -75,9 +94,16 @@ export async function verifyMappedGpuDriver(identity: GpuDriverIdentity, loaderP
       if (entry.file === loaderPath) continue; // The caller independently verifies the exact loader first.
       if (entry.file === identity.path) {
         const info = await access.stat(entry.file);
-        if (info.device !== BigInt(identity.device) || info.inode !== BigInt(identity.inode) ||
-            createHash('sha256').update(await access.read(entry.file)).digest('hex') !== identity.sha256 ||
-            !(await matchingMapping(entry, access))) return false;
+        if (
+          info.device !== BigInt(identity.device) ||
+          info.inode !== BigInt(identity.inode) ||
+          createHash('sha256')
+            .update(await access.read(entry.file))
+            .digest('hex') !== identity.sha256 ||
+          !(await matchingMapping(entry, access))
+        ) {
+          return false;
+        }
         expected = true;
       } else if (hasGpuIcdExports(await access.read(entry.file)) || !(await matchingMapping(entry, access))) return false;
     }
@@ -93,7 +119,9 @@ export async function verifyNoGpuDriver(loaderPath: string, access: DriverIdenti
   try {
     for (const entry of driverMappings(await access.maps())) {
       if (!(await matchingMapping(entry, access))) return false;
-      if (entry.file !== loaderPath && (hasGpuIcdExports(await access.read(entry.file)) || !(await matchingMapping(entry, access)))) return false;
+      if (entry.file !== loaderPath && (hasGpuIcdExports(await access.read(entry.file)) || !(await matchingMapping(entry, access)))) {
+        return false;
+      }
     }
     return true;
   } catch {

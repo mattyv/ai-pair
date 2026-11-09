@@ -52,8 +52,10 @@ function tensorFeeds(feeds: Record<string, unknown>): Record<string, Tensor> {
 /** Runs one fixed proof with the same forced-Vulkan provider as narration. */
 export async function runGpuProofWorker(kind: 'negative' | 'tiny' | 'model', options: GpuProofWorkerOptions): Promise<GpuProbeResult> {
   async function loader(): Promise<boolean> {
-    return (await verifyMappedVulkanLoader(options.loaderPath, options.loaderSha256)) &&
-      (kind === 'negative' ? await verifyNoGpuDriver(options.loaderPath) : await verifyMappedGpuDriver(options.driver, options.loaderPath));
+    return (
+      (await verifyMappedVulkanLoader(options.loaderPath, options.loaderSha256)) &&
+      (kind === 'negative' ? await verifyNoGpuDriver(options.loaderPath) : await verifyMappedGpuDriver(options.driver, options.loaderPath))
+    );
   }
   if (kind === 'negative') {
     let session: InferenceSession;
@@ -107,7 +109,8 @@ export async function runGpuProofWorker(kind: 'negative' | 'tiny' | 'model', opt
 }
 
 if (process.argv[2] === '--ai-pair-gpu-proof') {
-  const [, , , kind, graph, model, profilePrefix, loaderPath, loaderSha256, driverPath, driverSha256, driverDevice, driverInode] = process.argv;
+  const [, , , kind, graph, model, profilePrefix, loaderPath, loaderSha256, driverPath, driverSha256, driverDevice, driverInode] =
+    process.argv;
   if (
     process.argv.length !== ARGUMENT_COUNT + 1 ||
     (kind !== 'negative' && kind !== 'tiny' && kind !== 'model') ||
@@ -116,14 +119,26 @@ if (process.argv[2] === '--ai-pair-gpu-proof') {
     profilePrefix === undefined ||
     loaderPath === undefined ||
     loaderSha256 === undefined ||
-    driverPath === undefined || driverSha256 === undefined || driverDevice === undefined || driverInode === undefined ||
+    driverPath === undefined ||
+    driverSha256 === undefined ||
+    driverDevice === undefined ||
+    driverInode === undefined ||
     ![graph, model, profilePrefix, loaderPath, driverPath].every((value) => path.isAbsolute(value)) ||
-    !/^[a-f0-9]{64}$/.test(loaderSha256) || !/^[a-f0-9]{64}$/.test(driverSha256) ||
-    !/^[0-9]+$/.test(driverDevice) || !/^[0-9]+$/.test(driverInode)
+    !/^[a-f0-9]{64}$/.test(loaderSha256) ||
+    !/^[a-f0-9]{64}$/.test(driverSha256) ||
+    !/^[0-9]+$/.test(driverDevice) ||
+    !/^[0-9]+$/.test(driverInode)
   ) {
     process.exit(1);
   } else {
-    void runGpuProofWorker(kind, { graph, model, profilePrefix, loaderPath, loaderSha256, driver: { path: driverPath, sha256: driverSha256, device: driverDevice, inode: driverInode } }).then(
+    void runGpuProofWorker(kind, {
+      graph,
+      model,
+      profilePrefix,
+      loaderPath,
+      loaderSha256,
+      driver: { path: driverPath, sha256: driverSha256, device: driverDevice, inode: driverInode },
+    }).then(
       (result) => {
         if (process.send === undefined || !process.connected) return;
         process.send({ type: 'gpu-proof', kind, result }, () => {

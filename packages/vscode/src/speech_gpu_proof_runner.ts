@@ -25,7 +25,10 @@ export function createGpuProofRunner(capability: GpuLaunchCapability): (kind: 'n
       }
       try {
         const env = {
-          ...gpuEnvironment(kind === 'negative' ? path.join(directory, 'nonexistent-icd.json') : capability.environment.VK_DRIVER_FILES, capability.loaderPath),
+          ...gpuEnvironment(
+            kind === 'negative' ? path.join(directory, 'nonexistent-icd.json') : capability.environment.VK_DRIVER_FILES,
+            capability.loaderPath,
+          ),
           ELECTRON_RUN_AS_NODE: '1',
         };
         const args = [
@@ -36,7 +39,10 @@ export function createGpuProofRunner(capability: GpuLaunchCapability): (kind: 'n
           path.join(directory, 'profile'),
           capability.loaderPath,
           capability.loaderSha256,
-          capability.driverPath, capability.driverSha256, capability.driverDevice, capability.driverInode,
+          capability.driverPath,
+          capability.driverSha256,
+          capability.driverDevice,
+          capability.driverInode,
         ];
         return await new Promise<GpuProbeResult>((resolve) => {
           let child: ReturnType<typeof fork>;

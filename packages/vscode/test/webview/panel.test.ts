@@ -2447,6 +2447,26 @@ it('shows a fixed explanation for every GPU check failure and reports setup prog
   expect(text('gpu-status')).not.toMatch(/NaN|Infinity/);
   send({
     type: 'speechComputeState',
+    value: { requestedMode: 'gpu', actualBackend: 'none', gpuCheck: { phase: 'checking', progress: { stage: 'download', current: 1 } } },
+  });
+  expect(text('gpu-status')).toContain('download: 0.0 MB');
+  send({
+    type: 'speechComputeState',
+    value: { requestedMode: 'gpu', actualBackend: 'none', gpuCheck: { phase: 'checking', progress: { stage: 'verify' } } },
+  });
+  expect(text('gpu-status')).toContain('verify.');
+  send({
+    type: 'speechComputeState',
+    value: {
+      requestedMode: 'gpu',
+      actualBackend: 'none',
+      gpuCheck: { phase: 'checking', progress: { stage: 'verify', current: 1, total: 2 } },
+    },
+  });
+  expect(text('gpu-status')).toContain('verify: 1 of 2');
+
+  send({
+    type: 'speechComputeState',
     value: { requestedMode: 'gpu', actualBackend: 'none', gpuCheck: { phase: 'checking', progress: { stage: 'verify', current: 2 } } },
   });
   expect(text('gpu-status')).toContain('verify: 2');

@@ -850,6 +850,8 @@ it('enables GPU inference only with an explicit reviewed gate and fresh host cap
   detail?.('spawn_error');
   detail?.('exit_nonzero');
   expect(host.gpuDiagnostics().workerDetails).toEqual(['spawn_error', 'exit_nonzero']);
+  for (let i = 0; i < 8; i++) detail?.('loading');
+  expect(host.gpuDiagnostics().workerDetails).toEqual(Array.from({ length: 8 }, () => 'loading'));
   host.dispose();
 });
 

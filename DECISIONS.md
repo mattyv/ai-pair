@@ -601,8 +601,9 @@ device and inode; positive checks must verify the mapped identity before
 readiness and audio. The no-adapter negative control verifies the loader without
 requiring the Radeon driver. The exact loader preload is confined to the child.
 Root-owned native dependencies remain a trust assumption, and these checks do
-not sandbox native code. The guarded path is enabled for an experimental host trial after review;
-physical AMD validation remains required before describing GPU support as a
+not sandbox native code. The guarded path is enabled for an experimental host
+trial after review; physical AMD validation remains required before describing
+GPU support as a
 validated release. Fresh proof has its own bounded deadline, separate from the
 worker startup deadline.
 

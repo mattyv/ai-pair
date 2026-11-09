@@ -11,8 +11,16 @@ const capability = {
   executablePath: '/runtime/node',
   loaderPath: '/system/libvulkan.so',
   loaderSha256: 'a'.repeat(64),
-  driverPath: '/driver/lib.so', driverSha256: 'b'.repeat(64), driverDevice: '42', driverInode: '99',
-  environment: { LANG: 'C' as const, VK_DRIVER_FILES: '/driver/icd.json', VK_LOADER_LAYERS_DISABLE: '~all~' as const, LD_PRELOAD: '/system/libvulkan.so' },
+  driverPath: '/driver/lib.so',
+  driverSha256: 'b'.repeat(64),
+  driverDevice: '42',
+  driverInode: '99',
+  environment: {
+    LANG: 'C' as const,
+    VK_DRIVER_FILES: '/driver/icd.json',
+    VK_LOADER_LAYERS_DISABLE: '~all~' as const,
+    LD_PRELOAD: '/system/libvulkan.so',
+  },
 };
 
 beforeEach(() => {
@@ -48,9 +56,19 @@ it('accepts the explicit negative result only after the child closes', async () 
   expect(await pending).toBe('rejected');
   expect(fake.rm).toHaveBeenCalledOnce();
   expect(fake.fork).toHaveBeenCalledOnce();
-  expect(fake.fork).toHaveBeenCalledWith(expect.any(String), expect.any(Array), expect.objectContaining({
-    env: { LANG: 'C', VK_DRIVER_FILES: '/tmp/private-proof/nonexistent-icd.json', VK_LOADER_LAYERS_DISABLE: '~all~', LD_PRELOAD: '/system/libvulkan.so', ELECTRON_RUN_AS_NODE: '1' },
-  }));
+  expect(fake.fork).toHaveBeenCalledWith(
+    expect.any(String),
+    expect.any(Array),
+    expect.objectContaining({
+      env: {
+        LANG: 'C',
+        VK_DRIVER_FILES: '/tmp/private-proof/nonexistent-icd.json',
+        VK_LOADER_LAYERS_DISABLE: '~all~',
+        LD_PRELOAD: '/system/libvulkan.so',
+        ELECTRON_RUN_AS_NODE: '1',
+      },
+    }),
+  );
 });
 
 it('kills timed-out work but does not settle until reaped', async () => {

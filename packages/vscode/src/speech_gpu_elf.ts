@@ -12,7 +12,9 @@ export function hasGpuIcdExports(bytes: Uint8Array): boolean {
     return Number(view.getBigUint64(offset, true));
   }
   check(0, 64);
-  if (view.getUint32(0, false) !== 0x7f454c46 || view.getUint8(4) !== 2 || view.getUint8(5) !== 1) throw new Error('Unsupported mapped ELF.');
+  if (view.getUint32(0, false) !== 0x7f454c46 || view.getUint8(4) !== 2 || view.getUint8(5) !== 1) {
+    throw new Error('Unsupported mapped ELF.');
+  }
   const phoff = u64(32);
   const phsize = view.getUint16(54, true);
   const phcount = view.getUint16(56, true);
@@ -42,27 +44,41 @@ export function hasGpuIcdExports(bytes: Uint8Array): boolean {
     check(offset, size);
     return offset;
   }
-  if (dynamic === undefined || dynamic.size % 16 !== 0 || dynamic.size > 1_048_576 ||
-      translate(dynamic.addr, dynamic.size) !== dynamic.offset) throw new Error('Missing ELF dynamic segment.');
+  if (
+    dynamic === undefined ||
+    dynamic.size % 16 !== 0 ||
+    dynamic.size > 1_048_576 ||
+    translate(dynamic.addr, dynamic.size) !== dynamic.offset
+  ) {
+    throw new Error('Missing ELF dynamic segment.');
+  }
   const tags = new Map<number, number>();
   let terminated = false;
   for (let at = dynamic.offset; at < dynamic.offset + dynamic.size; at += 16) {
     const tag = u64(at);
     const value = u64(at + 8);
-    if (tag === 0) { terminated = true; break; }
+    if (tag === 0) {
+      terminated = true;
+      break;
+    }
     if ([4, 5, 6, 10, 11, 0x6ffffef5].includes(tag)) {
       if (tags.has(tag) || !Number.isSafeInteger(value)) throw new Error('Ambiguous ELF dynamic tags.');
       tags.set(tag, value);
     }
   }
-  const symaddr = tags.get(6); const straddr = tags.get(5); const strsize = tags.get(10);
-  if (!terminated || symaddr === undefined || straddr === undefined || strsize === undefined || tags.get(11) !== 24 || strsize === 0) throw new Error('Invalid ELF dynamic tables.');
+  const symaddr = tags.get(6);
+  const straddr = tags.get(5);
+  const strsize = tags.get(10);
+  if (!terminated || symaddr === undefined || straddr === undefined || strsize === undefined || tags.get(11) !== 24 || strsize === 0) {
+    throw new Error('Invalid ELF dynamic tables.');
+  }
   const strings = translate(straddr, strsize);
   let count: number | undefined;
   const hash = tags.get(4);
   if (hash !== undefined) {
     const at = translate(hash, 8);
-    const buckets = view.getUint32(at, true); count = view.getUint32(at + 4, true);
+    const buckets = view.getUint32(at, true);
+    count = view.getUint32(at + 4, true);
     if (buckets === 0 || count === 0 || count > 1_000_000 || buckets > 1_000_000) throw new Error('Invalid ELF hash.');
     const table = translate(hash, 8 + 4 * (buckets + count));
     for (let i = 0; i < buckets + count; i += 1) {
@@ -72,9 +88,12 @@ export function hasGpuIcdExports(bytes: Uint8Array): boolean {
   const gnu = tags.get(0x6ffffef5);
   if (gnu !== undefined) {
     const at = translate(gnu, 16);
-    const buckets = view.getUint32(at, true); const first = view.getUint32(at + 4, true);
+    const buckets = view.getUint32(at, true);
+    const first = view.getUint32(at + 4, true);
     const bloom = view.getUint32(at + 8, true);
-    if (buckets === 0 || buckets > 1_000_000 || bloom === 0 || bloom > 1_000_000 || first > 1_000_000) throw new Error('Invalid ELF GNU hash.');
+    if (buckets === 0 || buckets > 1_000_000 || bloom === 0 || bloom > 1_000_000 || first > 1_000_000) {
+      throw new Error('Invalid ELF GNU hash.');
+    }
     const bucketAddr = gnu + 16 + bloom * 8;
     const bucketOffset = translate(bucketAddr, buckets * 4);
     const chainAddr = bucketAddr + buckets * 4;
@@ -101,12 +120,16 @@ export function hasGpuIcdExports(bytes: Uint8Array): boolean {
   let nameBytes = 0;
   for (let i = 0; i < count; i += 1) {
     const at = symbols + i * 24;
-    const name = view.getUint32(at, true); const binding = view.getUint8(at + 4) >> 4;
-    const visibility = view.getUint8(at + 5) & 3; const defined = view.getUint16(at + 6, true) !== 0;
+    const name = view.getUint32(at, true);
+    const binding = view.getUint8(at + 4) >> 4;
+    const visibility = view.getUint8(at + 5) & 3;
+    const defined = view.getUint16(at + 6, true) !== 0;
     if (!defined) continue;
-    void binding; void visibility;
+    void binding;
+    void visibility;
     if (name >= strsize) throw new Error('Invalid ELF symbol name.');
-    const begin = strings + name; let end = begin;
+    const begin = strings + name;
+    let end = begin;
     while (end < strings + strsize && bytes[end] !== 0) {
       end += 1;
       nameBytes += 1;
@@ -114,7 +137,13 @@ export function hasGpuIcdExports(bytes: Uint8Array): boolean {
     }
     if (end === strings + strsize) throw new Error('Invalid ELF symbol name.');
     const symbol = Buffer.from(bytes.subarray(begin, end)).toString('utf8');
-    if (symbol === 'vk_icdGetInstanceProcAddr' || symbol === 'vk_icdNegotiateLoaderICDInterfaceVersion' || symbol === 'vkGetInstanceProcAddr') return true;
+    if (
+      symbol === 'vk_icdGetInstanceProcAddr' ||
+      symbol === 'vk_icdNegotiateLoaderICDInterfaceVersion' ||
+      symbol === 'vkGetInstanceProcAddr'
+    ) {
+      return true;
+    }
   }
   return false;
 }

@@ -84,7 +84,11 @@ it('closes the channel if a queued message or disconnect fails', async () => {
     send: vi.fn<(value: import('../src/speech_local_protocol').LocalResponse) => void>(),
     close,
   };
-  attachGpuWorker(channel, ['/trusted/loader', 'a'.repeat(64), '/model', '/trusted/driver', 'b'.repeat(64), '42', '99'], { load: vi.fn(), verify: vi.fn(), verifyDriver: vi.fn() });
+  attachGpuWorker(channel, ['/trusted/loader', 'a'.repeat(64), '/model', '/trusted/driver', 'b'.repeat(64), '42', '99'], {
+    load: vi.fn(),
+    verify: vi.fn(),
+    verifyDriver: vi.fn(),
+  });
   fake.receive.mockRejectedValue(new Error('private'));
   handlers.get('message')?.({});
   handlers.get('disconnect')?.(undefined);
@@ -114,11 +118,15 @@ it('turns a post-synthesis loader mismatch into a fatal protocol failure', async
     tokenize: () => ({ dims: [1] }),
     generate: () => Promise.resolve({ samples: new Float32Array([1]), rate: 24_000 }),
   };
-  attachGpuWorker({ on: () => {}, send, close: () => {} }, ['/trusted/loader', 'a'.repeat(64), '/model', '/trusted/driver', 'b'.repeat(64), '42', '99'], {
-    load: () => Promise.resolve({ engine, dispose: () => Promise.resolve() }),
-    verify,
-    verifyDriver: vi.fn().mockResolvedValue(true),
-  });
+  attachGpuWorker(
+    { on: () => {}, send, close: () => {} },
+    ['/trusted/loader', 'a'.repeat(64), '/model', '/trusted/driver', 'b'.repeat(64), '42', '99'],
+    {
+      load: () => Promise.resolve({ engine, dispose: () => Promise.resolve() }),
+      verify,
+      verifyDriver: vi.fn().mockResolvedValue(true),
+    },
+  );
   const value: unknown = await fake.load?.('/model');
   if (!isEngine(value)) throw new Error('Missing engine');
   await expect(value.engine.generate({ dims: [1] }, 'af_heart', 1)).rejects.toThrow('GPU loader verification failed.');
@@ -126,19 +134,26 @@ it('turns a post-synthesis loader mismatch into a fatal protocol failure', async
   expect(send).toHaveBeenCalledWith({ type: 'failure', version: 1, epoch: 1, id: 1, part: 0, category: 'protocol' });
 });
 
-
 it('fails closed before emitting PCM if the mapped driver changes after initialization', async () => {
   const send = vi.fn<(value: import('../src/speech_local_protocol').LocalResponse) => void>();
   const verifyDriver = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
-  const engine = { phonemize: () => Promise.resolve('a'), tokenize: () => ({ dims: [1] }),
-    generate: () => Promise.resolve({ samples: new Float32Array([1]), rate: 24_000 }) };
-  attachGpuWorker({ on: () => {}, send, close: () => {} },
+  const engine = {
+    phonemize: () => Promise.resolve('a'),
+    tokenize: () => ({ dims: [1] }),
+    generate: () => Promise.resolve({ samples: new Float32Array([1]), rate: 24_000 }),
+  };
+  attachGpuWorker(
+    { on: () => {}, send, close: () => {} },
     ['/trusted/loader', 'a'.repeat(64), '/model', '/trusted/driver', 'b'.repeat(64), '42', '99'],
-    { load: () => Promise.resolve({ engine, dispose: () => Promise.resolve() }), verify: vi.fn().mockResolvedValue(true), verifyDriver });
+    { load: () => Promise.resolve({ engine, dispose: () => Promise.resolve() }), verify: vi.fn().mockResolvedValue(true), verifyDriver },
+  );
   const value: unknown = await fake.load?.('/model');
   if (!isEngine(value)) throw new Error('Missing engine');
   await expect(value.engine.generate({ dims: [1] }, 'af_heart', 1)).rejects.toThrow();
   fake.post?.({ type: 'failure', version: 1, epoch: 1, id: 1, part: 0, category: 'synthesis' });
   expect(send).toHaveBeenCalledWith(expect.objectContaining({ category: 'protocol' }));
-  expect(verifyDriver).toHaveBeenCalledWith({ path: '/trusted/driver', sha256: 'b'.repeat(64), device: '42', inode: '99' }, '/trusted/loader');
+  expect(verifyDriver).toHaveBeenCalledWith(
+    { path: '/trusted/driver', sha256: 'b'.repeat(64), device: '42', inode: '99' },
+    '/trusted/loader',
+  );
 });

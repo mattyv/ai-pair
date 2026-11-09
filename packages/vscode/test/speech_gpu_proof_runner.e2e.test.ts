@@ -11,8 +11,16 @@ const capability = {
   executablePath: '/runtime/node',
   loaderPath: '/system/libvulkan.so',
   loaderSha256: 'a'.repeat(64),
-  driverPath: '/driver/lib.so', driverSha256: 'b'.repeat(64), driverDevice: '42', driverInode: '99',
-  environment: { LANG: 'C' as const, VK_DRIVER_FILES: '/driver/icd.json', VK_LOADER_LAYERS_DISABLE: '~all~' as const, LD_PRELOAD: '/system/libvulkan.so' },
+  driverPath: '/driver/lib.so',
+  driverSha256: 'b'.repeat(64),
+  driverDevice: '42',
+  driverInode: '99',
+  environment: {
+    LANG: 'C' as const,
+    VK_DRIVER_FILES: '/driver/icd.json',
+    VK_LOADER_LAYERS_DISABLE: '~all~' as const,
+    LD_PRELOAD: '/system/libvulkan.so',
+  },
 };
 beforeEach(() => {
   vi.useFakeTimers();

@@ -33,10 +33,14 @@ export function attachGpuWorker<T extends SpeechTokens>(
     !path.isAbsolute(loaderPath) ||
     loaderSha256 === undefined ||
     !/^[a-f0-9]{64}$/.test(loaderSha256) ||
-    driverPath === undefined || !path.isAbsolute(driverPath) ||
-    driverSha256 === undefined || !/^[a-f0-9]{64}$/.test(driverSha256) ||
-    driverDevice === undefined || !/^[0-9]+$/.test(driverDevice) ||
-    driverInode === undefined || !/^[0-9]+$/.test(driverInode)
+    driverPath === undefined ||
+    !path.isAbsolute(driverPath) ||
+    driverSha256 === undefined ||
+    !/^[a-f0-9]{64}$/.test(driverSha256) ||
+    driverDevice === undefined ||
+    !/^[0-9]+$/.test(driverDevice) ||
+    driverInode === undefined ||
+    !/^[0-9]+$/.test(driverInode)
   ) {
     throw new Error('Invalid GPU loader identity.');
   }
@@ -49,8 +53,12 @@ export function attachGpuWorker<T extends SpeechTokens>(
         { path: loaderPath, sha256: loaderSha256 },
         {
           ...dependencies,
-          verify: async (loader, digest) => (await dependencies.verify(loader, digest)) &&
-            (await dependencies.verifyDriver({ path: driverPath, sha256: driverSha256, device: driverDevice, inode: driverInode }, loaderPath)),
+          verify: async (loader, digest) =>
+            (await dependencies.verify(loader, digest)) &&
+            (await dependencies.verifyDriver(
+              { path: driverPath, sha256: driverSha256, device: driverDevice, inode: driverInode },
+              loaderPath,
+            )),
           proofFailed: () => {
             loaderCompromised = true;
           },

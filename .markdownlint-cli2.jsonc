@@ -26,5 +26,5 @@
   },
   // Skip what git ignores, such as the VS Code the integration test downloads into .vscode-test/.
   "gitignore": true,
-  "ignores": ["node_modules/**", "blueprints/notes/**"],
+  "ignores": ["node_modules/**", "blueprints/notes/**", "packages/vscode/native/vulkan/LICENSE.md"],
 }

@@ -50,8 +50,16 @@ const capability = {
   executablePath: '/verified/node',
   loaderPath: '/verified/libvulkan.so',
   loaderSha256: 'a'.repeat(64),
-  driverPath: '/verified/driver.so', driverSha256: 'b'.repeat(64), driverDevice: '42', driverInode: '99',
-  environment: { LANG: 'C' as const, VK_DRIVER_FILES: '/verified/icd.json', VK_LOADER_LAYERS_DISABLE: '~all~' as const, LD_PRELOAD: '/verified/libvulkan.so' },
+  driverPath: '/verified/driver.so',
+  driverSha256: 'b'.repeat(64),
+  driverDevice: '42',
+  driverInode: '99',
+  environment: {
+    LANG: 'C' as const,
+    VK_DRIVER_FILES: '/verified/icd.json',
+    VK_LOADER_LAYERS_DISABLE: '~all~' as const,
+    LD_PRELOAD: '/verified/libvulkan.so',
+  },
 };
 
 beforeEach(() => {
@@ -120,7 +128,13 @@ it('starts only the isolated worker with an allowlisted environment', () => {
       execPath: '/verified/node',
       serialization: 'json',
       execArgv: [],
-      env: { LANG: 'C', VK_DRIVER_FILES: '/verified/icd.json', VK_LOADER_LAYERS_DISABLE: '~all~', LD_PRELOAD: '/verified/libvulkan.so', ELECTRON_RUN_AS_NODE: '1' },
+      env: {
+        LANG: 'C',
+        VK_DRIVER_FILES: '/verified/icd.json',
+        VK_LOADER_LAYERS_DISABLE: '~all~',
+        LD_PRELOAD: '/verified/libvulkan.so',
+        ELECTRON_RUN_AS_NODE: '1',
+      },
     }),
   );
 });
@@ -192,8 +206,11 @@ it.each([
 ] as const)('reports only the fixed GPU process close category', (code, signal, category) => {
   const events = new Map<string, Array<(...args: unknown[]) => void>>();
   fake.fork.mockReturnValue({
-    on: (event: string, callback: (...args: unknown[]) => void) => { events.set(event, [...(events.get(event) ?? []), callback]); },
-    send: vi.fn(), kill: vi.fn(),
+    on: (event: string, callback: (...args: unknown[]) => void) => {
+      events.set(event, [...(events.get(event) ?? []), callback]);
+    },
+    send: vi.fn(),
+    kill: vi.fn(),
   });
   const detail = vi.fn<(value: import('../src/speech_gpu_client').GpuWorkerDetail) => void>();
   createGpuSynthesisClient({ listener, capability, detail });
@@ -205,12 +222,25 @@ it.each([
 });
 
 it('reports safe startup phases and ignores diagnostic callback errors', () => {
-  const detail = vi.fn((value: import('../src/speech_gpu_client').GpuWorkerDetail) => { void value; throw new Error('private diagnostic failure'); });
+  const detail = vi.fn((value: import('../src/speech_gpu_client').GpuWorkerDetail) => {
+    void value;
+    throw new Error('private diagnostic failure');
+  });
   const client = createGpuSynthesisClient({ listener, capability, detail });
   client.load('/verified/model');
   void client.synthesize({ id: 1, part: 0, final: true, text: 'safe', voice: 'af_heart', speed: 1 });
   const options: unknown = fake.LocalSynthesisClient.mock.calls[0]?.[0];
-  if (typeof options !== 'object' || options === null || !('listener' in options) || typeof options.listener !== 'object' || options.listener === null || !('ready' in options.listener) || typeof options.listener.ready !== 'function') throw new Error('No listener');
+  if (
+    typeof options !== 'object' ||
+    options === null ||
+    !('listener' in options) ||
+    typeof options.listener !== 'object' ||
+    options.listener === null ||
+    !('ready' in options.listener) ||
+    typeof options.listener.ready !== 'function'
+  ) {
+    throw new Error('No listener');
+  }
   if (!isSpawn(options.listener.ready)) throw new Error('No ready callback');
   const ready = options.listener.ready;
   ready('');
@@ -221,8 +251,13 @@ it('reports safe startup phases and ignores diagnostic callback errors', () => {
 it('reports fixed spawn and IPC errors without exposing their text', () => {
   const callbacks = new Map<string, (...args: unknown[]) => void>();
   fake.fork.mockReturnValue({
-    on: (event: string, callback: (...args: unknown[]) => void) => { callbacks.set(event, callback); },
-    send: (message: unknown, callback: (error: Error | null) => void) => { void message; callback(new Error('private IPC detail')); },
+    on: (event: string, callback: (...args: unknown[]) => void) => {
+      callbacks.set(event, callback);
+    },
+    send: (message: unknown, callback: (error: Error | null) => void) => {
+      void message;
+      callback(new Error('private IPC detail'));
+    },
     kill: vi.fn(),
   });
   const detail = vi.fn<(value: import('../src/speech_gpu_client').GpuWorkerDetail) => void>();
