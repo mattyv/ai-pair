@@ -51,6 +51,37 @@ const fakes = vi.hoisted(() => ({
   installed: vi.fn().mockResolvedValue(undefined),
   setup: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock('../../vscode/src/speech_compute', () => ({
+  SpeechCompute: class {
+    private value: import('../../vscode/src/speech_compute_types').SpeechComputeState;
+    constructor(
+      requested: unknown,
+      private readonly probe: () => Promise<import('../../vscode/src/speech_compute_types').GpuCheck>,
+      private readonly changed: (value: import('../../vscode/src/speech_compute_types').SpeechComputeState) => void,
+    ) {
+      this.value = {
+        requestedMode: requested === 'auto' || requested === 'gpu' ? requested : 'cpu',
+        actualBackend: 'none',
+        gpuCheck: { phase: 'idle' },
+      };
+    }
+    state(): import('../../vscode/src/speech_compute_types').SpeechComputeState {
+      return this.value;
+    }
+    select(requestedMode: import('../../vscode/src/speech_compute_types').SpeechComputeMode): void {
+      this.value = { ...this.value, requestedMode };
+      this.changed(this.value);
+    }
+    actual(actualBackend: import('../../vscode/src/speech_compute_types').SpeechComputeBackend): void {
+      this.value = { ...this.value, actualBackend };
+      this.changed(this.value);
+    }
+    async check(): Promise<void> {
+      this.value = { ...this.value, gpuCheck: await this.probe() };
+      this.changed(this.value);
+    }
+  },
+}));
 vi.mock('../../vscode/src/speech_readiness', () => ({ speechReady: fakes.readiness }));
 vi.mock('../../vscode/src/speech_platform', () => ({ localSpeechPlatform: fakes.platform }));
 vi.mock('vscode', () => ({
@@ -198,6 +229,7 @@ function harness(capabilities?: () => Promise<import('../../audio-native/src').A
     showSpeechOutputCatalog: vi.fn(),
     showSpeechCatalog: vi.fn(),
     showSpeechSettings: vi.fn(),
+    showSpeechComputeState: vi.fn(),
     showSpeechStatus: vi.fn(),
     refreshSpeechSupport: vi.fn(),
   };
@@ -619,4 +651,19 @@ it('passes local readiness facts to the readiness check', async () => {
   expect(facts?.output()).toBe(true);
   host.dispose();
   expect(facts?.desktop()).toBe(false);
+});
+
+it('persists the compute choice and runs an explicit GPU check without assuming readiness', async () => {
+  const { host, panel } = harness();
+  expect(host.panelSpeech.computeState().requestedMode).toBe('cpu');
+  host.panelSpeech.computeMode('gpu');
+  expect(fakes.cancel).toHaveBeenCalled();
+  await vi.waitFor(() => {
+    expect(fakes.update).toHaveBeenCalledWith('speech.computeMode', 'gpu', 1);
+  });
+  host.panelSpeech.checkGpuSetup();
+  await vi.waitFor(() => {
+    expect(host.panelSpeech.computeState().gpuCheck).toEqual({ phase: 'unavailable', reason: 'runtime_missing' });
+  });
+  expect(panel.showSpeechComputeState).toHaveBeenCalled();
 });

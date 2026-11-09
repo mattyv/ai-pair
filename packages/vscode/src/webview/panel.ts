@@ -90,6 +90,9 @@ const ui = {
   speechSpeed: $('speech-speed', HTMLSelectElement),
   speechListeningSpeed: $('speech-listening-speed', HTMLSelectElement),
   speechSetup: $('speech-setup', HTMLButtonElement),
+  speechCompute: $('speech-compute', HTMLSelectElement),
+  gpuStatus: $('gpu-status', HTMLElement),
+  gpuCheck: $('gpu-check', HTMLButtonElement),
   speechModelStatus: $('speech-model-status', HTMLElement),
   speechPreview: $('speech-preview', HTMLButtonElement),
   speechStop: $('speech-stop', HTMLButtonElement),
@@ -1005,6 +1008,13 @@ ui.speechEnabled.addEventListener('change', saveSpeechSettings);
 ui.speechVoice.addEventListener('change', saveSpeechSettings);
 ui.speechSpeed.addEventListener('change', saveSpeechSettings);
 ui.speechListeningSpeed.addEventListener('change', saveSpeechSettings);
+ui.speechCompute.addEventListener('change', () => {
+  const value = ui.speechCompute.value;
+  if (value === 'cpu' || value === 'auto' || value === 'gpu') vscode.postMessage({ type: 'speechComputeMode', value });
+});
+ui.gpuCheck.addEventListener('click', () => {
+  vscode.postMessage({ type: 'checkGpuSetup' });
+});
 ui.speechSetup.addEventListener('click', () => {
   vscode.postMessage({ type: 'speechSetup' });
 });
@@ -1053,6 +1063,39 @@ function handle(message: ToPanel): void {
       speechCanceled = false;
       speechAudio.page(message.pageId);
       return;
+    case 'speechComputeState': {
+      const { requestedMode, actualBackend, gpuCheck } = message.value;
+      const reasons = {
+        unsupported: 'GPU speech is unsupported on this host.',
+        runtime_missing: 'GPU runtime is missing.',
+        untrusted_driver: 'GPU driver could not be trusted.',
+        no_hardware: 'No compatible GPU was found.',
+        inconclusive: 'GPU availability could not be confirmed.',
+        model_missing: 'GPU model is missing.',
+        probe_failed: 'GPU check failed.',
+        timeout: 'GPU check timed out.',
+      };
+      ui.speechCompute.value = requestedMode;
+      ui.gpuCheck.disabled = gpuCheck.phase === 'checking';
+      const status =
+        gpuCheck.phase === 'unavailable'
+          ? reasons[gpuCheck.reason]
+          : gpuCheck.phase === 'ready'
+            ? 'GPU setup is ready.'
+            : gpuCheck.phase === 'checking'
+              ? 'Checking GPU setup...'
+              : 'GPU setup has not been checked.';
+      const progress = gpuCheck.phase === 'checking' ? gpuCheck.progress : undefined;
+      const counts =
+        progress?.current === undefined
+          ? ''
+          : progress.total === undefined
+            ? `: ${progress.current}`
+            : `: ${progress.current} of ${progress.total}`;
+      const detail = progress === undefined ? '' : ` ${progress.stage}${counts}.`;
+      ui.gpuStatus.textContent = `Requested: ${requestedMode.toUpperCase()}. Actual backend: ${actualBackend.toUpperCase()}. ${status}${detail}`;
+      return;
+    }
     case 'speechSupport':
       speechSupported = message.supported;
       ui.speechSetup.disabled = !message.supported;

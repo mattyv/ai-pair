@@ -66,6 +66,7 @@ it('keeps speech disabled by default and retains a missing local device', async 
     showSpeechOutputCatalog: vi.fn(),
     showSpeechCatalog: vi.fn(),
     showSpeechSettings: vi.fn(),
+    showSpeechComputeState: vi.fn(),
     showSpeechStatus: vi.fn(),
     refreshSpeechSupport: vi.fn(),
   };

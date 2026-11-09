@@ -11,6 +11,8 @@ import { SpeechOutputPreferences, type OutputPreferenceView } from '../../vscode
 import { speechRuntimeAvailable } from '../../vscode/src/speech_runtime_status';
 import { localSpeechPlatform } from '../../vscode/src/speech_platform';
 import { SpeechService } from '../../vscode/src/speech_service';
+import { SpeechCompute } from '../../vscode/src/speech_compute';
+import type { SpeechComputeState } from '../../vscode/src/speech_compute_types';
 import { speechReady } from '../../vscode/src/speech_readiness';
 import { SpeechTempoClient } from '../../vscode/src/speech_tempo_client';
 import { installedSpeechModel, setupSpeech, speechModelStatus } from '../../vscode/src/speech_setup';
@@ -23,6 +25,7 @@ export interface SpeechHostPanel {
   showSpeechOutputCatalog(value: OutputPreferenceView): void;
   showSpeechCatalog(value: CatalogView): void;
   showSpeechSettings(value: SpeechSettings): void;
+  showSpeechComputeState(value: SpeechComputeState): void;
   showSpeechStatus(id: number, state: SpeechState, message?: string): void;
   refreshSpeechSupport(): void;
 }
@@ -85,6 +88,16 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
   let previewCapture = false;
   let previewId: number | undefined;
   let previewSequence = 0;
+  const compute = new SpeechCompute(
+    config().get('speech.computeMode'),
+    async () => ({ phase: 'unavailable', reason: 'runtime_missing' }),
+    (value) => {
+      options.panel()?.showSpeechComputeState(value);
+    },
+  );
+  let computeGeneration = 0;
+  let computeTail: Promise<void> = Promise.resolve();
+  let computePending = false;
   let previewProvider: 'kokoro' | 'elevenlabs' = 'kokoro';
 
   function stored(): SpeechSettings {
@@ -292,6 +305,10 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     kokoroSupported: platform,
     cloud,
     settings: settings.get,
+    computeMode: () => compute.state().requestedMode,
+    actualBackend: (value) => {
+      compute.actual(value);
+    },
     output,
   });
   void speechRuntimeAvailable(runtimeDirectory).then((available) => {
@@ -317,6 +334,30 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     () => {},
   );
   const panelSpeech: PanelWiring['speech'] = {
+    computeState: () => compute.state(),
+    computeMode: (value) => {
+      speech.cancel();
+      compute.select(value);
+      const current = ++computeGeneration;
+      computePending = true;
+      const save = computeTail.then(() => config().update('speech.computeMode', value, vscode.ConfigurationTarget.Global));
+      computeTail = save.catch(() => {});
+      void save.then(
+        () => {
+          if (current === computeGeneration) computePending = false;
+        },
+        () => {
+          if (current !== computeGeneration) return;
+          computePending = false;
+          const stored: unknown = config().get('speech.computeMode');
+          compute.select(stored === 'auto' || stored === 'gpu' ? stored : 'cpu');
+          void vscode.window.showErrorMessage('Could not save speech compute mode.');
+        },
+      );
+    },
+    checkGpuSetup: () => {
+      void compute.check();
+    },
     outputView: () => preferences.view(),
     outputReady,
     outputRetired: () => {},
@@ -380,6 +421,14 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     }),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (!event.affectsConfiguration('aiPair.speech')) return;
+      if (!computePending) {
+        const mode: unknown = config().get('speech.computeMode');
+        const next = mode === 'auto' || mode === 'gpu' ? mode : 'cpu';
+        if (next !== compute.state().requestedMode) {
+          speech.cancel();
+          compute.select(next);
+        }
+      }
       const current = settings.get();
       // specs/ProviderChoice.tla, External: persistence echoes cannot override a pending choice.
       if (pending === undefined) {

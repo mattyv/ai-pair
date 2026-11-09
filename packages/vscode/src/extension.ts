@@ -28,6 +28,7 @@ import { installedSpeechModel, setupSpeech, speechModelStatus } from './speech_s
 import { speechRuntimeAvailable } from './speech_runtime_status';
 import { localSpeechPlatform } from './speech_platform';
 import { speechListeningRate, type SpeechSettings } from './speech_types';
+import { SpeechCompute } from './speech_compute';
 import type { SpeechState } from './panel_messages';
 import type { OutsideChanges } from './outside';
 import { watchOutside } from './outside_watch';
@@ -219,6 +220,16 @@ export function activate(context: vscode.ExtensionContext): Api {
       void config().update(CODE_PLAYBACK, value, vscode.ConfigurationTarget.Global);
     },
   };
+  const compute = new SpeechCompute(
+    config().get('speech.computeMode'),
+    async () => ({ phase: 'unavailable', reason: 'runtime_missing' }),
+    (value) => {
+      panel.showSpeechComputeState(value);
+    },
+  );
+  let computeGeneration = 0;
+  let computeTail: Promise<void> = Promise.resolve();
+  let computePending = false;
   let pendingSpeechSettings: SpeechSettings | undefined;
   let speechSaveGeneration = 0;
   let speechSaveTail: Promise<void> = Promise.resolve();
@@ -398,6 +409,30 @@ export function activate(context: vscode.ExtensionContext): Api {
         await vscode.env.clipboard.writeText(JSON.stringify({ ...snapshot, localSpeech }));
       },
       speech: {
+        computeState: () => compute.state(),
+        computeMode: (value) => {
+          speech.cancel();
+          compute.select(value);
+          const current = ++computeGeneration;
+          computePending = true;
+          const save = computeTail.then(() => config().update('speech.computeMode', value, vscode.ConfigurationTarget.Global));
+          computeTail = save.catch(() => {});
+          void save.then(
+            () => {
+              if (current === computeGeneration) computePending = false;
+            },
+            () => {
+              if (current !== computeGeneration) return;
+              computePending = false;
+              const stored: unknown = config().get('speech.computeMode');
+              compute.select(stored === 'auto' || stored === 'gpu' ? stored : 'cpu');
+              void vscode.window.showErrorMessage('Could not save speech compute mode.');
+            },
+          );
+        },
+        checkGpuSetup: () => {
+          void compute.check();
+        },
         outputView: () => outputPreferences.view(),
         outputReady: () => outputPreferences.ready(),
         outputRetired: (id, pageId) => {
@@ -555,6 +590,10 @@ export function activate(context: vscode.ExtensionContext): Api {
     localDesktop: cloudSupported,
     kokoroSupported: localSpeechSupported,
     settings: speechSettings.get,
+    computeMode: () => compute.state().requestedMode,
+    actualBackend: (value) => {
+      compute.actual(value);
+    },
     output: outputRouter,
   });
   const narration: NarrationPort = {
@@ -738,6 +777,14 @@ export function activate(context: vscode.ExtensionContext): Api {
     editor,
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('aiPair.speech')) {
+        if (!computePending) {
+          const mode: unknown = config().get('speech.computeMode');
+          const next = mode === 'auto' || mode === 'gpu' ? mode : 'cpu';
+          if (next !== compute.state().requestedMode) {
+            speech.cancel();
+            compute.select(next);
+          }
+        }
         const current = speechSettings.get();
         // specs/ProviderChoice.tla, External: persistence echoes cannot undo a pending choice.
         if (pendingSpeechSettings === undefined) {

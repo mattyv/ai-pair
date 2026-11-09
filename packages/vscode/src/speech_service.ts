@@ -26,6 +26,7 @@ import {
 import { speechSegments } from './speech_segments';
 import { decodeSpeechWav, encodeTempoWav } from './speech_tempo_pcm';
 import type { SpeechTempoRate } from './speech_tempo';
+import type { SpeechComputeBackend, SpeechComputeMode } from './speech_compute_types';
 
 /** The panel operations used by local speech; audio is never added to history. */
 export interface SpeechOutput {
@@ -65,6 +66,10 @@ export interface SpeechServiceOptions {
   createLocal?: (listener: LocalListener) => LocalSynthesisPort;
   output: SpeechOutput;
   settings(): SpeechSettings;
+  /** Samples the requested local compute mode when speech is admitted. */
+  computeMode?: () => SpeechComputeMode;
+  /** Reports the local worker's observed backend. */
+  actualBackend?: (value: SpeechComputeBackend) => void;
 }
 
 /** An acknowledgement from the page that received a particular generation. */
@@ -169,6 +174,11 @@ export class SpeechService implements NarrationPort {
     const provider = settings.provider ?? 'kokoro';
     if (provider !== 'kokoro' && provider !== 'elevenlabs') {
       this.options.output.status(id, 'unavailable', 'Choose a supported speech provider.');
+      return Promise.resolve();
+    }
+    // specs/GpuSetup.tla, ExplicitNoFallback: explicit GPU must never fall back to the CPU worker.
+    if (provider === 'kokoro' && this.options.computeMode?.() === 'gpu') {
+      this.options.output.status(id, 'unavailable', 'GPU speech is not available. Check GPU setup.');
       return Promise.resolve();
     }
     const voice = SPEECH_VOICES.find((candidate) => candidate === settings.voice);
@@ -371,6 +381,7 @@ export class SpeechService implements NarrationPort {
 
   /** The client reported valid capabilities: records the checkpoint and starts a unit that waits for it. */
   private localReady(): void {
+    this.options.actualBackend?.('cpu');
     const current = this.current;
     this.localDiagnostic('ready');
     if (current !== undefined && current.phase === 'loading') this.synthesize(current);
@@ -392,6 +403,7 @@ export class SpeechService implements NarrationPort {
 
   /** The worker was retired or exited: the unit it served is over, and nothing is replayed. */
   private localRetired(reason: LocalSpeechFailureReason): void {
+    this.options.actualBackend?.('none');
     const current = this.current;
     if (current?.provider === 'kokoro') {
       this.localDiagnostic('failed', reason);

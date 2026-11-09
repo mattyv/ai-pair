@@ -189,6 +189,15 @@ it('offers local speech setup, preferences, preview and stop in Settings', () =>
   expect(page.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute('content')).toContain('media-src blob:');
 });
 
+it('offers Kokoro compute choices and an explicit GPU setup check in Settings', () => {
+  const page = new window.DOMParser().parseFromString(panelHtml('source', 'style', 'script'), 'text/html');
+  const select = page.querySelector('[data-ui="speech-compute"]');
+  expect(Array.from(select?.querySelectorAll('option') ?? []).map((option) => option.value)).toEqual(['cpu', 'auto', 'gpu']);
+  expect(select?.closest('[data-ui="speech-local"]')).not.toBeNull();
+  expect(page.querySelector('[data-ui="gpu-status"]')?.getAttribute('role')).toBe('status');
+  expect(page.querySelector('[data-ui="gpu-check"]')?.textContent).toContain('Check GPU setup');
+});
+
 it('offers explicit cloud controls without exposing a key input', () => {
   const markup = panelHtml('vscode-resource:', 'panel.css', 'panel.js');
   expect(markup).toContain('data-ui="speech-provider"');

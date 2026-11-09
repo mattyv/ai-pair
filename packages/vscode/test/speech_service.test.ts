@@ -160,7 +160,7 @@ function newLocal(): LocalDouble {
 }
 
 /** Makes a service with a live page and local preferences. */
-function harness(enabled = true) {
+function harness(enabled = true, computeMode: () => 'cpu' | 'auto' | 'gpu' = () => 'cpu') {
   Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
   Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
   const output = mock<SpeechOutput>();
@@ -173,6 +173,7 @@ function harness(enabled = true) {
     localDesktop: true,
     output,
     createLocal: double.factory,
+    computeMode,
     settings: () => ({ enabled, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
   });
   return { service, output, local: double };
@@ -1985,4 +1986,35 @@ describe('listening-speed processing', () => {
     await finished;
     service.dispose();
   });
+});
+
+it('ExplicitNoFallback: refuses explicit GPU before starting a CPU worker', async () => {
+  const { service, output, local } = harness(true, () => 'gpu');
+  await service.speak('Hello.');
+  expect(local.port.load).not.toHaveBeenCalled();
+  expect(local.port.synthesize).not.toHaveBeenCalled();
+  expect(output.status).toHaveBeenCalledWith(expect.any(Number), 'unavailable', 'GPU speech is not available. Check GPU setup.');
+});
+
+it('reports the CPU backend when its worker becomes ready and clears it on retirement', async () => {
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
+  const backend = vi.fn();
+  const engine = newLocal();
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    createLocal: engine.factory,
+    actualBackend: backend,
+    output: mock<SpeechOutput>(),
+    settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+  });
+  const speech = service.speak('Hello.');
+  await settle();
+  engine.listener?.ready();
+  expect(backend).toHaveBeenCalledWith('cpu');
+  engine.listener?.retired('worker_exit');
+  expect(backend).toHaveBeenLastCalledWith('none');
+  await speech;
 });

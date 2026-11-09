@@ -187,6 +187,17 @@
           "description": "Speech provider. ElevenLabs sends selected narration and previews to its service.",
           "scope": "application"
         },
+        "aiPair.speech.computeMode": {
+          "type": "string",
+          "enum": [
+            "cpu",
+            "auto",
+            "gpu"
+          ],
+          "default": "cpu",
+          "description": "Kokoro compute mode. GPU requires verified local setup.",
+          "scope": "application"
+        },
         "aiPair.speech.elevenLabsVoice": {
           "type": "string",
           "default": "",

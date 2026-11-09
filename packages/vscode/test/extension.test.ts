@@ -270,6 +270,7 @@ const fakes = vi.hoisted(() => {
     readonly showReplyBehavior = vi.fn();
     readonly showCodePlayback = vi.fn();
     readonly showSpeechSettings = vi.fn<(value: SpeechSettings) => void>();
+    readonly showSpeechComputeState = vi.fn();
     readonly showSpeechKeyStatus = vi.fn();
     readonly showSpeechCatalog = vi.fn();
     readonly showSpeechOutputCatalog = vi.fn();
@@ -521,6 +522,37 @@ vi.mock('../src/editor', () => ({ VsCodeEditor: fakes.FakeEditor }));
 vi.mock('../src/diagnostics', () => ({ Diagnostics: fakes.FakeDiagnostics }));
 vi.mock('../src/speech_runtime_status', () => ({ speechRuntimeAvailable: vi.fn(() => Promise.resolve(false)) }));
 vi.mock('../src/speech_readiness', () => ({ speechReady: vi.fn().mockResolvedValue(false) }));
+vi.mock('../src/speech_compute', () => ({
+  SpeechCompute: class {
+    private value: import('../src/speech_compute_types').SpeechComputeState;
+    constructor(
+      requested: unknown,
+      private readonly probe: () => Promise<import('../src/speech_compute_types').GpuCheck>,
+      private readonly changed: (value: import('../src/speech_compute_types').SpeechComputeState) => void,
+    ) {
+      this.value = {
+        requestedMode: requested === 'auto' || requested === 'gpu' ? requested : 'cpu',
+        actualBackend: 'none',
+        gpuCheck: { phase: 'idle' },
+      };
+    }
+    state(): import('../src/speech_compute_types').SpeechComputeState {
+      return this.value;
+    }
+    select(requestedMode: import('../src/speech_compute_types').SpeechComputeMode): void {
+      this.value = { ...this.value, requestedMode };
+      this.changed(this.value);
+    }
+    actual(actualBackend: import('../src/speech_compute_types').SpeechComputeBackend): void {
+      this.value = { ...this.value, actualBackend };
+      this.changed(this.value);
+    }
+    async check(): Promise<void> {
+      this.value = { ...this.value, gpuCheck: await this.probe() };
+      this.changed(this.value);
+    }
+  },
+}));
 vi.mock('../src/speech_service', () => ({ SpeechService: fakes.FakeSpeech }));
 vi.mock('../src/speech_elevenlabs', () => ({ ElevenLabsClient: fakes.FakeCloudClient }));
 vi.mock('../src/speech_credentials', () => ({ SpeechCredentials: fakes.FakeCredentials }));
@@ -1839,4 +1871,20 @@ it('constructs the legacy listening-speed worker from the fixed extension path',
   tempoPaths.length = 0;
   activated();
   expect(tempoPaths).toEqual(['/ext/dist/speech/tempo_worker.mjs']);
+});
+
+it('persists compute mode and keeps an unavailable GPU check fail-closed', async () => {
+  const h = activated();
+  const compute = h.panel.wiring.speech;
+  expect(compute.computeState().requestedMode).toBe('cpu');
+  compute.computeMode('gpu');
+  expect(compute.computeState().requestedMode).toBe('gpu');
+  await vi.waitFor(() => {
+    expect(fakes.settings.get('speech.computeMode')).toBe('gpu');
+  });
+  compute.checkGpuSetup();
+  await vi.waitFor(() => {
+    expect(compute.computeState().gpuCheck).toEqual({ phase: 'unavailable', reason: 'runtime_missing' });
+  });
+  expect(h.panel.showSpeechComputeState).toHaveBeenCalled();
 });

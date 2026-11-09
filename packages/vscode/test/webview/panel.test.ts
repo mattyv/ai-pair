@@ -2349,3 +2349,63 @@ it('saves listening speed independently of both provider synthesis speeds', () =
     },
   });
 });
+
+it('shows the requested and actual Kokoro compute backend and starts an explicit check', () => {
+  send({
+    type: 'speechComputeState',
+    value: { requestedMode: 'auto', actualBackend: 'cpu', gpuCheck: { phase: 'unavailable', reason: 'no_hardware' } },
+  });
+  expect(text('gpu-status')).toContain('CPU');
+  expect(text('gpu-status')).toContain('No compatible GPU');
+  expect(element('speech-compute')).toHaveProperty('value', 'auto');
+  click(element('gpu-check'));
+  expect(posted()).toContainEqual({ type: 'checkGpuSetup' });
+});
+
+it('renders GPU checks and allows only the supported compute choices', () => {
+  const select = ui('speech-compute');
+  if (!(select instanceof window.HTMLSelectElement)) throw new TypeError('Missing compute select');
+  for (const value of ['cpu', 'auto', 'gpu']) {
+    select.value = value;
+    select.dispatchEvent(new window.Event('change'));
+    expect(posted()).toContainEqual({ type: 'speechComputeMode', value });
+  }
+  send({ type: 'speechComputeState', value: { requestedMode: 'gpu', actualBackend: 'none', gpuCheck: { phase: 'checking' } } });
+  expect(text('gpu-status')).toContain('Checking');
+  expect(element('gpu-check')).toHaveProperty('disabled', true);
+  send({ type: 'speechComputeState', value: { requestedMode: 'gpu', actualBackend: 'gpu', gpuCheck: { phase: 'ready' } } });
+  expect(text('gpu-status')).toContain('ready');
+  expect(element('gpu-check')).toHaveProperty('disabled', false);
+  send({ type: 'speechComputeState', value: { requestedMode: 'cpu', actualBackend: 'none', gpuCheck: { phase: 'idle' } } });
+  expect(text('gpu-status')).toContain('not been checked');
+});
+
+it('shows a fixed explanation for every GPU check failure and reports setup progress', () => {
+  const reasons = {
+    unsupported: 'unsupported',
+    runtime_missing: 'runtime is missing',
+    untrusted_driver: 'driver could not be trusted',
+    no_hardware: 'No compatible GPU',
+    inconclusive: 'could not be confirmed',
+    model_missing: 'model is missing',
+    probe_failed: 'check failed',
+    timeout: 'timed out',
+  } as const;
+  for (const reason of Object.keys(reasons) as Array<keyof typeof reasons>) {
+    const explanation = reasons[reason];
+    send({
+      type: 'speechComputeState',
+      value: { requestedMode: 'auto', actualBackend: 'cpu', gpuCheck: { phase: 'unavailable', reason } },
+    });
+    expect(text('gpu-status')).toContain(explanation);
+  }
+  send({
+    type: 'speechComputeState',
+    value: {
+      requestedMode: 'gpu',
+      actualBackend: 'none',
+      gpuCheck: { phase: 'checking', progress: { stage: 'download', current: 2, total: 5 } },
+    },
+  });
+  expect(text('gpu-status')).toContain('download: 2 of 5');
+});
