@@ -2241,7 +2241,10 @@ The model separates admission, asynchronous key reading, dispatch and response.
 It bounds two generations and credential changes; cancellation retains request
 ownership until settlement or timeout. The healthy-key configuration makes
 forward dispatch observable without assuming the network succeeds. Both
-configurations checked 59 states. Mutations disabling provider, key, epoch,
+configurations checked 264 and 251 states, respectively. The diagnostic
+category abstracts `key` as `no_key` at the reporting boundary; `unknown`
+covers unrecognized exceptions. A stale canceled request cannot overwrite a
+newer diagnostic. Mutations disabling provider, key, epoch,
 single-request, gate, cancellation and retry guards violate the corresponding
 safety properties. Disabling admission, dispatch, playback or fair timeout
 violates the respective progress property. Clearing approval on timeout and
@@ -2254,6 +2257,7 @@ violates `NoRetry`; it does not represent supported production behavior.
 | Property | Test |
 |---|---|
 | `SafeSend` | `speech_elevenlabs.test.ts`: sends only the selected unit to the fixed endpoint using the secret header; never calls the provider when the key or voice is missing. |
+| `NoStaleDiagnostic` | `speech_service.test.ts`: does not report a late rejected cloud request after cancellation; replacing stale preservation with `unknown` violates the invariant. |
 | `NoStale` | `speech_service.test.ts`: cancels cloud work when credentials change and discards the late response; aborts a canceled request and ignores its late output without queuing a successor. |
 | `NoOverlap`, `NoRetry` | `speech_service.test.ts`: aborts a canceled request and ignores its late output without queuing a successor; `speech_elevenlabs.test.ts`: times out a stalled request without retrying. |
 | `IndependentGates` | Existing `Narration` gate tests cover the independent reading and approval controls; cloud transport never receives these controls. |
