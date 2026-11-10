@@ -56,6 +56,10 @@ export async function run(): Promise<void> {
   const fetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch');
   const promptDescriptor = Object.getOwnPropertyDescriptor(vscode.window, 'showInputBox');
   const commandDescriptor = Object.getOwnPropertyDescriptor(vscode.commands, 'executeCommand');
+  const realSetTimeout = globalThis.setTimeout;
+  const realClearTimeout = globalThis.clearTimeout;
+  let placementTimerCleared = false;
+  let placementTimer: ReturnType<typeof setTimeout> | undefined;
   assert.ok(fetchDescriptor && promptDescriptor && commandDescriptor);
   const executeCommand = vscode.commands.executeCommand;
   const placement = Promise.withResolvers<unknown>();
@@ -119,8 +123,27 @@ export async function run(): Promise<void> {
         return executeCommand(name, ...args);
       },
     });
+    // Hold the placement deadline while the real controller plays the batches.
+    // The placement owner's own tests cover expiry; this fixture tests pending readiness.
+    globalThis.clearTimeout = (timer) => {
+      if (timer === placementTimer && timer !== undefined) placementTimerCleared = true;
+      realClearTimeout(timer);
+    };
+    Object.defineProperty(globalThis, 'setTimeout', {
+      configurable: true,
+      writable: true,
+      value: (callback: (...args: unknown[]) => void, delay?: number, ...args: unknown[]) => {
+        if (delay === 1500 && placementTimer === undefined) {
+          placementTimer = realSetTimeout(() => {}, 2_147_483_647);
+          globalThis.setTimeout = realSetTimeout;
+          return placementTimer;
+        }
+        return realSetTimeout(callback, delay, ...args);
+      },
+    });
     api = await extension.activate();
     assert.ok(prepareCalled, 'placement boundary was not invoked');
+    assert.ok(placementTimer !== undefined, 'placement deadline was not controlled');
     let placementFinished = false;
     void api.ready.then(() => {
       placementFinished = true;
@@ -128,14 +151,47 @@ export async function run(): Promise<void> {
     api.controller.setSpeed(20);
     api.controller.setReadingSpeed(100);
     await api.controller.start('pending speech readiness');
-    for (let index = 0; index < 3; index++) {
+    for (let index = 0; index < 2; index++) {
       const pending: Report = await api.controller.step([{ say: 'Pending.' }]);
       assert.equal(pending.speechReminder, undefined, 'pending placement must not prompt for speech');
     }
-    assert.equal(placementFinished, false, 'placement must stay pending during the three batches');
+    const reporting = Promise.withResolvers<void>();
+    const trace = api.controller.trace;
+    api.controller.trace = (line) => {
+      trace?.(line);
+      if (line.startsWith('report to step:')) reporting.resolve();
+    };
+    try {
+      let thirdFinished = false;
+      const third = api.controller.step([{ say: 'Pending.' }]).then((result) => {
+        thirdFinished = true;
+        return result;
+      });
+      const timeout = Promise.withResolvers<void>();
+      const timer = setTimeout(() => {
+        timeout.reject(new Error('the third pending report did not reach readiness'));
+      }, 5000);
+      try {
+        await Promise.race([reporting.promise, timeout.promise]);
+      } finally {
+        clearTimeout(timer);
+      }
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve);
+      });
+      assert.equal(placementFinished, false, 'placement must stay pending');
+      assert.equal(thirdFinished, false, 'the readiness check must wait for placement');
+      assert.equal(requests, 0, 'pending readiness must not contact the provider');
+      placement.resolve(undefined);
+      const thirdReport = await third;
+      assert.equal(thirdReport.speechReminder, undefined, 'unavailable speech must not prompt');
+    } finally {
+      api.controller.trace = trace;
+    }
     await api.controller.end();
-    placement.resolve(undefined);
     await api.ready;
+    assert.equal(placementTimerCleared, true, 'placement did not clear the controlled deadline');
+    globalThis.clearTimeout = realClearTimeout;
     Object.defineProperty(vscode.commands, 'executeCommand', commandDescriptor);
     await vscode.commands.executeCommand('aiPair.setElevenLabsKey');
     api.panelMessage({ type: 'speechSettings', value });
@@ -226,6 +282,9 @@ export async function run(): Promise<void> {
     assert.ok(requests >= 6, 'the controlled HTTP boundary did not receive each catalog request');
   } finally {
     placement.resolve(undefined);
+    globalThis.setTimeout = realSetTimeout;
+    globalThis.clearTimeout = realClearTimeout;
+    clearTimeout(placementTimer);
     Object.defineProperty(vscode.commands, 'executeCommand', commandDescriptor);
     Object.defineProperty(vscode.window, 'showInputBox', promptDescriptor);
     try {
