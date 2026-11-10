@@ -546,6 +546,8 @@ Last updated: css, 2026-11-10.
 | `specs/Navigator.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/OutputAdmission.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/OutputAdmission.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
+| `specs/OutputDiscoveryLifecycle.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/OutputDiscoveryLifecycle.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/OutputHandoff.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/OutputHandoff.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
 | `specs/OutputPreference.cfg` | TLC config | - | - | - | - | - | - |

@@ -2374,6 +2374,8 @@ disabled selection and missing fairness violate their corresponding properties.
 The model checks one pending capability request and host disposal, with fair
 completion. TLC checked five distinct states. Removing the disposal guard
 violates `NoLateList`; removing completion fairness violates `Completion`.
+An isolated initial state with a non-Boolean model value for `listed` violates
+`TypeOK` before transitions; temporal properties are omitted for this control.
 
 | Property | Test |
 |---|---|

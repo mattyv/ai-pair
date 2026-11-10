@@ -2,7 +2,10 @@
 
 ## 0.24.1
 
-- Clarify speech model and compute settings, with technical details collapsed.
+-   Restore a saved speech output device on startup without opening Settings,
+    while preserving missing-device reporting and shutdown safety.
+
+-   Clarify speech model and compute settings, with technical details collapsed.
 
 ## 0.24.0
 
