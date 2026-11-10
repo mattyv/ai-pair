@@ -1158,7 +1158,7 @@ export async function run(): Promise<void> {
   let agent = new Client({ name: 'integration', version: '0' });
   await agent.connect(transport);
   const tools = await agent.listTools();
-  assert.deepEqual(tools.tools.map((t) => t.name).toSorted(), ['calibrate', 'end', 'listen', 'read', 'start', 'step']);
+  assert.deepEqual(tools.tools.map((t) => t.name).toSorted(), ['calibrate', 'diagnostics', 'end', 'listen', 'read', 'start', 'step']);
   // Every text part of a tool's result, joined.
   async function toolAll(name: string, args: Record<string, unknown> = {}): Promise<string> {
     const result = await agent.callTool({ name, arguments: args });

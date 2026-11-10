@@ -824,7 +824,10 @@ test('voice status uses cached evidence and opens settings by keyboard at narrow
     type: 'speechSettings',
     value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
   });
-  await post({ type: 'speechComputeState', value: { requestedMode: 'cpu', actualBackend: 'none', gpuCheck: { phase: 'idle' } } });
+  await post({
+    type: 'speechComputeState',
+    value: { requestedMode: 'cpu', actualBackend: 'cpu', phase: 'ready', generation: 1, gpuCheck: { phase: 'idle' } },
+  });
   const facts = {
     enabled: true,
     provider: 'kokoro',
@@ -837,6 +840,22 @@ test('voice status uses cached evidence and opens settings by keyboard at narrow
     lastPlayback: 'unknown',
   };
   await post({ type: 'speechReadiness', value: facts });
+  await post({
+    type: 'speechComputeState',
+    value: { requestedMode: 'cpu', actualBackend: 'none', phase: 'loading', generation: 1, gpuCheck: { phase: 'idle' } },
+  });
+  const starting = page.getByRole('button', { name: 'Voice: model starting' });
+  await expect(starting).toBeVisible();
+  const indicator = starting.locator('.voice-indicator');
+  await expect(indicator).toHaveCSS('background-color', 'rgb(230, 126, 34)');
+  await expect(indicator).toHaveCSS('animation-name', 'voice-starting');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(indicator).toHaveCSS('animation-name', 'none');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await post({
+    type: 'speechComputeState',
+    value: { requestedMode: 'cpu', actualBackend: 'cpu', phase: 'ready', generation: 1, gpuCheck: { phase: 'idle' } },
+  });
   for (const width of [360, 720]) {
     await page.setViewportSize({ width, height: 640 });
     const button = page.getByRole('button', { name: 'Voice: ready (checks passed)' });

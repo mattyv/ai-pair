@@ -134,10 +134,11 @@ async function finish(
 ): Promise<void> {
   await vi.waitFor(
     () => {
-      expect(output.play).toHaveBeenCalledWith(id, expect.any(Uint8Array), expect.any(Number));
+      expect(output.play.mock.calls.at(-1)?.[0]).toBe(id);
     },
     { interval: 5 },
   );
+  expect(output.play.mock.calls.at(-1)).toEqual([id, expect.any(Uint8Array), expect.any(Number)]);
   expect(service.audioEvent({ id, pageId: 7, event: 'ended' })).toBe('ended');
   await pending;
 }
