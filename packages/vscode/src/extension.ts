@@ -29,7 +29,6 @@ import { installedSpeechModel, setupSpeech, speechModelStatus } from './speech_s
 import { speechRuntimeAvailable } from './speech_runtime_status';
 import { localSpeechPlatform } from './speech_platform';
 import { speechListeningRate, type SpeechSettings } from './speech_types';
-import { SpeechCompute } from './speech_compute';
 import type { SpeechState } from './panel_messages';
 import type { OutsideChanges } from './outside';
 import { watchOutside } from './outside_watch';
@@ -149,8 +148,12 @@ function showInstallCompanion(): void {
     });
 }
 
+/** Waits for the active legacy speech service to retire during deactivation. */
+let stopSpeech: (() => Promise<void>) | undefined;
+
 /** Starts the extension: the controller, the editor, the panel, the bridge, and the commands; returns the API the integration test drives. */
 export function activate(context: vscode.ExtensionContext): Api {
+  const previousRetirement = stopSpeech?.() ?? Promise.resolve();
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.homedir();
 
   // Activation is a cycle: the editor and the panel call the controller, which drives them through
@@ -264,13 +267,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       void config().update(CODE_PLAYBACK, value, vscode.ConfigurationTarget.Global);
     },
   };
-  const compute = new SpeechCompute(
-    config().get('speech.computeMode'),
-    () => Promise.resolve({ phase: 'unavailable', reason: 'runtime_missing' }),
-    (value) => {
-      panel.showSpeechComputeState(value);
-    },
-  );
+  const setupAbort = new AbortController();
   let computeGeneration = 0;
   let computeTail: Promise<void> = Promise.resolve();
   let computePending = false;
@@ -511,10 +508,9 @@ export function activate(context: vscode.ExtensionContext): Api {
       copyDiagnostics,
       speech: {
         readiness: audioReadiness,
-        computeState: () => compute.state(),
+        computeState: () => speech.computeState(),
         computeMode: (value) => {
-          speech.cancel();
-          compute.select(value);
+          speech.selectComputeMode(value);
           const current = ++computeGeneration;
           computePending = true;
           const computeSave = computeTail.then(() => config().update('speech.computeMode', value, vscode.ConfigurationTarget.Global));
@@ -527,13 +523,14 @@ export function activate(context: vscode.ExtensionContext): Api {
               if (current !== computeGeneration) return;
               computePending = false;
               const stored: unknown = config().get('speech.computeMode');
-              compute.select(stored === 'auto' || stored === 'gpu' ? stored : 'cpu');
+              const restored = stored === 'auto' || stored === 'gpu' ? stored : 'cpu';
+              speech.selectComputeMode(restored);
               void vscode.window.showErrorMessage('Could not save speech compute mode.');
             },
           );
         },
         checkGpuSetup: () => {
-          void compute.check();
+          void speech.checkGpu(() => Promise.resolve({ phase: 'unavailable', reason: 'runtime_missing' }), setupAbort.signal);
         },
         outputView: () => outputPreferences.view(),
         outputReady: () => outputPreferences.ready(),
@@ -717,17 +714,27 @@ export function activate(context: vscode.ExtensionContext): Api {
     localDesktop: cloudSupported,
     kokoroSupported: localSpeechSupported,
     settings: speechSettings.get,
-    computeMode: () => compute.state().requestedMode,
-    actualBackend: (value) => {
-      compute.actual(value);
+    computeMode: () => {
+      const value: unknown = config().get('speech.computeMode');
+      return value === 'gpu' || value === 'auto' ? value : 'cpu';
     },
-    gpuCheck: (value) => {
-      compute.reportUnavailable(value.reason);
+    computeChanged: (value) => {
+      if (!shuttingDown) panel.showSpeechComputeState(value);
     },
     output: outputRouter,
   });
+  let speechRetirement: Promise<void> | undefined;
+  function retireSpeech(): Promise<void> {
+    shuttingDown = true;
+    setupAbort.abort();
+    speechRetirement ??= Promise.all([previousRetirement, speech.dispose()]).then(() => {});
+    return speechRetirement;
+  }
+  stopSpeech = retireSpeech;
+  let narrationGeneration = 0;
   const narration: NarrationPort = {
     ready: async () => {
+      await ownerReady;
       if (owner === 'companion') {
         const ready: unknown = await vscode.commands.executeCommand('aiPair.localAudio.ready', connectionEpoch);
         return ready === true && owner === 'companion' && workspaceSession?.pageReady() === true;
@@ -742,7 +749,11 @@ export function activate(context: vscode.ExtensionContext): Api {
         key: () => credentials.hasKey(),
       });
     },
-    speak: (text) => selectedNarration?.speak(text) ?? Promise.resolve(),
+    speak: async (text) => {
+      const generation = narrationGeneration;
+      await ownerReady;
+      if (!shuttingDown && generation === narrationGeneration) await selectedNarration?.speak(text);
+    },
     pause: () => {
       selectedNarration?.pause();
     },
@@ -750,6 +761,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       selectedNarration?.resume();
     },
     cancel: () => {
+      narrationGeneration++;
       selectedNarration?.cancel();
     },
   };
@@ -890,7 +902,6 @@ export function activate(context: vscode.ExtensionContext): Api {
       }
     }),
     vscode.commands.registerCommand('aiPair.localAudio.workspace', (value: unknown) => workspaceSession?.accept(value) ?? false),
-    speech,
     log,
     starter,
     outsideWatch,
@@ -912,9 +923,8 @@ export function activate(context: vscode.ExtensionContext): Api {
         if (!computePending) {
           const mode: unknown = config().get('speech.computeMode');
           const next = mode === 'auto' || mode === 'gpu' ? mode : 'cpu';
-          if (next !== compute.state().requestedMode) {
-            speech.cancel();
-            compute.select(next);
+          if (next !== speech.computeState().requestedMode) {
+            speech.selectComputeMode(next);
           }
         }
         const current = speechSettings.get();
@@ -1000,7 +1010,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     { dispose: save },
     {
       dispose: () => {
-        shuttingDown = true;
+        void retireSpeech().catch(() => {});
       },
     },
   );
@@ -1040,6 +1050,9 @@ export function activate(context: vscode.ExtensionContext): Api {
     beforeCommit: () => {
       owner = 'companion';
       if (shuttingDown) throw new Error('Window is closing.');
+    },
+    afterCommit: () => {
+      if (shuttingDown) return;
       workspaceSession = new WorkspaceSession({
         epoch: connectionEpoch,
         panel,
@@ -1057,49 +1070,57 @@ export function activate(context: vscode.ExtensionContext): Api {
       selectedNarration = workspaceSession.narration;
       context.subscriptions.push(workspaceSession);
     },
+    commitFailed: () => {
+      if (!shuttingDown) {
+        void vscode.window.showWarningMessage('AI Pair could not complete its local audio connection. Reload the window to reconnect.');
+      }
+    },
     commit: (prepared) => Promise.resolve(vscode.commands.executeCommand('aiPair.localAudio.commit', prepared)),
   });
-  ownerReady = placement.choose().then((chosen) => {
-    if (shuttingDown) return;
-    owner = chosen;
-    if (chosen === 'companion') return;
-    if (chosen === 'incompatible') {
-      const detail: Record<PanelPrepareFailure, string> = {
-        timeout: 'The Local Audio extension did not respond in time.',
-        activation_failure: 'The Local Audio extension could not be started.',
-        activation_timeout: 'The Local Audio extension did not start in time.',
-        invalid_response: 'The Local Audio extension sent an invalid response.',
-        protocol_mismatch: 'The extensions use incompatible protocol versions.',
-        epoch_mismatch: 'The Local Audio extension returned an unexpected session.',
-      };
-      void vscode.window
-        .showWarningMessage(
-          prepareFailure === undefined
-            ? 'AI Pair and AI Pair Local Audio could not connect. Update both extensions and reload the window.'
-            : `AI Pair and AI Pair Local Audio could not connect. ${detail[prepareFailure]} See the AI Pair output for details.`,
-          'Copy diagnostics',
-          'Show output',
-        )
-        .then((action) => {
-          if (action === 'Copy diagnostics') void copyDiagnosticsFromCommand();
-          else if (action === 'Show output') log.show();
-        });
-      return;
-    }
-    panel.showSpeechTransport(chosen === 'legacy');
-    if (chosen === 'legacy') {
-      selectedNarration = speech;
-      publishReadiness();
-      // specs/OutputPreference.tla, Init: restore a saved device without opening Settings.
-      if (outputPreferences.choice().kind === 'native') void outputPreferences.refresh();
-    }
-    context.subscriptions.push(
-      vscode.window.registerWebviewViewProvider(NarrationPanel.viewId, panel, {
-        webviewOptions: { retainContextWhenHidden: true },
-      }),
-    );
-    if (chosen === 'remote-text') showInstallCompanion();
-  });
+  // specs/SpeechLifecycle.tla, Reap: replacement ownership waits for prior resource exit.
+  ownerReady = previousRetirement
+    .then(() => (shuttingDown ? undefined : placement.choose()))
+    .then((chosen) => {
+      if (chosen === undefined || shuttingDown) return;
+      owner = chosen;
+      if (chosen === 'companion') return;
+      if (chosen === 'incompatible') {
+        const detail: Record<PanelPrepareFailure, string> = {
+          timeout: 'The Local Audio extension did not respond in time.',
+          activation_failure: 'The Local Audio extension could not be started.',
+          activation_timeout: 'The Local Audio extension did not start in time.',
+          invalid_response: 'The Local Audio extension sent an invalid response.',
+          protocol_mismatch: 'The extensions use incompatible protocol versions.',
+          epoch_mismatch: 'The Local Audio extension returned an unexpected session.',
+        };
+        void vscode.window
+          .showWarningMessage(
+            prepareFailure === undefined
+              ? 'AI Pair and AI Pair Local Audio could not connect. Update both extensions and reload the window.'
+              : `AI Pair and AI Pair Local Audio could not connect. ${detail[prepareFailure]} See the AI Pair output for details.`,
+            'Copy diagnostics',
+            'Show output',
+          )
+          .then((action) => {
+            if (action === 'Copy diagnostics') void copyDiagnosticsFromCommand();
+            else if (action === 'Show output') log.show();
+          });
+        return;
+      }
+      panel.showSpeechTransport(chosen === 'legacy');
+      if (chosen === 'legacy') {
+        selectedNarration = speech;
+        publishReadiness();
+        // specs/OutputPreference.tla, Init: restore a saved device without opening Settings.
+        if (outputPreferences.choice().kind === 'native') void outputPreferences.refresh();
+      }
+      context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider(NarrationPanel.viewId, panel, {
+          webviewOptions: { retainContextWhenHidden: true },
+        }),
+      );
+      if (chosen === 'remote-text') showInstallCompanion();
+    });
   const ready = Promise.all([bridgeReady, ownerReady]).then(() => {});
   if (context.globalState.get<unknown>(OFFERED_SETUP) !== true) {
     void context.globalState.update(OFFERED_SETUP, true);
@@ -1140,5 +1161,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   };
 }
 
-/** Does nothing: every resource is disposed through the context. */
-export function deactivate(): void {}
+/** Waits for the speech lifecycle to retire its resources. */
+export function deactivate(): Promise<void> {
+  return stopSpeech?.() ?? Promise.resolve();
+}

@@ -63,7 +63,7 @@ export async function cloudCompanionHost(): Promise<void> {
     );
     assert.doesNotMatch(JSON.stringify(report), /private|synthetic-key/i);
   } finally {
-    host.dispose();
+    await host.dispose();
     changes.dispose();
     await fs.rm(directory, { recursive: true, force: true });
   }

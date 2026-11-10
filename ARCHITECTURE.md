@@ -11,7 +11,7 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes the experimental 0.24.0 implementation on this feature branch.
+Status: describes the experimental 0.25.2 implementation on this feature branch.
 
 The source is `.archi/ai-pair.json`. To regenerate the page with
 Archi-Techture 1.5.1, set `ARCHI_TO_HTML` to its `out/tools/archi-to-html.js`
@@ -42,10 +42,9 @@ companion. The Archi source passed its 1.5.1 validator on 2026-11-10; its HTML
 export was regenerated, the normalizer tests passed, and the overview was
 inspected in headless Chromium without page errors.
 
-The companion bootstrap and speech backend handoff sequences were updated on
-2026-11-10. Archi 1.5.1 validated the source, its HTML export was regenerated,
-and the normalizer tests passed. The generated handoff sequence was inspected
-in headless Chromium.
+The speech lifecycle and orderly-restart diagrams were updated on 2026-11-10.
+Archi 1.5.1 validated the source, its HTML export was regenerated, and the
+normalizer tests passed. The new sequences were inspected in headless Chromium.
 
 ## Components
 
@@ -139,11 +138,13 @@ extension through VS Code and returns readiness without creating a token or
 session. Activation has a 10-second bound; only a successful response starts
 prepare, with its own 1.5-second bound. Prepare validates the private protocol
 and epoch without registering a view. The workspace selects the companion
-before dispatching commit, so a lost acknowledgement cannot select another
-owner. Late activation or preparation cannot change the decision. An installed
+before dispatching commit, and creates its workspace session only after a
+successful commit acknowledgement. A missing or
+late acknowledgement cannot select another owner or start workspace transport.
+Late activation or preparation cannot change the decision. An installed
 companion that fails attachment fails closed; a missing companion retains the
-legacy local or remote text-only behavior. Reconnection requires a new window
-attachment rather than starting another audio owner.
+legacy local or remote text-only behavior. Deactivation waits for speech
+resources to be reaped; a replacement session waits for that retirement.
 
 The hosts exchange versioned allowlisted command frames with separate sequence
 numbers per direction. Ordered bounded chunks carry visible panel updates;
@@ -394,40 +395,41 @@ Bounded sentence pipelining is implemented for local Kokoro narration. The Archi
 
 The pipeline still needs final review and packaged verification before release.
 
-## Warm local synthesis worker
+## Local speech lifecycle
 
-One warm worker thread serves local Kokoro synthesis for each epoch. The Archi
-`Warm local synthesis` diagram shows the boundaries; the TLA+ model is
-`specs/WarmSynthesisWorker.tla`. The `Speech backend handoff` sequence shows
-switching ownership; `specs/SpeechBackendHandoff.tla` models its safety and
-progress.
+`SpeechLifecycle` is the single owner of the requested CPU/GPU mode, generation,
+setup or inference proof, worker lease and actual backend. `SpeechService` owns
+narration, chunks, tempo and playback and acquires a unit-bound lease from the
+manager. Host settings and status project the manager's snapshot; they do not
+own a second backend state. The Archi `Warm local synthesis` diagram shows the
+ports, and `specs/SpeechLifecycle.tla` models exclusive ownership and progress.
 
--   `speech_local_protocol.ts` defines the protocol with strict zod schemas:
-    `init`, `ready` (with capabilities), `synthesize`, `result`, `failure` and
-    `shutdown`. Every frame carries the protocol version, and every request and
-    response carries the epoch, the unit id and the part ordinal. A failure
-    carries one of four fixed categories (`load`, `synthesis`, `protocol`,
-    `busy`), never free text.
--   `speech_local_client.ts` (`LocalSynthesisClient`) owns the worker through
-    an injected factory. It loads the model once and runs one inference at a
-    time. The worker's `ready` capabilities must equal the client's own
-    constants.
--   A cancel invalidates the in-flight result at once, but the inference keeps
-    ownership of the worker until its result arrives or an independent watchdog
-    retires the worker.
--   A retiring worker holds the slot until its actual exit event. During a
-    planned CPU/GPU switch, the same pending request waits for the matching
-    client's reaped notification. Only then may fresh GPU proof or a replacement
-    CPU worker start. Cancellation or timeout prevents that request from
-    resuming after a late exit; it does not free a live worker's slot.
--   The client rejects stale, duplicate and late responses, and the text of a
-    canceled or retired inference is never replayed.
--   `SpeechService` drives the client in place of inline worker handling.
-    A planned switch retains its admitted unit until the previous slot is free.
+A mode change invalidates the previous generation and requests abort or worker
+retirement. Abort and retirement do not themselves release ownership: GPU proof
+settles only after its children close, and a worker lease lasts until the actual
+exit event. The current request waits for cleanup, then resolves CPU resources
+or requests fresh GPU proof and loads the selected worker. Explicit GPU fails
+closed; Auto can fall back only after failed proof has been reaped. The Archi
+`Proof cancellation and CPU acquisition` sequence shows this path.
 
-This is not a new engine, and it adds no persistent synthesis cache.
-ElevenLabs synthesis is unchanged. The shipped transport is a Node worker
-thread; the factory keeps the client independent of it.
+Generation and unit identity fence discovery, progress, ready, result and exit
+callbacks. Cancellation, timeout, disposal or a later selection prevents stale
+work from starting a replacement, publishing readiness or playing audio.
+Deactivation awaits reaping before another host or service can own the slot.
+The `Speech orderly restart` sequence shows that boundary and the commit
+acknowledgement before workspace session creation. Restart restores preferences,
+not workers, proofs, capabilities, pending checks or output reservations.
+
+The worker protocol remains versioned and validated. CPU and GPU clients hold
+their worker until exit; failure categories stay fixed and exclude free text.
+The model and runtime pins, native trust checks, provider, output admission and
+chunk/tempo behavior remain unchanged.
+
+Unit tests and composed fake transports exercise ownership, cancellation and
+switching; a real child-process test exercises proof abort and close. Existing
+packaged-host reload checks cover attachment, not GPU synthesis; a packaged
+reload of this lifecycle revision remains to be run. Physical AMD
+hardware validation and audible output for this revision remain open.
 
 ## Independent listening speed
 

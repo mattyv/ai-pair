@@ -14,6 +14,9 @@ It adds:
 -   Copyable session and speech diagnostics, plus a running version and build
     in Settings. Speech diagnostics show capability, button dispatch and safe
     failure categories without copying keys, narration or audio.
+-   CPU/GPU changes and restarted speech wait for previous local work to finish
+    shutting down before starting a replacement. GPU use still requires fresh
+    checks, and physical validation of this lifecycle change remains open.
 -   Optional local Kokoro speech for narration selected by the connected coding
     agent, which selects useful short explanations without a per-session prompt.
     Speech is off by default and needs no additional API key. In Settings,

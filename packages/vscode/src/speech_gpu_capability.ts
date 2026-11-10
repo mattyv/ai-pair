@@ -28,7 +28,11 @@ export interface GpuCapabilityResult {
 }
 
 /** Issues a capability only after a fresh fail-closed check succeeds. */
-export async function issueGpuCapability(options: GpuCapabilityInputs): Promise<GpuCapabilityResult> {
+export async function issueGpuCapability(options: GpuCapabilityInputs, signal?: AbortSignal): Promise<GpuCapabilityResult> {
+  function checkAbort(): void {
+    if (signal?.aborted === true) throw new DOMException('Aborted', 'AbortError');
+  }
+  checkAbort();
   const paths = [
     options.runtimeDirectory,
     options.modelDirectory,
@@ -59,9 +63,12 @@ export async function issueGpuCapability(options: GpuCapabilityInputs): Promise<
     environment: Object.freeze(gpuEnvironment(options.driverManifest, options.loaderPath)),
   });
   try {
-    const check = await checkGpuSetup({ ...options, probe: options.probeFor(capability) });
+    const check = await checkGpuSetup({ ...options, probe: options.probeFor(capability) }, signal);
+    // specs/GpuProofAbort.tla, Settle: aborted proof cannot issue a capability.
+    checkAbort();
     return check.phase === 'ready' ? { check, capability } : { check };
   } catch (error: unknown) {
+    checkAbort();
     return { check: { phase: 'unavailable', reason: error instanceof GpuProcessBusyError ? 'busy' : 'inconclusive' } };
   }
 }

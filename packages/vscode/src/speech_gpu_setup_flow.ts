@@ -5,11 +5,11 @@ import { GpuProcessBusyError } from './speech_gpu_client';
 
 /** Injected operations for one explicit GPU setup. */
 export interface GpuSetupFlowOptions {
-  preflight: () => Promise<GpuCheck>;
+  preflight: (signal: AbortSignal) => Promise<GpuCheck>;
   cpuModel: () => Promise<string | undefined>;
   gpuModel: () => Promise<string | undefined>;
   download: (progress: (bytes: number) => void) => Promise<string>;
-  verify: (modelDirectory: string) => Promise<GpuCheck>;
+  verify: (modelDirectory: string, signal: AbortSignal) => Promise<GpuCheck>;
   signal: AbortSignal;
   progress: (value: GpuCheckProgress) => void;
 }
@@ -21,7 +21,7 @@ export async function setupGpuFlow(options: GpuSetupFlowOptions): Promise<GpuChe
   let phase: 'preflight' | 'model' | 'verify' = 'preflight';
   try {
     // specs/GpuSetup.tla, Trust: hardware and runtime precede the optional download.
-    const preflight = await options.preflight();
+    const preflight = await options.preflight(options.signal);
     if (options.signal.aborted) return unavailable;
     if (preflight.phase !== 'ready') return preflight.phase === 'unavailable' ? preflight : unavailable;
     phase = 'model';
@@ -46,7 +46,7 @@ export async function setupGpuFlow(options: GpuSetupFlowOptions): Promise<GpuChe
     if (options.signal.aborted) return unavailable;
     phase = 'verify';
     options.progress({ stage: 'check' });
-    const result = await options.verify(directory);
+    const result = await options.verify(directory, options.signal);
     return options.signal.aborted ? unavailable : result.phase === 'ready' || result.phase === 'unavailable' ? result : unavailable;
   } catch (error) {
     if (options.signal.aborted) return unavailable;

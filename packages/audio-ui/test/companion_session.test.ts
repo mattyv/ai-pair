@@ -225,7 +225,7 @@ it('registers one provider and forwards local commands and diagnostics', async (
   expect(fake.narrationOptions?.nextSequence()).toBe(1);
   await fake.channelOptions?.send({ version: 2, connectionEpoch: 'epoch', sequence: 2, type: 'heartbeat' });
   expect(fake.execute).toHaveBeenCalledOnce();
-  current.dispose();
+  void current.dispose();
   expect(await current.ready('epoch')).toBe(false);
   expect(fake.providerDispose).toHaveBeenCalledOnce();
   expect(fake.hostDispose).toHaveBeenCalledOnce();
@@ -256,7 +256,7 @@ it('forwards panel controls only after local retirement and clears pause reasons
   await Promise.resolve();
   expect(fake.send).toHaveBeenCalledWith(expect.objectContaining({ action: { type: 'pageClosed' }, pageEpoch: 7 }));
   expect(fake.setPage).toHaveBeenCalledWith(undefined);
-  current.dispose();
+  void current.dispose();
 });
 
 it('forwards a reply behavior change to the workspace', () => {
@@ -265,7 +265,7 @@ it('forwards a reply behavior change to the workspace', () => {
   expect(fake.send).toHaveBeenCalledWith(
     expect.objectContaining({ type: 'panelAction', pageEpoch: 7, action: { type: 'replyBehavior', value: 'finishAction' } }),
   );
-  current.dispose();
+  void current.dispose();
 });
 
 it('forwards a deferred reply without canceling local narration', () => {
@@ -286,7 +286,7 @@ it('forwards a deferred reply without canceling local narration', () => {
       action: { type: 'reply', text: 'Wait', defer: true },
     }),
   );
-  current.dispose();
+  void current.dispose();
 });
 
 it('delivers complete panel updates and ignores heartbeats', () => {
@@ -305,7 +305,7 @@ it('delivers complete panel updates and ignores heartbeats', () => {
   expect(fake.showUpdate).toHaveBeenCalledWith({ type: 'say', text: 'test' });
   fake.narrationOptions?.send(speak);
   expect(fake.send).toHaveBeenCalledWith(speak);
-  current.dispose();
+  void current.dispose();
 });
 
 it('waits for old page retirement before forwarding a replacement ready', async () => {
@@ -322,7 +322,7 @@ it('waits for old page retirement before forwarding a replacement ready', async 
     { type: 'panelAction', pageEpoch: 7, action: { type: 'pageClosed' } },
     { type: 'panelAction', pageEpoch: 8, action: { type: 'ready' } },
   ]);
-  current.dispose();
+  void current.dispose();
 });
 
 it('warns and suppresses actions when local retirement fails', async () => {
@@ -340,7 +340,7 @@ it('warns and suppresses actions when local retirement fails', async () => {
   for (let index = 0; index < 4; index++) await Promise.resolve();
   expect(fake.warning).toHaveBeenCalledWith('AI Pair could not stop local audio. Reload the window.');
   expect(fake.send).not.toHaveBeenCalled();
-  current.dispose();
+  void current.dispose();
 });
 
 it('stops locally on connection loss and handles repeated shutdown safely', () => {
@@ -351,13 +351,13 @@ it('stops locally on connection loss and handles repeated shutdown safely', () =
   fake.channelOptions?.lost();
   expect(fake.hostDispose).toHaveBeenCalledOnce();
   expect(fake.warning).toHaveBeenCalledOnce();
-  current.dispose();
+  void current.dispose();
 });
 
 it('drops replacement-ready delivery after the session closes', async () => {
   const current = session();
   routing().forward({ type: 'ready' }, 7);
-  current.dispose();
+  void current.dispose();
   await Promise.resolve();
   expect(fake.send).not.toHaveBeenCalled();
 });
@@ -402,14 +402,14 @@ it('provides safe local-only panel settings and refuses workspace operations', a
   invoke(field(args[11], 'set'), 'lines');
   expect(invoke(field(args[12], 'get'))).toBe('interrupt');
   invoke(field(args[12], 'set'), 'finishAction');
-  current.dispose();
+  void current.dispose();
 });
 
 it('rejects malformed diagnostics from a local snapshot', () => {
   const current = session();
   fake.snapshot.mockReturnValue({ version: '', build: '', events: [{ private: 'bad' }] });
   expect(current.diagnostics()).toBeUndefined();
-  current.dispose();
+  void current.dispose();
 });
 
 it('closes local audio and warns when the outbound command channel is lost', () => {
@@ -419,15 +419,31 @@ it('closes local audio and warns when the outbound command channel is lost', () 
   expect(fake.hostDispose).toHaveBeenCalledOnce();
   expect(fake.connectionDispose).toHaveBeenCalledOnce();
   expect(fake.warning).toHaveBeenCalledWith('AI Pair lost its local audio connection. Reload the window to reconnect.');
-  current.dispose();
+  void current.dispose();
 });
 
 it('supplies the isolated GPU proof runner to the local speech host', async () => {
   const current = session();
   const capability = mock<import('../../vscode/src/speech_gpu_client').GpuLaunchCapability>();
   expect(fake.hostOptions?.enableGpuInference).toBe(true);
-  expect(await fake.hostOptions?.gpuProof?.(capability, 'tiny')).toBe('failed');
+  const signal = new AbortController().signal;
+  expect(await fake.hostOptions?.gpuProof?.(capability, 'tiny', signal)).toBe('failed');
   expect(fake.proofCapability).toBe(capability);
-  expect(fake.proof).toHaveBeenCalledWith('tiny');
-  current.dispose();
+  expect(fake.proof).toHaveBeenCalledWith('tiny', signal);
+  void current.dispose();
+});
+
+it('waits for the speech host to reap resources during shutdown', async () => {
+  const finished = Promise.withResolvers<void>();
+  fake.hostDispose.mockReturnValueOnce(finished.promise);
+  const current = session();
+  let disposed = false;
+  const pending = Promise.resolve(current.dispose()).then(() => {
+    disposed = true;
+  });
+  await Promise.resolve();
+  expect(disposed).toBe(false);
+  finished.resolve();
+  await pending;
+  expect(disposed).toBe(true);
 });

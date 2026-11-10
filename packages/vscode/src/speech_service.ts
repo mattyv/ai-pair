@@ -2,13 +2,7 @@ import * as path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import type { NarrationPort } from '@ai-pair/core';
 import { LocalSynthesisClient, type LocalListener, type LocalSynthesisOutcome, type LocalSynthesisPort } from './speech_local_client';
-import {
-  LOCAL_MAX_DURATION_MS,
-  LOCAL_MAX_WAV_BYTES,
-  LOCAL_MIN_WAV_BYTES,
-  LOCAL_WORKER_TIMEOUT_MS,
-  localWorkerError,
-} from './speech_local_protocol';
+import { LOCAL_MAX_DURATION_MS, LOCAL_MAX_WAV_BYTES, LOCAL_MIN_WAV_BYTES, LOCAL_WORKER_TIMEOUT_MS } from './speech_local_protocol';
 import { installedSpeechModel } from './speech_setup';
 import { speechRuntimeAvailable } from './speech_runtime_status';
 import {
@@ -26,9 +20,10 @@ import {
 import { speechSegments } from './speech_segments';
 import { decodeSpeechWav, encodeTempoWav } from './speech_tempo_pcm';
 import type { SpeechTempoRate } from './speech_tempo';
-import type { GpuCheck, SpeechComputeBackend, SpeechComputeMode } from './speech_compute_types';
+import type { GpuCheck, GpuCheckProgress, SpeechComputeBackend, SpeechComputeMode, SpeechComputeState } from './speech_compute_types';
 import type { GpuCapabilityResult } from './speech_gpu_capability';
-import { GpuProcessBusyError, type GpuLaunchCapability } from './speech_gpu_client';
+import type { GpuLaunchCapability } from './speech_gpu_client';
+import { SpeechLifecycle, type SpeechReadyLease } from './speech_lifecycle';
 
 /** The panel operations used by local speech; audio is never added to history. */
 export interface SpeechOutput {
@@ -103,18 +98,18 @@ export interface SpeechServiceOptions {
   createLocal?: (listener: LocalListener) => LocalSynthesisPort;
   output: SpeechOutput;
   settings(): SpeechSettings;
-  /** Samples the requested local compute mode when speech is admitted. */
+  /** Reads the initial local compute preference once; later changes use selectComputeMode. */
   computeMode?: () => SpeechComputeMode;
   /** Reports the local worker's observed backend. */
   actualBackend?: (value: SpeechComputeBackend) => void;
+  /** Publishes the lifecycle owner's compute projection. */
+  computeChanged?: (value: SpeechComputeState) => void;
   /** Requests fresh GPU proof before starting a GPU worker. */
-  gpuCapability?: () => Promise<GpuCapabilityResult>;
+  gpuCapability?: (signal: AbortSignal) => Promise<GpuCapabilityResult>;
   /** Creates an isolated GPU worker using the fresh capability. */
   createGpu?: (capability: GpuLaunchCapability, listener: LocalListener) => LocalSynthesisPort;
   /** Reports fixed GPU availability when Auto falls back. */
   gpuCheck?: (value: Extract<GpuCheck, { phase: 'unavailable' }>) => void;
-  /** Reports a setup proof or download that owns the shared GPU slot. */
-  gpuExternalBusy?: () => boolean;
 }
 
 /** An acknowledgement from the page that received a particular generation. */
@@ -139,6 +134,8 @@ interface ActiveSpeech {
   processing?: { part: number; controller: AbortController };
   provider: SpeechProvider;
   computeMode: SpeechComputeMode;
+  lifecycleAbort: AbortController;
+  lease?: SpeechReadyLease;
   cloudVoice: string;
   voice: SpeechVoice;
   speed: number;
@@ -171,46 +168,93 @@ export class SpeechService implements NarrationPort {
   private nextId = 1;
   private current?: ActiveSpeech;
   private paused = false;
-  private local: LocalSynthesisPort;
-  private readonly cpuLocal: LocalSynthesisPort;
-  private localBackend: 'cpu' | 'gpu' = 'cpu';
-  private gpuProofBusy = false;
-  private handoff?: { worker: LocalSynthesisPort; current: ActiveSpeech };
+  private readonly lifecycle: SpeechLifecycle;
   private cloudBusy?: { id: number; controller: AbortController; timer: ReturnType<typeof setTimeout> };
   private disposed = false;
+  private cpuFailure = 'Local speech could not start. Retry setup.';
 
   constructor(private readonly options: SpeechServiceOptions) {
-    const listener: LocalListener = {
-      ready: () => {
-        if (this.local === this.cpuLocal) this.localReady();
+    this.lifecycle = new SpeechLifecycle({
+      requestedMode: options.computeMode?.() ?? 'cpu',
+      resolveCpu: async (signal) => {
+        const available = await speechRuntimeAvailable(options.runtimeDirectory);
+        if (signal.aborted) return undefined;
+        if (!available) {
+          this.cpuFailure = 'This installation does not include the local speech runtime.';
+          this.localDiagnostic('failed', 'runtime_missing');
+          return undefined;
+        }
+        const model = await installedSpeechModel(options.storageDirectory);
+        if (signal.aborted) return undefined;
+        if (model === undefined) {
+          this.cpuFailure = 'Download the Kokoro model in Settings to hear local narration.';
+          this.localDiagnostic('failed', 'model_missing');
+        }
+        return model;
       },
-      retired: (reason) => {
-        this.localRetired(this.cpuLocal, reason);
+      proveGpu: (signal) =>
+        options.gpuCapability?.(signal) ?? Promise.resolve({ check: { phase: 'unavailable', reason: 'runtime_missing' } }),
+      createCpu: (listener) =>
+        options.createLocal?.(listener) ??
+        new LocalSynthesisClient({
+          spawn: (modelPath) => new Worker(path.join(options.runtimeDirectory, 'worker.mjs'), { workerData: { modelPath } }),
+          listener,
+        }),
+      createGpu: (capability, listener) => {
+        if (options.createGpu === undefined) throw new Error('GPU worker unavailable');
+        return options.createGpu(capability, listener);
       },
-      reaped: () => {
-        this.localReaped(this.cpuLocal);
+      changed: (snapshot) => {
+        options.actualBackend?.(snapshot.actualBackend);
+        options.computeChanged?.({
+          requestedMode: snapshot.requestedMode,
+          actualBackend: snapshot.actualBackend,
+          gpuCheck: snapshot.gpuCheck,
+        });
+        if (snapshot.gpuCheck.phase === 'unavailable') options.gpuCheck?.(snapshot.gpuCheck);
+        const current = this.current;
+        if (snapshot.phase === 'ready') this.localDiagnostic('ready');
+        if (snapshot.phase === 'retiring' && current?.lease !== undefined) {
+          this.localDiagnostic('failed', snapshot.failureReason ?? 'worker_exit');
+          this.fail(current, 'Local speech stopped. Retry setup.');
+        }
       },
-    };
-    this.cpuLocal =
-      options.createLocal?.(listener) ??
-      new LocalSynthesisClient({
-        // The pinned phonemizer bridge reads the verified model directory from workerData.
-        spawn: (modelPath) => new Worker(path.join(options.runtimeDirectory, 'worker.mjs'), { workerData: { modelPath } }),
-        listener,
-      });
-    this.local = this.cpuLocal;
+    });
   }
 
-  /** Reports whether a GPU proof or worker still owns its slot. */
-  gpuSlotBusy(): boolean {
-    return this.gpuProofBusy || (this.localBackend === 'gpu' && this.local.state() !== 'cold');
+  /** Selects the desired backend and invalidates old acquisition work. */
+  selectComputeMode(mode: SpeechComputeMode): void {
+    if (mode === this.lifecycle.snapshot().requestedMode) return;
+    this.cancel();
+    this.lifecycle.select(mode);
   }
 
-  /** Retires an idle GPU worker before a new explicit setup check. */
-  retireIdleGpu(): void {
-    if (this.current === undefined && this.localBackend === 'gpu' && this.local.state() === 'ready') {
-      this.local.retire('worker_exit');
-    }
+  /** Returns the manager's compute state projection. */
+  computeState(): SpeechComputeState {
+    const { requestedMode, actualBackend, gpuCheck } = this.lifecycle.snapshot();
+    return { requestedMode, actualBackend, gpuCheck };
+  }
+
+  /** Returns the manager generation for fencing transient feedback. */
+  computeGeneration(): number {
+    return this.lifecycle.snapshot().generation;
+  }
+
+  /** Runs a GPU setup check under the same resource owner as speech. */
+  checkGpu(
+    operation: (signal: AbortSignal, progress: (value: GpuCheckProgress) => void) => Promise<GpuCheck>,
+    signal: AbortSignal,
+  ): Promise<GpuCheck> {
+    return this.lifecycle.check(operation, signal);
+  }
+
+  /** Reports whether the selected local backend has a known failure. */
+  localComputeUsable(): boolean {
+    const state = this.lifecycle.snapshot();
+    return (
+      state.requestedMode !== 'gpu' ||
+      (state.gpuCheck.phase !== 'unavailable' && state.phase !== 'failed' && state.failureReason === undefined)
+    );
   }
 
   /** Speaks an explicitly selected live unit when enabled. */
@@ -245,7 +289,7 @@ export class SpeechService implements NarrationPort {
       return Promise.resolve();
     }
     // specs/GpuSetup.tla, ExplicitNoFallback: explicit GPU must never fall back to the CPU worker.
-    const computeMode = this.options.computeMode?.() ?? 'cpu';
+    const computeMode = this.lifecycle.snapshot().requestedMode;
     if (
       provider === 'kokoro' &&
       computeMode === 'gpu' &&
@@ -274,13 +318,7 @@ export class SpeechService implements NarrationPort {
     }
     // specs/SpeechTempo.tla, Admit: a transformed unit waits for the previous transform worker to retire.
     const listeningRate = speechListeningRate(settings.listeningSpeed);
-    if (
-      (provider === 'kokoro' && (this.gpuProofBusy || this.options.gpuExternalBusy?.() === true)) ||
-      this.local.busy() ||
-      (this.local.state() === 'retiring' && this.handoff?.worker !== this.local) ||
-      this.cloudBusy !== undefined ||
-      (listeningRate !== 1 && this.options.tempo?.busy() === true)
-    ) {
+    if (this.cloudBusy !== undefined || (listeningRate !== 1 && this.options.tempo?.busy() === true)) {
       this.options.output.status(id, 'unavailable', 'Speech is still finishing; try again shortly.');
       return Promise.resolve();
     }
@@ -298,6 +336,7 @@ export class SpeechService implements NarrationPort {
       listeningRate,
       provider,
       computeMode,
+      lifecycleAbort: new AbortController(),
       cloudVoice: settings.elevenLabsVoice,
       voice: voice ?? 'af_heart',
       speed: provider === 'elevenlabs' ? settings.elevenLabsSpeed : settings.speed,
@@ -401,142 +440,33 @@ export class SpeechService implements NarrationPort {
   }
 
   private async start(current: ActiveSpeech): Promise<void> {
-    if (current.computeMode !== 'cpu' && this.options.gpuCapability !== undefined && this.options.createGpu !== undefined) {
-      await this.startGpu(current);
-      return;
-    }
-    if (current.computeMode === 'auto') this.options.gpuCheck?.({ phase: 'unavailable', reason: 'runtime_missing' });
-    this.startCpu(current);
-  }
-
-  /** Switches only after the previous worker has been reaped. */
-  private startCpu(current: ActiveSpeech): void {
-    if (this.handoff?.worker === this.local && this.local.state() !== 'cold') {
-      this.waitForHandoff(current);
-      return;
-    }
-    if (this.localBackend === 'gpu') {
-      if (this.local.state() !== 'cold') {
-        this.waitForHandoff(current);
-        return;
-      }
-      this.local = this.cpuLocal;
-      this.localBackend = 'cpu';
-    }
-    void this.startCpuWorker(current);
-  }
-
-  /** Requests fresh capability before creating a new isolated GPU worker. */
-  private async startGpu(current: ActiveSpeech): Promise<void> {
-    if (this.localBackend === 'gpu' && this.local.state() === 'ready') {
-      this.synthesize(current);
-      return;
-    }
-    if (this.local.state() !== 'cold') {
-      this.waitForHandoff(current);
-      return;
-    }
-    let result: GpuCapabilityResult | undefined;
-    this.armStartup(current, GPU_PROOF_TIMEOUT_MS);
-    this.gpuProofBusy = true;
-    try {
-      // specs/GpuSynthesisProcess.tla, Spawn: each GPU worker requires fresh proof.
-      result = await this.options.gpuCapability?.();
-    } catch (error) {
-      if (this.current !== current) return;
-      if (error instanceof GpuProcessBusyError) {
-        this.fail(current, 'Speech is still finishing; try again shortly.');
-        return;
-      }
-      this.options.gpuCheck?.({ phase: 'unavailable', reason: 'probe_failed' });
-      if (current.computeMode === 'auto') {
-        this.armStartup(current, START_TIMEOUT_MS);
-        this.startCpu(current);
-      } else this.fail(current, 'GPU speech is not available. Check GPU setup.');
-      return;
-    } finally {
-      // specs/GpuSynthesisProcess.tla, Reap: proof owns its slot until it settles.
-      this.gpuProofBusy = false;
-    }
+    if (current.computeMode !== 'cpu') this.armStartup(current, GPU_PROOF_TIMEOUT_MS);
+    const result = await this.lifecycle.acquire(current.id, current.lifecycleAbort.signal);
     if (this.current !== current) return;
-    if (result?.check.phase === 'checking' || (result?.check.phase === 'unavailable' && result.check.reason === 'busy')) {
-      this.fail(current, 'Speech is still finishing; try again shortly.');
+    if (result.status === 'canceled') return;
+    if (result.status === 'unavailable') {
+      if (result.reason !== 'busy' && result.reason !== 'gpu_unavailable' && result.reason !== 'model_missing') {
+        this.localDiagnostic('failed', result.reason);
+      }
+      this.fail(
+        current,
+        result.reason === 'busy'
+          ? 'Speech is still finishing; try again shortly.'
+          : result.reason === 'gpu_unavailable'
+            ? 'GPU speech is not available. Check GPU setup.'
+            : result.reason === 'model_missing'
+              ? this.cpuFailure
+              : 'Local speech stopped. Retry setup.',
+      );
       return;
     }
-    if (result?.check.phase !== 'ready' || result.capability === undefined || this.options.createGpu === undefined) {
-      const check: Extract<GpuCheck, { phase: 'unavailable' }> =
-        result?.check.phase === 'unavailable' ? result.check : { phase: 'unavailable', reason: 'inconclusive' };
-      this.options.gpuCheck?.(check);
-      if (current.computeMode === 'auto') {
-        this.armStartup(current, START_TIMEOUT_MS);
-        this.startCpu(current);
-      } else this.fail(current, 'GPU speech is not available. Check GPU setup.');
-      return;
-    }
-    try {
-      let worker: LocalSynthesisPort;
-      const listener: LocalListener = {
-        ready: () => {
-          if (this.local === worker) this.localReady();
-        },
-        retired: (reason) => {
-          this.localRetired(worker, reason);
-        },
-        reaped: () => {
-          this.localReaped(worker);
-        },
-      };
-      this.armStartup(current, START_TIMEOUT_MS);
-      worker = this.options.createGpu(result.capability, listener);
-      this.local = worker;
-      this.localBackend = 'gpu';
-      this.local.load(result.capability.modelDirectory);
-    } catch (error) {
-      this.local.retire('worker_error');
-      if (this.current === current) {
-        this.fail(
-          current,
-          error instanceof GpuProcessBusyError
-            ? 'Speech is still finishing; try again shortly.'
-            : 'GPU speech could not start. Check GPU setup.',
-        );
-      }
-    }
-  }
-
-  private async startCpuWorker(current: ActiveSpeech): Promise<void> {
-    const state = this.local.state();
-    if (state === 'ready') {
-      this.synthesize(current);
-      return;
-    }
-    if (state !== 'cold') return;
-    try {
-      const available = await speechRuntimeAvailable(this.options.runtimeDirectory);
-      if (this.current !== current) return;
-      if (!available) {
-        this.localDiagnostic('failed', 'runtime_missing');
-        this.fail(current, 'This installation does not include the local speech runtime.');
-        return;
-      }
-      const modelPath = await installedSpeechModel(this.options.storageDirectory);
-      if (this.current !== current) return;
-      if (modelPath === undefined) {
-        this.localDiagnostic('failed', 'model_missing');
-        this.fail(current, 'Download the Kokoro model in Settings to hear local narration.');
-        return;
-      }
-      // specs/WarmSynthesisWorker.tla, Load: the checked model path comes from the host, never from input.
-      this.local.load(modelPath);
-    } catch (error: unknown) {
-      if (this.current !== current) return;
-      this.localDiagnostic('failed', localWorkerError(error));
-      this.fail(current, 'Local speech could not start. Retry setup.');
-    }
+    current.lease = result.lease;
+    this.armStartup(current, START_TIMEOUT_MS);
+    this.synthesize(current);
   }
 
   private synthesize(current: ActiveSpeech): void {
-    if (this.current !== current || this.local.state() !== 'ready' || (this.paused && current.multipart)) return;
+    if (this.current !== current || this.lifecycle.snapshot().phase !== 'ready' || (this.paused && current.multipart)) return;
     const part = current.nextPart;
     // A bounded slice is empty if an internal ordinal is invalid; the client rejects it.
     const text = current.parts.slice(part, part + 1).join('');
@@ -544,8 +474,16 @@ export class SpeechService implements NarrationPort {
     if (current.phase !== 'playing') current.phase = 'synthesizing';
     if (current.phase !== 'playing') this.clearTimer(current);
     // specs/SentencePipeline.tla, Synthesize: one inference owns its unit and part.
-    void this.local
-      .synthesize({ id: current.id, part, final: part === current.parts.length - 1, text, voice: current.voice, speed: current.speed })
+    if (current.lease === undefined) return;
+    void this.lifecycle
+      .synthesize(current.lease, {
+        id: current.id,
+        part,
+        final: part === current.parts.length - 1,
+        text,
+        voice: current.voice,
+        speed: current.speed,
+      })
       .then((outcome) => {
         this.localOutcome(current, part, outcome);
       });
@@ -560,21 +498,13 @@ export class SpeechService implements NarrationPort {
       !current.lookaheadAllowed ||
       current.buffered !== undefined ||
       current.processing !== undefined ||
-      this.local.busy() ||
-      this.local.state() !== 'ready' ||
+      this.lifecycle.busy() ||
+      this.lifecycle.snapshot().phase !== 'ready' ||
       current.nextPart >= current.parts.length
     ) {
       return;
     }
     this.synthesize(current);
-  }
-
-  /** The client reported valid capabilities: records the checkpoint and starts a unit that waits for it. */
-  private localReady(): void {
-    this.options.actualBackend?.(this.localBackend);
-    const current = this.current;
-    this.localDiagnostic('ready');
-    if (current !== undefined && current.phase === 'loading') this.synthesize(current);
   }
 
   /** Applies one inference outcome to the unit that asked for it, if that unit is still current. */
@@ -588,38 +518,6 @@ export class SpeechService implements NarrationPort {
       // service's own, so a failure that reaches a current unit is a synthesis the client refused.
       this.localDiagnostic('failed', 'synthesis');
       this.fail(current, 'Could not speak this text. Continue reading it.');
-    }
-  }
-
-  /** Waits for the previous worker's actual exit before switching backends. */
-  private waitForHandoff(current: ActiveSpeech): void {
-    const worker = this.local;
-    // specs/SpeechBackendHandoff.tla, Begin: planned retirement preserves the waiting unit.
-    this.handoff = { worker, current };
-    worker.retire('worker_exit');
-  }
-
-  /** Resumes only the still-current request after the matching worker exits. */
-  private localReaped(worker: LocalSynthesisPort): void {
-    const handoff = this.handoff;
-    if (handoff?.worker !== worker) return;
-    this.handoff = undefined;
-    // specs/SpeechBackendHandoff.tla, Continue: exit and request identity guard the successor.
-    if (this.current === handoff.current && !this.disposed) void this.start(handoff.current);
-  }
-
-  /** The worker was retired or exited: the unit it served is over, and nothing is replayed. */
-  private localRetired(worker: LocalSynthesisPort, reason: LocalSpeechFailureReason): void {
-    if (worker !== this.local) return;
-    if (this.handoff?.worker === worker) {
-      this.options.actualBackend?.('none');
-      return;
-    }
-    this.options.actualBackend?.('none');
-    const current = this.current;
-    if (current?.provider === 'kokoro') {
-      this.localDiagnostic('failed', reason);
-      this.fail(current, 'Local speech stopped. Retry setup.');
     }
   }
 
@@ -807,7 +705,7 @@ export class SpeechService implements NarrationPort {
       this.options.output.status(current.id, current.started ? 'speaking' : 'preparing');
       this.lookahead(current);
     } else {
-      if (current.phase === 'loading' && this.local.state() === 'ready') this.synthesize(current);
+      if (current.phase === 'loading' && this.lifecycle.snapshot().phase === 'ready') this.synthesize(current);
       else {
         if (current.multipart && current.phase === 'loading') this.arm(current, current.remaining);
         this.lookahead(current);
@@ -829,11 +727,10 @@ export class SpeechService implements NarrationPort {
   }
 
   /** Releases the worker and all pending speech. */
-  dispose(): void {
+  async dispose(): Promise<void> {
     this.disposed = true;
     this.cancel();
-    void this.options.tempo?.dispose().catch(() => {});
-    this.local.retire('worker_error');
+    await Promise.all([this.options.tempo?.dispose().catch(() => {}), this.lifecycle.dispose()]);
   }
 
   private armStartup(current: ActiveSpeech, ms: number): void {
@@ -847,10 +744,13 @@ export class SpeechService implements NarrationPort {
     current.remaining = ms;
     current.deadline = Date.now() + ms;
     current.timer = setTimeout(() => {
-      const state = this.local.state();
+      const state = this.lifecycle.snapshot().phase;
       if ((current.phase === 'loading' || current.phase === 'synthesizing') && (state === 'loading' || state === 'ready')) {
         // specs/WarmSynthesisWorker.tla, Retire: the unit's deadline also retires a worker that is still busy.
-        this.local.retire('timeout');
+        if (!this.lifecycle.retireWorker('timeout')) {
+          this.localDiagnostic('failed', 'timeout');
+          this.fail(current, 'Speech timed out; continue reading.');
+        }
       } else {
         if (current.provider === 'kokoro') this.localDiagnostic('failed', 'timeout');
         this.fail(current, 'Speech timed out; continue reading.');
@@ -882,7 +782,8 @@ export class SpeechService implements NarrationPort {
     // specs/SpeechTempo.tla, Cancel: abort invalidates the transform; the worker slot retires on its own.
     current.processing?.controller.abort();
     // specs/WarmSynthesisWorker.tla, Cancel: the result is invalid now; the worker stays owned until it returns.
-    this.local.cancel();
+    current.lifecycleAbort.abort();
+    this.lifecycle.release(current.id);
     this.clearTimer(current);
     if (current.pageId !== undefined) this.options.output.control(current.id, current.pageId, 'stop');
     else this.options.output.cancel?.(current.id);

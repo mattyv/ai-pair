@@ -107,7 +107,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `OutputPreference.cfg` | ordered choice, discovery and failed persistence | holds | 934 |
 | `LocalAudioAdmission.cfg` | capability, device snapshot and cloud admission | holds | 624 |
 | `LocalAudioOwnership.cfg` | local ownership, directional sequences and lease loss | holds | 3,632 |
-| `PanelPlacement.cfg` | bounded activation and prepare, irrevocable commit and fallback | holds | 12 |
+| `PanelPlacement.cfg` | bounded activation and prepare, irrevocable commit and fallback | holds | 16 |
 | `SentencePipeline.cfg` | two units, three parts, pause, cancel and late callbacks | holds | 2,242 |
 | `SpeechTempo.cfg` | two units, two parts, rate changes and stale results | holds | 868 |
 | `SpeechTempo_Healthy.cfg` | two fair completed units | holds | 17 |
@@ -2466,7 +2466,11 @@ Prepare does not register a view. The main extension selects the companion
 irrevocably before sending commit; a lost acknowledgement cannot select legacy
 fallback. A preparation timeout expires the token and may fall back only
 before commit. A delayed prepare cannot register an extra view. TLC checked
-12 states and assumes fair timeouts before and after commit. Activation has a
+16 states and assumes fair timeouts before and after commit. Workspace
+session startup follows a positive commit acknowledgement and cannot begin
+after closure. Removing the acknowledgement guard violates
+`NoSessionBeforeAck`; permitting startup after closure violates
+`NoSessionAfterClose`. Activation has a
 separate bounded interval before preparation begins and requires a valid readiness
 reply; a late activation cannot
 start preparation after the selection has settled. `RejectInstalled`
@@ -2485,6 +2489,7 @@ forbidden. The negative control disables this guard and violates
 
 | Property | Test |
 |---|---|
+| `NoSessionBeforeAck`, `NoSessionAfterClose` | `panel_placement.test.ts`: waits for a successful commit acknowledgement before creating the session; `extension.test.ts`: does not create a workspace session after the window closes during commit. |
 | `RejectInstalled` | `panel_placement.test.ts`: rejects an installed incompatible companion before selecting any panel owner; `integration_workspace_incompatible.ts`: a synthetic companion refusal shows the warning without committing or previewing. |
 | `NoFallbackAfterCommit`, `CommittedSettles` | `panel_placement.test.ts`: chooses companion irrevocably before committing, including on a lost acknowledgement. |
 | `NoEarlyRegistration`, `NoDuplicateRegistration`, `PreparationSettles` | `panel_placement.test.ts`: falls back only before commit and ignores late prepare replies; ignores activation completing after its deadline; uses local legacy only for a failed or invalid preparation before commit. |
@@ -3020,3 +3025,83 @@ request identity to 3 violates `TypeOK`, whose range is 1 through 2.
 
 The progress property assumes fair exit and continuation; the code additionally
 bounds an exit that never arrives with its startup timeout.
+
+### `GpuProofAbort`: aborting physical proof processes
+
+The model represents four sequential physical processes: enumeration, negative
+control, tiny graph, and model proof. An abort requests a kill of the live child;
+settlement and the next spawn wait for close. Capability issuance requires an
+unaborted completed proof. It abstracts filesystem cleanup and the operating
+system's kill implementation. Progress assumes a live child eventually closes
+and enabled actions run fairly. A child that cannot be reaped retains the slot
+indefinitely; the implementation does not manufacture a close event.
+
+| Property | Implementation test |
+| --- | --- |
+| `TypeOK` | TypeScript types and `NoLateSpawn: abort after %s prevents all later proof stages` |
+| `AbortKills` | `SettledReaped: abort kills proof and cleans up only after close` |
+| `NoOverlap` | `rejects replacement proof work until the previous child closes` |
+| `NoLateSpawn` | `NoLateSpawn: abort after %s prevents all later proof stages` |
+| `SettledReaped` | `SettledReaped: abort kills and waits for close before rejecting`; `SettledReaped: aborts and reaps a real proof child before permitting a successor` |
+| `NoAbortedCapability` | `NoAbortedCapability: refuses to issue when aborted before or after proof` |
+| `Progress` | `SettledReaped: aborts and reaps a real proof child before permitting a successor` |
+
+TLC negative controls independently allowed overlap, settlement before close,
+late spawning, and capability issuance after abort; omitted the kill request;
+set the initial stage outside its type; and removed fairness. Each violated its
+corresponding property. The late-spawn control checks `NoLateSpawn` before
+`AbortKills` because it also violates the latter.
+
+| Config | Bounds | Distinct states | Result |
+| --- | --- | --- | --- |
+| `GpuProofAbort.cfg` | Four stages and Boolean lifecycle flags | 32 | Pass |
+
+### `SpeechLifecycle`: shared speech resource ownership
+
+`SpeechLifecycle.cfg` checks two successive request identities, three desired
+modes, and one physical slot. A resource token pairs the originating request
+with proof or worker; it is separate from the current request. Selecting a mode
+or replacing a pending request retires the old slot while the latest request
+waits. Proof results, including failure, retain the slot until retirement,
+kill and actual reap. After reap the latest request progresses automatically;
+Auto may choose CPU after failed GPU proof, while explicit GPU reports typed
+unavailability. Loading can succeed or fail, and disposal completes only after
+reap. `actual = "unavailable"` abstracts a typed failure, not its reason.
+
+TLC checked 482 generated and 258 distinct states with `MaxRequest = 2`;
+all invariants and temporal properties passed. `WF_vars(Drive)` assumes the
+manager and external operations eventually take an enabled internal step; in
+particular a canceled discovery settles and the operating system eventually
+reports close after kill. It makes no claim when these dependencies hang. The
+bounded identity space explores at most two requests, not twenty cycles. The
+model abstracts explicit setup-check arbitration, unit-level inference and
+playback, observer reentrancy, proof stages, and worker crashes after readiness;
+those require concrete tests. It treats retirement uniformly as kill then reap,
+including a normally finished proof; actual implementations may observe close
+without needing a kill. A fresh host/restart is outside this model: tests must
+construct a new manager from preferences only and verify fresh proof and no
+restored worker, capability, pending check, or reservation. It does not prove
+hardware, audio, or cross-process coordination. The model also abstracts the
+health projection: selecting a different mode resets stale GPU failure to an
+idle, unchecked state while retaining retiring ownership until reap. A setup
+check refused as busy during an active unit returns busy without changing the
+last verified GPU health. These obligations are checked by `clears stale GPU
+failure when switching GPU to CPU and back` and `keeps verified GPU health when
+a setup check is refused during speech` in `speech_lifecycle.test.ts`.
+Worker construction or load errors retain their sanitized category through
+`preserves the sanitized module category when worker startup throws` in
+`speech_lifecycle.test.ts`; the physical-slot model abstracts failure details.
+
+| Property | Implementation and test mapping |
+| --- | --- |
+| `TypeOK` | `speech_lifecycle.test.ts`: `TypeOK: starts with a valid cold CPU snapshot`. The bounded model state is an abstraction rather than a production enum. |
+| `Safety` | `speech_lifecycle.test.ts`: `Safety: waits for the old worker to exit before switching backends` and `Safety: never starts CPU after an explicit GPU proof failure`. |
+| `LatestProgress` | `speech_lifecycle.test.ts`: `LatestProgress: cancels a stale proof and waits for its reaping before starting CPU`. |
+| `DisposeProgress` | `speech_lifecycle.test.ts`: `DisposeProgress: aborts a pending proof on shutdown and waits for the proof to be reaped`. |
+
+Independent temporary configurations setting `GuardReap`, `GuardCurrent`, or
+`GuardExplicit` to `FALSE` each violate `Safety`. Setting `EnableProgress` to
+`FALSE` violates `LatestProgress`; the fairness assumption does not force a
+disabled action. These negative controls were discarded. The model abstracts
+unit ownership, proof arbitration and restart; their concrete tests provide
+additional coverage.

@@ -708,3 +708,35 @@ The button opens speech settings; its label describes checks, not a guarantee of
 sound, network access, cloud credits, or future worker availability. The update
 uses the existing local panel channel and introduces no new process or device
 probe, so the architecture model and exports are unchanged.
+
+## One owner for local speech lifecycle
+
+`SpeechLifecycle` owns desired compute mode, generation-scoped health, unit
+leases, worker lifetime and the shared GPU setup/proof slot. `SpeechService`
+retains text segmentation, provider requests and playback orchestration. Hosts
+persist preferences and project snapshots; they do not keep competing backend
+busy flags. The former `SpeechCompute` controller is removed.
+
+Canceling an operation aborts its proof, but releasing ownership requires the
+actual child close or worker reaping. A successor request waits and continues
+without a second user request. An unkillable process retains its physical lease;
+we do not claim cleanup by merely returning an error. Read-only CPU discovery
+checks cancellation between operations and rejects stale results.
+
+A mode change starts a new generation with unchecked GPU health, rather than
+inheriting a previous failure or claiming readiness. Refusing a setup check
+while speech owns the worker is transient feedback and does not overwrite
+verified health. Snapshot traces check resource ownership, stale callbacks,
+health reset, and that disposed means resources have been reaped.
+
+Normal deactivation and replacement wait for the predecessor's retirement.
+Readiness, preparation, positive commit acknowledgement and workspace-session
+creation are ordered so first narration cannot be sent before attachment.
+Restart restores settings, never live worker or proof handles. Abrupt operating
+system termination is outside this graceful-shutdown guarantee.
+
+Solitary coverage, finite models, composed worker/host/router traces and real
+child abort tests provide different evidence. Fake synthesis and output do not
+prove AMD hardware compatibility or audibility. Physical CPU/GPU switching and
+restart remain a separate host validation step; published readiness describes
+cached checks and must not be presented as proof of sound.

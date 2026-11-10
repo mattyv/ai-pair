@@ -143,7 +143,7 @@ export async function cloudServicePaths(): Promise<void> {
       failure = { kind: 'auth' };
       await withoutObserver.speak('No observer.');
     } finally {
-      withoutObserver.dispose();
+      await withoutObserver.dispose();
     }
     let missingReason: CloudSpeechFailureReason | undefined;
     const missingOptions: SpeechServiceOptions = {
@@ -168,10 +168,10 @@ export async function cloudServicePaths(): Promise<void> {
       await missing.speak('Provider removed.');
       assert.equal(missingReason, 'unknown');
     } finally {
-      missing.dispose();
+      await missing.dispose();
     }
     assert.doesNotMatch(JSON.stringify({ diagnostics, statuses }), /private/i);
   } finally {
-    service.dispose();
+    await service.dispose();
   }
 }

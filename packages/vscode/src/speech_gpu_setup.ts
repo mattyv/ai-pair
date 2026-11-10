@@ -21,18 +21,31 @@ const PROOF_REASONS: Record<GpuProofFailure, GpuUnavailableReason> = {
 };
 
 /** Checks the isolated runtime, verified model and hardware before enabling GPU. */
-export async function checkGpuSetup(options: GpuSetupDependencies): Promise<GpuCheck> {
+export async function checkGpuSetup(options: GpuSetupDependencies, signal?: AbortSignal): Promise<GpuCheck> {
+  function checkAbort(): void {
+    if (signal?.aborted === true) throw new DOMException('Aborted', 'AbortError');
+  }
+  checkAbort();
   if (!options.supported) return { phase: 'unavailable', reason: 'unsupported' };
   try {
-    if (!options.inferenceAvailable || !(await options.runtimeAvailable())) return { phase: 'unavailable', reason: 'runtime_missing' };
+    const runtimeReady = options.inferenceAvailable && (await options.runtimeAvailable());
+    checkAbort();
+    if (!runtimeReady) return { phase: 'unavailable', reason: 'runtime_missing' };
   } catch {
+    checkAbort();
     return { phase: 'unavailable', reason: 'runtime_missing' };
   }
+  checkAbort();
   try {
-    if (!(await options.modelAvailable())) return { phase: 'unavailable', reason: 'model_missing' };
+    const modelReady = await options.modelAvailable();
+    checkAbort();
+    if (!modelReady) return { phase: 'unavailable', reason: 'model_missing' };
   } catch {
+    checkAbort();
     return { phase: 'unavailable', reason: 'model_missing' };
   }
-  const result = await checkGpu(options.probe);
+  checkAbort();
+  const result = await checkGpu(options.probe, signal);
+  checkAbort();
   return result.phase === 'ready' ? result : { phase: 'unavailable', reason: PROOF_REASONS[result.reason] };
 }

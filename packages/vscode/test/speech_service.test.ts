@@ -1,48 +1,42 @@
+/* oxlint-disable typescript/unbound-method -- Lifecycle methods are Vitest mocks without a receiver. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mock } from 'vitest-mock-extended';
 import { LOCAL_PROTOCOL_VERSION, LOCAL_REQUEST } from '../src/speech_local_protocol';
 import { installedSpeechModel } from '../src/speech_setup';
 import { speechRuntimeAvailable } from '../src/speech_runtime_status';
 import { SpeechService, type SpeechOutput } from '../src/speech_service';
-import { GpuProcessBusyError } from '../src/speech_gpu_client';
-import type {
-  LocalClientState,
-  LocalListener,
-  LocalSynthesisOutcome,
-  LocalSynthesisPort,
-  LocalSynthesisRequest,
-} from '../src/speech_local_client';
+import type { LocalListener, LocalSynthesisOutcome, LocalSynthesisPort, LocalSynthesisRequest } from '../src/speech_local_client';
 import type { ElevenLabsSpeechPort, LocalSpeechFailureReason, SpeechSettings } from '../src/speech_types';
 import { decodeSpeechWav, encodeTempoWav } from '../src/speech_tempo_pcm';
+import type { SpeechLifecycle, SpeechLifecycleOptions, SpeechLifecycleResult, SpeechLifecycleSnapshot } from '../src/speech_lifecycle';
 
 const fake = vi.hoisted(() => {
   const Worker = vi.fn();
+  const makeLifecycle = vi.fn<(options: SpeechLifecycleOptions) => SpeechLifecycle>();
   /** The inert stand-in for the real client, used by every service built without an injected one. */
   class LocalSynthesisClient {
     static made: Array<{ spawn: (modelPath: string) => unknown; listener: unknown }> = [];
     constructor(options: { spawn: (modelPath: string) => unknown; listener: unknown }) {
       LocalSynthesisClient.made.push(options);
     }
-    state(): string {
-      return 'cold';
-    }
-    busy(): boolean {
-      return false;
-    }
-    load(): void {}
-    synthesize(): Promise<unknown> {
-      return Promise.resolve({ status: 'failed', reason: 'unavailable' });
-    }
-    cancel(): void {}
-    retire(): void {}
   }
-  return { Worker, LocalSynthesisClient };
+  return { Worker, LocalSynthesisClient, makeLifecycle };
 });
+vi.mock('../src/speech_lifecycle', () => ({
+  // A constructor mock must be constructable.
+  // oxlint-disable-next-line eslint/prefer-arrow-callback
+  SpeechLifecycle: vi.fn(function (options: SpeechLifecycleOptions) {
+    return fake.makeLifecycle(options);
+  }),
+}));
 vi.mock('node:worker_threads', () => ({ Worker: fake.Worker }));
 vi.mock('../src/speech_local_client', () => ({ LocalSynthesisClient: fake.LocalSynthesisClient }));
-vi.mock('../src/speech_gpu_client', () => ({ GpuProcessBusyError: class extends Error {} }));
 vi.mock('../src/speech_setup', () => ({ installedSpeechModel: vi.fn() }));
 vi.mock('../src/speech_runtime_status', () => ({ speechRuntimeAvailable: vi.fn() }));
+vi.mock('../src/speech_types', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/speech_types')>();
+  return { ...actual, speechListeningRate: vi.fn((value: unknown) => (value === 0.75 || value === 1.25 || value === 1.5 ? value : 1)) };
+});
 vi.mock('../src/speech_tempo_pcm', () => ({ decodeSpeechWav: vi.fn(), encodeTempoWav: vi.fn() }));
 vi.mock('../src/speech_segments', () => ({
   speechSegments: vi.fn((text: string) => text.match(/[^.!?]+[.!?]\s*/gu) ?? [text]),
@@ -67,85 +61,80 @@ interface LocalCall {
   request: LocalSynthesisRequest;
   settle: (outcome: LocalSynthesisOutcome) => void;
   returned: boolean;
-  canceled: boolean;
 }
 
-/** A typed fake local engine whose lifecycle events the test raises; it follows the client's documented contract. */
+/** A controlled manager mock: tests settle acquisitions and synthesis without implementing worker ownership. */
 class LocalDouble {
-  readonly port = mock<LocalSynthesisPort>();
+  readonly manager = mock<SpeechLifecycle>();
   readonly calls: LocalCall[] = [];
-  phase: LocalClientState = 'cold';
-  listener?: LocalListener;
-
-  constructor() {
-    this.port.state.mockImplementation(() => this.phase);
-    this.port.busy.mockImplementation(() => this.calls.some((call) => !call.returned));
-    this.port.load.mockImplementation((modelPath) => {
-      expect(modelPath).toBeTypeOf('string');
-      this.phase = 'loading';
-    });
-    this.port.synthesize.mockImplementation((request) => {
-      // The fake accepts only what the real client's protocol would send.
-      LOCAL_REQUEST.parse({ type: 'synthesize', version: LOCAL_PROTOCOL_VERSION, epoch: 1, ...request });
-      const outcome = Promise.withResolvers<LocalSynthesisOutcome>();
-      this.calls.push({ request, settle: outcome.resolve, returned: false, canceled: false });
-      return outcome.promise;
-    });
-    this.port.cancel.mockImplementation(() => {
-      for (const call of this.calls) {
-        if (!call.returned && !call.canceled) {
-          call.canceled = true;
-          call.settle({ status: 'failed', reason: 'canceled' });
-        }
-      }
-    });
-    this.port.retire.mockImplementation((reason) => {
-      this.retired(reason);
-    });
-  }
-
-  /** Makes the factory the service receives. */
-  factory = (listener: LocalListener): LocalSynthesisPort => {
-    this.listener = listener;
-    return this.port;
+  readonly acquisitions: Array<{ id: number; resolve: (result: SpeechLifecycleResult) => void }> = [];
+  options?: SpeechLifecycleOptions;
+  private value: SpeechLifecycleSnapshot = {
+    requestedMode: 'cpu',
+    actualBackend: 'none',
+    phase: 'cold',
+    gpuCheck: { phase: 'idle' },
+    generation: 0,
   };
 
-  /** The worker reported valid capabilities. */
-  ready(): void {
-    this.phase = 'ready';
-    this.listener?.ready();
+  constructor() {
+    this.manager.snapshot.mockImplementation(() => this.value);
+    this.manager.select.mockImplementation((requestedMode) => {
+      this.value = { ...this.value, requestedMode };
+    });
+    this.manager.acquire.mockImplementation((id) => {
+      const pending = Promise.withResolvers<SpeechLifecycleResult>();
+      this.acquisitions.push({ id, resolve: pending.resolve });
+      return pending.promise;
+    });
+    this.manager.synthesize.mockImplementation((lease, request) => {
+      expect(lease.unitId).toBe(request.id);
+      LOCAL_REQUEST.parse({ type: 'synthesize', version: LOCAL_PROTOCOL_VERSION, epoch: 1, ...request });
+      const outcome = Promise.withResolvers<LocalSynthesisOutcome>();
+      this.calls.push({ request, settle: outcome.resolve, returned: false });
+      return outcome.promise;
+    });
+    this.manager.busy.mockReturnValue(false);
+    this.manager.dispose.mockResolvedValue();
+    this.manager.retireWorker.mockReturnValue(true);
   }
 
-  /** Returns the audio of the oldest outstanding request for the unit and part, then lets promises settle. */
+  attach(options: SpeechLifecycleOptions): SpeechLifecycle {
+    this.options = options;
+    this.value = { ...this.value, requestedMode: options.requestedMode };
+    return this.manager;
+  }
+
+  change(patch: Partial<SpeechLifecycleSnapshot>): void {
+    this.value = { ...this.value, ...patch };
+    this.options?.changed(this.value);
+  }
+
+  async ready(): Promise<void> {
+    this.value = { ...this.value, phase: 'ready', actualBackend: 'cpu' };
+    this.options?.changed(this.value);
+    for (const pending of this.acquisitions.splice(0)) {
+      pending.resolve({ status: 'ready', lease: { unitId: pending.id, generation: this.value.generation } });
+    }
+    await settle();
+  }
+
   async audio(id: number, part = 0, durationMs = 1000, wav = new Uint8Array(44)): Promise<void> {
     this.take(id, part)?.settle({ status: 'audio', wav, durationMs });
     await settle();
   }
 
-  /** The host reported a synthesis failure for the unit and part. */
   async failure(id: number, part = 0): Promise<void> {
     this.take(id, part)?.settle({ status: 'failed', reason: 'synthesis' });
     await settle();
   }
 
-  /** The worker was retired: it keeps the slot until released; its pending request fails. */
   retired(reason: LocalSpeechFailureReason): void {
-    if (this.phase === 'cold' || this.phase === 'retiring') return;
-    this.phase = 'retiring';
-    for (const call of this.calls) {
-      if (!call.returned && !call.canceled) call.settle({ status: 'failed', reason });
-      call.returned = true;
-    }
-    this.listener?.retired(reason);
+    this.value = { ...this.value, phase: 'retiring', actualBackend: 'none', failureReason: reason };
+    this.options?.changed(this.value);
+    for (const pending of this.acquisitions.splice(0)) pending.resolve({ status: 'unavailable', reason });
   }
 
-  /** The retired worker has exited. */
-  released(): void {
-    this.phase = 'cold';
-    this.listener?.reaped?.();
-  }
-
-  /** Requests whose unit and part match, excluding those the worker already returned. */
   private take(id: number, part: number): LocalCall | undefined {
     const call = this.calls.find((candidate) => !candidate.returned && candidate.request.id === id && candidate.request.part === part);
     if (call !== undefined) call.returned = true;
@@ -175,7 +164,6 @@ function harness(enabled = true, computeMode: () => 'cpu' | 'auto' | 'gpu' = () 
     storageDirectory: '/storage',
     localDesktop: true,
     output,
-    createLocal: double.factory,
     computeMode,
     settings: () => ({ enabled, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
   });
@@ -186,6 +174,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   fake.LocalSynthesisClient.made.length = 0;
   local = new LocalDouble();
+  fake.makeLifecycle.mockImplementation((options) => local.attach(options));
   vi.mocked(installedSpeechModel).mockResolvedValue('/model');
   vi.mocked(speechRuntimeAvailable).mockResolvedValue(true);
 });
@@ -204,7 +193,7 @@ describe('SpeechService', () => {
       const { service } = harness();
       const gate = service.speak('Hello.');
       await settle();
-      expect(local.port.load).toHaveBeenCalledWith('/model');
+      expect(local.manager.acquire).toHaveBeenCalledOnce();
       service.cancel();
       await gate;
     } finally {
@@ -215,7 +204,7 @@ describe('SpeechService', () => {
   it('defaults to silent behavior when disabled', async () => {
     const { service, output } = harness(false);
     await service.speak('Hello.');
-    expect(local.port.load).not.toHaveBeenCalled();
+    expect(local.manager.acquire).not.toHaveBeenCalled();
     expect(output.play).not.toHaveBeenCalled();
   });
 
@@ -223,8 +212,8 @@ describe('SpeechService', () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    expect(local.port.load).toHaveBeenCalledWith('/model');
-    local.ready();
+    expect(local.manager.acquire).toHaveBeenCalledOnce();
+    await local.ready();
     expect(local.calls.map((call) => call.request)).toEqual([{ id: 1, part: 0, final: true, text: 'Hello.', voice: 'af_heart', speed: 1 }]);
     await local.audio(1);
     expect(output.play).toHaveBeenCalledWith(1, new Uint8Array(44), 1000);
@@ -246,7 +235,7 @@ describe('SpeechService', () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    local.ready();
+    await local.ready();
     service.pause();
     await local.audio(1);
     expect(output.play).not.toHaveBeenCalled();
@@ -260,7 +249,7 @@ describe('SpeechService', () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    local.ready();
+    await local.ready();
     local.retired('timeout');
     await gate;
     expect(output.localDiagnostic).toHaveBeenCalledWith('failed', 'timeout');
@@ -278,7 +267,7 @@ describe('SpeechService lifecycle', () => {
     });
     await service.speak('Hello.');
     expect(installedSpeechModel).not.toHaveBeenCalled();
-    expect(local.port.load).not.toHaveBeenCalled();
+    expect(local.manager.acquire).not.toHaveBeenCalled();
   });
 
   it('does not post audio when its preparing notification synchronously cancels it', async () => {
@@ -289,7 +278,7 @@ describe('SpeechService lifecycle', () => {
     });
     const gate = service.speak('Hello.');
     await settle();
-    local.ready();
+    await local.ready();
     await local.audio(1);
     await gate;
     expect(output.play).not.toHaveBeenCalled();
@@ -303,75 +292,10 @@ describe('SpeechService lifecycle', () => {
     });
     const gate = service.speak('Hello.');
     await settle();
-    local.ready();
+    await local.ready();
     await local.audio(1);
     await gate;
     expect(output.control).toHaveBeenCalledWith(1, 7, 'stop');
-  });
-
-  it('does not retry synthesis while a canceled worker job is still running', async () => {
-    const { service, output } = harness();
-    const first = service.speak('First.');
-    await settle();
-    local.ready();
-    service.cancel();
-    await first;
-    await service.speak('Second.');
-    expect(output.status).toHaveBeenCalledWith(2, 'unavailable', expect.stringContaining('finishing'));
-    expect(local.calls).toHaveLength(1);
-    await local.audio(1);
-    const third = service.speak('Third.');
-    expect(local.calls.map((call) => call.request)).toEqual([
-      expect.objectContaining({ id: 1 }),
-      expect.objectContaining({ id: 3, text: 'Third.' }),
-    ]);
-    await local.audio(1);
-    expect(output.play).not.toHaveBeenCalled();
-    service.cancel();
-    await third;
-  });
-
-  it('NoCanceledResume: a unit canceled during model loading leaves the load to the worker watchdog', async () => {
-    const { service } = harness();
-    const gate = service.speak('Hello.');
-    await settle();
-    service.cancel();
-    await gate;
-    await vi.advanceTimersByTimeAsync(20_000);
-    expect(local.port.cancel).toHaveBeenCalled();
-    expect(local.port.retire).not.toHaveBeenCalled();
-    expect(local.calls).toHaveLength(0);
-  });
-
-  it('the unit deadline retires a worker that is still loading and falls back to reading', async () => {
-    const { service, output } = harness();
-    const gate = service.speak('Hello.');
-    await settle();
-    await vi.advanceTimersByTimeAsync(20_000);
-    await gate;
-    expect(local.port.retire).toHaveBeenCalledExactlyOnceWith('timeout');
-    expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.any(String));
-  });
-
-  it('OneEngine: refuses a new unit while a retired worker has not exited, then loads a fresh one', async () => {
-    const { service, output } = harness();
-    const first = service.speak('First.');
-    await settle();
-    local.ready();
-    service.cancel();
-    await first;
-    local.retired('timeout');
-    await service.speak('Second.');
-    expect(local.port.load).toHaveBeenCalledTimes(1);
-    expect(output.status).toHaveBeenCalledWith(2, 'unavailable', expect.stringContaining('finishing'));
-    await local.audio(1);
-    expect(output.play).not.toHaveBeenCalled();
-    local.released();
-    const third = service.speak('Third.');
-    await settle();
-    expect(local.port.load).toHaveBeenCalledTimes(2);
-    service.cancel();
-    await third;
   });
 
   it('shows preparation again when a synthesis pause clears', async () => {
@@ -388,7 +312,7 @@ describe('SpeechService lifecycle', () => {
     const { service } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    local.ready();
+    await local.ready();
     await local.audio(1);
     service.audioEvent({ id: 1, pageId: 7, event: 'started' });
     await vi.advanceTimersByTimeAsync(3000);
@@ -406,7 +330,7 @@ describe('SpeechService lifecycle', () => {
     const { service } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    local.ready();
+    await local.ready();
     await local.audio(1);
     service.audioEvent({ id: 1, pageId: 7, event: 'started' });
     await vi.advanceTimersByTimeAsync(3000);
@@ -430,7 +354,7 @@ describe('SpeechService lifecycle', () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    local.ready();
+    await local.ready();
     await local.audio(1);
     service.audioEvent({ id: 1, pageId: 7, event: 'started' });
     if (reason === 'cancel') service.cancel();
@@ -444,7 +368,7 @@ describe('SpeechService lifecycle', () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    local.ready();
+    await local.ready();
     await local.audio(1);
     service.pageClosed(7);
     await gate;
@@ -456,17 +380,21 @@ describe('SpeechService lifecycle', () => {
   it('uses text-only fallback when model or page is missing and for invalid worker audio', async () => {
     const missing = harness();
     vi.mocked(installedSpeechModel).mockResolvedValueOnce(undefined);
-    await missing.service.speak('Hello.');
+    const missingGate = missing.service.speak('Hello.');
+    expect(await local.options?.resolveCpu(new AbortController().signal)).toBeUndefined();
+    local.acquisitions[0]?.resolve({ status: 'unavailable', reason: 'model_missing' });
+    await missingGate;
     expect(missing.output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('Download the Kokoro model'));
     const noPage = harness();
     noPage.output.play.mockReturnValue(undefined);
     const gate = noPage.service.speak('Hello.');
     await settle();
-    local.ready();
+    await local.ready();
     await local.audio(1);
     await gate;
     expect(noPage.output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('panel'));
     const invalid = noPage.service.speak('Again.');
+    await local.ready();
     await local.audio(2, 0, 1000, new Uint8Array(43));
     await invalid;
     expect(noPage.output.status).toHaveBeenCalledWith(2, 'unavailable', expect.stringContaining('invalid'));
@@ -486,23 +414,12 @@ describe('SpeechService failures and races', () => {
         storageDirectory: '/storage',
         localDesktop: true,
         output,
-        createLocal: newLocal().factory,
         settings: () => settings,
       });
       await service.speak('Hello.');
       expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('supported'));
-      expect(local.port.load).not.toHaveBeenCalled();
+      expect(local.manager.acquire).not.toHaveBeenCalled();
     }
-  });
-
-  it('reports a package without a bundled runtime as unavailable', async () => {
-    const { service, output } = harness();
-    vi.mocked(speechRuntimeAvailable).mockResolvedValueOnce(false);
-    const gate = service.speak('Hello.');
-    await settle();
-    expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('runtime'));
-    expect(local.port.load).not.toHaveBeenCalled();
-    await gate;
   });
 
   it.each([
@@ -519,12 +436,11 @@ describe('SpeechService failures and races', () => {
       storageDirectory: '/storage',
       localDesktop: true,
       output,
-      createLocal: newLocal().factory,
       settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
     });
     await service.speak('Hello.');
     expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('local Linux'));
-    expect(local.port.load).not.toHaveBeenCalled();
+    expect(local.manager.acquire).not.toHaveBeenCalled();
   });
 
   it('explains unsupported extension hosts without starting a worker', async () => {
@@ -535,19 +451,18 @@ describe('SpeechService failures and races', () => {
       storageDirectory: '/storage',
       localDesktop: false,
       output,
-      createLocal: newLocal().factory,
       settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
     });
     await service.speak('Hello.');
     expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('local Linux'));
-    expect(local.port.load).not.toHaveBeenCalled();
+    expect(local.manager.acquire).not.toHaveBeenCalled();
   });
 
   it('resumes a prepared waveform only when the global pause clears', async () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    local.ready();
+    await local.ready();
     service.pause();
     await local.audio(1);
     expect(output.play).not.toHaveBeenCalled();
@@ -567,7 +482,7 @@ describe('SpeechService failures and races', () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    local.ready();
+    await local.ready();
     await local.audio(1);
     service.pause();
     service.audioEvent({ id: 1, pageId: 7, event: 'started' });
@@ -588,39 +503,11 @@ describe('SpeechService failures and races', () => {
     expect(output.localDiagnostic).toHaveBeenCalledWith('failed', reason);
   });
 
-  it('keeps a loading worker after cancellation but ignores the old request', async () => {
-    const { service } = harness();
-    const first = service.speak('Old.');
-    await settle();
-    service.cancel();
-    await first;
-    const next = service.speak('New.');
-    await settle();
-    expect(local.port.load).toHaveBeenCalledTimes(1);
-    local.ready();
-    expect(local.calls.map((call) => call.request)).toEqual([expect.objectContaining({ id: 2, text: 'New.' })]);
-    service.cancel();
-    await next;
-  });
-
-  it('ignores a discovery rejection after that generation was canceled', async () => {
-    const discovery = Promise.withResolvers<string | undefined>();
-    vi.mocked(installedSpeechModel).mockReturnValueOnce(discovery.promise);
-    const { service, output } = harness();
-    const gate = service.speak('Old.');
-    await settle();
-    service.cancel();
-    await gate;
-    discovery.reject(new Error('private'));
-    await settle();
-    expect(output.status).not.toHaveBeenCalledWith(1, 'unavailable', expect.any(String));
-  });
-
   it('handles a client that retires a worker it could not send a request to', async () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    local.ready();
+    await local.ready();
     local.retired('worker_error');
     await gate;
     expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.any(String));
@@ -642,31 +529,6 @@ describe('SpeechService failures and races', () => {
     timers.mockRestore();
   });
 
-  it('survives cancellation reentered from an unavailable notification', async () => {
-    const { service, output } = harness();
-    output.status.mockImplementation((id, state) => {
-      if (id === 1 && state === 'unavailable') service.cancel();
-    });
-    vi.mocked(installedSpeechModel).mockResolvedValueOnce(undefined);
-    await service.speak('Hello.');
-    expect(output.status).toHaveBeenCalledWith(1, 'idle');
-  });
-
-  it('accepts worker readiness after its requesting unit was canceled', async () => {
-    const { service, output } = harness();
-    const first = service.speak('Old.');
-    await settle();
-    service.cancel();
-    await first;
-    local.ready();
-    const next = service.speak('New.');
-    expect(local.calls.map((call) => call.request)).toEqual([expect.objectContaining({ id: 2, text: 'New.' })]);
-    await local.failure(1);
-    expect(output.status).not.toHaveBeenCalledWith(1, 'unavailable', expect.any(String));
-    service.cancel();
-    await next;
-  });
-
   it('handles cancellation during a failed page post and idle controls', async () => {
     const { service, output } = harness();
     service.pause();
@@ -678,19 +540,19 @@ describe('SpeechService failures and races', () => {
     });
     const gate = service.speak('Hello.');
     await settle();
-    local.ready();
+    await local.ready();
     await local.audio(1);
     await gate;
     expect(output.control).not.toHaveBeenCalled();
-    service.dispose();
-    service.dispose();
+    await service.dispose();
+    await service.dispose();
   });
 
   it('keeps the watchdog remaining time after a duplicate pause', async () => {
     const { service } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    local.ready();
+    await local.ready();
     await local.audio(1);
     service.audioEvent({ id: 1, pageId: 7, event: 'started' });
     service.pause();
@@ -700,31 +562,12 @@ describe('SpeechService failures and races', () => {
     await gate;
   });
 
-  it('drops a canceled discovery result and reports discovery failure safely', async () => {
-    const discovery = Promise.withResolvers<string | undefined>();
-    vi.mocked(installedSpeechModel).mockReturnValueOnce(discovery.promise);
-    const first = harness();
-    const gate = first.service.speak('Old.');
-    await settle();
-    first.service.cancel();
-    await gate;
-    discovery.resolve('/model');
-    await settle();
-    expect(local.port.load).not.toHaveBeenCalled();
-    const next = harness();
-    vi.mocked(installedSpeechModel).mockRejectedValueOnce(new Error('private path'));
-    await next.service.speak('New.');
-    expect(next.output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('could not start'));
-    expect(JSON.stringify(next.output.status.mock.calls)).not.toContain('private path');
-  });
-
   it('TruthfulUnavailable: a worker that cannot load its model ends the unit with the model_load category', async () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
     local.retired('model_load');
     await gate;
-    local.released();
     expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('stopped'));
     expect(output.localDiagnostic).toHaveBeenCalledWith('failed', 'model_load');
     expect(local.calls).toHaveLength(0);
@@ -734,7 +577,7 @@ describe('SpeechService failures and races', () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    local.ready();
+    await local.ready();
     await local.audio(1);
     service.pageClosed(8);
     service.pause();
@@ -742,28 +585,6 @@ describe('SpeechService failures and races', () => {
     expect(output.status).toHaveBeenLastCalledWith(1, 'preparing');
     service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
     await gate;
-  });
-
-  it('falls back when the client cannot start the worker, using only the allowlisted error code', async () => {
-    const { service, output } = harness();
-    local.port.load.mockImplementationOnce(() => {
-      throw Object.assign(new Error('/private/path'), { code: 'EACCES' });
-    });
-    await service.speak('Hello.');
-    expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('could not start'));
-    expect(output.localDiagnostic).toHaveBeenCalledWith('failed', 'worker_permission');
-    expect(JSON.stringify(output.status.mock.calls)).not.toContain('private');
-  });
-
-  it('ignores a failed start whose unit was canceled meanwhile', async () => {
-    const { service, output } = harness();
-    local.port.load.mockImplementationOnce(() => {
-      service.cancel();
-      throw new Error('late');
-    });
-    await service.speak('Hello.');
-    expect(output.localDiagnostic).not.toHaveBeenCalled();
-    expect(output.status).not.toHaveBeenCalledWith(1, 'unavailable', expect.any(String));
   });
 
   it('falls back on a retired worker and on audio play failures', async () => {
@@ -780,7 +601,7 @@ describe('SpeechService failures and races', () => {
     });
     const next = second.service.speak('Hello.');
     await settle();
-    local.ready();
+    await local.ready();
     await local.audio(1);
     await next;
     expect(second.output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('Audio'));
@@ -790,12 +611,13 @@ describe('SpeechService failures and races', () => {
     const { service, output } = harness();
     const first = service.speak('One.');
     await settle();
-    local.ready();
+    await local.ready();
     await local.failure(1);
     await first;
     expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'Could not speak this text. Continue reading it.');
     expect(output.localDiagnostic).toHaveBeenCalledWith('failed', 'synthesis');
     const next = service.speak('Two.');
+    await local.ready();
     await local.audio(2);
     expect(service.audioEvent({ id: 1, pageId: 7, event: 'failed' })).toBeUndefined();
     expect(service.audioEvent({ id: 2, pageId: 7, event: 'failed' })).toBe('failed');
@@ -807,14 +629,15 @@ describe('SpeechService failures and races', () => {
     const disabled = harness(false);
     const preview = disabled.service.preview();
     await settle();
-    expect(local.port.load).toHaveBeenCalledTimes(1);
+    expect(local.manager.acquire).toHaveBeenCalledTimes(1);
     disabled.service.cancel();
     await preview;
 
     const live = harness();
     const sample = live.service.preview();
     await settle();
-    local.ready();
+    await local.ready();
+    local.manager.acquire.mockResolvedValueOnce({ status: 'unavailable', reason: 'busy' });
     const next = live.service.speak('Live.');
     await sample;
     await next;
@@ -825,10 +648,11 @@ describe('SpeechService failures and races', () => {
     const { service } = harness();
     const first = service.speak('Failed text.');
     await settle();
-    local.ready();
+    await local.ready();
     await local.failure(1);
     await first;
     const second = service.speak('Next text.');
+    await local.ready();
     expect(local.calls.map((call) => call.request.text)).toEqual(['Failed text.', 'Next text.']);
     service.cancel();
     await second;
@@ -838,7 +662,7 @@ describe('SpeechService failures and races', () => {
     const { service, output } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    local.ready();
+    await local.ready();
     local.calls[0]?.settle({ status: 'failed', reason: 'unavailable' });
     await gate;
     expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'Could not speak this text. Continue reading it.');
@@ -848,11 +672,11 @@ describe('SpeechService failures and races', () => {
     const { service } = harness();
     const gate = service.speak('Hello.');
     await settle();
-    service.dispose();
+    await service.dispose();
     await gate;
-    expect(local.port.retire).toHaveBeenCalledExactlyOnceWith('worker_error');
+    expect(local.manager.dispose).toHaveBeenCalledOnce();
     await service.speak('Later.');
-    expect(local.port.load).toHaveBeenCalledTimes(1);
+    expect(local.manager.acquire).toHaveBeenCalledTimes(1);
   });
 
   it('builds the packaged Node worker client when none is injected', () => {
@@ -864,6 +688,7 @@ describe('SpeechService failures and races', () => {
       settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
     });
     expect(service).toBeInstanceOf(SpeechService);
+    local.options?.createCpu(mock<LocalListener>());
     const options = fake.LocalSynthesisClient.made[0];
     expect(options).toBeDefined();
     // The pinned phonemizer bridge reads the verified model directory from workerData.
@@ -1038,7 +863,7 @@ it('supports cloud on macOS without requiring the local runtime', async () => {
   cloud.synthesize.mockResolvedValue({ wav: new Uint8Array(44), durationMs: 1000 });
   const gate = service.speak('Hello.');
   await settle();
-  expect(local.port.load).not.toHaveBeenCalled();
+  expect(local.manager.acquire).not.toHaveBeenCalled();
   expect(service.audioEvent({ id: 1, pageId: 7, event: 'ended' })).toBe('ended');
   await gate;
 });
@@ -1113,7 +938,7 @@ it('rejects unknown providers without falling back or starting a request', async
   Object.assign(settings, { provider: 'unknown' });
   await service.speak('Do not send.');
   expect(cloud.synthesize.mock.calls).toHaveLength(0);
-  expect(local.port.load).not.toHaveBeenCalled();
+  expect(local.manager.acquire).not.toHaveBeenCalled();
   expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('provider'));
 });
 
@@ -1158,7 +983,7 @@ it('allows an existing local speech unit to survive a cloud key change', async (
   const gate = service.speak('Local.');
   await settle();
   service.invalidateCloud();
-  local.ready();
+  await local.ready();
   await local.audio(1);
   expect(service.audioEvent({ id: 1, pageId: 7, event: 'ended' })).toBe('ended');
   await gate;
@@ -1212,12 +1037,11 @@ it('does not let an idle local worker failure interrupt an active cloud unit', a
     localDesktop: true,
     output,
     cloud,
-    createLocal: newLocal().factory,
     settings: () => settings,
   });
   const localGate = service.speak('Local.');
   await settle();
-  local.ready();
+  await local.ready();
   await local.audio(1);
   service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
   await localGate;
@@ -1278,11 +1102,10 @@ it('blocks local speech on a non-glibc host while leaving cloud available', asyn
     kokoroSupported: false,
     output,
     cloud,
-    createLocal: newLocal().factory,
     settings: () => settings,
   });
   await service.speak('Local.');
-  expect(local.port.load).not.toHaveBeenCalled();
+  expect(local.manager.acquire).not.toHaveBeenCalled();
   settings.provider = 'elevenlabs';
   const cloudGate = service.speak('Cloud.');
   await settle();
@@ -1300,12 +1123,11 @@ it('uses local defaults for a preference saved before providers existed', async 
     storageDirectory: '',
     localDesktop: true,
     output,
-    createLocal: newLocal().factory,
     settings: () => settings,
   });
   const gate = service.speak('Local.');
   await settle();
-  expect(local.port.load).toHaveBeenCalledTimes(1);
+  expect(local.manager.acquire).toHaveBeenCalledTimes(1);
   service.cancel();
   await gate;
 });
@@ -1325,46 +1147,14 @@ it('ignores a stale queued cloud watchdog after its request settles', async () =
   await gate;
 });
 
-it('classifies a native worker failure by code without exposing error text', async () => {
-  const { service, output } = harness();
-  local.port.load.mockImplementationOnce(() => {
-    throw Object.assign(new Error('/private/lib secret text'), { code: 'ERR_DLOPEN_FAILED' });
-  });
-  const gate = service.speak('Synthetic.');
-  await settle();
-  await gate;
-  expect(output.localDiagnostic).toHaveBeenCalledWith('failed', 'worker_native');
-  expect(JSON.stringify(vi.mocked(output.localDiagnostic)?.mock.calls)).not.toMatch(/private|secret/);
-});
-
 it('records a local worker-ready checkpoint before synthesis', async () => {
   const { service, output } = harness();
   const gate = service.speak('Synthetic.');
   await settle();
-  local.ready();
+  await local.ready();
   expect(output.localDiagnostic).toHaveBeenCalledWith('ready', undefined);
   service.cancel();
   await gate;
-});
-
-it.each([
-  [{ code: 'ERR_MODULE_NOT_FOUND', message: '/private/file' }, 'worker_module'],
-  [{ code: 'MODULE_NOT_FOUND', message: '/private/file' }, 'worker_module'],
-  [{ code: 'EACCES', message: '/private/file' }, 'worker_permission'],
-  [{ code: 'EPERM', message: '/private/file' }, 'worker_permission'],
-  [{ code: 'SOME_UNKNOWN_CODE', message: '/private/file' }, 'worker_error'],
-  [new Error('private detail'), 'worker_error'],
-] as const)('classifies worker errors using only allowlisted codes', async (error, reason) => {
-  const { service, output } = harness();
-  const thrown: unknown = error;
-  local.port.load.mockImplementationOnce(() => {
-    throw thrown;
-  });
-  const gate = service.speak('Synthetic.');
-  await settle();
-  await gate;
-  expect(output.localDiagnostic).toHaveBeenCalledWith('failed', reason);
-  expect(JSON.stringify(vi.mocked(output.localDiagnostic)?.mock.calls)).not.toMatch(/private|SOME_UNKNOWN/);
 });
 
 it('reports the worker category the client gives for a retirement before and after readiness', async () => {
@@ -1377,7 +1167,7 @@ it('reports the worker category the client gives for a retirement before and aft
   const second = harness();
   const secondGate = second.service.speak('Synthetic.');
   await settle();
-  local.ready();
+  await local.ready();
   local.retired('worker_error');
   await secondGate;
   expect(second.output.localDiagnostic).toHaveBeenCalledWith('failed', 'worker_error');
@@ -1390,7 +1180,7 @@ it('does not let diagnostic callback failures interrupt local speech', async () 
   });
   const gate = service.speak('Synthetic.');
   await settle();
-  local.ready();
+  await local.ready();
   await local.audio(1);
   expect(service.audioEvent({ id: 1, pageId: 7, event: 'ended' })).toBe('ended');
   await gate;
@@ -1497,14 +1287,14 @@ it('does not let a canceled worker readiness bypass a newer pending output admis
   const pending = Promise.withResolvers<boolean>();
   output.prepare = vi.fn(() => pending.promise);
   const second = service.speak('New');
-  local.ready();
+  await local.ready();
   expect(local.calls).toHaveLength(0);
   pending.resolve(false);
   await second;
   expect(local.calls).toHaveLength(0);
 });
 
-it('starts the already-ready worker exactly once after the newer admission succeeds', async () => {
+it('starts synthesis only after the newer admission and acquisition succeed', async () => {
   const { service, output } = harness();
   const first = service.speak('Old');
   await settle();
@@ -1513,10 +1303,11 @@ it('starts the already-ready worker exactly once after the newer admission succe
   const pending = Promise.withResolvers<boolean>();
   output.prepare = vi.fn(() => pending.promise);
   const second = service.speak('New');
-  local.ready();
+  await local.ready();
   expect(local.calls).toHaveLength(0);
   pending.resolve(true);
   await settle();
+  await local.ready();
   expect(local.calls.map((call) => call.request)).toEqual([{ id: 2, part: 0, final: true, text: 'New', voice: 'af_heart', speed: 1 }]);
   service.cancel();
   await second;
@@ -1531,7 +1322,7 @@ it('retires pending admission on cancel, timeout, and disposal before late resul
     output.prepare = vi.fn(() => pending.promise);
     const gate = service.speak('One');
     if (reason === 'cancel') service.cancel();
-    else if (reason === 'dispose') service.dispose();
+    else if (reason === 'dispose') await service.dispose();
     else await vi.advanceTimersByTimeAsync(5000);
     await gate;
     expect(cancelOutput).toHaveBeenCalledWith(1);
@@ -1550,7 +1341,7 @@ it('SentencePipeline waits for the first started acknowledgement before one look
     done = true;
   });
   await settle();
-  local.ready();
+  await local.ready();
   expect(local.calls.at(-1)?.request).toEqual({
     id: 1,
     part: 0,
@@ -1591,11 +1382,13 @@ it('SentencePipeline does not dispatch the next part until its own started ackno
   output.parts = true;
   const gate = service.speak('First. Second. Third.');
   await settle();
-  local.ready();
+  await local.ready();
   await local.audio(1, 0);
   service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'started' });
+  local.manager.busy.mockReturnValue(true);
   service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'ended' });
   await local.audio(1, 1);
+  local.manager.busy.mockReturnValue(false);
   service.pause();
   service.resume();
   expect(local.calls).toHaveLength(2);
@@ -1611,7 +1404,7 @@ it('NoPausedDispatch: SentencePipeline holds first synthesis while paused during
   const gate = service.speak('First. Second.');
   await settle();
   service.pause();
-  local.ready();
+  await local.ready();
   expect(local.calls).toHaveLength(0);
   service.resume();
   expect(local.calls).toHaveLength(1);
@@ -1624,7 +1417,7 @@ it('SentencePipeline ignores a repeated part result without releasing the curren
   output.parts = true;
   const gate = service.speak('First. Second.');
   await settle();
-  local.ready();
+  await local.ready();
   await local.audio(1, 0);
   service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'started' });
   await local.audio(1, 0);
@@ -1641,7 +1434,7 @@ it('NoCanceledResume: SentencePipeline cancels a delayed lookahead on reply and 
   output.parts = true;
   const gate = service.speak('First. Second.');
   await settle();
-  local.ready();
+  await local.ready();
   await local.audio(1, 0);
   service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'started' });
   service.cancel();
@@ -1656,7 +1449,7 @@ it('SentencePipeline fails the whole unit if aggregate audio exceeds its bound',
   output.parts = true;
   const gate = service.speak('First. Second.');
   await settle();
-  local.ready();
+  await local.ready();
   await local.audio(1, 0, 25_000);
   service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'started' });
   await local.audio(1, 1, 16_000);
@@ -1676,7 +1469,7 @@ it('SentencePipeline keeps paused model-ready speech pending past the playback-s
   });
   await settle();
   service.pause();
-  local.ready();
+  await local.ready();
   await vi.advanceTimersByTimeAsync(21_000);
   expect(done).toBe(false);
   expect(output.status).not.toHaveBeenCalledWith(1, 'unavailable', expect.anything());
@@ -1694,7 +1487,7 @@ it('SentencePipeline does not launch lookahead if a status callback cancels the 
   });
   const gate = service.speak('First. Second.');
   await settle();
-  local.ready();
+  await local.ready();
   await local.audio(1, 0);
   service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'started' });
   await gate;
@@ -1706,7 +1499,7 @@ it('SentencePipeline fails an end acknowledgement before the part starts', async
   output.parts = true;
   const gate = service.speak('First. Second.');
   await settle();
-  local.ready();
+  await local.ready();
   await local.audio(1, 0);
   expect(service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'ended' })).toBe('failed');
   await gate;
@@ -1718,7 +1511,7 @@ it('SentencePipeline keeps a finished lookahead paused until the current part re
   output.parts = true;
   const gate = service.speak('First. Second.');
   await settle();
-  local.ready();
+  await local.ready();
   await local.audio(1, 0);
   service.audioEvent({ id: 1, pageId: 7, part: 0, event: 'started' });
   await local.audio(1, 1);
@@ -1736,7 +1529,7 @@ it('SentencePipeline discards a late synthesis error after cancellation', async 
   output.parts = true;
   const gate = service.speak('First. Second.');
   await settle();
-  local.ready();
+  await local.ready();
   service.cancel();
   await gate;
   await local.failure(1, 0);
@@ -1769,7 +1562,7 @@ it('SentencePipeline keeps the start watchdog frozen when admission completes wh
   service.pause();
   admission.resolve(true);
   await settle();
-  local.ready();
+  await local.ready();
   await vi.advanceTimersByTimeAsync(21_000);
   expect(done).toBe(false);
   service.resume();
@@ -1786,7 +1579,7 @@ it('SentencePipeline does not synthesize if a ready diagnostic cancels the unit'
   });
   const gate = service.speak('First. Second.');
   await settle();
-  local.ready();
+  await local.ready();
   await gate;
   expect(local.calls).toHaveLength(0);
 });
@@ -1924,7 +1717,7 @@ describe('listening-speed processing', () => {
     await service.speak('Selected text.');
     expect(output.play).not.toHaveBeenCalled();
     expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.any(String));
-    service.dispose();
+    await service.dispose();
   });
 
   it('reports unavailable without starting playback when the tempo worker is absent', async () => {
@@ -1979,7 +1772,7 @@ describe('listening-speed processing', () => {
   it('absorbs tempo disposal failure after stopping the service', async () => {
     const { service, dispose } = tempoHarness(1.25);
     dispose.mockRejectedValueOnce(new Error('worker already failed'));
-    service.dispose();
+    await service.dispose();
     await Promise.resolve();
   });
 
@@ -2022,7 +1815,6 @@ describe('listening-speed processing', () => {
       storageDirectory: '/storage',
       localDesktop: true,
       output,
-      createLocal: newLocal().factory,
       tempo: { transform, busy: () => false, dispose: vi.fn().mockResolvedValue(undefined) },
       settings: () => ({
         enabled: true,
@@ -2036,9 +1828,9 @@ describe('listening-speed processing', () => {
     });
     const finished = service.speak('First sentence. Second sentence. Third sentence.');
     await vi.waitFor(() => {
-      expect(local.port.load).toHaveBeenCalled();
+      expect(local.manager.acquire).toHaveBeenCalled();
     });
-    local.ready();
+    await local.ready();
     await local.audio(1, 0);
     await vi.waitFor(() => {
       expect(output.play).toHaveBeenCalledTimes(1);
@@ -2060,590 +1852,8 @@ describe('listening-speed processing', () => {
     expect(local.calls).toHaveLength(3);
     service.cancel();
     await finished;
-    service.dispose();
+    await service.dispose();
   });
-});
-
-it('ExplicitNoFallback: refuses explicit GPU before starting a CPU worker', async () => {
-  const { service, output, local: engine } = harness(true, () => 'gpu');
-  await service.speak('Hello.');
-  expect(engine.port.load).not.toHaveBeenCalled();
-  expect(engine.port.synthesize).not.toHaveBeenCalled();
-  expect(output.status).toHaveBeenCalledWith(expect.any(Number), 'unavailable', 'GPU speech is not available. Check GPU setup.');
-});
-
-it('reports the CPU backend when its worker becomes ready and clears it on retirement', async () => {
-  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
-  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
-  const backend = vi.fn<(value: import('../src/speech_compute_types').SpeechComputeBackend) => void>();
-  const engine = newLocal();
-  const service = new SpeechService({
-    runtimeDirectory: '/runtime',
-    storageDirectory: '/storage',
-    localDesktop: true,
-    createLocal: engine.factory,
-    actualBackend: backend,
-    output: mock<SpeechOutput>(),
-    settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
-  });
-  const speech = service.speak('Hello.');
-  await settle();
-  engine.listener?.ready();
-  expect(backend).toHaveBeenCalledWith('cpu');
-  engine.listener?.retired('worker_exit');
-  expect(backend).toHaveBeenLastCalledWith('none');
-  await speech;
-});
-
-it('GpuVerified: dispatches only through a freshly authorized GPU worker and reports its actual backend', async () => {
-  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
-  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
-  const cpu = new LocalDouble();
-  const gpu = new LocalDouble();
-  const actual = vi.fn<(value: import('../src/speech_compute_types').SpeechComputeBackend) => void>();
-  const capability = mock<import('../src/speech_gpu_client').GpuLaunchCapability>({ modelDirectory: '/gpu-model' });
-  const authorize = vi.fn().mockResolvedValue({ check: { phase: 'ready' }, capability });
-  const createGpu = vi.fn((value: typeof capability, listener: LocalListener) => {
-    expect(value).toBe(capability);
-    return gpu.factory(listener);
-  });
-  const output = mock<SpeechOutput>();
-  output.prepare = undefined;
-  const service = new SpeechService({
-    runtimeDirectory: '/runtime',
-    storageDirectory: '/storage',
-    localDesktop: true,
-    createLocal: cpu.factory,
-    gpuCapability: authorize,
-    createGpu,
-    computeMode: () => 'gpu',
-    actualBackend: actual,
-    output,
-    settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
-  });
-  const pending = service.speak('Hello.');
-  await settle();
-  expect(authorize).toHaveBeenCalledOnce();
-  expect(gpu.port.load).toHaveBeenCalledWith('/gpu-model');
-  expect(cpu.port.load).not.toHaveBeenCalled();
-  gpu.ready();
-  expect(actual).toHaveBeenCalledWith('gpu');
-  expect(gpu.port.synthesize).toHaveBeenCalledOnce();
-  service.cancel();
-  await pending;
-});
-
-/** Makes a service with separate controlled CPU and GPU workers. */
-function gpuHarness(mode: () => 'cpu' | 'auto' | 'gpu') {
-  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
-  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
-  const cpu = new LocalDouble();
-  const gpu = new LocalDouble();
-  const capability = mock<import('../src/speech_gpu_client').GpuLaunchCapability>({ modelDirectory: '/gpu-model' });
-  const authorize = vi
-    .fn<() => Promise<import('../src/speech_gpu_capability').GpuCapabilityResult>>()
-    .mockResolvedValue({ check: { phase: 'ready' }, capability });
-  const actual = vi.fn<(value: import('../src/speech_compute_types').SpeechComputeBackend) => void>();
-  const checked = vi.fn<(value: import('../src/speech_compute_types').GpuCheck) => void>();
-  const output = mock<SpeechOutput>();
-  output.prepare = undefined;
-  const service = new SpeechService({
-    runtimeDirectory: '/runtime',
-    storageDirectory: '/storage',
-    localDesktop: true,
-    createLocal: cpu.factory,
-    gpuCapability: authorize,
-    createGpu: (verified, listener) => {
-      expect(verified).toBe(capability);
-      return gpu.factory(listener);
-    },
-    computeMode: mode,
-    actualBackend: actual,
-    gpuCheck: checked,
-    output,
-    settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
-  });
-  return { service, cpu, gpu, capability, authorize, actual, checked, output };
-}
-
-it('HandoffAfterReap: switches a warm CPU worker to GPU for the next utterance', async () => {
-  let mode: 'cpu' | 'gpu' = 'cpu';
-  const { service, cpu, gpu, authorize, output } = gpuHarness(() => mode);
-  output.play.mockReturnValue(7);
-  const first = service.speak('CPU.');
-  await settle();
-  cpu.ready();
-  await cpu.audio(1);
-  expect(output.play).toHaveBeenCalledWith(1, new Uint8Array(44), 1000);
-  expect(service.audioEvent({ id: 1, pageId: 7, event: 'ended' })).toBe('ended');
-  await first;
-  mode = 'gpu';
-  const second = service.speak('GPU.');
-  await settle();
-  expect(cpu.port.retire).toHaveBeenCalledOnce();
-  expect(authorize).not.toHaveBeenCalled();
-  expect(output.status).not.toHaveBeenCalledWith(2, 'unavailable', expect.any(String));
-  cpu.released();
-  await settle();
-  expect(authorize).toHaveBeenCalledOnce();
-  gpu.ready();
-  expect(gpu.port.synthesize).toHaveBeenCalledOnce();
-  service.cancel();
-  await second;
-});
-
-it('HandoffCurrent: cancellation replaces the waiting request without starting the old one', async () => {
-  let mode: 'cpu' | 'gpu' = 'cpu';
-  const { service, cpu, gpu, authorize } = gpuHarness(() => mode);
-  const first = service.speak('CPU.');
-  await settle();
-  cpu.ready();
-  service.cancel();
-  await cpu.audio(1);
-  await first;
-  mode = 'gpu';
-  const canceled = service.speak('Canceled.');
-  service.cancel();
-  await canceled;
-  mode = 'cpu';
-  const replacement = service.speak('Replacement.');
-  cpu.released();
-  await settle();
-  expect(authorize).not.toHaveBeenCalled();
-  expect(gpu.port.load).not.toHaveBeenCalled();
-  expect(cpu.port.load).toHaveBeenCalledTimes(2);
-  cpu.ready();
-  expect(cpu.calls.at(-1)?.request.text).toBe('Replacement.');
-  service.cancel();
-  await replacement;
-});
-
-it('HandoffCurrent: a worker that never exits times out without starting a successor', async () => {
-  vi.useFakeTimers();
-  let mode: 'cpu' | 'gpu' = 'cpu';
-  const { service, cpu, authorize, output } = gpuHarness(() => mode);
-  const first = service.speak('CPU.');
-  await settle();
-  cpu.ready();
-  service.cancel();
-  await cpu.audio(1);
-  await first;
-  mode = 'gpu';
-  const waiting = service.speak('GPU.');
-  await vi.advanceTimersByTimeAsync(21_000);
-  await waiting;
-  expect(output.status).toHaveBeenCalledWith(2, 'unavailable', 'Speech timed out; continue reading.');
-  cpu.released();
-  await settle();
-  expect(authorize).not.toHaveBeenCalled();
-  vi.useRealTimers();
-});
-
-it('HandoffCurrent: stale CPU callbacks cannot change an active GPU request', async () => {
-  let mode: 'cpu' | 'gpu' = 'cpu';
-  const { service, cpu, gpu, actual, output } = gpuHarness(() => mode);
-  const first = service.speak('CPU.');
-  await settle();
-  cpu.ready();
-  service.cancel();
-  await cpu.audio(1);
-  await first;
-  mode = 'gpu';
-  const next = service.speak('GPU.');
-  cpu.released();
-  await settle();
-  gpu.ready();
-  actual.mockClear();
-  cpu.listener?.ready();
-  cpu.listener?.retired('worker_exit');
-  cpu.listener?.reaped?.();
-  expect(actual).not.toHaveBeenCalled();
-  expect(output.status).not.toHaveBeenCalledWith(2, 'unavailable', expect.any(String));
-  expect(gpu.port.synthesize).toHaveBeenCalledOnce();
-  service.cancel();
-  await next;
-});
-
-it('HandoffCurrent: disposal invalidates a waiting switch', async () => {
-  let mode: 'cpu' | 'gpu' = 'cpu';
-  const { service, cpu, authorize } = gpuHarness(() => mode);
-  const first = service.speak('CPU.');
-  await settle();
-  cpu.ready();
-  service.cancel();
-  await cpu.audio(1);
-  await first;
-  mode = 'gpu';
-  const waiting = service.speak('GPU.');
-  service.dispose();
-  await waiting;
-  cpu.released();
-  await settle();
-  expect(authorize).not.toHaveBeenCalled();
-});
-
-it('HandoffCurrent: a stale GPU ready callback cannot advance a CPU request', async () => {
-  let mode: 'cpu' | 'gpu' = 'gpu';
-  const { service, cpu, gpu, actual } = gpuHarness(() => mode);
-  const first = service.speak('GPU.');
-  await settle();
-  gpu.ready();
-  service.cancel();
-  await gpu.audio(1);
-  await first;
-  mode = 'cpu';
-  const next = service.speak('CPU.');
-  gpu.released();
-  await settle();
-  gpu.listener?.ready();
-  expect(actual).not.toHaveBeenLastCalledWith('cpu');
-  expect(cpu.port.synthesize).not.toHaveBeenCalled();
-  cpu.ready();
-  expect(cpu.port.synthesize).toHaveBeenCalledOnce();
-  service.cancel();
-  await next;
-});
-
-it('ExplicitNoFallback: refuses CPU when GPU proof fails and Auto reports its CPU fallback reason', async () => {
-  let mode: 'gpu' | 'auto' = 'gpu';
-  const { service, cpu, gpu, authorize, checked } = gpuHarness(() => mode);
-  authorize.mockResolvedValue({ check: { phase: 'unavailable', reason: 'no_hardware' } });
-  await service.speak('Hello.');
-  expect(cpu.port.load).not.toHaveBeenCalled();
-  expect(gpu.port.load).not.toHaveBeenCalled();
-  mode = 'auto';
-  const pending = service.speak('Hello.');
-  await settle();
-  expect(checked).toHaveBeenLastCalledWith({ phase: 'unavailable', reason: 'no_hardware' });
-  expect(cpu.port.load).toHaveBeenCalledWith('/model');
-  service.cancel();
-  await pending;
-});
-
-it('GpuVerified: accepts a fresh proof that takes longer than the worker startup deadline', async () => {
-  vi.useFakeTimers();
-  const { service, gpu, authorize, capability } = gpuHarness(() => 'gpu');
-  const proof = Promise.withResolvers<import('../src/speech_gpu_capability').GpuCapabilityResult>();
-  authorize.mockReturnValue(proof.promise);
-  const pending = service.speak('Hello.');
-  await vi.advanceTimersByTimeAsync(21_000);
-  proof.resolve({ check: { phase: 'ready' }, capability });
-  await settle();
-  expect(gpu.port.load).toHaveBeenCalledWith('/gpu-model');
-  service.cancel();
-  await pending;
-  vi.useRealTimers();
-});
-
-it('GpuVerified: preserves the proof deadline when multipart admission completes while paused', async () => {
-  vi.useFakeTimers();
-  const { service, gpu, authorize, capability, output } = gpuHarness(() => 'gpu');
-  output.parts = true;
-  const admission = Promise.withResolvers<boolean>();
-  output.prepare = vi.fn().mockReturnValue(admission.promise);
-  const proof = Promise.withResolvers<import('../src/speech_gpu_capability').GpuCapabilityResult>();
-  authorize.mockReturnValue(proof.promise);
-  const pending = service.speak('First. Second.');
-  service.pause();
-  admission.resolve(true);
-  await settle();
-  service.resume();
-  await vi.advanceTimersByTimeAsync(21_000);
-  proof.resolve({ check: { phase: 'ready' }, capability });
-  await settle();
-  expect(gpu.port.load).toHaveBeenCalledWith('/gpu-model');
-  service.cancel();
-  await pending;
-  vi.useRealTimers();
-});
-
-it('NoStaleProof: times out a stuck proof without launching its late result', async () => {
-  vi.useFakeTimers();
-  const { service, gpu, authorize, capability } = gpuHarness(() => 'gpu');
-  const proof = Promise.withResolvers<import('../src/speech_gpu_capability').GpuCapabilityResult>();
-  authorize.mockReturnValue(proof.promise);
-  const pending = service.speak('Hello.');
-  await vi.advanceTimersByTimeAsync(400_000);
-  await pending;
-  proof.resolve({ check: { phase: 'ready' }, capability });
-  await settle();
-  expect(gpu.port.load).not.toHaveBeenCalled();
-  vi.useRealTimers();
-});
-
-it('NoStaleProof: ignores a GPU capability that arrives after cancellation', async () => {
-  const { service, gpu, authorize, capability } = gpuHarness(() => 'gpu');
-  const proof = Promise.withResolvers<import('../src/speech_gpu_capability').GpuCapabilityResult>();
-  authorize.mockReturnValue(proof.promise);
-  const pending = service.speak('Hello.');
-  service.cancel();
-  proof.resolve({ check: { phase: 'ready' }, capability });
-  await settle();
-  expect(gpu.port.load).not.toHaveBeenCalled();
-  await pending;
-});
-
-it('NoSuccessorBeforeReap: waits for a CPU worker to exit before starting a GPU worker', async () => {
-  let mode: 'cpu' | 'gpu' = 'cpu';
-  const { service, cpu, gpu, authorize } = gpuHarness(() => mode);
-  const first = service.speak('CPU.');
-  await settle();
-  cpu.ready();
-  service.cancel();
-  await cpu.audio(1);
-  await first;
-  mode = 'gpu';
-  const next = service.speak('GPU.');
-  expect(cpu.port.retire).toHaveBeenCalledOnce();
-  expect(authorize).not.toHaveBeenCalled();
-  expect(gpu.port.load).not.toHaveBeenCalled();
-  expect(authorize).not.toHaveBeenCalled();
-  cpu.released();
-  await settle();
-  expect(authorize).toHaveBeenCalledOnce();
-  expect(gpu.port.load).toHaveBeenCalledWith('/gpu-model');
-  service.cancel();
-  await next;
-});
-
-it('reports why Auto uses CPU when no GPU adapter is available', async () => {
-  const checked = vi.fn<(value: import('../src/speech_compute_types').GpuCheck) => void>();
-  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
-  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
-  const cpu = new LocalDouble();
-  const output = mock<SpeechOutput>();
-  output.prepare = undefined;
-  const service = new SpeechService({
-    runtimeDirectory: '/runtime',
-    storageDirectory: '/storage',
-    localDesktop: true,
-    createLocal: cpu.factory,
-    computeMode: () => 'auto',
-    gpuCheck: checked,
-    output,
-    settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
-  });
-  const pending = service.speak('Hello.');
-  await settle();
-  expect(checked).toHaveBeenCalledWith({ phase: 'unavailable', reason: 'runtime_missing' });
-  expect(cpu.port.load).toHaveBeenCalledWith('/model');
-  service.cancel();
-  await pending;
-});
-
-it('falls back in Auto when GPU proof rejects before a worker starts', async () => {
-  const { service, cpu, gpu, authorize, checked } = gpuHarness(() => 'auto');
-  authorize.mockRejectedValue(new Error('private'));
-  const pending = service.speak('Hello.');
-  await settle();
-  expect(checked).toHaveBeenCalledWith({ phase: 'unavailable', reason: 'probe_failed' });
-  expect(cpu.port.load).toHaveBeenCalledWith('/model');
-  expect(gpu.port.load).not.toHaveBeenCalled();
-  service.cancel();
-  await pending;
-});
-
-it('NoReplayAfterDispatch: never retries a failed GPU unit on CPU', async () => {
-  const { service, cpu, gpu } = gpuHarness(() => 'auto');
-  const unit = service.speak('Hello.');
-  await settle();
-  gpu.ready();
-  await gpu.failure(1);
-  await unit;
-  expect(cpu.port.load).not.toHaveBeenCalled();
-  expect(cpu.port.synthesize).not.toHaveBeenCalled();
-});
-
-it('NoSuccessorBeforeReap: retires a warm GPU before starting CPU', async () => {
-  let mode: 'cpu' | 'gpu' = 'gpu';
-  const { service, cpu, gpu, output } = gpuHarness(() => mode);
-  output.play.mockReturnValue(7);
-  const first = service.speak('GPU.');
-  await settle();
-  gpu.ready();
-  await gpu.audio(1);
-  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
-  await first;
-  mode = 'cpu';
-  const next = service.speak('CPU.');
-  expect(gpu.port.retire).toHaveBeenCalledOnce();
-  expect(cpu.port.load).not.toHaveBeenCalled();
-  expect(cpu.port.load).not.toHaveBeenCalled();
-  gpu.released();
-  await settle();
-  expect(cpu.port.load).toHaveBeenCalledWith('/model');
-  service.cancel();
-  await next;
-});
-
-it('reuses a verified warm GPU worker without starting a second process', async () => {
-  const { service, gpu, authorize, output } = gpuHarness(() => 'gpu');
-  output.play.mockReturnValue(7);
-  const first = service.speak('One.');
-  await settle();
-  gpu.ready();
-  await gpu.audio(1);
-  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
-  await first;
-  const next = service.speak('Two.');
-  await settle();
-  expect(authorize).toHaveBeenCalledOnce();
-  expect(gpu.port.load).toHaveBeenCalledOnce();
-  expect(gpu.port.synthesize).toHaveBeenCalledTimes(2);
-  service.cancel();
-  await next;
-});
-
-it('rejects a stale failed GPU proof and fails closed on a current proof exception', async () => {
-  const { service, gpu, authorize, checked } = gpuHarness(() => 'gpu');
-  const proof = Promise.withResolvers<import('../src/speech_gpu_capability').GpuCapabilityResult>();
-  authorize.mockReturnValueOnce(proof.promise);
-  const stale = service.speak('Stale.');
-  service.cancel();
-  proof.reject(new Error('private'));
-  await settle();
-  await stale;
-  expect(checked).not.toHaveBeenCalled();
-  authorize.mockRejectedValueOnce(new Error('private'));
-  await service.speak('Current.');
-  expect(checked).toHaveBeenCalledWith({ phase: 'unavailable', reason: 'probe_failed' });
-  expect(gpu.port.load).not.toHaveBeenCalled();
-});
-
-it('rejects GPU ready without a capability and retires a worker that fails to start', async () => {
-  const { service, gpu, authorize, checked } = gpuHarness(() => 'gpu');
-  authorize.mockResolvedValueOnce({ check: { phase: 'ready' } });
-  await service.speak('No capability.');
-  expect(checked).toHaveBeenCalledWith({ phase: 'unavailable', reason: 'inconclusive' });
-  gpu.port.load.mockImplementationOnce(() => {
-    throw new Error('private');
-  });
-  await service.speak('Start fails.');
-  expect(gpu.port.retire).toHaveBeenCalledWith('worker_error');
-});
-
-it('does not fail a unit twice if GPU retirement settles it during a launch error', async () => {
-  const { service, gpu, output } = gpuHarness(() => 'gpu');
-  gpu.port.load.mockImplementationOnce(() => {
-    gpu.phase = 'loading';
-    throw new Error('private');
-  });
-  await service.speak('Hello.');
-  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'Local speech stopped. Retry setup.');
-  expect(output.status).not.toHaveBeenCalledWith(1, 'unavailable', 'GPU speech could not start. Check GPU setup.');
-});
-
-it('NoSuccessorBeforeReap: keeps a canceled GPU proof slot until the proof settles', async () => {
-  const { service, gpu, authorize, capability, output } = gpuHarness(() => 'gpu');
-  const proof = Promise.withResolvers<import('../src/speech_gpu_capability').GpuCapabilityResult>();
-  authorize.mockReturnValueOnce(proof.promise);
-  const first = service.speak('First.');
-  service.cancel();
-  await first;
-  await service.speak('Second.');
-  expect(authorize).toHaveBeenCalledOnce();
-  expect(output.status).toHaveBeenCalledWith(2, 'unavailable', 'Speech is still finishing; try again shortly.');
-  proof.resolve({ check: { phase: 'ready' }, capability });
-  await settle();
-  expect(gpu.port.load).not.toHaveBeenCalled();
-  const third = service.speak('Third.');
-  await settle();
-  expect(authorize).toHaveBeenCalledTimes(2);
-  expect(gpu.port.load).toHaveBeenCalledWith('/gpu-model');
-  service.cancel();
-  await third;
-});
-
-it('NoSuccessorBeforeReap: Auto waits while another GPU check owns the slot', async () => {
-  const { service, cpu, gpu, authorize, output } = gpuHarness(() => 'auto');
-  authorize.mockResolvedValue({ check: { phase: 'checking' } });
-  await service.speak('Hello.');
-  expect(cpu.port.load).not.toHaveBeenCalled();
-  expect(gpu.port.load).not.toHaveBeenCalled();
-  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'Speech is still finishing; try again shortly.');
-});
-
-it('reports the GPU slot occupied through proof, worker life and retirement', async () => {
-  const { service, gpu, authorize, capability } = gpuHarness(() => 'gpu');
-  const proof = Promise.withResolvers<import('../src/speech_gpu_capability').GpuCapabilityResult>();
-  authorize.mockReturnValueOnce(proof.promise);
-  const unit = service.speak('Hello.');
-  expect(service.gpuSlotBusy()).toBe(true);
-  proof.resolve({ check: { phase: 'ready' }, capability });
-  await settle();
-  expect(service.gpuSlotBusy()).toBe(true);
-  gpu.ready();
-  service.cancel();
-  gpu.retired('worker_exit');
-  expect(service.gpuSlotBusy()).toBe(true);
-  gpu.released();
-  expect(service.gpuSlotBusy()).toBe(false);
-  await unit;
-});
-
-it('NoSuccessorBeforeReap: reports retryable GPU slot contention without CPU fallback', async () => {
-  const { service, gpu, cpu, output } = gpuHarness(() => 'auto');
-  gpu.port.load.mockImplementationOnce(() => {
-    throw new GpuProcessBusyError();
-  });
-  await service.speak('Hello.');
-  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'Speech is still finishing; try again shortly.');
-  expect(cpu.port.load).not.toHaveBeenCalled();
-});
-
-it('GpuVerified: requests fresh proof for each new GPU worker epoch', async () => {
-  const { service, gpu, authorize, output } = gpuHarness(() => 'gpu');
-  output.play.mockReturnValue(7);
-  const first = service.speak('One.');
-  await settle();
-  gpu.ready();
-  await gpu.audio(1);
-  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
-  await first;
-  gpu.retired('worker_exit');
-  gpu.released();
-  const second = service.speak('Two.');
-  await settle();
-  expect(authorize).toHaveBeenCalledTimes(2);
-  expect(gpu.port.load).toHaveBeenCalledTimes(2);
-  service.cancel();
-  await second;
-});
-
-it('retires an idle warm GPU worker for an explicit setup check', async () => {
-  const { service, gpu, output } = gpuHarness(() => 'gpu');
-  output.play.mockReturnValue(7);
-  const unit = service.speak('Hello.');
-  await settle();
-  gpu.ready();
-  service.retireIdleGpu();
-  expect(gpu.port.retire).not.toHaveBeenCalled();
-  await gpu.audio(1);
-  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
-  await unit;
-  service.retireIdleGpu();
-  expect(gpu.port.retire).toHaveBeenCalledOnce();
-  expect(service.gpuSlotBusy()).toBe(true);
-  gpu.released();
-  expect(service.gpuSlotBusy()).toBe(false);
-});
-
-it('NoSuccessorBeforeReap: blocks CPU speech while a separate GPU setup owns the slot', async () => {
-  const cpu = new LocalDouble();
-  const output = mock<SpeechOutput>();
-  output.prepare = undefined;
-  const service = new SpeechService({
-    runtimeDirectory: '/runtime',
-    storageDirectory: '/storage',
-    localDesktop: true,
-    createLocal: cpu.factory,
-    gpuExternalBusy: () => true,
-    output,
-    settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
-  });
-  await service.speak('Hello.');
-  expect(cpu.port.load).not.toHaveBeenCalled();
-  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'Speech is still finishing; try again shortly.');
 });
 
 it('keeps cloud narration available during a local GPU setup check', async () => {
@@ -2657,21 +1867,305 @@ it('keeps cloud narration available during a local GPU setup check', async () =>
     storageDirectory: '/storage',
     localDesktop: true,
     cloud,
-    gpuExternalBusy: () => true,
     output,
     settings: () => ({ enabled: true, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: 'voice', elevenLabsSpeed: 1 }),
   });
+  const pending = Promise.withResolvers<import('../src/speech_compute_types').GpuCheck>();
+  local.manager.check.mockReturnValueOnce(pending.promise);
+  const operation = vi.fn(() => pending.promise);
+  const signal = new AbortController().signal;
+  const check = service.checkGpu(operation, signal);
+  expect(local.manager.check).toHaveBeenCalledWith(operation, signal);
   const unit = service.speak('Hello.');
   await settle();
   expect(cloud.synthesize.mock.calls).toHaveLength(1);
   service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
   await unit;
+  pending.resolve({ phase: 'unavailable', reason: 'probe_failed' });
+  await check;
 });
 
-it('NoSuccessorBeforeReap: never falls back when fresh GPU proof reports a busy slot', async () => {
-  const { service, cpu, authorize, output } = gpuHarness(() => 'auto');
-  authorize.mockRejectedValue(new GpuProcessBusyError());
+it.each([
+  { saved: 'cpu' as const, selected: 'gpu' as const },
+  { saved: 'gpu' as const, selected: 'cpu' as const },
+])('uses selected $selected for preview before saved $saved changes', async ({ saved, selected }) => {
+  vi.resetModules();
+  const lifecycle = mock<import('../src/speech_lifecycle').SpeechLifecycle>();
+  let mode: 'cpu' | 'gpu' = saved;
+  lifecycle.snapshot.mockImplementation(() => ({
+    requestedMode: mode,
+    actualBackend: 'none',
+    phase: 'cold',
+    gpuCheck: { phase: 'idle' },
+    generation: 0,
+  }));
+  lifecycle.select.mockImplementation((value) => {
+    if (value === 'cpu' || value === 'gpu') mode = value;
+  });
+  lifecycle.acquire.mockReturnValue(new Promise(() => {}));
+  vi.doMock('../src/speech_lifecycle', () => ({
+    // A constructor mock must be constructable.
+    // oxlint-disable-next-line eslint/prefer-arrow-callback
+    SpeechLifecycle: vi.fn(function () {
+      return lifecycle;
+    }),
+  }));
+  try {
+    const { SpeechService: IsolatedSpeechService } = await import('../src/speech_service');
+    const output = mock<SpeechOutput>();
+    output.prepare = undefined;
+    const service = new IsolatedSpeechService({
+      runtimeDirectory: '/runtime',
+      storageDirectory: '/storage',
+      localDesktop: true,
+      output,
+      computeMode: () => saved,
+      gpuCapability: vi.fn(),
+      createGpu: vi.fn(),
+      settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+    });
+    service.selectComputeMode(selected);
+    const unit = service.preview();
+    expect(lifecycle.select).toHaveBeenLastCalledWith(selected);
+    expect(lifecycle.acquire).toHaveBeenCalledOnce();
+    service.cancel();
+    await unit;
+  } finally {
+    vi.doUnmock('../src/speech_lifecycle');
+    vi.resetModules();
+  }
+});
+
+it('times out discovery without waiting for acquisition and aborts its signal', async () => {
+  vi.resetModules();
+  const lifecycle = mock<import('../src/speech_lifecycle').SpeechLifecycle>();
+  lifecycle.snapshot.mockReturnValue({
+    requestedMode: 'cpu',
+    actualBackend: 'none',
+    phase: 'loading',
+    gpuCheck: { phase: 'idle' },
+    generation: 0,
+  });
+  lifecycle.acquire.mockReturnValue(new Promise(() => {}));
+  lifecycle.retireWorker.mockReturnValue(false);
+  vi.doMock('../src/speech_lifecycle', () => ({
+    // A constructor mock must be constructable.
+    // oxlint-disable-next-line eslint/prefer-arrow-callback
+    SpeechLifecycle: vi.fn(function () {
+      return lifecycle;
+    }),
+  }));
+  try {
+    const { SpeechService: IsolatedSpeechService } = await import('../src/speech_service');
+    const output = mock<SpeechOutput>();
+    output.prepare = undefined;
+    const service = new IsolatedSpeechService({
+      runtimeDirectory: '/runtime',
+      storageDirectory: '/storage',
+      localDesktop: true,
+      output,
+      settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+    });
+    const unit = service.speak('Hello.');
+    const signal = lifecycle.acquire.mock.calls[0]?.[1];
+    expect(signal?.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(60_000);
+    await unit;
+    expect(lifecycle.retireWorker).toHaveBeenCalledWith('timeout');
+    expect(signal?.aborted).toBe(true);
+    expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'Speech timed out; continue reading.');
+  } finally {
+    vi.doUnmock('../src/speech_lifecycle');
+    vi.resetModules();
+  }
+});
+
+it('supplies cancelable runtime and model discovery callbacks to the manager', async () => {
+  const { output } = harness();
+  const options = local.options;
+  if (options === undefined) throw new Error('Missing lifecycle options');
+  const controller = new AbortController();
+  vi.mocked(speechRuntimeAvailable).mockResolvedValueOnce(false);
+  expect(await options.resolveCpu(controller.signal)).toBeUndefined();
+  expect(output.localDiagnostic).toHaveBeenCalledWith('failed', 'runtime_missing');
+  expect(await options.resolveCpu(controller.signal)).toBe('/model');
+  const runtime = Promise.withResolvers<boolean>();
+  vi.mocked(speechRuntimeAvailable).mockReturnValueOnce(runtime.promise);
+  const abortedRuntime = options.resolveCpu(controller.signal);
+  controller.abort();
+  runtime.resolve(true);
+  expect(await abortedRuntime).toBeUndefined();
+  const modelController = new AbortController();
+  const model = Promise.withResolvers<string | undefined>();
+  vi.mocked(installedSpeechModel).mockReturnValueOnce(model.promise);
+  const abortedModel = options.resolveCpu(modelController.signal);
+  await settle();
+  modelController.abort();
+  model.resolve('/model');
+  expect(await abortedModel).toBeUndefined();
+});
+
+it('passes GPU proof and worker factories through to the manager', async () => {
+  harness();
+  const options = local.options;
+  if (options === undefined) throw new Error('Missing lifecycle options');
+  const signal = new AbortController().signal;
+  expect(await options.proveGpu(signal)).toEqual({ check: { phase: 'unavailable', reason: 'runtime_missing' } });
+  expect(() => options.createGpu(mock(), mock())).toThrow('GPU worker unavailable');
+  const createGpu = vi.fn(() => mock<LocalSynthesisPort>());
+  const gpuCapability = vi.fn().mockResolvedValue({ check: { phase: 'unavailable', reason: 'probe_failed' } });
+  const configuredService = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output: mock<SpeechOutput>(),
+    gpuCapability,
+    createGpu,
+    settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+  });
+  expect(configuredService).toBeInstanceOf(SpeechService);
+  const configured = local.options;
+  if (configured === undefined) throw new Error('Missing lifecycle options');
+  await configured.proveGpu(signal);
+  expect(gpuCapability).toHaveBeenCalledWith(signal);
+  const capability = mock<import('../src/speech_gpu_client').GpuLaunchCapability>();
+  const listener = mock<LocalListener>();
+  configured.createGpu(capability, listener);
+  expect(createGpu).toHaveBeenCalledWith(capability, listener);
+});
+
+it('projects manager snapshots and ignores a repeated mode selection', () => {
+  const { service } = harness();
+  expect(service.computeState()).toEqual({ requestedMode: 'cpu', actualBackend: 'none', gpuCheck: { phase: 'idle' } });
+  expect(service.computeGeneration()).toBe(0);
+  local.change({ generation: 7 });
+  expect(service.computeGeneration()).toBe(7);
+  service.selectComputeMode('cpu');
+  expect(local.manager.select).not.toHaveBeenCalled();
+});
+
+it('publishes unavailable GPU checks', () => {
+  const checked = vi.fn<(value: Extract<import('../src/speech_compute_types').GpuCheck, { phase: 'unavailable' }>) => void>();
+  const output = mock<SpeechOutput>();
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output,
+    gpuCheck: checked,
+    settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+  });
+  expect(service).toBeInstanceOf(SpeechService);
+  local.change({ phase: 'ready', actualBackend: 'gpu', gpuCheck: { phase: 'unavailable', reason: 'probe_failed' } });
+  expect(checked).toHaveBeenCalledWith({ phase: 'unavailable', reason: 'probe_failed' });
+});
+
+it('reports readiness from the selected mode and current lifecycle snapshot', () => {
+  const { service } = harness();
+  local.change({
+    requestedMode: 'cpu',
+    phase: 'failed',
+    gpuCheck: { phase: 'unavailable', reason: 'probe_failed' },
+    failureReason: 'worker_error',
+  });
+  expect(service.localComputeUsable()).toBe(true);
+  local.change({ requestedMode: 'auto' });
+  expect(service.localComputeUsable()).toBe(true);
+  local.change({ requestedMode: 'gpu' });
+  expect(service.localComputeUsable()).toBe(false);
+  local.change({ gpuCheck: { phase: 'idle' } });
+  expect(service.localComputeUsable()).toBe(false);
+  local.change({ phase: 'cold' });
+  expect(service.localComputeUsable()).toBe(false);
+  local.change({ failureReason: undefined });
+  expect(service.localComputeUsable()).toBe(true);
+  local.change({ gpuCheck: { phase: 'checking' } });
+  expect(service.localComputeUsable()).toBe(true);
+});
+
+it('refuses explicit GPU when GPU collaborators are missing', async () => {
+  const { service, output } = harness(true, () => 'gpu');
+  await service.speak('Hello');
+  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'GPU speech is not available. Check GPU setup.');
+  expect(local.manager.acquire).not.toHaveBeenCalled();
+});
+
+it.each(['canceled', 'gpu_unavailable'] as const)('handles manager acquisition %s', async (result) => {
+  const { service, output } = harness();
+  local.manager.acquire.mockResolvedValueOnce(result === 'canceled' ? { status: 'canceled' } : { status: 'unavailable', reason: result });
+  const unit = service.speak('Hello');
+  await settle();
+  if (result === 'canceled') service.cancel();
+  await unit;
+  if (result === 'gpu_unavailable') {
+    expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'GPU speech is not available. Check GPU setup.');
+  }
+});
+
+it('does not synthesize before an acquisition returns a lease even if the snapshot is ready', async () => {
+  const { service } = harness();
+  const unit = service.speak('Hello. Next.');
+  local.change({ phase: 'ready' });
+  service.pause();
+  service.resume();
+  expect(local.manager.synthesize).not.toHaveBeenCalled();
+  service.cancel();
+  await unit;
+});
+
+it('tolerates reentrant cancellation from an unavailable status callback', async () => {
+  const { service, output } = harness();
+  output.status.mockImplementation((id, status) => {
+    expect(id).toBe(1);
+    if (status === 'unavailable') service.cancel();
+  });
+  local.manager.acquire.mockResolvedValueOnce({ status: 'unavailable', reason: 'busy' });
+  await service.speak('Hello');
+  expect(output.status).toHaveBeenCalledWith(1, 'idle');
+});
+
+it('asks the manager to retire a loading worker on startup timeout', async () => {
+  const { service } = harness();
+  const unit = service.speak('Hello');
+  local.change({ phase: 'loading' });
+  await vi.advanceTimersByTimeAsync(20_000);
+  expect(local.manager.retireWorker).toHaveBeenCalledWith('timeout');
+  service.cancel();
+  await unit;
+});
+
+it('uses the fixed worker-exit diagnostic when a retirement has no reason', async () => {
+  const { service, output } = harness();
+  const unit = service.speak('Hello.');
+  await local.ready();
+  local.change({ phase: 'retiring', actualBackend: 'none' });
+  await unit;
+  expect(output.localDiagnostic).toHaveBeenCalledWith('failed', 'worker_exit');
+});
+
+it('uses fresh generation snapshots when switching GPU to CPU and back', () => {
+  const { service } = harness();
+  local.change({
+    requestedMode: 'gpu',
+    phase: 'failed',
+    gpuCheck: { phase: 'unavailable', reason: 'probe_failed' },
+    failureReason: 'worker_error',
+  });
+  expect(service.localComputeUsable()).toBe(false);
+  local.change({ requestedMode: 'cpu', phase: 'cold', gpuCheck: { phase: 'idle' }, failureReason: undefined, generation: 1 });
+  expect(service.localComputeUsable()).toBe(true);
+  local.change({ requestedMode: 'gpu', generation: 2 });
+  expect(service.localComputeUsable()).toBe(true);
+  local.change({ phase: 'checking', gpuCheck: { phase: 'checking' } });
+  expect(service.localComputeUsable()).toBe(true);
+  local.change({ phase: 'failed', gpuCheck: { phase: 'unavailable', reason: 'probe_failed' } });
+  expect(service.localComputeUsable()).toBe(false);
+});
+
+it('reports a fixed worker-module acquisition failure without private details', async () => {
+  const { service, output } = harness();
+  local.manager.acquire.mockResolvedValueOnce({ status: 'unavailable', reason: 'worker_module' });
   await service.speak('Hello.');
-  expect(cpu.port.load).not.toHaveBeenCalled();
-  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'Speech is still finishing; try again shortly.');
+  expect(output.localDiagnostic).toHaveBeenCalledWith('failed', 'worker_module');
+  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'Local speech stopped. Retry setup.');
 });

@@ -716,13 +716,6 @@
       "functions": 100
     }
   },
-  "packages/vscode/src/speech_compute.ts": {
-    "unit": {
-      "lines": 100,
-      "branches": 100,
-      "functions": 100
-    }
-  },
   "packages/vscode/src/speech_credentials.ts": {
     "unit": {
       "lines": 100,
@@ -752,6 +745,13 @@
     }
   },
   "packages/vscode/src/speech_gpu_capability.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/speech_gpu_check.ts": {
     "unit": {
       "lines": 100,
       "branches": 100,
@@ -800,7 +800,42 @@
       "functions": 100
     }
   },
+  "packages/vscode/src/speech_gpu_physical.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/speech_gpu_process.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/speech_gpu_proof_runner.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/speech_gpu_setup.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/vscode/src/speech_gpu_setup_flow.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/speech_lifecycle.ts": {
     "unit": {
       "lines": 100,
       "branches": 100,

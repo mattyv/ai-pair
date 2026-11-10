@@ -14,16 +14,25 @@ export { withGpuProcessSlot } from './speech_gpu_slot';
 import { withGpuProcessSlot } from './speech_gpu_slot';
 
 /** Starts each proof in a fresh child and waits for its close before returning. */
-export function createGpuProofRunner(capability: GpuLaunchCapability): (kind: 'negative' | 'tiny' | 'model') => Promise<GpuProbeResult> {
-  return (kind) =>
+export function createGpuProofRunner(
+  capability: GpuLaunchCapability,
+): (kind: 'negative' | 'tiny' | 'model', signal?: AbortSignal) => Promise<GpuProbeResult> {
+  return (kind, signal) =>
     withGpuProcessSlot(async () => {
+      // oxlint-disable-next-line unicorn/consistent-function-scoping
+      function checkAbort(): void {
+        if (signal?.aborted === true) throw new DOMException('Aborted', 'AbortError');
+      }
+      checkAbort();
       let directory: string;
       try {
         directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-pair-gpu-proof-'));
       } catch {
+        checkAbort();
         return 'failed';
       }
       try {
+        checkAbort();
         const env = {
           ...gpuEnvironment(
             kind === 'negative' ? path.join(directory, 'nonexistent-icd.json') : capability.environment.VK_DRIVER_FILES,
@@ -44,7 +53,7 @@ export function createGpuProofRunner(capability: GpuLaunchCapability): (kind: 'n
           capability.driverDevice,
           capability.driverInode,
         ];
-        return await new Promise<GpuProbeResult>((resolve) => {
+        return await new Promise<GpuProbeResult>((resolve, reject) => {
           let child: ReturnType<typeof fork>;
           try {
             child = fork(path.join(capability.runtimeDirectory, 'gpu_proof_worker.mjs'), args, {
@@ -55,6 +64,10 @@ export function createGpuProofRunner(capability: GpuLaunchCapability): (kind: 'n
               stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
             });
           } catch {
+            if (signal?.aborted === true) {
+              reject(new DOMException('Aborted', 'AbortError'));
+              return;
+            }
             resolve('failed');
             return;
           }
@@ -68,6 +81,12 @@ export function createGpuProofRunner(capability: GpuLaunchCapability): (kind: 'n
               /* Keep ownership until close. */
             }
           }
+          // specs/GpuProofAbort.tla, Abort: retain the slot until close.
+          function abort(): void {
+            stop();
+          }
+          signal?.addEventListener('abort', abort, { once: true });
+          if (signal?.aborted === true) abort();
           const timer = setTimeout(() => {
             timedOut = true;
             stop();
@@ -94,9 +113,12 @@ export function createGpuProofRunner(capability: GpuLaunchCapability): (kind: 'n
             }
             stop();
           });
+          // specs/GpuProofAbort.tla, Close: reap before cleanup and settlement.
           child.on('close', () => {
             clearTimeout(timer);
-            if (timedOut) resolve('timeout');
+            signal?.removeEventListener('abort', abort);
+            if (signal?.aborted === true) reject(new DOMException('Aborted', 'AbortError'));
+            else if (timedOut) resolve('timeout');
             else if (failed || reported === undefined) resolve('failed');
             else if (kind === 'negative' && reported === 'rejected') resolve('rejected');
             else if (kind !== 'negative' && reported === 'passed') resolve('passed');

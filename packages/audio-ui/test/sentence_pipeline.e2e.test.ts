@@ -10,7 +10,12 @@ const fake = vi.hoisted(() => {
     static current?: Worker;
     listeners = new Map<string, (value: unknown) => void>();
     postMessage = vi.fn();
-    terminate = vi.fn().mockResolvedValue(0);
+    terminate = vi.fn(() =>
+      Promise.resolve().then(() => {
+        this.listeners.get('exit')?.(0);
+        return 0;
+      }),
+    );
     constructor() {
       Worker.current = this;
     }
@@ -129,7 +134,7 @@ it('SentencePipeline composes one captured route through physical closes and com
   expect(settled).toBe(true);
   await output.stopAndWait();
   output.dispose();
-  service.dispose();
+  await service.dispose();
 });
 
 type SpeechServiceOutputStatus = import('../../vscode/src/speech_service').SpeechOutput['status'];

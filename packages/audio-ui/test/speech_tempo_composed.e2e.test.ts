@@ -16,7 +16,12 @@ const fake = vi.hoisted(() => {
     static current?: Worker;
     listeners = new Map<string, (value: unknown) => void>();
     postMessage = vi.fn();
-    terminate = vi.fn().mockResolvedValue(0);
+    terminate = vi.fn(() =>
+      Promise.resolve().then(() => {
+        this.listeners.get('exit')?.(0);
+        return 0;
+      }),
+    );
     constructor() {
       Worker.current = this;
     }
@@ -160,7 +165,7 @@ it('transforms two synthetic Kokoro parts in a real worker before local physical
     closes[1]?.resolve();
     await gate;
   } finally {
-    service.dispose();
+    await service.dispose();
     output.dispose();
     await tempo.dispose();
   }

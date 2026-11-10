@@ -87,6 +87,7 @@ Last updated: css, 2026-11-10.
 | `packages/audio-ui/test/sentence_pipeline.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_host.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_host.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/speech_restart_handshake.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/audio-ui/test/speech_tempo_composed.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/worker_diagnostics.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/core/src/bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
@@ -198,7 +199,7 @@ Last updated: css, 2026-11-10.
 | `packages/vscode/src/remote_narration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 53.5% B 38.5% F 41.7% | - | - | - | - |
 | `packages/vscode/src/setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 83.8% B 81.6% F 66.7% | - | - | - | - |
 | `packages/vscode/src/speech_catalog.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.9% B 89.7% F 100.0% | - | - | - | - |
-| `packages/vscode/src/speech_compute.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_compute.ts` | TypeScript | - | - | - | - | - | - |
 | `packages/vscode/src/speech_compute_types.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_credentials.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_elevenlabs.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 81.2% B 72.6% F 88.9% | - | - | - | - |
@@ -243,6 +244,7 @@ Last updated: css, 2026-11-10.
 | `packages/vscode/src/speech_gpu_worker.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_gpu_worker_host.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_gpu_worker_runtime.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_lifecycle.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_local_client.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 47.5% B 62.5% F 31.3% | - | - | - | - |
 | `packages/vscode/src/speech_local_protocol.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.2% B 100.0% F 50.0% | - | - | - | - |
 | `packages/vscode/src/speech_model_manifest.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
@@ -381,6 +383,7 @@ Last updated: css, 2026-11-10.
 | `packages/vscode/test/speech_gpu_process.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_gpu_process.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_gpu_profile.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_gpu_proof_abort.integration.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_gpu_proof_runner.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_gpu_proof_runner.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_gpu_proof_worker.test.ts` | TypeScript | test | - | - | - | - | test |
@@ -398,6 +401,9 @@ Last updated: css, 2026-11-10.
 | `packages/vscode/test/speech_gpu_worker_host.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_gpu_worker_runtime.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_handoff.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_lifecycle.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_lifecycle_acceptance.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_lifecycle_trace.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_local.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_local_client.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_local_protocol.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -519,6 +525,8 @@ Last updated: css, 2026-11-10.
 | `specs/GpuMappedIcd.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/GpuProcessSlot.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/GpuProcessSlot.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/GpuProofAbort.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/GpuProofAbort.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/GpuSetup.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/GpuSetup.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/GpuSynthesisProcess.cfg` | TLC config | - | - | - | - | - | - |
@@ -619,6 +627,8 @@ Last updated: css, 2026-11-10.
 | `specs/SettingsAccess.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/SpeechBackendHandoff.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechBackendHandoff.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/SpeechLifecycle.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/SpeechLifecycle.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/SpeechPage.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechPage.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/SpeechPlatformEvidence.cfg` | TLC config | - | - | - | - | - | - |

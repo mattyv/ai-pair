@@ -235,3 +235,59 @@ describe('panel placement', () => {
     expect(commit).not.toHaveBeenCalled();
   });
 });
+
+it('waits for a successful commit acknowledgement before creating the session', async () => {
+  const commit = Promise.withResolvers<unknown>();
+  const beforeCommit = vi.fn<() => void>();
+  const afterCommit = vi.fn<() => void>();
+  const placement = new PanelPlacement({
+    epoch: 'epoch',
+    remote: false,
+    timeoutMs: 100,
+    prepare: () => Promise.resolve({ version: 2, epoch: 'epoch', token: 'token' }),
+    beforeCommit,
+    afterCommit,
+    commit: () => commit.promise,
+  });
+  const selected = placement.choose();
+  await vi.waitFor(() => {
+    expect(beforeCommit).toHaveBeenCalledOnce();
+  });
+  expect(afterCommit).not.toHaveBeenCalled();
+  commit.resolve(true);
+  expect(await selected).toBe('companion');
+  expect(afterCommit).toHaveBeenCalledOnce();
+});
+
+it('keeps companion ownership after rejected, false, or timed out commit without starting a session', async () => {
+  vi.useFakeTimers();
+  for (const result of [Promise.reject(new Error('private')), Promise.resolve(false)]) {
+    const afterCommit = vi.fn<() => void>();
+    const placement = new PanelPlacement({
+      epoch: 'epoch',
+      remote: false,
+      timeoutMs: 100,
+      prepare: () => Promise.resolve({ version: 2, epoch: 'epoch', token: 'token' }),
+      afterCommit,
+      commit: () => result,
+    });
+    expect(await placement.choose()).toBe('companion');
+    expect(afterCommit).not.toHaveBeenCalled();
+  }
+  const pending = Promise.withResolvers<unknown>();
+  const afterCommit = vi.fn<() => void>();
+  const placement = new PanelPlacement({
+    epoch: 'epoch',
+    remote: false,
+    timeoutMs: 100,
+    prepare: () => Promise.resolve({ version: 2, epoch: 'epoch', token: 'token' }),
+    afterCommit,
+    commit: () => pending.promise,
+  });
+  const selected = placement.choose();
+  await vi.advanceTimersByTimeAsync(100);
+  expect(await selected).toBe('companion');
+  pending.resolve(true);
+  await Promise.resolve();
+  expect(afterCommit).not.toHaveBeenCalled();
+});

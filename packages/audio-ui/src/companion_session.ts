@@ -38,7 +38,7 @@ export interface CompanionSession {
   diagnostics(): LocalSpeechReport | undefined;
   audioDiagnostics(): import('@ai-pair/protocol').AudioDiagnostics;
   gpuDiagnostics(): import('@ai-pair/protocol').GpuDiagnostics;
-  dispose(): void;
+  dispose(): Promise<void>;
 }
 
 /** Refuses workspace-only operations inside the UI host. */
@@ -50,6 +50,7 @@ function workspaceOnly(): never {
 export function createCompanionSession(context: vscode.ExtensionContext, epoch: string): CompanionSession {
   let sequence = 0;
   let closed = false;
+  let shutdownPromise: Promise<void> | undefined;
   let panel: NarrationPanel | undefined;
   let connection: LocalConnection;
   let narration: CompanionNarration;
@@ -61,22 +62,23 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
   function nextSequence(): number {
     return ++sequence;
   }
-  function shutdown(notify: boolean): void {
-    if (closed) return;
+  function shutdown(notify: boolean): Promise<void> {
+    if (shutdownPromise !== undefined) return shutdownPromise;
     closed = true;
     panel?.showSpeechTransport(false);
     assembler.setPage(undefined);
     narration.dispose();
-    host.dispose();
+    shutdownPromise = Promise.resolve(host.dispose());
     connection.dispose();
     channel.dispose();
     if (notify) void vscode.window.showWarningMessage('AI Pair lost its local audio connection. Reload the window to reconnect.');
+    return shutdownPromise;
   }
   channel = new CommandChannel<LocalAudioFrame>({
     timeoutMs: COMMAND_TIMEOUT_MS,
     maxPending: MAX_PENDING_COMMANDS,
     lost: () => {
-      shutdown(true);
+      void shutdown(true);
     },
     send: async (frame) => {
       await vscode.commands.executeCommand('aiPair.localAudio.workspace', frame);
@@ -86,7 +88,7 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
     context,
     connectionEpoch: epoch,
     enableGpuInference: true,
-    gpuProof: (capability, kind) => createGpuProofRunner(capability)(kind),
+    gpuProof: (capability, kind, signal) => createGpuProofRunner(capability)(kind, signal),
     adapter: createLocalAudioAdapter(context.extensionPath),
     page: () => panel?.speechReadyPageId(),
     panel: () => panel,
@@ -108,7 +110,7 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
   connection = new LocalConnection({
     leaseMs: LEASE_MS,
     lost: () => {
-      shutdown(true);
+      void shutdown(true);
     },
     receive: (frame) => {
       if (frame.type === 'panelChunk') {
@@ -228,7 +230,7 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
     },
     dispose: () => {
       provider.dispose();
-      shutdown(false);
+      return shutdown(false);
     },
   };
 }

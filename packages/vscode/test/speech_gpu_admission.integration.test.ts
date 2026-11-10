@@ -1,6 +1,5 @@
 import { expect, it, vi } from 'vitest';
 import { mock } from 'vitest-mock-extended';
-import { SpeechCompute } from '../src/speech_compute';
 import { setupGpuFlow } from '../src/speech_gpu_setup_flow';
 import { SpeechService, type SpeechOutput } from '../src/speech_service';
 import type { LocalListener, LocalSynthesisPort } from '../src/speech_local_client';
@@ -19,23 +18,6 @@ it('runs verified setup then dispatches a GPU unit through a controlled worker p
     const issue = vi
       .fn<() => Promise<import('../src/speech_gpu_capability').GpuCapabilityResult>>()
       .mockResolvedValue({ check: { phase: 'ready' }, capability });
-    const compute = new SpeechCompute(
-      'gpu',
-      (progress) =>
-        setupGpuFlow({
-          preflight: () => Promise.resolve({ phase: 'ready' }),
-          cpuModel: () => Promise.resolve('/cpu'),
-          gpuModel: () => Promise.resolve('/gpu'),
-          download: () => Promise.resolve('/gpu'),
-          verify: async () => (await issue()).check,
-          signal: new AbortController().signal,
-          progress,
-        }),
-      () => {},
-      /* allowReady= */ true,
-    );
-    await compute.check();
-    expect(compute.state().gpuCheck).toEqual({ phase: 'ready' });
     const cpu = mock<LocalSynthesisPort>();
     cpu.state.mockReturnValue('cold');
     cpu.busy.mockReturnValue(false);
@@ -62,13 +44,25 @@ it('runs verified setup then dispatches a GPU unit through a controlled worker p
         listener = owner;
         return gpu;
       },
-      computeMode: () => compute.state().requestedMode,
-      actualBackend: (value) => {
-        compute.actual(value);
-      },
+      computeMode: () => 'gpu',
       output,
       settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
     });
+    const check = await service.checkGpu(
+      (signal, progress) =>
+        setupGpuFlow({
+          preflight: () => Promise.resolve({ phase: 'ready' }),
+          cpuModel: () => Promise.resolve('/cpu'),
+          gpuModel: () => Promise.resolve('/gpu'),
+          download: () => Promise.resolve('/gpu'),
+          verify: async () => (await issue()).check,
+          signal,
+          progress,
+        }),
+      new AbortController().signal,
+    );
+    expect(check).toEqual({ phase: 'ready' });
+    expect(service.computeState().gpuCheck).toEqual({ phase: 'ready' });
     const unit = service.speak('Hello.');
     await vi.waitFor(() => {
       expect(gpu.load).toHaveBeenCalledWith('/gpu');
@@ -78,12 +72,15 @@ it('runs verified setup then dispatches a GPU unit through a controlled worker p
     await vi.waitFor(() => {
       expect(output.play).toHaveBeenCalledOnce();
     });
-    expect(compute.state().actualBackend).toBe('gpu');
+    expect(service.computeState().actualBackend).toBe('gpu');
     expect(issue).toHaveBeenCalledTimes(2);
     expect(cpu.load).not.toHaveBeenCalled();
     service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
     await unit;
-    service.dispose();
+    gpu.retire.mockImplementation(() => {
+      listener?.reaped?.();
+    });
+    await service.dispose();
   } finally {
     if (originalPlatform !== undefined) Object.defineProperty(process, 'platform', originalPlatform);
     if (originalArch !== undefined) Object.defineProperty(process, 'arch', originalArch);

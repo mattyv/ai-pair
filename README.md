@@ -38,6 +38,9 @@ It adds:
 -   When enabled speech is available, the agent is encouraged to select a
     concise explanation to speak, and may be reminded after several batches
     without one. The reminder does not enable speech or make a provider request.
+-   CPU/GPU changes and restarted speech wait for previous local work to finish
+    shutting down before starting a replacement. GPU use still requires fresh
+    checks, and physical validation of this lifecycle change remains open.
 -   Optional local Kokoro speech for narration selected by the connected coding
     agent, which selects useful short explanations without a per-session prompt.
     Speech is off by default and needs no additional API key. In Settings,

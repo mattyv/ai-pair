@@ -52,14 +52,17 @@ it('records a sanitized worker-module failure through the real companion output'
       settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
       output,
     });
-    await speech.speak('Synthetic narration.');
-    const report = diagnostics.snapshot();
-    expect(report.events).toContainEqual(
-      expect.objectContaining({ kind: 'speech', event: 'runtime', phase: 'failed', reason: 'worker_module' }),
-    );
-    expect(JSON.stringify(report)).not.toContain('private');
-    speech.dispose();
-    output.dispose();
+    try {
+      await speech.speak('Synthetic narration.');
+      const report = diagnostics.snapshot();
+      expect(report.events).toContainEqual(
+        expect.objectContaining({ kind: 'speech', event: 'runtime', phase: 'failed', reason: 'worker_module' }),
+      );
+      expect(JSON.stringify(report)).not.toContain('private');
+    } finally {
+      await speech.dispose();
+      output.dispose();
+    }
   } finally {
     if (platform !== undefined) Object.defineProperty(process, 'platform', platform);
     if (arch !== undefined) Object.defineProperty(process, 'arch', arch);

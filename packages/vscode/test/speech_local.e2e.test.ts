@@ -70,6 +70,7 @@ class InProcessWorker implements WorkerLike {
 
 const platform = Object.getOwnPropertyDescriptor(process, 'platform');
 const arch = Object.getOwnPropertyDescriptor(process, 'arch');
+const services: SpeechService[] = [];
 
 /** Composes the real service, client and host over the in-process worker. */
 function compose() {
@@ -86,6 +87,7 @@ function compose() {
     createLocal: (listener: LocalListener) => new LocalSynthesisClient({ spawn: () => new InProcessWorker(), listener }),
     settings: () => ({ enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
   });
+  services.push(service);
   return { service, output };
 }
 
@@ -108,7 +110,10 @@ beforeEach(() => {
   vi.mocked(installedSpeechModel).mockResolvedValue('/model');
   vi.mocked(speechRuntimeAvailable).mockResolvedValue(true);
 });
-afterEach(() => {
+afterEach(async () => {
+  const disposals = services.splice(0).map((service) => service.dispose());
+  for (const worker of InProcessWorker.made) worker.exit();
+  await Promise.all(disposals);
   vi.resetAllMocks();
   if (platform !== undefined) Object.defineProperty(process, 'platform', platform);
   if (arch !== undefined) Object.defineProperty(process, 'arch', arch);
@@ -129,7 +134,7 @@ describe('local synthesis, composed from the service to the host', () => {
     expect(wav?.length).toBe(44 + (SAMPLES.length + 14_400) * 2);
   });
 
-  it('NoCanceledResume: a canceled inference keeps the worker owned, its result is discarded, and the warm worker is reused', async () => {
+  it('NoCanceledResume: the next request waits for the canceled worker to exit and does not replay its result', async () => {
     const { service, output } = compose();
     engine.gate = Promise.withResolvers<void>();
     const first = service.speak('Canceled unit.');
@@ -138,20 +143,25 @@ describe('local synthesis, composed from the service to the host', () => {
     });
     service.cancel();
     await first;
-    await service.speak('Refused unit.');
-    expect(output.status).toHaveBeenCalledWith(2, 'unavailable', expect.stringContaining('finishing'));
-    expect(engine.texts).toEqual(['Canceled unit.']);
-    engine.gate.resolve();
-    engine.gate = undefined;
-    // The canceled inference returns on its own; give the worker thread time to deliver and the client to discard it.
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 0);
+    const second = service.speak('Waiting unit.');
+    expect(output.status).toHaveBeenCalledWith(2, 'preparing');
+    expect(output.status).not.toHaveBeenCalledWith(2, 'unavailable', expect.any(String));
+    const worker = InProcessWorker.made[0];
+    await vi.waitFor(() => {
+      expect(worker?.terminate).toHaveBeenCalledOnce();
     });
-    const third = service.speak('Reused worker.');
-    await finish(service, output, third, 3);
+    expect(InProcessWorker.made).toHaveLength(1);
+    expect(engine.texts).toEqual(['Canceled unit.']);
+    expect(output.play).not.toHaveBeenCalled();
+    const oldInference = engine.gate;
+    engine.gate = undefined;
+    worker?.exit();
+    oldInference.resolve();
+    await finish(service, output, second, 2);
     expect(output.play).not.toHaveBeenCalledWith(1, expect.anything(), expect.anything());
-    expect(engine.texts).toEqual(['Canceled unit.', 'Reused worker.']);
-    expect(engine.loads).toBe(1);
+    expect(engine.texts).toEqual(['Canceled unit.', 'Waiting unit.']);
+    expect(engine.loads).toBe(2);
+    expect(InProcessWorker.made).toHaveLength(2);
   });
 
   it('TruthfulUnavailable: a fatal load error ends the unit, keeps the slot until exit, and replays nothing on the next request', async () => {
@@ -164,15 +174,17 @@ describe('local synthesis, composed from the service to the host', () => {
     expect(JSON.stringify(output.status.mock.calls)).not.toContain('secret');
     const worker = InProcessWorker.made[0];
     expect(worker?.terminate).toHaveBeenCalledTimes(1);
-    await service.speak('Too early.');
-    expect(output.status).toHaveBeenCalledWith(2, 'unavailable', expect.stringContaining('finishing'));
+    const retry = service.speak('Waiting retry.');
+    expect(output.status).toHaveBeenCalledWith(2, 'preparing');
+    expect(output.status).not.toHaveBeenCalledWith(2, 'unavailable', expect.any(String));
     expect(InProcessWorker.made).toHaveLength(1);
-    worker?.exit();
+    expect(output.play).not.toHaveBeenCalled();
+    expect(engine.texts).toEqual([]);
     engine.failLoad = false;
-    const retry = service.speak('Retried unit.');
-    await finish(service, output, retry, 3);
+    worker?.exit();
+    await finish(service, output, retry, 2);
     expect(InProcessWorker.made).toHaveLength(2);
     expect(engine.loads).toBe(2);
-    expect(engine.texts).toEqual(['Retried unit.']);
+    expect(engine.texts).toEqual(['Waiting retry.']);
   });
 });

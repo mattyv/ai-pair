@@ -81,3 +81,15 @@ it('maps busy and unexpected exceptions to fixed safe results', async () => {
   });
   expect(await issueGpuCapability(options)).toEqual({ check: { phase: 'unavailable', reason: 'inconclusive' } });
 });
+
+it('NoAbortedCapability: refuses to issue when aborted before or after proof', async () => {
+  const before = new AbortController();
+  before.abort();
+  await expect(issueGpuCapability(inputs(), before.signal)).rejects.toMatchObject({ name: 'AbortError' });
+  const after = new AbortController();
+  vi.mocked(checkGpuSetup).mockImplementationOnce(() => {
+    after.abort();
+    return Promise.resolve({ phase: 'ready' });
+  });
+  await expect(issueGpuCapability(inputs(), after.signal)).rejects.toMatchObject({ name: 'AbortError' });
+});

@@ -126,7 +126,7 @@ it('keeps speech disabled by default and retains a missing local device', async 
   callbacks.values.clear();
   callbacks.config?.({ affectsConfiguration: () => true });
   expect(panel.showSpeechSettings).toHaveBeenCalled();
-  host.dispose();
+  await host.dispose();
 });
 
 it('restores an available saved output without opening Settings', async () => {
@@ -185,7 +185,7 @@ it('restores an available saved output without opening Settings', async () => {
   });
   expect(list).toHaveBeenCalledOnce();
   expect(host.panelSpeech.outputView().selected).toEqual({ kind: 'native', backend: 'coreaudio', name: 'headset' });
-  host.dispose();
+  await host.dispose();
 });
 
 it('retries a failed startup device listing from Settings', async () => {
@@ -252,5 +252,5 @@ it('retries a failed startup device listing from Settings', async () => {
   });
   expect(list).toHaveBeenCalledTimes(2);
   expect(host.panelSpeech.outputView().selected).toEqual({ kind: 'native', backend: 'coreaudio', name: 'headset' });
-  host.dispose();
+  await host.dispose();
 });

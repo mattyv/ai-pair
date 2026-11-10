@@ -57,3 +57,27 @@ it('reports a retryable busy outcome when another GPU child owns the slot', asyn
   vi.mocked(proof.run).mockRejectedValueOnce(new GpuProcessBusyError());
   expect(await checkGpu(proof)).toEqual({ phase: 'unavailable', reason: 'busy' });
 });
+
+it.each(['trust', 'enumerate', 'negative', 'tiny', 'model'] as const)(
+  'NoLateSpawn: abort after %s prevents all later proof stages',
+  async (stage) => {
+    const controller = new AbortController();
+    const runner = probe();
+    if (stage === 'trust' || stage === 'enumerate') {
+      vi.mocked(runner[stage]).mockImplementation(() => {
+        controller.abort();
+        return Promise.resolve(true);
+      });
+    } else {
+      vi.mocked(runner.run).mockImplementation((kind) => {
+        if (kind === stage) controller.abort();
+        return Promise.resolve(kind === 'negative' ? 'rejected' : 'passed');
+      });
+    }
+    await expect(checkGpu(runner, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    const stages = ['negative', 'tiny', 'model'];
+    expect(vi.mocked(runner.run).mock.calls.map(([kind]) => kind)).toEqual(
+      stage === 'trust' || stage === 'enumerate' ? [] : stages.slice(0, stages.indexOf(stage) + 1),
+    );
+  },
+);

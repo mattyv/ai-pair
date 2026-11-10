@@ -18,6 +18,8 @@ export interface PanelPlacementOptions {
   prepare: () => Promise<unknown>;
   failure?: (reason: PanelPrepareFailure) => void;
   beforeCommit?: () => void;
+  afterCommit?: () => void;
+  commitFailed?: () => void;
   commit: (prepared: LocalAudioPrepared) => Promise<unknown>;
 }
 
@@ -95,9 +97,25 @@ export class PanelPlacement {
     } catch {
       return 'companion';
     }
-    void Promise.resolve()
-      .then(() => this.options.commit(prepared.data))
-      .catch(() => {});
+    let commitTimer: ReturnType<typeof setTimeout> | undefined;
+    const commitTimeout = new Promise<undefined>((resolve) => {
+      commitTimer = setTimeout(() => {
+        resolve(undefined);
+      }, this.options.timeoutMs);
+    });
+    try {
+      const accepted = await Promise.race([Promise.resolve().then(() => this.options.commit(prepared.data)), commitTimeout]);
+      if (accepted === true) {
+        // specs/PanelPlacement.tla, Acknowledged and StartSession: no session before acknowledgement.
+        this.options.afterCommit?.();
+      } else {
+        this.options.commitFailed?.();
+      }
+    } catch {
+      this.options.commitFailed?.();
+    } finally {
+      clearTimeout(commitTimer);
+    }
     return 'companion';
   }
 }

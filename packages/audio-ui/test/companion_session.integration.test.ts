@@ -82,7 +82,7 @@ describe('companion session integration', () => {
         expect.objectContaining({ type: 'panelAction', action: { type: 'reply', text: 'Wait', defer: true } }),
       );
     });
-    current.dispose();
+    await current.dispose();
     expect(fake.showSpeechTransport).toHaveBeenCalledWith(false);
   });
 
@@ -106,7 +106,7 @@ describe('companion session integration', () => {
     await Promise.resolve();
     expect(fake.execute).toHaveBeenCalledTimes(1);
     fake.warning.mockClear();
-    session.dispose();
+    await session.dispose();
     expect(fake.warning).not.toHaveBeenCalled();
   });
   it('sends a replacement ready only after the old page stops and closes', async () => {
@@ -129,7 +129,7 @@ describe('companion session integration', () => {
       { type: 'panelAction', pageEpoch: 1, action: { type: 'pageClosed' } },
       { type: 'panelAction', pageEpoch: 2, action: { type: 'ready' } },
     ]);
-    session.dispose();
+    await session.dispose();
   });
   it('clears an old page draft pause when the page is disposed', async () => {
     fake.stop.mockResolvedValue(undefined);
@@ -146,7 +146,7 @@ describe('companion session integration', () => {
     panel.routing.closed(1);
     await Promise.resolve();
     expect(fake.speechResume).toHaveBeenCalledTimes(1);
-    session.dispose();
+    await session.dispose();
   });
   it('retains an independent manual pause when a draft page closes', async () => {
     fake.stop.mockResolvedValue(undefined);
@@ -164,16 +164,16 @@ describe('companion session integration', () => {
     expect(fake.speechResume).not.toHaveBeenCalled();
     panel.routing.forward({ type: 'resume' }, 2);
     expect(fake.speechResume).toHaveBeenCalledTimes(1);
-    session.dispose();
+    await session.dispose();
   });
-  it('retains only sanitized local speech diagnostics and real build identity', () => {
+  it('retains only sanitized local speech diagnostics and real build identity', async () => {
     fake.stop.mockResolvedValue(undefined);
     fake.execute.mockResolvedValue(undefined);
     fake.register.mockReturnValue({ dispose: () => {} });
     const session = createCompanionSession(mock<vscode.ExtensionContext>({ extensionPath: '/trusted', subscriptions: [] }), 'epoch');
     fake.diagnostic?.({ kind: 'speech', event: 'preview', phase: 'ready', provider: 'kokoro' });
     expect(session.diagnostics()).toMatchObject({ version: 'test', build: 'test-build', events: [{ kind: 'speech', event: 'preview' }] });
-    session.dispose();
+    await session.dispose();
   });
   it('clears local pause reasons after canceling for a reply and when explicitly resumed', async () => {
     fake.stop.mockResolvedValue(undefined);
@@ -194,6 +194,6 @@ describe('companion session integration', () => {
     panel.routing.forward({ type: 'draft', empty: false }, 1);
     panel.routing.forward({ type: 'resume' }, 1);
     expect(fake.speechResume).toHaveBeenCalledTimes(2);
-    session.dispose();
+    await session.dispose();
   });
 });

@@ -54,6 +54,7 @@ class Worker implements WorkerLike {
 const platform = Object.getOwnPropertyDescriptor(process, 'platform');
 const arch = Object.getOwnPropertyDescriptor(process, 'arch');
 const services: SpeechService[] = [];
+const allWorkers: Worker[] = [];
 
 /** Composes both real clients with independent, manually reaped fake workers. */
 function compose() {
@@ -70,6 +71,7 @@ function compose() {
       spawn: () => {
         const worker = new Worker();
         workers[kind].push(worker);
+        allWorkers.push(worker);
         return worker;
       },
     });
@@ -96,6 +98,7 @@ function compose() {
     authorize,
     setMode: (value: 'cpu' | 'gpu') => {
       mode = value;
+      service.selectComputeMode(value);
     },
   };
 }
@@ -120,8 +123,10 @@ beforeEach(() => {
   vi.mocked(installedSpeechModel).mockResolvedValue('/model');
   vi.mocked(speechRuntimeAvailable).mockResolvedValue(true);
 });
-afterEach(() => {
-  for (const service of services.splice(0)) service.dispose();
+afterEach(async () => {
+  const disposals = services.splice(0).map((service) => service.dispose());
+  for (const worker of allWorkers.splice(0)) worker.exit();
+  await Promise.all(disposals);
   vi.resetAllMocks();
   if (platform !== undefined) Object.defineProperty(process, 'platform', platform);
   if (arch !== undefined) Object.defineProperty(process, 'arch', arch);

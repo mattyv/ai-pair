@@ -52,9 +52,9 @@ it('preflights and passes current paths and revalidation callbacks to capability
   const probe = options.probeFor(capability);
   expect(await probe.trust()).toBe(true);
   expect(await probe.enumerate()).toBe(true);
-  expect(deps.physical).toHaveBeenCalledWith('/runtime', '/loader', DRIVER);
+  expect(deps.physical).toHaveBeenCalledWith('/runtime', '/loader', DRIVER, undefined);
   expect(await probe.run('tiny')).toBe('passed');
-  expect(deps.proof).toHaveBeenCalledWith(capability, 'tiny');
+  expect(deps.proof).toHaveBeenCalledWith(capability, 'tiny', undefined);
   vi.mocked(deps.loader).mockResolvedValueOnce(undefined);
   expect(await probe.trust()).toBe(false);
   vi.mocked(deps.driver).mockResolvedValueOnce({ ...DRIVER, identity: { ...DRIVER.identity, inode: '3' } });
@@ -98,4 +98,59 @@ it('distinguishes a busy process from other preflight failures', async () => {
   expect(await createGpuBinding(deps).preflight()).toEqual({ phase: 'unavailable', reason: 'busy' });
   vi.mocked(deps.physical).mockRejectedValueOnce(new Error('private'));
   expect(await createGpuBinding(deps).preflight()).toEqual({ phase: 'unavailable', reason: 'inconclusive' });
+});
+
+it('NoLateSpawn: aborts before and between preparation operations', async () => {
+  for (const step of ['before', 'runtimeVerified', 'loader', 'driver', 'physical', 'model'] as const) {
+    const deps = dependencies();
+    const controller = new AbortController();
+    if (step === 'before') controller.abort();
+    else {
+      const operation = vi.mocked(deps[step]);
+      operation.mockImplementationOnce((): Promise<never> => {
+        controller.abort();
+        return Promise.reject(new Error('canceled'));
+      });
+    }
+    await expect(createGpuBinding(deps).issue(controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    expect(issueGpuCapability).not.toHaveBeenCalled();
+  }
+});
+
+it('NoLateSpawn: abort during loader revalidation stops driver lookup and proof', async () => {
+  const deps = dependencies();
+  const controller = new AbortController();
+  await createGpuBinding(deps).issue(controller.signal);
+  const options = vi.mocked(issueGpuCapability).mock.calls[0]?.[0];
+  if (options === undefined) throw new Error('Missing capability request');
+  const probe = options.probeFor(mock<GpuLaunchCapability>());
+  let resolveLoader: ((value: Awaited<ReturnType<GpuBindingDependencies['loader']>>) => void) | undefined;
+  vi.mocked(deps.loader).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveLoader = resolve;
+      }),
+  );
+  vi.mocked(deps.driver).mockClear();
+  const pending = probe.trust();
+  controller.abort();
+  resolveLoader?.({ path: '/loader', sha256: 'a'.repeat(64) });
+  await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+  expect(deps.driver).not.toHaveBeenCalled();
+  expect(deps.proof).not.toHaveBeenCalled();
+});
+
+it('NoLateSpawn: direct enumerate and run closures reject an aborted operation', async () => {
+  const deps = dependencies();
+  const controller = new AbortController();
+  await createGpuBinding(deps).issue(controller.signal);
+  const options = vi.mocked(issueGpuCapability).mock.calls[0]?.[0];
+  if (options === undefined) throw new Error('Missing capability request');
+  const probe = options.probeFor(mock<GpuLaunchCapability>());
+  vi.mocked(deps.physical).mockClear();
+  controller.abort();
+  await expect(probe.enumerate()).rejects.toMatchObject({ name: 'AbortError' });
+  await expect(probe.run('tiny')).rejects.toMatchObject({ name: 'AbortError' });
+  expect(deps.physical).not.toHaveBeenCalled();
+  expect(deps.proof).not.toHaveBeenCalled();
 });

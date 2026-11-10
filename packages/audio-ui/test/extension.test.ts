@@ -49,7 +49,8 @@ vi.mock('../src/companion_session', () => ({
   })),
 }));
 
-beforeEach(() => {
+beforeEach(async () => {
+  await deactivate();
   fake.commands.clear();
   vi.clearAllMocks();
 });
@@ -94,7 +95,7 @@ it('warns an old workspace to update both extensions and reload', () => {
 });
 
 it('rejects malformed commit and makes unattached commands safe', async () => {
-  deactivate();
+  void deactivate();
   const subscriptions: vscode.Disposable[] = [];
   activate(mock<vscode.ExtensionContext>({ subscriptions }));
   expect(fake.commands.get('aiPair.localAudio.commit')?.({})).toBe(false);
@@ -149,4 +150,149 @@ it('isolates audio diagnostics callback failures', () => {
   activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
   fake.commands.get('aiPair.localAudio.commit')?.({ version: 2, epoch: 'epoch', token: 'token' });
   expect(fake.commands.get('aiPair.localAudio.audioDiagnostics')?.(undefined)).toBeUndefined();
+});
+
+it('waits for companion disposal when the extension deactivates', async () => {
+  const stopped = Promise.withResolvers<void>();
+  fake.session.dispose.mockReturnValueOnce(stopped.promise);
+  activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
+  fake.register?.();
+  let finished = false;
+  const pending = Promise.resolve(deactivate()).then(() => {
+    finished = true;
+  });
+  await Promise.resolve();
+  expect(fake.session.dispose).toHaveBeenCalledOnce();
+  expect(finished).toBe(false);
+  stopped.resolve();
+  await pending;
+});
+
+it('waits for the previous companion to reap before creating a replacement', async () => {
+  const stopped = Promise.withResolvers<void>();
+  fake.session.dispose.mockReturnValueOnce(stopped.promise);
+  activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
+  fake.register?.();
+  expect(createCompanionSession).toHaveBeenCalledTimes(1);
+  const previous = deactivate();
+  activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
+  fake.register?.();
+  expect(createCompanionSession).toHaveBeenCalledTimes(1);
+  stopped.resolve();
+  await previous;
+  await vi.waitFor(() => {
+    expect(createCompanionSession).toHaveBeenCalledTimes(2);
+  });
+  await deactivate();
+});
+
+it('keeps the original retirement barrier across a canceled replacement', async () => {
+  const stopped = Promise.withResolvers<void>();
+  fake.session.dispose.mockReturnValueOnce(stopped.promise);
+  activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
+  fake.register?.();
+  const first = deactivate();
+  activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
+  fake.register?.();
+  const second = deactivate();
+  activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
+  fake.register?.();
+  expect(createCompanionSession).toHaveBeenCalledTimes(1);
+  stopped.resolve();
+  await Promise.all([first, second]);
+  await vi.waitFor(() => {
+    expect(createCompanionSession).toHaveBeenCalledTimes(2);
+  });
+  await deactivate();
+});
+
+it('acknowledges a replacement commit only after its first frame can be accepted', async () => {
+  const stopped = Promise.withResolvers<void>();
+  fake.session.dispose.mockReturnValueOnce(stopped.promise);
+  fake.session.accept.mockReturnValue(true);
+  activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
+  fake.register?.();
+  const previous = deactivate();
+  activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
+  fake.commit.mockImplementationOnce(() => {
+    fake.register?.();
+    return true;
+  });
+  const value = fake.commands.get('aiPair.localAudio.commit')?.({ version: 2, epoch: 'epoch', token: 'token' });
+  let acknowledged = false;
+  const pending = Promise.resolve(value).then((result) => {
+    acknowledged = true;
+    return result;
+  });
+  await Promise.resolve();
+  expect(acknowledged).toBe(false);
+  stopped.resolve();
+  await previous;
+  expect(await pending).toBe(true);
+  expect(fake.commands.get('aiPair.localAudio.frame')?.({})).toBe(true);
+  await deactivate();
+});
+
+it('does not advertise attachment readiness until the previous companion is reaped', async () => {
+  const stopped = Promise.withResolvers<void>();
+  fake.session.dispose.mockReturnValueOnce(stopped.promise);
+  activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
+  fake.register?.();
+  const previous = deactivate();
+  activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
+  const pending = Promise.resolve(fake.commands.get('aiPair.localAudio.activate')?.(undefined));
+  let ready = false;
+  void pending.then(() => {
+    ready = true;
+  });
+  await Promise.resolve();
+  const wasReady = ready;
+  stopped.resolve();
+  await previous;
+  expect(wasReady).toBe(false);
+  expect(await pending).toBe(true);
+  await deactivate();
+});
+
+it('keeps the accepted epoch when a later invalid commit arrives before startup', async () => {
+  const stopped = Promise.withResolvers<void>();
+  fake.session.dispose.mockReturnValueOnce(stopped.promise);
+  activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
+  fake.register?.();
+  const previous = deactivate();
+  activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
+  fake.commit
+    .mockImplementationOnce(() => {
+      fake.register?.();
+      return true;
+    })
+    .mockReturnValueOnce(false);
+  const commit = fake.commands.get('aiPair.localAudio.commit');
+  const accepted = Promise.resolve(commit?.({ version: 2, epoch: 'accepted', token: 'token' }));
+  expect(commit?.({ version: 2, epoch: 'rejected', token: 'wrong' })).toBe(false);
+  stopped.resolve();
+  await previous;
+  expect(await accepted).toBe(true);
+  expect(vi.mocked(createCompanionSession).mock.lastCall?.[1]).toBe('accepted');
+  await deactivate();
+});
+
+it('rejects readiness and commit when the previous companion cannot retire', async () => {
+  const failed = Promise.withResolvers<void>();
+  fake.session.dispose.mockReturnValueOnce(failed.promise);
+  activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
+  fake.register?.();
+  const previous = deactivate();
+  activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
+  const readiness = Promise.resolve(fake.commands.get('aiPair.localAudio.activate')?.(undefined));
+  fake.commit.mockImplementationOnce(() => {
+    fake.register?.();
+    return true;
+  });
+  const commit = Promise.resolve(fake.commands.get('aiPair.localAudio.commit')?.({ version: 2, epoch: 'epoch', token: 'token' }));
+  failed.reject(new Error('private'));
+  await expect(previous).rejects.toThrow('private');
+  expect(await readiness).toBe(false);
+  expect(await commit).toBe(false);
+  expect(createCompanionSession).toHaveBeenCalledOnce();
 });

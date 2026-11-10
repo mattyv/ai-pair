@@ -15,8 +15,8 @@ import { createSpeechHost } from '../src/speech_host';
 
 const fakes = vi.hoisted(() => ({
   gpuClientFactory: vi.fn<typeof import('../../vscode/src/speech_gpu_client').createGpuSynthesisClient>(),
-  gpuSlotBusy: vi.fn<() => boolean>().mockReturnValue(false),
-  retireIdleGpu: vi.fn<() => void>(),
+  setupBusy: vi.fn<() => boolean>().mockReturnValue(false),
+  computeUsable: vi.fn<() => boolean>().mockReturnValue(true),
   gpuFlowResult: vi
     .fn<() => Promise<import('../../vscode/src/speech_compute_types').GpuCheck>>()
     .mockResolvedValue({ phase: 'unavailable', reason: 'probe_failed' }),
@@ -26,10 +26,7 @@ const fakes = vi.hoisted(() => ({
   gpuInstalled: vi.fn().mockResolvedValue('/gpu'),
   gpuDownload: vi.fn().mockResolvedValue('/gpu'),
   speechOptions: undefined as
-    | Pick<
-        import('../../vscode/src/speech_service').SpeechServiceOptions,
-        'computeMode' | 'actualBackend' | 'gpuCheck' | 'gpuCapability' | 'createGpu' | 'gpuExternalBusy'
-      >
+    | Pick<import('../../vscode/src/speech_service').SpeechServiceOptions, 'computeMode' | 'computeChanged' | 'gpuCapability' | 'createGpu'>
     | undefined,
   cloudDiagnostic: undefined as ((reason: 'auth') => void) | undefined,
   readiness: vi.fn<(options: import('../../vscode/src/speech_readiness').SpeechReadiness) => Promise<boolean>>().mockResolvedValue(true),
@@ -42,6 +39,7 @@ const fakes = vi.hoisted(() => ({
   secretChanged: undefined as ((event: { key: string }) => void) | undefined,
   credentialInvalidate: vi.fn(),
   errorMessage: vi.fn(),
+  informationMessage: vi.fn(),
   uiKind: 1,
   showInputBox: vi.fn(),
   readKey: undefined as (() => Promise<string | undefined>) | undefined,
@@ -72,43 +70,6 @@ const fakes = vi.hoisted(() => ({
   modelStatus: vi
     .fn()
     .mockResolvedValue({ path: '/model', source: 'https://example.test', revision: 'abc', verified: false, download: 'missing' }),
-}));
-vi.mock('../../vscode/src/speech_compute', () => ({
-  SpeechCompute: class {
-    private value: import('../../vscode/src/speech_compute_types').SpeechComputeState;
-    constructor(
-      requested: unknown,
-      private readonly probe: (
-        progress: (value: import('../../vscode/src/speech_compute_types').GpuCheckProgress) => void,
-      ) => Promise<import('../../vscode/src/speech_compute_types').GpuCheck>,
-      private readonly changed: (value: import('../../vscode/src/speech_compute_types').SpeechComputeState) => void,
-    ) {
-      this.value = {
-        requestedMode: requested === 'auto' || requested === 'gpu' ? requested : 'cpu',
-        actualBackend: 'none',
-        gpuCheck: { phase: 'idle' },
-      };
-    }
-    state(): import('../../vscode/src/speech_compute_types').SpeechComputeState {
-      return this.value;
-    }
-    select(requestedMode: import('../../vscode/src/speech_compute_types').SpeechComputeMode): void {
-      this.value = { ...this.value, requestedMode };
-      this.changed(this.value);
-    }
-    actual(actualBackend: import('../../vscode/src/speech_compute_types').SpeechComputeBackend): void {
-      this.value = { ...this.value, actualBackend };
-      this.changed(this.value);
-    }
-    reportUnavailable(reason: import('../../vscode/src/speech_compute_types').GpuUnavailableReason): void {
-      this.value = { ...this.value, gpuCheck: { phase: 'unavailable', reason } };
-      this.changed(this.value);
-    }
-    async check(): Promise<void> {
-      this.value = { ...this.value, gpuCheck: await this.probe(() => {}) };
-      this.changed(this.value);
-    }
-  },
 }));
 vi.mock('../../vscode/src/speech_gpu_client', () => ({ createGpuSynthesisClient: fakes.gpuClientFactory }));
 vi.mock('../../vscode/src/speech_gpu_host_binding', () => ({
@@ -142,21 +103,52 @@ vi.mock('vscode', () => ({
       return { dispose: vi.fn() };
     },
   },
-  window: { showInputBox: fakes.showInputBox, showErrorMessage: fakes.errorMessage },
+  window: { showInputBox: fakes.showInputBox, showErrorMessage: fakes.errorMessage, showInformationMessage: fakes.informationMessage },
 }));
 vi.mock('../../vscode/src/speech_service', () => ({
   SpeechService: class {
+    private value: import('../../vscode/src/speech_compute_types').SpeechComputeState;
+    private generation = 0;
+    private readonly changed?: import('../../vscode/src/speech_service').SpeechServiceOptions['computeChanged'];
     constructor(
       options: { cloudDiagnostic?: (reason: 'auth') => void } & Pick<
         import('../../vscode/src/speech_service').SpeechServiceOptions,
-        'computeMode' | 'actualBackend' | 'gpuCheck' | 'gpuCapability' | 'createGpu' | 'gpuExternalBusy'
+        'computeMode' | 'computeChanged' | 'gpuCapability' | 'createGpu'
       >,
     ) {
       fakes.cloudDiagnostic = options.cloudDiagnostic;
       fakes.speechOptions = options;
+      this.changed = options.computeChanged;
+      this.value = { requestedMode: options.computeMode?.() ?? 'cpu', actualBackend: 'none', gpuCheck: { phase: 'idle' } };
     }
-    gpuSlotBusy = fakes.gpuSlotBusy;
-    retireIdleGpu = fakes.retireIdleGpu;
+    localComputeUsable = fakes.computeUsable;
+    computeGeneration() {
+      return this.generation;
+    }
+    computeState() {
+      return this.value;
+    }
+    selectComputeMode(requestedMode: import('../../vscode/src/speech_compute_types').SpeechComputeMode) {
+      fakes.cancel();
+      this.generation++;
+      this.value = { ...this.value, requestedMode };
+      this.changed?.(this.value);
+    }
+    async checkGpu(
+      operation: (
+        signal: AbortSignal,
+        progress: (value: import('../../vscode/src/speech_compute_types').GpuCheckProgress) => void,
+      ) => Promise<import('../../vscode/src/speech_compute_types').GpuCheck>,
+      signal: AbortSignal,
+    ) {
+      const result = fakes.setupBusy() ? { phase: 'unavailable' as const, reason: 'busy' as const } : await operation(signal, () => {});
+      const gpuCheck = signal.aborted ? { phase: 'unavailable' as const, reason: 'inconclusive' as const } : result;
+      if (gpuCheck.phase !== 'unavailable' || gpuCheck.reason !== 'busy') {
+        this.value = { ...this.value, gpuCheck };
+        this.changed?.(this.value);
+      }
+      return gpuCheck;
+    }
     cancel = fakes.cancel;
     invalidateCloud = fakes.invalidateCloud;
     audioEvent = fakes.audioEvent;
@@ -348,7 +340,7 @@ it('uses local settings and credentials through panel callbacks', async () => {
   expect(fakes.preview).toHaveBeenCalledOnce();
   host.panelSpeech.stop();
   expect(fakes.cancel).toHaveBeenCalled();
-  host.dispose();
+  void host.dispose();
   expect(fakes.dispose).toHaveBeenCalledOnce();
   expect(fakes.outputDispose).toHaveBeenCalledOnce();
 });
@@ -379,7 +371,7 @@ it('keeps the latest setting while serialized writes are pending and rolls back 
   expect(host.panelSpeech.settings.get()).toEqual(initial);
   expect(fakes.cancel).toHaveBeenCalled();
   expect(fakes.invalidate).toHaveBeenCalled();
-  host.dispose();
+  void host.dispose();
 });
 
 it('invalidates pending voice and speech when the local key changes', async () => {
@@ -398,7 +390,7 @@ it('invalidates pending voice and speech when the local key changes', async () =
   await vi.waitFor(() => {
     expect(panel.showSpeechKeyStatus).toHaveBeenCalledWith(false);
   });
-  host.dispose();
+  void host.dispose();
 });
 
 it('cancels local speech when external settings disable it or switch provider', () => {
@@ -414,7 +406,7 @@ it('cancels local speech when external settings disable it or switch provider', 
   expect(fakes.supersede).toHaveBeenCalled();
   expect(fakes.invalidate).toHaveBeenCalled();
   expect(panel.showSpeechSettings).toHaveBeenCalledTimes(2);
-  host.dispose();
+  void host.dispose();
 });
 
 it('drops asynchronous key, capability and runtime results after disposal', async () => {
@@ -425,7 +417,7 @@ it('drops asynchronous key, capability and runtime results after disposal', asyn
   fakes.hasKey.mockReturnValueOnce(key.promise);
   const { host, panel } = harness(() => capability.promise);
   host.panelSpeech.keyRefresh();
-  host.dispose();
+  void host.dispose();
   runtime.resolve(true);
   key.resolve(true);
   capability.resolve({ backend: 'pipewire', location: 'ui', defaultOutput: true, deviceSelection: true, pauseResume: true });
@@ -453,7 +445,7 @@ it('only admits the selected backend and never substitutes a missing route', asy
     devices: [{ choice: { kind: 'native', backend: 'pipewire', name: 'headset' }, label: 'Headset', available: true }],
   });
   fakes.preferencesWiring?.changed({ supported: true, devices: [], selected: { kind: 'default' } });
-  host.dispose();
+  void host.dispose();
 });
 
 it('reports unavailable output and key failures without exposing their details', async () => {
@@ -468,7 +460,7 @@ it('reports unavailable output and key failures without exposing their details',
   fakes.stopAndWait.mockRejectedValueOnce(new Error('private'));
   fakes.preferencesWiring?.stop();
   expect(fakes.cancel).toHaveBeenCalled();
-  host.dispose();
+  void host.dispose();
 });
 
 it('reports catalog outcomes using only fixed diagnostic reasons', () => {
@@ -480,7 +472,7 @@ it('reports catalog outcomes using only fixed diagnostic reasons', () => {
   publish?.({ voices: [], more: false, loading: false, error: true, errorKind: 'network' });
   publish?.({ voices: [], more: false, loading: true, error: false });
   publish?.({ voices: [{ id: 'voice', name: 'Voice' }], more: false, loading: false, error: false });
-  host.dispose();
+  void host.dispose();
   publish?.({ voices: [], more: false, loading: false, error: false });
 });
 
@@ -513,7 +505,7 @@ it('reads local settings, previews installed models, and keeps cloud unavailable
   });
   await fakes.readKey?.();
   expect(fakes.read).toHaveBeenCalled();
-  host.dispose();
+  void host.dispose();
 });
 
 it('restores a newly validated voice and ignores a superseded failed save', async () => {
@@ -541,7 +533,7 @@ it('restores a newly validated voice and ignores a superseded failed save', asyn
   await vi.waitFor(() => {
     expect(host.panelSpeech.settings.get().elevenLabsVoice).toBe('new_voice');
   });
-  host.dispose();
+  void host.dispose();
 });
 
 it('handles unsupported adapters and superseded capability discovery', async () => {
@@ -560,7 +552,7 @@ it('handles unsupported adapters and superseded capability discovery', async () 
   expect(await fakes.preferencesWiring?.discover()).toEqual({ supported: true, devices: [] });
   fakes.choice.mockReturnValue({ kind: 'native', backend: 'pipewire', name: 'headset' });
   expect(host.panelSpeech.outputReady()).toBe(false);
-  host.dispose();
+  void host.dispose();
   fakes.preferencesWiring?.changed({ supported: false, devices: [], selected: { kind: 'default' } });
   fakes.outputWiring?.status(1, 'idle');
 });
@@ -581,7 +573,7 @@ it('supports a ready local runtime and suppresses stale key failures', async () 
   key.reject(new Error('late'));
   await Promise.resolve();
   expect(panel.showSpeechKeyStatus).toHaveBeenCalledTimes(1);
-  host.dispose();
+  void host.dispose();
 });
 
 it('reports unavailable process evidence without exposing host details', async () => {
@@ -597,7 +589,7 @@ it('reports unavailable process evidence without exposing host details', async (
       reason: 'libc_report_failed',
     });
   });
-  host.host.dispose();
+  void host.host.dispose();
 });
 
 it('cancels on disable without invalidating the unchanged provider', () => {
@@ -608,7 +600,7 @@ it('cancels on disable without invalidating the unchanged provider', () => {
   host.panelSpeech.settings.set({ ...host.panelSpeech.settings.get(), enabled: false });
   expect(fakes.cancel).toHaveBeenCalledOnce();
   expect(fakes.supersede).not.toHaveBeenCalled();
-  host.dispose();
+  void host.dispose();
 });
 
 it('exposes only bounded local speech lifecycle facts for integration observation', () => {
@@ -621,7 +613,7 @@ it('exposes only bounded local speech lifecycle facts for integration observatio
   fakes.outputWiring?.event({ id: 7, pageId: 1, event: 'ended' });
   expect(host.observation()).toEqual({ id: 7, state: 'speaking', started: true, terminal: 'ended' });
   expect(JSON.stringify(host.observation())).not.toContain('private text');
-  host.dispose();
+  void host.dispose();
 });
 
 it('records local worker and preview outcomes without sensitive content', async () => {
@@ -642,7 +634,7 @@ it('records local worker and preview outcomes without sensitive content', async 
     reason: 'worker_module',
   });
   expect(diagnostic).toHaveBeenCalledWith({ kind: 'speech', event: 'preview', provider: 'kokoro', phase: 'ready' });
-  host.dispose();
+  void host.dispose();
 });
 
 it('records preview failure and ignores an older preview settlement', async () => {
@@ -669,7 +661,7 @@ it('records preview failure and ignores an older preview settlement', async () =
   expect(diagnostic).toHaveBeenCalledWith({ kind: 'speech', event: 'runtime', provider: 'kokoro', phase: 'ready' });
   newer.resolve();
   await second;
-  host.dispose();
+  void host.dispose();
 });
 
 it('defaults invalid listening speed and persists it independently of synthesis speed', async () => {
@@ -683,14 +675,14 @@ it('defaults invalid listening speed and persists it independently of synthesis 
   await vi.waitFor(() => {
     expect(fakes.update).toHaveBeenCalledWith('speech.listeningSpeed', 1.25, 1);
   });
-  host.dispose();
+  void host.dispose();
 });
 
 it('constructs the listening-speed worker from the fixed local extension path', () => {
   tempoPaths.length = 0;
   const { host } = harness();
   expect(tempoPaths).toEqual(['/extension/dist/speech/tempo_worker.mjs']);
-  host.dispose();
+  void host.dispose();
 });
 
 it('passes local readiness facts to the readiness check', async () => {
@@ -705,7 +697,7 @@ it('passes local readiness facts to the readiness check', async () => {
   expect(facts?.local()).toBe(false);
   await Promise.resolve();
   expect(facts?.output()).toBe(true);
-  host.dispose();
+  void host.dispose();
   expect(facts?.desktop()).toBe(false);
 });
 
@@ -713,10 +705,6 @@ it('persists the compute choice and runs an explicit GPU check without assuming 
   const { host, panel } = harness();
   expect(host.panelSpeech.computeState().requestedMode).toBe('cpu');
   expect(fakes.speechOptions?.computeMode?.()).toBe('cpu');
-  fakes.speechOptions?.actualBackend?.('cpu');
-  expect(host.panelSpeech.computeState().actualBackend).toBe('cpu');
-  fakes.speechOptions?.gpuCheck?.({ phase: 'unavailable', reason: 'runtime_missing' });
-  expect(host.panelSpeech.computeState().gpuCheck).toEqual({ phase: 'unavailable', reason: 'runtime_missing' });
   host.panelSpeech.computeMode('gpu');
   expect(fakes.cancel).toHaveBeenCalled();
   await vi.waitFor(() => {
@@ -733,7 +721,7 @@ it('records cloud narration failures in companion diagnostics', () => {
   const { host, diagnostic } = harness();
   fakes.cloudDiagnostic?.('auth');
   expect(diagnostic).toHaveBeenCalledWith({ kind: 'speech', event: 'narration', provider: 'elevenlabs', phase: 'failed', reason: 'auth' });
-  host.dispose();
+  void host.dispose();
 });
 
 it('keeps the latest compute choice across pending saves and restores it after a failed save', async () => {
@@ -803,7 +791,7 @@ it('exposes a bounded GPU failure snapshot for copied diagnostics', async () => 
       stage: 'preflight',
     });
   });
-  host.dispose();
+  void host.dispose();
 });
 
 it('routes explicit GPU setup through preflight, model installation, fresh proof and disposal cancellation', async () => {
@@ -814,20 +802,20 @@ it('routes explicit GPU setup through preflight, model installation, fresh proof
   });
   const flow = fakes.gpuFlow;
   if (flow === undefined) throw new Error('Missing GPU setup flow');
-  expect(await flow.preflight()).toEqual({ phase: 'ready' });
+  expect(await flow.preflight(flow.signal)).toEqual({ phase: 'ready' });
   await flow.cpuModel();
   expect(fakes.installed).toHaveBeenCalledWith('/storage');
   expect(await flow.gpuModel()).toBe('/gpu');
   await flow.download(() => {});
   expect(fakes.gpuDownload).toHaveBeenCalledWith('/storage', expect.objectContaining({ signal: flow.signal }));
-  expect(await flow.verify('/gpu')).toEqual({ phase: 'unavailable', reason: 'probe_failed' });
+  expect(await flow.verify('/gpu', flow.signal)).toEqual({ phase: 'unavailable', reason: 'probe_failed' });
   fakes.gpuIssue.mockResolvedValueOnce({ check: { phase: 'ready' }, capability: { modelDirectory: '/other' } });
-  expect(await flow.verify('/gpu')).toEqual({ phase: 'unavailable', reason: 'model_missing' });
+  expect(await flow.verify('/gpu', flow.signal)).toEqual({ phase: 'unavailable', reason: 'model_missing' });
   fakes.gpuIssue.mockResolvedValueOnce({ check: { phase: 'ready' }, capability: { modelDirectory: '/gpu' } });
-  expect(await flow.verify('/gpu')).toEqual({ phase: 'ready' });
-  host.dispose();
+  expect(await flow.verify('/gpu', flow.signal)).toEqual({ phase: 'ready' });
+  void host.dispose();
   expect(flow.signal.aborted).toBe(true);
-  fakes.speechOptions?.actualBackend?.('none');
+  fakes.speechOptions?.computeChanged?.({ requestedMode: 'cpu', actualBackend: 'none', gpuCheck: { phase: 'idle' } });
 });
 
 it('enables GPU inference only with an explicit reviewed gate and fresh host capability', async () => {
@@ -845,7 +833,7 @@ it('enables GPU inference only with an explicit reviewed gate and fresh host cap
     environment: { LANG: 'C', VK_DRIVER_FILES: '/driver', VK_LOADER_LAYERS_DISABLE: '~all~', LD_PRELOAD: '/loader' },
   };
   fakes.gpuIssue.mockResolvedValueOnce({ check: { phase: 'ready' }, capability });
-  expect(await fakes.speechOptions?.gpuCapability?.()).toEqual({ check: { phase: 'ready' }, capability });
+  expect(await fakes.speechOptions?.gpuCapability?.(new AbortController().signal)).toEqual({ check: { phase: 'ready' }, capability });
   const listener = { ready: vi.fn(), retired: vi.fn() };
   fakes.speechOptions?.createGpu?.(capability, listener);
   expect(fakes.gpuClientFactory.mock.calls[0]?.[0].capability).toBe(capability);
@@ -856,56 +844,21 @@ it('enables GPU inference only with an explicit reviewed gate and fresh host cap
   expect(host.gpuDiagnostics().workerDetails).toEqual(['spawn_error', 'exit_nonzero']);
   for (let i = 0; i < 8; i++) detail?.('loading');
   expect(host.gpuDiagnostics().workerDetails).toEqual(Array.from({ length: 8 }, () => 'loading'));
-  host.dispose();
-});
-
-it('NoSuccessorBeforeReap: serializes explicit setup and speech admission proof', async () => {
-  const { host } = harness(undefined, () => Promise.resolve('failed'), /* enableGpuInference= */ true);
-  const setup = Promise.withResolvers<import('../../vscode/src/speech_compute_types').GpuCheck>();
-  fakes.gpuFlowResult.mockReturnValueOnce(setup.promise);
-  host.panelSpeech.checkGpuSetup();
-  await vi.waitFor(() => {
-    expect(fakes.gpuFlow).toBeDefined();
-  });
-  expect(fakes.speechOptions?.gpuExternalBusy?.()).toBe(false);
-  const preflight = Promise.withResolvers<import('../../vscode/src/speech_compute_types').GpuCheck>();
-  fakes.gpuPreflight.mockReturnValueOnce(preflight.promise);
-  const checking = fakes.gpuFlow?.preflight();
-  expect(fakes.speechOptions?.gpuExternalBusy?.()).toBe(true);
-  preflight.resolve({ phase: 'ready' });
-  await checking;
-  expect(fakes.speechOptions?.gpuExternalBusy?.()).toBe(false);
-  expect(await fakes.speechOptions?.gpuCapability?.()).toEqual({ check: { phase: 'checking' } });
-  expect(fakes.gpuIssue).not.toHaveBeenCalled();
-  setup.resolve({ phase: 'unavailable', reason: 'probe_failed' });
-  await vi.waitFor(() => {
-    expect(host.panelSpeech.computeState().gpuCheck.phase).toBe('unavailable');
-  });
-  expect(fakes.speechOptions?.gpuExternalBusy?.()).toBe(false);
-  const admission = Promise.withResolvers<import('../../vscode/src/speech_gpu_capability').GpuCapabilityResult>();
-  fakes.gpuIssue.mockReturnValueOnce(admission.promise);
-  const pending = fakes.speechOptions?.gpuCapability?.();
-  host.panelSpeech.checkGpuSetup();
-  await vi.waitFor(() => {
-    expect(host.panelSpeech.computeState().gpuCheck).toEqual({ phase: 'unavailable', reason: 'busy' });
-  });
-  admission.resolve({ check: { phase: 'unavailable', reason: 'probe_failed' } });
-  await pending;
-  host.dispose();
+  void host.dispose();
 });
 
 it('does not run GPU setup while an inference worker still owns the slot', async () => {
   const { host } = harness(undefined, () => Promise.resolve('failed'), /* enableGpuInference= */ true);
-  fakes.gpuSlotBusy.mockReturnValue(true);
+  fakes.setupBusy.mockReturnValue(true);
   fakes.gpuFlow = undefined;
   host.panelSpeech.checkGpuSetup();
   await vi.waitFor(() => {
-    expect(host.panelSpeech.computeState().gpuCheck).toEqual({ phase: 'unavailable', reason: 'busy' });
+    expect(fakes.informationMessage).toHaveBeenCalledWith('Speech is still finishing; try GPU setup again shortly.');
   });
+  expect(host.panelSpeech.computeState().gpuCheck).toEqual({ phase: 'idle' });
   expect(fakes.gpuFlow).toBeUndefined();
-  expect(fakes.retireIdleGpu).toHaveBeenCalledOnce();
-  host.dispose();
-  fakes.gpuSlotBusy.mockReturnValue(false);
+  void host.dispose();
+  fakes.setupBusy.mockReturnValue(false);
 });
 
 it('drops a setup proof that settles after the host is disposed', async () => {
@@ -916,7 +869,7 @@ it('drops a setup proof that settles after the host is disposed', async () => {
   await vi.waitFor(() => {
     expect(fakes.gpuFlow).toBeDefined();
   });
-  host.dispose();
+  void host.dispose();
   const updates = panel.showSpeechComputeState.mock.calls.length;
   pending.resolve({ phase: 'ready' });
   await vi.waitFor(() => {
@@ -934,7 +887,7 @@ it('does not offer GPU setup from a non-desktop host', async () => {
     expect(host.panelSpeech.computeState().gpuCheck).toEqual({ phase: 'unavailable', reason: 'unsupported' });
   });
   expect(fakes.gpuFlow).toBeUndefined();
-  host.dispose();
+  void host.dispose();
   fakes.uiKind = 1;
 });
 
@@ -975,7 +928,7 @@ it('projects cached audio facts without probing or exposing sensitive values', a
   expect(JSON.stringify(host.audioDiagnostics())).not.toContain('private-voice');
   expect(capabilities).toHaveBeenCalledTimes(1);
   expect(list).not.toHaveBeenCalled();
-  host.dispose();
+  void host.dispose();
 });
 
 it('keeps unavailable and unobserved evidence unknown and invalidates cached checks', async () => {
@@ -996,7 +949,7 @@ it('keeps unavailable and unobserved evidence unknown and invalidates cached che
   });
   fakes.credentialChanged?.();
   expect(host.audioDiagnostics().keyConfigured).toBe('unknown');
-  host.dispose();
+  void host.dispose();
 });
 
 it('uses discovered output availability and resets model evidence on setup', async () => {
@@ -1013,14 +966,14 @@ it('uses discovered output availability and resets model evidence on setup', asy
   await host.panelSpeech.setup();
   expect(host.audioDiagnostics().modelReady).toBe('unknown');
   expect(JSON.stringify(host.audioDiagnostics())).not.toContain('private-device');
-  host.dispose();
+  void host.dispose();
 });
 
 it('refreshes a restored native output at startup without opening Settings', () => {
   fakes.choice.mockReturnValue({ kind: 'native', backend: 'pipewire', name: 'headset' });
   const { host } = harness();
   expect(fakes.refresh).toHaveBeenCalledOnce();
-  host.dispose();
+  void host.dispose();
 });
 
 it('does not list devices after a restored host is disposed during discovery', async () => {
@@ -1028,7 +981,7 @@ it('does not list devices after a restored host is disposed during discovery', a
   fakes.choice.mockReturnValue({ kind: 'native', backend: 'pipewire', name: 'headset' });
   const { host, list, panel } = harness(() => capability.promise);
   const discovery = fakes.preferencesWiring?.discover();
-  host.dispose();
+  void host.dispose();
   capability.resolve({ backend: 'pipewire', location: 'ui', defaultOutput: true, deviceSelection: true, pauseResume: true });
   await discovery;
   expect(list).not.toHaveBeenCalled();
@@ -1044,7 +997,7 @@ it('ignores a device list that settles after disposal', async () => {
   await vi.waitFor(() => {
     expect(list).toHaveBeenCalledOnce();
   });
-  host.dispose();
+  void host.dispose();
   devices.resolve([{ id: 'headset', label: 'Headset' }]);
   await discovery;
   expect(host.audioDiagnostics().routeAvailable).toBe('unknown');
@@ -1068,7 +1021,7 @@ it('publishes conservative validated facts and ignores an older model result', a
   expect(host.audioDiagnostics().modelReady).toBe(false);
   expect(panel.showSpeechReadiness).toHaveBeenCalled();
   expect(panel.showSpeechReadiness.mock.lastCall?.[0]).toMatchObject({ runtimeReady: false, modelReady: false });
-  host.dispose();
+  void host.dispose();
 });
 
 it('invalidates model evidence on failure and ignores superseded or disposed status results', async () => {
@@ -1087,9 +1040,51 @@ it('invalidates model evidence on failure and ignores superseded or disposed sta
   const afterDispose = Promise.withResolvers<typeof status>();
   fakes.modelStatus.mockReturnValueOnce(afterDispose.promise);
   const pending = host.panelSpeech.modelStatus();
-  host.dispose();
+  void host.dispose();
   const sent = panel.showSpeechReadiness.mock.calls.length;
   afterDispose.resolve(status);
   await pending;
   expect(panel.showSpeechReadiness).toHaveBeenCalledTimes(sent);
+});
+
+it('projects an Auto preference and does not advertise a usable GPU when inference is disabled', async () => {
+  fakes.config.set('speech.computeMode', 'auto');
+  fakes.gpuFlowResult.mockResolvedValueOnce({ phase: 'ready' });
+  const { host } = harness(undefined, () => Promise.resolve('failed'), false);
+  expect(host.panelSpeech.computeState().requestedMode).toBe('auto');
+  host.panelSpeech.checkGpuSetup();
+  await vi.waitFor(() => {
+    expect(host.panelSpeech.computeState().gpuCheck).toEqual({ phase: 'unavailable', reason: 'inconclusive' });
+  });
+  await host.dispose();
+});
+
+it('reports explicit GPU failure as unavailable while preserving Auto fallback readiness', async () => {
+  fakes.runtime.mockResolvedValue(true);
+  fakes.config.set('speech.computeMode', 'gpu');
+  const { host } = harness();
+  await vi.waitFor(() => {
+    expect(host.audioDiagnostics().runtimeReady).toBe(true);
+  });
+  fakes.computeUsable.mockReturnValue(false);
+  expect(host.audioDiagnostics().runtimeReady).toBe(false);
+  await host.ready();
+  expect(fakes.readiness.mock.lastCall?.[0].local()).toBe(false);
+  fakes.computeUsable.mockReturnValue(true);
+  expect(host.audioDiagnostics().runtimeReady).toBe(true);
+  await host.dispose();
+});
+
+it('drops transient busy feedback after an ABA mode change', async () => {
+  fakes.setupBusy.mockReturnValue(true);
+  const { host } = harness(undefined, () => Promise.resolve('failed'), /* enableGpuInference= */ true);
+  host.panelSpeech.checkGpuSetup();
+  host.panelSpeech.computeMode('gpu');
+  host.panelSpeech.computeMode('cpu');
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(fakes.informationMessage).not.toHaveBeenCalled();
+  expect(host.panelSpeech.computeState().gpuCheck).toEqual({ phase: 'idle' });
+  fakes.setupBusy.mockReturnValue(false);
+  await host.dispose();
 });

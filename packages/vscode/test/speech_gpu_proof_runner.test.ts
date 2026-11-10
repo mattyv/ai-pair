@@ -154,3 +154,69 @@ it('rejects duplicate proof reports before close', async () => {
   handlers.get('close')?.(undefined);
   expect(await pending).toBe('failed');
 });
+
+it('SettledReaped: abort kills proof and cleans up only after close', async () => {
+  const handlers = new Map<string, (value: unknown) => void>();
+  const kill = vi.fn();
+  fake.fork.mockReturnValue({
+    on: (event: string, handler: (value: unknown) => void) => {
+      handlers.set(event, handler);
+    },
+    kill,
+  });
+  const controller = new AbortController();
+  const rejected = vi.fn();
+  const pending = createGpuProofRunner(capability)('model', controller.signal).catch(rejected);
+  for (let index = 0; index < 5; index++) await Promise.resolve();
+  controller.abort();
+  expect(kill).toHaveBeenCalledWith('SIGKILL');
+  expect(rejected).not.toHaveBeenCalled();
+  expect(fake.rm).not.toHaveBeenCalled();
+  handlers.get('error')?.(new Error('private'));
+  expect(rejected).not.toHaveBeenCalled();
+  handlers.get('close')?.(undefined);
+  await pending;
+  expect(rejected).toHaveBeenCalledWith(expect.objectContaining({ name: 'AbortError' }));
+  expect(fake.rm).toHaveBeenCalledOnce();
+});
+
+it('NoLateSpawn: abort before setup or during temporary directory creation prevents fork', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  await expect(createGpuProofRunner(capability)('tiny', controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+  expect(fake.mkdtemp).not.toHaveBeenCalled();
+  const later = new AbortController();
+  fake.mkdtemp.mockImplementationOnce(() => {
+    later.abort();
+    return Promise.resolve('/tmp/private-proof');
+  });
+  await expect(createGpuProofRunner(capability)('tiny', later.signal)).rejects.toMatchObject({ name: 'AbortError' });
+  expect(fake.fork).not.toHaveBeenCalled();
+  expect(fake.rm).toHaveBeenCalledOnce();
+});
+
+it('handles cancellation while fork throws or returns a child', async () => {
+  const throwing = new AbortController();
+  fake.fork.mockImplementationOnce(() => {
+    throwing.abort();
+    throw new Error('fork');
+  });
+  await expect(createGpuProofRunner(capability)('tiny', throwing.signal)).rejects.toMatchObject({ name: 'AbortError' });
+  const controller = new AbortController();
+  const handlers = new Map<string, (value: unknown) => void>();
+  const kill = vi.fn();
+  fake.fork.mockImplementationOnce(() => {
+    controller.abort();
+    return {
+      on: (event: string, handler: (value: unknown) => void) => {
+        handlers.set(event, handler);
+      },
+      kill,
+    };
+  });
+  const pending = createGpuProofRunner(capability)('tiny', controller.signal);
+  for (let index = 0; index < 5; index++) await Promise.resolve();
+  expect(kill).toHaveBeenCalledWith('SIGKILL');
+  handlers.get('close')?.(undefined);
+  await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+});

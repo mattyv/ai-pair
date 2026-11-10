@@ -14,6 +14,25 @@ function child() {
 }
 
 describe('GPU process supervision', () => {
+  it('SettledReaped: abort kills and waits for close before rejecting', async () => {
+    const fake = child();
+    const controller = new AbortController();
+    const done = vi.fn();
+    const result = runGpuProcess(() => fake.process, 1000, controller.signal).catch(done);
+    controller.abort();
+    expect(fake.process.kill).toHaveBeenCalledWith('SIGKILL');
+    expect(done).not.toHaveBeenCalled();
+    fake.emit('close', 0);
+    await result;
+    expect(done).toHaveBeenCalledWith(expect.objectContaining({ name: 'AbortError' }));
+  });
+  it('NoLateSpawn: an already aborted signal never spawns', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const spawn = vi.fn(() => child().process);
+    await expect(runGpuProcess(spawn, 1000, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    expect(spawn).not.toHaveBeenCalled();
+  });
   it('returns only after the child exits', async () => {
     const fake = child();
     const result = runGpuProcess(() => fake.process, 1000);
@@ -75,4 +94,31 @@ describe('GPU process supervision', () => {
     fake.emit('close', 1);
     expect(await result).toBe('failed');
   });
+});
+
+it('handles cancellation during spawn whether spawning throws or returns a child', async () => {
+  const throwing = new AbortController();
+  await expect(
+    runGpuProcess(
+      () => {
+        throwing.abort();
+        throw new Error('spawn');
+      },
+      1000,
+      throwing.signal,
+    ),
+  ).rejects.toMatchObject({ name: 'AbortError' });
+  const controller = new AbortController();
+  const fake = child();
+  const pending = runGpuProcess(
+    () => {
+      controller.abort();
+      return fake.process;
+    },
+    1000,
+    controller.signal,
+  );
+  expect(fake.process.kill).toHaveBeenCalledWith('SIGKILL');
+  fake.emit('close');
+  await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
 });

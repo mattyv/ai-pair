@@ -124,5 +124,5 @@ it('preserves a cloud rate failure between successful narration requests', async
   speech.audioEvent({ id: await played.promise, pageId: 1, event: 'ended' });
   await third;
   expect(requests).toBe(3);
-  speech.dispose();
+  await speech.dispose();
 });

@@ -163,7 +163,27 @@ const fakes = vi.hoisted(() => {
     readonly resume = vi.fn<() => void>();
     readonly cancel = vi.fn<() => void>();
     readonly invalidateCloud = vi.fn<() => void>();
-    readonly dispose = vi.fn<() => void>();
+    readonly dispose = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    private compute: import('../src/speech_compute_types').SpeechComputeState;
+    readonly selectComputeMode = vi.fn((requestedMode: import('../src/speech_compute_types').SpeechComputeMode) => {
+      this.compute = { ...this.compute, requestedMode };
+      this.options.computeChanged(this.compute);
+    });
+    readonly computeState = vi.fn(() => this.compute);
+    readonly checkGpu = vi.fn(
+      async (
+        operation: (
+          signal: AbortSignal,
+          progress: (value: import('../src/speech_compute_types').GpuCheckProgress) => void,
+        ) => Promise<import('../src/speech_compute_types').GpuCheck>,
+        signal: AbortSignal,
+      ) => {
+        const gpuCheck = await operation(signal, () => {});
+        this.compute = { ...this.compute, gpuCheck };
+        this.options.computeChanged(this.compute);
+        return gpuCheck;
+      },
+    );
     readonly preview = vi.fn<() => Promise<void>>().mockResolvedValue();
     readonly audioEvent =
       vi.fn<(event: { id: number; pageId: number; event: 'started' | 'ended' | 'failed' }) => 'ended' | 'failed' | undefined>();
@@ -175,11 +195,15 @@ const fakes = vi.hoisted(() => {
         localDesktop: boolean;
         cloudDiagnostic?: (reason: 'auth') => void;
         computeMode: () => import('../src/speech_compute_types').SpeechComputeMode;
-        actualBackend: (value: import('../src/speech_compute_types').SpeechComputeBackend) => void;
-        gpuCheck: (value: import('../src/speech_compute_types').GpuCheck) => void;
+        computeChanged: (value: import('../src/speech_compute_types').SpeechComputeState) => void;
       },
     ) {
+      this.compute = { requestedMode: options.computeMode(), actualBackend: 'none', gpuCheck: { phase: 'idle' } };
       made.speech.push(this);
+    }
+    setComputeState(value: import('../src/speech_compute_types').SpeechComputeState): void {
+      this.compute = value;
+      this.options.computeChanged(value);
     }
   }
 
@@ -392,6 +416,8 @@ const fakes = vi.hoisted(() => {
     companionAvailable: false,
     companionInstalled: false,
     placementChoice: undefined as Promise<import('../src/panel_placement').PanelOwner> | undefined,
+    placementCommit: undefined as Promise<unknown> | undefined,
+    placementChoose: vi.fn(),
     session: undefined as
       | {
           narration: {
@@ -541,10 +567,19 @@ vi.mock('../src/panel_placement', () => ({
       fakes.placementOptions = options;
     }
     choose(): Promise<import('../src/panel_placement').PanelOwner> {
+      fakes.placementChoose();
       if (fakes.placementChoice !== undefined) return fakes.placementChoice;
       if (this.options.companionInstalled === true) return Promise.resolve('incompatible');
       if (fakes.companionAvailable) {
         this.options.beforeCommit?.();
+        if (fakes.placementCommit !== undefined) {
+          return fakes.placementCommit.then((accepted) => {
+            if (accepted === true) this.options.afterCommit?.();
+            else this.options.commitFailed?.();
+            return 'companion';
+          });
+        }
+        this.options.afterCommit?.();
         return Promise.resolve('companion');
       }
       return Promise.resolve(this.options.remote ? 'remote-text' : 'legacy');
@@ -569,41 +604,6 @@ vi.mock('../src/diagnostics', () => ({ Diagnostics: fakes.FakeDiagnostics }));
 vi.mock('../src/diagnostics_collector', () => ({ collectDiagnostics: fakes.collect }));
 vi.mock('../src/speech_runtime_status', () => ({ speechRuntimeAvailable: vi.fn(() => Promise.resolve(false)) }));
 vi.mock('../src/speech_readiness', () => ({ speechReady: vi.fn().mockResolvedValue(false) }));
-vi.mock('../src/speech_compute', () => ({
-  SpeechCompute: class {
-    private value: import('../src/speech_compute_types').SpeechComputeState;
-    constructor(
-      requested: unknown,
-      private readonly probe: () => Promise<import('../src/speech_compute_types').GpuCheck>,
-      private readonly publish: (value: import('../src/speech_compute_types').SpeechComputeState) => void,
-    ) {
-      this.value = {
-        requestedMode: requested === 'auto' || requested === 'gpu' ? requested : 'cpu',
-        actualBackend: 'none',
-        gpuCheck: { phase: 'idle' },
-      };
-    }
-    state(): import('../src/speech_compute_types').SpeechComputeState {
-      return this.value;
-    }
-    select(requestedMode: import('../src/speech_compute_types').SpeechComputeMode): void {
-      this.value = { ...this.value, requestedMode };
-      this.publish(this.value);
-    }
-    actual(actualBackend: import('../src/speech_compute_types').SpeechComputeBackend): void {
-      this.value = { ...this.value, actualBackend };
-      this.publish(this.value);
-    }
-    reportUnavailable(reason: import('../src/speech_compute_types').GpuUnavailableReason): void {
-      this.value = { ...this.value, gpuCheck: { phase: 'unavailable', reason } };
-      this.publish(this.value);
-    }
-    async check(): Promise<void> {
-      this.value = { ...this.value, gpuCheck: await this.probe() };
-      this.publish(this.value);
-    }
-  },
-}));
 vi.mock('../src/speech_service', () => ({ SpeechService: fakes.FakeSpeech }));
 vi.mock('../src/speech_elevenlabs', () => ({ ElevenLabsClient: fakes.FakeCloudClient }));
 vi.mock('../src/speech_credentials', () => ({ SpeechCredentials: fakes.FakeCredentials }));
@@ -716,6 +716,7 @@ beforeEach(() => {
   fakes.companionAvailable = false;
   fakes.companionInstalled = false;
   fakes.placementChoice = undefined;
+  fakes.placementCommit = undefined;
   fakes.session = undefined;
   fakes.frameAccepted = true;
   fakes.gpuSnapshot = undefined;
@@ -726,6 +727,7 @@ beforeEach(() => {
   fakes.commandCalls.length = 0;
   fakes.failedCommands.clear();
   fakes.providerRegistered.mockClear();
+  fakes.placementChoose.mockClear();
 });
 
 afterEach(() => {
@@ -745,6 +747,10 @@ afterEach(() => {
   fakes.errors.length = 0;
   fakes.infos.length = 0;
   fakes.logged.length = 0;
+});
+
+it('deactivates safely before a service is activated', async () => {
+  await expect(deactivate()).resolves.toBeUndefined();
 });
 
 describe('activate', () => {
@@ -1697,10 +1703,9 @@ describe('the calibration', () => {
 });
 
 describe('deactivate', () => {
-  it('does nothing: the context disposes everything', () => {
-    expect(() => {
-      deactivate();
-    }).not.toThrow();
+  it('returns after the active service has retired', async () => {
+    activated();
+    await expect(deactivate()).resolves.toBeUndefined();
   });
 });
 
@@ -1920,8 +1925,8 @@ it('holds narration and secret changes while placement is pending, then selects 
   const choice = Promise.withResolvers<'legacy'>();
   fakes.placementChoice = choice.promise;
   const h = activated();
-  expect(await h.controller.narration.ready?.()).toBe(false);
-  await h.controller.narration.speak('pending');
+  const ready = h.controller.narration.ready?.();
+  const pending = h.controller.narration.speak('pending');
   h.controller.narration.pause();
   h.controller.narration.resume();
   h.controller.narration.cancel();
@@ -1930,9 +1935,12 @@ it('holds narration and secret changes while placement is pending, then selects 
   expect(command('aiPair.localAudio.workspace', { example: true })).toBe(false);
   choice.resolve('legacy');
   await h.api.ready;
+  await pending;
+  expect(await ready).toBe(false);
   const speech = last(fakes.made.speech);
+  expect(speech.speak).not.toHaveBeenCalledWith('pending');
   expect(await h.controller.narration.ready?.()).toBe(false);
-  expect(speechReady).toHaveBeenCalledOnce();
+  expect(speechReady).toHaveBeenCalledTimes(2);
   const facts = vi.mocked(speechReady).mock.lastCall?.[0];
   if (facts === undefined) throw new Error('No readiness facts');
   expect(facts.settings().enabled).toBe(false);
@@ -2087,9 +2095,8 @@ it('persists compute mode and keeps an unavailable GPU check fail-closed', async
   expect(compute.computeState().requestedMode).toBe('cpu');
   const service = last(fakes.made.speech);
   expect(service.options.computeMode()).toBe('cpu');
-  service.options.actualBackend('cpu');
+  service.setComputeState({ requestedMode: 'cpu', actualBackend: 'cpu', gpuCheck: { phase: 'unavailable', reason: 'runtime_missing' } });
   expect(compute.computeState().actualBackend).toBe('cpu');
-  service.options.gpuCheck({ phase: 'unavailable', reason: 'runtime_missing' });
   expect(compute.computeState().gpuCheck).toEqual({ phase: 'unavailable', reason: 'runtime_missing' });
   compute.computeMode('gpu');
   expect(compute.computeState().requestedMode).toBe('gpu');
@@ -2335,4 +2342,192 @@ it('updates settings validity before publishing immediate readiness', async () =
   });
   expect(h.panel.showSpeechSettings).toHaveBeenCalled();
   expect(h.panel.showSpeechSettings.mock.invocationCallOrder[0]).toBeLessThan(h.panel.showSpeechReadiness.mock.invocationCallOrder[0] ?? 0);
+});
+
+it('uses the service manager as the sole compute authority', async () => {
+  const h = activated();
+  const service = last(fakes.made.speech);
+  h.panel.wiring.speech.computeMode('gpu');
+  expect(service.selectComputeMode).toHaveBeenCalledWith('gpu');
+  expect(h.panel.wiring.speech.computeState()).toEqual(service.computeState());
+  h.panel.wiring.speech.checkGpuSetup();
+  await vi.waitFor(() => {
+    expect(service.checkGpu).toHaveBeenCalledOnce();
+  });
+});
+
+it('awaits lifecycle retirement during deactivation', async () => {
+  const h = activated();
+  const service = last(fakes.made.speech);
+  const stopped = Promise.withResolvers<void>();
+  service.dispose.mockReturnValueOnce(stopped.promise);
+  const completed = vi.fn();
+  const deactivated = deactivate().then(completed);
+  await Promise.resolve();
+  expect(service.dispose).toHaveBeenCalledOnce();
+  expect(completed).not.toHaveBeenCalled();
+  stopped.resolve();
+  await deactivated;
+  expect(completed).toHaveBeenCalledOnce();
+  for (const disposable of h.context.subscriptions) disposable.dispose();
+  expect(service.dispose).toHaveBeenCalledOnce();
+});
+
+it('initializes the lifecycle from each saved compute mode', () => {
+  fakes.settings.set('speech.computeMode', 'auto');
+  activated();
+  expect(last(fakes.made.speech).computeState().requestedMode).toBe('auto');
+  fakes.settings.set('speech.computeMode', 'gpu');
+  activated();
+  expect(last(fakes.made.speech).computeState().requestedMode).toBe('gpu');
+});
+
+it('suppresses late compute notifications after shutdown', async () => {
+  const h = activated();
+  const service = last(fakes.made.speech);
+  await deactivate();
+  h.panel.showSpeechComputeState.mockClear();
+  service.setComputeState({ requestedMode: 'cpu', actualBackend: 'none', gpuCheck: { phase: 'idle' } });
+  expect(h.panel.showSpeechComputeState).not.toHaveBeenCalled();
+});
+
+it('waits for the previous speech service to retire before activating a replacement', async () => {
+  activated();
+  const old = last(fakes.made.speech);
+  const retired = Promise.withResolvers<void>();
+  old.dispose.mockReturnValueOnce(retired.promise);
+  fakes.providerRegistered.mockClear();
+  const next = activated();
+  let ready = false;
+  void next.api.ready.then(() => {
+    ready = true;
+  });
+  await Promise.resolve();
+  expect(old.dispose).toHaveBeenCalledOnce();
+  expect(ready).toBe(false);
+  expect(fakes.providerRegistered).not.toHaveBeenCalled();
+  const nextSpeech = last(fakes.made.speech);
+  const narration = next.controller.narration;
+  const pendingSpeech = narration.speak('first request');
+  expect(nextSpeech.speak).not.toHaveBeenCalled();
+  retired.resolve();
+  await next.api.ready;
+  await pendingSpeech;
+  expect(nextSpeech.speak).toHaveBeenCalledWith('first request');
+  expect(fakes.providerRegistered).toHaveBeenCalled();
+});
+
+it('keeps the oldest retirement barrier across repeated replacement', async () => {
+  activated();
+  const first = last(fakes.made.speech);
+  const retired = Promise.withResolvers<void>();
+  first.dispose.mockReturnValueOnce(retired.promise);
+  activated();
+  const third = activated();
+  let ready = false;
+  void third.api.ready.then(() => {
+    ready = true;
+  });
+  await new Promise<void>((resolve) => {
+    setImmediate(resolve);
+  });
+  expect(ready).toBe(false);
+  retired.resolve();
+  await third.api.ready;
+  expect(ready).toBe(true);
+});
+
+it('does not dispatch narration after shutdown during placement', async () => {
+  const choice = Promise.withResolvers<'legacy'>();
+  fakes.placementChoice = choice.promise;
+  const h = activated();
+  const service = last(fakes.made.speech);
+  const queued = h.controller.narration.speak('pending');
+  const ready = h.controller.narration.ready?.();
+  await deactivate();
+  choice.resolve('legacy');
+  await queued;
+  expect(await ready).toBe(false);
+  expect(service.speak).not.toHaveBeenCalled();
+});
+
+it('does not start placement for a replacement already retired while waiting', async () => {
+  const first = activated();
+  await first.api.ready;
+  const old = last(fakes.made.speech);
+  const retired = Promise.withResolvers<void>();
+  old.dispose.mockReturnValueOnce(retired.promise);
+  fakes.placementChoose.mockClear();
+  const second = activated();
+  const third = activated();
+  retired.resolve();
+  await Promise.all([second.api.ready, third.api.ready]);
+  expect(fakes.placementChoose).toHaveBeenCalledOnce();
+});
+
+it('creates the workspace session only after companion commit acknowledgement', async () => {
+  const commit = Promise.withResolvers<unknown>();
+  fakes.companionAvailable = true;
+  fakes.placementCommit = commit.promise;
+  const h = activated();
+  await vi.waitFor(() => {
+    expect(fakes.placementChoose).toHaveBeenCalled();
+  });
+  expect(fakes.session).toBeUndefined();
+  commit.resolve(true);
+  await h.api.ready;
+  expect(fakes.session).toBeDefined();
+});
+
+it('does not create a workspace session after the window closes during commit', async () => {
+  const commit = Promise.withResolvers<unknown>();
+  fakes.companionAvailable = true;
+  fakes.placementCommit = commit.promise;
+  const h = activated();
+  await vi.waitFor(() => {
+    expect(fakes.placementChoose).toHaveBeenCalled();
+  });
+  for (const disposable of h.context.subscriptions) disposable.dispose();
+  commit.resolve(true);
+  await h.api.ready;
+  expect(fakes.session).toBeUndefined();
+  expect(fakes.providerRegistered).not.toHaveBeenCalled();
+});
+
+it('reports a failed commit without falling back or creating a session', async () => {
+  const commit = Promise.withResolvers<unknown>();
+  fakes.companionAvailable = true;
+  fakes.placementCommit = commit.promise;
+  const h = activated();
+  await vi.waitFor(() => {
+    expect(fakes.placementChoose).toHaveBeenCalled();
+  });
+  commit.resolve(false);
+  await h.api.ready;
+  expect(fakes.session).toBeUndefined();
+  expect(fakes.providerRegistered).not.toHaveBeenCalled();
+  expect(fakes.infos).toContain('AI Pair could not complete its local audio connection. Reload the window to reconnect.');
+});
+
+it('suppresses failed commit notifications after shutdown', async () => {
+  const commit = Promise.withResolvers<unknown>();
+  fakes.companionAvailable = true;
+  fakes.placementCommit = commit.promise;
+  const h = activated();
+  await vi.waitFor(() => {
+    expect(fakes.placementChoose).toHaveBeenCalled();
+  });
+  for (const disposable of h.context.subscriptions) disposable.dispose();
+  fakes.infos.length = 0;
+  commit.resolve(false);
+  await h.api.ready;
+  expect(fakes.infos).toEqual([]);
+});
+
+it('handles context disposal rejection and reports it to deactivate', async () => {
+  const h = activated();
+  const service = last(fakes.made.speech);
+  service.dispose.mockRejectedValueOnce(new Error('retirement failed'));
+  for (const disposable of h.context.subscriptions) disposable.dispose();
+  await expect(deactivate()).rejects.toThrow('retirement failed');
 });

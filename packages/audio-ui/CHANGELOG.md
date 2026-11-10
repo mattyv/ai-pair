@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.25.2
+
+-   Keep speech setup, CPU/GPU switches and restart recovery coordinated while
+    prior proof and workers finish shutting down.
+
 ## 0.25.1
 
 -   Switch local speech between CPU and GPU after the previous worker exits,

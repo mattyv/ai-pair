@@ -10,3 +10,7 @@ fallback after this companion refuses an incompatible connection.
 The ElevenLabs key belongs to the companion's local secret storage. Enter it
 again in the local panel when moving from an earlier AI Pair installation.
 Kokoro synthesis remains available only on supported Linux x64 systems.
+
+CPU/GPU changes and restarted speech wait for earlier local work to finish
+shutting down before a replacement starts. GPU use still requires fresh checks.
+Physical validation of this lifecycle change remains open.

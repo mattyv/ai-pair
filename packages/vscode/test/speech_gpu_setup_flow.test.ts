@@ -42,7 +42,7 @@ it('downloads only on explicit setup, reports bounded bytes, and requires full v
   });
   expect(progress).toHaveBeenCalledWith({ stage: 'download', current: 325_532_232, total: 325_532_232 });
   expect(progress).toHaveBeenLastCalledWith({ stage: 'check' });
-  expect(verify).toHaveBeenCalledWith('/gpu');
+  expect(verify).toHaveBeenCalledWith('/gpu', expect.any(AbortSignal));
   expect(result).toEqual({ phase: 'unavailable', reason: 'probe_failed' });
 });
 
