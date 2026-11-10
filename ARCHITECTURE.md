@@ -42,9 +42,10 @@ companion. The Archi source passed its 1.5.1 validator on 2026-11-10; its HTML
 export was regenerated, the normalizer tests passed, and the overview was
 inspected in headless Chromium without page errors.
 
-The companion bootstrap sequence was added on 2026-11-10. Archi 1.5.1
-validated the source, its HTML export was regenerated, and the normalizer tests
-passed. The generated sequence was inspected in headless Chromium.
+The companion bootstrap and speech backend handoff sequences were updated on
+2026-11-10. Archi 1.5.1 validated the source, its HTML export was regenerated,
+and the normalizer tests passed. The generated handoff sequence was inspected
+in headless Chromium.
 
 ## Components
 
@@ -397,7 +398,9 @@ The pipeline still needs final review and packaged verification before release.
 
 One warm worker thread serves local Kokoro synthesis for each epoch. The Archi
 `Warm local synthesis` diagram shows the boundaries; the TLA+ model is
-`specs/WarmSynthesisWorker.tla`.
+`specs/WarmSynthesisWorker.tla`. The `Speech backend handoff` sequence shows
+switching ownership; `specs/SpeechBackendHandoff.tla` models its safety and
+progress.
 
 -   `speech_local_protocol.ts` defines the protocol with strict zod schemas:
     `init`, `ready` (with capabilities), `synthesize`, `result`, `failure` and
@@ -412,12 +415,15 @@ One warm worker thread serves local Kokoro synthesis for each epoch. The Archi
 -   A cancel invalidates the in-flight result at once, but the inference keeps
     ownership of the worker until its result arrives or an independent watchdog
     retires the worker.
--   A retiring worker holds the slot until its actual exit event. Only then can
-    a replacement start.
+-   A retiring worker holds the slot until its actual exit event. During a
+    planned CPU/GPU switch, the same pending request waits for the matching
+    client's reaped notification. Only then may fresh GPU proof or a replacement
+    CPU worker start. Cancellation or timeout prevents that request from
+    resuming after a late exit; it does not free a live worker's slot.
 -   The client rejects stale, duplicate and late responses, and the text of a
     canceled or retired inference is never replayed.
 -   `SpeechService` drives the client in place of inline worker handling.
-    Admitting a unit waits until the local slot is free.
+    A planned switch retains its admitted unit until the previous slot is free.
 
 This is not a new engine, and it adds no persistent synthesis cache.
 ElevenLabs synthesis is unchanged. The shipped transport is a Node worker

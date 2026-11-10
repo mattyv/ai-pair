@@ -142,6 +142,7 @@ class LocalDouble {
   /** The retired worker has exited. */
   released(): void {
     this.phase = 'cold';
+    this.listener?.reaped?.();
   }
 
   /** Requests whose unit and part match, excluding those the worker already returned. */
@@ -2165,6 +2166,144 @@ function gpuHarness(mode: () => 'cpu' | 'auto' | 'gpu') {
   return { service, cpu, gpu, capability, authorize, actual, checked, output };
 }
 
+it('HandoffAfterReap: switches a warm CPU worker to GPU for the next utterance', async () => {
+  let mode: 'cpu' | 'gpu' = 'cpu';
+  const { service, cpu, gpu, authorize, output } = gpuHarness(() => mode);
+  output.play.mockReturnValue(7);
+  const first = service.speak('CPU.');
+  await settle();
+  cpu.ready();
+  await cpu.audio(1);
+  expect(output.play).toHaveBeenCalledWith(1, new Uint8Array(44), 1000);
+  expect(service.audioEvent({ id: 1, pageId: 7, event: 'ended' })).toBe('ended');
+  await first;
+  mode = 'gpu';
+  const second = service.speak('GPU.');
+  await settle();
+  expect(cpu.port.retire).toHaveBeenCalledOnce();
+  expect(authorize).not.toHaveBeenCalled();
+  expect(output.status).not.toHaveBeenCalledWith(2, 'unavailable', expect.any(String));
+  cpu.released();
+  await settle();
+  expect(authorize).toHaveBeenCalledOnce();
+  gpu.ready();
+  expect(gpu.port.synthesize).toHaveBeenCalledOnce();
+  service.cancel();
+  await second;
+});
+
+it('HandoffCurrent: cancellation replaces the waiting request without starting the old one', async () => {
+  let mode: 'cpu' | 'gpu' = 'cpu';
+  const { service, cpu, gpu, authorize } = gpuHarness(() => mode);
+  const first = service.speak('CPU.');
+  await settle();
+  cpu.ready();
+  service.cancel();
+  await cpu.audio(1);
+  await first;
+  mode = 'gpu';
+  const canceled = service.speak('Canceled.');
+  service.cancel();
+  await canceled;
+  mode = 'cpu';
+  const replacement = service.speak('Replacement.');
+  cpu.released();
+  await settle();
+  expect(authorize).not.toHaveBeenCalled();
+  expect(gpu.port.load).not.toHaveBeenCalled();
+  expect(cpu.port.load).toHaveBeenCalledTimes(2);
+  cpu.ready();
+  expect(cpu.calls.at(-1)?.request.text).toBe('Replacement.');
+  service.cancel();
+  await replacement;
+});
+
+it('HandoffCurrent: a worker that never exits times out without starting a successor', async () => {
+  vi.useFakeTimers();
+  let mode: 'cpu' | 'gpu' = 'cpu';
+  const { service, cpu, authorize, output } = gpuHarness(() => mode);
+  const first = service.speak('CPU.');
+  await settle();
+  cpu.ready();
+  service.cancel();
+  await cpu.audio(1);
+  await first;
+  mode = 'gpu';
+  const waiting = service.speak('GPU.');
+  await vi.advanceTimersByTimeAsync(21_000);
+  await waiting;
+  expect(output.status).toHaveBeenCalledWith(2, 'unavailable', 'Speech timed out; continue reading.');
+  cpu.released();
+  await settle();
+  expect(authorize).not.toHaveBeenCalled();
+  vi.useRealTimers();
+});
+
+it('HandoffCurrent: stale CPU callbacks cannot change an active GPU request', async () => {
+  let mode: 'cpu' | 'gpu' = 'cpu';
+  const { service, cpu, gpu, actual, output } = gpuHarness(() => mode);
+  const first = service.speak('CPU.');
+  await settle();
+  cpu.ready();
+  service.cancel();
+  await cpu.audio(1);
+  await first;
+  mode = 'gpu';
+  const next = service.speak('GPU.');
+  cpu.released();
+  await settle();
+  gpu.ready();
+  actual.mockClear();
+  cpu.listener?.ready();
+  cpu.listener?.retired('worker_exit');
+  cpu.listener?.reaped?.();
+  expect(actual).not.toHaveBeenCalled();
+  expect(output.status).not.toHaveBeenCalledWith(2, 'unavailable', expect.any(String));
+  expect(gpu.port.synthesize).toHaveBeenCalledOnce();
+  service.cancel();
+  await next;
+});
+
+it('HandoffCurrent: disposal invalidates a waiting switch', async () => {
+  let mode: 'cpu' | 'gpu' = 'cpu';
+  const { service, cpu, authorize } = gpuHarness(() => mode);
+  const first = service.speak('CPU.');
+  await settle();
+  cpu.ready();
+  service.cancel();
+  await cpu.audio(1);
+  await first;
+  mode = 'gpu';
+  const waiting = service.speak('GPU.');
+  service.dispose();
+  await waiting;
+  cpu.released();
+  await settle();
+  expect(authorize).not.toHaveBeenCalled();
+});
+
+it('HandoffCurrent: a stale GPU ready callback cannot advance a CPU request', async () => {
+  let mode: 'cpu' | 'gpu' = 'gpu';
+  const { service, cpu, gpu, actual } = gpuHarness(() => mode);
+  const first = service.speak('GPU.');
+  await settle();
+  gpu.ready();
+  service.cancel();
+  await gpu.audio(1);
+  await first;
+  mode = 'cpu';
+  const next = service.speak('CPU.');
+  gpu.released();
+  await settle();
+  gpu.listener?.ready();
+  expect(actual).not.toHaveBeenLastCalledWith('cpu');
+  expect(cpu.port.synthesize).not.toHaveBeenCalled();
+  cpu.ready();
+  expect(cpu.port.synthesize).toHaveBeenCalledOnce();
+  service.cancel();
+  await next;
+});
+
 it('ExplicitNoFallback: refuses CPU when GPU proof fails and Auto reports its CPU fallback reason', async () => {
   let mode: 'gpu' | 'auto' = 'gpu';
   const { service, cpu, gpu, authorize, checked } = gpuHarness(() => mode);
@@ -2254,14 +2393,12 @@ it('NoSuccessorBeforeReap: waits for a CPU worker to exit before starting a GPU 
   await cpu.audio(1);
   await first;
   mode = 'gpu';
-  await service.speak('GPU.');
+  const next = service.speak('GPU.');
   expect(cpu.port.retire).toHaveBeenCalledOnce();
   expect(authorize).not.toHaveBeenCalled();
   expect(gpu.port.load).not.toHaveBeenCalled();
-  await service.speak('Still retiring.');
   expect(authorize).not.toHaveBeenCalled();
   cpu.released();
-  const next = service.speak('GPU after exit.');
   await settle();
   expect(authorize).toHaveBeenCalledOnce();
   expect(gpu.port.load).toHaveBeenCalledWith('/gpu-model');
@@ -2328,13 +2465,11 @@ it('NoSuccessorBeforeReap: retires a warm GPU before starting CPU', async () => 
   service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
   await first;
   mode = 'cpu';
-  await service.speak('CPU.');
+  const next = service.speak('CPU.');
   expect(gpu.port.retire).toHaveBeenCalledOnce();
   expect(cpu.port.load).not.toHaveBeenCalled();
-  await service.speak('Still retiring.');
   expect(cpu.port.load).not.toHaveBeenCalled();
   gpu.released();
-  const next = service.speak('CPU after exit.');
   await settle();
   expect(cpu.port.load).toHaveBeenCalledWith('/model');
   service.cancel();

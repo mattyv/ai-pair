@@ -649,16 +649,29 @@ describe('discovery', () => {
   });
 
   it("FindsOpen: finds the window again after the relay's socket to it closes, while it stays open", async () => {
-    const client = await connect();
-    expect((await call(client, 'start')).error).toBe(false);
-    for (const c of bridge.connections() ?? []) {
-      c.terminate();
+    const registered = vi.spyOn(WebSocket.prototype, 'on');
+    try {
+      const client = await connect();
+      expect((await call(client, 'start')).error).toBe(false);
+      const [editorSocket] = bridge.connections();
+      ok(editorSocket);
+      const openRegistration = registered.mock.calls.findIndex(([event]) => event === 'open');
+      const relaySocket = registered.mock.contexts[openRegistration];
+      ok(relaySocket instanceof WebSocket);
+      expect(relaySocket).not.toBe(editorSocket);
+      const relayClosed = new Promise<void>((resolve) => {
+        relaySocket.once('close', () => {
+          resolve();
+        });
+      });
+      editorSocket.terminate();
+      // Wait for this relay's socket and for the bridge to suspend the old owner.
+      await relayClosed;
+      await until(() => bridge.connections().size === 0 && controller.isSuspended);
+      expect((await call(client, 'start')).error).toBe(false);
+      expect(bridge.connections().size).toBe(1);
+    } finally {
+      registered.mockRestore();
     }
-    await new Promise((r) => {
-      setTimeout(r, 50);
-    });
-    expect(bridge.connections().size).toBe(0);
-    expect((await call(client, 'start')).error).toBe(false);
-    expect(bridge.connections().size).toBe(1);
   });
 });

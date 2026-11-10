@@ -32,6 +32,8 @@ export interface LocalListener {
   ready: () => void;
   /** Called once when the worker was retired or exited, with a fixed category. */
   retired: (reason: LocalSpeechFailureReason) => void;
+  /** Called after the matching worker has exited and its slot is cold. */
+  reaped?: () => void;
 }
 
 /** A worker slot: cold, loading, ready, or retiring until the worker actually exits. */
@@ -255,6 +257,7 @@ export class LocalSynthesisClient implements LocalSynthesisPort {
     if (unexpected) {
       this.options.listener.retired('worker_exit');
     }
+    this.options.listener.reaped?.();
   }
 
   /** Ends any owed inference without a result: its text is never replayed. */

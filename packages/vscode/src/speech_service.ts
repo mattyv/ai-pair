@@ -175,16 +175,20 @@ export class SpeechService implements NarrationPort {
   private readonly cpuLocal: LocalSynthesisPort;
   private localBackend: 'cpu' | 'gpu' = 'cpu';
   private gpuProofBusy = false;
+  private handoff?: { worker: LocalSynthesisPort; current: ActiveSpeech };
   private cloudBusy?: { id: number; controller: AbortController; timer: ReturnType<typeof setTimeout> };
   private disposed = false;
 
   constructor(private readonly options: SpeechServiceOptions) {
     const listener: LocalListener = {
       ready: () => {
-        this.localReady();
+        if (this.local === this.cpuLocal) this.localReady();
       },
       retired: (reason) => {
-        this.localRetired(reason);
+        this.localRetired(this.cpuLocal, reason);
+      },
+      reaped: () => {
+        this.localReaped(this.cpuLocal);
       },
     };
     this.cpuLocal =
@@ -273,7 +277,7 @@ export class SpeechService implements NarrationPort {
     if (
       (provider === 'kokoro' && (this.gpuProofBusy || this.options.gpuExternalBusy?.() === true)) ||
       this.local.busy() ||
-      this.local.state() === 'retiring' ||
+      (this.local.state() === 'retiring' && this.handoff?.worker !== this.local) ||
       this.cloudBusy !== undefined ||
       (listeningRate !== 1 && this.options.tempo?.busy() === true)
     ) {
@@ -407,10 +411,13 @@ export class SpeechService implements NarrationPort {
 
   /** Switches only after the previous worker has been reaped. */
   private startCpu(current: ActiveSpeech): void {
+    if (this.handoff?.worker === this.local && this.local.state() !== 'cold') {
+      this.waitForHandoff(current);
+      return;
+    }
     if (this.localBackend === 'gpu') {
       if (this.local.state() !== 'cold') {
-        this.local.retire('worker_exit');
-        this.fail(current, 'Speech is still finishing; try again shortly.');
+        this.waitForHandoff(current);
         return;
       }
       this.local = this.cpuLocal;
@@ -426,8 +433,7 @@ export class SpeechService implements NarrationPort {
       return;
     }
     if (this.local.state() !== 'cold') {
-      this.local.retire('worker_exit');
-      this.fail(current, 'Speech is still finishing; try again shortly.');
+      this.waitForHandoff(current);
       return;
     }
     let result: GpuCapabilityResult | undefined;
@@ -468,16 +474,21 @@ export class SpeechService implements NarrationPort {
       return;
     }
     try {
+      let worker: LocalSynthesisPort;
       const listener: LocalListener = {
         ready: () => {
-          this.localReady();
+          if (this.local === worker) this.localReady();
         },
         retired: (reason) => {
-          this.localRetired(reason);
+          this.localRetired(worker, reason);
+        },
+        reaped: () => {
+          this.localReaped(worker);
         },
       };
       this.armStartup(current, START_TIMEOUT_MS);
-      this.local = this.options.createGpu(result.capability, listener);
+      worker = this.options.createGpu(result.capability, listener);
+      this.local = worker;
       this.localBackend = 'gpu';
       this.local.load(result.capability.modelDirectory);
     } catch (error) {
@@ -580,8 +591,30 @@ export class SpeechService implements NarrationPort {
     }
   }
 
+  /** Waits for the previous worker's actual exit before switching backends. */
+  private waitForHandoff(current: ActiveSpeech): void {
+    const worker = this.local;
+    // specs/SpeechBackendHandoff.tla, Begin: planned retirement preserves the waiting unit.
+    this.handoff = { worker, current };
+    worker.retire('worker_exit');
+  }
+
+  /** Resumes only the still-current request after the matching worker exits. */
+  private localReaped(worker: LocalSynthesisPort): void {
+    const handoff = this.handoff;
+    if (handoff?.worker !== worker) return;
+    this.handoff = undefined;
+    // specs/SpeechBackendHandoff.tla, Continue: exit and request identity guard the successor.
+    if (this.current === handoff.current && !this.disposed) void this.start(handoff.current);
+  }
+
   /** The worker was retired or exited: the unit it served is over, and nothing is replayed. */
-  private localRetired(reason: LocalSpeechFailureReason): void {
+  private localRetired(worker: LocalSynthesisPort, reason: LocalSpeechFailureReason): void {
+    if (worker !== this.local) return;
+    if (this.handoff?.worker === worker) {
+      this.options.actualBackend?.('none');
+      return;
+    }
     this.options.actualBackend?.('none');
     const current = this.current;
     if (current?.provider === 'kokoro') {

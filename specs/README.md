@@ -113,6 +113,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `SpeechTempo_Healthy.cfg` | two fair completed units | holds | 17 |
 | `SpeechTempo_Canceled.cfg` | fair retirement after cancellation or timeout | holds | 11 |
 | `GpuProcessSlot.cfg` | shared inference and proof child ownership | holds | 5 |
+| `SpeechBackendHandoff.cfg` | planned retirement, reaping and canceled request | holds | 8 |
 | `GpuSynthesisProcess.cfg` | verified child, stale epochs, loader and retirement | holds | 132 |
 | `WarmSynthesisWorker.cfg` | two epochs, two units and parts, stale and late completions, cancel between parts | holds | 440 |
 | `WarmSynthesisWorker_Healthy.cfg` | two units reuse one healthy worker | holds | 11 |
@@ -2999,3 +3000,23 @@ recording observation each produced a counterexample for its named property.
 | Config | Bounds | Distinct states | Result |
 |---|---|---|---|
 | `VoiceIndicator.cfg` | Two Boolean flags, three prerequisite states and failure flag | 25 | Pass |
+
+### `SpeechBackendHandoff`: switching local workers
+
+The bounded model checks the old worker's retirement and exit, a waiting
+request and cancellation. It does not model admitting a replacement while the
+old worker retires; `HandoffCurrent: cancellation replaces the waiting request
+without starting the old one` tests that implementation behavior.
+TLC checked 8 distinct states. Disabling each of `GuardReap`, `GuardCurrent`,
+and `GuardPlanned` separately violates `Safety`, respectively by overlapping
+workers, continuing stale work, or failing a planned switch. Setting the initial
+request identity to 3 violates `TypeOK`, whose range is 1 through 2.
+
+| Property | Implementation test |
+| --- | --- |
+| `TypeOK` | TypeScript types and `HandoffCurrent: stale CPU callbacks cannot change an active GPU request` |
+| `Safety` | `HandoffAfterReap: switches a warm CPU worker to GPU for the next utterance`; `HandoffCurrent: cancellation replaces the waiting request without starting the old one` |
+| `Progress` | `HandoffAfterReap: switches a warm CPU worker to GPU for the next utterance`; `HandoffCurrent: a worker that never exits times out without starting a successor` |
+
+The progress property assumes fair exit and continuation; the code additionally
+bounds an exit that never arrives with its startup timeout.

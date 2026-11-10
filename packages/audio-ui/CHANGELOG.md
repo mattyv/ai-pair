@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.25.1
+
+-   Switch local speech between CPU and GPU after the previous worker exits,
+    and distinguish model setup from live worker readiness.
+
 ## 0.25.0
 
 -   Show cached voice readiness beside the toolbar controls, with explanatory

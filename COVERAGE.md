@@ -397,6 +397,7 @@ Last updated: css, 2026-11-10.
 | `packages/vscode/test/speech_gpu_worker.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_gpu_worker_host.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_gpu_worker_runtime.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_handoff.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_local.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_local_client.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_local_protocol.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -616,6 +617,8 @@ Last updated: css, 2026-11-10.
 | `specs/Serialize.tla` | TLA+ | - | - | 13 of 13 actions | - | - | - |
 | `specs/SettingsAccess.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SettingsAccess.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
+| `specs/SpeechBackendHandoff.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/SpeechBackendHandoff.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/SpeechPage.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechPage.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/SpeechPlatformEvidence.cfg` | TLC config | - | - | - | - | - | - |

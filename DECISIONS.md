@@ -10,6 +10,14 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   GPT-6.1 Terra agents write code and tests; GPT-6 Astra agents review them.
     Resolve findings and verify the resulting changes before reporting completion.
 
+## Speech backend handoff
+
+-   Retire the previous local worker and wait for its matching exit before
+    starting a different backend. The waiting utterance has a startup deadline;
+    cancellation or timeout invalidates it. A planned retirement is not a
+    worker failure. Model setup readiness does not establish live worker or
+    playback readiness, and GPU hardware still requires its own verification.
+
 ## Guided demo and diagnostics
 
 -   Ship one canonical skill for each workflow, embedded in MCP prompts and

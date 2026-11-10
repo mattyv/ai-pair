@@ -1105,7 +1105,7 @@ it('reports setup and preview outcomes and ignores superseded availability check
   view.send({ type: 'ready' });
   panel.refreshSpeechSupport();
   await flush();
-  expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Local speech is ready.' });
+  expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Local model is ready.' });
   pending.reject(new Error('stale'));
   await flush();
   expect(view.posted).not.toContainEqual({ type: 'speechSetupState', pending: false, message: 'Local speech availability is unknown.' });

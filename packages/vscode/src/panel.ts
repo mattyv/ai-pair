@@ -404,7 +404,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
             this.send({
               type: 'speechSetupState',
               pending: false,
-              message: installed ? 'Local speech is ready.' : 'Local speech is not set up.',
+              message: installed ? 'Local model is ready.' : 'Local speech is not set up.',
             });
           }
         },
@@ -596,7 +596,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         void this.wiring.speech.setup().then(
           () => {
             this.wiring.speech.diagnostic({ kind: 'speech', event: 'setup', phase: 'ready', provider: 'kokoro' });
-            this.send({ type: 'speechSetupState', pending: false, message: 'Local speech is ready.' });
+            this.send({ type: 'speechSetupState', pending: false, message: 'Local model is ready.' });
             this.refreshSpeechSupport();
           },
           () => {

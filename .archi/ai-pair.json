@@ -2,9 +2,9 @@
   "version": 1,
   "bundleId": "277c3415-7b74-4008-8be4-8c14ae6d41dd",
   "revision": {
-    "number": 21,
+    "number": 22,
     "updatedAt": "2026-11-10T00:00:00.000Z",
-    "summary": "Model cross-host companion activation before attachment"
+    "summary": "Model safe CPU and GPU synthesis handoff after worker exit"
   },
   "diagrams": [
     {
@@ -9999,7 +9999,7 @@
           {
             "from": "retirement",
             "to": "service",
-            "label": "slot released"
+            "label": "reaped after exit"
           }
         ],
         "groups": [],
@@ -10008,6 +10008,11 @@
             {
               "id": "ownership",
               "text": "Cancel invalidates the result at once but the inference keeps ownership until its result arrives or the watchdog retires the worker. Stale, duplicate and late responses change nothing.",
+              "ts": 0
+            },
+            {
+              "id": "backend-handoff",
+              "text": "A planned backend switch retires the old worker without failing the waiting request. The service continues only when that client reports the matching actual exit. A canceled, timed-out or replaced request cannot resume when a late exit arrives.",
               "ts": 0
             }
           ],
@@ -10326,7 +10331,7 @@
           "service": [
             {
               "id": "pending",
-              "text": "Integration is in progress. Explicit GPU must fail closed until the setup verifier issues fresh proof and the inference worker is available. Auto may fall back to CPU only after safe retirement.",
+              "text": "An accepted CPU-to-GPU switch waits for the old worker to exit before fresh GPU proof or launch. The reverse switch waits for GPU exit before starting CPU. Explicit GPU fails closed if proof fails; Auto may fall back only after safe retirement.",
               "ts": 0
             }
           ],
@@ -10417,6 +10422,96 @@
             {
               "id": "bootstrap-bounds",
               "text": "Activation uses a VS Code command so the companion can run on a different extension host. The 10-second activation deadline is separate from the 1.5-second prepare deadline. Both timeouts fail closed for an installed companion; late results cannot change the owner. Selection precedes commit, so a missing commit acknowledgement cannot trigger another owner.",
+              "ts": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "speech-backend-handoff",
+      "name": "Speech backend handoff",
+      "type": "sequence",
+      "origin": "llm",
+      "doc": {
+        "type": "sequence",
+        "nodes": [
+          {
+            "id": "service",
+            "label": "Speech service",
+            "files": ["packages/vscode/src/speech_service.ts"],
+            "x": 0,
+            "y": 0,
+            "step": 1
+          },
+          {
+            "id": "old-client",
+            "label": "Old synthesis client",
+            "files": ["packages/vscode/src/speech_local_client.ts"],
+            "x": 0,
+            "y": 0,
+            "step": 2
+          },
+          {
+            "id": "old-worker",
+            "label": "Old CPU or GPU worker",
+            "files": ["packages/vscode/src/speech_local_client.ts", "packages/vscode/src/speech_gpu_transport.ts"],
+            "x": 0,
+            "y": 0,
+            "step": 3
+          },
+          {
+            "id": "next",
+            "label": "Proof / replacement",
+            "files": ["packages/vscode/src/speech_gpu_capability.ts", "packages/vscode/src/speech_local_client.ts"],
+            "x": 0,
+            "y": 0,
+            "step": 4
+          }
+        ],
+        "edges": [
+          {
+            "from": "service",
+            "to": "old-client",
+            "label": "retain request; retire old backend"
+          },
+          {
+            "from": "old-client",
+            "to": "old-worker",
+            "label": "request shutdown / termination"
+          },
+          {
+            "from": "old-client",
+            "to": "service",
+            "label": "retired (slot still owned)"
+          },
+          {
+            "from": "old-worker",
+            "to": "old-client",
+            "label": "actual exit"
+          },
+          {
+            "from": "old-client",
+            "to": "service",
+            "label": "reaped: slot released"
+          },
+          {
+            "from": "service",
+            "to": "next",
+            "label": "if request current: fresh GPU proof or CPU load"
+          },
+          {
+            "from": "next",
+            "to": "service",
+            "label": "ready; synthesize same request"
+          }
+        ],
+        "groups": [],
+        "comments": {
+          "__diagram__": [
+            {
+              "id": "handoff-safety",
+              "text": "The pending request waits within its startup deadline until the matching old client reports actual exit. A planned retirement is not a failure of that request. Cancellation, timeout or replacement invalidates the waiting request: a late reap must not start proof, spawn a replacement or replay stale text. GPU authorization occurs only after exit; the reverse switch waits before CPU load.",
               "ts": 0
             }
           ]

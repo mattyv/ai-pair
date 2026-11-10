@@ -98,6 +98,27 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+it('HandoffAfterReap: reports reaping once only after the matching exit makes the slot cold', async () => {
+  const reaped = vi.fn<() => void>();
+  const worker = new FakeWorker();
+  const observed = new LocalSynthesisClient({
+    spawn: () => worker,
+    listener: { ready: vi.fn<() => void>(), retired: vi.fn<(reason: string) => void>(), reaped },
+  });
+  reaped.mockImplementation(() => {
+    expect(observed.state()).toBe('cold');
+  });
+  observed.load('/model');
+  observed.retire('worker_exit');
+  await Promise.resolve();
+  expect(reaped).not.toHaveBeenCalled();
+  expect(observed.state()).toBe('retiring');
+  worker.raise('exit');
+  worker.raise('exit');
+  expect(reaped).toHaveBeenCalledOnce();
+  expect(observed.state()).toBe('cold');
+});
+
 describe('LocalSynthesisClient loading', () => {
   it('OneEngine: one load spawns one worker, sends the host-supplied model once, and refuses a second load', () => {
     const { client, spawn, made } = harness();
