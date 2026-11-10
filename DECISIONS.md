@@ -740,3 +740,25 @@ child abort tests provide different evidence. Fake synthesis and output do not
 prove AMD hardware compatibility or audibility. Physical CPU/GPU switching and
 restart remain a separate host validation step; published readiness describes
 cached checks and must not be presented as proof of sound.
+
+## Prepare enabled local speech before pairing
+
+`SpeechLifecycle` owns the desired warm-worker policy as well as narration
+leases. Both speech host paths request preparation when enabled Kokoro settings
+are loaded or changed; the legacy host does so only when it owns speech. The
+manager serializes preparation with existing proof and worker retirement,
+releases the warmup unit lease after admission and keeps the idle worker for
+first narration. Disabled speech and a cloud provider do not request a local
+worker. A mode change prepares the successor after the old resource is reaped.
+
+Preparation performs model initialization without synthesis, playback, automatic
+model downloads or cloud requests. Existing worker-load and GPU-proof deadlines
+apply; CPU model lookup has no additional deadline. Successful explicit model
+setup can retry a failed preparation. A failed worker does not enter an
+unbounded automatic restart loop.
+
+The toolbar projects the manager's phase: starting is orange and pulses, with
+a static orange indicator for reduced motion. Readiness requires actual worker
+ready evidence for Kokoro, together with the existing settings and output checks.
+An unknown output route remains unchecked after model startup. Readiness does
+not establish audibility; it is available before the first pairing session.

@@ -199,7 +199,6 @@ Last updated: css, 2026-11-10.
 | `packages/vscode/src/remote_narration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 53.5% B 38.5% F 41.7% | - | - | - | - |
 | `packages/vscode/src/setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 83.8% B 81.6% F 66.7% | - | - | - | - |
 | `packages/vscode/src/speech_catalog.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.9% B 89.7% F 100.0% | - | - | - | - |
-| `packages/vscode/src/speech_compute.ts` | TypeScript | - | - | - | - | - | - |
 | `packages/vscode/src/speech_compute_types.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_credentials.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_elevenlabs.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 81.2% B 72.6% F 88.9% | - | - | - | - |
@@ -275,7 +274,7 @@ Last updated: css, 2026-11-10.
 | `packages/vscode/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/view.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 88.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/voice_indicator.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 159 of 159 rules matched |
+| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 161 of 161 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/speech_audio.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/workspace_panel_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 84.4% B 46.1% F 100.0% | - | - | - | - |
@@ -344,7 +343,6 @@ Last updated: css, 2026-11-10.
 | `packages/vscode/test/speech_audio.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_cached_assets.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_catalog.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/speech_compute.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_credentials.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_elevenlabs.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_elevenlabs.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -433,6 +431,7 @@ Last updated: css, 2026-11-10.
 | `packages/vscode/test/speech_tempo_pcm.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_tempo_worker.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_tempo_worker_host.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_warmup.integration.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_waveform.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_worker.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_worker_host.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -643,6 +642,8 @@ Last updated: css, 2026-11-10.
 | `specs/SpeechTempo.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/SpeechTempo_Canceled.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechTempo_Healthy.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/SpeechWarmup.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/SpeechWarmup.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/SpeechWorker.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechWorker.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/Start.cfg` | TLC config | - | - | - | - | - | - |

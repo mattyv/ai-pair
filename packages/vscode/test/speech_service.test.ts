@@ -2036,7 +2036,13 @@ it('passes GPU proof and worker factories through to the manager', async () => {
 
 it('projects manager snapshots and ignores a repeated mode selection', () => {
   const { service } = harness();
-  expect(service.computeState()).toEqual({ requestedMode: 'cpu', actualBackend: 'none', gpuCheck: { phase: 'idle' } });
+  expect(service.computeState()).toEqual({
+    requestedMode: 'cpu',
+    actualBackend: 'none',
+    gpuCheck: { phase: 'idle' },
+    phase: 'cold',
+    failureReason: undefined,
+  });
   expect(service.computeGeneration()).toBe(0);
   local.change({ generation: 7 });
   expect(service.computeGeneration()).toBe(7);
@@ -2168,4 +2174,23 @@ it('reports a fixed worker-module acquisition failure without private details', 
   await service.speak('Hello.');
   expect(output.localDiagnostic).toHaveBeenCalledWith('failed', 'worker_module');
   expect(output.status).toHaveBeenCalledWith(1, 'unavailable', 'Local speech stopped. Retry setup.');
+});
+
+it('reconciles prewarming only for enabled local speech', () => {
+  const { service, local: engine } = harness();
+  service.prepare();
+  expect(engine.manager.prepare).toHaveBeenCalledWith(true, false);
+  const disabled = harness(false);
+  disabled.service.prepare();
+  expect(disabled.local.manager.prepare).toHaveBeenCalledWith(false, false);
+  const output = mock<SpeechOutput>();
+  const cloud = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output,
+    settings: () => ({ enabled: true, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: 'voice', elevenLabsSpeed: 1 }),
+  });
+  cloud.prepare();
+  expect(local.manager.prepare).toHaveBeenCalledWith(false, false);
 });

@@ -3,9 +3,14 @@
 ## Voice status
 
 The speaker icon beside the toolbar controls shows whether automatic narration
-is off, not checked, ready, or unavailable. Hover for the reason, or select it
-to open speech settings. Ready means the available cached checks passed; it
-does not confirm audible sound or cloud account availability.
+is off, not checked, starting, ready, or unavailable. Hover for the reason, or
+select it to open speech settings. Ready means the available cached checks
+passed; it does not confirm audible sound or cloud account availability.
+
+When Kokoro narration is enabled, its model starts as the extension loads,
+before a Pair MCP session starts. The icon pulses orange during startup
+(static orange with reduced motion). Startup does not download missing models,
+speak text or make a paid cloud request.
 
 ## Demo and diagnostics
 

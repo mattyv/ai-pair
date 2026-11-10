@@ -143,7 +143,7 @@ it('every rule in panel.css matches the page in some state', async () => {
     send(event);
     check();
   }
-  for (const state of ['ready', 'unavailable']) {
+  for (const state of ['starting', 'ready', 'unavailable']) {
     // oxlint-disable-next-line unicorn/prefer-dom-node-dataset -- ui returns Element.
     ui('voice-status')?.setAttribute('data-state', state);
     check();

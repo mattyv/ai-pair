@@ -207,6 +207,8 @@ export class SpeechService implements NarrationPort {
       changed: (snapshot) => {
         options.actualBackend?.(snapshot.actualBackend);
         options.computeChanged?.({
+          phase: snapshot.phase,
+          failureReason: snapshot.failureReason,
           requestedMode: snapshot.requestedMode,
           actualBackend: snapshot.actualBackend,
           gpuCheck: snapshot.gpuCheck,
@@ -229,10 +231,19 @@ export class SpeechService implements NarrationPort {
     this.lifecycle.select(mode);
   }
 
+  /** Reconciles pre-session local worker preparation with current settings. */
+  prepare(retry = false): void {
+    const settings = this.options.settings();
+    this.lifecycle.prepare(
+      settings.enabled && settings.provider === 'kokoro' && this.options.localDesktop && this.options.kokoroSupported !== false,
+      retry,
+    );
+  }
+
   /** Returns the manager's compute state projection. */
   computeState(): SpeechComputeState {
-    const { requestedMode, actualBackend, gpuCheck } = this.lifecycle.snapshot();
-    return { requestedMode, actualBackend, gpuCheck };
+    const { requestedMode, actualBackend, gpuCheck, phase, failureReason } = this.lifecycle.snapshot();
+    return { requestedMode, actualBackend, gpuCheck, phase, failureReason };
   }
 
   /** Returns the manager generation for fencing transient feedback. */

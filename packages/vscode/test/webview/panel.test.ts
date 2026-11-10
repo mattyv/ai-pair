@@ -2523,6 +2523,10 @@ it('updates voice readiness without opening settings and opens speech controls',
   });
   send({ type: 'speechComputeState', value: { requestedMode: 'cpu', actualBackend: 'none', gpuCheck: { phase: 'idle' } } });
   expect(button.getAttribute('aria-label')).toContain('ready');
+  vi.mocked(voiceIndicator).mockReturnValue('starting');
+  send({ type: 'speechTransport', available: true });
+  expect(button.dataset.state).toBe('starting');
+  expect(button.getAttribute('aria-label')).toBe('Voice: model starting');
   click(button);
   expect(document.activeElement).toBe(element('speech-provider'));
   element('settings-dialog').dispatchEvent(new window.Event('close'));

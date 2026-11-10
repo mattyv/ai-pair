@@ -198,6 +198,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
       // specs/ProviderChoice.tla, Select: the latest local choice takes effect before persistence.
       const current = ++generation;
       pending = { ...value, listeningSpeed: speechListeningRate(value.listeningSpeed) };
+      speech.prepare();
       if (
         prior.enabled !== value.enabled ||
         prior.provider !== value.provider ||
@@ -235,6 +236,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
           if (current !== generation || disposed) return;
           pending = undefined;
           speech.cancel();
+          speech.prepare();
           catalog.invalidate();
           last = stored();
           options.panel()?.showSpeechSettings(last);
@@ -444,6 +446,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     },
     output,
   });
+  speech.prepare();
   void speechRuntimeAvailable(runtimeDirectory).then((available) => {
     if (disposed) return;
     runtimeAvailable = available;
@@ -554,7 +557,9 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
       modelGeneration++;
       modelReady = 'unknown';
       publishReadiness();
-      return setupSpeech(context.globalStorageUri.fsPath);
+      return setupSpeech(context.globalStorageUri.fsPath).then(() => {
+        speech.prepare(/* retry= */ true);
+      });
     },
     preview: () => {
       previewProvider = settings.get().provider;
@@ -607,6 +612,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
         }
         last = current;
       }
+      speech.prepare();
       options.panel()?.showSpeechSettings(current);
       publishReadiness();
     }),

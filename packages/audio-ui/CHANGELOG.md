@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.26.0
+
+-   Prepare enabled Kokoro speech before pairing starts, using the speech
+    lifecycle manager for startup, switching and shutdown.
+-   Show an orange pulsing voice indicator while the local model starts, with
+    a static indicator when reduced motion is requested.
+
 ## 0.25.2
 
 -   Keep speech setup, CPU/GPU switches and restart recovery coordinated while

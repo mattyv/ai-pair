@@ -892,6 +892,7 @@ function syncVoiceStatus(): void {
   const labels = {
     off: 'Automatic narration: off',
     checking: 'Voice: readiness not checked',
+    starting: 'Voice: model starting',
     ready: 'Voice: ready (checks passed)',
     unavailable: 'Voice: unavailable',
   };

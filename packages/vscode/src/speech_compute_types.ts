@@ -24,6 +24,8 @@ export type GpuCheck =
   { phase: 'idle' | 'ready' } | { phase: 'checking'; progress?: GpuCheckProgress } | { phase: 'unavailable'; reason: GpuUnavailableReason };
 /** The compute choice and the backend actually in use. */
 export interface SpeechComputeState {
+  phase?: 'cold' | 'checking' | 'loading' | 'ready' | 'retiring' | 'failed' | 'disposed';
+  failureReason?: import('./speech_types').LocalSpeechFailureReason;
   requestedMode: SpeechComputeMode;
   actualBackend: SpeechComputeBackend;
   gpuCheck: GpuCheck;

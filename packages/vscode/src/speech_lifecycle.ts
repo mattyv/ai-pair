@@ -58,6 +58,7 @@ export class SpeechLifecycle {
   private disposed = false;
   private activeLease?: { identity: SpeechReadyLease; worker: LocalSynthesisPort };
   private serial: Promise<void> = Promise.resolve();
+  private warm = false;
 
   constructor(private readonly options: SpeechLifecycleOptions) {
     this.value = { requestedMode: options.requestedMode, actualBackend: 'none', phase: 'cold', gpuCheck: { phase: 'idle' }, generation: 0 };
@@ -82,6 +83,37 @@ export class SpeechLifecycle {
     });
     this.activeLease = undefined;
     this.retire();
+    if (this.warm) this.queueWarmup();
+  }
+
+  /** Reconciles whether a local worker should be warm before narration. */
+  // specs/SpeechWarmup.tla, Change: reconcile demand before starting or retiring work.
+  prepare(enabled: boolean, retry = false): void {
+    if (
+      this.disposed ||
+      (this.warm === enabled && !(enabled && retry && (this.value.phase === 'failed' || this.value.failureReason !== undefined)))
+    ) {
+      return;
+    }
+    this.warm = enabled;
+    if (enabled) {
+      this.queueWarmup();
+    } else {
+      this.update({ generation: this.value.generation + 1, actualBackend: 'none', phase: this.lease === undefined ? 'cold' : 'retiring' });
+      this.activeLease = undefined;
+      this.retire();
+    }
+  }
+
+  // specs/SpeechWarmup.tla, Start: serialize startup behind the previous owner.
+  private queueWarmup(): void {
+    const generation = this.value.generation;
+    const operation = this.serial.then(async () => {
+      if (!this.warm || this.value.generation !== generation) return;
+      const result = await this.acquireSerial(0, generation, new AbortController().signal);
+      if (result.status === 'ready' && this.activeLease?.identity === result.lease) this.activeLease = undefined;
+    });
+    this.serial = operation.catch(() => {});
   }
 
   /** Acquires the selected backend after all preceding ownership has ended. */
@@ -141,6 +173,9 @@ export class SpeechLifecycle {
       })
       .catch(() => ({ phase: 'unavailable', reason: 'probe_failed' }) as const);
     this.serial = pending.then(() => {});
+    void pending.then(() => {
+      if (this.warm && !this.disposed) this.queueWarmup();
+    });
     return pending;
   }
 

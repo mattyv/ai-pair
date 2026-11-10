@@ -158,6 +158,7 @@ const fakes = vi.hoisted(() => {
   }
 
   class FakeSpeech {
+    readonly prepare = vi.fn();
     readonly speak = vi.fn<() => Promise<void>>().mockResolvedValue();
     readonly pause = vi.fn<() => void>();
     readonly resume = vi.fn<() => void>();
@@ -1052,6 +1053,29 @@ describe('activate', () => {
     await h.api.ready;
   });
 
+  it('prepares legacy speech after ownership and on settings changes', async () => {
+    fakes.settings.set('speech.enabled', true);
+    const h = activated();
+    await h.api.ready;
+    const speech = last(fakes.made.speech);
+    expect(speech.prepare).toHaveBeenCalledOnce();
+    expect(speech.options.settings()).toMatchObject({ enabled: true, provider: 'kokoro' });
+    changed('unrelated');
+    expect(speech.prepare).toHaveBeenCalledOnce();
+    fakes.settings.set('speech.provider', 'elevenlabs');
+    changed('speech', 'speech.provider');
+    expect(speech.options.settings().provider).toBe('elevenlabs');
+    expect(speech.prepare).toHaveBeenCalledTimes(2);
+    fakes.settings.set('speech.enabled', false);
+    changed('speech', 'speech.enabled');
+    expect(speech.options.settings().enabled).toBe(false);
+    expect(speech.prepare).toHaveBeenCalledTimes(3);
+    fakes.settings.set('speech.computeMode', 'gpu');
+    changed('speech', 'speech.computeMode');
+    expect(speech.computeState().requestedMode).toBe('gpu');
+    expect(speech.prepare).toHaveBeenCalledTimes(4);
+  });
+
   it('wires local speech with safe defaults and stops it when disabled', () => {
     const h = activated();
     const speech = fakes.made.speech.at(-1);
@@ -1412,6 +1436,30 @@ describe('activate', () => {
     });
     expect(h.panel.wiring.speech.settings.get().provider).toBe('kokoro');
     expect(JSON.stringify(fakes.errors)).not.toContain('private');
+  });
+
+  it('rolls back a failed speech setting for a remote text owner without preparing speech', async () => {
+    fakes.remoteName = 'ssh-remote';
+    const h = activated();
+    await h.api.ready;
+    const speech = last(fakes.made.speech);
+    const gate = Promise.withResolvers<void>();
+    fakes.providerGate = gate.promise;
+    h.panel.wiring.speech.settings.set({
+      enabled: false,
+      provider: 'elevenlabs',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+    });
+    gate.reject(new Error('save failed'));
+    await vi.waitFor(() => {
+      expect(fakes.errors).toContain('Could not save speech settings.');
+    });
+    expect(h.panel.wiring.speech.settings.get().provider).toBe('kokoro');
+    expect(speech.cancel).toHaveBeenCalled();
+    expect(speech.prepare).not.toHaveBeenCalled();
   });
 
   it('cancels on a genuine external provider change after pending writes settle', () => {

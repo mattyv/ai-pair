@@ -11,7 +11,7 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes the experimental 0.25.2 implementation on this feature branch.
+Status: describes the experimental 0.26.0 implementation on this feature branch.
 
 The source is `.archi/ai-pair.json`. To regenerate the page with
 Archi-Techture 1.5.1, set `ARCHI_TO_HTML` to its `out/tools/archi-to-html.js`
@@ -44,7 +44,10 @@ inspected in headless Chromium without page errors.
 
 The speech lifecycle and orderly-restart diagrams were updated on 2026-11-10.
 Archi 1.5.1 validated the source, its HTML export was regenerated, and the
-normalizer tests passed. The new sequences were inspected in headless Chromium.
+normalizer tests passed. The new sequences were inspected in headless
+Chromium. The pre-session warmup projection was added to the same source and
+regenerated on 2026-11-10; the validator and normalizer tests passed, and the
+diagram was inspected in headless Chromium without page errors.
 
 ## Components
 
@@ -404,6 +407,15 @@ manager. Host settings and status project the manager's snapshot; they do not
 own a second backend state. The Archi `Warm local synthesis` diagram shows the
 ports, and `specs/SpeechLifecycle.tla` models exclusive ownership and progress.
 
+The same manager owns pre-session warmup demand. Enabled Kokoro settings at
+host startup request preparation without waiting for MCP `start`; disabled
+speech or a cloud provider withdraws that demand. Preparation uses the existing
+serialized resource slot and releases its unit lease when the worker is ready,
+retaining that worker for narration. It does not synthesize, play audio or
+download missing models. The toolbar projects checking/loading as an orange
+pulse, with reduced motion respected, and requires actual worker readiness
+before reporting local voice ready. Independent output checks still apply.
+
 A mode change invalidates the previous generation and requests abort or worker
 retirement. Abort and retirement do not themselves release ownership: GPU proof
 settles only after its children close, and a worker lease lasts until the actual
@@ -426,10 +438,11 @@ The model and runtime pins, native trust checks, provider, output admission and
 chunk/tempo behavior remain unchanged.
 
 Unit tests and composed fake transports exercise ownership, cancellation and
-switching; a real child-process test exercises proof abort and close. Existing
-packaged-host reload checks cover attachment, not GPU synthesis; a packaged
-reload of this lifecycle revision remains to be run. Physical AMD
-hardware validation and audible output for this revision remain open.
+switching; a real child-process test exercises proof abort and close. Isolated
+packaged-host cold starts and reloads restored CPU, GPU and Auto preferences
+with speech disabled and device discovery blocked. They check attachment and
+cached facts, not GPU synthesis. Physical AMD hardware validation and audible
+output for this revision remain open.
 
 ## Independent listening speed
 

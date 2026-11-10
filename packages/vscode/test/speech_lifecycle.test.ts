@@ -1115,3 +1115,172 @@ it('preserves the sanitized module category when worker startup throws', async (
   expect(classifier).toHaveBeenCalledWith(failure);
   await manager.dispose();
 });
+
+it('WarmupSafe: prepares one worker and lends it to the first narration', async () => {
+  const { manager, worker, ready } = fixture();
+  manager.select('cpu');
+  manager.prepare(true);
+  manager.prepare(true);
+  const narration = manager.acquire(42, new AbortController().signal);
+  await vi.waitFor(() => {
+    expect(worker.load).toHaveBeenCalledTimes(1);
+  });
+  ready();
+  expect((await narration).status).toBe('ready');
+  expect(worker.load).toHaveBeenCalledTimes(1);
+  expect(worker.synthesize).not.toHaveBeenCalled();
+});
+
+it('WarmupSafe: disabling during loading retires the worker and blocks stale readiness', async () => {
+  const { manager, worker, ready, reap } = fixture();
+  manager.select('cpu');
+  manager.prepare(true);
+  await vi.waitFor(() => {
+    expect(worker.load).toHaveBeenCalledOnce();
+  });
+  manager.prepare(false);
+  expect(worker.retire).toHaveBeenCalledOnce();
+  ready();
+  expect(manager.snapshot().phase).not.toBe('ready');
+  reap();
+  expect(manager.snapshot().phase).toBe('cold');
+});
+
+it('WarmupSafe: re-enabling waits for the retired worker before starting a replacement', async () => {
+  const { manager, worker, ready, reap } = fixture();
+  manager.select('cpu');
+  manager.prepare(true);
+  await vi.waitFor(() => {
+    expect(worker.load).toHaveBeenCalledTimes(1);
+  });
+  manager.prepare(false);
+  manager.prepare(true);
+  expect(worker.load).toHaveBeenCalledTimes(1);
+  reap();
+  await vi.waitFor(() => {
+    expect(worker.load).toHaveBeenCalledTimes(2);
+  });
+  ready();
+  await vi.waitFor(() => {
+    expect(manager.snapshot().phase).toBe('ready');
+  });
+});
+
+it('restores warm demand after an explicit setup check retires the worker', async () => {
+  const { manager, worker, ready, reap } = fixture();
+  manager.select('cpu');
+  manager.prepare(true);
+  await vi.waitFor(() => {
+    expect(worker.load).toHaveBeenCalledTimes(1);
+  });
+  ready();
+  await vi.waitFor(() => {
+    expect(manager.snapshot().phase).toBe('ready');
+  });
+  const checked = manager.check(() => Promise.resolve({ phase: 'ready' }), new AbortController().signal);
+  await vi.waitFor(() => {
+    expect(worker.retire).toHaveBeenCalled();
+  });
+  reap();
+  expect(await checked).toEqual({ phase: 'ready' });
+  await vi.waitFor(() => {
+    expect(worker.load).toHaveBeenCalledTimes(2);
+  });
+  ready();
+  await vi.waitFor(() => {
+    expect(manager.snapshot().phase).toBe('ready');
+  });
+});
+
+it('does not start disabled or disposed warm demand', async () => {
+  const { manager, worker } = fixture();
+  manager.prepare(true);
+  manager.prepare(false);
+  await Promise.resolve();
+  expect(worker.load).not.toHaveBeenCalled();
+  await manager.dispose();
+  manager.prepare(true);
+  expect(worker.load).not.toHaveBeenCalled();
+});
+
+it('retries a failed warmup when setup completes', async () => {
+  const { manager, proof, prove } = fixture();
+  manager.prepare(true);
+  await vi.waitFor(() => {
+    expect(prove).toHaveBeenCalledOnce();
+  });
+  proof.resolve({ check: { phase: 'unavailable', reason: 'runtime_missing' } });
+  await vi.waitFor(() => {
+    expect(manager.snapshot().phase).toBe('failed');
+  });
+  manager.prepare(true, true);
+  await vi.waitFor(() => {
+    expect(prove).toHaveBeenCalledTimes(2);
+  });
+});
+
+it('restarts warm demand after changing compute mode', async () => {
+  const { manager, proof, prove, worker, ready } = fixture();
+  manager.prepare(true);
+  await vi.waitFor(() => {
+    expect(prove).toHaveBeenCalledOnce();
+  });
+  manager.select('cpu');
+  proof.resolve({ check: { phase: 'unavailable', reason: 'runtime_missing' } });
+  await vi.waitFor(() => {
+    expect(worker.load).toHaveBeenCalledOnce();
+  });
+  ready();
+  await vi.waitFor(() => {
+    expect(manager.snapshot().phase).toBe('ready');
+  });
+});
+
+it('retries after an unexpected warm worker failure', async () => {
+  const { manager, worker, ready, reap } = fixture();
+  manager.select('cpu');
+  manager.prepare(true);
+  await vi.waitFor(() => {
+    expect(worker.load).toHaveBeenCalledTimes(1);
+  });
+  ready();
+  await vi.waitFor(() => {
+    expect(manager.snapshot().phase).toBe('ready');
+  });
+  worker.retire('timeout');
+  reap();
+  manager.prepare(true, true);
+  await vi.waitFor(() => {
+    expect(worker.load).toHaveBeenCalledTimes(2);
+  });
+  ready();
+});
+
+it('keeps the lifecycle usable if a warm worker state check throws', async () => {
+  const { manager, worker, ready, reap } = fixture();
+  manager.select('cpu');
+  manager.prepare(true);
+  const first = manager.check(() => Promise.resolve({ phase: 'ready' }), new AbortController().signal);
+  const second = manager.check(() => Promise.resolve({ phase: 'ready' }), new AbortController().signal);
+  await vi.waitFor(() => {
+    expect(worker.load).toHaveBeenCalledTimes(1);
+  });
+  ready();
+  await vi.waitFor(() => {
+    expect(worker.retire).toHaveBeenCalled();
+  });
+  reap();
+  await Promise.all([first, second]);
+  await vi.waitFor(() => {
+    expect(worker.load).toHaveBeenCalledTimes(2);
+  });
+  ready();
+  const state = vi.spyOn(worker, 'state').mockImplementationOnce(() => {
+    throw new Error('state error');
+  });
+  await vi.waitFor(() => {
+    expect(state).toHaveBeenCalled();
+  });
+  state.mockRestore();
+  expect((await manager.acquire(8, new AbortController().signal)).status).toBe('ready');
+});

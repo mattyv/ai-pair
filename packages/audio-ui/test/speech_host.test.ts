@@ -49,6 +49,7 @@ const fakes = vi.hoisted(() => ({
   credentialChanged: undefined as (() => void) | undefined,
   credentialPrompt: undefined as (() => PromiseLike<string | undefined>) | undefined,
   configChanged: undefined as ((event: { affectsConfiguration(key: string): boolean }) => void) | undefined,
+  prepare: vi.fn(),
   cancel: vi.fn(),
   invalidateCloud: vi.fn(),
   audioEvent: vi.fn(),
@@ -149,6 +150,7 @@ vi.mock('../../vscode/src/speech_service', () => ({
       }
       return gpuCheck;
     }
+    prepare = fakes.prepare;
     cancel = fakes.cancel;
     invalidateCloud = fakes.invalidateCloud;
     audioEvent = fakes.audioEvent;
@@ -291,6 +293,25 @@ function harness(
   });
   return { host, adapter, panel, list, diagnostic };
 }
+
+it('prepares on activation and speech settings changes', () => {
+  fakes.config.set('speech.enabled', true);
+  const { host } = harness();
+  expect(fakes.prepare).toHaveBeenCalledOnce();
+  fakes.configChanged?.({ affectsConfiguration: () => false });
+  expect(fakes.prepare).toHaveBeenCalledOnce();
+  fakes.config.set('speech.provider', 'elevenlabs');
+  fakes.configChanged?.({ affectsConfiguration: () => true });
+  expect(host.panelSpeech.settings.get()).toMatchObject({ enabled: true, provider: 'elevenlabs' });
+  expect(fakes.prepare).toHaveBeenCalledTimes(2);
+  fakes.config.set('speech.enabled', false);
+  fakes.configChanged?.({ affectsConfiguration: () => true });
+  expect(host.panelSpeech.settings.get().enabled).toBe(false);
+  expect(fakes.prepare).toHaveBeenCalledTimes(3);
+  fakes.config.set('speech.computeMode', 'gpu');
+  fakes.configChanged?.({ affectsConfiguration: () => true });
+  expect(fakes.prepare).toHaveBeenCalledTimes(4);
+});
 
 it('uses local settings and credentials through panel callbacks', async () => {
   const { host, panel } = harness();

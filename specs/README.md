@@ -2985,26 +2985,30 @@ because `GuardClose` is true; it exists only to model the early-release mutation
 ### `VoiceIndicator`: truthful toolbar readiness
 
 `VoiceIndicator.tla` models an atomic projection of enablement, transport,
-provider prerequisites and a recorded failure. The prerequisites abstract the
+provider prerequisites, worker lifecycle and a recorded failure. The
+prerequisites abstract the
 provider-specific runtime, route, model, key, voice and GPU checks; their
 concrete mapping is tested separately. The model does not prove audibility,
-cloud credit availability, or hardware execution. Weak fairness makes the
+cloud credit availability, or hardware execution. Local readiness requires a ready
+worker, while loading takes precedence over unknown prerequisites. Weak fairness
+makes the
 observation step eventually update the view.
 
 | Property | Test |
 |---|---|
 | `TypeOK`, `Accurate` | `voice_indicator.test.ts`: maps each supported state and unknown evidence. |
-| `ReadyRequiresEvidence` | `voice_indicator.test.ts`: requires known provider, route and GPU evidence before ready. |
+| `ReadyRequiresEvidence` | `voice_indicator.test.ts`: requires known provider, route, GPU and worker evidence before ready. |
 | `OffWhenDisabled` | `voice_indicator.test.ts`: reports off when speech is disabled. |
 | `EventuallyObserved` | `webview/panel.test.ts`: updates voice readiness without opening settings and opens speech controls. |
 
 Mutations producing an invalid type, retaining the old indicator, accepting
 unknown prerequisites as ready, showing checking when disabled, or never
 recording observation each produced a counterexample for its named property.
+Removing the local worker-ready guard violates `ReadyRequiresEvidence`.
 
 | Config | Bounds | Distinct states | Result |
 |---|---|---|---|
-| `VoiceIndicator.cfg` | Two Boolean flags, three prerequisite states and failure flag | 25 | Pass |
+| `VoiceIndicator.cfg` | Enablement, transport, provider, four worker states, three prerequisite states and failure | 193 | Pass |
 
 ### `SpeechBackendHandoff`: switching local workers
 
@@ -3105,3 +3109,34 @@ Independent temporary configurations setting `GuardReap`, `GuardCurrent`, or
 disabled action. These negative controls were discarded. The model abstracts
 unit ownership, proof arbitration and restart; their concrete tests provide
 additional coverage.
+
+### `SpeechWarmup`: pre-session local speech warmup
+
+The model tracks enablement, local route, CPU/GPU mode, bounded generation,
+worker ownership and asynchronous ready/failure events. A configuration change
+invalidates the visible result immediately; stale workers retain the single slot
+until reaped. A result applies only to the current eligible loading worker.
+The model allows old events to arrive after a change and allows successive
+configuration changes before worker retirement. It abstracts the worker's
+backend internals, startup timeout, actual audio, and process-level cleanup.
+`DemandProgress` assumes weak fairness of starting and of reaping each stale
+worker: an eligible idle demand eventually starts or becomes ineligible. The
+model does not guarantee progress if a child never reaps, and it does not
+assume worker completion. Retry after loading or unexpected worker failure
+keeps the configuration generation and gives the worker a new attempt identity.
+The model bounds retries to one per configuration generation.
+
+| Property | Implementation test |
+| --- | --- |
+| `TypeOK` | `speech_lifecycle.test.ts`: `TypeOK: starts with a valid cold CPU snapshot`. |
+| `SingleWorker` | `speech_lifecycle.test.ts`: `WarmupSafe: re-enabling waits for the retired worker before starting a replacement`. |
+| `CurrentResult`, `ReadyHasWorker` | `speech_lifecycle.test.ts`: `WarmupSafe: disabling during loading retires the worker and blocks stale readiness`; `speech_warmup.integration.test.ts`: `projects pre-session warmup through the service and lifecycle into the voice indicator`. |
+| `DemandProgress` | `speech_lifecycle.test.ts`: `retries a failed warmup when setup completes` and `retries after an unexpected warm worker failure`. |
+
+TLC checked 422,427 generated and 53,112 distinct states with three
+configuration changes and one retry per generation. Deadlock checking is
+disabled because the generation bound can stop configuration changes.
+Independently setting `GuardCurrent` to false violates
+`CurrentResult`, setting `GuardSingle` to false violates `SingleWorker`, and
+setting `EnableStart` to false violates `DemandProgress`; these temporary
+negative-control configurations were discarded.

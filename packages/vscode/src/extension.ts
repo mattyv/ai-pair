@@ -310,6 +310,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       const restoresVoice = cloudVoiceInvalidated && value.elevenLabsVoice !== '' && catalog.contains(value.elevenLabsVoice);
       const generation = ++speechSaveGeneration;
       pendingSpeechSettings = { ...value, listeningSpeed: speechListeningRate(value.listeningSpeed) };
+      if (owner === 'legacy') speech.prepare();
       lastSpeechProvider = value.provider;
       lastSpeechEnabled = value.enabled;
       panel.showSpeechSettings(pendingSpeechSettings);
@@ -343,6 +344,7 @@ export function activate(context: vscode.ExtensionContext): Api {
           if (generation !== speechSaveGeneration) return;
           pendingSpeechSettings = undefined;
           speech.cancel();
+          if (owner === 'legacy') speech.prepare();
           catalog.invalidate();
           const restored = storedSpeechSettings();
           lastSpeechProvider = restored.provider;
@@ -591,7 +593,9 @@ export function activate(context: vscode.ExtensionContext): Api {
           modelGeneration++;
           modelReady = 'unknown';
           publishReadiness();
-          return setupSpeech(context.globalStorageUri.fsPath);
+          return setupSpeech(context.globalStorageUri.fsPath).then(() => {
+            speech.prepare(/* retry= */ true);
+          });
         },
         preview: () => {
           previewProvider = speechSettings.get().provider;
@@ -938,6 +942,7 @@ export function activate(context: vscode.ExtensionContext): Api {
           lastSpeechProvider = current.provider;
           lastSpeechEnabled = current.enabled;
         }
+        if (owner === 'legacy') speech.prepare();
         panel.showSpeechSettings(current);
         publishReadiness();
       }
@@ -1110,6 +1115,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       panel.showSpeechTransport(chosen === 'legacy');
       if (chosen === 'legacy') {
         selectedNarration = speech;
+        speech.prepare();
         publishReadiness();
         // specs/OutputPreference.tla, Init: restore a saved device without opening Settings.
         if (outputPreferences.choice().kind === 'native') void outputPreferences.refresh();

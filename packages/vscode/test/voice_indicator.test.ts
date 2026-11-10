@@ -13,7 +13,7 @@ const ready = AUDIO_DIAGNOSTICS_SCHEMA.parse({
   modelReady: true,
   lastPlayback: 'unknown',
 });
-const cpu = { requestedMode: 'cpu', actualBackend: 'none', gpuCheck: { phase: 'idle' } } as const;
+const cpu = { phase: 'ready', requestedMode: 'cpu', actualBackend: 'cpu', gpuCheck: { phase: 'idle' } } as const;
 
 describe('voice indicator', () => {
   it('reports off when speech is disabled', () => {
@@ -54,4 +54,25 @@ it('distinguishes incomplete facts, provider failures and CPU fallback', () => {
 it('does not claim readiness without valid provider settings', () => {
   expect(voiceIndicator(ready, cpu, true, undefined)).toBe('checking');
   expect(voiceIndicator(ready, cpu, true, false)).toBe('unavailable');
+});
+
+it('shows local worker startup until the lifecycle reports ready', () => {
+  expect(voiceIndicator(ready, { ...cpu, phase: 'loading' }, true, true)).toBe('starting');
+  expect(voiceIndicator(ready, { ...cpu, phase: 'ready' }, true, true)).toBe('ready');
+  expect(voiceIndicator(ready, { ...cpu, phase: 'checking' }, true, true)).toBe('checking');
+  expect(voiceIndicator({ ...ready, provider: 'elevenlabs', keyConfigured: true }, { ...cpu, phase: 'loading' }, true, true)).toBe('ready');
+});
+
+it('reports lifecycle failures and refuses readiness before a worker starts', () => {
+  expect(voiceIndicator(ready, { ...cpu, phase: 'failed' }, true, true)).toBe('unavailable');
+  expect(voiceIndicator(ready, { ...cpu, phase: 'cold', failureReason: 'timeout' }, true, true)).toBe('unavailable');
+  expect(voiceIndicator(ready, { ...cpu, phase: 'cold' }, true, true)).toBe('checking');
+  expect(voiceIndicator(ready, { ...cpu, actualBackend: 'none' }, true, true)).toBe('checking');
+});
+
+it('shows current startup over an earlier playback failure, then preserves the failure', () => {
+  const failed = { ...ready, lastPlayback: 'failed' } as const;
+  expect(voiceIndicator(failed, { ...cpu, phase: 'loading' }, true, true)).toBe('starting');
+  expect(voiceIndicator(failed, cpu, true, true)).toBe('unavailable');
+  expect(voiceIndicator(failed, { ...cpu, phase: 'loading' }, false, true)).toBe('unavailable');
 });

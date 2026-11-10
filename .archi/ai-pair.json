@@ -9921,7 +9921,7 @@
       "type": "architecture",
       "origin": "llm",
       "generation": {
-        "focus": "Unified local speech lifecycle, exclusive proof and worker ownership"
+        "focus": "Unified local speech lifecycle, pre-session preparation and exclusive proof/worker ownership"
       },
       "doc": {
         "type": "architecture",
@@ -9969,7 +9969,7 @@
           {
             "id": "projection",
             "label": "Settings and readiness\nSnapshot and progress projection",
-            "files": ["packages/audio-ui/src/speech_host.ts", "packages/vscode/src/panel.ts"],
+            "files": ["packages/audio-ui/src/speech_host.ts", "packages/vscode/src/panel.ts", "packages/vscode/src/voice_indicator.ts"],
             "x": 40,
             "y": 430
           }
@@ -9978,7 +9978,14 @@
           {
             "from": "service",
             "to": "manager",
-            "label": "acquire / release"
+            "label": "prepare / lease",
+            "labelPosition": {
+              "distance": 0.5,
+              "offset": {
+                "x": 0,
+                "y": -35
+              }
+            }
           },
           {
             "from": "manager",
@@ -9988,17 +9995,44 @@
           {
             "from": "manager",
             "to": "client",
-            "label": "create and retire"
+            "label": "create and retire",
+            "labelPosition": {
+              "distance": 0.5,
+              "offset": {
+                "x": 90,
+                "y": 0
+              }
+            }
           },
           {
             "from": "client",
             "to": "worker",
-            "label": "versioned protocol"
+            "label": "protocol",
+            "labelPosition": {
+              "distance": 0.5,
+              "offset": {
+                "x": 0,
+                "y": -25
+              }
+            }
           },
           {
             "from": "worker",
             "to": "client",
-            "label": "actual exit"
+            "label": "exit",
+            "vertices": [
+              {
+                "x": 1000,
+                "y": 560
+              }
+            ],
+            "labelPosition": {
+              "distance": 0.5,
+              "offset": {
+                "x": 0,
+                "y": 20
+              }
+            }
           },
           {
             "from": "manager",
@@ -10008,12 +10042,25 @@
           {
             "from": "projection",
             "to": "service",
-            "label": "mode selection"
+            "label": "startup / settings demand"
           },
           {
             "from": "client",
             "to": "manager",
-            "label": "reaped"
+            "label": "reaped",
+            "vertices": [
+              {
+                "x": 470,
+                "y": 300
+              }
+            ],
+            "labelPosition": {
+              "distance": 0.5,
+              "offset": {
+                "x": -45,
+                "y": 0
+              }
+            }
           }
         ],
         "groups": [],
@@ -10021,7 +10068,7 @@
           "manager": [
             {
               "id": "single-owner",
-              "text": "One manager serializes explicit setup proof, inference proof, CPU resolution and CPU/GPU worker ownership. Cancellation requests abort or retirement; only settled proof or actual worker exit releases its lease. Generations fence stale completions and progress.",
+              "text": "One manager serializes explicit setup proof, inference proof, CPU resolution and CPU/GPU worker ownership. Cancellation requests abort or retirement; only settled proof or actual worker exit releases its lease. Generations fence stale completions and progress. Enabled local narration requests preparation before MCP start. Disabled speech/provider changes withdraw warmup demand. Actual worker readiness drives toolbar state; warmup does not synthesize, play, or download.",
               "ts": 0
             }
           ],

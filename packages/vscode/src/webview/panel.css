@@ -314,6 +314,17 @@ button:focus-visible {
   width: 6px;
 }
 
+.voice-status[data-state='starting'] .voice-indicator {
+  animation: voice-starting 1s steps(2, end) infinite;
+  background: #e67e22;
+}
+
+@keyframes voice-starting {
+  50% {
+    opacity: 0.3;
+  }
+}
+
 .voice-status[data-state='ready'] .voice-indicator {
   background: var(--vscode-testing-iconPassed);
 }
@@ -837,7 +848,8 @@ a:hover {
 /* Reduced motion: no pulsing dot, no fade-in. Last, so it beats the rules it overrides. */
 @media (prefers-reduced-motion: reduce) {
   .dot.read,
-  .arrive {
+  .arrive,
+  .voice-status[data-state='starting'] .voice-indicator {
     animation: none;
   }
 }
