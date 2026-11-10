@@ -38,6 +38,7 @@ const fakes = vi.hoisted(() => ({
   update: vi.fn().mockResolvedValue(undefined),
   choice: vi.fn<() => import('../../vscode/src/speech_output_types').OutputChoice>().mockReturnValue({ kind: 'default' }),
   ready: vi.fn().mockReturnValue(true),
+  refresh: vi.fn().mockResolvedValue(undefined),
   secretChanged: undefined as ((event: { key: string }) => void) | undefined,
   credentialInvalidate: vi.fn(),
   errorMessage: vi.fn(),
@@ -207,7 +208,7 @@ vi.mock('../../vscode/src/speech_output_preferences', () => ({
     choice = fakes.choice;
     view = vi.fn();
     ready = fakes.ready;
-    refresh = vi.fn().mockResolvedValue(undefined);
+    refresh = fakes.refresh;
     choose = vi.fn().mockResolvedValue(undefined);
   },
 }));
@@ -299,6 +300,7 @@ function harness(
 
 it('uses local settings and credentials through panel callbacks', async () => {
   const { host, panel } = harness();
+  expect(fakes.refresh).not.toHaveBeenCalled();
   expect(host.panelSpeech.settings.get().enabled).toBe(false);
   fakes.catalogPublish?.({ voices: [], more: false, loading: true, error: false });
   fakes.catalogPublish?.({ voices: [], more: false, loading: false, error: false });
@@ -1010,4 +1012,38 @@ it('uses discovered output availability and resets model evidence on setup', asy
   expect(host.audioDiagnostics().modelReady).toBe('unknown');
   expect(JSON.stringify(host.audioDiagnostics())).not.toContain('private-device');
   host.dispose();
+});
+
+it('refreshes a restored native output at startup without opening Settings', () => {
+  fakes.choice.mockReturnValue({ kind: 'native', backend: 'pipewire', name: 'headset' });
+  const { host } = harness();
+  expect(fakes.refresh).toHaveBeenCalledOnce();
+  host.dispose();
+});
+
+it('does not list devices after a restored host is disposed during discovery', async () => {
+  const capability = Promise.withResolvers<import('../../audio-native/src').AudioCapabilities>();
+  fakes.choice.mockReturnValue({ kind: 'native', backend: 'pipewire', name: 'headset' });
+  const { host, list, panel } = harness(() => capability.promise);
+  const discovery = fakes.preferencesWiring?.discover();
+  host.dispose();
+  capability.resolve({ backend: 'pipewire', location: 'ui', defaultOutput: true, deviceSelection: true, pauseResume: true });
+  await discovery;
+  expect(list).not.toHaveBeenCalled();
+  expect(panel.showSpeechOutputCatalog).not.toHaveBeenCalled();
+});
+
+it('ignores a device list that settles after disposal', async () => {
+  const devices = Promise.withResolvers<Array<import('../../audio-native/src').AudioDevice>>();
+  fakes.choice.mockReturnValue({ kind: 'native', backend: 'pipewire', name: 'headset' });
+  const { host, list } = harness();
+  list.mockReturnValueOnce(devices.promise);
+  const discovery = fakes.preferencesWiring?.discover();
+  await vi.waitFor(() => {
+    expect(list).toHaveBeenCalledOnce();
+  });
+  host.dispose();
+  devices.resolve([{ id: 'headset', label: 'Headset' }]);
+  await discovery;
+  expect(host.audioDiagnostics().routeAvailable).toBe('unknown');
 });

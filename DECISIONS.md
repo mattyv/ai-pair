@@ -660,3 +660,12 @@ model provenance in native disclosures. Show model and GPU setup outcomes and
 the reported backend outside the disclosure; setup readiness does not establish
 that GPU is active. This changes presentation only: model pins, setup flow and
 architecture remain unchanged.
+
+## Restore selected speech output on startup
+
+Refresh a persisted native output selection when its speech host starts, so
+narration can use an available device without opening Settings. The legacy
+host does this only when it owns speech. The default output keeps its existing
+startup path. A missing device remains selected and unavailable until discovery
+finds it; no fallback device is chosen. This addresses the saved-output case,
+not every possible cause of a restart failure.

@@ -103,7 +103,8 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `OutputAdmission.cfg` | overlapping output checks and stale completion | holds | 140 |
 | `OutputHandoff.cfg` | worker admission and acknowledged browser retirement | holds | 270 |
 | `OutputReplacement.cfg` | view replacement and old-page disposal | holds | 22 |
-| `OutputPreference.cfg` | ordered choice, discovery and failed persistence | holds | 648 |
+| `OutputDiscoveryLifecycle.cfg` | discovery completion after disposal | holds | 5 |
+| `OutputPreference.cfg` | ordered choice, discovery and failed persistence | holds | 934 |
 | `LocalAudioAdmission.cfg` | capability, device snapshot and cloud admission | holds | 624 |
 | `LocalAudioOwnership.cfg` | local ownership, directional sequences and lease loss | holds | 3,632 |
 | `PanelPlacement.cfg` | bounded prepare, irrevocable commit and fallback | holds | 11 |
@@ -2354,15 +2355,29 @@ settle through an independently fair timeout.
 ### `OutputPreference`: route selection and persistence
 
 The model checks ordered local setting writes, immediate speech cancellation,
-stale discovery results and unavailable saved devices. TLC checked 648 states.
+stale discovery results and unavailable saved devices. A restored device starts
+discovery without opening Settings. TLC checked 934 states, with two choices
+and up to two overlapping requests. Removing startup discovery violates
+`StartupDiscovery` in the restored-device initial state.
 Negative controls for invalid choices, stale writes or results, missing stop,
 disabled selection and missing fairness violate their corresponding properties.
 
 | Property | Test |
 |---|---|
+| `StartupDiscovery` | `speech_host.test.ts`: refreshes a restored native output at startup without opening Settings; `extension.test.ts`: refreshes a restored native route when the legacy host owns speech. |
 | `SelectionStops`, `ChoiceChangeStops` | `speech_output_preferences.test.ts`: stops speech before immediate selection and persists only the choice. |
 | `LatestHonored`, `Settlement` | `speech_output_preferences.test.ts`: serializes writes and ignores an older failed write after a newer selection; rolls back a latest failed write and exposes a fixed error. |
 | `StaleIgnored`, `EligibleSelect` | `speech_output_preferences.test.ts`: ignores stale discovery and keeps a missing saved output selected; treats a missing native choice as not ready until an available match is discovered. |
+
+### `OutputDiscoveryLifecycle`: discovery and disposal
+
+The model checks one pending capability request and host disposal, with fair
+completion. TLC checked five distinct states. Removing the disposal guard
+violates `NoLateList`; removing completion fairness violates `Completion`.
+
+| Property | Test |
+|---|---|
+| `NoLateList`, `Completion` | `speech_host.test.ts`: does not list devices after a restored host is disposed during discovery. |
 
 ### `OutputHandoff`: admission and browser retirement
 

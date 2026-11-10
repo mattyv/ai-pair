@@ -100,6 +100,7 @@ const fakes = vi.hoisted(() => {
     readonly choose = vi.fn(() => Promise.resolve());
     readonly refresh = vi.fn(() => Promise.resolve());
     constructor(readonly wiring: OutputPreferenceWiring) {
+      if (wiring.initial !== undefined) this.choice.mockReturnValue({ kind: 'native', backend: 'coreaudio', name: 'headset' });
       made.outputs.push(this);
     }
   }
@@ -2102,4 +2103,21 @@ it('ignores an older failed compute save and normalizes an invalid saved choice'
     expect(fakes.errors).toContain('Could not save speech compute mode.');
   });
   expect(h.panel.wiring.speech.computeState().requestedMode).toBe('cpu');
+});
+
+it('refreshes a restored native route when the legacy host owns speech', async () => {
+  const given = context();
+  await given.globalState.update('speechOutput', { kind: 'native', backend: 'coreaudio', name: 'headset' });
+  const h = activated(given);
+  await h.api.ready;
+  expect(fakes.made.outputs.at(-1)?.refresh).toHaveBeenCalledOnce();
+});
+
+it('does not refresh the legacy route when the companion owns speech', async () => {
+  fakes.companionAvailable = true;
+  const given = context();
+  await given.globalState.update('speechOutput', { kind: 'native', backend: 'coreaudio', name: 'headset' });
+  const h = activated(given);
+  await h.api.ready;
+  expect(fakes.made.outputs.at(-1)?.refresh).not.toHaveBeenCalled();
 });

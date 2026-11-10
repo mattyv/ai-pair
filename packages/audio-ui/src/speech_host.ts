@@ -320,6 +320,8 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
       capability = undefined;
       routeDiscovered = false;
       const discovered = await adapter.capabilities();
+      // specs/OutputDiscoveryLifecycle.tla, Complete: do not start listing after disposal.
+      if (disposed) return { supported: false, devices: [], reason: 'unavailable' };
       if (sequence === capabilityGeneration) capability = discovered;
       const backend = discovered.backend;
       if (
@@ -330,7 +332,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
         return { supported: false, devices: [], reason: 'unsupported' };
       }
       const devices = discovered.deviceSelection ? await adapter.list() : [];
-      if (sequence === capabilityGeneration) routeDiscovered = true;
+      if (!disposed && sequence === capabilityGeneration) routeDiscovered = true;
       return {
         supported: true,
         devices: devices.map((device) => ({
@@ -443,16 +445,21 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     });
     options.panel()?.refreshSpeechSupport();
   });
-  const initialCapability = ++capabilityGeneration;
-  void adapter.capabilities().then(
-    (value) => {
-      if (!disposed && initialCapability === capabilityGeneration) {
-        capability = value;
-        options.panel()?.showSpeechOutputCatalog(preferences.view());
-      }
-    },
-    () => {},
-  );
+  // specs/OutputPreference.tla, Init: restore a saved device without opening Settings.
+  if (preferences.choice().kind === 'native') {
+    void preferences.refresh();
+  } else {
+    const initialCapability = ++capabilityGeneration;
+    void adapter.capabilities().then(
+      (value) => {
+        if (!disposed && initialCapability === capabilityGeneration) {
+          capability = value;
+          options.panel()?.showSpeechOutputCatalog(preferences.view());
+        }
+      },
+      () => {},
+    );
+  }
   const panelSpeech: PanelWiring['speech'] = {
     computeState: () => compute.state(),
     computeMode: (value) => {

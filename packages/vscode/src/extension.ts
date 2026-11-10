@@ -969,7 +969,11 @@ export function activate(context: vscode.ExtensionContext): Api {
       );
       return;
     }
-    if (chosen === 'legacy') selectedNarration = speech;
+    if (chosen === 'legacy') {
+      selectedNarration = speech;
+      // specs/OutputPreference.tla, Init: restore a saved device without opening Settings.
+      if (outputPreferences.choice().kind === 'native') void outputPreferences.refresh();
+    }
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider(NarrationPanel.viewId, panel, {
         webviewOptions: { retainContextWhenHidden: true },

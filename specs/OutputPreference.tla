@@ -12,10 +12,12 @@ TypeOK == /\ selected \in Choices /\ stored \in Choices
           /\ playing \in BOOLEAN /\ discovery \in 0..2
           /\ displayed \in 0..discovery /\ pending \in SUBSET Ids
           /\ available \in BOOLEAN
-Init == /\ selected = "default" /\ stored = "default"
+Init == /\ selected \in Choices /\ stored = selected
         /\ issued = 0 /\ settled = 0 /\ choices = [i \in Ids |-> "default"]
-        /\ owned = FALSE /\ playing = FALSE /\ discovery = 0
-        /\ displayed = 0 /\ pending = {} /\ available = FALSE
+        /\ owned = FALSE /\ playing = FALSE
+        /\ discovery = IF selected = "device" THEN 1 ELSE 0
+        /\ displayed = 0 /\ pending = IF selected = "device" THEN {1} ELSE {}
+        /\ available = FALSE
 Start == /\ ~playing /\ playing' = TRUE
          /\ UNCHANGED <<selected, stored, issued, settled, choices, owned,
                         discovery, displayed, pending, available>>
@@ -54,6 +56,7 @@ Next == Start \/ Finish \/ (\E c \in Choices: Select(c))
         \/ Refresh \/ (\E i \in Ids, b \in BOOLEAN: Complete(i, b))
 Spec == Init /\ [][Next]_vars /\ WF_vars(WriteOK \/ WriteFailed)
         /\ \A i \in Ids: WF_vars(\E b \in BOOLEAN: Complete(i, b))
+StartupDiscovery == selected = "device" => discovery = 1 /\ pending = {1}
 LatestHonored == owned => issued > 0 /\ selected = choices[issued]
 EligibleSelect == issued < 2 => (\A c \in Choices: ENABLED Select(c))
 ChoiceChangeStops == [][selected' # selected => ~playing']_vars

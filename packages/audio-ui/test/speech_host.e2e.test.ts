@@ -58,7 +58,7 @@ it('keeps speech disabled by default and retains a missing local device', async 
     play: vi.fn(),
     pause: vi.fn(),
     resume: vi.fn(),
-    stop: vi.fn(),
+    stop: vi.fn().mockResolvedValue(undefined),
     onEvent: vi.fn().mockReturnValue({ dispose: vi.fn() }),
   };
   const panel = {
@@ -96,12 +96,25 @@ it('keeps speech disabled by default and retains a missing local device', async 
   await vi.waitFor(() => {
     expect(capabilities).toHaveBeenCalled();
   });
-  expect(list).not.toHaveBeenCalled();
+  await vi.waitFor(() => {
+    expect(list).toHaveBeenCalledOnce();
+  });
+  expect(host.panelSpeech.outputReady()).toBe(false);
+  list.mockResolvedValue([{ id: 'missing', label: 'Headset' }]);
   host.panelSpeech.outputRefresh();
   await vi.waitFor(() => {
     expect(panel.showSpeechOutputCatalog).toHaveBeenCalled();
   });
   expect(host.panelSpeech.outputView().selected).toEqual({ kind: 'native', backend: 'coreaudio', name: 'missing' });
+  await vi.waitFor(() => {
+    expect(host.panelSpeech.outputReady()).toBe(true);
+  });
+  list.mockResolvedValue([]);
+  host.panelSpeech.outputRefresh();
+  await vi.waitFor(() => {
+    expect(list).toHaveBeenCalledTimes(3);
+    expect(host.panelSpeech.outputView().devices).toEqual([]);
+  });
   expect(host.panelSpeech.outputReady()).toBe(false);
   callbacks.values.set('speech.enabled', true);
   callbacks.values.set('speech.provider', 'elevenlabs');
@@ -112,5 +125,129 @@ it('keeps speech disabled by default and retains a missing local device', async 
   callbacks.values.clear();
   callbacks.config?.({ affectsConfiguration: () => true });
   expect(panel.showSpeechSettings).toHaveBeenCalled();
+  host.dispose();
+});
+
+it('restores an available saved output without opening Settings', async () => {
+  const secrets = {
+    get: vi.fn(),
+    store: vi.fn(),
+    delete: vi.fn(),
+    onDidChange: (callback: typeof callbacks.secret) => {
+      callbacks.secret = callback;
+      return { dispose: vi.fn() };
+    },
+  };
+  // The integration fixture supplies only the VS Code methods used by this host.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  const context = {
+    extensionPath: '/extension',
+    globalStorageUri: { fsPath: '/storage' },
+    secrets,
+    globalState: { get: () => ({ kind: 'native', backend: 'coreaudio', name: 'headset' }), update: vi.fn() },
+  } as unknown as vscode.ExtensionContext;
+  const admit = vi.fn();
+  const capabilities = vi
+    .fn()
+    .mockResolvedValue({ backend: 'coreaudio', location: 'ui', defaultOutput: true, deviceSelection: true, pauseResume: true });
+  const list = vi.fn().mockResolvedValue([{ id: 'headset', label: 'Headset' }]);
+  const adapter: AudioAdapter = {
+    capabilities,
+    list,
+    admit,
+    play: vi.fn(),
+    pause: vi.fn(),
+    resume: vi.fn(),
+    stop: vi.fn().mockResolvedValue(undefined),
+    onEvent: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+  };
+  const panel = {
+    showSpeechKeyStatus: vi.fn(),
+    showSpeechOutputCatalog: vi.fn(),
+    showSpeechCatalog: vi.fn(),
+    showSpeechSettings: vi.fn(),
+    showSpeechComputeState: vi.fn(),
+    showSpeechStatus: vi.fn(),
+    refreshSpeechSupport: vi.fn(),
+  };
+  const host = createSpeechHost({
+    context,
+    connectionEpoch: 'epoch',
+    adapter,
+    page: () => 1,
+    panel: () => panel,
+    diagnostic: vi.fn<(event: SpeechDiagnosticEvent) => void>(),
+  });
+  await vi.waitFor(() => {
+    expect(host.panelSpeech.outputReady()).toBe(true);
+  });
+  expect(list).toHaveBeenCalledOnce();
+  expect(host.panelSpeech.outputView().selected).toEqual({ kind: 'native', backend: 'coreaudio', name: 'headset' });
+  host.dispose();
+});
+
+it('retries a failed startup device listing from Settings', async () => {
+  const secrets = {
+    get: vi.fn(),
+    store: vi.fn(),
+    delete: vi.fn(),
+    onDidChange: (callback: typeof callbacks.secret) => {
+      callbacks.secret = callback;
+      return { dispose: vi.fn() };
+    },
+  };
+  // The integration fixture supplies only the VS Code methods used by this host.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  const context = {
+    extensionPath: '/extension',
+    globalStorageUri: { fsPath: '/storage' },
+    secrets,
+    globalState: { get: () => ({ kind: 'native', backend: 'coreaudio', name: 'headset' }), update: vi.fn() },
+  } as unknown as vscode.ExtensionContext;
+  const admit = vi.fn();
+  const capabilities = vi
+    .fn()
+    .mockResolvedValue({ backend: 'coreaudio', location: 'ui', defaultOutput: true, deviceSelection: true, pauseResume: true });
+  const list = vi
+    .fn()
+    .mockRejectedValueOnce(new Error('device listing failed'))
+    .mockResolvedValue([{ id: 'headset', label: 'Headset' }]);
+  const adapter: AudioAdapter = {
+    capabilities,
+    list,
+    admit,
+    play: vi.fn(),
+    pause: vi.fn(),
+    resume: vi.fn(),
+    stop: vi.fn().mockResolvedValue(undefined),
+    onEvent: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+  };
+  const panel = {
+    showSpeechKeyStatus: vi.fn(),
+    showSpeechOutputCatalog: vi.fn(),
+    showSpeechCatalog: vi.fn(),
+    showSpeechSettings: vi.fn(),
+    showSpeechComputeState: vi.fn(),
+    showSpeechStatus: vi.fn(),
+    refreshSpeechSupport: vi.fn(),
+  };
+  const host = createSpeechHost({
+    context,
+    connectionEpoch: 'epoch',
+    adapter,
+    page: () => 1,
+    panel: () => panel,
+    diagnostic: vi.fn<(event: SpeechDiagnosticEvent) => void>(),
+  });
+  await vi.waitFor(() => {
+    expect(host.panelSpeech.outputView().reason).toBe('unavailable');
+  });
+  expect(host.panelSpeech.outputReady()).toBe(false);
+  host.panelSpeech.outputRefresh();
+  await vi.waitFor(() => {
+    expect(host.panelSpeech.outputReady()).toBe(true);
+  });
+  expect(list).toHaveBeenCalledTimes(2);
+  expect(host.panelSpeech.outputView().selected).toEqual({ kind: 'native', backend: 'coreaudio', name: 'headset' });
   host.dispose();
 });

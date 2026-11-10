@@ -132,6 +132,7 @@ Code goes without a spec for one of these reasons:
 |---|---|---|
 | `local_connection.ts` | ordered frames and local lease | `LocalAudioOwnership`; physical retirement integration pending |
 | `companion_session.ts`, `speech_host.ts` | readiness query and host facts | `SpeechReminder` abstracts readiness; concrete local checks: unit and integration tests |
+| `speech_host.ts` | restored output discovery and disposal | `OutputPreference` (`Init`), `OutputDiscoveryLifecycle` (`Complete`); solitary and fake-adapter composed tests |
 | `companion_output.ts` | page and job ownership | `LocalAudioAdmission`, `LocalAudioOwnership`, `MultipartAudioLease`; native integration pending |
 
 ## vscode
@@ -216,7 +217,8 @@ Code goes without a spec for one of these reasons:
 | `agents.ts` | all | Pure, Glue: agents' config files; `agents.test.ts` |
 | `setup.ts` | `claudeStarter` | `Start` (`AnswerCheck`, `Click`, `AgentExits`) |
 | | the rest | Glue |
-| `extension.ts` | diagnostic snapshot wiring | `DiagnosticsRequest` (`Complete`); unit tests cover observed local audio facts |
+| `extension.ts` | legacy restored output discovery | `OutputPreference` (`Init`); ownership-gated startup unit tests |
+| | diagnostic snapshot wiring | `DiagnosticsRequest` (`Complete`); unit tests cover observed local audio facts |
 | | saving the session and the panel's history, and reviving them | `Resume` (`Store`, `ReloadWindow`) |
 | | integration speech status observation | `Narration` (`CompletionCurrent`); Glue: exposes accepted state without text or audio |
 | | the calibration's host: `store` applies the timing before it resolves | `Calibration` (`ApplyRate`) |
