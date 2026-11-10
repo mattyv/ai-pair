@@ -5,6 +5,8 @@ import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { CURSOR_MARKER } from '@ai-pair/protocol';
+import { z } from 'zod';
+import type { Controller, PanelEvent } from '@ai-pair/core';
 import * as vscode from 'vscode';
 import type { Api } from '../src/extension';
 
@@ -841,6 +843,56 @@ async function interruptedTypingAfterMarker(api: Api): Promise<void> {
   }
 }
 
+/** Keeps a displayed narration readable if its optional speech port throws synchronously. */
+export async function synchronousNarrationFailure(api: Api): Promise<void> {
+  const events: PanelEvent[] = [];
+  let attempts = 0;
+  // Use the extension’s loaded constructor so coverage records the real source-mapped core bundle.
+  const LoadedController = z.custom<typeof Controller>((value) => typeof value === 'function').parse(api.controller.constructor);
+  const controller = new LoadedController(
+    api.editor,
+    {
+      post: (event) => {
+        events.push(event);
+      },
+    },
+    undefined,
+    {
+      speak: () => {
+        attempts++;
+        throw new Error('injected synchronous speech failure');
+      },
+      pause: () => {},
+      resume: () => {},
+      cancel: () => {},
+    },
+  );
+  controller.setReadingSpeed(20);
+  const trace: string[] = [];
+  controller.trace = (line) => {
+    trace.push(line);
+  };
+  let started = false;
+  try {
+    await controller.start('synchronous narration failure');
+    started = true;
+    const submitted = await controller.step([{ say: 'Still readable.', speak: true }]);
+    assert.equal(submitted.rejected, undefined);
+    const report = await controller.step([]);
+    assert.equal(attempts, 1);
+    assert.ok(events.some((event) => event.type === 'say' && event.text === 'Still readable.'));
+    assert.ok(events.some((event) => event.type === 'reading'));
+    assert.equal(report.batches[0]?.status, 'completed');
+  } finally {
+    if (started) {
+      controller.endSession();
+      await controller.step([]);
+      assert.equal(controller.isActive, false);
+      assert.ok(trace.includes('session closed'));
+    }
+  }
+}
+
 /** Runs a command with the setting that shows terminals, then shows its terminal again from the panel. */
 export async function gapPaths(api: Api): Promise<void> {
   const { controller } = api;
@@ -870,6 +922,7 @@ export async function gapPaths(api: Api): Promise<void> {
   await foreignTerminalExecution(api);
   await diagnosticObserverFailure(api);
   await narrationSettingsFailure(api);
+  await synchronousNarrationFailure(api);
   await diagnosticSnapshotCaveat(api);
   await editorDiagnosticsFailure(api);
   await delayedDiagnosticsAfterReplacement(api);

@@ -776,3 +776,21 @@ verification requirements; do not attribute that shipped example to a personal
 manifesto. The principles are review obligations, with automated enforcement
 identified honestly. This documentation change adds no runtime boundary and
 does not require architecture source or export regeneration.
+
+## Native test scope and production coverage
+
+Native fixtures exercise the modules loaded by the extension. A test can obtain
+a core constructor from a live public API object, with a type-only import for
+its signature. This avoids bundling a second implementation into the test and
+claiming coverage of the production bundle.
+
+VS Code resolves its API by the importing module's extension path. Place native
+test bundles inside the extension's `dist-test` directory when they patch that
+API. An entry outside the extension receives a separate default API object.
+Alternatively, resolve the API from the actual extension entry. Assert that
+each injected boundary runs, and restore overrides and owned resources.
+
+Focused coverage measurements retain each generated bundle's own source map.
+Merge source-level results only after remapping each bundle independently.
+Generated offsets can differ even when original source content matches. The
+complete native runner remains the final coverage gate; its floors stay intact.

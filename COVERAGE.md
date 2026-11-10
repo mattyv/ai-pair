@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: css, 2026-11-10.
+Last updated: integration, 2026-11-10.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -61,18 +61,18 @@ Last updated: css, 2026-11-10.
 | `packages/audio-ui/scripts/build.mts` | TypeScript | - | - | - | - | - | - |
 | `packages/audio-ui/scripts/build_identity.mts` | TypeScript | - | - | - | - | - | - |
 | `packages/audio-ui/scripts/gpu_manifest.mts` | TypeScript | - | - | - | - | - | - |
-| `packages/audio-ui/scripts/gpu_manifest.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/audio-ui/scripts/gpu_manifest.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/scripts/gpu_runtime.mts` | TypeScript | - | - | - | - | - | - |
-| `packages/audio-ui/scripts/gpu_runtime.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/audio-ui/scripts/gpu_runtime.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/scripts/speech_runtime.mts` | TypeScript | - | - | - | - | - | - |
 | `packages/audio-ui/scripts/speech_runtime.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/audio-ui/src/attachment_gate.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.1% B 50.0% F 100.0% | - | - | - | - |
+| `packages/audio-ui/src/attachment_gate.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.1% B 75.0% F 100.0% | - | - | - | - |
 | `packages/audio-ui/src/companion_narration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 45.3% B 50.0% F 30.0% | - | - | - | - |
-| `packages/audio-ui/src/companion_output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 45.4% B 60.0% F 46.1% | - | - | - | - |
-| `packages/audio-ui/src/companion_session.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 81.7% B 76.7% F 50.0% | - | - | - | - |
-| `packages/audio-ui/src/extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 73.7% F 100.0% | - | - | - | - |
-| `packages/audio-ui/src/local_connection.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.5% B 50.0% F 100.0% | - | - | - | - |
-| `packages/audio-ui/src/speech_host.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 80.2% B 70.1% F 57.1% | - | - | - | - |
+| `packages/audio-ui/src/companion_output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 46.4% B 63.6% F 53.8% | - | - | - | - |
+| `packages/audio-ui/src/companion_session.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 80.9% B 83.8% F 50.0% | - | - | - | - |
+| `packages/audio-ui/src/extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 87.2% B 67.5% F 100.0% | - | - | - | - |
+| `packages/audio-ui/src/local_connection.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.5% B 60.0% F 100.0% | - | - | - | - |
+| `packages/audio-ui/src/speech_host.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 72.8% B 64.1% F 60.3% | - | - | - | - |
 | `packages/audio-ui/test/attachment_gate.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/bridge.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/build_identity.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -87,7 +87,7 @@ Last updated: css, 2026-11-10.
 | `packages/audio-ui/test/sentence_pipeline.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_host.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_host.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/audio-ui/test/speech_restart_handshake.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/audio-ui/test/speech_restart_handshake.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_tempo_composed.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/worker_diagnostics.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/core/src/bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
@@ -100,11 +100,11 @@ Last updated: css, 2026-11-10.
 | `packages/core/src/lines.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.5% F 100.0% | - | - | - | - |
 | `packages/core/src/paths.ts` | TypeScript | - | - | - | - | - | - |
 | `packages/core/src/places.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/core/src/player.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 99.0% F 100.0% | - | - | - | - |
+| `packages/core/src/player.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 99.1% F 100.0% | - | - | - | - |
 | `packages/core/src/ports.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/rehearsal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/core/src/speech_reminder.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/core/src/structural_typing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 35.4% B 68.8% F 100.0% | - | - | - | - |
+| `packages/core/src/speech_reminder.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/core/src/structural_typing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 45.7% B 66.7% F 100.0% | - | - | - | - |
 | `packages/core/src/text.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/timeline.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 97.4% F 100.0% | - | - | - | - |
 | `packages/core/src/timing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
@@ -112,7 +112,7 @@ Last updated: css, 2026-11-10.
 | `packages/core/test/bridge.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/controller.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/diagnostic_delivery.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/core/test/diagnostics_bridge.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/core/test/diagnostics_bridge.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/core/test/diff.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/fake.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/lines.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -120,27 +120,27 @@ Last updated: css, 2026-11-10.
 | `packages/core/test/player.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/rehearsal.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/session.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
-| `packages/core/test/speech_reminder.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/core/test/speech_reminder.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/core/test/structural_typing.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/core/test/text.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/timeline.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/timing.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/typing.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/protocol/src/command_channel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.5% B 65.0% F 100.0% | - | - | - | - |
-| `packages/protocol/src/diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/protocol/src/gpu_diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/protocol/src/diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/protocol/src/gpu_diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/index.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/local_audio.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/local_diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/panel_action.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/panel_chunks.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 33.3% F 100.0% | - | - | - | - |
 | `packages/protocol/src/panel_update.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/protocol/src/paths.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 83.3% F 100.0% | - | - | - | - |
+| `packages/protocol/src/paths.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 84.6% F 100.0% | - | - | - | - |
 | `packages/protocol/src/schemas.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/wire.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/test/command_channel.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/protocol/test/diagnostics.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/protocol/test/gpu_diagnostics.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/protocol/test/diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/protocol/test/gpu_diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/index.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/protocol/test/local_audio.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/local_diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -149,12 +149,12 @@ Last updated: css, 2026-11-10.
 | `packages/protocol/test/panel_update.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/paths.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/protocol/test/wire.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/relay/src/guide.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.6% B 88.2% F 100.0% | - | - | - | - |
+| `packages/relay/src/guide.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.6% B 88.9% F 100.0% | - | - | - | - |
 | `packages/relay/src/link.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/relay/src/main.ts` | TypeScript | - | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/relay/src/md.d.ts` | TypeScript | - | - | - | - | - | - |
-| `packages/relay/src/render.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 85.1% B 76.3% F 100.0% | - | - | - | - |
-| `packages/relay/src/server.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 93.0% B 87.8% F 88.9% | - | - | - | - |
+| `packages/relay/src/render.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 86.3% B 76.0% F 100.0% | - | - | - | - |
+| `packages/relay/src/server.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 97.2% B 87.8% F 100.0% | - | - | - | - |
 | `packages/relay/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 50.0% F 100.0% | - | - | - | - |
 | `packages/relay/src/tools.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/relay/test/agent_guide.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -163,7 +163,7 @@ Last updated: css, 2026-11-10.
 | `packages/relay/test/relay.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/render.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/server.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/relay/test/skills.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/relay/test/skills.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/relay/test/timings.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/relay/test/tools.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/validation.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -179,86 +179,86 @@ Last updated: css, 2026-11-10.
 | `packages/vscode/scripts/speech_runtime.mts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/scripts/vscode_bin.mts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/scripts/vscode_bin.test.ts` | TypeScript | test | test | test | test | - | test |
-| `packages/vscode/src/agents.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 76.4% B 68.0% F 79.5% | - | - | - | - |
+| `packages/vscode/src/agents.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 83.0% B 68.8% F 89.7% | - | - | - | - |
 | `packages/vscode/src/calibration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.2% F 100.0% | - | - | - | - |
 | `packages/vscode/src/demo.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.8% B 83.9% F 100.0% | - | - | - | - |
 | `packages/vscode/src/diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.5% B 72.1% F 100.0% | - | - | - | - |
-| `packages/vscode/src/diagnostics_collector.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/diagnostics_collector.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.3% B 90.5% F 100.0% | - | - | - | - |
 | `packages/vscode/src/editor.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.2% B 90.1% F 100.0% | - | - | - | - |
-| `packages/vscode/src/extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 97.6% B 92.7% F 94.8% | - | - | - | - |
+| `packages/vscode/src/extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.0% B 92.0% F 94.5% | - | - | - | - |
 | `packages/vscode/src/output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 93.2% B 91.7% F 100.0% | - | - | - | - |
 | `packages/vscode/src/outside.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.5% F 100.0% | - | - | - | - |
 | `packages/vscode/src/outside_watch.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 96.5% F 100.0% | - | - | - | - |
-| `packages/vscode/src/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 87.8% B 86.2% F 92.7% | - | - | - | - |
+| `packages/vscode/src/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.2% B 85.8% F 93.3% | - | - | - | - |
 | `packages/vscode/src/panel_html.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 80.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/panel_messages.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
-| `packages/vscode/src/panel_placement.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 94.9% B 85.7% F 100.0% | - | - | - | - |
+| `packages/vscode/src/panel_placement.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 90.9% B 67.6% F 100.0% | - | - | - | - |
 | `packages/vscode/src/panel_update_sender.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 91.5% B 82.6% F 100.0% | - | - | - | - |
 | `packages/vscode/src/passage.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/python_diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.3% B 62.5% F 100.0% | - | - | - | - |
 | `packages/vscode/src/remote_narration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 53.5% B 38.5% F 41.7% | - | - | - | - |
-| `packages/vscode/src/setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 83.8% B 81.6% F 66.7% | - | - | - | - |
+| `packages/vscode/src/setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 85.1% B 85.4% F 83.3% | - | - | - | - |
 | `packages/vscode/src/speech_catalog.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.9% B 89.7% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_compute_types.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_credentials.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/vscode/src/speech_elevenlabs.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 81.2% B 72.6% F 88.9% | - | - | - | - |
+| `packages/vscode/src/speech_elevenlabs.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 89.2% B 75.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_engine.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_asset_fs.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_assets.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_binding.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_bundled_assets.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_capability.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_check.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_client.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_driver.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_gpu_asset_fs.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 26.1% B 100.0% F 0.0% | - | - | - | - |
+| `packages/vscode/src/speech_gpu_assets.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 38.3% B 100.0% F 0.0% | - | - | - | - |
+| `packages/vscode/src/speech_gpu_binding.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 25.2% B 100.0% F 25.0% | - | - | - | - |
+| `packages/vscode/src/speech_gpu_bundled_assets.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 75.0% B 100.0% F 0.0% | - | - | - | - |
+| `packages/vscode/src/speech_gpu_capability.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 40.5% B 100.0% F 0.0% | - | - | - | - |
+| `packages/vscode/src/speech_gpu_check.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 41.5% B 100.0% F 0.0% | - | - | - | - |
+| `packages/vscode/src/speech_gpu_client.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 23.5% B 100.0% F 0.0% | - | - | - | - |
+| `packages/vscode/src/speech_gpu_driver.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 36.7% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_gpu_driver_identity.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_gpu_elf.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_gpu_engine.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_environment.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_host_binding.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_ipc.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_gpu_environment.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 28.6% B 100.0% F 0.0% | - | - | - | - |
+| `packages/vscode/src/speech_gpu_host_binding.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 33.3% | - | - | - | - |
+| `packages/vscode/src/speech_gpu_ipc.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 41.9% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_gpu_loader.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_loader_allowlist.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_model.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_model_error.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_model_manifest.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_gpu_loader_allowlist.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 66.7% B 100.0% F 0.0% | - | - | - | - |
+| `packages/vscode/src/speech_gpu_model.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 15.1% B 100.0% F 0.0% | - | - | - | - |
+| `packages/vscode/src/speech_gpu_model_error.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 66.7% B 100.0% F 0.0% | - | - | - | - |
+| `packages/vscode/src/speech_gpu_model_manifest.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_gpu_negative.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_gpu_options.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_gpu_phonemizer_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_physical.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_gpu_physical.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 25.6% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_gpu_preflight.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_process.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_gpu_process.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 15.4% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_gpu_profile.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_proof_runner.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_gpu_proof_runner.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 12.9% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_gpu_proof_worker.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_gpu_selftest.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_setup_flow.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_slot.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_system.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_gpu_setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 45.1% B 100.0% F 0.0% | - | - | - | - |
+| `packages/vscode/src/speech_gpu_setup_flow.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 29.8% B 100.0% F 0.0% | - | - | - | - |
+| `packages/vscode/src/speech_gpu_slot.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 89.3% B 100.0% F 0.0% | - | - | - | - |
+| `packages/vscode/src/speech_gpu_system.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 30.5% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_gpu_tiny.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_transport.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_gpu_trust.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_gpu_transport.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 49.2% B 100.0% F 0.0% | - | - | - | - |
+| `packages/vscode/src/speech_gpu_trust.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 38.9% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_gpu_verified_engine.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_gpu_worker.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_gpu_worker_host.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_gpu_worker_runtime.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_lifecycle.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_local_client.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 47.5% B 62.5% F 31.3% | - | - | - | - |
+| `packages/vscode/src/speech_lifecycle.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 56.6% B 56.1% F 54.2% | - | - | - | - |
+| `packages/vscode/src/speech_local_client.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 43.9% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_local_protocol.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.2% B 100.0% F 50.0% | - | - | - | - |
 | `packages/vscode/src/speech_model_manifest.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_native_output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 29.7% B 66.7% F 36.4% | - | - | - | - |
-| `packages/vscode/src/speech_output_preferences.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 73.7% B 51.6% F 100.0% | - | - | - | - |
-| `packages/vscode/src/speech_output_router.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 58.3% B 47.0% F 80.0% | - | - | - | - |
+| `packages/vscode/src/speech_output_preferences.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 85.7% B 76.3% F 100.0% | - | - | - | - |
+| `packages/vscode/src/speech_output_router.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 68.9% B 50.0% F 80.0% | - | - | - | - |
 | `packages/vscode/src/speech_output_types.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_pcm.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 52.0% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_phonemizer_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_platform.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 81.6% B 63.6% F 100.0% | - | - | - | - |
-| `packages/vscode/src/speech_readiness.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_readiness.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 79.5% B 80.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_runtime_status.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 90.0% B 33.3% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_segments.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 94.9% B 22.2% F 100.0% | - | - | - | - |
-| `packages/vscode/src/speech_service.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 55.4% B 50.5% F 59.4% | - | - | - | - |
-| `packages/vscode/src/speech_setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 22.6% B 28.6% F 33.3% | - | - | - | - |
+| `packages/vscode/src/speech_service.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 62.5% B 50.0% F 72.1% | - | - | - | - |
+| `packages/vscode/src/speech_setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 33.5% B 36.4% F 57.1% | - | - | - | - |
 | `packages/vscode/src/speech_synthesis.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_tempo.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_tempo_client.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 36.0% B 66.7% F 25.0% | - | - | - | - |
@@ -278,17 +278,17 @@ Last updated: css, 2026-11-10.
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/speech_audio.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/workspace_panel_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 84.4% B 46.1% F 100.0% | - | - | - | - |
-| `packages/vscode/src/workspace_session.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.1% B 93.8% F 73.3% | - | - | - | - |
+| `packages/vscode/src/workspace_session.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.8% B 94.1% F 73.3% | - | - | - | - |
 | `packages/vscode/test/agents.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/calibration.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/css.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/diagnostics_collector.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/diagnostics_collector.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/editor.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/extension.test.ts` | TypeScript | test | test | test | test | - | test |
-| `packages/vscode/test/fixtures/packaged_mcp_check.mts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/fixtures/packaged_mcp_check.mts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/fixtures/tempo_schema_fake.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/integration_bad_speech_settings.ts` | TypeScript | test | test | test | - | - | test |
@@ -296,33 +296,35 @@ Last updated: css, 2026-11-10.
 | `packages/vscode/test/integration_cloud_companion_host.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_cloud_service_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_code_playback.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_command_delivery.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/integration_command_delivery.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_companion_faults.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_companion_paths.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_companion_version.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/integration_companion_version.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_core_paths.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_deferred_settlement.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/integration_deferred_settlement.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_gap_paths.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_gpu_process.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/integration_guided_diagnostics.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/integration_gpu_process.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_guided_diagnostics.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_invalid_calibration.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_legacy_speech_paths.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_model_status.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/integration_model_status.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_no_workspace.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_notification.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/integration_notification.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_panel_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_paths.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/integration_player_faults.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_player_gap_paths.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_preserved_playback.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/integration_recovery_restart.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/integration_render_diagnostic.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/integration_preserved_playback.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_recovery_restart.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_release_extension_owner_paths.ts` | TypeScript | - | test | test | - | - | - |
+| `packages/vscode/test/integration_release_extension_paths.ts` | TypeScript | - | test | test | - | - | - |
+| `packages/vscode/test/integration_render_diagnostic.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_restricted_runtime.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_runtime_identity.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/integration_speech_reminder.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/integration_runtime_identity.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_speech_reminder.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_startup_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_terminal_cleanup.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_workspace_incompatible.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/integration_workspace_incompatible.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/launcher.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/output.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/outside.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -330,7 +332,7 @@ Last updated: css, 2026-11-10.
 | `packages/vscode/test/page.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/panel.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/panel_html.test.ts` | TypeScript | test | test | test | test | - | test |
-| `packages/vscode/test/panel_placement.integration.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/panel_placement.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/panel_placement.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/panel_update_sender.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/panel_update_sender.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -347,61 +349,61 @@ Last updated: css, 2026-11-10.
 | `packages/vscode/test/speech_elevenlabs.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_elevenlabs.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_engine.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/speech_gpu_admission.integration.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_asset_fs.integration.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_asset_fs.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_assets.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_binding.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_binding.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_bundled_assets.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_capability.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_capability.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_check.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_client.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_driver.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_driver_identity.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_elf.integration.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_elf.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_engine.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_environment.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_host_binding.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_ipc.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_loader.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_loader_allowlist.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_model.integration.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_model.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_model_error.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_model_manifest.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_native.integration.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_negative.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_options.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_phonemizer_bridge.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_physical.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_preflight.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_process.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_process.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_profile.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_proof_abort.integration.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_proof_runner.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_proof_runner.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_proof_worker.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_selftest.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_setup.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_setup.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_setup_flow.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_slot.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_system.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_tiny.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_transport.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_trust.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_verified_engine.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_worker.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_worker_host.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_gpu_worker_runtime.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_handoff.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_lifecycle.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_lifecycle_acceptance.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/speech_lifecycle_trace.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_gpu_admission.integration.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_asset_fs.integration.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_asset_fs.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_assets.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_binding.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_binding.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_bundled_assets.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_capability.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_capability.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_check.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_client.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_driver.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_driver_identity.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_elf.integration.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_elf.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_engine.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_environment.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_host_binding.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_ipc.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_loader.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_loader_allowlist.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_model.integration.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_model.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_model_error.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_model_manifest.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_native.integration.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_negative.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_options.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_phonemizer_bridge.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_physical.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_preflight.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_process.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_process.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_profile.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_proof_abort.integration.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_proof_runner.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_proof_runner.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_proof_worker.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_selftest.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_setup.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_setup.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_setup_flow.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_slot.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_system.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_tiny.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_transport.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_trust.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_verified_engine.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_worker.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_worker_host.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_gpu_worker_runtime.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_handoff.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_lifecycle.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_lifecycle_acceptance.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_lifecycle_trace.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_local.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_local_client.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_local_protocol.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -414,7 +416,7 @@ Last updated: css, 2026-11-10.
 | `packages/vscode/test/speech_pcm.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_phonemizer_bridge.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_platform.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/speech_readiness.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_readiness.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_runtime.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_segments.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_service.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -431,7 +433,7 @@ Last updated: css, 2026-11-10.
 | `packages/vscode/test/speech_tempo_pcm.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_tempo_worker.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_tempo_worker_host.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/speech_warmup.integration.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_warmup.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_waveform.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_worker.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_worker_host.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -441,7 +443,7 @@ Last updated: css, 2026-11-10.
 | `packages/vscode/test/view.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/visual/chat_order.spec.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/visual/panel.spec.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/vscode/test/voice_indicator.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/voice_indicator.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/webview/panel.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/workspace_panel_bridge.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/workspace_session.integration.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -471,7 +473,7 @@ Last updated: css, 2026-11-10.
 | `specs/ActionValidation.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ActionValidation.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/Actions.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/Actions.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
+| `specs/Actions.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/Anchor.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Anchor.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
 | `specs/AudioOutput.cfg` | TLC config | - | - | - | - | - | - |
@@ -506,7 +508,7 @@ Last updated: css, 2026-11-10.
 | `specs/DiagnosticsPrivacy.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/DiagnosticsPrivacy_Speech.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/DiagnosticsRequest.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/DiagnosticsRequest.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/DiagnosticsRequest.tla` | TLA+ | - | - | 4 of 4 actions | - | - | - |
 | `specs/Discovery.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Discovery.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/Discovery_InPlace.cfg` | TLC config | - | - | - | - | - | - |
@@ -521,15 +523,15 @@ Last updated: css, 2026-11-10.
 | `specs/FollowMode.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/FollowMode.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
 | `specs/GpuMappedIcd.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/GpuMappedIcd.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/GpuMappedIcd.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
 | `specs/GpuProcessSlot.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/GpuProcessSlot.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/GpuProcessSlot.tla` | TLA+ | - | - | 4 of 5 actions (never: Result) | - | - | - |
 | `specs/GpuProofAbort.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/GpuProofAbort.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/GpuProofAbort.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
 | `specs/GpuSetup.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/GpuSetup.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/GpuSetup.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/GpuSynthesisProcess.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/GpuSynthesisProcess.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/GpuSynthesisProcess.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
 | `specs/LineEndGuard.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/LineEndGuard.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/LineIdentity.cfg` | TLC config | - | - | - | - | - | - |
@@ -557,7 +559,7 @@ Last updated: css, 2026-11-10.
 | `specs/OutputAdmission.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/OutputAdmission.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/OutputDiscoveryLifecycle.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/OutputDiscoveryLifecycle.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/OutputDiscoveryLifecycle.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/OutputHandoff.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/OutputHandoff.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
 | `specs/OutputPreference.cfg` | TLC config | - | - | - | - | - | - |
@@ -570,7 +572,7 @@ Last updated: css, 2026-11-10.
 | `specs/Panel.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Panel.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
 | `specs/PanelPlacement.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/PanelPlacement.tla` | TLA+ | - | - | 10 of 11 actions (never: UnsafeFallback) | - | - | - |
+| `specs/PanelPlacement.tla` | TLA+ | - | - | 13 of 14 actions (never: UnsafeFallback) | - | - | - |
 | `specs/PanelReplay.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/PanelReplay.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/PanelScroll.cfg` | TLC config | - | - | - | - | - | - |
@@ -625,9 +627,9 @@ Last updated: css, 2026-11-10.
 | `specs/SettingsAccess.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SettingsAccess.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/SpeechBackendHandoff.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/SpeechBackendHandoff.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/SpeechBackendHandoff.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/SpeechLifecycle.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/SpeechLifecycle.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/SpeechLifecycle.tla` | TLA+ | - | - | 5 of 6 actions (never: StaleCallback) | - | - | - |
 | `specs/SpeechPage.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechPage.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/SpeechPlatformEvidence.cfg` | TLC config | - | - | - | - | - | - |
@@ -643,7 +645,7 @@ Last updated: css, 2026-11-10.
 | `specs/SpeechTempo_Canceled.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechTempo_Healthy.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechWarmup.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/SpeechWarmup.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/SpeechWarmup.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/SpeechWorker.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechWorker.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/Start.cfg` | TLC config | - | - | - | - | - | - |
@@ -670,7 +672,7 @@ Last updated: css, 2026-11-10.
 | `specs/TypingEol.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/TypingEol.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/VoiceIndicator.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/VoiceIndicator.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/VoiceIndicator.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/WarmSynthesisWorker.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/WarmSynthesisWorker.tla` | TLA+ | - | - | 16 of 16 actions | - | - | - |
 | `specs/WarmSynthesisWorker_Cancellation.cfg` | TLC config | - | - | - | - | - | - |

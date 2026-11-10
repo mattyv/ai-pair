@@ -17,7 +17,8 @@ if [[ "${platform}" == Linux ]]; then
 fi
 for fixture in integration_catalog_paths integration_companion_faults \
   integration_companion_version integration_workspace_incompatible \
-  integration_no_workspace integration_restricted_runtime; do
+  integration_no_workspace integration_restricted_runtime \
+  integration_release_extension_owner_paths; do
   if [[ "${platform}" != Linux ]] \
     && [[ "${fixture}" == integration_catalog_paths ||
       "${fixture}" == integration_restricted_runtime ]]; then

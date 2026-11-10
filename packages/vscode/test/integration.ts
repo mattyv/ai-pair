@@ -45,6 +45,8 @@ import { badSpeechSettings } from './integration_bad_speech_settings';
 import { runtimeIdentityPaths } from './integration_runtime_identity';
 import { commandDeliveryPaths } from './integration_command_delivery';
 import { renderDiagnosticPaths } from './integration_render_diagnostic';
+import { run as guidedDiagnosticPaths } from './integration_guided_diagnostics';
+import { exerciseReleaseExtensionPaths } from './integration_release_extension_paths';
 
 const EXPECTED_TODOS = `export interface Todo {
   id: number;
@@ -257,6 +259,7 @@ export async function run(): Promise<void> {
   }
   assert.ok(isApi(exported), 'the extension exported something other than its Api');
   const api = exported;
+  await exerciseReleaseExtensionPaths(api);
   await modelStatusPaths();
   const folder = vscode.workspace.workspaceFolders?.[0];
   assert.ok(folder, 'no workspace folder is open');
@@ -843,6 +846,7 @@ export async function run(): Promise<void> {
   await ai.update('confirmCommands', false, vscode.ConfigurationTarget.Global);
   await commandDeliveryPaths(api);
   await renderDiagnosticPaths(api, root);
+  await guidedDiagnosticPaths();
   await ai.update('timing', { glideMs: LONG_GLIDE_MS, glideMaxMs: LONG_GLIDE_MS }, vscode.ConfigurationTarget.Global);
   fs.writeFileSync(file('glide.txt'), Array.from({ length: 300 }, (_, i) => `line ${i + 1}\n`).join(''));
   const glide = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file('glide.txt')));
