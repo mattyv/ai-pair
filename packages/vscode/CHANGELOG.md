@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.27.0
+
+-   Invite an optional programmer edit in the guided demo and provide a useful
+    navigator comment based on the observed edit.
+
 ## 0.26.0
 
 -   Prepare enabled Kokoro speech before pairing starts, using the speech

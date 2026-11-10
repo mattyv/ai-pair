@@ -24,6 +24,21 @@ it('checks session ownership before demonstrating and ends only its own session'
   expect(demo).toContain('Call `diagnostics` first');
   expect(demo).toContain('active or suspended');
   expect(demo).toContain('do not append to or drain');
-  expect(demo).toContain('end the session you created');
+  expect(demo).toMatch(/end the\s+session you created/);
   expect(demo).toContain('If the programmer has taken over');
+});
+
+it('guides a real programmer edit and navigator comment without taking the turn', () => {
+  expect(demo).toContain('**My turn**');
+  expect(demo).toContain('small, safe edit');
+  expect(demo).toContain('dependency-free code');
+  expect(demo).toContain('change a value');
+  expect(demo).toContain('`point`');
+  expect(demo).toContain('skip or defer');
+  expect(demo).toContain('call `listen`');
+  expect(demo).toContain('report confirms');
+  expect(demo).toMatch(/useful\s+written `say`/);
+  expect(demo).toContain('Do not invent');
+  expect(demo).toContain('do not ask them to hand back');
+  expect(demo).toContain('permission to end');
 });

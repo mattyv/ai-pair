@@ -15,7 +15,8 @@ speak text or make a paid cloud request.
 ## Demo and diagnostics
 
 In Claude Code, run `/pair:demo` to guide a real Pair session in a fresh scratch
-file, or `/pair:diagnose` to inspect connection, command, speech and audio
+file, including an optional programmer edit and a navigator comment, or
+`/pair:diagnose` to inspect connection, command, speech and audio
 status without changing settings. The legacy `/mcp__pair__demo` and
 `/mcp__pair__diagnose` forms also work. The demo uses the current speech
 setting; only you can confirm whether you heard it. Diagnostics alone do not

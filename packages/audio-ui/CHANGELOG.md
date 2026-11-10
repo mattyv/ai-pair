@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.27.0
+
+-   Keep the Local Audio companion version aligned with the guided demo release.
+    The optional programmer-edit segment uses the existing speech setting.
+
 ## 0.26.0
 
 -   Prepare enabled Kokoro speech before pairing starts, using the speech

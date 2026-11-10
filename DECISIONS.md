@@ -22,6 +22,9 @@ Issue discussions and working notes hold the detailed evidence and history.
 
 -   Ship one canonical skill for each workflow, embedded in MCP prompts and
     included as physical files in the extension. Skill installation is manual.
+-   Invite a real programmer edit in the scratch file and comment on the
+    observed report as navigator. The edit is optional; the agent waits for the
+    programmer and does not take back their turn or end without permission.
 -   Run diagnostics on a bounded temporary connection, independent of session
     ownership. Return only schema-validated metadata and fixed errors; audio
     readiness cannot establish that the programmer heard playback. A preview
