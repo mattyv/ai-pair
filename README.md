@@ -1,5 +1,19 @@
 # AI Pair Programmer
 
+## Demo and diagnostics
+
+In Claude Code, run `/pair:demo` to guide a real Pair session in a fresh scratch
+file, or `/pair:diagnose` to inspect connection, command, speech and audio
+status without changing settings. The legacy `/mcp__pair__demo` and
+`/mcp__pair__diagnose` forms also work. The demo uses the current speech
+setting; only you can confirm whether you heard it. Diagnostics alone do not
+run a paid speech preview.
+
+The extension includes the corresponding `skills/ai-pair-demo/SKILL.md` and
+`skills/ai-pair-diagnose/SKILL.md`. Optionally copy their directories to your Claude
+`.claude/skills` directory for `/ai-pair-demo` and `/ai-pair-diagnose`. No
+skill or project configuration is installed automatically.
+
 ## Additions in this fork
 
 This fork builds on the original [AI Pair project](https://github.com/faiface/ai-pair).

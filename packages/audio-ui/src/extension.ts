@@ -41,6 +41,13 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('aiPair.localAudio.ready', (epoch: unknown) => session?.ready(epoch) ?? Promise.resolve(false)),
     vscode.commands.registerCommand('aiPair.localAudio.status', () => session?.observation()),
     vscode.commands.registerCommand('aiPair.localAudio.diagnostics', () => session?.diagnostics()),
+    vscode.commands.registerCommand('aiPair.localAudio.audioDiagnostics', () => {
+      try {
+        return session?.audioDiagnostics();
+      } catch {
+        return undefined;
+      }
+    }),
     vscode.commands.registerCommand('aiPair.localAudio.gpuDiagnostics', () => session?.gpuDiagnostics()),
     {
       dispose: () => {

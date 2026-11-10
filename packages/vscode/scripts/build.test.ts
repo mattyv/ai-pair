@@ -70,6 +70,8 @@ it('bundles the extension, the page script, the page styles, and the relay, with
       .digest('hex'),
   );
   expect(fs.readFileSync).toHaveBeenCalledWith('dist/relay.js');
+  expect(fs.readFileSync).toHaveBeenCalledWith('skills/ai-pair-demo/SKILL.md');
+  expect(fs.readFileSync).toHaveBeenCalledWith('skills/ai-pair-diagnose/SKILL.md');
   const buildId = builds().at(-1)?.define?.AI_PAIR_BUILD_ID;
   expect(buildId).toMatch(/^"[a-f0-9]{16}"$/);
   expect(builds()).toEqual([

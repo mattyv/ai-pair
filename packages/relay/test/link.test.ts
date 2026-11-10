@@ -32,6 +32,9 @@ const fakes = vi.hoisted(() => {
         this.readyState = CLOSING;
       }
     });
+    readonly terminate = vi.fn(() => {
+      this.closed();
+    });
     private readonly listeners = new Map<string, Array<(...args: unknown[]) => void>>();
 
     constructor(
@@ -441,6 +444,34 @@ describe('call', () => {
     answer(socket, sentCall(socket).id, 'ok');
     expect(await call).toBe('ok');
     expect(new EditorLink('/a', DIR).locate(['/b'])).toBe('/b');
+  });
+});
+
+describe('diagnose', () => {
+  it('uses a separate connection and closes it after the snapshot', async () => {
+    window('one', ['/project']);
+    const link = new EditorLink('/project', DIR);
+    const result = link.diagnose(['/project']);
+    const socket = lastSocket();
+    welcome(socket);
+    await settle();
+    expect(sentCall(socket).tool).toBe('diagnostics');
+    answer(socket, sentCall(socket).id, { snapshot: true });
+    await expect(result).resolves.toEqual({ snapshot: true });
+    expect(socket.close).toHaveBeenCalled();
+  });
+
+  it('times out and terminates an unwelcomed socket', async () => {
+    vi.useFakeTimers();
+    window('one', ['/project']);
+    const link = new EditorLink('/project', DIR);
+    const result = link.diagnose(['/project']);
+    const socket = lastSocket();
+    const rejection = expect(result).rejects.toMatchObject({ code: 'timeout' });
+    await vi.runAllTimersAsync();
+    await rejection;
+    expect(socket.terminate).toHaveBeenCalled();
+    vi.useRealTimers();
   });
 });
 

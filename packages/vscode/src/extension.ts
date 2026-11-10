@@ -11,10 +11,11 @@ import {
   type SavedSession,
   type NarrationPort,
 } from '@ai-pair/core';
-import { discoveryDir, gpuDiagnostics, LOCAL_AUDIO_VERSION, localSpeechReport, type LocalSpeechReport } from '@ai-pair/protocol';
+import { discoveryDir, LOCAL_AUDIO_VERSION } from '@ai-pair/protocol';
 import { playDemo } from './demo';
 import { VsCodeEditor } from './editor';
 import { Diagnostics } from './diagnostics';
+import { collectDiagnostics } from './diagnostics_collector';
 import { SpeechService, type SpeechAudioEvent, type SpeechOutput } from './speech_service';
 import { speechReady } from './speech_readiness';
 import { SpeechTempoClient } from './speech_tempo_client';
@@ -164,6 +165,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   let catalogRequestActive = false;
   const localSpeechSupported = speechSupported();
   let runtimeSpeechSupported = false;
+  let runtimeSpeechChecked = false;
   const cloudSupported = vscode.env.remoteName === undefined && vscode.env.uiKind === vscode.UIKind.Desktop;
   let keyStatusEpoch = 0;
   let cloudVoiceInvalidated = false;
@@ -378,6 +380,50 @@ export function activate(context: vscode.ExtensionContext): Api {
   }
   const launcher = writeLauncher(context.extensionPath);
   const starter = claudeStarter(launcher);
+  /** Collects the same bounded facts for the clipboard and authenticated agents. */
+  function diagnosticSnapshot(): Promise<import('@ai-pair/protocol').DiagnosticSnapshot> {
+    return collectDiagnostics({
+      snapshot: () => {
+        const snapshot = diagnostics.snapshot();
+        // specs/DiagnosticsRequest.tla: observe current state without changing the session.
+        const session = controller.isSuspended
+          ? 'suspended'
+          : controller.isActive
+            ? 'active'
+            : snapshot.session === 'ended'
+              ? 'ended'
+              : 'idle';
+        return { ...snapshot, session };
+      },
+      companion: owner === 'companion',
+      timeoutMs: COMPANION_PREPARE_TIMEOUT_MS,
+      command: (name) =>
+        vscode.commands.executeCommand(
+          name === 'speech'
+            ? 'aiPair.localAudio.diagnostics'
+            : name === 'gpu'
+              ? 'aiPair.localAudio.gpuDiagnostics'
+              : 'aiPair.localAudio.audioDiagnostics',
+        ),
+      audio: async () => {
+        if (owner !== 'legacy') return undefined;
+        const settings = speechSettings.get();
+        const output = outputPreferences.choice().kind;
+        return {
+          enabled: settings.enabled,
+          provider: settings.provider,
+          keyConfigured: await credentials.hasKey(),
+          voiceConfigured: (settings.provider === 'kokoro' ? settings.voice : settings.elevenLabsVoice).length > 0,
+          output: output === 'native' ? 'override' : output,
+          routeAvailable: output === 'native' ? outputPreferences.ready() : 'unknown',
+          runtimeReady: runtimeSpeechChecked ? runtimeSpeechSupported : 'unknown',
+          modelReady: 'unknown',
+          lastPlayback: speechObservation?.terminal ?? 'unknown',
+        };
+      },
+    });
+  }
+
   panel = new NarrationPanel(
     (file) => editor.resolvePath(file),
     speed,
@@ -393,28 +439,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       calibration: () => calibration,
       starter,
       copyDiagnostics: async () => {
-        const snapshot = diagnostics.snapshot();
-        if (owner !== 'companion') {
-          await vscode.env.clipboard.writeText(JSON.stringify(snapshot));
-          return;
-        }
-        let localSpeech: LocalSpeechReport | 'unavailable' = 'unavailable';
-        try {
-          const raw: unknown = await vscode.commands.executeCommand('aiPair.localAudio.diagnostics');
-          const parsed = localSpeechReport.safeParse(raw);
-          if (parsed.success) localSpeech = parsed.data;
-        } catch {
-          // Copy the workspace facts even when the local report is unavailable.
-        }
-        let gpu: import('@ai-pair/protocol').GpuDiagnostics | undefined;
-        try {
-          const raw: unknown = await vscode.commands.executeCommand('aiPair.localAudio.gpuDiagnostics');
-          const parsed = gpuDiagnostics.safeParse(raw);
-          if (parsed.success) gpu = parsed.data;
-        } catch {
-          // Older companions do not provide this optional command.
-        }
-        await vscode.env.clipboard.writeText(JSON.stringify({ ...snapshot, localSpeech, ...(gpu === undefined ? {} : { gpu }) }));
+        await vscode.env.clipboard.writeText(JSON.stringify(await diagnosticSnapshot()));
       },
       speech: {
         computeState: () => compute.state(),
@@ -548,6 +573,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   });
   void speechRuntimeAvailable(path.join(context.extensionPath, 'dist', 'speech')).then((available) => {
     runtimeSpeechSupported = available;
+    runtimeSpeechChecked = true;
     diagnostics.record({
       kind: 'speech',
       event: 'capability',
@@ -711,6 +737,7 @@ export function activate(context: vscode.ExtensionContext): Api {
 
   const bridge = new Bridge(controller, {
     onDiagnostic: record,
+    collectDiagnostics: diagnosticSnapshot,
     runtime: { version: AI_PAIR_VERSION, build: AI_PAIR_BUILD_ID, relayHash: AI_PAIR_RELAY_HASH },
     dir: discoveryDir(),
     workspaceFolders: () => (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath),

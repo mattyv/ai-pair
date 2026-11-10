@@ -231,7 +231,7 @@ export const DISCOVERY_SCHEMA = z.object({
 });
 
 /** Checks a {@link ToolName}. */
-export const TOOL_NAME_SCHEMA = z.enum(['start', 'step', 'listen', 'end', 'read', 'calibrate']);
+export const TOOL_NAME_SCHEMA = z.enum(['start', 'step', 'listen', 'end', 'read', 'calibrate', 'diagnostics']);
 
 /** Checks a {@link RelayMessage}. */
 export const RELAY_MESSAGE_SCHEMA = z.discriminatedUnion('type', [

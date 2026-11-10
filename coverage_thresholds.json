@@ -340,6 +340,13 @@
       "functions": 100
     }
   },
+  "packages/protocol/src/diagnostics.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/protocol/src/index.ts": {
     "unit": {
       "lines": 100,
@@ -556,6 +563,13 @@
     "integration": {
       "lines": 95,
       "branches": 81,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/diagnostics_collector.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
       "functions": 100
     }
   },

@@ -34852,12 +34852,14 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 { id: "agent", label: "AI Coding Agent", files: [], group: "people", x: 256, y: 177, step: 2 },
                 {
                   id: "relay",
-                  label: "Relay (pair-mcp)\nMCP tools, finds editor window",
+                  label: "Relay (pair-mcp)\nMCP tools and prompts",
                   files: [
                     "packages/relay/src/main.ts",
                     "packages/relay/src/server.ts",
                     "packages/relay/src/link.ts",
                     "packages/relay/src/tools.ts",
+                    "packages/vscode/skills/ai-pair-demo/SKILL.md",
+                    "packages/vscode/skills/ai-pair-diagnose/SKILL.md",
                   ],
                   group: "agentside",
                   x: 151,
@@ -34867,7 +34869,12 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 {
                   id: "protocol",
                   label: "Shared Protocol\nSchemas and wire message validation",
-                  files: ["packages/protocol/src/schemas.ts", "packages/protocol/src/wire.ts", "packages/protocol/src/index.ts"],
+                  files: [
+                    "packages/protocol/src/schemas.ts",
+                    "packages/protocol/src/wire.ts",
+                    "packages/protocol/src/index.ts",
+                    "packages/protocol/src/diagnostics.ts",
+                  ],
                   group: "agentside",
                   x: 42,
                   y: 545,
@@ -34908,6 +34915,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                     "packages/vscode/src/panel.ts",
                     "packages/vscode/src/extension.ts",
                     "packages/vscode/src/terminal.ts",
+                    "packages/vscode/src/diagnostics_collector.ts",
                   ],
                   group: "extension",
                   x: 1151,
@@ -41949,9 +41957,6 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
       var tourNodes = []
       var tourIndex = 0
       var tourActive = false
-      // A merge-request view with a diagram note opens its tour on that note ("Story", index -1)
-      // before the numbered stops. tourNodes stays node-only so positionOverlays() is unaffected.
-      var tourHasIntro = false
       // User-resized comment-bubble dimensions, keyed by node id, so a drag-resize
       // survives positionOverlays() rebuilding the overlay (same early-init reason as above).
       var bubbleSizes = {}
@@ -44673,7 +44678,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
         // Update tour button visibility based on whether any nodes have a step
         var tourBtn = document.getElementById("tour-btn")
         if (tourBtn) {
-          tourBtn.style.display = tourAvailable() ? "" : "none"
+          tourBtn.style.display = tourNodes.length > 0 ? "" : "none"
         }
       }
 
@@ -45325,12 +45330,12 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
             buildTourNodes()
             var tourBtnEl = document.getElementById("tour-btn")
             if (tourBtnEl) {
-              tourBtnEl.style.display = tourAvailable() ? "" : "none"
+              tourBtnEl.style.display = tourNodes.length > 0 ? "" : "none"
             }
-            if (wasTouring && sameDiagram && tourAvailable()) {
+            if (wasTouring && sameDiagram && tourNodes.length > 0) {
               // Restore the tour at the step we were on (re-find by node id in case steps
               // changed). Re-renders the panel so a just-added comment is visible.
-              var restoreIdx = tourIndex === -1 && tourHasIntro ? -1 : 0
+              var restoreIdx = 0
               for (var ti = 0; ti < tourNodes.length; ti++) {
                 if (tourNodes[ti].id === prevTourNodeId) {
                   restoreIdx = ti
@@ -45757,11 +45762,6 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
           .sort(function (a, b) {
             return a.step - b.step
           })
-        tourHasIntro = activeDiagramOrigin() === "mr" && ((currentDoc.comments || {})[DIAGRAM_NOTE_KEY] || []).length > 0
-      }
-
-      function tourAvailable() {
-        return tourNodes.length > 0 || tourHasIntro
       }
 
       buildTourNodes()
@@ -45781,20 +45781,10 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
       }
 
       function tourGoTo(i) {
-        if (!tourAvailable()) {
+        if (tourNodes.length === 0) {
           return
         }
-        tourIndex = Math.max(tourHasIntro ? -1 : 0, Math.min(i, tourNodes.length - 1))
-        if (tourIndex === -1) {
-          clearTourHighlight()
-          selectedCellId = DIAGRAM_NOTE_KEY
-          renderPanel(DIAGRAM_NOTE_KEY)
-          var introCounter = document.getElementById("tour-counter")
-          if (introCounter) {
-            introCounter.textContent = "Story"
-          }
-          return
-        }
+        tourIndex = Math.max(0, Math.min(i, tourNodes.length - 1))
         var tourNode = tourNodes[tourIndex]
         var nodeId = tourNode.id
         clearTourHighlight()
@@ -45824,7 +45814,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
       }
 
       function tourStart() {
-        if (!tourAvailable()) {
+        if (tourNodes.length === 0) {
           return
         }
         tourActive = true
@@ -45833,7 +45823,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
           tourOverlay.style.display = "flex"
         }
         expandSidePanel() // surface each node's note as the tour walks them
-        tourGoTo(tourHasIntro ? -1 : 0)
+        tourGoTo(0)
       }
 
       function tourStop() {
@@ -45847,7 +45837,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
       var tourBtn = document.getElementById("tour-btn")
       if (tourBtn) {
-        tourBtn.style.display = tourAvailable() ? "" : "none"
+        tourBtn.style.display = tourNodes.length > 0 ? "" : "none"
         tourBtn.addEventListener("click", tourStart)
       }
 

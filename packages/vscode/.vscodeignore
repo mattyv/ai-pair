@@ -13,3 +13,6 @@
 !dist/speech/**
 !THIRD_PARTY_NOTICES.md
 !third_party/**
+
+!skills/ai-pair-demo/SKILL.md
+!skills/ai-pair-diagnose/SKILL.md

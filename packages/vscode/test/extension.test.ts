@@ -15,6 +15,8 @@ vi.mock('../src/speech_tempo_client', () => ({
 import * as vscode from 'vscode';
 import { isSavedSession } from '@ai-pair/core';
 import { playDemo } from '../src/demo';
+import { collectDiagnostics } from '../src/diagnostics_collector';
+import { DIAGNOSTIC_SNAPSHOT_SCHEMA } from '@ai-pair/protocol';
 import { activate, deactivate } from '../src/extension';
 import { setTimings } from '../src/timings';
 import { watchOutside } from '../src/outside_watch';
@@ -94,7 +96,7 @@ const fakes = vi.hoisted(() => {
   class FakeOutputPreferences {
     readonly view = vi.fn(() => ({ supported: false, devices: [], selected: { kind: 'default' as const } }));
     readonly ready = vi.fn(() => true);
-    readonly choice = vi.fn(() => ({ kind: 'default' as const }));
+    readonly choice = vi.fn<() => import('../src/speech_output_types').OutputChoice>(() => ({ kind: 'default' }));
     readonly choose = vi.fn(() => Promise.resolve());
     readonly refresh = vi.fn(() => Promise.resolve());
     constructor(readonly wiring: OutputPreferenceWiring) {
@@ -181,7 +183,16 @@ const fakes = vi.hoisted(() => {
 
   class FakeDiagnostics {
     readonly record = vi.fn<(event: unknown) => void>();
-    readonly snapshot = vi.fn(() => ({ safe: 'snapshot' }));
+    readonly snapshot = vi.fn<() => import('../src/diagnostics').DiagnosticSnapshot>(() => ({
+      version: 'test',
+      build: 'test',
+      session: 'unavailable' as const,
+      connection: 'unavailable' as const,
+      connectionId: 'unavailable' as const,
+      paused: 'unavailable' as const,
+      pauseReasons: 'unavailable' as const,
+      events: [],
+    }));
     constructor(readonly identity: unknown) {
       made.diagnostics.push(this);
     }
@@ -193,6 +204,8 @@ const fakes = vi.hoisted(() => {
     onChange?: () => void;
     onDiagnostic?: (event: unknown) => void;
     isPaused = false;
+    isActive = false;
+    isSuspended = false;
     turn: string | undefined = undefined;
     saved: unknown = undefined;
     readonly setSpeed = vi.fn();
@@ -337,6 +350,16 @@ const fakes = vi.hoisted(() => {
 
   return {
     listeners,
+    collect: vi.fn<typeof import('../src/diagnostics_collector').collectDiagnostics>().mockResolvedValue({
+      version: 'test',
+      build: 'test',
+      session: 'unavailable',
+      connection: 'unavailable',
+      connectionId: 'unavailable',
+      paused: 'unavailable',
+      pauseReasons: 'unavailable',
+      events: [],
+    }),
     event,
     FakeController,
     FakeBridge,
@@ -536,6 +559,7 @@ vi.mock('../src/workspace_session', () => ({
 vi.mock('../src/demo', () => ({ playDemo: vi.fn(() => Promise.resolve()) }));
 vi.mock('../src/editor', () => ({ VsCodeEditor: fakes.FakeEditor }));
 vi.mock('../src/diagnostics', () => ({ Diagnostics: fakes.FakeDiagnostics }));
+vi.mock('../src/diagnostics_collector', () => ({ collectDiagnostics: fakes.collect }));
 vi.mock('../src/speech_runtime_status', () => ({ speechRuntimeAvailable: vi.fn(() => Promise.resolve(false)) }));
 vi.mock('../src/speech_readiness', () => ({ speechReady: vi.fn().mockResolvedValue(false) }));
 vi.mock('../src/speech_compute', () => ({
@@ -928,8 +952,91 @@ describe('activate', () => {
     expect(diagnostics.record).toHaveBeenCalledTimes(3);
     expect(diagnostics.snapshot).not.toHaveBeenCalled();
     await h.panel.wiring.copyDiagnostics();
-    expect(diagnostics.snapshot).toHaveBeenCalledOnce();
-    expect(vi.mocked(vscode.env.clipboard, { deep: true }).writeText.mock.calls).toContainEqual([JSON.stringify({ safe: 'snapshot' })]);
+    const options = vi.mocked(collectDiagnostics).mock.calls.at(-1)?.[0];
+    if (options === undefined) throw new Error('Missing collector options');
+    expect(DIAGNOSTIC_SNAPSHOT_SCHEMA.parse(options.snapshot())).toEqual(options.snapshot());
+    expect(
+      DIAGNOSTIC_SNAPSHOT_SCHEMA.safeParse(JSON.parse(vi.mocked(vscode.env.clipboard).writeText.mock.calls.at(-1)?.[0] ?? '')).success,
+    ).toBe(true);
+  });
+
+  it('reports the current idle, active, and suspended session without changing it', async () => {
+    const h = activated();
+    await h.panel.wiring.copyDiagnostics();
+    const options = vi.mocked(collectDiagnostics).mock.calls.at(-1)?.[0];
+    if (options === undefined) throw new Error('Missing collector options');
+    expect(options.snapshot().session).toBe('idle');
+    last(fakes.made.diagnostics).snapshot.mockReturnValue({
+      version: 'test',
+      build: 'test',
+      session: 'ended',
+      connection: 'unavailable',
+      connectionId: 'unavailable',
+      paused: 'unavailable',
+      pauseReasons: 'unavailable',
+      events: [],
+    });
+    h.controller.isActive = true;
+    expect(options.snapshot().session).toBe('active');
+    h.controller.isSuspended = true;
+    expect(options.snapshot().session).toBe('suspended');
+    h.controller.isSuspended = false;
+    h.controller.isActive = false;
+    expect(options.snapshot().session).toBe('ended');
+    expect(h.controller.pause).not.toHaveBeenCalled();
+    expect(h.controller.resume).not.toHaveBeenCalled();
+  });
+
+  it('exposes existing legacy audio observations without a preview', async () => {
+    const h = activated();
+    await h.api.ready;
+    await h.panel.wiring.copyDiagnostics();
+    const options = vi.mocked(collectDiagnostics).mock.calls.at(-1)?.[0];
+    if (options?.audio === undefined) throw new Error('Missing audio collector');
+    expect(await options.audio()).toMatchObject({
+      provider: 'kokoro',
+      output: 'default',
+      routeAvailable: 'unknown',
+      lastPlayback: 'unknown',
+    });
+    fakes.settings.set('speech.provider', 'elevenlabs');
+    const output = last(fakes.made.outputs);
+    output.choice.mockReturnValue({ kind: 'native', backend: 'pipewire', name: 'private' });
+    output.ready.mockReturnValue(false);
+    const speech = last(fakes.made.speech);
+    speech.options.output.status(1, 'speaking');
+    speech.audioEvent.mockReturnValueOnce('ended');
+    h.panel.wiring.speech.event({ id: 1, pageId: 7, event: 'ended' });
+    const audio = await options.audio();
+    expect(audio).toMatchObject({ output: 'override', routeAvailable: false, lastPlayback: 'ended' });
+    expect(JSON.stringify(audio)).not.toContain('private');
+    expect(speech.preview).not.toHaveBeenCalled();
+  });
+
+  it('reports runtime readiness as unknown until the existing check finishes', async () => {
+    const runtime = Promise.withResolvers<boolean>();
+    vi.mocked(speechRuntimeAvailable).mockReturnValueOnce(runtime.promise);
+    const h = activated();
+    await h.api.ready;
+    await h.panel.wiring.copyDiagnostics();
+    const options = vi.mocked(collectDiagnostics).mock.calls.at(-1)?.[0];
+    if (options?.audio === undefined) throw new Error('Missing audio collector');
+    expect(await options.audio()).toMatchObject({ runtimeReady: 'unknown' });
+    runtime.resolve(true);
+    await runtime.promise;
+    expect(await options.audio()).toMatchObject({ runtimeReady: true });
+  });
+
+  it('leaves local audio unavailable while placement is pending', async () => {
+    const choice = Promise.withResolvers<'legacy'>();
+    fakes.placementChoice = choice.promise;
+    const h = activated();
+    await h.panel.wiring.copyDiagnostics();
+    const options = vi.mocked(collectDiagnostics).mock.calls.at(-1)?.[0];
+    if (options?.audio === undefined) throw new Error('Missing audio collector');
+    expect(await options.audio()).toBeUndefined();
+    choice.resolve('legacy');
+    await h.api.ready;
   });
 
   it('wires local speech with safe defaults and stops it when disabled', () => {
@@ -1733,26 +1840,22 @@ it('selects the local companion without registering a workspace panel provider',
   expect(h.api.speechPageReady()).toBe(true);
   expect(h.api.speechStatus()).toBeUndefined();
   await h.panel.wiring.copyDiagnostics();
-  const copied = vi.mocked(vscode.env.clipboard, { deep: true }).writeText.mock.calls.at(-1)?.[0];
-  expect(copied).toContain('localSpeech');
-  expect(copied).toContain('abcdef');
+  expect(vi.mocked(collectDiagnostics).mock.calls.at(-1)?.[0].companion).toBe(true);
 });
 
-it('copies only a validated optional GPU snapshot', async () => {
+it('maps companion diagnostics commands to the collector', async () => {
   fakes.companionAvailable = true;
   const h = activated();
   await h.api.ready;
-  fakes.gpuSnapshot = {
-    requestedMode: 'gpu',
-    actualBackend: 'none',
-    check: { phase: 'unavailable', reason: 'no_hardware' },
-    stage: 'preflight',
-  };
   await h.panel.wiring.copyDiagnostics();
-  expect(vi.mocked(vscode.env.clipboard).writeText.mock.calls.at(-1)?.[0]).toContain('"reason":"no_hardware"');
-  fakes.gpuSnapshot = { path: '/private' };
-  await h.panel.wiring.copyDiagnostics();
-  expect(vi.mocked(vscode.env.clipboard).writeText.mock.calls.at(-1)?.[0]).not.toContain('/private');
+  const options = vi.mocked(collectDiagnostics).mock.calls.at(-1)?.[0];
+  if (options === undefined) throw new Error('Missing collector options');
+  await options.command('speech');
+  await options.command('gpu');
+  await options.command('audio');
+  expect(fakes.commandCalls.map(([name]) => name)).toEqual(
+    expect.arrayContaining(['aiPair.localAudio.diagnostics', 'aiPair.localAudio.gpuDiagnostics', 'aiPair.localAudio.audioDiagnostics']),
+  );
 });
 
 it('holds narration and secret changes while placement is pending, then selects legacy', async () => {
@@ -1837,14 +1940,8 @@ it('exposes fixed prepare and commit commands and merges only valid local diagno
   const prepared = { version: 2 as const, epoch: 'test-epoch', token: 'token' };
   await expect(placement.prepare()).resolves.toEqual(prepared);
   await expect(placement.commit(prepared)).resolves.toBe(true);
-  for (const mode of ['invalid', 'rejected']) {
-    fakes.diagnosticsInvalid = mode === 'invalid';
-    fakes.diagnosticsReject = mode === 'rejected';
-    await h.panel.wiring.copyDiagnostics();
-    const copied = vi.mocked(vscode.env.clipboard).writeText.mock.calls.at(-1)?.[0];
-    expect(copied).toBe('{"safe":"snapshot","localSpeech":"unavailable"}');
-    expect(copied).not.toContain('private');
-  }
+  await h.panel.wiring.copyDiagnostics();
+  expect(vi.mocked(collectDiagnostics).mock.calls.at(-1)?.[0].companion).toBe(true);
 });
 
 it('remote text routes preview and key actions to local installation, including the chosen install action', async () => {

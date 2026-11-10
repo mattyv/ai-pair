@@ -23,7 +23,7 @@ const EMPTY_REPORT: Report = REPORT_SCHEMA.parse({ batches: [], events: [], turn
 const FILE: FileContent = FILE_CONTENT_SCHEMA.parse({ file: 'a.ts', dirty: false, lines: [{ number: 1, text: 'x' }] });
 
 /** The tools the server registers, in order. */
-const TOOL_NAMES = ['start', 'step', 'listen', 'end', 'read', 'calibrate'] as const;
+const TOOL_NAMES = ['start', 'step', 'listen', 'end', 'read', 'calibrate', 'diagnostics'] as const;
 
 /** The fakes the mocked modules hand out, made before the `vi.mock` factories run. */
 const fakes = vi.hoisted(() => {
@@ -32,7 +32,7 @@ const fakes = vi.hoisted(() => {
     /** Every one made, in order. */
     static readonly made: FakeMcpServer[] = [];
     readonly tools = new Map<string, { config: unknown; handler: ToolHandler }>();
-    prompt: { name: string; config: unknown; handler: PromptHandler } | undefined;
+    readonly prompts = new Map<string, { config: unknown; handler: PromptHandler }>();
     /** What reached the transport's handler that `connect` set. */
     readonly received: unknown[] = [];
     /** Every transport `connect` was given. */
@@ -65,7 +65,7 @@ const fakes = vi.hoisted(() => {
     }
 
     registerPrompt(name: string, config: unknown, handler: PromptHandler): void {
-      this.prompt = { name, config, handler };
+      this.prompts.set(name, { config, handler });
     }
   }
 
@@ -78,6 +78,8 @@ const fakes = vi.hoisted(() => {
     readonly workspace = vi.fn<EditorLink['workspace']>();
     readonly handBack = vi.fn<EditorLink['handBack']>();
     readonly close = vi.fn<EditorLink['close']>();
+    readonly diagnose = vi.fn();
+    activeRuntime: EditorLink['activeRuntime'];
 
     constructor(
       readonly cwd: string,
@@ -113,6 +115,7 @@ vi.mock('../src/tools', () => ({
     end: 'end schema',
     read: 'read schema',
     calibrate: 'calibrate schema',
+    diagnostics: 'diagnostics schema',
   },
 }));
 vi.mock(import('@ai-pair/protocol'), async (importOriginal) => ({
@@ -183,8 +186,72 @@ describe('createServer', () => {
     for (const name of TOOL_NAMES) {
       expect(sdk.tools.get(name)?.config).toBe(TOOLS[name]);
     }
-    expect(sdk.prompt?.name).toBe('start');
-    expect(sdk.prompt?.handler({ task: 'a todos API' }).messages[0]?.content.text).toBe(startPrompt('a todos API'));
+    expect(sdk.prompts.get('start')?.handler({ task: 'a todos API' }).messages[0]?.content.text).toBe(startPrompt('a todos API'));
+    expect(sdk.prompts.get('demo')?.handler({}).messages[0]?.content.text).toContain('# Demonstrate AI Pair');
+    expect(sdk.prompts.get('diagnose')?.handler({}).messages[0]?.content.text).toContain('# Diagnose AI Pair');
+  });
+
+  it('returns a validated diagnostic snapshot from an isolated link without caching it', async () => {
+    const { sdk, link } = build();
+    const snapshot = {
+      version: '1',
+      build: 'abc',
+      session: 'active',
+      connection: 'connected',
+      connectionId: 1,
+      paused: false,
+      pauseReasons: [],
+      events: [],
+    };
+    link.diagnose.mockResolvedValueOnce(snapshot);
+    const result = await call(sdk, 'diagnostics', { cwd: '/project' });
+    expect(JSON.parse(texts(result)[0] ?? '')).toEqual(snapshot);
+    expect(link.diagnose).toHaveBeenCalledWith(['/project']);
+    expect(link.locate).not.toHaveBeenCalled();
+    expect(link.call).not.toHaveBeenCalled();
+  });
+
+  it('discovers diagnostics roots and reports the active runtime on start', async () => {
+    const { sdk, link } = build();
+    sdk.server.getClientCapabilities.mockReturnValue({ roots: {} });
+    sdk.server.listRoots.mockResolvedValue({ roots: [{ uri: 'file:///root/a' }, { uri: 'https://example.com/' }] });
+    link.diagnose.mockResolvedValueOnce({
+      version: '1',
+      build: 'b',
+      session: 'ended',
+      connection: 'disconnected',
+      connectionId: 'unavailable',
+      paused: false,
+      pauseReasons: [],
+      events: [],
+    });
+    await call(sdk, 'diagnostics');
+    expect(link.diagnose).toHaveBeenCalledWith(['/root/a', '/project/src']);
+    link.activeRuntime = { version: '1', build: 'b', relayHash: 'abc' };
+    link.locate.mockReturnValue('/root/a');
+    link.workspace.mockReturnValue({ folder: '/root/a', root: '/root' });
+    link.call.mockResolvedValue(EMPTY_REPORT);
+    expect(texts(await call(sdk, 'start')).join(' ')).toContain('editor 1 (build b)');
+  });
+
+  it('uses fixed diagnostics errors and rejects relative paths', async () => {
+    const { sdk, link } = build();
+    expect(texts(await call(sdk, 'diagnostics', { cwd: 'relative' }))).toEqual([
+      'invalid_cwd: The working directory must be an absolute path.',
+    ]);
+    for (const [code, message] of [
+      ['timeout', 'The diagnostics request timed out.'],
+      ['no_editor', 'No matching editor is available.'],
+      ['runtime_mismatch', 'The relay and editor versions do not match. Reload the extension and reconnect.'],
+      ['other', 'Diagnostics failed.'],
+    ] as const) {
+      link.diagnose.mockRejectedValueOnce(new RelayError(code, 'secret /private/path'));
+      const result = await call(sdk, 'diagnostics');
+      expect(result.isError).toBe(true);
+      expect(texts(result)).toEqual([`${code === 'other' ? 'internal' : code}: ${message}`]);
+    }
+    link.diagnose.mockResolvedValueOnce({ invalid: true });
+    expect(texts(await call(sdk, 'diagnostics'))).toEqual(['internal: Diagnostics failed.']);
   });
 
   it("renders a tool's report from the link's answer", async () => {

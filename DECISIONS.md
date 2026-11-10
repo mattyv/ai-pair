@@ -10,6 +10,15 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   GPT-6.1 Terra agents write code and tests; GPT-6 Astra agents review them.
     Resolve findings and verify the resulting changes before reporting completion.
 
+## Guided demo and diagnostics
+
+-   Ship one canonical skill for each workflow, embedded in MCP prompts and
+    included as physical files in the extension. Skill installation is manual.
+-   Run diagnostics on a bounded temporary connection, independent of session
+    ownership. Return only schema-validated metadata and fixed errors; audio
+    readiness cannot establish that the programmer heard playback. A preview
+    requires explicit consent and uses the existing provider and settings.
+
 ## Interrupted typing edits
 
 -   If an in-flight typing edit is rejected after interruption, report only
@@ -144,6 +153,15 @@ Issue discussions and working notes hold the detailed evidence and history.
 
 ## Session diagnostics
 
+-   Report speech configuration and last observed playback through fixed,
+    validated fields. Companion key presence, runtime and model readiness and
+    output availability remain unknown until observed; collection starts no
+    audio, network request, installation or device probe. A ready playback path
+    does not establish that the user heard audio.
+-   Read the controller's current session state for diagnostics, including an
+    idle fresh window. Preserve a recorded ended state only while the controller
+    has neither an active nor a suspended session.
+
 -   Record bounded speech capability, button dispatch and result events even
     without a pairing session. Keep failure reasons in a fixed allowlist;
     exclude API keys, narration, audio, voice identifiers and raw provider
@@ -154,9 +172,11 @@ Issue discussions and working notes hold the detailed evidence and history.
     rather than silently accepting a different provider for the next action.
 -   Keep a bounded, in-memory history of allowlisted lifecycle metadata for
     connection, requests, pause reasons, and commands. Exclude chat, source,
-    paths, command text, output, and tokens. Copy a snapshot only on an explicit
-    Settings action; report clipboard failure. Values not yet observed remain
-    unavailable, and timestamps and identifiers are still diagnostic metadata.
+    paths, command text, output, and tokens. An explicit Settings action or an
+    authenticated diagnostics request collects the same bounded snapshot; the
+    latter does not take session ownership. Report clipboard failure. Values
+    not yet observed remain unavailable, and timestamps and identifiers are
+    still diagnostic metadata.
 -   A fresh session replaces an old suspended display; unrelated late status
     events cannot clear an actual suspension. Explain how to reconnect in the
     same project, without claiming why a connection ended.

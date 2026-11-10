@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.24.0
+
+-   Provide read-only audio status for AI Pair diagnostics without exposing
+    keys or narration.
+
 ## 0.23.2
 
 -   Correct distorted GPU voice output by routing one affected model operation

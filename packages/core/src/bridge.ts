@@ -7,6 +7,7 @@ import type { AddressInfo } from 'node:net';
 import * as path from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
+  DIAGNOSTIC_SNAPSHOT_SCHEMA,
   parseRelayMessage,
   PROTOCOL_VERSION,
   REPORT_SCHEMA,
@@ -33,6 +34,8 @@ export interface BridgeOptions {
   trace?: (line: string) => void;
   /** Receives allowlisted owner-connection and request lifecycle facts. */
   onDiagnostic?: (event: DiagnosticEvent) => void;
+  /** Collects a read-only diagnostics report without starting a session. */
+  collectDiagnostics?: (signal: AbortSignal) => Promise<unknown>;
   /** Called when the discovery file can't be written, so relays won't find this window (#9). */
   failed?: (error: unknown) => void;
   /** Hands an agent's passage to the editor's reading speed calibration; false while one is under way (#109). */
@@ -50,6 +53,7 @@ function diagnosticMethod(tool: string): DiagnosticMethod {
     case 'end':
     case 'read':
     case 'calibrate':
+    case 'diagnostics':
       return tool;
     default:
       return 'unknown';
@@ -299,6 +303,17 @@ export class Bridge {
     connectionId: number,
   ): Promise<unknown> {
     const controller = this.controller;
+    // specs/DiagnosticsRequest.tla, Complete: diagnostics never takes session ownership.
+    if (tool === 'diagnostics') {
+      try {
+        const snapshot = await this.options.collectDiagnostics?.(signal);
+        const parsed = DIAGNOSTIC_SNAPSHOT_SCHEMA.safeParse(snapshot);
+        if (parsed.success && !signal.aborted) return parsed.data;
+      } catch {
+        // Do not expose companion errors or other private data.
+      }
+      throw new Error('Diagnostics are unavailable.');
+    }
     if (tool === 'start') {
       // specs/Bridge.tla, `BeginStart`: refused while another socket's session is active.
       if (controller.isActive && !controller.isSuspended && this.owner !== ws) {

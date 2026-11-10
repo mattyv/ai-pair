@@ -60,7 +60,7 @@ Code goes without a spec for one of these reasons:
 
 | File | Functions | Spec |
 |---|---|---|
-| `bridge.ts` | `start`, `accept`, `dispatch`, `dispose` | `Bridge`; typed diagnostic events: `DiagnosticsPrivacy` |
+| `bridge.ts` | `start`, `accept`, `dispatch`, `dispose` | `Bridge`; typed diagnostic events: `DiagnosticsPrivacy`; nonowner requests: `DiagnosticsRequest` |
 | | `connections` | Glue: what a test reads |
 | | `writeDiscovery`, `focused`, `file` | `Discovery` |
 | | `tokenMatches` | Pure: compares tokens in constant time |
@@ -112,6 +112,7 @@ Code goes without a spec for one of these reasons:
 | `schemas.ts` | the schemas, and the types taken from them | Types: data declarations, which the parsers above apply (#163) |
 | `paths.ts` | `samePath`, `withinFolder` | Pure |
 | `local_audio.ts` | local-audio bridge schemas | Types; validated at boundaries |
+| `diagnostics.ts` | strict snapshot and audio schemas | `DiagnosticsRequest` (`Allowlist`); concrete bounds checked by unit tests |
 | `panel_chunks.ts` | bounded ordered local panel replay assembly | `LocalPanelReplay`; transport tests |
 
 ## audio-native
@@ -211,10 +212,12 @@ Code goes without a spec for one of these reasons:
 | | `row`, `viewport`, `isOwnEdit` | Pure |
 | `output.ts` | `outcomeOf`, `push` | Pure: a command's output, cut to size |
 | `diagnostics.ts` | all | `DiagnosticsPrivacy`: bounded allowlisted event history, speech-only events and independent snapshots |
+| `diagnostics_collector.ts` | all | `DiagnosticsRequest` (`Complete`): bounded, independently validated companion reads |
 | `agents.ts` | all | Pure, Glue: agents' config files; `agents.test.ts` |
 | `setup.ts` | `claudeStarter` | `Start` (`AnswerCheck`, `Click`, `AgentExits`) |
 | | the rest | Glue |
-| `extension.ts` | saving the session and the panel's history, and reviving them | `Resume` (`Store`, `ReloadWindow`) |
+| `extension.ts` | diagnostic snapshot wiring | `DiagnosticsRequest` (`Complete`); unit tests cover observed local audio facts |
+| | saving the session and the panel's history, and reviving them | `Resume` (`Store`, `ReloadWindow`) |
 | | integration speech status observation | `Narration` (`CompletionCurrent`); Glue: exposes accepted state without text or audio |
 | | the calibration's host: `store` applies the timing before it resolves | `Calibration` (`ApplyRate`) |
 | | asking the panel again after Set Up Agent | `Start` (`FlipSetUp`) |

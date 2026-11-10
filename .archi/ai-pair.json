@@ -2,9 +2,9 @@
   "version": 1,
   "bundleId": "277c3415-7b74-4008-8be4-8c14ae6d41dd",
   "revision": {
-    "number": 19,
-    "updatedAt": "2026-11-09T00:00:00.000Z",
-    "summary": "Model local GPU setup, proof and isolated worker boundaries"
+    "number": 20,
+    "updatedAt": "2026-11-10T00:00:00.000Z",
+    "summary": "Model guided prompts and isolated read-only diagnostics"
   },
   "diagrams": [
     {
@@ -35,12 +35,14 @@
           },
           {
             "id": "relay",
-            "label": "Relay (pair-mcp)\nMCP tools, finds editor window",
+            "label": "Relay (pair-mcp)\nMCP tools and prompts",
             "files": [
               "packages/relay/src/main.ts",
               "packages/relay/src/server.ts",
               "packages/relay/src/link.ts",
-              "packages/relay/src/tools.ts"
+              "packages/relay/src/tools.ts",
+              "packages/vscode/skills/ai-pair-demo/SKILL.md",
+              "packages/vscode/skills/ai-pair-diagnose/SKILL.md"
             ],
             "group": "agentside",
             "x": 151,
@@ -50,7 +52,12 @@
           {
             "id": "protocol",
             "label": "Shared Protocol\nSchemas and wire message validation",
-            "files": ["packages/protocol/src/schemas.ts", "packages/protocol/src/wire.ts", "packages/protocol/src/index.ts"],
+            "files": [
+              "packages/protocol/src/schemas.ts",
+              "packages/protocol/src/wire.ts",
+              "packages/protocol/src/index.ts",
+              "packages/protocol/src/diagnostics.ts"
+            ],
             "group": "agentside",
             "x": 42,
             "y": 545,
@@ -90,7 +97,8 @@
               "packages/vscode/src/editor.ts",
               "packages/vscode/src/panel.ts",
               "packages/vscode/src/extension.ts",
-              "packages/vscode/src/terminal.ts"
+              "packages/vscode/src/terminal.ts",
+              "packages/vscode/src/diagnostics_collector.ts"
             ],
             "group": "extension",
             "x": 1151,

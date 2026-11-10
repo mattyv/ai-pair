@@ -551,7 +551,7 @@ it('handles unsupported adapters and superseded capability discovery', async () 
   const { host } = harness(capabilities);
   const stale = fakes.preferencesWiring?.discover();
   expect(await fakes.preferencesWiring?.discover()).toEqual({ supported: false, devices: [], reason: 'unsupported' });
-  first.resolve({ backend: 'pipewire', location: 'ui', defaultOutput: true, deviceSelection: true, pauseResume: true });
+  first.resolve({ backend: 'unknown', location: 'ui', defaultOutput: true, deviceSelection: true, pauseResume: true });
   await stale;
   expect(await fakes.preferencesWiring?.discover()).toEqual({ supported: true, devices: [] });
   fakes.choice.mockReturnValue({ kind: 'native', backend: 'pipewire', name: 'headset' });
@@ -932,4 +932,82 @@ it('does not offer GPU setup from a non-desktop host', async () => {
   expect(fakes.gpuFlow).toBeUndefined();
   host.dispose();
   fakes.uiKind = 1;
+});
+
+it('projects cached audio facts without probing or exposing sensitive values', async () => {
+  fakes.config.set('speech.enabled', true);
+  fakes.config.set('speech.provider', 'elevenlabs');
+  fakes.config.set('speech.elevenLabsVoice', 'private-voice');
+  fakes.hasKey.mockResolvedValue(true);
+  const capabilities = vi
+    .fn()
+    .mockResolvedValue({ backend: 'pipewire', location: 'ui', defaultOutput: true, deviceSelection: true, pauseResume: true });
+  const { host, list } = harness(capabilities);
+  expect(host.audioDiagnostics()).toEqual({
+    enabled: true,
+    provider: 'elevenlabs',
+    keyConfigured: 'unknown',
+    voiceConfigured: true,
+    output: 'default',
+    routeAvailable: 'unknown',
+    runtimeReady: 'unknown',
+    modelReady: 'unknown',
+    lastPlayback: 'unknown',
+  });
+  await vi.waitFor(() => {
+    expect(capabilities).toHaveBeenCalledTimes(1);
+  });
+  host.panelSpeech.keyRefresh();
+  await vi.waitFor(() => {
+    expect(host.audioDiagnostics().keyConfigured).toBe(true);
+  });
+  expect(host.audioDiagnostics()).toMatchObject({ routeAvailable: true, runtimeReady: false, modelReady: 'unknown' });
+  await host.panelSpeech.installed();
+  expect(host.audioDiagnostics().modelReady).toBe(false);
+  fakes.outputWiring?.status(7, 'speaking');
+  fakes.audioEvent.mockReturnValueOnce('failed');
+  fakes.outputWiring?.event({ id: 7, pageId: 1, event: 'failed' });
+  expect(host.audioDiagnostics().lastPlayback).toBe('failed');
+  expect(JSON.stringify(host.audioDiagnostics())).not.toContain('private-voice');
+  expect(capabilities).toHaveBeenCalledTimes(1);
+  expect(list).not.toHaveBeenCalled();
+  host.dispose();
+});
+
+it('keeps unavailable and unobserved evidence unknown and invalidates cached checks', async () => {
+  fakes.uiKind = 2;
+  fakes.config.set('speech.provider', 'elevenlabs');
+  const { host } = harness();
+  await host.panelSpeech.modelStatus();
+  host.panelSpeech.keyRefresh();
+  await vi.waitFor(() => {
+    expect(host.audioDiagnostics().keyConfigured).toBe(false);
+  });
+  expect(host.audioDiagnostics()).toMatchObject({
+    voiceConfigured: false,
+    output: 'unknown',
+    routeAvailable: 'unknown',
+    runtimeReady: 'unknown',
+    modelReady: 'unknown',
+  });
+  fakes.credentialChanged?.();
+  expect(host.audioDiagnostics().keyConfigured).toBe('unknown');
+  host.dispose();
+});
+
+it('uses discovered output availability and resets model evidence on setup', async () => {
+  const { host } = harness();
+  fakes.choice.mockReturnValue({ kind: 'native', backend: 'pipewire', name: 'private-device' });
+  await vi.waitFor(() => {
+    expect(host.panelSpeech.outputReady()).toBe(true);
+  });
+  expect(host.audioDiagnostics()).toMatchObject({ output: 'override', routeAvailable: 'unknown' });
+  await fakes.preferencesWiring?.discover();
+  expect(host.audioDiagnostics().routeAvailable).toBe(true);
+  await host.panelSpeech.modelStatus();
+  expect(host.audioDiagnostics().modelReady).toBe(false);
+  await host.panelSpeech.setup();
+  expect(host.audioDiagnostics().modelReady).toBe('unknown');
+  expect(JSON.stringify(host.audioDiagnostics())).not.toContain('private-device');
+  host.dispose();
 });

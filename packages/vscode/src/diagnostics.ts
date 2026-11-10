@@ -31,7 +31,7 @@ export type SpeechDiagnosticReason =
   | 'unknown'
   | LocalSpeechFailureReason;
 type StoredEvent = (DiagnosticEvent | SpeechDiagnosticEvent) & { seq: number; time: number };
-type SessionState = 'active' | 'suspended' | 'ended' | 'unavailable';
+type SessionState = 'idle' | 'active' | 'suspended' | 'ended' | 'unavailable';
 type ConnectionState = 'connected' | 'disconnected' | 'unavailable';
 
 /** A snapshot contains only explicitly selected lifecycle facts. */
@@ -49,7 +49,7 @@ export interface DiagnosticSnapshot {
 const SESSION = new Set(['active', 'suspended', 'ended']);
 const CONNECTION = new Set(['connected', 'disconnected']);
 const PAUSE_REASON = new Set(['programmer', 'reply', 'away', 'calibrate']);
-const REQUEST_METHOD = new Set(['start', 'step', 'listen', 'end', 'read', 'calibrate', 'unknown']);
+const REQUEST_METHOD = new Set(['start', 'step', 'listen', 'end', 'read', 'calibrate', 'diagnostics', 'unknown']);
 const REQUEST_PHASE = new Set(['received', 'replied', 'failed', 'cancelled']);
 const SPEECH_EVENT = new Set(['preview', 'catalog', 'setup', 'capability', 'runtime', 'narration']);
 const SPEECH_PHASE = new Set(['received', 'blocked', 'dispatched', 'ready', 'failed']);

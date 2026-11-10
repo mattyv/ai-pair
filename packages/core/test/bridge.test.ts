@@ -693,3 +693,65 @@ describe('the trace', () => {
     expect(traced).toEqual([]);
   });
 });
+
+describe('DiagnosticsRequest isolation', () => {
+  it('lets a non-owner inspect without affecting the owner session', async () => {
+    const snapshot = {
+      version: 'test',
+      build: 'test',
+      session: 'active',
+      connection: 'connected',
+      connectionId: 1,
+      paused: false,
+      pauseReasons: [],
+      events: [],
+    };
+    const collectDiagnostics = vi.fn(() => Promise.resolve(snapshot));
+    const { server } = await started({ collectDiagnostics });
+    const first = await owner(server);
+    const second = welcomed(server);
+    expect(await call(second, 2, 'diagnostics', {})).toEqual({ type: 'result', id: 2, result: snapshot });
+    second.closed();
+    expect(controller.disconnect).not.toHaveBeenCalled();
+    expect(await call(first, 3, 'listen', {})).toEqual({ type: 'result', id: 3, result: REPORT });
+  });
+});
+
+describe('DiagnosticsRequest failure and cancellation', () => {
+  it('returns a fixed failure for a thrown or malformed collector result', async () => {
+    const collectDiagnostics = vi.fn().mockRejectedValueOnce(new Error('secret path')).mockResolvedValueOnce({ secret: 'private' });
+    const { server } = await started({ collectDiagnostics });
+    const socket = welcomed(server);
+    for (const id of [1, 2]) {
+      expect(await call(socket, id, 'diagnostics', {})).toEqual({
+        type: 'error',
+        id,
+        code: 'internal',
+        message: 'Diagnostics are unavailable.',
+      });
+    }
+    expect(controller.start).not.toHaveBeenCalled();
+  });
+  it('cancels an idle diagnostics request without starting a session', async () => {
+    const { promise, resolve } = Promise.withResolvers<unknown>();
+    const collectDiagnostics = vi.fn(() => promise);
+    const { server } = await started({ collectDiagnostics });
+    const socket = welcomed(server);
+    socket.receive({ type: 'call', id: 1, tool: 'diagnostics', args: {} });
+    socket.receive({ type: 'cancel', id: 1 });
+    resolve({
+      version: 'test',
+      build: 'test',
+      session: 'unavailable',
+      connection: 'unavailable',
+      connectionId: 'unavailable',
+      paused: 'unavailable',
+      pauseReasons: 'unavailable',
+      events: [],
+    });
+    await settle();
+    expect(lastSent(socket)).toMatchObject({ type: 'error', code: 'internal', message: 'Diagnostics are unavailable.' });
+    expect(controller.start).not.toHaveBeenCalled();
+    expect(controller.disconnect).not.toHaveBeenCalled();
+  });
+});

@@ -17,6 +17,7 @@ const fake = vi.hoisted(() => ({
     preview: vi.fn(),
     ready: vi.fn().mockResolvedValue(true),
     dispose: vi.fn(),
+    audioDiagnostics: vi.fn().mockReturnValue({ enabled: false }),
   },
 }));
 vi.mock('node:crypto', () => ({ randomUUID: () => 'token' }));
@@ -96,6 +97,7 @@ it('rejects malformed commit and makes unattached commands safe', async () => {
   await expect(fake.commands.get('aiPair.localAudio.ready')?.('epoch')).resolves.toBe(false);
   expect(fake.commands.get('aiPair.localAudio.diagnostics')?.(undefined)).toBeUndefined();
   expect(fake.commands.get('aiPair.localAudio.gpuDiagnostics')?.(undefined)).toBeUndefined();
+  expect(fake.commands.get('aiPair.localAudio.audioDiagnostics')?.(undefined)).toBeUndefined();
   await expect(fake.commands.get('aiPair.localAudio.keySet')?.(undefined)).resolves.toBeUndefined();
   await expect(fake.commands.get('aiPair.localAudio.keyRemove')?.(undefined)).resolves.toBeUndefined();
   await expect(fake.commands.get('aiPair.localAudio.preview')?.(undefined)).resolves.toBeUndefined();
@@ -120,10 +122,24 @@ it('forwards attached commands to the local session and disposes it', async () =
   expect(fake.session.ready).toHaveBeenCalledWith('epoch');
   expect(fake.commands.get('aiPair.localAudio.diagnostics')?.(undefined)).toEqual({ version: 'test', build: 'test-build', events: [] });
   expect(fake.commands.get('aiPair.localAudio.gpuDiagnostics')?.(undefined)).toEqual({ stage: 'idle' });
+  expect(fake.commands.get('aiPair.localAudio.audioDiagnostics')?.(undefined)).toEqual({ enabled: false });
   expect(fake.session.accept).toHaveBeenCalledWith({ message: 'safe' });
   expect(fake.session.keySet).toHaveBeenCalledOnce();
   expect(fake.session.keyRemove).toHaveBeenCalledOnce();
   expect(fake.session.preview).toHaveBeenCalledOnce();
   for (const subscription of subscriptions) subscription.dispose();
   expect(fake.session.dispose).toHaveBeenCalledOnce();
+});
+
+it('isolates audio diagnostics callback failures', () => {
+  fake.commit.mockImplementation(() => {
+    fake.register?.();
+    return true;
+  });
+  fake.session.audioDiagnostics.mockImplementationOnce(() => {
+    throw new Error('private');
+  });
+  activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
+  fake.commands.get('aiPair.localAudio.commit')?.({ version: 2, epoch: 'epoch', token: 'token' });
+  expect(fake.commands.get('aiPair.localAudio.audioDiagnostics')?.(undefined)).toBeUndefined();
 });

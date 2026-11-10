@@ -78,6 +78,9 @@ it('keeps speech disabled by default and retains a missing local device', async 
     panel: () => panel,
     diagnostic: vi.fn<(event: SpeechDiagnosticEvent) => void>(),
   });
+  expect(host.audioDiagnostics()).toMatchObject({ enabled: false, output: 'override', routeAvailable: 'unknown' });
+  expect(JSON.stringify(host.audioDiagnostics())).not.toContain('missing');
+  expect(list).not.toHaveBeenCalled();
   host.panelSpeech.computeMode('gpu');
   await host.speech.preview();
   expect(panel.showSpeechStatus).toHaveBeenCalledWith(expect.any(Number), 'unavailable', 'GPU speech is not available. Check GPU setup.');

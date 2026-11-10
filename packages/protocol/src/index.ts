@@ -203,3 +203,5 @@ export * from './command_channel';
 export * from './local_diagnostics';
 
 export * from './gpu_diagnostics';
+
+export * from './diagnostics';

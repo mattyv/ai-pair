@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.24.0
+
+-   Add real-session demo and read-only diagnostic MCP prompts, including
+    privacy-preserving speech and audio status.
+
 ## 0.23.2
 
 -   Preserve the untyped remainder when a programmer edit interrupts typing

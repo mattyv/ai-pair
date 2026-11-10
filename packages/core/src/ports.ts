@@ -44,7 +44,7 @@ export type DiagnosticEvent =
       kind: 'request';
       connectionId: number;
       id: number;
-      method: 'start' | 'step' | 'listen' | 'end' | 'read' | 'calibrate' | 'unknown';
+      method: 'start' | 'step' | 'listen' | 'end' | 'read' | 'calibrate' | 'diagnostics' | 'unknown';
       phase: 'received' | 'replied' | 'failed' | 'cancelled';
     }
   | CommandDiagnostic;

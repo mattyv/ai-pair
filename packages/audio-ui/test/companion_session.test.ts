@@ -125,6 +125,17 @@ vi.mock('../src/speech_host', () => ({
       output: { stopAndWait: fake.stopOutput },
       observation: fake.observation,
       gpuDiagnostics: () => ({ stage: 'idle' }),
+      audioDiagnostics: () => ({
+        enabled: false,
+        provider: 'kokoro',
+        keyConfigured: 'unknown',
+        voiceConfigured: true,
+        output: 'default',
+        routeAvailable: 'unknown',
+        runtimeReady: 'unknown',
+        modelReady: 'unknown',
+        lastPlayback: 'unknown',
+      }),
       ready: () => Promise.resolve(true),
       dispose: fake.hostDispose,
     };
@@ -200,6 +211,7 @@ it('registers one provider and forwards local commands and diagnostics', async (
   expect(await current.ready('epoch')).toBe(true);
   expect(current.diagnostics()).toMatchObject({ version: 'test', build: 'test-build' });
   expect(current.gpuDiagnostics()).toEqual({ stage: 'idle' });
+  expect(current.audioDiagnostics()).toMatchObject({ enabled: false, provider: 'kokoro' });
   fake.hostOptions?.diagnostic({ kind: 'test' });
   expect(fake.diagnostic).toHaveBeenCalledWith({ kind: 'test' });
   expect(fake.hostOptions?.page()).toBe(7);

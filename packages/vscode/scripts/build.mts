@@ -116,6 +116,8 @@ for (const file of [
   'package.json',
   'README.md',
   'CHANGELOG.md',
+  'skills/ai-pair-demo/SKILL.md',
+  'skills/ai-pair-diagnose/SKILL.md',
   'scripts/build.mts',
   'media/icon.png',
   'media/comma-gets-a-cure.txt',

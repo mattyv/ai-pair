@@ -13,6 +13,8 @@ export const EDITOR_DISCONNECTED = 'The editor disconnected. If its window was r
 export const LINK_CLOSED = 'The relay is shutting down.';
 
 /** Tools whose results are reports, which must be delivered at least once (#67). */
+const DIAGNOSTICS_TIMEOUT_MS = 5000;
+
 const REPORTING: ReadonlySet<ToolName> = new Set(['step', 'listen', 'end']);
 
 interface Pending {
@@ -117,6 +119,7 @@ export class EditorLink {
   private connection: Connection | undefined;
   private connecting: Promise<Connection> | undefined;
   private closed = false;
+  private pendingSocket: WebSocket | undefined;
   private nextId = 1;
   /** The socket each report came over, for `handBack`. */
   private readonly answeredOn = new WeakMap<object, WebSocket>();
@@ -128,6 +131,7 @@ export class EditorLink {
     cwd: string,
     private readonly dir: string,
     private readonly runtime?: { version: string; relayHash: string },
+    private readonly diagnosticPeer = false,
   ) {
     this.folder = cwd;
   }
@@ -209,10 +213,29 @@ export class EditorLink {
     if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'return', report, mayRepeat: true }));
   }
 
+  /** Takes a bounded snapshot on a separate connection without affecting the session link. */
+  async diagnose(folders: string[]): Promise<unknown> {
+    const peer = new EditorLink(this.folder, this.dir, this.runtime, /* diagnosticPeer= */ true);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      peer.locate(folders);
+      const timeout = Promise.withResolvers<never>();
+      timer = setTimeout(() => {
+        timeout.reject(new RelayError('timeout', 'The diagnostics request timed out.'));
+      }, DIAGNOSTICS_TIMEOUT_MS);
+      // specs/DiagnosticsRequest.tla: diagnostics uses a temporary, bounded connection.
+      return await Promise.race([peer.call('diagnostics', {}), timeout.promise]);
+    } finally {
+      clearTimeout(timer);
+      peer.close();
+    }
+  }
+
   /** Closes the link for good: its socket closes, and it opens no other (specs/Wire.tla, `Shutdown`). */
   close(): void {
     this.closed = true;
     this.connection?.ws.close();
+    if (this.diagnosticPeer) this.pendingSocket?.terminate();
   }
 
   private connect(): Promise<Connection> {
@@ -264,6 +287,7 @@ export class EditorLink {
     }
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(`ws://127.0.0.1:${window.port}`, { handshakeTimeout: RELAY_TIMINGS.handshakeMs });
+      if (this.diagnosticPeer) this.pendingSocket = ws;
       let welcomed = false;
       const calls = new Map<number, Pending>();
       const connection: Connection = { ws, calls, cancelled: new Set() };
@@ -297,6 +321,7 @@ export class EditorLink {
           }
           // specs/Wire.tla, `Welcome`: calls go out on this socket.
           welcomed = true;
+          this.pendingSocket = undefined;
           this.connection = connection;
           this.activeRuntime = window.runtime;
           resolve(connection);
@@ -323,6 +348,7 @@ export class EditorLink {
       });
       // specs/Wire.tla, `HandleClose`: a close rejects only this socket's calls (#3).
       ws.on('close', () => {
+        if (this.pendingSocket === ws) this.pendingSocket = undefined;
         // specs/Discovery.tla, `Disconnect`: the next call opens again.
         if (this.connection?.ws === ws) this.connection = undefined;
         if (!welcomed) reject(new RelayError('no_editor', 'The editor closed the connection.'));

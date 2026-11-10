@@ -151,10 +151,45 @@ describe('relay', () => {
   it('lists the tools and the prompt, with short instructions', async () => {
     const client = await connect();
     const tools = await client.listTools();
-    expect(tools.tools.map((t) => t.name).toSorted()).toEqual(['calibrate', 'end', 'listen', 'read', 'start', 'step']);
+    expect(tools.tools.map((t) => t.name).toSorted()).toEqual(['calibrate', 'diagnostics', 'end', 'listen', 'read', 'start', 'step']);
     expect(client.getInstructions()).toContain('`start`');
     const prompt = await client.getPrompt({ name: 'start', arguments: { task: 'add a todos API' } });
     expect(JSON.stringify(prompt.messages)).toContain('The task: add a todos API');
+    expect(JSON.stringify((await client.getPrompt({ name: 'demo' })).messages)).toContain('# Demonstrate AI Pair');
+    expect(JSON.stringify((await client.getPrompt({ name: 'diagnose' })).messages)).toContain('# Diagnose AI Pair');
+  });
+
+  it('DiagnosticsRequest isolation: a second client observes while the owner drains its queue', async () => {
+    bridge.dispose();
+    const snapshot = {
+      version: 'test',
+      build: 'build-one',
+      session: 'active',
+      connection: 'connected',
+      connectionId: 1,
+      paused: false,
+      pauseReasons: [],
+      events: [],
+    };
+    bridge = new Bridge(controller, {
+      dir,
+      workspaceFolders: () => ['/project'],
+      calibrate: () => true,
+      runtime: { version: 'test', build: 'build-one', relayHash: 'abc' },
+      collectDiagnostics: () => Promise.resolve(snapshot),
+    });
+    await bridge.start();
+    const owner = await connect();
+    const observer = await connect();
+    expect((await call(owner, 'start')).error).toBe(false);
+    expect((await call(owner, 'step', { actions: [{ say: 'A queued message.' }] })).error).toBe(false);
+    const diagnostic = await call(observer, 'diagnostics');
+    expect(JSON.parse(diagnostic.text)).toEqual(snapshot);
+    const report = await call(owner, 'step', { actions: [] });
+    expect(report.error).toBe(false);
+    expect(report.text).toContain('Batch 1 completed.');
+    expect(controller.isActive).toBe(true);
+    expect((await call(observer, 'start')).text).toMatch(/^session_active:/);
   });
 
   it('starts a calibration from a passage file, and refuses a second one', async () => {
@@ -478,9 +513,7 @@ describe('relay', () => {
     for (const c of bridge.connections() ?? []) {
       c.close();
     }
-    await new Promise((r) => {
-      setTimeout(r, 50);
-    });
+    await until(() => panel.events.some((event) => event.type === 'session' && 'suspended' in event && event.suspended === true));
     expect(controller.isActive).toBe(true);
     expect(panel.events).toContainEqual({ type: 'session', active: true, suspended: true });
     const next = await call(await connect(), 'start');

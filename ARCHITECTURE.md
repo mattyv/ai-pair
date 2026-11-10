@@ -11,7 +11,7 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes the experimental 0.23.0 implementation on this feature branch.
+Status: describes the experimental 0.24.0 implementation on this feature branch.
 
 The source is `.archi/ai-pair.json`. To regenerate the page with
 Archi-Techture 1.5.1, set `ARCHI_TO_HTML` to its `out/tools/archi-to-html.js`
@@ -34,6 +34,13 @@ the export was regenerated, and both normalizer test suites passed. An
 isolated headless Chromium render showed the GPU diagram with no page errors;
 the screenshot was inspected for layout. One supplied AMD system has since
 been tested; broader hardware validation remains open.
+
+The guided demo and diagnostics add MCP prompts backed by shipped canonical
+skills. Diagnostics uses a bounded temporary connection, independent of the
+session owner, to obtain an allowlisted snapshot from the editor and audio
+companion. The Archi source passed its 1.5.1 validator on 2026-11-10; its HTML
+export was regenerated, the normalizer tests passed, and the overview was
+inspected in headless Chromium without page errors.
 
 ## Components
 

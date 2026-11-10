@@ -1,3 +1,5 @@
+import demoSkill from '../../vscode/skills/ai-pair-demo/SKILL.md?raw';
+import diagnoseSkill from '../../vscode/skills/ai-pair-diagnose/SKILL.md?raw';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -6,7 +8,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { isJSONRPCNotification, type CallToolResult, type RequestId } from '@modelcontextprotocol/sdk/types.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { z } from 'zod';
-import { aiPairHome, FILE_CONTENT_SCHEMA, REPORT_SCHEMA, type ToolName } from '@ai-pair/protocol';
+import { aiPairHome, DIAGNOSTIC_SNAPSHOT_SCHEMA, FILE_CONTENT_SCHEMA, REPORT_SCHEMA, type ToolName } from '@ai-pair/protocol';
 import { readGuides, renderGuides, type Guide } from './guide';
 import { EditorLink, RelayError } from './link';
 import { renderFile, renderReport } from './render';
@@ -77,7 +79,7 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
   // The reports the relay answered with, by request: a cancel for one may come after its answer (#67).
   const answered = new Map<RequestId, unknown>();
   async function run(
-    tool: ToolName,
+    tool: Exclude<ToolName, 'diagnostics'>,
     args: Record<string, unknown>,
     { signal, requestId }: { signal: AbortSignal; requestId: RequestId },
     before?: () => Promise<Record<string, unknown>>,
@@ -135,6 +137,27 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
   server.registerTool('end', TOOLS.end, (args, extra) => run('end', args, extra));
   server.registerTool('read', TOOLS.read, (args, extra) => run('read', args, extra));
   server.registerTool('calibrate', TOOLS.calibrate, (args, extra) => run('calibrate', args, extra));
+  server.registerTool('diagnostics', TOOLS.diagnostics, async ({ cwd: given }) => {
+    if (given !== undefined && !path.isAbsolute(given)) {
+      return { isError: true, content: [{ type: 'text', text: 'invalid_cwd: The working directory must be an absolute path.' }] };
+    }
+    try {
+      const folders = given === undefined ? [...(await roots()), cwd] : [given];
+      const snapshot = DIAGNOSTIC_SNAPSHOT_SCHEMA.parse(await link.diagnose(folders));
+      return { content: [{ type: 'text', text: JSON.stringify(snapshot) }] };
+    } catch (error) {
+      const code = error instanceof RelayError ? error.code : 'internal';
+      const messages = new Map([
+        ['timeout', 'The diagnostics request timed out.'],
+        ['runtime_mismatch', 'The relay and editor versions do not match. Reload the extension and reconnect.'],
+        ['no_editor', 'No matching editor is available.'],
+      ]);
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `${messages.has(code) ? code : 'internal'}: ${messages.get(code) ?? 'Diagnostics failed.'}` }],
+      };
+    }
+  });
 
   // A cancel for a request the relay already answered: the SDK ignores it, and the agent's client
   // dropped the answer, unless it had taken it first (its abort listener sends a cancel either way).
@@ -166,6 +189,13 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
     },
     ({ task }) => ({ messages: [{ role: 'user', content: { type: 'text', text: startPrompt(task) } }] }),
   );
+
+  server.registerPrompt('demo', { description: 'Demonstrate AI Pair in a real session.' }, () => ({
+    messages: [{ role: 'user', content: { type: 'text', text: demoSkill } }],
+  }));
+  server.registerPrompt('diagnose', { description: 'Diagnose AI Pair without changing settings.' }, () => ({
+    messages: [{ role: 'user', content: { type: 'text', text: diagnoseSkill } }],
+  }));
 
   return server;
 }

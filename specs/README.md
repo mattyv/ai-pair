@@ -86,6 +86,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Resume.cfg` | 2 directories, `MaxSessions = 3`, revive and replacement updates enabled | holds | 56 |
 | `TerminalPanel.cfg` | two command IDs and automatic visibility | holds | 61 |
 | `DiagnosticsCopy.cfg` | explicit request with clipboard success or failure | holds | 3 |
+| `DiagnosticsRequest.cfg` | idle, active and suspended sessions; isolated diagnostic requests | holds | 456 |
 | `DiagnosticsPrivacy.cfg` | bounded two-event history, copy and allowlisted projection | holds | 22,778 |
 | `DiagnosticsPrivacy_Speech.cfg` | speech-only projection without a session | holds | 38 |
 | `Timeline.cfg` | `MaxSleeps = 3` sleeps, holds, and a second sleep while one is pending | holds | 864 |
@@ -2107,6 +2108,23 @@ scoped by that ID. `replied` records that the bridge sent a response to the
 socket, not that the client acknowledged or consumed it. Unknown state and
 uncaptured values stay unavailable; no task, chat, command, output, path,
 environment, credential or error text enters this history.
+
+### `DiagnosticsRequest`: isolated bounded diagnostics
+
+The request has no effect on session, owner, pause or queued reports. Collection
+can return available facts, unavailable facts, or cancellation. Weak fairness
+models the collector deadline; the model abstracts the concrete 100-event bound
+and the specific field and audio enums, which protocol and collector tests check.
+TLC checked 456 distinct states with 24 initial combinations. Each property was
+mutated separately: an invalid response breaks `TypeOK`; a secret fact breaks
+`Allowlist`; an absent result breaks `Outcome`; changing the session breaks
+`Isolation`; removing fairness breaks `EventuallyResponds`.
+
+| Property | Test |
+|---|---|
+| `TypeOK`, `Allowlist` | `diagnostics.test.ts`: accepts bounded allowlisted workspace and audio facts; rejects secrets, arbitrary fields, and excess events |
+| `Outcome`, `EventuallyResponds` | `diagnostics_collector.test.ts`: returns within the bound when a companion hangs; retains workspace facts when companion commands fail or return private data |
+| `Isolation` | `bridge.test.ts`: lets a non-owner inspect without affecting the owner session; cancels an idle diagnostics request without starting a session; `extension.test.ts`: reports the current idle, active, and suspended session without changing it |
 
 ### `DiagnosticsCopy`: explicit clipboard export
 
