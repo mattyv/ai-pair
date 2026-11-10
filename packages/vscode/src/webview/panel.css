@@ -892,6 +892,46 @@ a:hover {
   display: none;
 }
 
+/* Keep model status compact while allowing long diagnostic paths to wrap. */
+.speech-model:not([hidden]) {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 12px;
+}
+
+.speech-model h3 {
+  font-size: 12px;
+  margin: 0;
+}
+
+.speech-badge {
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--fg);
+  font-size: 11px;
+  margin-left: 4px;
+  padding: 1px 4px;
+}
+
+.speech-details {
+  overflow-wrap: anywhere;
+}
+
+.speech-details summary {
+  cursor: pointer;
+}
+
+.speech-details summary:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+
+.speech-details p {
+  margin-top: 8px;
+}
+
 .settings-footer {
   align-items: center;
   border-top: 1px solid var(--border);

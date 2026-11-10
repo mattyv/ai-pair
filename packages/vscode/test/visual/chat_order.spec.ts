@@ -788,15 +788,20 @@ test('experimental GPU setup remains readable and explicit in a narrow Settings 
   const compute = dialog.getByRole('combobox', { name: 'Kokoro compute' });
   await compute.scrollIntoViewIfNeeded();
   await expect(compute).toHaveValue('cpu');
-  await expect(dialog.getByText(/GPU support is experimental/)).toBeVisible();
-  await expect(dialog.getByText(/326 MB/)).toBeVisible();
+  await expect(dialog.getByText('Experimental', { exact: true })).toBeVisible();
+  const details = dialog.locator('[data-ui="speech-details"]');
+  await expect(details.getByText(/326 MB/)).toBeHidden();
+  await details.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(details.getByText(/326 MB/)).toBeVisible();
   await compute.selectOption('auto');
   await dialog.getByRole('button', { name: 'Set up GPU' }).click();
   await post({
     type: 'speechComputeState',
     value: { requestedMode: 'auto', actualBackend: 'cpu', gpuCheck: { phase: 'unavailable', reason: 'no_hardware' } },
   });
-  await expect(dialog.getByRole('status').filter({ hasText: 'No compatible GPU' })).toContainText('Actual backend: CPU');
+  await expect(dialog.getByRole('status').filter({ hasText: 'No compatible GPU' })).toContainText('Using CPU');
+  await expect(details).toContainText('Requested: AUTO. Actual backend: CPU');
   const widths = await dialog.evaluate((element: { scrollWidth: number; clientWidth: number }) => [
     element.scrollWidth,
     element.clientWidth,

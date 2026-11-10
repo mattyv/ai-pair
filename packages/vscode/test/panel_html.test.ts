@@ -193,13 +193,13 @@ it('offers Kokoro compute choices and an explicit GPU setup check in Settings', 
   const page = new window.DOMParser().parseFromString(panelHtml('source', 'style', 'script'), 'text/html');
   const select = page.querySelector('[data-ui="speech-compute"]');
   expect(Array.from(select?.querySelectorAll('option') ?? []).map((option) => option.value)).toEqual(['cpu', 'auto', 'gpu']);
-  expect(select?.closest('[data-ui="speech-local"]')).not.toBeNull();
+  expect(select?.closest('[data-ui="speech-local-model"]')).not.toBeNull();
   expect(page.querySelector('[data-ui="gpu-status"]')?.getAttribute('role')).toBe('status');
   expect(page.querySelector('[data-ui="gpu-check"]')?.textContent).toContain('Set up GPU');
   expect(page.querySelector('[data-ui="gpu-model-info"]')?.textContent).toContain('326 MB');
   expect(page.querySelector('[data-ui="gpu-model-info"]')?.textContent).toContain('additional');
   expect(page.querySelector('[data-ui="gpu-model-info"]')?.textContent).toContain('CPU model');
-  expect(page.querySelector('[data-ui="gpu-model-info"]')?.textContent).toContain('experimental');
+  expect(page.querySelector('.speech-badge')?.textContent).toContain('Experimental');
 });
 
 it('offers explicit cloud controls without exposing a key input', () => {

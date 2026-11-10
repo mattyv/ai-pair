@@ -1754,9 +1754,35 @@ it('shows the local model status, path and pinned source', () => {
     value: { path: '/storage/model', source: 'https://example.test/model', revision: 'abc', verified: true, download: 'installed' },
   });
   expect(text('speech-model-status')).toContain('verified');
-  expect(text('speech-model-status')).toContain('/storage/model');
-  expect(text('speech-model-status')).toContain('https://example.test/model');
-  expect(text('speech-model-status')).toContain('abc');
+  expect(text('speech-model-details')).toContain('/storage/model');
+  expect(text('speech-model-details')).toContain('https://example.test/model');
+  expect(text('speech-model-details')).toContain('abc');
+});
+
+it('keeps model diagnostics collapsed and labels actions for the reported state', () => {
+  send({ type: 'speechSupport', supported: true });
+  const details = element('speech-details');
+  expect(details.tagName).toBe('DETAILS');
+  expect(details.hasAttribute('open')).toBe(false);
+  const base = { path: '/model', source: 'https://example.test', revision: 'abc', verified: true };
+  send({ type: 'speechModelStatus', value: { ...base, download: 'installed' } });
+  expect(text('speech-model-status')).toContain('verified');
+  expect(text('speech-model-status')).not.toContain('/model');
+  expect(text('speech-model-details')).toContain('/model');
+  expect(element('speech-setup').parentElement).toBe(element('speech-setup-secondary'));
+  expect(text('speech-setup')).toContain('Recheck');
+  click(element('speech-setup'));
+  expect(posted()).toContainEqual({ type: 'speechSetup' });
+  send({ type: 'speechModelStatus', value: { ...base, download: 'missing', verified: false } });
+  expect(element('speech-setup').parentElement).toBe(element('speech-setup-primary'));
+  expect(text('speech-setup')).toContain('Download');
+  send({ type: 'speechModelStatusUnavailable' });
+  expect(text('speech-model-details')).not.toContain('/model');
+  expect(element('speech-setup').parentElement).toBe(element('speech-setup-primary'));
+  send({ type: 'speechComputeState', value: { requestedMode: 'gpu', actualBackend: 'none', gpuCheck: { phase: 'ready' } } });
+  expect(text('gpu-status')).toContain('No backend reported yet');
+  expect(text('gpu-details')).toContain('Requested: GPU. Actual backend: NONE');
+  expect(text('gpu-check')).toContain('Recheck');
 });
 
 it('distinguishes missing, unverified and unknown model status', () => {
@@ -2048,6 +2074,7 @@ it('switches providers explicitly and loads cloud voices only when requested', (
   provider.value = 'elevenlabs';
   provider.dispatchEvent(new window.Event('change'));
   expect(element('speech-local').hidden).toBe(true);
+  expect(element('speech-local-model').hidden).toBe(true);
   expect(element('speech-cloud').hidden).toBe(false);
   expect(posted().filter((message) => message.type === 'speechVoicesLoad')).toEqual([]);
   click(element('speech-voices-load'));

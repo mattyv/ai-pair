@@ -78,6 +78,7 @@ const ui = {
   speechOutputRefresh: $('speech-output-refresh', HTMLButtonElement),
   speechOutputStatus: $('speech-output-status', HTMLElement),
   speechLocal: $('speech-local', HTMLElement),
+  speechLocalModel: $('speech-local-model', HTMLElement),
   speechCloud: $('speech-cloud', HTMLElement),
   speechKeyStatus: $('speech-key-status', HTMLElement),
   speechKeySet: $('speech-key-set', HTMLButtonElement),
@@ -90,10 +91,14 @@ const ui = {
   speechSpeed: $('speech-speed', HTMLSelectElement),
   speechListeningSpeed: $('speech-listening-speed', HTMLSelectElement),
   speechSetup: $('speech-setup', HTMLButtonElement),
+  speechSetupPrimary: $('speech-setup-primary', HTMLElement),
+  speechSetupSecondary: $('speech-setup-secondary', HTMLElement),
   speechCompute: $('speech-compute', HTMLSelectElement),
   gpuStatus: $('gpu-status', HTMLElement),
+  gpuDetails: $('gpu-details', HTMLElement),
   gpuCheck: $('gpu-check', HTMLButtonElement),
   speechModelStatus: $('speech-model-status', HTMLElement),
+  speechModelDetails: $('speech-model-details', HTMLElement),
   speechPreview: $('speech-preview', HTMLButtonElement),
   speechStop: $('speech-stop', HTMLButtonElement),
   speechSettingsStatus: $('speech-settings-status', HTMLElement),
@@ -948,6 +953,7 @@ let outputReady = true;
 function syncSpeechProvider(): void {
   const cloud = speechProvider === 'elevenlabs';
   ui.speechLocal.hidden = cloud;
+  ui.speechLocalModel.hidden = cloud;
   ui.speechCloud.hidden = !cloud;
   ui.speechProvider.value = speechProvider;
   ui.speechKeySet.disabled = !cloudSupported;
@@ -1078,6 +1084,7 @@ function handle(message: ToPanel): void {
       };
       ui.speechCompute.value = requestedMode;
       ui.gpuCheck.disabled = gpuCheck.phase === 'checking';
+      ui.gpuCheck.textContent = gpuCheck.phase === 'ready' ? 'Recheck GPU setup' : 'Set up GPU';
       const status =
         gpuCheck.phase === 'unavailable'
           ? reasons[gpuCheck.reason]
@@ -1106,7 +1113,8 @@ function handle(message: ToPanel): void {
               : `: ${progress.current} of ${progress.total}`;
         detail = ` ${progress.stage}${counts}.`;
       }
-      ui.gpuStatus.textContent = `Requested: ${requestedMode.toUpperCase()}. Actual backend: ${actualBackend.toUpperCase()}. ${status}${detail}`;
+      ui.gpuStatus.textContent = `${status}${detail} ${actualBackend === 'none' ? 'No backend reported yet.' : `Using ${actualBackend.toUpperCase()}.`}`;
+      ui.gpuDetails.textContent = `Requested: ${requestedMode.toUpperCase()}. Actual backend: ${actualBackend.toUpperCase()}.`;
       return;
     }
     case 'speechSupport':
@@ -1215,10 +1223,19 @@ function handle(message: ToPanel): void {
       return;
     }
     case 'speechModelStatus':
-      ui.speechModelStatus.textContent = `${message.value.download === 'missing' ? 'Not downloaded' : message.value.download === 'unknown' ? 'Download status unknown' : message.value.verified ? 'Downloaded and verified' : 'Local model is not verified; the path exists'}. Local path: ${message.value.path}. Pinned source: ${message.value.source} (revision ${message.value.revision}).`;
+      ui.speechModelStatus.textContent = `${message.value.download === 'missing' ? 'Not downloaded' : message.value.download === 'unknown' ? 'Download status unknown' : message.value.verified ? 'Downloaded and verified' : 'Local model is not verified; the path exists'}.`;
+      ui.speechModelDetails.textContent = `Local path: ${message.value.path}. Pinned source: ${message.value.source} (revision ${message.value.revision}).`;
+      (message.value.download === 'installed' && message.value.verified ? ui.speechSetupSecondary : ui.speechSetupPrimary).append(
+        ui.speechSetup,
+      );
+      ui.speechSetup.textContent =
+        message.value.download === 'installed' && message.value.verified ? 'Recheck Kokoro model' : 'Download Kokoro model';
       return;
     case 'speechModelStatusUnavailable':
       ui.speechModelStatus.textContent = 'Local model status is unknown.';
+      ui.speechModelDetails.textContent = 'Model details are unavailable.';
+      ui.speechSetupPrimary.append(ui.speechSetup);
+      ui.speechSetup.textContent = 'Download Kokoro model';
       return;
     case 'speechSetupState':
       ui.speechSetup.disabled = message.pending || !speechSupported;

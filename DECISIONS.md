@@ -652,3 +652,11 @@ profiled original-model test placed that operation on CPU while retaining GPU
 execution elsewhere; its raw waveform closely matched the CPU reference.
 Strict negative and tiny graph proofs still forbid CPU fallback. This evidence
 does not establish subjective audio quality or compatibility on other hardware.
+
+## Speech settings presentation
+
+Keep voice and listening controls prominent, and place synthesis tuning and
+model provenance in native disclosures. Show model and GPU setup outcomes and
+the reported backend outside the disclosure; setup readiness does not establish
+that GPU is active. This changes presentation only: model pins, setup flow and
+architecture remain unchanged.

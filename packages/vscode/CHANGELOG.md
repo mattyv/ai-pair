@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.24.1
+
+- Clarify speech model and compute settings, with technical details collapsed.
+
 ## 0.24.0
 
 -   Add real-session demo and read-only diagnostic MCP prompts, including

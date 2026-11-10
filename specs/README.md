@@ -2887,6 +2887,11 @@ abstracts execution-provider placement: model inference retains GPU admission
 and proofs while one known operation runs on CPU. Strict probes still forbid
 CPU fallback; `speech_gpu_options.test.ts` checks both policies.
 
+The settings presentation keeps the requested and reported backend distinct,
+shows setup outcomes outside a collapsed technical-details disclosure, and keeps
+model provenance inside it. These presentation changes do not alter the model
+or its transitions; `panel.test.ts` checks the visible state mapping.
+
 | Property | Test |
 |---|---|
 | `TypeOK`, `GpuVerified` | `speech_gpu_check.test.ts`: GpuVerified: requires trust, physical device, negative control, tiny graph and model; `speech_gpu_admission.integration.test.ts`: runs verified setup then dispatches a GPU unit through a controlled worker port. |

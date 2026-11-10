@@ -55,6 +55,12 @@
       <div class="settings-actions"><button type="button" data-ui="speech-output-refresh" class="soft">Refresh outputs</button></div>
       <p data-ui="speech-output-status" role="status"></p>
       <label class="settings-check"><input type="checkbox" data-ui="speech-enabled"> Speak selected narration automatically</label>
+      <label class="settings-field">Listening speed (experimental)
+        <select data-ui="speech-listening-speed">
+          <option value="0.75">0.75x</option><option value="1" selected>1.0x</option>
+          <option value="1.25">1.25x</option><option value="1.5">1.5x</option>
+        </select>
+      </label>
       <div data-ui="speech-local">
       <label class="settings-field">Voice
         <select data-ui="speech-voice">
@@ -64,30 +70,6 @@
           <option value="bm_george">George</option>
         </select>
       </label>
-      <label class="settings-field">Synthesis speed
-        <select data-ui="speech-speed">
-          <option value="0.75">0.75x</option>
-          <option value="1" selected>1.0x</option>
-          <option value="1.25">1.25x</option>
-          <option value="1.5">1.5x</option>
-        </select>
-      </label>
-      <label class="settings-field">Kokoro compute
-        <select data-ui="speech-compute">
-          <option value="cpu">CPU</option>
-          <option value="auto">Auto (use CPU if GPU is unavailable)</option>
-          <option value="gpu">GPU</option>
-        </select>
-      </label>
-      <p data-ui="gpu-model-info">GPU support is experimental. Setup requires the CPU model and downloads
-        an additional pinned model of about 326 MB if needed.</p>
-      <p data-ui="gpu-status" role="status">GPU setup has not been checked. Actual backend: none.</p>
-      <div class="settings-actions"><button type="button" data-ui="gpu-check" class="soft">Set up GPU</button></div>
-      <p>CPU setup downloads a local voice model of about 94 MB.</p>
-      <p data-ui="speech-model-status">Checking model verification...</p>
-      <div class="settings-actions">
-        <button type="button" data-ui="speech-setup" class="soft" disabled>Download Kokoro model</button>
-      </div>
       </div>
       <div data-ui="speech-cloud" hidden>
         <p>Selected narration and voice previews are sent to ElevenLabs and use your account credits.
@@ -106,23 +88,52 @@
           <button type="button" data-ui="speech-voices-load" class="soft">Load voices</button>
           <button type="button" data-ui="speech-voices-more" class="soft" hidden>Load more</button>
         </div>
+        <details class="speech-details">
+          <summary>Synthesis speed</summary>
         <label class="settings-field">Synthesis speed
           <select data-ui="speech-cloud-speed">
             <option value="0.75">0.75x</option><option value="1" selected>1.0x</option>
             <option value="1.2">1.2x</option>
           </select>
         </label>
+        </details>
       </div>
-      <label class="settings-field">Listening speed (experimental)
-        <select data-ui="speech-listening-speed">
-          <option value="0.75">0.75x</option><option value="1" selected>1.0x</option>
-          <option value="1.25">1.25x</option><option value="1.5">1.5x</option>
-        </select>
-      </label>
       <p>Preview: Here is a short example of the voice for our pairing session.</p>
       <div class="settings-actions">
         <button type="button" data-ui="speech-preview" class="soft" disabled>Preview voice</button>
         <button type="button" data-ui="speech-stop" class="soft">Stop speech</button>
+      </div>
+      <div data-ui="speech-local-model" class="speech-model">
+        <h3>Local model</h3>
+        <p data-ui="speech-model-status" role="status">Checking model verification...</p>
+        <div data-ui="speech-setup-primary" class="settings-actions">
+          <button type="button" data-ui="speech-setup" class="soft" disabled>Download Kokoro model</button>
+        </div>
+        <label class="settings-field"><span>Kokoro compute <span class="speech-badge">Experimental</span></span>
+          <select data-ui="speech-compute">
+            <option value="cpu">CPU</option>
+            <option value="auto">Auto (use CPU if GPU is unavailable)</option>
+            <option value="gpu">GPU</option>
+          </select>
+        </label>
+        <p data-ui="gpu-status" role="status">GPU setup has not been checked. Actual backend: NONE.</p>
+        <div class="settings-actions"><button type="button" data-ui="gpu-check" class="soft">Set up GPU</button></div>
+        <details data-ui="speech-details" class="speech-details">
+          <summary>Technical details and synthesis speed</summary>
+        <p data-ui="gpu-model-info">GPU setup requires the CPU model and an additional model (about 326 MB).</p>
+          <div data-ui="speech-setup-secondary" class="settings-actions"></div>
+      <label class="settings-field">Synthesis speed
+        <select data-ui="speech-speed">
+          <option value="0.75">0.75x</option>
+          <option value="1" selected>1.0x</option>
+          <option value="1.25">1.25x</option>
+          <option value="1.5">1.5x</option>
+        </select>
+      </label>
+          <p>CPU setup downloads a local voice model of about 94 MB.</p>
+          <p data-ui="speech-model-details">Model details are not available yet.</p>
+          <p data-ui="gpu-details">Compute details are not available yet.</p>
+        </details>
       </div>
       <p data-ui="speech-settings-status" role="status"></p>
     </section>
