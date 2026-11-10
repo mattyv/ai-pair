@@ -42,6 +42,10 @@ companion. The Archi source passed its 1.5.1 validator on 2026-11-10; its HTML
 export was regenerated, the normalizer tests passed, and the overview was
 inspected in headless Chromium without page errors.
 
+The companion bootstrap sequence was added on 2026-11-10. Archi 1.5.1
+validated the source, its HTML export was regenerated, and the normalizer tests
+passed. The generated sequence was inspected in headless Chromium.
+
 ## Components
 
 ```text
@@ -128,11 +132,17 @@ output devices. The main extension keeps workspace state and dispatches editor,
 file and terminal actions on the workspace host. The `Local audio placement`
 diagram shows this boundary, including an isolated SSH placement proof.
 
-`PanelPlacement` and `AttachmentGate` use prepare/commit before registering the
-view. A successful prepare does not register anything; committing selects the
-companion irrevocably for the current window. Missing companions retain the
-legacy local behavior or remote text-only behavior. Reconnection requires a
-new window attachment rather than starting another audio owner.
+The `Companion attachment bootstrap` diagram shows the cross-host sequence.
+The workspace first calls `aiPair.localAudio.activate`, which activates the UI
+extension through VS Code and returns readiness without creating a token or
+session. Activation has a 10-second bound; only a successful response starts
+prepare, with its own 1.5-second bound. Prepare validates the private protocol
+and epoch without registering a view. The workspace selects the companion
+before dispatching commit, so a lost acknowledgement cannot select another
+owner. Late activation or preparation cannot change the decision. An installed
+companion that fails attachment fails closed; a missing companion retains the
+legacy local or remote text-only behavior. Reconnection requires a new window
+attachment rather than starting another audio owner.
 
 The hosts exchange versioned allowlisted command frames with separate sequence
 numbers per direction. Ordered bounded chunks carry visible panel updates;

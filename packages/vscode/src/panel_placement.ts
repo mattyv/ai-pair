@@ -4,7 +4,8 @@ import { LOCAL_AUDIO_VERSION, localAudioPrepared, type LocalAudioPrepared } from
 export type PanelOwner = 'companion' | 'legacy' | 'remote-text' | 'incompatible';
 
 /** Safe categories for diagnosing failed preparation. */
-export type PanelPrepareFailure = 'timeout' | 'activation_failure' | 'invalid_response' | 'protocol_mismatch' | 'epoch_mismatch';
+export type PanelPrepareFailure =
+  'timeout' | 'activation_timeout' | 'activation_failure' | 'invalid_response' | 'protocol_mismatch' | 'epoch_mismatch';
 
 /** Inputs for bounded, two-phase companion attachment. */
 export interface PanelPlacementOptions {
@@ -12,6 +13,8 @@ export interface PanelPlacementOptions {
   remote: boolean;
   companionInstalled?: boolean;
   timeoutMs: number;
+  activationTimeoutMs?: number;
+  activate?: () => Promise<unknown>;
   prepare: () => Promise<unknown>;
   failure?: (reason: PanelPrepareFailure) => void;
   beforeCommit?: () => void;
@@ -37,6 +40,25 @@ export class PanelPlacement {
 
   /** Bounds preparation; a late answer cannot register or select a companion. */
   private async select(): Promise<PanelOwner> {
+    // specs/PanelPlacement.tla, Activate: activation has a separate bounded deadline.
+    if (this.options.activate !== undefined) {
+      let activationTimer: ReturnType<typeof setTimeout> | undefined;
+      const timedOut = Symbol();
+      const timeout = new Promise<symbol>((resolve) => {
+        activationTimer = setTimeout(() => {
+          resolve(timedOut);
+        }, this.options.activationTimeoutMs ?? this.options.timeoutMs);
+      });
+      try {
+        const activated = await Promise.race([Promise.resolve().then(this.options.activate), timeout]);
+        if (activated === timedOut) return this.failed('activation_timeout');
+        if (activated !== true) return this.failed('activation_failure');
+      } catch {
+        return this.failed('activation_failure');
+      } finally {
+        clearTimeout(activationTimer);
+      }
+    }
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timedOut = Symbol();
     const timeout = new Promise<symbol>((resolve) => {

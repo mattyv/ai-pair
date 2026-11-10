@@ -63,6 +63,8 @@ const CONFIRM_COMMANDS = 'confirmCommands';
 const CALIBRATION_PASSAGE = 'calibrationPassage';
 /** Maximum wait for companion preparation before choosing a fallback. */
 const COMPANION_PREPARE_TIMEOUT_MS = 1500;
+/** Cold extension activation may load the companion bundle before command dispatch. */
+const COMPANION_ACTIVATION_TIMEOUT_MS = 10_000;
 
 /** The latest speech state, without narration text or audio bytes. */
 export interface SpeechObservation {
@@ -424,6 +426,20 @@ export function activate(context: vscode.ExtensionContext): Api {
     });
   }
 
+  /** Copies the bounded diagnostic snapshot. */
+  async function copyDiagnostics(): Promise<void> {
+    await vscode.env.clipboard.writeText(JSON.stringify(await diagnosticSnapshot()));
+  }
+
+  /** Reports clipboard failures when no panel is available to show them. */
+  async function copyDiagnosticsFromCommand(): Promise<void> {
+    try {
+      await copyDiagnostics();
+    } catch {
+      void vscode.window.showErrorMessage('AI Pair could not copy diagnostics to the clipboard.');
+    }
+  }
+
   panel = new NarrationPanel(
     (file) => editor.resolvePath(file),
     speed,
@@ -438,9 +454,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       controller: () => controller,
       calibration: () => calibration,
       starter,
-      copyDiagnostics: async () => {
-        await vscode.env.clipboard.writeText(JSON.stringify(await diagnosticSnapshot()));
-      },
+      copyDiagnostics,
       speech: {
         computeState: () => compute.state(),
         computeMode: (value) => {
@@ -764,6 +778,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   }
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('aiPair.copyDiagnostics', copyDiagnosticsFromCommand),
     context.secrets.onDidChange((event) => {
       if (event.key !== 'aiPair.elevenLabs.apiKey') return;
       function refreshLegacy(): void {
@@ -913,15 +928,32 @@ export function activate(context: vscode.ExtensionContext): Api {
     },
   );
   let prepareFailure: PanelPrepareFailure | undefined;
+  const companion = vscode.extensions.getExtension('michalstrba.ai-pair-local-audio');
   const placement = new PanelPlacement({
     epoch: connectionEpoch,
     remote: vscode.env.remoteName !== undefined,
-    companionInstalled: vscode.extensions.getExtension('michalstrba.ai-pair-local-audio') !== undefined,
+    companionInstalled: companion !== undefined,
     timeoutMs: COMPANION_PREPARE_TIMEOUT_MS,
-    prepare: () =>
-      Promise.resolve(
-        vscode.commands.executeCommand('aiPair.localAudio.prepare', { version: LOCAL_AUDIO_VERSION, epoch: connectionEpoch }),
-      ),
+    activationTimeoutMs: COMPANION_ACTIVATION_TIMEOUT_MS,
+    activate:
+      companion === undefined
+        ? undefined
+        : async () => {
+            const started = Date.now();
+            try {
+              return await vscode.commands.executeCommand('aiPair.localAudio.activate');
+            } finally {
+              log.info(`Local Audio activation completed in ${Date.now() - started} ms`);
+            }
+          },
+    prepare: async () => {
+      const started = Date.now();
+      try {
+        return await vscode.commands.executeCommand('aiPair.localAudio.prepare', { version: LOCAL_AUDIO_VERSION, epoch: connectionEpoch });
+      } finally {
+        log.info(`Local Audio prepare command completed in ${Date.now() - started} ms`);
+      }
+    },
     failure: (reason) => {
       prepareFailure = reason;
       if (vscode.extensions.getExtension('michalstrba.ai-pair-local-audio') !== undefined) {
@@ -958,15 +990,23 @@ export function activate(context: vscode.ExtensionContext): Api {
       const detail: Record<PanelPrepareFailure, string> = {
         timeout: 'The Local Audio extension did not respond in time.',
         activation_failure: 'The Local Audio extension could not be started.',
+        activation_timeout: 'The Local Audio extension did not start in time.',
         invalid_response: 'The Local Audio extension sent an invalid response.',
         protocol_mismatch: 'The extensions use incompatible protocol versions.',
         epoch_mismatch: 'The Local Audio extension returned an unexpected session.',
       };
-      void vscode.window.showWarningMessage(
-        prepareFailure === undefined
-          ? 'AI Pair and AI Pair Local Audio could not connect. Update both extensions and reload the window.'
-          : `AI Pair and AI Pair Local Audio could not connect. ${detail[prepareFailure]} See the AI Pair output for details.`,
-      );
+      void vscode.window
+        .showWarningMessage(
+          prepareFailure === undefined
+            ? 'AI Pair and AI Pair Local Audio could not connect. Update both extensions and reload the window.'
+            : `AI Pair and AI Pair Local Audio could not connect. ${detail[prepareFailure]} See the AI Pair output for details.`,
+          'Copy diagnostics',
+          'Show output',
+        )
+        .then((action) => {
+          if (action === 'Copy diagnostics') void copyDiagnosticsFromCommand();
+          else if (action === 'Show output') log.show();
+        });
       return;
     }
     if (chosen === 'legacy') {

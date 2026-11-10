@@ -669,3 +669,22 @@ host does this only when it owns speech. The default output keeps its existing
 startup path. A missing device remains selected and unavailable until discovery
 finds it; no fallback device is chosen. This addresses the saved-output case,
 not every possible cause of a restart failure.
+
+## Local Audio activation and preparation deadlines
+
+The workspace extension invokes a private no-op readiness command on an
+installed Local Audio extension with a
+separate ten-second deadline before starting the 1.5-second prepare command
+deadline. The command crosses VS Code extension hosts, unlike direct `Extension.activate()`
+which cannot activate a foreign extension. Cold extension loading and cross-host
+activation otherwise consume
+the prepare budget. A late activation cannot begin preparation after the
+deadline; a late prepare cannot commit. Timings are logged without session data
+to distinguish activation from command latency. The ten-second bound permits
+slower startup but cannot guarantee activation on every machine; the reported
+timeout has not yet been reproduced on the affected host.
+
+When attachment fails, a Command Palette action and warning actions expose the
+same bounded diagnostics and output without registering a second provider. An
+older incompatible companion may have different registration behavior, so an
+unconditional fallback panel cannot safely establish sole ownership.

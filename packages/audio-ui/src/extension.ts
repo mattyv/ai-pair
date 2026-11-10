@@ -20,6 +20,8 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   context.subscriptions.push(
     gate,
+    // specs/PanelPlacement.tla, Activate: readiness does not prepare or register.
+    vscode.commands.registerCommand('aiPair.localAudio.activate', () => true),
     vscode.commands.registerCommand('aiPair.localAudio.prepare', (value: unknown) => {
       if (typeof value === 'object' && value !== null && 'version' in value && value.version !== LOCAL_AUDIO_VERSION) {
         void vscode.window.showWarningMessage(

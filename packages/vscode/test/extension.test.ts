@@ -418,6 +418,7 @@ const fakes = vi.hoisted(() => {
     remoteName: undefined as string | undefined,
     workspaceProvider: undefined as string | undefined,
     logged: [] as Array<[string, string]>,
+    showOutput: vi.fn(),
   };
 });
 
@@ -465,11 +466,12 @@ vi.mock('vscode', () => ({
       info: (line: string) => fakes.logged.push(['info', line]),
       trace: (line: string) => fakes.logged.push(['trace', line]),
       dispose: () => {},
+      show: fakes.showOutput,
     }),
     showInputBox: vi.fn().mockResolvedValue(undefined),
     showWarningMessage: (message: string) => {
       fakes.infos.push(message);
-      return Promise.resolve();
+      return Promise.resolve(fakes.answer);
     },
     showErrorMessage: (message: string) => {
       fakes.errors.push(message);
@@ -505,6 +507,7 @@ vi.mock('vscode', () => ({
       ) {
         return Promise.resolve({ version: 2, epoch: value.epoch, token: 'token' });
       }
+      if (name === 'aiPair.localAudio.activate') return Promise.resolve(true);
       if (name === 'aiPair.localAudio.gpuDiagnostics' && fakes.companionAvailable) return Promise.resolve(fakes.gpuSnapshot);
       if (name === 'aiPair.localAudio.diagnostics' && fakes.companionAvailable) {
         if (fakes.diagnosticsReject) return Promise.reject(new Error('private'));
@@ -1802,6 +1805,41 @@ it('never discovers native outputs on a remote host', async () => {
   fakes.remoteName = undefined;
 });
 
+it('activates the installed companion before preparing and logs both timings', async () => {
+  fakes.companionInstalled = true;
+  activated();
+  await fakes.placementOptions?.activate?.();
+  expect(fakes.commandCalls.some(([name]) => name === 'aiPair.localAudio.activate')).toBe(true);
+  await expect(fakes.placementOptions?.prepare()).rejects.toThrow('missing command');
+  expect(fakes.logged.some(([, line]) => line.startsWith('Local Audio activation completed in '))).toBe(true);
+  expect(fakes.logged.some(([, line]) => line.startsWith('Local Audio prepare command completed in '))).toBe(true);
+});
+
+it('copies diagnostics from a command when the panel is unavailable', async () => {
+  fakes.companionInstalled = true;
+  const h = activated();
+  await h.api.ready;
+  const copy = fakes.commands.get('aiPair.copyDiagnostics');
+  expect(copy).toBeDefined();
+  await copy?.();
+  expect(
+    DIAGNOSTIC_SNAPSHOT_SCHEMA.safeParse(JSON.parse(vi.mocked(vscode.env.clipboard).writeText.mock.calls.at(-1)?.[0] ?? '')).success,
+  ).toBe(true);
+});
+
+it('propagates clipboard failure to the panel so it cannot report success', async () => {
+  const h = activated();
+  vi.mocked(vscode.env.clipboard).writeText.mockRejectedValueOnce(new Error('private'));
+  await expect(h.panel.wiring.copyDiagnostics()).rejects.toThrow('private');
+});
+
+it('reports a clipboard failure from the diagnostics command', async () => {
+  activated();
+  vi.mocked(vscode.env.clipboard).writeText.mockRejectedValueOnce(new Error('private'));
+  await fakes.commands.get('aiPair.copyDiagnostics')?.();
+  expect(fakes.errors).toContain('AI Pair could not copy diagnostics to the clipboard.');
+});
+
 it('blocks an installed incompatible companion without registering a fallback provider', async () => {
   fakes.companionInstalled = true;
   const h = activated();
@@ -1813,6 +1851,22 @@ it('blocks an installed incompatible companion without registering a fallback pr
   expect(fakes.infos).toContain('AI Pair and AI Pair Local Audio could not connect. Update both extensions and reload the window.');
   await h.api.previewSpeech();
   expect(fakes.commandCalls.some(([name]) => name === 'aiPair.localAudio.preview')).toBe(false);
+});
+
+it('offers diagnostics and output from the connection warning', async () => {
+  fakes.companionInstalled = true;
+  fakes.answer = 'Copy diagnostics';
+  const h = activated();
+  await h.api.ready;
+  await vi.waitFor(() => {
+    expect(vi.mocked(vscode.env.clipboard).writeText.mock.calls.length).toBeGreaterThan(0);
+  });
+  fakes.answer = 'Show output';
+  const next = activated();
+  await next.api.ready;
+  await vi.waitFor(() => {
+    expect(fakes.showOutput).toHaveBeenCalled();
+  });
 });
 
 it('reports a sanitized companion preparation failure in the warning and output', async () => {

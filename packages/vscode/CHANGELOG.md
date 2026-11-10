@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.24.2
+
+-   Give Local Audio activation its own bounded startup interval and record
+    activation and prepare timings for connection diagnosis.
+
+-   Make diagnostics and the output log accessible when the Pair panel cannot
+    connect to Local Audio.
+
 ## 0.24.1
 
 -   Restore a saved speech output device on startup without opening Settings,

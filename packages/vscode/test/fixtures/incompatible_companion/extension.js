@@ -3,6 +3,7 @@ const vscode = require("vscode")
 exports.activate = (context) => {
   const stats = { prepare: 0, commit: 0, preview: 0 }
   context.subscriptions.push(
+    vscode.commands.registerCommand("aiPair.localAudio.activate", () => true),
     vscode.commands.registerCommand("aiPair.localAudio.prepare", () => {
       stats.prepare++
       return undefined

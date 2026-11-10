@@ -2,7 +2,7 @@
   "name": "ai-pair-local-audio",
   "displayName": "AI Pair Local Audio",
   "description": "Local panel and audio companion for AI Pair.",
-  "version": "0.24.1",
+  "version": "0.24.2",
   "publisher": "michalstrba",
   "private": true,
   "license": "MIT",
@@ -15,10 +15,15 @@
   "api": "none",
   "main": "./dist/extension.js",
   "activationEvents": [
-    "onCommand:aiPair.localAudio.prepare"
+    "onCommand:aiPair.localAudio.prepare",
+    "onCommand:aiPair.localAudio.activate"
   ],
   "contributes": {
     "commands": [
+      {
+        "command": "aiPair.localAudio.activate",
+        "title": "AI Pair Local Audio: Activate"
+      },
       {
         "command": "aiPair.localAudio.prepare",
         "title": "AI Pair Local Audio: Prepare"
@@ -26,6 +31,10 @@
     ],
     "menus": {
       "commandPalette": [
+        {
+          "command": "aiPair.localAudio.activate",
+          "when": "false"
+        },
         {
           "command": "aiPair.localAudio.prepare",
           "when": "false"

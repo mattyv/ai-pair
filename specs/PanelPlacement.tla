@@ -18,8 +18,13 @@ Init ==
     /\ mainRegistered = FALSE /\ companionRegistered = FALSE
     /\ lateSeen = FALSE /\ badEarly = FALSE /\ badFallback = FALSE
 
+Activate ==
+    /\ phase = "idle" /\ phase' = "activating"
+    /\ UNCHANGED <<tokenValid, committed, mainRegistered, companionRegistered,
+                   lateSeen, badEarly, badFallback>>
+
 Prepare ==
-    /\ phase = "idle" /\ phase' = "preparing" /\ tokenValid' = TRUE
+    /\ phase = "activating" /\ phase' = "preparing" /\ tokenValid' = TRUE
     /\ UNCHANGED <<committed, mainRegistered, companionRegistered, lateSeen,
                    badEarly, badFallback>>
 
@@ -37,14 +42,14 @@ Commit ==
                    badEarly, badFallback>>
 
 ExpireBeforeCommit ==
-    /\ phase \in {"preparing", "prepared"} /\ ~committed
+    /\ phase \in {"activating", "preparing", "prepared"} /\ ~committed
     /\ phase' = "fallback" /\ tokenValid' = FALSE /\ mainRegistered' = TRUE
     /\ UNCHANGED <<committed, companionRegistered, lateSeen, badEarly,
                    badFallback>>
 
 \* An installed companion that did not prepare selects no owner.
 RejectInstalled ==
-    /\ phase \in {"preparing", "prepared"} /\ ~committed
+    /\ phase \in {"activating", "preparing", "prepared"} /\ ~committed
     /\ phase' = "incompatible" /\ tokenValid' = FALSE
     /\ UNCHANGED <<committed, mainRegistered, companionRegistered, lateSeen,
                    badEarly, badFallback>>
@@ -76,25 +81,27 @@ UnsafeFallback ==
     /\ UNCHANGED <<tokenValid, committed, companionRegistered, lateSeen,
                    badEarly>>
 
-Next == Prepare \/ Prepared \/ Commit \/ ExpireBeforeCommit
+Next == Activate \/ Prepare \/ Prepared \/ Commit \/ ExpireBeforeCommit
         \/ RejectInstalled \/ LatePrepared
         \/ Register \/ Acknowledged \/ TimeoutAfterCommit \/ UnsafeFallback
 Spec == Init /\ [][Next]_vars /\ WF_vars(TimeoutAfterCommit) /\
         WF_vars(ExpireBeforeCommit)
 TypeOK ==
-    /\ phase \in {"idle", "preparing", "prepared", "committed", "attached",
-                  "fallback", "unavailable", "incompatible"}
+    /\ phase \in {"idle", "activating", "preparing", "prepared",
+                  "committed", "attached", "fallback",
+                  "unavailable", "incompatible"}
     /\ tokenValid \in BOOLEAN /\ committed \in BOOLEAN
     /\ mainRegistered \in BOOLEAN /\ companionRegistered \in BOOLEAN
     /\ lateSeen \in BOOLEAN /\ badEarly \in BOOLEAN /\ badFallback \in BOOLEAN
 NoEarlyRegistration == ~badEarly
 NoFallbackAfterCommit == ~badFallback
 NoDuplicateRegistration == ~(mainRegistered /\ companionRegistered)
-CanPrepare == phase = "idle" => ENABLED Prepare
+CanPrepare == phase = "idle" => ENABLED Activate
 CanCommit == phase = "prepared" => ENABLED Commit
 CanRegister == (committed /\ ~companionRegistered) => ENABLED Register
-CanFallback == phase \in {"preparing", "prepared"} => ENABLED ExpireBeforeCommit
-PreparationSettles == (phase \in {"preparing", "prepared"}) ~>
+CanFallback == phase \in {"activating", "preparing", "prepared"} =>
+    ENABLED ExpireBeforeCommit
+PreparationSettles == (phase \in {"activating", "preparing", "prepared"}) ~>
     (phase \in {"committed", "fallback", "attached",
                 "unavailable", "incompatible"})
 CommittedSettles == (phase = "committed") ~>

@@ -40407,7 +40407,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
               ],
               edges: [
                 { from: "workspace-session", to: "workspace-audio-proxy", label: "narration" },
-                { from: "workspace-audio-proxy", to: "local-panel", label: "requests" },
+                { from: "workspace-audio-proxy", to: "local-panel", label: "activation, attachment, requests" },
                 {
                   from: "local-panel",
                   to: "workspace-audio-proxy",
@@ -40460,7 +40460,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 "local-panel": [
                   {
                     id: "placement-commit",
-                    text: "Prepare cannot register a view. Private protocol version 2 carries accepted queued-batch counts. A new workspace rejects an installed incompatible companion before selecting an owner; the new companion rejects old workspace requests and asks for both extensions to be updated and the window reloaded. An already-installed old workspace may still choose its own legacy fallback. Commit selects one owner; a lost acknowledgement cannot register a legacy fallback.",
+                    text: "A bounded activation command crosses VS Code hosts and returns readiness without creating a session or token. The workspace then prepares with a separate deadline, validates protocol and epoch, selects the companion, and dispatches commit. A late activation or preparation cannot commit; after selection a lost commit acknowledgement cannot cause legacy fallback. Private protocol version 2 carries accepted queued-batch counts.",
                     ts: 0,
                   },
                 ],
@@ -40958,6 +40958,52 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                   {
                     id: "gpu-ups1-policy",
                     text: "Model proof and synthesis route the pinned model ups.1 ConvTranspose node to CPU to avoid reproduced WebGPU numerical corruption. Other model work remains on GPU; strict prerequisite probes and loader, driver, model, and physical-device verification remain unchanged.",
+                    ts: 0,
+                  },
+                ],
+              },
+            },
+          },
+          {
+            id: "companion-attachment-bootstrap",
+            name: "Companion attachment bootstrap",
+            type: "sequence",
+            origin: "llm",
+            doc: {
+              type: "sequence",
+              nodes: [
+                {
+                  id: "workspace",
+                  label: "Workspace host",
+                  files: ["packages/vscode/src/panel_placement.ts", "packages/vscode/src/extension.ts"],
+                  x: 0,
+                  y: 0,
+                  step: 1,
+                },
+                { id: "commands", label: "VS Code commands", files: [], x: 0, y: 0, step: 2 },
+                {
+                  id: "companion",
+                  label: "Local UI companion",
+                  files: ["packages/audio-ui/src/extension.ts", "packages/audio-ui/src/attachment_gate.ts"],
+                  x: 0,
+                  y: 0,
+                  step: 3,
+                },
+              ],
+              edges: [
+                { from: "workspace", to: "commands", label: "activate command (10 s bound)" },
+                { from: "commands", to: "companion", label: "activate host and request readiness" },
+                { from: "companion", to: "workspace", label: "ready: true (no token or session)" },
+                { from: "workspace", to: "companion", label: "prepare (1.5 s bound)" },
+                { from: "companion", to: "workspace", label: "prepared token, version, epoch" },
+                { from: "workspace", to: "companion", label: "select companion; dispatch commit" },
+              ],
+              groups: [],
+              comments: {
+                __diagram__: [
+                  {
+                    id: "bootstrap-bounds",
+                    text: "Activation uses a VS Code command so the companion can run on a different extension host. The 10-second activation deadline is separate from the 1.5-second prepare deadline. Both timeouts fail closed for an installed companion; late results cannot change the owner. Selection precedes commit, so a missing commit acknowledgement cannot trigger another owner.",
                     ts: 0,
                   },
                 ],

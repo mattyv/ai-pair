@@ -55,6 +55,13 @@ beforeEach(() => {
 });
 
 describe('local companion activation', () => {
+  it('signals readiness without preparing or registering a provider', () => {
+    activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
+    expect(fake.commands.get('aiPair.localAudio.activate')?.(undefined)).toBe(true);
+    expect(fake.prepare).not.toHaveBeenCalled();
+    expect(createCompanionSession).not.toHaveBeenCalled();
+  });
+
   it('prepares without registering a provider and commits only once', () => {
     const subscriptions: vscode.Disposable[] = [];
     fake.prepare.mockReturnValue({ version: 2, epoch: 'epoch', token: 'token' });

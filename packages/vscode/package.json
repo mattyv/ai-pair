@@ -2,7 +2,7 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.24.1",
+  "version": "0.24.2",
   "publisher": "michalstrba",
   "private": true,
   "license": "MIT",
@@ -77,6 +77,11 @@
       ]
     },
     "commands": [
+      {
+        "command": "aiPair.copyDiagnostics",
+        "title": "Copy Diagnostics",
+        "category": "AI Pair"
+      },
       {
         "command": "aiPair.setElevenLabsKey",
         "title": "Add or Replace ElevenLabs API Key",

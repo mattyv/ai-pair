@@ -107,7 +107,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `OutputPreference.cfg` | ordered choice, discovery and failed persistence | holds | 934 |
 | `LocalAudioAdmission.cfg` | capability, device snapshot and cloud admission | holds | 624 |
 | `LocalAudioOwnership.cfg` | local ownership, directional sequences and lease loss | holds | 3,632 |
-| `PanelPlacement.cfg` | bounded prepare, irrevocable commit and fallback | holds | 11 |
+| `PanelPlacement.cfg` | bounded activation and prepare, irrevocable commit and fallback | holds | 12 |
 | `SentencePipeline.cfg` | two units, three parts, pause, cancel and late callbacks | holds | 2,242 |
 | `SpeechTempo.cfg` | two units, two parts, rate changes and stale results | holds | 868 |
 | `SpeechTempo_Healthy.cfg` | two fair completed units | holds | 17 |
@@ -2112,6 +2112,9 @@ environment, credential or error text enters this history.
 
 ### `DiagnosticsRequest`: isolated bounded diagnostics
 
+The Command Palette and connection-failure warning use the same bounded
+snapshot as the panel, including when no panel provider was selected.
+
 The request has no effect on session, owner, pause or queued reports. Collection
 can return available facts, unavailable facts, or cancellation. Weak fairness
 models the collector deadline; the model abstracts the concrete 100-event bound
@@ -2129,7 +2132,8 @@ mutated separately: an invalid response breaks `TypeOK`; a secret fact breaks
 
 ### `DiagnosticsCopy`: explicit clipboard export
 
-An explicit action can succeed or fail; opening Settings alone does not copy.
+An explicit action from the panel, Command Palette, or connection warning can
+succeed or fail; opening Settings alone does not copy.
 TLC checked three states. Mutations that copy before a request, fail to produce
 an outcome, or produce both outcomes violate `OnlyOnRequest`,
 `RequestedCompletes`, and `ExclusiveOutcome`; an invalid type is rejected.
@@ -2138,7 +2142,7 @@ an outcome, or produce both outcomes violate `OnlyOnRequest`,
 |---|---|
 | `TypeOK` | TypeScript checks the control and outcome types |
 | `OnlyOnRequest` | `webview/panel.test.ts`: OnlyOnRequest: requests diagnostics only when the button is activated |
-| `RequestedCompletes`, `ExclusiveOutcome` | `panel.test.ts`: OnlyOnRequest and RequestedCompletes: copies only when asked and reports either outcome |
+| `RequestedCompletes`, `ExclusiveOutcome` | `panel.test.ts`: OnlyOnRequest and RequestedCompletes: copies only when asked and reports either outcome; `extension.test.ts`: copies diagnostics from a command when the panel is unavailable; reports a clipboard failure from the diagnostics command |
 
 ### `CodePlayback`: grouped code and its reading pauses
 
@@ -2461,7 +2465,10 @@ Prepare does not register a view. The main extension selects the companion
 irrevocably before sending commit; a lost acknowledgement cannot select legacy
 fallback. A preparation timeout expires the token and may fall back only
 before commit. A delayed prepare cannot register an extra view. TLC checked
-11 states and assumes fair timeouts before and after commit. `RejectInstalled`
+12 states and assumes fair timeouts before and after commit. Activation has a
+separate bounded interval before preparation begins and requires a valid readiness
+reply; a late activation cannot
+start preparation after the selection has settled. `RejectInstalled`
 models the new incompatible result without registering either owner;
 `StatusTransport` models the version guard that selects this result.
 
@@ -2479,7 +2486,7 @@ forbidden. The negative control disables this guard and violates
 |---|---|
 | `RejectInstalled` | `panel_placement.test.ts`: rejects an installed incompatible companion before selecting any panel owner; `integration_workspace_incompatible.ts`: a synthetic companion refusal shows the warning without committing or previewing. |
 | `NoFallbackAfterCommit`, `CommittedSettles` | `panel_placement.test.ts`: chooses companion irrevocably before committing, including on a lost acknowledgement. |
-| `NoEarlyRegistration`, `NoDuplicateRegistration`, `PreparationSettles` | `panel_placement.test.ts`: falls back only before commit and ignores late prepare replies; uses local legacy only for a failed or invalid preparation before commit. |
+| `NoEarlyRegistration`, `NoDuplicateRegistration`, `PreparationSettles` | `panel_placement.test.ts`: falls back only before commit and ignores late prepare replies; ignores activation completing after its deadline; uses local legacy only for a failed or invalid preparation before commit. |
 
 ### `LocalPanelReplay`: ordered local panel replay
 

@@ -7,10 +7,15 @@
   },
   "main": "./extension.js",
   "activationEvents": [
-    "onCommand:aiPair.localAudio.prepare"
+    "onCommand:aiPair.localAudio.prepare",
+    "onCommand:aiPair.localAudio.activate"
   ],
   "contributes": {
     "commands": [
+      {
+        "command": "aiPair.localAudio.activate",
+        "title": "Activate"
+      },
       {
         "command": "aiPair.localAudio.prepare",
         "title": "Synthetic prepare"

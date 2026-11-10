@@ -17,6 +17,7 @@ export async function run(): Promise<void> {
     await expectNotification(
       'AI Pair and AI Pair Local Audio could not connect. The Local Audio extension sent an invalid response. See the AI Pair output for details.',
     );
+    assert.ok((await vscode.commands.getCommands()).includes('aiPair.copyDiagnostics'));
     assert.equal(api.speechPageReady(), false);
     assert.equal(api.speechStatus(), undefined);
     await api.previewSpeech();

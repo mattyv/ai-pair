@@ -6,6 +6,92 @@ afterEach(() => {
 });
 
 describe('panel placement', () => {
+  it('allows slow activation its own bounded interval before preparing', async () => {
+    vi.useFakeTimers();
+    const activation = Promise.withResolvers<unknown>();
+    const prepare = vi.fn().mockResolvedValue({ version: 2, epoch: 'epoch', token: 'token' });
+    const commit = vi.fn().mockResolvedValue(true);
+    const placement = new PanelPlacement({
+      epoch: 'epoch',
+      remote: false,
+      companionInstalled: true,
+      timeoutMs: 100,
+      activationTimeoutMs: 500,
+      activate: () => activation.promise,
+      prepare,
+      commit,
+    });
+    const result = placement.choose();
+    await vi.advanceTimersByTimeAsync(200);
+    expect(prepare).not.toHaveBeenCalled();
+    activation.resolve(true);
+    expect(await result).toBe('companion');
+    expect(commit).toHaveBeenCalledOnce();
+  });
+
+  it('ignores activation completing after its deadline', async () => {
+    vi.useFakeTimers();
+    const activation = Promise.withResolvers<unknown>();
+    const prepare = vi.fn();
+    const commit = vi.fn();
+    const failure = vi.fn<(reason: import('../src/panel_placement').PanelPrepareFailure) => void>();
+    const placement = new PanelPlacement({
+      epoch: 'epoch',
+      remote: false,
+      companionInstalled: true,
+      timeoutMs: 100,
+      activationTimeoutMs: 500,
+      activate: () => activation.promise,
+      prepare,
+      commit,
+      failure,
+    });
+    const result = placement.choose();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(await result).toBe('incompatible');
+    expect(failure).toHaveBeenCalledExactlyOnceWith('activation_timeout');
+    activation.resolve(true);
+    await Promise.resolve();
+    expect(prepare).not.toHaveBeenCalled();
+    expect(commit).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid readiness response without preparing', async () => {
+    const prepare = vi.fn();
+    const failure = vi.fn<(reason: import('../src/panel_placement').PanelPrepareFailure) => void>();
+    const placement = new PanelPlacement({
+      epoch: 'epoch',
+      remote: true,
+      companionInstalled: true,
+      timeoutMs: 100,
+      activate: () => Promise.resolve(undefined),
+      prepare,
+      commit: vi.fn(),
+      failure,
+    });
+    expect(await placement.choose()).toBe('incompatible');
+    expect(failure).toHaveBeenCalledExactlyOnceWith('activation_failure');
+    expect(prepare).not.toHaveBeenCalled();
+  });
+
+  it('reports activation rejection without preparing', async () => {
+    const prepare = vi.fn();
+    const failure = vi.fn<(reason: import('../src/panel_placement').PanelPrepareFailure) => void>();
+    const placement = new PanelPlacement({
+      epoch: 'epoch',
+      remote: false,
+      companionInstalled: true,
+      timeoutMs: 100,
+      activate: () => Promise.reject(new Error('private')),
+      prepare,
+      commit: vi.fn(),
+      failure,
+    });
+    expect(await placement.choose()).toBe('incompatible');
+    expect(failure).toHaveBeenCalledExactlyOnceWith('activation_failure');
+    expect(prepare).not.toHaveBeenCalled();
+  });
+
   it('chooses companion irrevocably before committing, including on a lost acknowledgement', async () => {
     const prepare = vi.fn().mockResolvedValue({ version: 2, epoch: 'epoch', token: 'token' });
     const commit = vi.fn().mockRejectedValue(new Error('lost'));

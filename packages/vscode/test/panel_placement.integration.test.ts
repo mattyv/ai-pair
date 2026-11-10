@@ -41,3 +41,33 @@ it('attaches matching workspace and companion versions once', async () => {
   expect(commit).toHaveBeenCalledOnce();
   gate.dispose();
 });
+
+it('waits for delayed activation before preparing and committing the gate', async () => {
+  vi.useFakeTimers();
+  const activation = Promise.withResolvers<unknown>();
+  const register = vi.fn<() => void>();
+  const gate = new AttachmentGate({ token: () => 'token', timeoutMs: 500, register });
+  try {
+    const placement = new PanelPlacement({
+      epoch: 'epoch',
+      remote: false,
+      companionInstalled: true,
+      timeoutMs: 100,
+      activationTimeoutMs: 500,
+      activate: () => activation.promise,
+      prepare: () => Promise.resolve(gate.prepare({ version: LOCAL_AUDIO_VERSION, epoch: 'epoch' })),
+      commit: (value) => Promise.resolve(gate.commit(value)),
+    });
+    const result = placement.choose();
+    await vi.advanceTimersByTimeAsync(200);
+    expect(register).not.toHaveBeenCalled();
+    activation.resolve(true);
+    expect(await result).toBe('companion');
+    await vi.waitFor(() => {
+      expect(register).toHaveBeenCalledOnce();
+    });
+  } finally {
+    gate.dispose();
+    vi.useRealTimers();
+  }
+});

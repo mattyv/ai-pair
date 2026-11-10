@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.24.2
+
+-   Give Local Audio activation its own bounded startup interval and record
+    activation and prepare timings for connection diagnosis.
+
 ## 0.24.1
 
 -   Restore a saved speech output device on startup without opening Settings,
