@@ -207,3 +207,42 @@ is bumped. No new package is claimed ready by this checkpoint.
 Chat order, line/block playback, selected narration, sentence pipelining,
 listening speed, warm worker reuse, output selection and model status have
 implementation already. Their older planning notes are not a new-work list.
+
+## Independent architecture audit, 2026-11-10
+
+Astra reviewed lifecycle-overhaul commit `d1bdaad` and the current source.
+These are future work, not changes included in the speech overhaul. Evidence
+comes from source inspection and in-memory probes, not a full host reproduction.
+
+-   **Session recovery: bounded overhaul.** A malformed checkpoint passes the
+    shallow validator and throws during revival (reproduced). Introduce one
+    versioned, validated recovery envelope for session and history, ordered
+    writes, and an explicit disposition for accepted unfinished work. Test
+    malformed/legacy data, delayed/rejected writes and crashes around commit.
+    Debounced durability and mismatched generations are risks; torn disk writes
+    were not reproduced. See `packages/core/src/controller.ts` and the
+    persistence boundary in `packages/vscode/src/extension.ts`.
+-   **Report provenance: focused protocol fix.** Returning an old report can
+    insert its events into a newer session (reproduced at the controller
+    boundary, not through a real MCP client). Carry a controller-owned session
+    epoch and delivery receipt through report/return. Test late and duplicate
+    returns across end/start and reconnect, preserving legitimate cancellation
+    handback. See `packages/core/src/bridge.ts`,
+    `packages/core/src/controller.ts` and `packages/relay/src/server.ts`.
+-   **Relay handshake ownership: focused fix.** A normal upgraded socket that
+    never receives welcome remains pending after link shutdown (fake-socket
+    reproduction). Own the pending socket, welcome deadline, abort and shutdown
+    under one connection attempt. Test silent peers, cancellation, shutdown and
+    stale completion. See `packages/relay/src/link.ts`.
+-   **Command identity across reload: focused fix, related to #11.** Run IDs
+    restart while history survives, allowing old rows to target a new command
+    with the same number (source-level collision). Add a host epoch or
+    non-reusing identity; mark unattached historical commands unavailable. Test
+    restored and new rows in both history orders. See
+    `packages/core/src/player.ts`, `packages/vscode/src/terminal.ts` and
+    `packages/vscode/src/webview/panel.ts`.
+
+Retain terminal pooling, intentional command continuation after interruption,
+companion transport ownership and existing relay authentication. The common
+verification gap is composition across reload, session and asynchronous storage
+lifetimes; a general controller, terminal or panel rewrite is not justified.
