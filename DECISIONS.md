@@ -762,3 +762,14 @@ a static orange indicator for reduced motion. Readiness requires actual worker
 ready evidence for Kokoro, together with the existing settings and output checks.
 An unknown output route remains unchecked after model startup. Readiness does
 not establish audibility; it is available before the first pairing session.
+
+## Canonical architecture principles
+
+Keep the repository's architecture principles in
+[`.archi/MANIFESTO.md`](.archi/MANIFESTO.md), the default manifesto location
+read by Archi-Techture. Agent entry points link to that single source. Adapt
+the installed Archi 1.5.1 example to the repository's ownership, lifecycle and
+verification requirements; do not attribute that shipped example to a personal
+manifesto. The principles are review obligations, with automated enforcement
+identified honestly. This documentation change adds no runtime boundary and
+does not require architecture source or export regeneration.

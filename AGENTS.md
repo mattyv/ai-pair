@@ -13,7 +13,9 @@ Give regular progress reports with an approximate percentage complete and ETA.
 Explain material delays or uncertainty, and do not report completion until
 implementation, review, and verification are finished.
 
-Read `CLAUDE.md` for the repository's additional development guidance.
+Read [CLAUDE.md](CLAUDE.md) for the repository's additional development
+guidance and [architecture principles](.archi/MANIFESTO.md) before designing
+or reviewing a change.
 
 Record material technical and product choices in `DECISIONS.md`, including
 their rationale and important limitations. Update the record when a choice

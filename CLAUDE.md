@@ -4,7 +4,8 @@ Rules for a coding agent working on this codebase, decided with Justine in
 earlier sessions. Read them at the start of every session so she does not have
 to repeat them. Add a rule here whenever she sets one. This is not the guide the
 extension sends to pairing agents; that is `AGENT_GUIDE.md`, which ships to
-every user.
+every user. Read the canonical [architecture principles](.archi/MANIFESTO.md)
+before designing or reviewing a change.
 
 ## GitHub issues
 
