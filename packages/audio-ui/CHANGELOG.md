@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.25.0
+
+-   Show cached voice readiness beside the toolbar controls, with explanatory
+    tooltips and direct access to speech settings.
+
 ## 0.24.2
 
 -   Give Local Audio activation its own bounded startup interval and record

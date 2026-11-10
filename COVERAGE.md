@@ -272,7 +272,8 @@ Last updated: css, 2026-11-10.
 | `packages/vscode/src/terminal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 98.9% F 100.0% | - | - | - | - |
 | `packages/vscode/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/view.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 88.0% F 100.0% | - | - | - | - |
-| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 155 of 155 rules matched |
+| `packages/vscode/src/voice_indicator.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 159 of 159 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/speech_audio.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/workspace_panel_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 84.4% B 46.1% F 100.0% | - | - | - | - |
@@ -434,6 +435,7 @@ Last updated: css, 2026-11-10.
 | `packages/vscode/test/view.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/visual/chat_order.spec.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/visual/panel.spec.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/vscode/test/voice_indicator.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/webview/panel.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/workspace_panel_bridge.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/workspace_session.integration.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -653,6 +655,8 @@ Last updated: css, 2026-11-10.
 | `specs/Typing.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/TypingEol.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/TypingEol.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
+| `specs/VoiceIndicator.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/VoiceIndicator.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/WarmSynthesisWorker.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/WarmSynthesisWorker.tla` | TLA+ | - | - | 16 of 16 actions | - | - | - |
 | `specs/WarmSynthesisWorker_Cancellation.cfg` | TLC config | - | - | - | - | - | - |

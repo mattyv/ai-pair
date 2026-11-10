@@ -1,5 +1,12 @@
 # AI Pair Programmer
 
+## Voice status
+
+The speaker icon beside the toolbar controls shows whether automatic narration
+is off, not checked, ready, or unavailable. Hover for the reason, or select it
+to open speech settings. Ready means the available cached checks passed; it
+does not confirm audible sound or cloud account availability.
+
 ## Demo and diagnostics
 
 In Claude Code, run `/pair:demo` to guide a real Pair session in a fresh scratch

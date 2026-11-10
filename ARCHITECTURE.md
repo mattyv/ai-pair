@@ -474,3 +474,7 @@ updates; neither produces a private transport frame. This leaves version 2
 and the public MCP protocol unchanged. An older companion
 does not offer the GPU controls. The companion panel routing test verifies the
 local boundary.
+
+The voice toolbar button projects existing cached audio facts through the local
+panel channel. It adds no process, device probe or component boundary; the
+source model and generated export retain the current attachment architecture.

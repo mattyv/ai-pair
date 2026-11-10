@@ -12,6 +12,7 @@ const fake = vi.hoisted(() => ({
   speechPause: vi.fn(),
   speechResume: vi.fn(),
   warning: vi.fn(),
+  showSpeechTransport: vi.fn(),
   diagnostic: undefined as ((event: import('../../vscode/src/diagnostics').SpeechDiagnosticEvent) => void) | undefined,
 }));
 vi.mock('vscode', () => ({
@@ -43,6 +44,7 @@ vi.mock('../../vscode/src/panel', () => ({
       return 1;
     }
     showRemoteUpdate = vi.fn();
+    showSpeechTransport = fake.showSpeechTransport;
   },
 }));
 
@@ -61,6 +63,7 @@ function isRouting(value: unknown): value is { forward(action: unknown, page: nu
 describe('companion session integration', () => {
   it('forwards a deferred reply while resuming the locally paused narration', async () => {
     fake.stop.mockClear();
+    fake.showSpeechTransport.mockClear();
     fake.speechCancel.mockClear();
     fake.speechResume.mockClear();
     fake.execute.mockClear().mockResolvedValue(undefined);
@@ -80,6 +83,7 @@ describe('companion session integration', () => {
       );
     });
     current.dispose();
+    expect(fake.showSpeechTransport).toHaveBeenCalledWith(false);
   });
 
   it('registers one local provider and forwards a reply only after local retirement', async () => {
