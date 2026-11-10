@@ -3106,9 +3106,11 @@ Worker construction or load errors retain their sanitized category through
 Independent temporary configurations setting `GuardReap`, `GuardCurrent`, or
 `GuardExplicit` to `FALSE` each violate `Safety`. Setting `EnableProgress` to
 `FALSE` violates `LatestProgress`; the fairness assumption does not force a
-disabled action. These negative controls were discarded. The model abstracts
-unit ownership, proof arbitration and restart; their concrete tests provide
-additional coverage.
+disabled action. `StaleCallback` never fires with `GuardCurrent = TRUE` in the
+normal configuration. It models a stale completion only when the negative
+control disables that guard, which violates `Safety`. These negative controls
+were discarded. The model abstracts unit ownership, proof arbitration and
+restart; their concrete tests provide additional coverage.
 
 ### `SpeechWarmup`: pre-session local speech warmup
 
