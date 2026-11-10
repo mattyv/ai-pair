@@ -1,3 +1,6 @@
+import { voiceIndicator } from '../voice_indicator';
+import type { AudioDiagnostics } from '@ai-pair/protocol';
+import type { SpeechComputeState } from '../speech_compute_types';
 import { SPEECH_LISTENING_RATES } from '../speech_tempo';
 // The narration panel's page script, bundled for the webview as dist/panel.js (#6). The markup and
 // styles are in panel_html.ts; the messages in panel_messages.ts.
@@ -67,6 +70,7 @@ function $<T extends HTMLElement>(name: string, type: abstract new () => T): T {
 const ui = {
   band: $('band', HTMLElement),
   settings: $('settings', HTMLButtonElement),
+  voiceStatus: $('voice-status', HTMLButtonElement),
   settingsDialog: $('settings-dialog', HTMLDialogElement),
   settingsClose: $('settings-close', HTMLButtonElement),
   chatOrder: $('chat-order', HTMLSelectElement),
@@ -148,6 +152,11 @@ const ui = {
 };
 
 let chatOrder: ChatOrder = 'newestFirst';
+let voiceFacts: AudioDiagnostics | undefined;
+let voiceCompute: SpeechComputeState | undefined;
+let voiceTransport = false;
+let voiceSettingsValid: boolean | undefined;
+let settingsReturn: HTMLButtonElement;
 let speechPage = 0;
 let speechId = 0;
 let speechCanceled = false;
@@ -877,8 +886,30 @@ ui.copyDiagnostics.addEventListener('click', () => {
   vscode.postMessage({ type: 'copyDiagnostics' });
 });
 
+/** Updates the accessible status from the latest validated host facts. */
+function syncVoiceStatus(): void {
+  const indicator = voiceIndicator(voiceFacts, voiceCompute, voiceTransport, voiceSettingsValid);
+  const labels = {
+    off: 'Automatic narration: off',
+    checking: 'Voice: readiness not checked',
+    ready: 'Voice: ready (checks passed)',
+    unavailable: 'Voice: unavailable',
+  };
+  ui.voiceStatus.dataset.state = indicator;
+  ui.voiceStatus.setAttribute('aria-label', labels[indicator]);
+  ui.voiceStatus.dataset.tip = labels[indicator];
+  if (tipTarget === ui.voiceStatus) showTip(ui.voiceStatus);
+}
+
+ui.voiceStatus.addEventListener('click', () => {
+  settingsReturn = ui.voiceStatus;
+  ui.settingsDialog.showModal();
+  ui.speechProvider.focus();
+});
+
 // specs/Panel.tla, `OpenSettings` and `CloseSettings`.
 ui.settings.addEventListener('click', () => {
+  settingsReturn = ui.settings;
   ui.settingsDialog.showModal();
   ui.chatOrder.focus();
 });
@@ -886,7 +917,7 @@ ui.settingsClose.addEventListener('click', () => {
   ui.settingsDialog.close();
 });
 ui.settingsDialog.addEventListener('close', () => {
-  ui.settings.focus();
+  (settingsReturn ?? ui.settings).focus();
 });
 function isSpeechVoice(value: string): value is SpeechVoice {
   return SPEECH_VOICES.some((voice) => voice === value);
@@ -905,6 +936,8 @@ function saveSpeechSettings(): void {
   }
   if (speechEnabled && !ui.speechEnabled.checked) stopSpeechLocally();
   speechEnabled = ui.speechEnabled.checked;
+  voiceFacts = undefined;
+  syncVoiceStatus();
   vscode.postMessage({
     type: 'speechSettings',
     value: {
@@ -1063,13 +1096,28 @@ ui.chatOrder.addEventListener('change', () => {
 
 function handle(message: ToPanel): void {
   switch (message.type) {
+    case 'speechReadiness':
+      voiceFacts = message.value;
+      syncVoiceStatus();
+      return;
+    case 'speechTransport':
+      voiceTransport = message.available;
+      syncVoiceStatus();
+      return;
     case 'speechPage':
+      voiceFacts = undefined;
+      voiceCompute = undefined;
+      voiceTransport = false;
+      voiceSettingsValid = undefined;
+      syncVoiceStatus();
       speechPage = message.pageId;
       speechId = 0;
       speechCanceled = false;
       speechAudio.page(message.pageId);
       return;
     case 'speechComputeState': {
+      voiceCompute = message.value;
+      syncVoiceStatus();
       const { requestedMode, actualBackend, gpuCheck } = message.value;
       const reasons = {
         busy: 'GPU speech is still finishing. Try again shortly.',
@@ -1124,6 +1172,22 @@ function handle(message: ToPanel): void {
       if (!message.supported) ui.speechSettingsStatus.textContent = 'Local speech is unavailable in this build or on this host.';
       return;
     case 'speechSettings':
+      voiceSettingsValid =
+        message.value.provider === 'kokoro'
+          ? SPEECH_VOICES.some((voice) => voice === message.value.voice) && SPEECH_SPEEDS.some((speed) => speed === message.value.speed)
+          : message.value.elevenLabsVoice.trim() !== '' && ELEVENLABS_SPEEDS.some((speed) => speed === message.value.elevenLabsSpeed);
+      voiceFacts = {
+        enabled: message.value.enabled,
+        provider: message.value.provider,
+        keyConfigured: 'unknown',
+        voiceConfigured: true,
+        output: 'unknown',
+        routeAvailable: 'unknown',
+        runtimeReady: 'unknown',
+        modelReady: 'unknown',
+        lastPlayback: 'unknown',
+      };
+      syncVoiceStatus();
       if (speechEnabled && !message.value.enabled) stopSpeechLocally();
       speechEnabled = message.value.enabled;
       speechProvider = message.value.provider;

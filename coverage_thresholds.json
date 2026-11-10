@@ -929,6 +929,13 @@
       "functions": 100
     }
   },
+  "packages/vscode/src/voice_indicator.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/vscode/src/webview/panel.css": {
     "css": {
       "rules": 100

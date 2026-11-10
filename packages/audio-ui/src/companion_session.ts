@@ -64,6 +64,7 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
   function shutdown(notify: boolean): void {
     if (closed) return;
     closed = true;
+    panel?.showSpeechTransport(false);
     assembler.setPage(undefined);
     narration.dispose();
     host.dispose();

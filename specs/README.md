@@ -2975,3 +2975,27 @@ reports a child close. Unit and integration tests for `speech_gpu_slot.ts`,
 process lease and reaping boundary. The model does not coordinate separate
 extension-host processes. `Result` never fires in the checked configuration
 because `GuardClose` is true; it exists only to model the early-release mutation.
+
+### `VoiceIndicator`: truthful toolbar readiness
+
+`VoiceIndicator.tla` models an atomic projection of enablement, transport,
+provider prerequisites and a recorded failure. The prerequisites abstract the
+provider-specific runtime, route, model, key, voice and GPU checks; their
+concrete mapping is tested separately. The model does not prove audibility,
+cloud credit availability, or hardware execution. Weak fairness makes the
+observation step eventually update the view.
+
+| Property | Test |
+|---|---|
+| `TypeOK`, `Accurate` | `voice_indicator.test.ts`: maps each supported state and unknown evidence. |
+| `ReadyRequiresEvidence` | `voice_indicator.test.ts`: requires known provider, route and GPU evidence before ready. |
+| `OffWhenDisabled` | `voice_indicator.test.ts`: reports off when speech is disabled. |
+| `EventuallyObserved` | `webview/panel.test.ts`: updates voice readiness without opening settings and opens speech controls. |
+
+Mutations producing an invalid type, retaining the old indicator, accepting
+unknown prerequisites as ready, showing checking when disabled, or never
+recording observation each produced a counterexample for its named property.
+
+| Config | Bounds | Distinct states | Result |
+|---|---|---|---|
+| `VoiceIndicator.cfg` | Two Boolean flags, three prerequisite states and failure flag | 25 | Pass |

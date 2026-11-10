@@ -160,6 +160,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   let calibration: Calibration;
   let speech: SpeechService;
   let speechObservation: SpeechObservation | undefined;
+  let lastPlayback: import('@ai-pair/protocol').AudioDiagnostics['lastPlayback'] = 'unknown';
   let previewCapture = false;
   let previewSequence = 0;
   let previewId: number | undefined;
@@ -170,6 +171,9 @@ export function activate(context: vscode.ExtensionContext): Api {
   let runtimeSpeechChecked = false;
   const cloudSupported = vscode.env.remoteName === undefined && vscode.env.uiKind === vscode.UIKind.Desktop;
   let keyStatusEpoch = 0;
+  let keyConfigured: boolean | 'unknown' = 'unknown';
+  let modelReady: boolean | 'unknown' = 'unknown';
+  let modelGeneration = 0;
   let cloudVoiceInvalidated = false;
   let panel: NarrationPanel;
   const connectionEpoch = randomUUID();
@@ -181,14 +185,50 @@ export function activate(context: vscode.ExtensionContext): Api {
   let catalog: SpeechCatalog;
   let outputPreferences: SpeechOutputPreferences;
   let outputRouter: SpeechOutputRouter;
+  let speechSettings: { get: () => SpeechSettings; set: (value: SpeechSettings) => void };
+  let routeKnown = false;
+  let routeGeneration = 0;
   function discoverSpeechOutputs(): Promise<OutputDiscovery> {
     return cloudSupported ? discoverOutputs() : Promise.resolve({ supported: false, devices: [], reason: 'unsupported' });
+  }
+  /** Projects existing local facts without initiating any capability checks. */
+  function audioReadiness(): import('@ai-pair/protocol').AudioDiagnostics {
+    const settings = speechSettings.get();
+    const output = outputPreferences.choice().kind;
+    return {
+      enabled: settings.enabled,
+      provider: settings.provider,
+      keyConfigured: shuttingDown ? 'unknown' : keyConfigured,
+      voiceConfigured: (settings.provider === 'kokoro' ? settings.voice : settings.elevenLabsVoice).trim() !== '',
+      output: output === 'native' ? 'override' : output,
+      routeAvailable: !shuttingDown && output === 'native' && routeKnown ? outputPreferences.ready() : 'unknown',
+      runtimeReady: shuttingDown ? 'unknown' : !localSpeechSupported ? false : runtimeSpeechChecked ? runtimeSpeechSupported : 'unknown',
+      modelReady: shuttingDown ? 'unknown' : modelReady,
+      lastPlayback,
+    };
+  }
+  /** Publishes current facts only while the legacy host owns the panel. */
+  function publishReadiness(): void {
+    // specs/VoiceIndicator.tla, Observe: publish one coherent cached snapshot.
+    if (!shuttingDown && owner === 'legacy') panel.showSpeechReadiness(audioReadiness());
+  }
+  async function discoverPreferenceOutputs(): Promise<OutputDiscovery> {
+    const generation = ++routeGeneration;
+    routeKnown = false;
+    publishReadiness();
+    const result = await discoverSpeechOutputs();
+    if (!shuttingDown && generation === routeGeneration) routeKnown = true;
+    return result;
   }
   function handleSpeechEvent(event: SpeechAudioEvent): void {
     const terminal = speech.audioEvent(event);
     if (terminal !== undefined) {
       outputRouter.browserRetired(event.id, event.pageId);
-      if (speechObservation?.id === event.id) speechObservation = { ...speechObservation, terminal };
+      if (speechObservation?.id === event.id) {
+        speechObservation = { ...speechObservation, terminal };
+        lastPlayback = terminal;
+      }
+      publishReadiness();
     }
   }
   let credentials: SpeechCredentials;
@@ -258,7 +298,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   }
   let lastSpeechProvider = storedSpeechSettings().provider;
   let lastSpeechEnabled = storedSpeechSettings().enabled;
-  const speechSettings = {
+  speechSettings = {
     get: (): SpeechSettings => pendingSpeechSettings ?? storedSpeechSettings(),
     set: (value: SpeechSettings): void => {
       const prior = speechSettings.get();
@@ -275,6 +315,8 @@ export function activate(context: vscode.ExtensionContext): Api {
       pendingSpeechSettings = { ...value, listeningSpeed: speechListeningRate(value.listeningSpeed) };
       lastSpeechProvider = value.provider;
       lastSpeechEnabled = value.enabled;
+      panel.showSpeechSettings(pendingSpeechSettings);
+      publishReadiness();
       const saveOperation = speechSaveTail.then(async () => {
         const updates: Array<[string, unknown]> = [
           ['speech.enabled', value.enabled],
@@ -297,6 +339,7 @@ export function activate(context: vscode.ExtensionContext): Api {
           pendingSpeechSettings = undefined;
           if (restoresVoice) cloudVoiceInvalidated = false;
           panel.showSpeechSettings(storedSpeechSettings());
+          publishReadiness();
         },
         () => {
           // specs/ProviderChoice.tla, Failure: only the latest failed write rolls back.
@@ -308,6 +351,7 @@ export function activate(context: vscode.ExtensionContext): Api {
           lastSpeechProvider = restored.provider;
           lastSpeechEnabled = restored.enabled;
           panel.showSpeechSettings(restored);
+          publishReadiness();
           void vscode.window.showErrorMessage('Could not save speech settings.');
         },
       );
@@ -324,6 +368,8 @@ export function activate(context: vscode.ExtensionContext): Api {
       }),
     () => {
       keyStatusEpoch++;
+      keyConfigured = 'unknown';
+      publishReadiness();
       catalog.invalidate();
       speech.invalidateCloud();
       // specs/ProviderChoice.tla, KeyChange: a queued old voice cannot revive.
@@ -334,10 +380,14 @@ export function activate(context: vscode.ExtensionContext): Api {
   const cloud = new ElevenLabsClient(() => credentials.read());
   function refreshKey(): void {
     const epoch = ++keyStatusEpoch;
+    keyConfigured = 'unknown';
+    publishReadiness();
     void credentials.hasKey().then(
       (hasKey) => {
-        if (epoch === keyStatusEpoch) {
+        if (!shuttingDown && epoch === keyStatusEpoch) {
+          keyConfigured = hasKey;
           panel.showSpeechKeyStatus(hasKey);
+          publishReadiness();
           diagnostics.record({
             kind: 'speech',
             event: 'capability',
@@ -348,7 +398,10 @@ export function activate(context: vscode.ExtensionContext): Api {
         }
       },
       () => {
-        if (epoch === keyStatusEpoch) panel.showSpeechKeyStatus(false);
+        if (!shuttingDown && epoch === keyStatusEpoch) {
+          panel.showSpeechKeyStatus(false);
+          publishReadiness();
+        }
       },
     );
   }
@@ -382,6 +435,18 @@ export function activate(context: vscode.ExtensionContext): Api {
   }
   const launcher = writeLauncher(context.extensionPath);
   const starter = claudeStarter(launcher);
+  /** Checks the installed model while ignoring superseded or disposed results. */
+  async function checkedModel(): Promise<boolean> {
+    const generation = ++modelGeneration;
+    modelReady = 'unknown';
+    publishReadiness();
+    const available = (await installedSpeechModel(context.globalStorageUri.fsPath)) !== undefined;
+    if (!shuttingDown && generation === modelGeneration) {
+      modelReady = available;
+      publishReadiness();
+    }
+    return available;
+  }
   /** Collects the same bounded facts for the clipboard and authenticated agents. */
   function diagnosticSnapshot(): Promise<import('@ai-pair/protocol').DiagnosticSnapshot> {
     return collectDiagnostics({
@@ -409,19 +474,8 @@ export function activate(context: vscode.ExtensionContext): Api {
         ),
       audio: async () => {
         if (owner !== 'legacy') return undefined;
-        const settings = speechSettings.get();
-        const output = outputPreferences.choice().kind;
-        return {
-          enabled: settings.enabled,
-          provider: settings.provider,
-          keyConfigured: await credentials.hasKey(),
-          voiceConfigured: (settings.provider === 'kokoro' ? settings.voice : settings.elevenLabsVoice).length > 0,
-          output: output === 'native' ? 'override' : output,
-          routeAvailable: output === 'native' ? outputPreferences.ready() : 'unknown',
-          runtimeReady: runtimeSpeechChecked ? runtimeSpeechSupported : 'unknown',
-          modelReady: 'unknown',
-          lastPlayback: speechObservation?.terminal ?? 'unknown',
-        };
+        const hasKey = await credentials.hasKey();
+        return { ...audioReadiness(), keyConfigured: hasKey };
       },
     });
   }
@@ -456,6 +510,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       starter,
       copyDiagnostics,
       speech: {
+        readiness: audioReadiness,
         computeState: () => compute.state(),
         computeMode: (value) => {
           speech.cancel();
@@ -514,7 +569,7 @@ export function activate(context: vscode.ExtensionContext): Api {
         validCloudVoice: (id) => catalog.contains(id),
         supported: () => localSpeechSupported && runtimeSpeechSupported,
         installed: async () => {
-          const available = (await installedSpeechModel(context.globalStorageUri.fsPath)) !== undefined;
+          const available = await checkedModel();
           diagnostics.record({
             kind: 'speech',
             event: 'setup',
@@ -524,8 +579,23 @@ export function activate(context: vscode.ExtensionContext): Api {
           });
           return available;
         },
-        modelStatus: () => speechModelStatus(context.globalStorageUri.fsPath),
-        setup: () => setupSpeech(context.globalStorageUri.fsPath),
+        modelStatus: async () => {
+          const generation = ++modelGeneration;
+          modelReady = 'unknown';
+          publishReadiness();
+          const status = await speechModelStatus(context.globalStorageUri.fsPath);
+          if (!shuttingDown && generation === modelGeneration) {
+            modelReady = status.verified;
+            publishReadiness();
+          }
+          return status;
+        },
+        setup: () => {
+          modelGeneration++;
+          modelReady = 'unknown';
+          publishReadiness();
+          return setupSpeech(context.globalStorageUri.fsPath);
+        },
         preview: () => {
           previewProvider = speechSettings.get().provider;
           const sequence = ++previewSequence;
@@ -567,8 +637,9 @@ export function activate(context: vscode.ExtensionContext): Api {
     },
     changed: (value) => {
       panel.showSpeechOutputCatalog(value);
+      publishReadiness();
     },
-    discover: discoverSpeechOutputs,
+    discover: discoverPreferenceOutputs,
   });
   catalog = new SpeechCatalog(cloud, (value) => {
     if (value.reset) catalogRequestActive = false;
@@ -586,6 +657,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     panel.showSpeechCatalog(value);
   });
   void speechRuntimeAvailable(path.join(context.extensionPath, 'dist', 'speech')).then((available) => {
+    if (shuttingDown) return;
     runtimeSpeechSupported = available;
     runtimeSpeechChecked = true;
     diagnostics.record({
@@ -596,6 +668,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       ...(!localSpeechSupported ? { reason: 'unsupported' as const } : !available ? { reason: 'not_ready' as const } : {}),
     });
     panel.refreshSpeechSupport();
+    publishReadiness();
   });
   const defaultOutput: SpeechOutput = {
     localDiagnostic: (phase, reason) => {
@@ -618,7 +691,10 @@ export function activate(context: vscode.ExtensionContext): Api {
       }
       const started = state === 'speaking' || (speechObservation?.id === id && speechObservation.started);
       speechObservation = { id, state, started, ...(message === undefined ? {} : { message }) };
+      if (state === 'unavailable') lastPlayback = 'failed';
+      else if (state === 'speaking') lastPlayback = 'unknown';
       panel.showSpeechStatus(id, state, message);
+      publishReadiness();
     },
   };
   const nativeOutput = new NativeOutputDriver();
@@ -662,7 +738,7 @@ export function activate(context: vscode.ExtensionContext): Api {
         desktop: () => cloudSupported && owner === 'legacy',
         local: () => localSpeechSupported && runtimeSpeechSupported,
         output: () => panel.speechPageIsReady() && nativeOutput.available() && outputPreferences.ready(),
-        model: async () => (await installedSpeechModel(context.globalStorageUri.fsPath)) !== undefined,
+        model: checkedModel,
         key: () => credentials.hasKey(),
       });
     },
@@ -853,6 +929,7 @@ export function activate(context: vscode.ExtensionContext): Api {
           lastSpeechEnabled = current.enabled;
         }
         panel.showSpeechSettings(current);
+        publishReadiness();
       }
       if (e.affectsConfiguration('aiPair.replyBehavior')) panel.showReplyBehavior(replyBehavior.get());
       if (e.affectsConfiguration('aiPair.chatOrder')) panel.showChatOrder(chatOrder.get());
@@ -1009,8 +1086,10 @@ export function activate(context: vscode.ExtensionContext): Api {
         });
       return;
     }
+    panel.showSpeechTransport(chosen === 'legacy');
     if (chosen === 'legacy') {
       selectedNarration = speech;
+      publishReadiness();
       // specs/OutputPreference.tla, Init: restore a saved device without opening Settings.
       if (outputPreferences.choice().kind === 'native') void outputPreferences.refresh();
     }

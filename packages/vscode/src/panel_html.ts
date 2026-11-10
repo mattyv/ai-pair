@@ -44,6 +44,7 @@ const ICONS = {
   swap: svg('<path d="M7 7h11l-3-3M17 17H6l3 3"/>'),
   exit: svg('<path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h11"/>'),
   send: svg('<path d="M4 12l16-8-6 16-2.5-6.5z"/>'),
+  voice: svg('<path d="M4 9v6h4l5 4V5L8 9H4zM17 9a5 5 0 010 6"/>'),
   settings: svg(
     '<circle cx="12" cy="12" r="3"/>' +
       '<path d="M10 2h4l.5 2.4 1.9.8 2.1-1.3 1.4 1.4-1.3 2.1.8 1.9L22 10v4l-2.6.5-.8 1.9 ' +
@@ -292,6 +293,15 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
             <div data-ui="reading-menu" class="speed-menu" role="menu" aria-label="Reading speed" hidden>${speeds}</div>
           </div>
           </div>
+          <button
+            type="button"
+            data-ui="voice-status"
+            class="quiet voice-status"
+            data-state="checking"
+            aria-label="Voice: readiness not checked"
+            aria-haspopup="dialog"
+            data-tip="Voice: readiness not checked"
+          >${ICONS.voice}<span class="voice-indicator" aria-hidden="true"></span></button>
           <button
             type="button"
             data-ui="settings"

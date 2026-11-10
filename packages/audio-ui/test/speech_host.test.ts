@@ -69,6 +69,9 @@ const fakes = vi.hoisted(() => ({
   runtime: vi.fn().mockResolvedValue(false),
   installed: vi.fn().mockResolvedValue(undefined),
   setup: vi.fn().mockResolvedValue(undefined),
+  modelStatus: vi
+    .fn()
+    .mockResolvedValue({ path: '/model', source: 'https://example.test', revision: 'abc', verified: false, download: 'missing' }),
 }));
 vi.mock('../../vscode/src/speech_compute', () => ({
   SpeechCompute: class {
@@ -215,9 +218,7 @@ vi.mock('../../vscode/src/speech_output_preferences', () => ({
 vi.mock('../../vscode/src/speech_runtime_status', () => ({ speechRuntimeAvailable: fakes.runtime }));
 vi.mock('../../vscode/src/speech_setup', () => ({
   installedSpeechModel: fakes.installed,
-  speechModelStatus: vi
-    .fn()
-    .mockResolvedValue({ path: '/model', source: 'https://example.test', revision: 'abc', verified: false, download: 'missing' }),
+  speechModelStatus: fakes.modelStatus,
   setupSpeech: fakes.setup,
 }));
 vi.mock('../src/companion_output', () => ({
@@ -276,6 +277,7 @@ function harness(
     onEvent: vi.fn(),
   };
   const panel = {
+    showSpeechReadiness: vi.fn(),
     showSpeechKeyStatus: vi.fn(),
     showSpeechOutputCatalog: vi.fn(),
     showSpeechCatalog: vi.fn(),
@@ -368,7 +370,7 @@ it('keeps the latest setting while serialized writes are pending and rolls back 
   await vi.waitFor(() => {
     expect(fakes.update).toHaveBeenCalledTimes(14);
   });
-  expect(panel.showSpeechSettings).toHaveBeenCalledTimes(1);
+  expect(panel.showSpeechSettings).toHaveBeenCalledTimes(3);
   fakes.update.mockRejectedValueOnce(new Error('private'));
   host.panelSpeech.settings.set(first);
   await vi.waitFor(() => {
@@ -515,10 +517,10 @@ it('reads local settings, previews installed models, and keeps cloud unavailable
 });
 
 it('restores a newly validated voice and ignores a superseded failed save', async () => {
-  const { host, panel } = harness();
+  const { host } = harness();
   fakes.credentialChanged?.();
   await vi.waitFor(() => {
-    expect(panel.showSpeechSettings).toHaveBeenCalled();
+    expect(fakes.update).toHaveBeenCalledTimes(7);
   });
   const blocked = Promise.withResolvers<void>();
   fakes.update.mockReturnValueOnce(blocked.promise);
@@ -1046,4 +1048,48 @@ it('ignores a device list that settles after disposal', async () => {
   devices.resolve([{ id: 'headset', label: 'Headset' }]);
   await discovery;
   expect(host.audioDiagnostics().routeAvailable).toBe('unknown');
+});
+
+it('publishes conservative validated facts and ignores an older model result', async () => {
+  fakes.runtime.mockResolvedValue(true);
+  fakes.platform.mockReturnValue({ supported: false, reason: 'host_platform' });
+  const older = Promise.withResolvers<string | undefined>();
+  fakes.installed.mockReturnValueOnce(older.promise);
+  fakes.installed.mockResolvedValueOnce(undefined);
+  const { host, panel } = harness();
+  const old = host.panelSpeech.installed();
+  const latest = host.panelSpeech.installed();
+  await latest;
+  older.resolve('/old-model');
+  await old;
+  await vi.waitFor(() => {
+    expect(host.audioDiagnostics().runtimeReady).toBe(false);
+  });
+  expect(host.audioDiagnostics().modelReady).toBe(false);
+  expect(panel.showSpeechReadiness).toHaveBeenCalled();
+  expect(panel.showSpeechReadiness.mock.lastCall?.[0]).toMatchObject({ runtimeReady: false, modelReady: false });
+  host.dispose();
+});
+
+it('invalidates model evidence on failure and ignores superseded or disposed status results', async () => {
+  const status = { path: '/model', source: 'https://example.test', revision: 'abc', verified: true, download: 'installed' };
+  const { host, panel } = harness();
+  fakes.modelStatus.mockRejectedValueOnce(new Error('read failed'));
+  await expect(host.panelSpeech.modelStatus()).rejects.toThrow('read failed');
+  expect(host.audioDiagnostics().modelReady).toBe('unknown');
+  const older = Promise.withResolvers<typeof status>();
+  fakes.modelStatus.mockReturnValueOnce(older.promise);
+  const old = host.panelSpeech.modelStatus();
+  await host.panelSpeech.installed();
+  older.resolve(status);
+  await old;
+  expect(host.audioDiagnostics().modelReady).toBe(false);
+  const afterDispose = Promise.withResolvers<typeof status>();
+  fakes.modelStatus.mockReturnValueOnce(afterDispose.promise);
+  const pending = host.panelSpeech.modelStatus();
+  host.dispose();
+  const sent = panel.showSpeechReadiness.mock.calls.length;
+  afterDispose.resolve(status);
+  await pending;
+  expect(panel.showSpeechReadiness).toHaveBeenCalledTimes(sent);
 });

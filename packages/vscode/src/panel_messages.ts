@@ -7,6 +7,7 @@ import type { SpeechComputeMode, SpeechComputeState } from './speech_compute_typ
 import type { SpeechModelStatus } from './speech_setup';
 import type { CatalogView } from './speech_catalog';
 import type { OutputChoice } from './speech_output_types';
+import type { AudioDiagnostics } from '@ai-pair/protocol';
 import type { OutputPreferenceView } from './speech_output_preferences';
 
 export type SpeechState = 'preparing' | 'speaking' | 'paused' | 'unavailable' | 'idle';
@@ -65,6 +66,8 @@ export type ToPanel =
   /** The programmer's selection, offered with a reply. */
   | { type: 'selection'; ref: Ref | undefined }
   | { type: 'speechPage'; pageId: number }
+  | { type: 'speechReadiness'; value: AudioDiagnostics }
+  | { type: 'speechTransport'; available: boolean }
   | { type: 'speechSupport'; supported: boolean }
   | { type: 'speechModelStatus'; value: SpeechModelStatus }
   | { type: 'speechModelStatusUnavailable' }

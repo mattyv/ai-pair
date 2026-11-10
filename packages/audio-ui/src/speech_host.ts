@@ -1,3 +1,4 @@
+/* oxlint-disable eslint/no-use-before-define -- callbacks publish a snapshot assembled from the host's collaborators. */
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import type { AudioAdapter, AudioCapabilities, AudioChoice } from '../../audio-native/src';
@@ -27,6 +28,7 @@ import { CompanionOutput } from './companion_output';
 
 /** The local panel operations used by the speech host. */
 export interface SpeechHostPanel {
+  showSpeechReadiness(value: AudioDiagnostics): void;
   showSpeechKeyStatus(hasKey: boolean): void;
   showSpeechOutputCatalog(value: OutputPreferenceView): void;
   showSpeechCatalog(value: CatalogView): void;
@@ -86,6 +88,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
   let runtimeKnown = false;
   let keyConfigured: boolean | 'unknown' = 'unknown';
   let modelReady: boolean | 'unknown' = 'unknown';
+  let modelGeneration = 0;
   let routeDiscovered = false;
   let lastPlayback: AudioDiagnostics['lastPlayback'] = 'unknown';
   let disposed = false;
@@ -213,6 +216,16 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
       // specs/ProviderChoice.tla, Select: the latest local choice takes effect before persistence.
       const current = ++generation;
       pending = { ...value, listeningSpeed: speechListeningRate(value.listeningSpeed) };
+      if (
+        prior.enabled !== value.enabled ||
+        prior.provider !== value.provider ||
+        prior.voice !== value.voice ||
+        prior.elevenLabsVoice !== value.elevenLabsVoice
+      ) {
+        lastPlayback = 'unknown';
+      }
+      options.panel()?.showSpeechSettings(settings.get());
+      publishReadiness();
       last = value;
       const save = tail.then(async () => {
         const updates: Array<[string, unknown]> = [
@@ -234,6 +247,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
           pending = undefined;
           if (restoresVoice) invalidVoice = false;
           options.panel()?.showSpeechSettings(stored());
+          publishReadiness();
         },
         () => {
           if (current !== generation || disposed) return;
@@ -242,6 +256,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
           catalog.invalidate();
           last = stored();
           options.panel()?.showSpeechSettings(last);
+          publishReadiness();
           void vscode.window.showErrorMessage('Could not save speech settings.');
         },
       );
@@ -284,10 +299,12 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
   function refreshKey(): void {
     const epoch = ++keyEpoch;
     keyConfigured = 'unknown';
+    publishReadiness();
     void credentials.hasKey().then(
       (hasKey) => {
         if (disposed || epoch !== keyEpoch) return;
         keyConfigured = hasKey;
+        publishReadiness();
         options.panel()?.showSpeechKeyStatus(hasKey);
         options.diagnostic({
           kind: 'speech',
@@ -298,7 +315,10 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
         });
       },
       () => {
-        if (!disposed && epoch === keyEpoch) keyConfigured = 'unknown';
+        if (!disposed && epoch === keyEpoch) {
+          keyConfigured = 'unknown';
+          publishReadiness();
+        }
         if (!disposed && epoch === keyEpoch) options.panel()?.showSpeechKeyStatus(false);
       },
     );
@@ -313,12 +333,16 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
       void output.stopAndWait().catch(() => {});
     },
     changed: (value) => {
-      if (!disposed) options.panel()?.showSpeechOutputCatalog(value);
+      if (!disposed) {
+        options.panel()?.showSpeechOutputCatalog(value);
+        publishReadiness();
+      }
     },
     discover: async () => {
       const sequence = ++capabilityGeneration;
       capability = undefined;
       routeDiscovered = false;
+      publishReadiness();
       const discovered = await adapter.capabilities();
       // specs/OutputDiscoveryLifecycle.tla, Complete: do not start listing after disposal.
       if (disposed) return { supported: false, devices: [], reason: 'unavailable' };
@@ -368,6 +392,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
       if (terminal !== undefined && observation?.id === event.id) {
         observation = { ...observation, terminal };
         lastPlayback = terminal;
+        publishReadiness();
       }
     },
     localDiagnostic: (phase, reason) => {
@@ -384,6 +409,9 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
           ...(state === 'unavailable' ? { reason: 'unknown' as const } : {}),
         });
       }
+      if (state === 'unavailable') lastPlayback = 'failed';
+      else if (state === 'speaking') lastPlayback = 'unknown';
+      publishReadiness();
       const started = state === 'speaking' || (observation?.id === id && observation.started);
       observation = { id, state, started };
       if (!disposed) options.panel()?.showSpeechStatus(id, state, message);
@@ -436,6 +464,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     if (disposed) return;
     runtimeAvailable = available;
     runtimeKnown = true;
+    publishReadiness();
     options.diagnostic({
       kind: 'speech',
       event: 'capability',
@@ -455,12 +484,14 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
         if (!disposed && initialCapability === capabilityGeneration) {
           capability = value;
           options.panel()?.showSpeechOutputCatalog(preferences.view());
+          publishReadiness();
         }
       },
       () => {},
     );
   }
   const panelSpeech: PanelWiring['speech'] = {
+    readiness: audioDiagnostics,
     computeState: () => compute.state(),
     computeMode: (value) => {
       speech.cancel();
@@ -493,6 +524,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
       void preferences.refresh();
     },
     outputSelect: (value) => {
+      lastPlayback = 'unknown';
       void preferences.choose(value);
     },
     settings,
@@ -513,16 +545,31 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     validCloudVoice: (id) => catalog.contains(id),
     supported: () => platform && runtimeAvailable,
     installed: async () => {
-      modelReady = (await installedSpeechModel(context.globalStorageUri.fsPath)) !== undefined;
-      return modelReady;
+      const current = ++modelGeneration;
+      modelReady = 'unknown';
+      publishReadiness();
+      const installed = (await installedSpeechModel(context.globalStorageUri.fsPath)) !== undefined;
+      if (current === modelGeneration && !disposed) {
+        modelReady = installed;
+        publishReadiness();
+      }
+      return installed;
     },
     modelStatus: async () => {
+      const current = ++modelGeneration;
+      modelReady = 'unknown';
+      publishReadiness();
       const status = await speechModelStatus(context.globalStorageUri.fsPath);
-      modelReady = status.verified;
+      if (current === modelGeneration && !disposed) {
+        modelReady = status.verified;
+        publishReadiness();
+      }
       return status;
     },
     setup: () => {
+      modelGeneration++;
       modelReady = 'unknown';
+      publishReadiness();
       return setupSpeech(context.globalStorageUri.fsPath);
     },
     preview: () => {
@@ -578,30 +625,37 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
         last = current;
       }
       options.panel()?.showSpeechSettings(current);
+      publishReadiness();
     }),
   ];
+  /** Projects cached facts only; it never starts discovery or synthesis. */
+  function audioDiagnostics(): AudioDiagnostics {
+    const current = settings.get();
+    const selected = preferences.choice();
+    return {
+      enabled: current.enabled,
+      provider: current.provider,
+      keyConfigured,
+      voiceConfigured: (current.provider === 'kokoro' ? current.voice : current.elevenLabsVoice).trim() !== '',
+      output: desktop ? (selected.kind === 'default' ? 'default' : 'override') : 'unknown',
+      routeAvailable: !desktop || capability === undefined || (selected.kind !== 'default' && !routeDiscovered) ? 'unknown' : outputReady(),
+      runtimeReady: desktop && runtimeKnown ? platform && runtimeAvailable : 'unknown',
+      modelReady: desktop ? modelReady : 'unknown',
+      lastPlayback,
+    };
+  }
+
+  /** Sends the current cached facts to a connected page. */
+  function publishReadiness(): void {
+    if (!disposed) options.panel()?.showSpeechReadiness(audioDiagnostics());
+  }
+
   return {
     speech,
     output,
     panelSpeech,
     observation: () => (observation === undefined ? undefined : { ...observation }),
-    // specs/DiagnosticsRequest.tla, Complete: project existing local evidence without starting checks.
-    audioDiagnostics: () => {
-      const current = settings.get();
-      const selected = preferences.choice();
-      return {
-        enabled: current.enabled,
-        provider: current.provider,
-        keyConfigured,
-        voiceConfigured: (current.provider === 'kokoro' ? current.voice : current.elevenLabsVoice).trim() !== '',
-        output: desktop ? (selected.kind === 'default' ? 'default' : 'override') : 'unknown',
-        routeAvailable:
-          !desktop || capability === undefined || (selected.kind !== 'default' && !routeDiscovered) ? 'unknown' : outputReady(),
-        runtimeReady: desktop && runtimeKnown ? runtimeAvailable : 'unknown',
-        modelReady: desktop ? modelReady : 'unknown',
-        lastPlayback,
-      };
-    },
+    audioDiagnostics,
     gpuDiagnostics: () => {
       const { requestedMode, actualBackend, gpuCheck } = compute.state();
       const check = gpuCheck.phase === 'unavailable' ? gpuCheck : { phase: gpuCheck.phase };

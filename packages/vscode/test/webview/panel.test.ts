@@ -11,6 +11,9 @@ import type { PanelEvent } from '@ai-pair/core';
 import { ELLIPSIS, LABEL_SEPARATOR, RANGE_DASH, RIGHT_ARROW, SPEED_SUFFIX } from '@ai-pair/core/constants';
 import type { ToPanel } from '../../src/panel_messages';
 import { loadPage, ui } from '../page';
+import { voiceIndicator } from '../../src/voice_indicator';
+
+vi.mock('../../src/voice_indicator', () => ({ voiceIndicator: vi.fn().mockReturnValue('checking') }));
 
 // The test environment's globals, typed with happy-dom's types: the project's type check has no DOM library.
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
@@ -2497,4 +2500,46 @@ it('shows a fixed explanation for every GPU check failure and reports setup prog
     value: { requestedMode: 'gpu', actualBackend: 'none', gpuCheck: { phase: 'checking', progress: { stage: 'verify', current: 2 } } },
   });
   expect(text('gpu-status')).toContain('verify: 2');
+});
+
+it('updates voice readiness without opening settings and opens speech controls', () => {
+  const button = element('voice-status');
+  expect(button.getAttribute('aria-label')).toContain('not checked');
+  vi.mocked(voiceIndicator).mockReturnValue('ready');
+  send({ type: 'speechTransport', available: true });
+  send({
+    type: 'speechReadiness',
+    value: {
+      enabled: true,
+      provider: 'kokoro',
+      keyConfigured: 'unknown',
+      voiceConfigured: true,
+      output: 'default',
+      routeAvailable: true,
+      runtimeReady: true,
+      modelReady: true,
+      lastPlayback: 'unknown',
+    },
+  });
+  send({ type: 'speechComputeState', value: { requestedMode: 'cpu', actualBackend: 'none', gpuCheck: { phase: 'idle' } } });
+  expect(button.getAttribute('aria-label')).toContain('ready');
+  click(button);
+  expect(document.activeElement).toBe(element('speech-provider'));
+  element('settings-dialog').dispatchEvent(new window.Event('close'));
+  expect(document.activeElement).toBe(button);
+});
+
+it('restores the settings button when the dialog closes without a recorded opener', () => {
+  element('settings-dialog').dispatchEvent(new window.Event('close'));
+  expect(document.activeElement).toBe(element('settings'));
+});
+
+it('refreshes an open voice tooltip when readiness changes', () => {
+  vi.useFakeTimers();
+  hover(element('voice-status'));
+  vi.advanceTimersByTime(TIP_DELAY_MS);
+  expect(tip()).toBe('Voice: readiness not checked');
+  vi.mocked(voiceIndicator).mockReturnValue('unavailable');
+  send({ type: 'speechTransport', available: false });
+  expect(tip()).toBe('Voice: unavailable');
 });

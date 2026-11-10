@@ -4,7 +4,13 @@ import type { SpeechComputeMode, SpeechComputeState } from './speech_compute_typ
 
 import * as vscode from 'vscode';
 import type { CodePlayback, Controller, PanelEvent, PanelPort, Ref, SharedSelection } from '@ai-pair/core';
-import { localPanelAction, localPanelUpdate, type LocalPanelAction } from '@ai-pair/protocol';
+import {
+  AUDIO_DIAGNOSTICS_SCHEMA,
+  localPanelAction,
+  localPanelUpdate,
+  type AudioDiagnostics,
+  type LocalPanelAction,
+} from '@ai-pair/protocol';
 import { panelHtml, SPEEDS } from './panel_html';
 import { timings } from './timings';
 import type { ChatOrder, FromPanel, SpeechAction, SpeechEvent, SpeechState, ToPanel } from './panel_messages';
@@ -60,6 +66,7 @@ export interface PanelWiring {
   /** Copies the sanitized diagnostics snapshot on explicit request. */
   copyDiagnostics: () => Promise<void>;
   speech: {
+    readiness?: () => AudioDiagnostics;
     computeState: () => SpeechComputeState;
     computeMode: (value: SpeechComputeMode) => void;
     checkGpuSetup: () => void;
@@ -108,6 +115,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   private speechPageId = 0;
   private speechPageReady = false;
   private speechSetupCheck = 0;
+  private speechTransportAvailable = true;
   /** Everything posted so far, replayed when the view is (re)created. */
   private readonly log: PanelEvent[] = [];
   /** After each post: the window saves the history with a session, for a reload (#25). */
@@ -154,6 +162,17 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   private send(message: ToPanel): void {
     if (this.remote !== undefined) this.remote.send(message);
     else void this.view?.webview.postMessage(message);
+  }
+
+  /** Sends validated cached readiness facts to the current page. */
+  showSpeechReadiness(value: AudioDiagnostics): void {
+    this.send({ type: 'speechReadiness', value: AUDIO_DIAGNOSTICS_SCHEMA.parse(value) });
+  }
+
+  /** Reports whether the local speech connection remains usable. */
+  showSpeechTransport(available: boolean): void {
+    this.speechTransportAvailable = available;
+    this.send({ type: 'speechTransport', available });
   }
 
   /** Sends the local compute state to the current page. */
@@ -411,8 +430,10 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   private readySpeech(pageId: number): void {
     this.speechPageReady = true;
     this.send({ type: 'speechPage', pageId });
+    this.showSpeechTransport(this.speechTransportAvailable);
     this.showSpeechSettings(this.wiring.speech.settings.get());
     this.showSpeechComputeState(this.wiring.speech.computeState());
+    if (this.wiring.speech.readiness !== undefined) this.showSpeechReadiness(this.wiring.speech.readiness());
     this.showSpeechOutputCatalog(this.wiring.speech.outputView());
     const supported = this.wiring.speech.cloudSupported();
     this.wiring.speech.diagnostic({

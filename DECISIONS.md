@@ -688,3 +688,15 @@ When attachment fails, a Command Palette action and warning actions expose the
 same bounded diagnostics and output without registering a second provider. An
 older incompatible companion may have different registration behavior, so an
 unconditional fallback panel cannot safely establish sole ownership.
+
+## Voice readiness in the toolbar
+
+Project the local host's existing, sanitized readiness facts into a toolbar
+button. Unknown facts stay unchecked, private transport loss and recorded
+playback failure stay unavailable, and explicit GPU requires setup proof or an
+admitted GPU worker. CPU fallback in Auto does not depend on GPU setup. Voice
+and synthesis settings are checked separately from the cached diagnostic facts.
+The button opens speech settings; its label describes checks, not a guarantee of
+sound, network access, cloud credits, or future worker availability. The update
+uses the existing local panel channel and introduces no new process or device
+probe, so the architecture model and exports are unchanged.

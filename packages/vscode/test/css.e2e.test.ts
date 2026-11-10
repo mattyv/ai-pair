@@ -143,6 +143,11 @@ it('every rule in panel.css matches the page in some state', async () => {
     send(event);
     check();
   }
+  for (const state of ['ready', 'unavailable']) {
+    // oxlint-disable-next-line unicorn/prefer-dom-node-dataset -- ui returns Element.
+    ui('voice-status')?.setAttribute('data-state', state);
+    check();
+  }
   // VS Code's high contrast themes put their class on the body.
   document.body.classList.add('vscode-high-contrast-light');
   check();

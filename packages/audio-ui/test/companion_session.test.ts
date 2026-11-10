@@ -52,6 +52,7 @@ const fake = vi.hoisted(() => ({
   setPage: vi.fn(),
   acceptChunk: vi.fn(),
   showUpdate: vi.fn(),
+  showSpeechTransport: vi.fn(),
   receiveNarration: vi.fn(),
   attach: vi.fn(),
   accept: vi.fn(),
@@ -106,6 +107,7 @@ vi.mock('../../vscode/src/panel', () => ({
       return 7;
     }
     showRemoteUpdate = fake.showUpdate;
+    showSpeechTransport = fake.showSpeechTransport;
   },
 }));
 vi.mock('../../vscode/src/speech_gpu_proof_runner', () => ({
@@ -344,6 +346,7 @@ it('warns and suppresses actions when local retirement fails', async () => {
 it('stops locally on connection loss and handles repeated shutdown safely', () => {
   const current = session();
   fake.connectionOptions?.lost();
+  expect(fake.showSpeechTransport).toHaveBeenCalledWith(false);
   expect(fake.warning).toHaveBeenCalledWith('AI Pair lost its local audio connection. Reload the window to reconnect.');
   fake.channelOptions?.lost();
   expect(fake.hostDispose).toHaveBeenCalledOnce();

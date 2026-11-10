@@ -815,3 +815,47 @@ test('experimental GPU setup remains readable and explicit in a narrow Settings 
   expect(messages).toContainEqual({ type: 'checkGpuSetup' });
   await dialog.screenshot({ path: testInfo.outputPath('gpu-settings.png') });
 });
+
+test('voice status uses cached evidence and opens settings by keyboard at narrow and wide widths', async ({ page }) => {
+  const post = await load(page);
+  await post({ type: 'speechPage', pageId: 1 });
+  await post({ type: 'speechTransport', available: true });
+  await post({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+  await post({ type: 'speechComputeState', value: { requestedMode: 'cpu', actualBackend: 'none', gpuCheck: { phase: 'idle' } } });
+  const facts = {
+    enabled: true,
+    provider: 'kokoro',
+    keyConfigured: 'unknown',
+    voiceConfigured: true,
+    output: 'default',
+    routeAvailable: true,
+    runtimeReady: true,
+    modelReady: true,
+    lastPlayback: 'unknown',
+  };
+  await post({ type: 'speechReadiness', value: facts });
+  for (const width of [360, 720]) {
+    await page.setViewportSize({ width, height: 640 });
+    const button = page.getByRole('button', { name: 'Voice: ready (checks passed)' });
+    await expect(button).toBeVisible();
+    await button.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('combobox', { name: 'Speech provider' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(button).toBeFocused();
+    const scrollWidth = await page.locator('html').evaluate((element: { scrollWidth: number }) => element.scrollWidth);
+    expect(scrollWidth).toBeLessThanOrEqual(width);
+  }
+  await post({ type: 'speechReadiness', value: { ...facts, routeAvailable: 'unknown' } });
+  await expect(page.getByRole('button', { name: 'Voice: readiness not checked' })).toBeVisible();
+  await post({ type: 'speechReadiness', value: { ...facts, enabled: false } });
+  await expect(page.getByRole('button', { name: 'Automatic narration: off' })).toBeVisible();
+  await post({ type: 'speechReadiness', value: { ...facts, lastPlayback: 'failed' } });
+  await expect(page.getByRole('button', { name: 'Voice: unavailable' })).toBeVisible();
+  await post({ type: 'speechTransport', available: false });
+  await post({ type: 'speechReadiness', value: facts });
+  await expect(page.getByRole('button', { name: 'Voice: unavailable' })).toBeVisible();
+});

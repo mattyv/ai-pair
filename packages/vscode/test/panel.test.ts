@@ -173,7 +173,11 @@ interface FakeView {
 }
 
 /** Returns a panel with every collaborator a fake, the controller's turn `turn`. */
-function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: 'test-build' }): Harness {
+function harness(
+  turn: Turn = 'agent',
+  buildInfo = { version: '0.10.0', build: 'test-build' },
+  readiness?: () => import('@ai-pair/protocol').AudioDiagnostics,
+): Harness {
   const traced: string[] = [];
   const speed = { get: vi.fn(() => SPEEDS[1] ?? 0), set: vi.fn<(value: number) => void>() };
   const readingSpeed = { get: vi.fn(() => SPEEDS[2] ?? 0), set: vi.fn<(value: number) => void>() };
@@ -193,6 +197,7 @@ function harness(turn: Turn = 'agent', buildInfo = { version: '0.10.0', build: '
   };
   const copyDiagnostics = vi.fn<() => Promise<void>>().mockResolvedValue();
   const speech = {
+    ...(readiness === undefined ? {} : { readiness }),
     settings: {
       get: vi.fn<() => import('../src/speech_types').SpeechSettings>(() => ({
         enabled: false,
@@ -628,6 +633,7 @@ describe('receive', () => {
     expect(controller.resume.mock.calls).toEqual([['reply']]);
     expect(view.posted).toEqual([
       { type: 'speechPage', pageId: 1 },
+      { type: 'speechTransport', available: true },
       {
         type: 'speechSettings',
         value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
@@ -659,7 +665,7 @@ describe('receive', () => {
     chatOrder.get.mockReturnValue('oldestFirst');
     const view = open(panel);
     view.send({ type: 'ready' });
-    expect(view.posted.slice(6, 9)).toEqual([
+    expect(view.posted.slice(7, 10)).toEqual([
       { type: 'chatOrder', value: 'oldestFirst' },
       { type: 'replyBehavior', value: 'interrupt' },
       { type: 'replay', events: [] },
@@ -1452,4 +1458,34 @@ it('routes GPU setup requests and compute choices to the local service', () => {
   expect(speech.computeMode).toHaveBeenCalledOnce();
   expect(speech.computeMode).toHaveBeenCalledWith('gpu');
   expect(speech.checkGpuSetup).toHaveBeenCalledOnce();
+});
+
+it('keeps a lost speech transport unavailable when the page becomes ready again', () => {
+  const { panel } = harness();
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  panel.showSpeechTransport(false);
+  view.send({ type: 'ready' });
+  expect(postedOf(view, 'speechTransport').at(-1)).toEqual({ type: 'speechTransport', available: false });
+});
+
+it('publishes validated initial readiness after settings and compute facts', () => {
+  const facts = {
+    enabled: true,
+    provider: 'kokoro',
+    keyConfigured: 'unknown',
+    voiceConfigured: true,
+    output: 'default',
+    routeAvailable: true,
+    runtimeReady: true,
+    modelReady: true,
+    lastPlayback: 'unknown',
+  } as const;
+  const { panel } = harness('agent', undefined, () => facts);
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  const index = view.posted.findIndex((message) => message.type === 'speechReadiness');
+  expect(view.posted[index]).toEqual({ type: 'speechReadiness', value: facts });
+  expect(view.posted.findIndex((message) => message.type === 'speechSettings')).toBeLessThan(index);
+  expect(view.posted.findIndex((message) => message.type === 'speechComputeState')).toBeLessThan(index);
 });

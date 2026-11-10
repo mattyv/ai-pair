@@ -62,6 +62,7 @@ it('keeps speech disabled by default and retains a missing local device', async 
     onEvent: vi.fn().mockReturnValue({ dispose: vi.fn() }),
   };
   const panel = {
+    showSpeechReadiness: vi.fn(),
     showSpeechKeyStatus: vi.fn(),
     showSpeechOutputCatalog: vi.fn(),
     showSpeechCatalog: vi.fn(),
@@ -162,6 +163,7 @@ it('restores an available saved output without opening Settings', async () => {
     onEvent: vi.fn().mockReturnValue({ dispose: vi.fn() }),
   };
   const panel = {
+    showSpeechReadiness: vi.fn(),
     showSpeechKeyStatus: vi.fn(),
     showSpeechOutputCatalog: vi.fn(),
     showSpeechCatalog: vi.fn(),
@@ -223,6 +225,7 @@ it('retries a failed startup device listing from Settings', async () => {
     onEvent: vi.fn().mockReturnValue({ dispose: vi.fn() }),
   };
   const panel = {
+    showSpeechReadiness: vi.fn(),
     showSpeechKeyStatus: vi.fn(),
     showSpeechOutputCatalog: vi.fn(),
     showSpeechCatalog: vi.fn(),

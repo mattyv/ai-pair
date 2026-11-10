@@ -16,7 +16,7 @@ import * as vscode from 'vscode';
 import { isSavedSession } from '@ai-pair/core';
 import { playDemo } from '../src/demo';
 import { collectDiagnostics } from '../src/diagnostics_collector';
-import { DIAGNOSTIC_SNAPSHOT_SCHEMA } from '@ai-pair/protocol';
+import { AUDIO_DIAGNOSTICS_SCHEMA, DIAGNOSTIC_SNAPSHOT_SCHEMA } from '@ai-pair/protocol';
 import { activate, deactivate } from '../src/extension';
 import { setTimings } from '../src/timings';
 import { watchOutside } from '../src/outside_watch';
@@ -31,7 +31,8 @@ vi.mock('../src/speech_platform', () => ({ localSpeechPlatform: vi.fn() }));
 import type { SpeechSettings } from '../src/speech_types';
 import type { OutputPreferenceWiring } from '../src/speech_output_preferences';
 import type { SpeechOutputRouter } from '../src/speech_output_router';
-import { installedSpeechModel, setupSpeech } from '../src/speech_setup';
+import { installedSpeechModel, setupSpeech, speechModelStatus } from '../src/speech_setup';
+import { discoverOutputs } from '../src/speech_native_output';
 import { builtInPassage } from '../src/passage';
 import { claudeStarter, setUpAgent, writeLauncher } from '../src/setup';
 
@@ -290,6 +291,8 @@ const fakes = vi.hoisted(() => {
     readonly showSpeechSettings = vi.fn<(value: SpeechSettings) => void>();
     readonly showSpeechComputeState = vi.fn();
     readonly showSpeechKeyStatus = vi.fn();
+    readonly showSpeechReadiness = vi.fn();
+    readonly showSpeechTransport = vi.fn();
     readonly showSpeechCatalog = vi.fn();
     readonly showSpeechOutputCatalog = vi.fn();
     readonly speechReadyPageId = vi.fn(() => 7);
@@ -1012,7 +1015,7 @@ describe('activate', () => {
     speech.audioEvent.mockReturnValueOnce('ended');
     h.panel.wiring.speech.event({ id: 1, pageId: 7, event: 'ended' });
     const audio = await options.audio();
-    expect(audio).toMatchObject({ output: 'override', routeAvailable: false, lastPlayback: 'ended' });
+    expect(audio).toMatchObject({ output: 'override', routeAvailable: 'unknown', lastPlayback: 'ended' });
     expect(JSON.stringify(audio)).not.toContain('private');
     expect(speech.preview).not.toHaveBeenCalled();
   });
@@ -2174,4 +2177,162 @@ it('does not refresh the legacy route when the companion owns speech', async () 
   const h = activated(given);
   await h.api.ready;
   expect(fakes.made.outputs.at(-1)?.refresh).not.toHaveBeenCalled();
+});
+
+it('reports cached legacy voice readiness before Settings opens', async () => {
+  fakes.settings.set('speech.enabled', true);
+  const runtime = Promise.withResolvers<boolean>();
+  vi.mocked(speechRuntimeAvailable).mockReturnValueOnce(runtime.promise);
+  const h = activated();
+  await h.api.ready;
+  expect(h.panel.wiring.speech.readiness?.()).toMatchObject({
+    enabled: true,
+    provider: 'kokoro',
+    runtimeReady: 'unknown',
+    modelReady: 'unknown',
+  });
+  runtime.resolve(true);
+  await runtime.promise;
+  expect(h.panel.wiring.speech.readiness?.().runtimeReady).toBe(true);
+  expect(h.panel.showSpeechReadiness).toHaveBeenCalled();
+});
+
+it('keeps the latest cached model result when an older check settles late', async () => {
+  const old = Promise.withResolvers<string | undefined>();
+  vi.mocked(installedSpeechModel).mockReturnValueOnce(old.promise).mockResolvedValueOnce('/new');
+  const h = activated();
+  await h.api.ready;
+  const first = h.panel.wiring.speech.installed();
+  expect(await h.panel.wiring.speech.installed()).toBe(true);
+  old.resolve(undefined);
+  await first;
+  expect(h.panel.wiring.speech.readiness?.().modelReady).toBe(true);
+});
+
+it('does not publish a late model or runtime result after shutdown', async () => {
+  const runtime = Promise.withResolvers<boolean>();
+  const model = Promise.withResolvers<string | undefined>();
+  vi.mocked(speechRuntimeAvailable).mockReturnValueOnce(runtime.promise);
+  vi.mocked(installedSpeechModel).mockReturnValueOnce(model.promise);
+  const h = activated();
+  await h.api.ready;
+  const pending = h.panel.wiring.speech.installed();
+  for (const disposable of h.context.subscriptions) disposable.dispose();
+  h.panel.showSpeechReadiness.mockClear();
+  runtime.resolve(true);
+  model.resolve('/new');
+  await pending;
+  await runtime.promise;
+  expect(h.panel.showSpeechReadiness).not.toHaveBeenCalled();
+  expect(h.panel.wiring.speech.readiness?.().modelReady).toBe('unknown');
+  expect(h.panel.wiring.speech.readiness?.().runtimeReady).toBe('unknown');
+});
+
+it('leaves a restored route unknown until device discovery completes', async () => {
+  const given = context();
+  await given.globalState.update('speechOutput', { kind: 'native', backend: 'coreaudio', name: 'headset' });
+  const h = activated(given);
+  expect(h.panel.wiring.speech.readiness?.().routeAvailable).toBe('unknown');
+  await h.api.ready;
+});
+
+it('publishes only the latest discovered route and validates its facts', async () => {
+  const old = Promise.withResolvers<Awaited<ReturnType<typeof discoverOutputs>>>();
+  const current = Promise.withResolvers<Awaited<ReturnType<typeof discoverOutputs>>>();
+  vi.mocked(discoverOutputs).mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise);
+  const h = activated();
+  await h.api.ready;
+  const output = last(fakes.made.outputs);
+  output.choice.mockReturnValue({ kind: 'native', backend: 'pipewire', name: 'headset' });
+  const first = output.wiring.discover();
+  const second = output.wiring.discover();
+  current.resolve({ supported: true, devices: [] });
+  await second;
+  expect(AUDIO_DIAGNOSTICS_SCHEMA.parse(h.panel.wiring.speech.readiness?.()).routeAvailable).toBe(true);
+  old.resolve({ supported: false, devices: [] });
+  await first;
+  expect(h.panel.wiring.speech.readiness?.().routeAvailable).toBe(true);
+  const later = Promise.withResolvers<Awaited<ReturnType<typeof discoverOutputs>>>();
+  vi.mocked(discoverOutputs).mockReturnValueOnce(later.promise);
+  const pending = output.wiring.discover();
+  for (const disposable of h.context.subscriptions) disposable.dispose();
+  later.resolve({ supported: true, devices: [] });
+  await pending;
+  expect(h.panel.wiring.speech.readiness?.().routeAvailable).toBe('unknown');
+});
+
+it('ignores a superseded model status and a status resolved after shutdown', async () => {
+  const old = Promise.withResolvers<Awaited<ReturnType<typeof speechModelStatus>>>();
+  const later = Promise.withResolvers<Awaited<ReturnType<typeof speechModelStatus>>>();
+  vi.mocked(speechModelStatus).mockReturnValueOnce(old.promise).mockReturnValueOnce(later.promise);
+  const h = activated();
+  await h.api.ready;
+  const first = h.panel.wiring.speech.modelStatus();
+  vi.mocked(installedSpeechModel).mockResolvedValueOnce('/new');
+  await h.panel.wiring.speech.installed();
+  const status = { path: '/model', source: 'https://example.test', revision: 'abc', verified: false, download: 'missing' as const };
+  old.resolve(status);
+  await first;
+  expect(h.panel.wiring.speech.readiness?.().modelReady).toBe(true);
+  const pending = h.panel.wiring.speech.modelStatus();
+  for (const disposable of h.context.subscriptions) disposable.dispose();
+  later.resolve(status);
+  await pending;
+  expect(h.panel.wiring.speech.readiness?.().modelReady).toBe('unknown');
+});
+
+it('reports local audio transport from the selected panel owner', async () => {
+  const local = activated();
+  await local.api.ready;
+  expect(local.panel.showSpeechTransport).toHaveBeenCalledWith(true);
+  fakes.remoteName = 'ssh-remote';
+  const remote = activated();
+  await remote.api.ready;
+  expect(remote.panel.showSpeechTransport).toHaveBeenCalledWith(false);
+});
+
+it('publishes failed playback and clears it when speech starts again', async () => {
+  const h = activated();
+  await h.api.ready;
+  const output = last(fakes.made.speech).options.output;
+  output.status(1, 'unavailable', 'Speech failed');
+  expect(h.panel.wiring.speech.readiness?.().lastPlayback).toBe('failed');
+  expect(h.panel.showSpeechReadiness).toHaveBeenLastCalledWith(expect.objectContaining({ lastPlayback: 'failed' }));
+  changed('speech', 'speech.speed');
+  expect(h.panel.wiring.speech.readiness?.().lastPlayback).toBe('failed');
+  output.status(2, 'speaking');
+  expect(h.panel.wiring.speech.readiness?.().lastPlayback).toBe('unknown');
+});
+
+it('publishes an unknown route while a refreshed discovery is pending', async () => {
+  const h = activated();
+  await h.api.ready;
+  const output = last(fakes.made.outputs);
+  output.choice.mockReturnValue({ kind: 'native', backend: 'pipewire', name: 'headset' });
+  await output.wiring.discover();
+  expect(h.panel.wiring.speech.readiness?.().routeAvailable).toBe(true);
+  h.panel.showSpeechReadiness.mockClear();
+  const pending = Promise.withResolvers<Awaited<ReturnType<typeof discoverOutputs>>>();
+  vi.mocked(discoverOutputs).mockReturnValueOnce(pending.promise);
+  const refresh = output.wiring.discover();
+  expect(h.panel.showSpeechReadiness).toHaveBeenLastCalledWith(expect.objectContaining({ routeAvailable: 'unknown' }));
+  pending.resolve({ supported: true, devices: [] });
+  await refresh;
+});
+
+it('updates settings validity before publishing immediate readiness', async () => {
+  const h = activated();
+  await h.api.ready;
+  h.panel.showSpeechSettings.mockClear();
+  h.panel.showSpeechReadiness.mockClear();
+  h.panel.wiring.speech.settings.set({
+    enabled: true,
+    provider: 'kokoro',
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: '',
+    elevenLabsSpeed: 1,
+  });
+  expect(h.panel.showSpeechSettings).toHaveBeenCalled();
+  expect(h.panel.showSpeechSettings.mock.invocationCallOrder[0]).toBeLessThan(h.panel.showSpeechReadiness.mock.invocationCallOrder[0] ?? 0);
 });
