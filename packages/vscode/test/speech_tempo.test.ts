@@ -115,7 +115,8 @@ describe('isolated impulses on the stretch path', () => {
   const IMPULSE = 12_000;
   const SWEEP_STEP = 211;
   const DENSE_TAIL = 400;
-  const SWEEP_TIMEOUT_MS = 60_000;
+  // The macOS Intel runner took 74 s for one sweep under coverage (#39).
+  const SWEEP_TIMEOUT_MS = 180_000;
   // No impulse of a long silent waveform may be erased, including the gap between the
   // last aligned frame and the anchored final frame. Crossfades may attenuate it.
   it.each([

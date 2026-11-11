@@ -22,6 +22,8 @@ jobs:
     name: VSIX ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
     strategy:
+      # One target's failure must not cancel the other's build.
+      fail-fast: false
       matrix:
         include:
           - target: darwin-arm64
