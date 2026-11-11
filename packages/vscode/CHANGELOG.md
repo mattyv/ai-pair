@@ -5,6 +5,9 @@
 -   Run local Kokoro speech on macOS, on Apple silicon and Intel Macs, as well
     as on Linux x64. Each Mac architecture has its own VSIX; GPU acceleration
     remains Linux only.
+-   Fix narration that failed with "Audio could not play" when it started long
+    after the last click: one click or keypress in the panel now enables
+    audio for the rest of the session.
 
 ## 0.27.0
 

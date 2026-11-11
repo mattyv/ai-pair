@@ -2219,12 +2219,16 @@ current narration ID. A delivery attempt records its eligibility independently
 of whether playback started. TLC checked 28 states. Mutating the initial page
 outside its range violates `TypeOK`; accepting a stale ID violates
 `PlayingIsCurrent`; refusing an eligible delivery violates `AcceptedStarts`.
+The model takes the browser's permission to play as given. The page earns it
+by playing every clip through one shared element that any click or keypress
+in the panel unlocks, because a browser that wants a user gesture unlocks an
+element, not the page (#39). The model is unchanged.
 
 | Property | Test |
 |---|---|
 | `TypeOK` | `speech_audio.test.ts`: rejects invalid page and unit IDs and ignores duplicate audio. |
 | `PlayingIsCurrent` | `speech_audio.test.ts`: interrupts synchronously and never resurrects the old unit; ignores stale callbacks when a page or unit changes. |
-| `AcceptedStarts` | `speech_audio.test.ts`: plays only the current page and unit, then acknowledges and releases it. |
+| `AcceptedStarts` | `speech_audio.test.ts`: plays only the current page and unit, then acknowledges and releases it.; `panel.test.ts`: unlocks one shared player on a gesture so later narration can start without one. |
 
 ### `SpeechSetup`: verified model installation
 
