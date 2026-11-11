@@ -159,7 +159,7 @@ async function diagnosticFailurePaths(
 
 /** Exercises packaged MCP prompts, diagnostics isolation, and a saved Pair edit. */
 export async function run(): Promise<void> {
-  const extension = vscode.extensions.getExtension('michalstrba.ai-pair');
+  const extension = vscode.extensions.getExtension('mattyv.ai-pair');
   assert.ok(extension);
   const api: unknown = await extension.activate();
   if (!isApi(api)) throw new Error('Extension API unavailable');

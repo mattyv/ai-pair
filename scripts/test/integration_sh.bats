@@ -18,7 +18,7 @@ if [[ -n "${AI_PAIR_COMPANION_RESTART:-}" ]]; then
   for arg in "$@"; do
     case "${arg}" in
       --extensions-dir=*)
-        test -f "${arg#*=}/michalstrba.ai-pair-local-audio/dist/extension.js" || exit 9
+        test -f "${arg#*=}/mattyv.ai-pair-local-audio/dist/extension.js" || exit 9
         ;;
       --user-data-dir=*)
         mkdir -p "${arg#*=}/User/workspaceStorage/id"

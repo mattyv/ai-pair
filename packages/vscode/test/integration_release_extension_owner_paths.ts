@@ -77,7 +77,7 @@ async function until(condition: () => boolean, description: string): Promise<voi
 
 /** Retires a real owner before activating a replacement with the same persisted state. */
 export async function run(): Promise<void> {
-  const extension = vscode.extensions.getExtension<Api>('michalstrba.ai-pair');
+  const extension = vscode.extensions.getExtension<Api>('mattyv.ai-pair');
   assert.ok(extension && !extension.isActive, 'the extension must start inactive');
   const entry = path.join(extension.extensionPath, 'dist', 'extension.js');
   const requireEntry = createRequire(entry);

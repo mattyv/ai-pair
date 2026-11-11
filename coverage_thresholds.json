@@ -506,7 +506,7 @@
   },
   "packages/vscode/scripts/icon/Sources/IconDrawing/Icon.swift": {
     "swift": {
-      "lines": 99,
+      "lines": 100,
       "regions": 93,
       "functions": 100
     }
@@ -515,7 +515,7 @@
     "swift": {
       "lines": 99,
       "regions": 98,
-      "functions": 97
+      "functions": 98
     }
   },
   "packages/vscode/scripts/integration.sh": {

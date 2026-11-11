@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.31.0
+
+-   New icon: two speech bubbles as characters, a grey one for you and an
+    orange one for the agent, with text-cursor eyes. It stays readable at the
+    small sizes VS Code shows it.
+-   Publish under the `mattyv` publisher, so the extension's ID is now
+    `mattyv.ai-pair` and the companion's `mattyv.ai-pair-local-audio`. The
+    repository, homepage, and issue links point at this fork.
+
 ## 0.30.0
 
 -   Keep toolbar controls accessible in narrow panels and popup menus inside

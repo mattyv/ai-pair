@@ -244,7 +244,7 @@ function fakeWindow(name: string, folders: string[], port: number, changes: { pi
 /** Runs every scenario inside VS Code; the extension host exits with its result. */
 export async function run(): Promise<void> {
   const cleanup = installTerminalCleanup();
-  const ext = vscode.extensions.getExtension('michalstrba.ai-pair');
+  const ext = vscode.extensions.getExtension('mattyv.ai-pair');
   assert.ok(ext, 'extension not found');
   assert.equal(ext.isActive, false, 'main activated before the cleanup observer');
   let exported: unknown;

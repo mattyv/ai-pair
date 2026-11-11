@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.31.0
+
+-   Publish under the `mattyv` publisher, so the companion's ID is now
+    `mattyv.ai-pair-local-audio`, matching the main extension's
+    `mattyv.ai-pair`.
+
 ## 0.30.0
 
 -   Keep the Local Audio companion version aligned with the main extension

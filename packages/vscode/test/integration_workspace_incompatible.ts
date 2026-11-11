@@ -6,8 +6,8 @@ import { expectNotification } from './integration_notification';
 
 /** Refuses a synthetic companion without committing it or starting its preview. */
 export async function run(): Promise<void> {
-  const companion = vscode.extensions.getExtension('michalstrba.ai-pair-local-audio');
-  const main = vscode.extensions.getExtension<Api>('michalstrba.ai-pair');
+  const companion = vscode.extensions.getExtension('mattyv.ai-pair-local-audio');
+  const main = vscode.extensions.getExtension<Api>('mattyv.ai-pair');
   assert.ok(companion && main, 'the workspace and synthetic companion must be installed');
   const api = await main.activate();
   try {
