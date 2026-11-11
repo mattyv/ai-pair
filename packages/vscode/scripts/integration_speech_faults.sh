@@ -37,6 +37,8 @@ for fixture in integration_catalog_paths integration_companion_faults \
   if [[ "${fixture}" == integration_companion_version ]]; then
     development="${root}/packages/audio-ui"
   fi
+  # bash 3.2, which macOS ships, treats an empty array as unset under set -u,
+  # so each array below expands with ${name[@]+...}.
   debug_args=()
   if [[ "${fixture}" == integration_companion_version ||
     "${fixture}" == integration_workspace_incompatible ]]; then
@@ -54,12 +56,14 @@ for fixture in integration_catalog_paths integration_companion_faults \
     PULSE_SERVER='unix:/nonexistent' \
     PIPEWIRE_REMOTE='ai-pair-integration-no-audio' \
     PATH='/usr/bin:/bin:/usr/sbin:/sbin' \
-    "${code}" "$@" "${password_args[@]}" "${debug_args[@]}" \
+    "${code}" "$@" \
+    ${password_args[@]+"${password_args[@]}"} \
+    ${debug_args[@]+"${debug_args[@]}"} \
     --user-data-dir="${profile}/${fixture}/user" \
     --shared-data-dir="${profile}/${fixture}/shared" \
     --extensions-dir="${profile}/${fixture}/extensions" \
     --disable-workspace-trust --skip-welcome --skip-release-notes \
     --extensionDevelopmentPath="${development}" \
     --extensionTestsPath="${root}/packages/vscode/dist-test/${fixture}.js" \
-    "${workspace_args[@]}"
+    ${workspace_args[@]+"${workspace_args[@]}"}
 done
