@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: css, 2026-11-11.
+Last updated: swift, 2026-11-11.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -170,9 +170,9 @@ Last updated: css, 2026-11-11.
 | `packages/vscode/scripts/build.mts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/scripts/build.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/scripts/icon/Package.swift` | Swift | - | - | - | - | - | - |
-| `packages/vscode/scripts/icon/Sources/IconDrawing/Icon.swift` | Swift | - | - | - | L 99.3% R 93.3% F 100.0% | - | - |
+| `packages/vscode/scripts/icon/Sources/IconDrawing/Icon.swift` | Swift | - | - | - | L 100.0% R 93.2% F 100.0% | - | - |
 | `packages/vscode/scripts/icon/Sources/icon/main.swift` | Swift | - | - | - | - | - | - |
-| `packages/vscode/scripts/icon/Tests/IconDrawingTests/IconDrawingTests.swift` | Swift | - | - | - | L 99.2% R 98.3% F 98.0% | - | - |
+| `packages/vscode/scripts/icon/Tests/IconDrawingTests/IconDrawingTests.swift` | Swift | - | - | - | L 99.4% R 98.6% F 98.2% | - | - |
 | `packages/vscode/scripts/integration.sh` | Shell | - | - | - | - | - | - |
 | `packages/vscode/scripts/integration_companion.sh` | Shell | - | - | - | - | - | - |
 | `packages/vscode/scripts/integration_speech_faults.sh` | Shell | - | - | - | - | - | - |
