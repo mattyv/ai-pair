@@ -84,6 +84,15 @@ const ui = {
   speechLocal: $('speech-local', HTMLElement),
   speechLocalModel: $('speech-local-model', HTMLElement),
   speechCloud: $('speech-cloud', HTMLElement),
+  openRouter: $('openrouter', HTMLElement),
+  openRouterKeyStatus: $('openrouter-key-status', HTMLElement),
+  openRouterKeySet: $('openrouter-key-set', HTMLButtonElement),
+  openRouterKeyRemove: $('openrouter-key-remove', HTMLButtonElement),
+  openRouterLoad: $('openrouter-load', HTMLButtonElement),
+  openRouterModel: $('openrouter-model', HTMLSelectElement),
+  openRouterVoice: $('openrouter-voice', HTMLSelectElement),
+  openRouterZdr: $('openrouter-zdr', HTMLButtonElement),
+  openRouterStatus: $('openrouter-status', HTMLElement),
   speechKeyStatus: $('speech-key-status', HTMLElement),
   speechKeySet: $('speech-key-set', HTMLButtonElement),
   speechKeyRemove: $('speech-key-remove', HTMLButtonElement),
@@ -162,7 +171,13 @@ let speechId = 0;
 let speechCanceled = false;
 let speechState: SpeechState = 'idle';
 let speechEnabled = false;
-let speechProvider: 'kokoro' | 'elevenlabs' = 'kokoro';
+let speechProvider: 'kokoro' | 'elevenlabs' | 'openrouter' = 'kokoro';
+let openRouterModel = '';
+let openRouterVoice = '';
+let openRouterZdr = false;
+let openRouterHasKey = false;
+let openRouterCatalogVerified = false;
+let openRouterModels: Array<{ id: string; name: string; voices: Array<{ id: string; name: string }> }> = [];
 let cloudVoice = '';
 let cloudSpeed = 1;
 let cloudSupported = false;
@@ -1041,6 +1056,9 @@ function saveSpeechSettings(): void {
       provider: speechProvider,
       elevenLabsVoice: cloudVoice,
       elevenLabsSpeed: cloudSpeed,
+      ...(speechProvider === 'openrouter' || openRouterModel !== '' || openRouterVoice !== '' || openRouterZdr
+        ? { openRouterModel, openRouterVoice, openRouterZdr }
+        : {}),
     },
   });
 }
@@ -1078,15 +1096,32 @@ function catalogFailure(reason: string | undefined): string {
 let outputReady = true;
 function syncSpeechProvider(): void {
   const cloud = speechProvider === 'elevenlabs';
-  ui.speechLocal.hidden = cloud;
-  ui.speechLocalModel.hidden = cloud;
+  ui.speechLocal.hidden = speechProvider !== 'kokoro';
+  ui.speechLocalModel.hidden = speechProvider !== 'kokoro';
+  ui.openRouter.hidden = speechProvider !== 'openrouter';
+  ui.openRouterKeySet.disabled = !cloudSupported;
+  ui.openRouterKeyRemove.disabled = !cloudSupported || !openRouterHasKey;
+  ui.openRouterLoad.disabled = !cloudSupported || !openRouterHasKey;
+  ui.openRouterZdr.setAttribute('aria-pressed', String(openRouterZdr));
+  ui.openRouterZdr.textContent = `ZDR filter: ${openRouterZdr ? 'On' : 'Off'}`;
   ui.speechCloud.hidden = !cloud;
   ui.speechProvider.value = speechProvider;
   ui.speechKeySet.disabled = !cloudSupported;
   ui.speechKeyRemove.disabled = !cloudSupported || !cloudHasKey;
   ui.speechVoicesLoad.disabled = !cloudSupported || !cloudHasKey || cloudLoading;
   ui.speechVoicesMore.disabled = !cloudSupported || !cloudHasKey || cloudLoading;
-  ui.speechPreview.disabled = !outputReady || (cloud ? !cloudSupported || !cloudHasKey || cloudVoice === '' : !speechSupported);
+  ui.speechPreview.disabled =
+    !outputReady ||
+    (cloud
+      ? !cloudSupported || !cloudHasKey || cloudVoice === ''
+      : speechProvider === 'openrouter'
+        ? !cloudSupported ||
+          !openRouterHasKey ||
+          openRouterModel === '' ||
+          openRouterVoice === '' ||
+          (openRouterCatalogVerified &&
+            !openRouterModels.some((model) => model.id === openRouterModel && model.voices.some((voice) => voice.id === openRouterVoice)))
+        : !speechSupported);
 }
 
 let outputChoices: OutputChoice[] = [{ kind: 'default' }];
@@ -1101,7 +1136,7 @@ ui.speechOutputRefresh.addEventListener('click', () => {
 });
 ui.speechProvider.addEventListener('change', () => {
   const selected = ui.speechProvider.value;
-  if (selected !== 'kokoro' && selected !== 'elevenlabs') return;
+  if (selected !== 'kokoro' && selected !== 'elevenlabs' && selected !== 'openrouter') return;
   if (selected !== speechProvider) stopSpeechLocally();
   if (!ELEVENLABS_SPEEDS.some((speed) => speed === cloudSpeed)) {
     cloudSpeed = 1;
@@ -1112,6 +1147,78 @@ ui.speechProvider.addEventListener('change', () => {
   speechProvider = selected;
   syncSpeechProvider();
   saveSpeechSettings();
+});
+/** Renders only voices advertised by the selected compatible model. */
+function renderOpenRouterVoices(): void {
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Choose a voice';
+  ui.openRouterVoice.replaceChildren(placeholder);
+  for (const voice of openRouterModels.find((model) => model.id === openRouterModel)?.voices ?? []) {
+    const option = document.createElement('option');
+    option.value = voice.id;
+    option.textContent = voice.name;
+    ui.openRouterVoice.append(option);
+  }
+  if (
+    !openRouterCatalogVerified &&
+    openRouterVoice !== '' &&
+    !Array.from(ui.openRouterVoice.options).some((option) => option.value === openRouterVoice)
+  ) {
+    const saved = document.createElement('option');
+    saved.value = openRouterVoice;
+    saved.textContent = 'Saved voice (load models to change)';
+    ui.openRouterVoice.append(saved);
+  }
+  ui.openRouterVoice.value = openRouterVoice;
+}
+ui.openRouterKeySet.addEventListener('click', () => {
+  vscode.postMessage({ type: 'openRouterKeySet' });
+});
+ui.openRouterKeyRemove.addEventListener('click', () => {
+  vscode.postMessage({ type: 'openRouterKeyRemove' });
+});
+ui.openRouterLoad.addEventListener('click', () => {
+  vscode.postMessage({ type: 'openRouterModelsLoad' });
+});
+ui.openRouterModel.addEventListener('change', () => {
+  openRouterModel = ui.openRouterModel.value;
+  openRouterVoice = '';
+  renderOpenRouterVoices();
+  syncSpeechProvider();
+  saveSpeechSettings();
+});
+ui.openRouterVoice.addEventListener('change', () => {
+  openRouterVoice = ui.openRouterVoice.value;
+  syncSpeechProvider();
+  saveSpeechSettings();
+});
+ui.openRouterZdr.addEventListener('click', () => {
+  openRouterZdr = !openRouterZdr;
+  openRouterModels = [];
+  openRouterCatalogVerified = false;
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Choose a model';
+  ui.openRouterModel.replaceChildren(placeholder);
+  if (openRouterModel !== '') {
+    const saved = document.createElement('option');
+    saved.value = openRouterModel;
+    saved.textContent = 'Saved model (load models to change)';
+    ui.openRouterModel.append(saved);
+  }
+  ui.openRouterModel.value = openRouterModel;
+  renderOpenRouterVoices();
+  syncSpeechProvider();
+  saveSpeechSettings();
+  if (cloudSupported && openRouterHasKey) {
+    ui.openRouterStatus.textContent = 'Updating the model filter...';
+    vscode.postMessage({ type: 'openRouterModelsLoad' });
+  } else {
+    ui.openRouterStatus.textContent = cloudSupported
+      ? 'Add an OpenRouter API key to load compatible models.'
+      : 'OpenRouter is unavailable on this host.';
+  }
 });
 ui.speechCloudVoice.addEventListener('change', () => {
   cloudVoice = ui.speechCloudVoice.value;
@@ -1268,7 +1375,9 @@ function handle(message: ToPanel): void {
       voiceSettingsValid =
         message.value.provider === 'kokoro'
           ? SPEECH_VOICES.some((voice) => voice === message.value.voice) && SPEECH_SPEEDS.some((speed) => speed === message.value.speed)
-          : message.value.elevenLabsVoice.trim() !== '' && ELEVENLABS_SPEEDS.some((speed) => speed === message.value.elevenLabsSpeed);
+          : message.value.provider === 'openrouter'
+            ? (message.value.openRouterModel ?? '') !== '' && (message.value.openRouterVoice ?? '') !== ''
+            : message.value.elevenLabsVoice.trim() !== '' && ELEVENLABS_SPEEDS.some((speed) => speed === message.value.elevenLabsSpeed);
       voiceFacts = {
         enabled: message.value.enabled,
         provider: message.value.provider,
@@ -1286,6 +1395,21 @@ function handle(message: ToPanel): void {
       speechProvider = message.value.provider;
       cloudVoice = message.value.elevenLabsVoice;
       cloudSpeed = message.value.elevenLabsSpeed;
+      openRouterModel = message.value.openRouterModel ?? '';
+      openRouterVoice = message.value.openRouterVoice ?? '';
+      openRouterZdr = message.value.openRouterZdr ?? false;
+      if (
+        !openRouterCatalogVerified &&
+        openRouterModel !== '' &&
+        !Array.from(ui.openRouterModel.options).some((option) => option.value === openRouterModel)
+      ) {
+        const saved = document.createElement('option');
+        saved.value = openRouterModel;
+        saved.textContent = 'Saved model (load models to change)';
+        ui.openRouterModel.append(saved);
+      }
+      ui.openRouterModel.value = openRouterModel;
+      renderOpenRouterVoices();
       ui.speechCloudSpeed.value = String(cloudSpeed);
       selectCloudVoice();
       syncSpeechProvider();
@@ -1344,6 +1468,49 @@ function handle(message: ToPanel): void {
             : message.value.reason === undefined
               ? 'Select Refresh outputs to list available devices.'
               : 'Output selection is unavailable on this host; System default remains available.';
+      return;
+    }
+    case 'openRouterKeyStatus':
+      openRouterHasKey = message.hasKey;
+      ui.openRouterKeyStatus.textContent = message.hasKey ? 'API key saved.' : 'No API key saved.';
+      syncSpeechProvider();
+      return;
+    case 'openRouterCatalog': {
+      openRouterModels = message.value.models;
+      openRouterCatalogVerified = message.value.verified;
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Choose a model';
+      ui.openRouterModel.replaceChildren(placeholder);
+      for (const model of openRouterModels) {
+        const option = document.createElement('option');
+        option.value = model.id;
+        option.textContent = model.name;
+        ui.openRouterModel.append(option);
+      }
+      if (
+        !openRouterCatalogVerified &&
+        openRouterModel !== '' &&
+        !Array.from(ui.openRouterModel.options).some((option) => option.value === openRouterModel)
+      ) {
+        const saved = document.createElement('option');
+        saved.value = openRouterModel;
+        saved.textContent = 'Saved model (load models to change)';
+        ui.openRouterModel.append(saved);
+      }
+      ui.openRouterModel.value = openRouterModel;
+      renderOpenRouterVoices();
+      ui.openRouterStatus.textContent =
+        message.value.state === 'loading'
+          ? 'Loading compatible account models...'
+          : message.value.state === 'error'
+            ? (message.value.message ?? 'Could not load compatible models.')
+            : message.value.state === 'ready'
+              ? openRouterModels.length === 0
+                ? 'No compatible eligible models are available for this account and filter.'
+                : 'Compatible account models loaded.'
+              : 'Load account models to see compatible models and voices.';
+      syncSpeechProvider();
       return;
     }
     case 'speechKeyStatus':

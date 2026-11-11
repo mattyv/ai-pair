@@ -373,6 +373,13 @@
       "functions": 100
     }
   },
+  "packages/protocol/src/openrouter.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/protocol/src/panel_action.ts": {
     "unit": {
       "lines": 100,
@@ -850,6 +857,13 @@
     }
   },
   "packages/vscode/src/speech_local_protocol.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/speech_openrouter.ts": {
     "unit": {
       "lines": 100,
       "branches": 100,

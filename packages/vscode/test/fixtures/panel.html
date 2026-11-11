@@ -46,6 +46,7 @@
         <select data-ui="speech-provider">
           <option value="kokoro">Kokoro (local)</option>
           <option value="elevenlabs">ElevenLabs (cloud)</option>
+          <option value="openrouter">OpenRouter (cloud)</option>
         </select>
       </label>
       <label class="settings-field">Speech output
@@ -70,6 +71,24 @@
           <option value="bm_george">George</option>
         </select>
       </label>
+      </div>
+      <div data-ui="openrouter" hidden>
+        <p>Selected narration and previews are sent to OpenRouter and may use account credits.</p>
+        <p data-ui="openrouter-key-status" role="status"></p>
+        <div class="settings-actions">
+          <button type="button" data-ui="openrouter-key-set" class="soft">Add or replace API key</button>
+          <button type="button" data-ui="openrouter-key-remove" class="soft">Remove API key</button>
+          <button type="button" data-ui="openrouter-load" class="soft">Load account models</button>
+        </div>
+        <label class="settings-field">Compatible model
+          <select data-ui="openrouter-model"><option value="">Choose a model</option></select>
+        </label>
+        <label class="settings-field">Voice
+          <select data-ui="openrouter-voice"><option value="">Choose a voice</option></select>
+        </label>
+        <button type="button" data-ui="openrouter-zdr" class="soft zdr-toggle" aria-pressed="false">ZDR filter: Off</button>
+        <p>Filters models with ZDR routes and requests OpenRouter's ZDR policy. Your account's Safety Retention settings still apply.</p>
+        <p data-ui="openrouter-status" role="status">Load account models to see compatible models and voices.</p>
       </div>
       <div data-ui="speech-cloud" hidden>
         <p>Selected narration and voice previews are sent to ElevenLabs and use your account credits.

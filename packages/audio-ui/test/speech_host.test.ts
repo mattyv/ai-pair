@@ -26,7 +26,10 @@ const fakes = vi.hoisted(() => ({
   gpuInstalled: vi.fn().mockResolvedValue('/gpu'),
   gpuDownload: vi.fn().mockResolvedValue('/gpu'),
   speechOptions: undefined as
-    | Pick<import('../../vscode/src/speech_service').SpeechServiceOptions, 'computeMode' | 'computeChanged' | 'gpuCapability' | 'createGpu'>
+    | Pick<
+        import('../../vscode/src/speech_service').SpeechServiceOptions,
+        'computeMode' | 'computeChanged' | 'gpuCapability' | 'createGpu' | 'openRouterAllowed'
+      >
     | undefined,
   cloudDiagnostic: undefined as ((reason: 'auth') => void) | undefined,
   readiness: vi.fn<(options: import('../../vscode/src/speech_readiness').SpeechReadiness) => Promise<boolean>>().mockResolvedValue(true),
@@ -47,6 +50,22 @@ const fakes = vi.hoisted(() => ({
   preferencesWiring: undefined as import('../../vscode/src/speech_output_preferences').OutputPreferenceWiring | undefined,
   outputWiring: undefined as import('../src/companion_output').CompanionOutputOptions | undefined,
   credentialChanged: undefined as (() => void) | undefined,
+  openChanged: undefined as (() => void) | undefined,
+  openPrompt: undefined as (() => PromiseLike<string | undefined>) | undefined,
+  openReadKey: undefined as (() => Promise<string | undefined>) | undefined,
+  openPublish: undefined as ((value: import('../../vscode/src/speech_openrouter_catalog').OpenRouterCatalogView) => void) | undefined,
+  openDiagnostic: undefined as ((reason: 'auth') => void) | undefined,
+  openHasKey: vi.fn<() => Promise<boolean>>().mockResolvedValue(false),
+  openRead: vi.fn().mockResolvedValue(undefined),
+  openSet: vi.fn().mockResolvedValue(undefined),
+  openRemove: vi.fn().mockResolvedValue(undefined),
+  openSupersede: vi.fn(),
+  openCredentialInvalidate: vi.fn(),
+  openInvalidate: vi.fn(),
+  openLoad: vi.fn().mockResolvedValue(undefined),
+  openContains: vi.fn().mockReturnValue(false),
+  openCatalogChanged: vi.fn(),
+  openAllows: vi.fn().mockReturnValue(true),
   credentialPrompt: undefined as (() => PromiseLike<string | undefined>) | undefined,
   configChanged: undefined as ((event: { affectsConfiguration(key: string): boolean }) => void) | undefined,
   prepare: vi.fn(),
@@ -112,12 +131,13 @@ vi.mock('../../vscode/src/speech_service', () => ({
     private generation = 0;
     private readonly changed?: import('../../vscode/src/speech_service').SpeechServiceOptions['computeChanged'];
     constructor(
-      options: { cloudDiagnostic?: (reason: 'auth') => void } & Pick<
+      options: { cloudDiagnostic?: (reason: 'auth') => void; openRouterDiagnostic?: (reason: 'auth') => void } & Pick<
         import('../../vscode/src/speech_service').SpeechServiceOptions,
-        'computeMode' | 'computeChanged' | 'gpuCapability' | 'createGpu'
+        'computeMode' | 'computeChanged' | 'gpuCapability' | 'createGpu' | 'openRouterAllowed'
       >,
     ) {
       fakes.cloudDiagnostic = options.cloudDiagnostic;
+      fakes.openDiagnostic = options.openRouterDiagnostic;
       fakes.speechOptions = options;
       this.changed = options.computeChanged;
       this.value = { requestedMode: options.computeMode?.() ?? 'cpu', actualBackend: 'none', gpuCheck: { phase: 'idle' } };
@@ -153,6 +173,7 @@ vi.mock('../../vscode/src/speech_service', () => ({
     prepare = fakes.prepare;
     cancel = fakes.cancel;
     invalidateCloud = fakes.invalidateCloud;
+    openRouterCatalogChanged = fakes.openCatalogChanged;
     audioEvent = fakes.audioEvent;
     dispose = fakes.dispose;
     preview = fakes.preview;
@@ -176,10 +197,22 @@ vi.mock('../../vscode/src/speech_credentials', () => ({
       storage: unknown,
       prompt: NonNullable<typeof fakes.credentialPrompt>,
       changed: NonNullable<typeof fakes.credentialChanged>,
+      key?: string,
     ) {
       void storage;
-      fakes.credentialPrompt = prompt;
-      fakes.credentialChanged = changed;
+      if (key === undefined) {
+        fakes.credentialPrompt = prompt;
+        fakes.credentialChanged = changed;
+      } else {
+        fakes.openPrompt = prompt;
+        fakes.openChanged = changed;
+        this.read = fakes.openRead;
+        this.hasKey = fakes.openHasKey;
+        this.set = fakes.openSet;
+        this.remove = fakes.openRemove;
+        this.supersede = fakes.openSupersede;
+        this.invalidate = fakes.openCredentialInvalidate;
+      }
     }
     read = fakes.read;
     hasKey = fakes.hasKey;
@@ -187,6 +220,26 @@ vi.mock('../../vscode/src/speech_credentials', () => ({
     remove = fakes.remove;
     supersede = fakes.supersede;
     invalidate = fakes.credentialInvalidate;
+  },
+}));
+vi.mock('../../vscode/src/speech_openrouter', () => ({
+  OpenRouterClient: class {
+    readonly client = true;
+    constructor(read: NonNullable<typeof fakes.openReadKey>) {
+      fakes.openReadKey = read;
+    }
+  },
+}));
+vi.mock('../../vscode/src/speech_openrouter_catalog', () => ({
+  OpenRouterCatalog: class {
+    constructor(client: unknown, publish: NonNullable<typeof fakes.openPublish>) {
+      void client;
+      fakes.openPublish = publish;
+    }
+    invalidate = fakes.openInvalidate;
+    contains = fakes.openContains;
+    allows = fakes.openAllows;
+    load = fakes.openLoad;
   },
 }));
 vi.mock('../../vscode/src/speech_elevenlabs', () => ({
@@ -235,6 +288,9 @@ beforeEach(() => {
   fakes.ready.mockReturnValue(true);
   fakes.runtime.mockReset().mockResolvedValue(false);
   fakes.hasKey.mockReset().mockResolvedValue(false);
+  fakes.openHasKey.mockReset().mockResolvedValue(false);
+  fakes.openContains.mockReturnValue(false);
+  fakes.openAllows.mockReturnValue(true);
   fakes.contains.mockReturnValue(false);
 });
 
@@ -273,6 +329,8 @@ function harness(
   const panel = {
     showSpeechReadiness: vi.fn(),
     showSpeechKeyStatus: vi.fn(),
+    showOpenRouterKeyStatus: vi.fn(),
+    showOpenRouterCatalog: vi.fn(),
     showSpeechOutputCatalog: vi.fn(),
     showSpeechCatalog: vi.fn(),
     showSpeechSettings: vi.fn(),
@@ -713,7 +771,7 @@ it('passes local readiness facts to the readiness check', async () => {
   expect(facts).toBeDefined();
   expect(facts?.settings().enabled).toBe(false);
   expect(facts?.desktop()).toBe(true);
-  await expect(facts?.key()).resolves.toBe(false);
+  await expect(facts?.key('elevenlabs')).resolves.toBe(false);
   await expect(facts?.model()).resolves.toBe(false);
   expect(facts?.local()).toBe(false);
   await Promise.resolve();
@@ -1107,5 +1165,153 @@ it('drops transient busy feedback after an ABA mode change', async () => {
   expect(fakes.informationMessage).not.toHaveBeenCalled();
   expect(host.panelSpeech.computeState().gpuCheck).toEqual({ phase: 'idle' });
   fakes.setupBusy.mockReturnValue(false);
+  await host.dispose();
+});
+
+it('restores OpenRouter model, voice and ZDR settings in the local companion', () => {
+  fakes.config.set('speech.provider', 'openrouter');
+  fakes.config.set('speech.openRouterModel', 'model');
+  fakes.config.set('speech.openRouterVoice', 'voice');
+  fakes.config.set('speech.openRouterZdr', true);
+  const { host } = harness();
+  expect(host.panelSpeech.settings.get()).toMatchObject({
+    provider: 'openrouter',
+    openRouterModel: 'model',
+    openRouterVoice: 'voice',
+    openRouterZdr: true,
+  });
+});
+
+it('restores OpenRouter settings and routes its account catalog through the local host', async () => {
+  fakes.config.set('speech.provider', 'openrouter');
+  fakes.config.set('speech.openRouterModel', 'model');
+  fakes.config.set('speech.openRouterVoice', 'voice');
+  fakes.config.set('speech.openRouterZdr', true);
+  fakes.openHasKey.mockResolvedValue(true);
+  const { host, panel, diagnostic } = harness();
+  expect(host.panelSpeech.settings.get()).toMatchObject({
+    provider: 'openrouter',
+    openRouterModel: 'model',
+    openRouterVoice: 'voice',
+    openRouterZdr: true,
+  });
+  host.panelSpeech.openRouterKeyRefresh();
+  await vi.waitFor(() => {
+    expect(panel.showOpenRouterKeyStatus).toHaveBeenCalledWith(true);
+  });
+  expect(host.audioDiagnostics()).toMatchObject({ provider: 'openrouter', keyConfigured: true, voiceConfigured: true });
+  await fakes.openReadKey?.();
+  expect(fakes.openRead).toHaveBeenCalled();
+  await fakes.openPrompt?.();
+  expect(fakes.showInputBox).toHaveBeenCalledWith(expect.objectContaining({ title: 'OpenRouter API key', password: true }));
+  expect(fakes.speechOptions?.openRouterAllowed?.('model', 'voice')).toBe(true);
+  host.panelSpeech.loadOpenRouterModels();
+  expect(fakes.openLoad).toHaveBeenCalledWith(true);
+  fakes.openContains.mockReturnValueOnce(true);
+  expect(host.panelSpeech.validOpenRouterVoice('model', 'voice')).toBe(true);
+  fakes.openPublish?.({ state: 'loading', verified: false, models: [] });
+  expect(fakes.openCatalogChanged).not.toHaveBeenCalled();
+  fakes.openPublish?.({ state: 'ready', verified: true, models: [] });
+  expect(fakes.openCatalogChanged).toHaveBeenCalledOnce();
+  expect(panel.showOpenRouterCatalog).toHaveBeenCalledWith({ state: 'ready', verified: true, models: [] });
+  fakes.openDiagnostic?.('auth');
+  expect(diagnostic).toHaveBeenCalledWith({ kind: 'speech', event: 'narration', provider: 'openrouter', phase: 'failed', reason: 'auth' });
+  await host.panelSpeech.openRouterKeySet();
+  await host.panelSpeech.openRouterKeyRemove();
+  expect(fakes.openSet).toHaveBeenCalledOnce();
+  expect(fakes.openRemove).toHaveBeenCalledOnce();
+  await host.ready();
+  const readiness = fakes.readiness.mock.calls.at(-1)?.[0];
+  await readiness?.key('openrouter');
+  expect(readiness?.openRouterAllowed?.('model', 'voice')).toBe(true);
+  fakes.openAllows.mockReturnValueOnce(false);
+  expect(readiness?.openRouterAllowed?.('model', 'voice')).toBe(false);
+  expect(fakes.openHasKey).toHaveBeenCalled();
+  host.panelSpeech.pageClosed(1);
+  expect(fakes.openInvalidate).toHaveBeenCalled();
+  await host.dispose();
+  const count = panel.showOpenRouterCatalog.mock.calls.length;
+  fakes.openPublish?.({ state: 'idle', verified: false, models: [] });
+  expect(panel.showOpenRouterCatalog).toHaveBeenCalledTimes(count);
+});
+
+it('invalidates OpenRouter selections and requests when key or policy changes', async () => {
+  fakes.config.set('speech.provider', 'openrouter');
+  const { host, panel } = harness();
+  const restored = host.panelSpeech.settings.get();
+  expect(restored).toMatchObject({ openRouterModel: '', openRouterVoice: '', openRouterZdr: false });
+  host.panelSpeech.settings.set({ ...restored, openRouterModel: 'model', openRouterVoice: 'voice', openRouterZdr: true });
+  expect(fakes.cancel).toHaveBeenCalled();
+  expect(fakes.openInvalidate).toHaveBeenCalled();
+  await vi.waitFor(() => {
+    expect(fakes.update).toHaveBeenCalledWith('speech.openRouterZdr', true, 1);
+  });
+  fakes.openChanged?.();
+  expect(host.panelSpeech.settings.get()).toMatchObject({ openRouterModel: '', openRouterVoice: '' });
+  expect(fakes.invalidateCloud).toHaveBeenCalled();
+  fakes.secretChanged?.({ key: 'aiPair.openRouter.apiKey' });
+  expect(fakes.openCredentialInvalidate).toHaveBeenCalled();
+  await vi.waitFor(() => {
+    expect(panel.showOpenRouterKeyStatus).toHaveBeenCalledWith(false);
+  });
+  await host.dispose();
+});
+
+it('ignores stale key checks and reports only current key-check failure', async () => {
+  const { host, panel } = harness();
+  const old = Promise.withResolvers<boolean>();
+  fakes.openHasKey.mockReturnValueOnce(old.promise).mockRejectedValueOnce(new Error('private'));
+  host.panelSpeech.openRouterKeyRefresh();
+  host.panelSpeech.openRouterKeyRefresh();
+  await vi.waitFor(() => {
+    expect(panel.showOpenRouterKeyStatus).toHaveBeenCalledWith(false);
+  });
+  old.resolve(true);
+  await Promise.resolve();
+  expect(panel.showOpenRouterKeyStatus).not.toHaveBeenCalledWith(true);
+  expect(JSON.stringify(panel.showOpenRouterKeyStatus.mock.calls)).not.toContain('private');
+  await host.dispose();
+});
+
+it('invalidates the catalog on external ZDR changes and cancels changed model settings', () => {
+  fakes.config.set('speech.provider', 'openrouter');
+  const { host } = harness();
+  fakes.config.set('speech.openRouterModel', 'model');
+  fakes.configChanged?.({ affectsConfiguration: () => true });
+  expect(fakes.cancel).toHaveBeenCalled();
+  fakes.config.set('speech.openRouterZdr', true);
+  fakes.configChanged?.({ affectsConfiguration: () => true });
+  expect(fakes.openInvalidate).toHaveBeenCalled();
+  void host.dispose();
+});
+
+it('handles an incomplete OpenRouter choice and ignores a superseded key failure', async () => {
+  const { host, panel } = harness();
+  const choice = { ...host.panelSpeech.settings.get(), provider: 'openrouter' as const };
+  host.panelSpeech.settings.set(choice);
+  expect(host.audioDiagnostics().voiceConfigured).toBe(false);
+  host.panelSpeech.settings.set({ ...choice, openRouterModel: 'model' });
+  const stale = Promise.withResolvers<boolean>();
+  fakes.openHasKey.mockReturnValueOnce(stale.promise).mockResolvedValueOnce(true);
+  host.panelSpeech.openRouterKeyRefresh();
+  host.panelSpeech.openRouterKeyRefresh();
+  await vi.waitFor(() => {
+    expect(panel.showOpenRouterKeyStatus).toHaveBeenCalledWith(true);
+  });
+  stale.reject(new Error('private'));
+  await Promise.resolve();
+  expect(panel.showOpenRouterKeyStatus).not.toHaveBeenCalledWith(false);
+  await host.dispose();
+});
+
+it('loads models with the pending ZDR choice before settings persistence finishes', async () => {
+  fakes.config.set('speech.provider', 'openrouter');
+  const save = Promise.withResolvers<void>();
+  fakes.update.mockReturnValueOnce(save.promise);
+  const { host } = harness();
+  host.panelSpeech.settings.set({ ...host.panelSpeech.settings.get(), openRouterZdr: true });
+  host.panelSpeech.loadOpenRouterModels();
+  expect(fakes.openLoad).toHaveBeenCalledWith(true);
+  save.resolve();
   await host.dispose();
 });

@@ -7,7 +7,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { panelHtml } from '../../src/panel_html';
 
 /** The bundles, from the repository's root, where Playwright runs. */
-const DIST = path.resolve('packages/vscode/dist');
+const DIST = path.resolve(process.env.AI_PAIR_VISUAL_DIST ?? 'packages/vscode/dist');
 /** The page's origin, routed to dist/: the CSP allows styles from it. */
 const ORIGIN = 'https://panel.test';
 /** The VS Code theme variables the stylesheet reads, as Dark Modern sets them. */
@@ -230,3 +230,35 @@ test('open menu follows its trigger when bottom band grows', async ({ page }) =>
     })
     .toBe(true);
 });
+for (const width of [320, 240]) {
+  test(`OpenRouter settings fit at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    const post = await load(page);
+    await page.locator('[data-ui="settings"]').click();
+    await page.locator('[data-ui="speech-provider"]').selectOption('openrouter');
+    await post({ type: 'speechCloudSupport', supported: true });
+    await post({ type: 'openRouterKeyStatus', hasKey: true });
+    await post({
+      type: 'openRouterCatalog',
+      value: { state: 'ready', verified: true, models: [{ id: 'model', name: 'Model', voices: [{ id: 'voice', name: 'Voice' }] }] },
+    });
+    await expect(page.locator('[data-ui="openrouter-model"] option')).toHaveCount(2);
+    await page.locator('[data-ui="openrouter-model"]').selectOption('model');
+    await expect(page.locator('[data-ui="openrouter-voice"] option')).toHaveCount(2);
+    const toggle = page.locator('[data-ui="openrouter-zdr"]');
+    await expect(toggle).toHaveText('ZDR filter: Off');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await expect(toggle).toHaveText('ZDR filter: On');
+    expect(
+      await page.evaluate(() => {
+        // The browser provides document; this test's TypeScript configuration omits DOM types.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        const root = (globalThis as unknown as { document: { documentElement: { scrollWidth: number; clientWidth: number } } }).document
+          .documentElement;
+        return root.scrollWidth <= root.clientWidth;
+      }),
+    ).toBe(true);
+    await testInfo.attach('settings', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
+  });
+}

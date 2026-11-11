@@ -501,3 +501,24 @@ local boundary.
 The voice toolbar button projects existing cached audio facts through the local
 panel channel. It adds no process, device probe or component boundary; the
 source model and generated export retain the current attachment architecture.
+
+## OpenRouter cloud speech
+
+OpenRouter uses the existing `SpeechService` cloud slot and the same local
+output router as ElevenLabs. It does not own a second playback lifecycle.
+The local host owns a separate SecretStorage credential, selected model,
+voice and ZDR preference. Each admitted narration snapshots those preferences;
+changes invalidate stale catalog and synthesis work.
+
+The provider client reads the authenticated account catalog before applying
+the optional ZDR intersection. Public discovery never substitutes for account
+eligibility. The filter sends OpenRouter's ZDR request policy without claiming
+to override account Safety Retention settings. The first adapter supports
+only documented PCM capabilities and returns the existing bounded WAV contract.
+Missing credentials, rejected policy and unsupported models fail within speech;
+editing and readable narration remain available.
+
+The OpenRouter diagram update was validated with Archi-Techture 1.5.1 on
+2026-11-11. The source and standalone HTML export were regenerated together;
+both normalizer suites passed. Headless Chromium rendered the integration
+diagram without page errors, and its provider boundaries were visually checked.

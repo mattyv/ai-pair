@@ -2643,3 +2643,223 @@ it('refreshes an open voice tooltip when readiness changes', () => {
   send({ type: 'speechTransport', available: false });
   expect(tip()).toBe('Voice: unavailable');
 });
+
+it('loads OpenRouter models and remembers the selected voice when ZDR changes', () => {
+  send({ type: 'speechCloudSupport', supported: true });
+  send({ type: 'openRouterKeyStatus', hasKey: true });
+  const provider = element('speech-provider');
+  const model = element('openrouter-model');
+  const voice = element('openrouter-voice');
+  if (
+    !(provider instanceof window.HTMLSelectElement) ||
+    !(model instanceof window.HTMLSelectElement) ||
+    !(voice instanceof window.HTMLSelectElement)
+  ) {
+    throw new TypeError('Missing controls');
+  }
+  provider.value = 'openrouter';
+  provider.dispatchEvent(new window.Event('change'));
+  click(element('openrouter-key-set'));
+  click(element('openrouter-load'));
+  expect(posted()).toContainEqual({ type: 'openRouterKeySet' });
+  expect(posted()).toContainEqual({ type: 'openRouterModelsLoad' });
+  send({
+    type: 'openRouterCatalog',
+    value: { state: 'ready', verified: true, models: [{ id: 'model', name: 'Model', voices: [{ id: 'voice', name: 'Voice' }] }] },
+  });
+  model.value = 'model';
+  model.dispatchEvent(new window.Event('change'));
+  voice.value = 'voice';
+  voice.dispatchEvent(new window.Event('change'));
+  expect(posted()).toContainEqual({
+    type: 'speechSettings',
+    // oxlint-disable-next-line typescript/no-unsafe-assignment -- Vitest's asymmetric matcher validates this value.
+    value: expect.objectContaining({ provider: 'openrouter', openRouterModel: 'model', openRouterVoice: 'voice', openRouterZdr: false }),
+  });
+  click(element('openrouter-zdr'));
+  expect(element('openrouter-zdr').getAttribute('aria-pressed')).toBe('true');
+  expect(element('openrouter-zdr').textContent).toBe('ZDR filter: On');
+  expect(model.value).toBe('model');
+  expect(voice.value).toBe('voice');
+  expect(posted()).toContainEqual({
+    type: 'speechSettings',
+    // oxlint-disable-next-line typescript/no-unsafe-assignment -- Vitest's asymmetric matcher validates this value.
+    value: expect.objectContaining({ openRouterModel: 'model', openRouterVoice: 'voice', openRouterZdr: true }),
+  });
+  send({
+    type: 'openRouterCatalog',
+    value: { state: 'ready', verified: true, models: [{ id: 'model', name: 'Model', voices: [{ id: 'voice', name: 'Voice' }] }] },
+  });
+  expect(model.value).toBe('model');
+  expect(voice.value).toBe('voice');
+  click(element('openrouter-zdr'));
+  send({ type: 'openRouterCatalog', value: { state: 'ready', verified: true, models: [] } });
+  expect(model.value).toBe('');
+  expect(element('speech-preview').hasAttribute('disabled')).toBe(true);
+});
+
+it('reports OpenRouter catalog states and restores saved settings', () => {
+  send({
+    type: 'speechSettings',
+    value: {
+      enabled: true,
+      provider: 'openrouter',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+      openRouterModel: 'm',
+      openRouterVoice: 'v',
+      openRouterZdr: true,
+    },
+  });
+  send({ type: 'openRouterKeyStatus', hasKey: false });
+  expect(element('openrouter-key-status').textContent).toBe('No API key saved.');
+  send({ type: 'openRouterCatalog', value: { state: 'loading', verified: false, models: [] } });
+  expect(element('openrouter-status').textContent).toContain('Loading');
+  send({ type: 'openRouterCatalog', value: { state: 'error', verified: false, models: [] } });
+  expect(element('openrouter-status').textContent).toContain('Could not load');
+  send({ type: 'openRouterCatalog', value: { state: 'error', verified: false, models: [], message: 'Unavailable.' } });
+  expect(element('openrouter-status').textContent).toBe('Unavailable.');
+  send({ type: 'openRouterCatalog', value: { state: 'ready', verified: true, models: [] } });
+  expect(element('openrouter-status').textContent).toContain('No compatible');
+  send({ type: 'openRouterCatalog', value: { state: 'idle', verified: false, models: [] } });
+  expect(element('openrouter-status').textContent).toContain('Load account models');
+  send({ type: 'speechCloudSupport', supported: true });
+  send({ type: 'openRouterKeyStatus', hasKey: true });
+  click(element('openrouter-key-remove'));
+  expect(posted()).toContainEqual({ type: 'openRouterKeyRemove' });
+  send({
+    type: 'speechSettings',
+    value: {
+      enabled: true,
+      provider: 'openrouter',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+      openRouterModel: 'm',
+    },
+  });
+  send({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'openrouter', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+});
+
+it('marks a remembered OpenRouter selection unavailable when a current catalog excludes it', () => {
+  send({ type: 'speechCloudSupport', supported: true });
+  send({ type: 'openRouterKeyStatus', hasKey: true });
+  send({
+    type: 'speechSettings',
+    value: {
+      enabled: true,
+      provider: 'openrouter',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+      openRouterModel: 'saved',
+      openRouterVoice: 'voice',
+    },
+  });
+  const model = element('openrouter-model');
+  const voice = element('openrouter-voice');
+  if (!(model instanceof window.HTMLSelectElement) || !(voice instanceof window.HTMLSelectElement)) throw new TypeError('Missing controls');
+  expect(model.selectedOptions[0]?.textContent).toContain('Saved model');
+  send({
+    type: 'openRouterCatalog',
+    value: {
+      state: 'ready',
+      verified: true,
+      models: [{ id: 'other', name: 'Other', voices: [{ id: 'other-voice', name: 'Other voice' }] }],
+    },
+  });
+  expect(model.value).toBe('');
+  expect(voice.value).toBe('');
+  expect(element('speech-preview').hasAttribute('disabled')).toBe(true);
+});
+
+it('retains authoritative exclusion during a refresh and its failure', () => {
+  send({ type: 'speechCloudSupport', supported: true });
+  send({ type: 'openRouterKeyStatus', hasKey: true });
+  send({
+    type: 'speechSettings',
+    value: {
+      enabled: true,
+      provider: 'openrouter',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+      openRouterModel: 'saved',
+      openRouterVoice: 'voice',
+    },
+  });
+  const model = element('openrouter-model');
+  if (!(model instanceof window.HTMLSelectElement)) throw new TypeError('Missing model selector');
+  for (const state of ['ready', 'loading', 'error'] as const) {
+    send({ type: 'openRouterCatalog', value: { state, verified: true, models: [] } });
+    expect(model.options).toHaveLength(1);
+    expect(element('speech-preview').hasAttribute('disabled')).toBe(true);
+  }
+  send({ type: 'openRouterCatalog', value: { state: 'idle', verified: false, models: [] } });
+  expect(model.selectedOptions[0]?.textContent).toContain('Saved model');
+});
+
+it('saves the ZDR choice before refreshing compatible account models', () => {
+  send({ type: 'speechCloudSupport', supported: true });
+  send({ type: 'openRouterKeyStatus', hasKey: true });
+  send({
+    type: 'speechSettings',
+    value: { enabled: false, provider: 'openrouter', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+  send({
+    type: 'openRouterCatalog',
+    value: { state: 'ready', verified: true, models: [{ id: 'model', name: 'Model', voices: [{ id: 'voice', name: 'Voice' }] }] },
+  });
+  const prior = posted().length;
+  click(element('openrouter-zdr'));
+  expect(
+    posted()
+      .slice(prior)
+      .map((message) => message.type),
+  ).toEqual(['speechSettings', 'openRouterModelsLoad']);
+  expect(element('openrouter-status').textContent).not.toBe('Compatible account models loaded.');
+  send({ type: 'openRouterCatalog', value: { state: 'ready', verified: true, models: [] } });
+  expect(element('openrouter-status').textContent).toContain('No compatible');
+});
+
+it('saves ZDR without requesting a catalog when no key is saved', () => {
+  send({ type: 'speechCloudSupport', supported: true });
+  send({ type: 'openRouterKeyStatus', hasKey: false });
+  send({
+    type: 'speechSettings',
+    value: { enabled: false, provider: 'openrouter', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+  const prior = posted().length;
+  click(element('openrouter-zdr'));
+  expect(
+    posted()
+      .slice(prior)
+      .map((message) => message.type),
+  ).toEqual(['speechSettings']);
+  expect(element('openrouter-status').textContent).toContain('API key');
+});
+
+it('saves ZDR without requesting a catalog when cloud speech is unsupported', () => {
+  send({ type: 'speechCloudSupport', supported: false });
+  send({ type: 'openRouterKeyStatus', hasKey: true });
+  send({
+    type: 'speechSettings',
+    value: { enabled: false, provider: 'openrouter', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+  const prior = posted().length;
+  click(element('openrouter-zdr'));
+  expect(
+    posted()
+      .slice(prior)
+      .map((message) => message.type),
+  ).toEqual(['speechSettings']);
+  expect(element('openrouter-status').textContent).toContain('unavailable');
+});

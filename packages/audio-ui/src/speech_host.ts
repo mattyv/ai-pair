@@ -8,6 +8,8 @@ import type { SpeechState } from '../../vscode/src/panel_messages';
 import { SpeechCatalog, type CatalogView } from '../../vscode/src/speech_catalog';
 import { SpeechCredentials } from '../../vscode/src/speech_credentials';
 import { ElevenLabsClient } from '../../vscode/src/speech_elevenlabs';
+import { OpenRouterClient } from '../../vscode/src/speech_openrouter';
+import { OpenRouterCatalog, type OpenRouterCatalogView } from '../../vscode/src/speech_openrouter_catalog';
 import { SpeechOutputPreferences, type OutputPreferenceView } from '../../vscode/src/speech_output_preferences';
 import { speechRuntimeAvailable } from '../../vscode/src/speech_runtime_status';
 import { localSpeechPlatform } from '../../vscode/src/speech_platform';
@@ -29,6 +31,8 @@ import { CompanionOutput } from './companion_output';
 export interface SpeechHostPanel {
   showSpeechReadiness(value: AudioDiagnostics): void;
   showSpeechKeyStatus(hasKey: boolean): void;
+  showOpenRouterKeyStatus(hasKey: boolean): void;
+  showOpenRouterCatalog(value: OpenRouterCatalogView): void;
   showSpeechOutputCatalog(value: OutputPreferenceView): void;
   showSpeechCatalog(value: CatalogView): void;
   showSpeechSettings(value: SpeechSettings): void;
@@ -99,6 +103,10 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
   let catalogActive = false;
   let speech: SpeechService;
   let credentials: SpeechCredentials;
+  let openRouterCredentials: SpeechCredentials;
+  let openRouterCatalog: OpenRouterCatalog;
+  let openRouterKeyEpoch = 0;
+  let openRouterKeyConfigured: boolean | 'unknown' = 'unknown';
   let catalog: SpeechCatalog;
   let output: CompanionOutput;
   let capability: AudioCapabilities | undefined;
@@ -163,7 +171,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
   let computeGeneration = 0;
   let computeTail: Promise<void> = Promise.resolve();
   let computePending = false;
-  let previewProvider: 'kokoro' | 'elevenlabs' = 'kokoro';
+  let previewProvider: SpeechSettings['provider'] = 'kokoro';
 
   function stored(): SpeechSettings {
     const enabled: unknown = config().get('speech.enabled');
@@ -172,14 +180,24 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     const provider: unknown = config().inspect('speech.provider')?.globalValue;
     const cloudVoice: unknown = config().get('speech.elevenLabsVoice');
     const cloudSpeed: unknown = config().get('speech.elevenLabsSpeed');
+    const openRouterModel: unknown = config().get('speech.openRouterModel');
+    const openRouterVoice: unknown = config().get('speech.openRouterVoice');
+    const openRouterZdr: unknown = config().get('speech.openRouterZdr');
     return {
       enabled: enabled === true,
       listeningSpeed: speechListeningRate(config().get('speech.listeningSpeed')),
       voice: typeof voice === 'string' ? voice : 'af_heart',
       speed: typeof speed === 'number' ? speed : 1,
-      provider: provider === 'elevenlabs' ? 'elevenlabs' : 'kokoro',
+      provider: provider === 'elevenlabs' || provider === 'openrouter' ? provider : 'kokoro',
       elevenLabsVoice: !invalidVoice && typeof cloudVoice === 'string' ? cloudVoice : '',
       elevenLabsSpeed: typeof cloudSpeed === 'number' ? cloudSpeed : 1,
+      ...(typeof openRouterModel === 'string' || typeof openRouterVoice === 'string' || openRouterZdr === true || provider === 'openrouter'
+        ? {
+            openRouterModel: typeof openRouterModel === 'string' ? openRouterModel : '',
+            openRouterVoice: typeof openRouterVoice === 'string' ? openRouterVoice : '',
+            openRouterZdr: openRouterZdr === true,
+          }
+        : {}),
     };
   }
   let last = stored();
@@ -192,7 +210,17 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
         if (prior.provider !== value.provider) {
           credentials.supersede();
           catalog.invalidate();
+          openRouterCredentials.supersede();
+          openRouterCatalog.invalidate();
         }
+      }
+      if (
+        prior.openRouterModel !== value.openRouterModel ||
+        prior.openRouterVoice !== value.openRouterVoice ||
+        prior.openRouterZdr !== value.openRouterZdr
+      ) {
+        speech.cancel();
+        if (prior.openRouterZdr !== value.openRouterZdr) openRouterCatalog.invalidate();
       }
       const restoresVoice = invalidVoice && value.elevenLabsVoice !== '' && catalog.contains(value.elevenLabsVoice);
       // specs/ProviderChoice.tla, Select: the latest local choice takes effect before persistence.
@@ -219,6 +247,9 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
           ['speech.provider', value.provider],
           ['speech.elevenLabsVoice', value.elevenLabsVoice],
           ['speech.elevenLabsSpeed', value.elevenLabsSpeed],
+          ...(value.openRouterModel === undefined ? [] : [['speech.openRouterModel', value.openRouterModel] as [string, unknown]]),
+          ...(value.openRouterVoice === undefined ? [] : [['speech.openRouterVoice', value.openRouterVoice] as [string, unknown]]),
+          ...(value.openRouterZdr === undefined ? [] : [['speech.openRouterZdr', value.openRouterZdr] as [string, unknown]]),
         ];
         for (const [key, setting] of updates) await config().update(key, setting, vscode.ConfigurationTarget.Global);
       });
@@ -265,6 +296,43 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     },
   );
   const cloud = new ElevenLabsClient(() => credentials.read());
+  openRouterCredentials = new SpeechCredentials(
+    context.secrets,
+    () => vscode.window.showInputBox({ title: 'OpenRouter API key', password: true, ignoreFocusOut: true }),
+    () => {
+      openRouterKeyEpoch++;
+      openRouterKeyConfigured = 'unknown';
+      openRouterCatalog.invalidate();
+      speech.invalidateCloud();
+      settings.set({ ...settings.get(), openRouterModel: '', openRouterVoice: '' });
+      publishReadiness();
+    },
+    'aiPair.openRouter.apiKey',
+  );
+  const openRouter = new OpenRouterClient(() => openRouterCredentials.read());
+  openRouterCatalog = new OpenRouterCatalog(openRouter, (value) => {
+    if (!disposed) {
+      if (value.state === 'ready') speech.openRouterCatalogChanged();
+      options.panel()?.showOpenRouterCatalog(value);
+      publishReadiness();
+    }
+  });
+  function refreshOpenRouterKey(): void {
+    const epoch = ++openRouterKeyEpoch;
+    openRouterKeyConfigured = 'unknown';
+    publishReadiness();
+    void openRouterCredentials.hasKey().then(
+      (hasKey) => {
+        if (disposed || epoch !== openRouterKeyEpoch) return;
+        openRouterKeyConfigured = hasKey;
+        options.panel()?.showOpenRouterKeyStatus(hasKey);
+        publishReadiness();
+      },
+      () => {
+        if (!disposed && epoch === openRouterKeyEpoch) options.panel()?.showOpenRouterKeyStatus(false);
+      },
+    );
+  }
   catalog = new SpeechCatalog(cloud, (value) => {
     if (value.reset) catalogActive = false;
     else if (value.loading) catalogActive = true;
@@ -402,6 +470,9 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     },
   });
   speech = new SpeechService({
+    openRouterDiagnostic: (reason) => {
+      options.diagnostic({ kind: 'speech', event: 'narration', provider: 'openrouter', phase: 'failed', reason });
+    },
     cloudDiagnostic: (reason) => {
       options.diagnostic({ kind: 'speech', event: 'narration', provider: 'elevenlabs', phase: 'failed', reason });
     },
@@ -411,6 +482,8 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     localDesktop: desktop,
     kokoroSupported: platform,
     cloud,
+    openRouter,
+    openRouterAllowed: (model, voice) => openRouterCatalog.allows(model, voice),
     settings: settings.get,
     ...(options.enableGpuInference === true && binding !== undefined
       ? {
@@ -526,6 +599,19 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
       refreshKey();
     },
     keyRefresh: refreshKey,
+    openRouterKeySet: async () => {
+      await openRouterCredentials.set();
+      refreshOpenRouterKey();
+    },
+    openRouterKeyRemove: async () => {
+      await openRouterCredentials.remove();
+      refreshOpenRouterKey();
+    },
+    openRouterKeyRefresh: refreshOpenRouterKey,
+    loadOpenRouterModels: () => {
+      void openRouterCatalog.load(settings.get().openRouterZdr === true);
+    },
+    validOpenRouterVoice: (model, voice) => openRouterCatalog.contains(model, voice),
     loadVoices: (more) => {
       void catalog.load(more);
     },
@@ -583,10 +669,15 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     pageClosed: (pageId) => {
       speech.pageClosed(pageId);
       catalog.invalidate();
+      openRouterCatalog.invalidate();
     },
   };
   const subscriptions = [
     context.secrets.onDidChange((event) => {
+      if (event.key === 'aiPair.openRouter.apiKey') {
+        openRouterCredentials.invalidate();
+        refreshOpenRouterKey();
+      }
       if (event.key === 'aiPair.elevenLabs.apiKey') {
         credentials.invalidate();
         keyConfigured = 'unknown';
@@ -609,6 +700,16 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
         if (current.provider !== last.provider) {
           credentials.supersede();
           catalog.invalidate();
+          openRouterCredentials.supersede();
+          openRouterCatalog.invalidate();
+        }
+        if (
+          current.openRouterModel !== last.openRouterModel ||
+          current.openRouterVoice !== last.openRouterVoice ||
+          current.openRouterZdr !== last.openRouterZdr
+        ) {
+          speech.cancel();
+          if (current.openRouterZdr !== last.openRouterZdr) openRouterCatalog.invalidate();
         }
         last = current;
       }
@@ -621,11 +722,16 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
   function audioDiagnostics(): AudioDiagnostics {
     const current = settings.get();
     const selected = preferences.choice();
+    const openRouterModel = current.openRouterModel ?? '';
+    const openRouterVoice = current.openRouterVoice ?? '';
     return {
       enabled: current.enabled,
       provider: current.provider,
-      keyConfigured,
-      voiceConfigured: (current.provider === 'kokoro' ? current.voice : current.elevenLabsVoice).trim() !== '',
+      keyConfigured: current.provider === 'openrouter' ? openRouterKeyConfigured : keyConfigured,
+      voiceConfigured:
+        current.provider === 'openrouter'
+          ? openRouterModel.trim() !== '' && openRouterVoice.trim() !== '' && openRouterCatalog.allows(openRouterModel, openRouterVoice)
+          : (current.provider === 'kokoro' ? current.voice : current.elevenLabsVoice).trim() !== '',
       output: desktop ? (selected.kind === 'default' ? 'default' : 'override') : 'unknown',
       routeAvailable: !desktop || capability === undefined || (selected.kind !== 'default' && !routeDiscovered) ? 'unknown' : outputReady(),
       runtimeReady: desktop && runtimeKnown ? platform && runtimeAvailable && speech.localComputeUsable() : 'unknown',
@@ -663,7 +769,8 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
         local: () => platform && runtimeAvailable && speech.localComputeUsable(),
         output: () => options.page() !== undefined && outputReady(),
         model: panelSpeech.installed,
-        key: () => credentials.hasKey(),
+        key: (provider) => (provider === 'openrouter' ? openRouterCredentials.hasKey() : credentials.hasKey()),
+        openRouterAllowed: (model, voice) => openRouterCatalog.allows(model, voice),
       }),
     dispose: async () => {
       disposed = true;
@@ -672,7 +779,9 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
         subscription.dispose();
       });
       credentials.supersede();
+      openRouterCredentials.supersede();
       catalog.invalidate();
+      openRouterCatalog.invalidate();
       output.dispose();
       await speech.dispose();
     },

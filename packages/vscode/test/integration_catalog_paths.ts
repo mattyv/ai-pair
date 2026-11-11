@@ -66,6 +66,8 @@ export async function run(): Promise<void> {
   let prepareCalled = false;
   const realFetch = globalThis.fetch;
   let mode = 'empty';
+  const routerRequests: Array<{ url: URL; init: RequestInit | undefined }> = [];
+  let routerDenied = false;
   let requests = 0;
   let sawMore = false;
   let api: Api | undefined;
@@ -78,6 +80,9 @@ export async function run(): Promise<void> {
     'speech.provider',
     'speech.elevenLabsVoice',
     'speech.elevenLabsSpeed',
+    'speech.openRouterModel',
+    'speech.openRouterVoice',
+    'speech.openRouterZdr',
   ];
   const original = keys.map((key) => settings.inspect<unknown>(key)?.globalValue);
   const value = { enabled: false, voice: 'af_heart', speed: 1, provider: 'elevenlabs', elevenLabsVoice: '', elevenLabsSpeed: 1 };
@@ -86,6 +91,21 @@ export async function run(): Promise<void> {
       ...fetchDescriptor,
       value: (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(typeof input === 'string' || input instanceof URL ? input.toString() : input.url);
+        if (url.hostname === 'openrouter.ai') {
+          routerRequests.push({ url, init });
+          if (url.pathname === '/api/v1/audio/speech') {
+            return Promise.resolve(new Response('private provider response', { status: 429 }));
+          }
+          if (url.pathname === '/api/v1/models/user' || url.pathname === '/api/v1/models') {
+            const model = { id: 'microsoft/mai-voice-2.1', name: 'MAI', supported_voices: ['en-US-Harper:MAI-Voice-2.1'] };
+            return Promise.resolve(
+              new Response(JSON.stringify({ data: routerDenied ? [] : [model] }), {
+                headers: { 'content-type': 'application/json' },
+              }),
+            );
+          }
+          return Promise.reject(new Error('Unexpected OpenRouter request'));
+        }
         if (url.hostname !== 'api.elevenlabs.io') return realFetch(input, init);
         requests++;
         if (url.origin === 'https://api.elevenlabs.io' && url.pathname === '/v1/text-to-speech/test_voice' && init?.method === 'POST') {
@@ -280,6 +300,80 @@ export async function run(): Promise<void> {
       await catalog(api, 'failed', reason);
     }
     assert.ok(requests >= 6, 'the controlled HTTP boundary did not receive each catalog request');
+    // Exercise the real panel, credential store and adapter against a local boundary.
+    api.panelMessage({ type: 'openRouterKeySet' });
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 200);
+    });
+    const routerValue = { ...value, enabled: true, provider: 'openrouter', openRouterModel: '', openRouterVoice: '', openRouterZdr: true };
+    api.panelMessage({ type: 'speechSettings', value: routerValue });
+    for (let attempt = 0; attempt < 100 && vscode.workspace.getConfiguration('aiPair').get('speech.provider') !== 'openrouter'; attempt++) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 50);
+      });
+    }
+    assert.equal(vscode.workspace.getConfiguration('aiPair').get('speech.provider'), 'openrouter');
+    api.panelMessage({ type: 'openRouterModelsLoad' });
+    for (let attempt = 0; attempt < 100 && routerRequests.length < 2; attempt++) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 50);
+      });
+    }
+    assert.equal(routerRequests[0]?.url.pathname, '/api/v1/models/user');
+    assert.equal(routerRequests[1]?.url.searchParams.get('zdr'), 'true');
+    const routerModel = 'microsoft/mai-voice-2.1';
+    const routerVoice = 'en-US-Harper:MAI-Voice-2.1';
+    const selectedRouter = { ...routerValue, openRouterModel: routerModel, openRouterVoice: routerVoice };
+    for (
+      let attempt = 0;
+      attempt < 100 && vscode.workspace.getConfiguration('aiPair').get('speech.openRouterVoice') !== routerVoice;
+      attempt++
+    ) {
+      api.panelMessage({ type: 'speechSettings', value: selectedRouter });
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 50);
+      });
+    }
+    assert.equal(vscode.workspace.getConfiguration('aiPair').get('speech.openRouterVoice'), routerVoice);
+    api.panelMessage({ type: 'speechPreview' });
+    for (let attempt = 0; attempt < 100 && !routerRequests.some((request) => request.url.pathname === '/api/v1/audio/speech'); attempt++) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 50);
+      });
+    }
+    const speechRequest = routerRequests.find((request) => request.url.pathname === '/api/v1/audio/speech');
+    assert.ok(speechRequest, 'OpenRouter preview did not reach the controlled boundary');
+    assert.equal(speechRequest.init?.redirect, 'error');
+    assert.equal(typeof speechRequest.init?.body, 'string');
+    if (typeof speechRequest.init?.body !== 'string') assert.fail('missing synthesis body');
+    assert.deepEqual(JSON.parse(speechRequest.init.body), {
+      model: routerModel,
+      voice: routerVoice,
+      input: 'Here is a short example of the voice for our pairing session.',
+      response_format: 'pcm',
+      provider: { zdr: true },
+    });
+    routerDenied = true;
+    api.panelMessage({ type: 'openRouterModelsLoad' });
+    for (
+      let attempt = 0;
+      attempt < 100 && routerRequests.filter((request) => request.url.pathname === '/api/v1/models').length < 2;
+      attempt++
+    ) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 50);
+      });
+    }
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 100);
+    });
+    const beforeBlockedPreview = routerRequests.filter((request) => request.url.pathname === '/api/v1/audio/speech').length;
+    await api.previewSpeech();
+    assert.equal(routerRequests.filter((request) => request.url.pathname === '/api/v1/audio/speech').length, beforeBlockedPreview);
+    api.panelMessage({ type: 'openRouterKeyRemove' });
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 200);
+    });
   } finally {
     placement.resolve(undefined);
     globalThis.setTimeout = realSetTimeout;
@@ -288,7 +382,10 @@ export async function run(): Promise<void> {
     Object.defineProperty(vscode.commands, 'executeCommand', commandDescriptor);
     Object.defineProperty(vscode.window, 'showInputBox', promptDescriptor);
     try {
-      if (api !== undefined) await vscode.commands.executeCommand('aiPair.removeElevenLabsKey');
+      if (api !== undefined) {
+        api.panelMessage({ type: 'openRouterKeyRemove' });
+        await vscode.commands.executeCommand('aiPair.removeElevenLabsKey');
+      }
     } finally {
       Object.defineProperty(globalThis, 'fetch', fetchDescriptor);
       for (const [index, key] of keys.entries()) await settings.update(key, original[index], vscode.ConfigurationTarget.Global);

@@ -205,3 +205,9 @@ it('retains narration failure metadata and strips private fields', () => {
   ]);
   expect(JSON.stringify(diagnostics.snapshot())).not.toContain('private');
 });
+
+it('retains only sanitized OpenRouter diagnostic fields', () => {
+  const diagnostics = new Diagnostics({ version: '1', build: 'test' });
+  diagnostics.record({ kind: 'speech', event: 'narration', provider: 'openrouter', phase: 'failed', reason: 'auth' });
+  expect(diagnostics.snapshot().events).toMatchObject([{ kind: 'speech', provider: 'openrouter', reason: 'auth' }]);
+});

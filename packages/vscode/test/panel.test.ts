@@ -153,6 +153,11 @@ interface Harness {
     keySet: ReturnType<typeof vi.fn<() => Promise<void>>>;
     keyRemove: ReturnType<typeof vi.fn<() => Promise<void>>>;
     keyRefresh: ReturnType<typeof vi.fn<() => void>>;
+    openRouterKeySet: ReturnType<typeof vi.fn<() => Promise<void>>>;
+    openRouterKeyRemove: ReturnType<typeof vi.fn<() => Promise<void>>>;
+    openRouterKeyRefresh: ReturnType<typeof vi.fn<() => void>>;
+    loadOpenRouterModels: ReturnType<typeof vi.fn<() => void>>;
+    validOpenRouterVoice: ReturnType<typeof vi.fn<(modelId: string, voiceId: string) => boolean>>;
     loadVoices: ReturnType<typeof vi.fn<(more: boolean) => void>>;
     validCloudVoice: ReturnType<typeof vi.fn<(id: string) => boolean>>;
   };
@@ -227,6 +232,11 @@ function harness(
     keySet: vi.fn<() => Promise<void>>().mockResolvedValue(),
     keyRemove: vi.fn<() => Promise<void>>().mockResolvedValue(),
     keyRefresh: vi.fn<() => void>(),
+    openRouterKeySet: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    openRouterKeyRemove: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    openRouterKeyRefresh: vi.fn<() => void>(),
+    loadOpenRouterModels: vi.fn<() => void>(),
+    validOpenRouterVoice: vi.fn<(modelId: string, voiceId: string) => boolean>(),
     loadVoices: vi.fn<(more: boolean) => void>(),
     validCloudVoice: vi.fn<(id: string) => boolean>(),
     supported: vi.fn(() => true),
@@ -1488,4 +1498,66 @@ it('publishes validated initial readiness after settings and compute facts', () 
   expect(view.posted[index]).toEqual({ type: 'speechReadiness', value: facts });
   expect(view.posted.findIndex((message) => message.type === 'speechSettings')).toBeLessThan(index);
   expect(view.posted.findIndex((message) => message.type === 'speechComputeState')).toBeLessThan(index);
+});
+
+it('routes OpenRouter key and catalog actions and validates the selected pair', async () => {
+  const { panel, speech } = harness();
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  view.send({ type: 'openRouterKeySet' });
+  view.send({ type: 'openRouterKeyRemove' });
+  await flush();
+  expect(speech.openRouterKeySet).toHaveBeenCalledOnce();
+  expect(speech.openRouterKeyRemove).toHaveBeenCalledOnce();
+  const choice = {
+    enabled: false,
+    provider: 'openrouter' as const,
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: '',
+    elevenLabsSpeed: 1,
+    openRouterModel: 'model',
+    openRouterVoice: 'voice',
+    openRouterZdr: true,
+  };
+  view.send({ type: 'speechSettings', value: choice });
+  expect(speech.settings.set).not.toHaveBeenCalled();
+  speech.validOpenRouterVoice.mockReturnValue(true);
+  view.send({ type: 'speechSettings', value: choice });
+  expect(speech.settings.set).toHaveBeenCalledWith(choice);
+  panel.showOpenRouterKeyStatus(true);
+  panel.showOpenRouterCatalog({ state: 'ready', verified: true, models: [] });
+  expect(view.posted).toContainEqual({ type: 'openRouterKeyStatus', hasKey: true });
+  expect(view.posted).toContainEqual({ type: 'openRouterCatalog', value: { state: 'ready', verified: true, models: [] } });
+});
+
+it('scopes OpenRouter catalog and reports key failure without leaking errors', async () => {
+  const { panel, speech } = harness();
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  view.send({ type: 'openRouterModelsLoad' });
+  expect(speech.loadOpenRouterModels).not.toHaveBeenCalled();
+  const settings = { ...speech.settings.get(), provider: 'openrouter' as const };
+  speech.settings.get.mockReturnValue(settings);
+  view.send({ type: 'openRouterModelsLoad' });
+  expect(speech.loadOpenRouterModels).toHaveBeenCalledOnce();
+  speech.cloudSupported.mockReturnValue(false);
+  view.send({ type: 'openRouterModelsLoad' });
+  view.send({ type: 'openRouterKeySet' });
+  expect(speech.loadOpenRouterModels).toHaveBeenCalledOnce();
+  expect(speech.openRouterKeySet).not.toHaveBeenCalled();
+  speech.cloudSupported.mockReturnValue(true);
+  speech.openRouterKeySet.mockRejectedValueOnce(new Error('private'));
+  view.send({ type: 'openRouterKeySet' });
+  await flush();
+  expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Could not update the API key.' });
+  expect(JSON.stringify(view.posted)).not.toContain('private');
+  for (const bad of [{ openRouterZdr: 'yes' }, { openRouterModel: 1 }, { openRouterVoice: 1 }]) {
+    view.receive({ type: 'speechSettings', value: { ...settings, ...bad } });
+  }
+  expect(speech.settings.set).not.toHaveBeenCalled();
+  const saved = { ...settings, openRouterModel: 'model', openRouterVoice: 'voice' };
+  speech.settings.get.mockReturnValue(saved);
+  view.send({ type: 'speechSettings', value: saved });
+  expect(speech.settings.set).toHaveBeenCalledWith(saved);
 });

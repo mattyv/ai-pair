@@ -1747,6 +1747,10 @@ and a foreign shell-start event. It abstracts path and terminal-ID matching,
 which the existing `Terminals` model and terminal tests cover. TLC checked 48
 states. An unobserved background descendant is not modeled as detectable; live
 shells are retained on cleanup even after a foreground command ends.
+The native `foreignTerminalExecution` fixture first observes the initial Pair
+execution's actual start and end and verifies its successful run report before
+starting a foreign execution. This strengthens the test precondition; it does
+not change the modeled behavior or establish the cause of issue #53.
 
 | Mutation | Breaks |
 |---|---|
@@ -3214,3 +3218,70 @@ Independently setting `GuardCurrent` to false violates
 `CurrentResult`, setting `GuardSingle` to false violates `SingleWorker`, and
 setting `EnableStart` to false violates `DemandProgress`; these temporary
 negative-control configurations were discarded.
+
+### `OpenRouterSpeech`: account-scoped speech selection
+
+The finite model represents one account catalog request, optional ZDR
+narrowing, selection and synthesis admission. It abstracts network transport,
+individual models and voices, PCM parsing, and audio output. The policy can
+change before selection; after it stops changing, `StableProgress` requires
+that the request reach synthesis admission or account failure. Weak fairness
+of `Resolve`, `Narrow`, `Select`, and `Synthesize` assumes each continuously
+enabled step eventually occurs. It does not guarantee provider responses,
+playback, or progress when the setting changes forever.
+
+`OpenRouterSpeech.cfg` explores successful authentication: TLC checked 17
+generated and 12 distinct states. `OpenRouterSpeech_Failure.cfg` explores
+account failure: 7 generated and 4 distinct states. Both pass all safety and
+temporal properties. Terminal states are permitted.
+
+| Property | Implementation test |
+| --- | --- |
+| `TypeOK` | `openrouter.test.ts`: `accepts bounded catalog metadata and ignores provider additions` and `accepts only bounded PCM requests with optional ZDR enforcement`. |
+| `AccountOnly` | `speech_openrouter.test.ts`: `AccountOnly uses the authenticated account catalog and maps advertised voices`; `AccountOnly never falls back when authentication fails`. |
+| `ZdrSelection` | `speech_openrouter.test.ts`: `ZdrSelection intersects the authenticated catalog with the public ZDR catalog`. |
+| `PolicySampled` | `speech_openrouter.test.ts`: `PolicySampled sends the selected request and converts documented PCM`; `omits provider policy when ZDR is off`. |
+| `StableProgress` | `speech_openrouter.test.ts`: `AccountOnly uses the authenticated account catalog and maps advertised voices`; `PolicySampled sends the selected request and converts documented PCM`; `AccountOnly never falls back when authentication fails`. These tests check the corresponding outcomes, not fairness. |
+
+An invalid initial result violates `TypeOK`. Independent temporary mutations
+disabling authentication, allowing selection
+without narrowing, and inverting the sampled policy violated `AccountOnly`,
+`ZdrSelection`, and `PolicySampled`, respectively. Disabling each of
+`Authenticate`, `Select`, and `Synthesize` separately violated
+`StableProgress`. The mutations were discarded.
+
+### `OpenRouterCatalog`: remembered pair eligibility
+
+The model tracks two request generations, a remembered model and voice, the
+latest authoritative eligibility, and whether one admission has occurred.
+Unknown eligibility permits a restored selection before a catalog request;
+a current successful response can allow or deny it. Refreshing the same
+identity retains previous evidence, including a denial, while a response is
+pending or fails. Changing identity invalidates that evidence. An old response
+may arrive after invalidation or replacement, but cannot update eligibility.
+An admission records the evidence at that instant: the model does not revoke a
+request already admitted before a later denial. It abstracts request payloads,
+provider transport, user interface details, cancellation, and physical playback.
+
+TLC checked `OpenRouterCatalog.cfg` with two generations: 71 generated and 36
+distinct states. The safety invariants and temporal properties passed. Terminal
+states are permitted. `StableProgress` assumes weak fairness of admission: if eligibility
+eventually remains non-denied, an enabled admission eventually happens.
+`CatalogProgress` separately checks that admission is enabled. Neither property
+guarantees progress when the caller does not make or sustain a request.
+
+| Property | Implementation test |
+| --- | --- |
+| `TypeOK` | `speech_openrouter_catalog.test.ts`: `CatalogProgress: permits an unknown restored pair` and `CatalogEligibility: rejects a remembered pair only after an authoritative catalog excludes it`. |
+| `CatalogStale` | `speech_openrouter_catalog.test.ts`: `CatalogStale: invalidation rejects late catalog replies`. |
+| `CatalogEligibility` | `speech_openrouter_catalog.test.ts`: `CatalogEligibility: rejects a remembered pair only after an authoritative catalog excludes it`; service tests cover preview and narration admission. |
+| `CatalogProgress` | `speech_openrouter_catalog.test.ts`: `CatalogProgress: permits an unknown restored pair`. |
+| `StableProgress` | `speech_openrouter_catalog.test.ts`: `CatalogProgress: permits an unknown restored pair` checks admission is possible; fairness is a model assumption. |
+| `DeniedRefresh` | `speech_openrouter_catalog.test.ts`: `DeniedRefresh: keeps a denial while refreshing the same identity and after failure`. |
+
+Independent negative controls allowing stale replies, allowing admission after
+a denial, disabling admission, clearing evidence during refresh, and assigning
+an invalid initial eligibility violated `CatalogStale`, `CatalogEligibility`,
+`CatalogProgress`, `DeniedRefresh`, and `TypeOK`, respectively. With the
+`CatalogProgress` invariant removed in the negative control, disabled
+admission also violates `StableProgress`. All mutations were discarded.

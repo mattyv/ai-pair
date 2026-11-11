@@ -23,6 +23,7 @@ import { watchOutside } from '../src/outside_watch';
 import { settingSpeed } from '../src/panel_html';
 import { speechRuntimeAvailable } from '../src/speech_runtime_status';
 import { speechReady } from '../src/speech_readiness';
+import { OpenRouterClient } from '../src/speech_openrouter';
 import { localSpeechPlatform } from '../src/speech_platform';
 import type { SpeechOutput } from '../src/speech_service';
 import type { PanelWiring } from '../src/panel';
@@ -66,6 +67,7 @@ const fakes = vi.hoisted(() => {
     speech: [] as Array<InstanceType<typeof FakeSpeech>>,
     cloudClients: [] as Array<InstanceType<typeof FakeCloudClient>>,
     catalogs: [] as Array<InstanceType<typeof FakeCatalog>>,
+    credentials: [] as Array<InstanceType<typeof FakeCredentials>>,
     outputs: [] as Array<InstanceType<typeof FakeOutputPreferences>>,
     routers: [] as Array<InstanceType<typeof FakeOutputRouter>>,
     starting: Promise.resolve(),
@@ -122,18 +124,21 @@ const fakes = vi.hoisted(() => {
       },
       private readonly prompt: () => Promise<string | undefined>,
       private readonly onCredentialChange: () => void,
-    ) {}
-    readonly read = vi.fn(() => this.storage.get('aiPair.elevenLabs.apiKey'));
+      private readonly key = 'aiPair.elevenLabs.apiKey',
+    ) {
+      made.credentials.push(this);
+    }
+    readonly read = vi.fn(() => this.storage.get(this.key));
     readonly hasKey = vi.fn(async () => (await this.read()) !== undefined);
     readonly set = vi.fn(async () => {
       const key = await this.prompt();
       if (key === undefined || key.length === 0) return;
       this.onCredentialChange();
-      await this.storage.store('aiPair.elevenLabs.apiKey', key);
+      await this.storage.store(this.key, key);
     });
     readonly remove = vi.fn(async () => {
       this.onCredentialChange();
-      await this.storage.delete('aiPair.elevenLabs.apiKey');
+      await this.storage.delete(this.key);
     });
     readonly invalidate = vi.fn(() => {
       this.onCredentialChange();
@@ -164,6 +169,7 @@ const fakes = vi.hoisted(() => {
     readonly resume = vi.fn<() => void>();
     readonly cancel = vi.fn<() => void>();
     readonly invalidateCloud = vi.fn<() => void>();
+    readonly openRouterCatalogChanged = vi.fn<() => void>();
     readonly dispose = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
     private compute: import('../src/speech_compute_types').SpeechComputeState;
     readonly selectComputeMode = vi.fn((requestedMode: import('../src/speech_compute_types').SpeechComputeMode) => {
@@ -195,6 +201,8 @@ const fakes = vi.hoisted(() => {
         output: SpeechOutput;
         localDesktop: boolean;
         cloudDiagnostic?: (reason: 'auth') => void;
+        openRouterDiagnostic?: (reason: 'auth') => void;
+        openRouterAllowed?: (model: string, voice: string) => boolean;
         computeMode: () => import('../src/speech_compute_types').SpeechComputeMode;
         computeChanged: (value: import('../src/speech_compute_types').SpeechComputeState) => void;
       },
@@ -319,6 +327,8 @@ const fakes = vi.hoisted(() => {
     readonly showSpeechReadiness = vi.fn();
     readonly showSpeechTransport = vi.fn();
     readonly showSpeechCatalog = vi.fn();
+    readonly showOpenRouterCatalog = vi.fn();
+    readonly showOpenRouterKeyStatus = vi.fn();
     readonly showSpeechOutputCatalog = vi.fn();
     readonly speechReadyPageId = vi.fn(() => 7);
     readonly showSpeechStatus = vi.fn();
@@ -1996,7 +2006,7 @@ it('holds narration and secret changes while placement is pending, then selects 
   expect(typeof facts.local()).toBe('boolean');
   expect(facts.output()).toBe(true);
   await expect(facts.model()).resolves.toBe(false);
-  await expect(facts.key()).resolves.toBe(false);
+  await expect(facts.key('elevenlabs')).resolves.toBe(false);
   await h.controller.narration.speak('legacy');
   h.controller.narration.pause();
   h.controller.narration.resume();
@@ -2570,6 +2580,155 @@ it('suppresses failed commit notifications after shutdown', async () => {
   commit.resolve(false);
   await h.api.ready;
   expect(fakes.infos).toEqual([]);
+});
+
+it('restores OpenRouter preferences and clears the selected pair when its credential changes', async () => {
+  fakes.settings.set('speech.provider', 'openrouter');
+  fakes.settings.set('speech.openRouterModel', 'model');
+  fakes.settings.set('speech.openRouterVoice', 'voice');
+  fakes.settings.set('speech.openRouterZdr', true);
+  const h = activated();
+  const wiring = h.panel.wiring.speech;
+  expect(wiring.settings.get()).toMatchObject({
+    provider: 'openrouter',
+    openRouterModel: 'model',
+    openRouterVoice: 'voice',
+    openRouterZdr: true,
+  });
+  vi.mocked(vscode.window.showInputBox).mockResolvedValueOnce('secret');
+  await wiring.openRouterKeySet();
+  expect(h.context.secrets.store).toHaveBeenCalledWith('aiPair.openRouter.apiKey', 'secret');
+  expect(wiring.settings.get()).toMatchObject({ openRouterModel: '', openRouterVoice: '' });
+  await wiring.openRouterKeyRemove();
+  expect(h.context.secrets.delete).toHaveBeenCalledWith('aiPair.openRouter.apiKey');
+  fire('secrets', { key: 'aiPair.openRouter.apiKey' });
+  await vi.waitFor(() => {
+    expect(h.panel.showOpenRouterKeyStatus).toHaveBeenCalled();
+  });
+  wiring.openRouterKeyRefresh();
+  expect(wiring.validOpenRouterVoice('model', 'voice')).toBe(false);
+  expect(h.api).toBeDefined();
+});
+
+it('cancels legacy work when external OpenRouter settings change', async () => {
+  fakes.settings.set('speech.provider', 'openrouter');
+  fakes.settings.set('speech.openRouterModel', 'model');
+  fakes.settings.set('speech.openRouterVoice', 'voice');
+  const h = activated();
+  await h.api.ready;
+  const service = last(fakes.made.speech);
+  fakes.settings.set('speech.openRouterZdr', true);
+  changed('speech', 'speech.openRouterZdr');
+  expect(service.cancel).toHaveBeenCalled();
+  expect(h.panel.showOpenRouterCatalog).toHaveBeenCalledWith({ state: 'idle', verified: false, models: [] });
+});
+
+it('routes OpenRouter catalog, key failure, readiness and sanitized diagnostics', async () => {
+  fakes.settings.set('speech.provider', 'openrouter');
+  const h = activated();
+  await h.api.ready;
+  const wiring = h.panel.wiring.speech;
+  expect(wiring.settings.get()).toMatchObject({ openRouterModel: '', openRouterVoice: '', openRouterZdr: false });
+  h.context.secrets.get.mockRejectedValueOnce(new Error('private'));
+  wiring.openRouterKeyRefresh();
+  await vi.waitFor(() => {
+    expect(h.panel.showOpenRouterKeyStatus).toHaveBeenCalledWith(false);
+  });
+  wiring.loadOpenRouterModels();
+  await vi.waitFor(() => {
+    expect(h.panel.showOpenRouterCatalog).toHaveBeenCalledWith(expect.objectContaining({ state: 'error' }));
+  });
+  const service = last(fakes.made.speech);
+  service.options.openRouterDiagnostic?.('auth');
+  expect(service.options.openRouterAllowed?.('model', 'voice')).toBe(true);
+  expect(last(fakes.made.diagnostics).record).toHaveBeenCalledWith({
+    kind: 'speech',
+    event: 'narration',
+    provider: 'openrouter',
+    phase: 'failed',
+    reason: 'auth',
+  });
+  await h.controller.narration.ready?.();
+  const facts = vi.mocked(speechReady).mock.lastCall?.[0];
+  if (facts === undefined) throw new Error('No readiness facts');
+  await facts.key('openrouter');
+  expect(facts.openRouterAllowed?.('model', 'voice')).toBe(true);
+});
+
+it('invalidates catalogs on policy changes, rejects stale key checks and reports current OpenRouter facts', async () => {
+  fakes.settings.set('speech.provider', 'openrouter');
+  const h = activated();
+  await h.api.ready;
+  const wiring = h.panel.wiring.speech;
+  const pending = Promise.withResolvers<string | undefined>();
+  h.context.secrets.get.mockReturnValueOnce(pending.promise);
+  wiring.openRouterKeyRefresh();
+  wiring.openRouterKeyRefresh();
+  pending.reject(new Error('private'));
+  await Promise.resolve();
+  await Promise.resolve();
+  wiring.settings.set({ enabled: true, provider: 'openrouter', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 });
+  expect(wiring.readiness?.().voiceConfigured).toBe(false);
+  wiring.settings.set({ ...wiring.settings.get(), openRouterZdr: true });
+  expect(h.panel.showOpenRouterCatalog).toHaveBeenCalledWith({ state: 'idle', verified: false, models: [] });
+  await vi.waitFor(() => {
+    expect(fakes.updated).toContainEqual(['speech.openRouterZdr', true, 1]);
+  });
+  await h.panel.wiring.copyDiagnostics();
+  const options = vi.mocked(collectDiagnostics).mock.lastCall?.[0];
+  if (options === undefined) throw new Error('No diagnostics');
+  await options.audio?.();
+  fakes.settings.set('speech.openRouterModel', 'new-model');
+  changed('speech', 'speech.openRouterModel');
+});
+
+it('retires both credential prompts and catalog requests when the legacy host closes', async () => {
+  const h = activated();
+  await h.api.ready;
+  const credentials = fakes.made.credentials.slice(-2);
+  const catalog = last(fakes.made.catalogs);
+  for (const disposable of h.context.subscriptions) disposable.dispose();
+  await deactivate();
+  expect(credentials).toHaveLength(2);
+  for (const credential of credentials) expect(credential.supersede).toHaveBeenCalled();
+  expect(catalog.invalidate).toHaveBeenCalled();
+  const previous = h.panel.showSpeechCatalog.mock.calls.length;
+  catalog.publish({ voices: [], more: false, loading: false, error: false });
+  expect(h.panel.showSpeechCatalog).toHaveBeenCalledTimes(previous);
+});
+
+it('notifies the speech owner when a current OpenRouter catalog arrives', async () => {
+  const models = vi.spyOn(OpenRouterClient.prototype, 'models').mockResolvedValueOnce([]);
+  const h = activated();
+  const service = last(fakes.made.speech);
+  h.panel.wiring.speech.loadOpenRouterModels();
+  await vi.waitFor(() => {
+    expect(service.openRouterCatalogChanged).toHaveBeenCalledOnce();
+  });
+  models.mockRestore();
+});
+
+it('defers OpenRouter secret notifications until legacy ownership is established', async () => {
+  const choice = Promise.withResolvers<'legacy'>();
+  fakes.placementChoice = choice.promise;
+  const h = activated();
+  const credential = last(fakes.made.credentials);
+  fire('secrets', { key: 'aiPair.openRouter.apiKey' });
+  expect(credential.invalidate).not.toHaveBeenCalled();
+  choice.resolve('legacy');
+  await h.api.ready;
+  await vi.waitFor(() => {
+    expect(credential.invalidate).toHaveBeenCalledOnce();
+  });
+});
+
+it('ignores OpenRouter secret changes after legacy shutdown starts', async () => {
+  const h = activated();
+  await h.api.ready;
+  const credential = last(fakes.made.credentials);
+  await deactivate();
+  fire('secrets', { key: 'aiPair.openRouter.apiKey' });
+  expect(credential.invalidate).not.toHaveBeenCalled();
 });
 
 it('handles context disposal rejection and reports it to deactivate', async () => {

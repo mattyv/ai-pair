@@ -6,6 +6,7 @@ import type { SpeechSettings } from './speech_types';
 import type { SpeechComputeMode, SpeechComputeState } from './speech_compute_types';
 import type { SpeechModelStatus } from './speech_setup';
 import type { CatalogView } from './speech_catalog';
+import type { OpenRouterCatalogView } from './speech_openrouter_catalog';
 import type { OutputChoice } from './speech_output_types';
 import type { AudioDiagnostics } from '@ai-pair/protocol';
 import type { OutputPreferenceView } from './speech_output_preferences';
@@ -26,7 +27,16 @@ export type FromPanel =
   | { type: 'speechSettings'; value: SpeechSettings }
   | { type: 'speechSetup' | 'speechPreview' | 'speechStop' | 'checkGpuSetup' }
   | { type: 'speechComputeMode'; value: SpeechComputeMode }
-  | { type: 'speechKeySet' | 'speechKeyRemove' | 'speechVoicesLoad' | 'speechVoicesMore' }
+  | {
+      type:
+        | 'speechKeySet'
+        | 'speechKeyRemove'
+        | 'speechVoicesLoad'
+        | 'speechVoicesMore'
+        | 'openRouterKeySet'
+        | 'openRouterKeyRemove'
+        | 'openRouterModelsLoad';
+    }
   | { type: 'speechPageHidden' | 'speechPageVisible'; pageId: number }
   | { type: 'speechRetired'; id: number; pageId: number }
   | { type: 'speechEvent'; id: number; pageId: number; event: SpeechEvent }
@@ -77,6 +87,8 @@ export type ToPanel =
   | { type: 'speechOutputCatalog'; value: OutputPreferenceView }
   | { type: 'speechKeyStatus'; hasKey: boolean }
   | { type: 'speechCatalog'; value: CatalogView }
+  | { type: 'openRouterKeyStatus'; hasKey: boolean }
+  | { type: 'openRouterCatalog'; value: OpenRouterCatalogView }
   | { type: 'speechSetupState'; pending: boolean; message: string }
   | { type: 'speechAudio'; id: number; pageId: number; wavBase64: string; durationMs: number }
   | { type: 'speechControl'; id: number; pageId: number; action: SpeechAction }

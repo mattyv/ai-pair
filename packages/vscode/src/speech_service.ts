@@ -13,6 +13,7 @@ import {
   SPEECH_VOICES,
   speechListeningRate,
   type ElevenLabsSpeechPort,
+  type OpenRouterSpeechPort,
   type LocalSpeechFailureReason,
   type SpeechProvider,
   type SpeechSettings,
@@ -66,7 +67,8 @@ function cloudFailureReason(error: unknown): CloudSpeechFailureReason {
 }
 
 /** Gives the programmer a fixed explanation without exposing provider data. */
-function cloudFailureMessage(reason: Exclude<CloudSpeechFailureReason, 'canceled'>): string {
+function cloudFailureMessage(reason: Exclude<CloudSpeechFailureReason, 'canceled'>, provider: SpeechProvider): string {
+  if (provider === 'openrouter') return 'OpenRouter speech is unavailable. Check your key, model, voice and account access.';
   switch (reason) {
     case 'no_key':
       return 'Cloud speech needs an ElevenLabs API key.';
@@ -95,6 +97,10 @@ export interface SpeechServiceOptions {
   localDesktop: boolean;
   kokoroSupported?: boolean;
   cloud?: ElevenLabsSpeechPort;
+  openRouter?: OpenRouterSpeechPort;
+  /** Admits remembered choices until current catalog evidence excludes them. */
+  openRouterAllowed?: (model: string, voice: string) => boolean;
+  openRouterDiagnostic?: (reason: CloudSpeechFailureReason) => void;
   /** Records a sanitized failure for preview and ordinary narration. */
   cloudDiagnostic?: (reason: CloudSpeechFailureReason) => void;
   tempo?: SpeechTempoProcessor;
@@ -141,6 +147,8 @@ interface ActiveSpeech {
   lifecycleAbort: AbortController;
   lease?: SpeechReadyLease;
   cloudVoice: string;
+  openRouterModel: string;
+  openRouterZdr: boolean;
   voice: SpeechVoice;
   speed: number;
   resolve(): void;
@@ -292,12 +300,12 @@ export class SpeechService implements NarrationPort {
       this.options.output.status(
         id,
         'unavailable',
-        settings.provider === 'elevenlabs' ? 'Cloud speech is available only on a local desktop.' : UNSUPPORTED_HOST_MESSAGE,
+        settings.provider !== 'kokoro' ? 'Cloud speech is available only on a local desktop.' : UNSUPPORTED_HOST_MESSAGE,
       );
       return Promise.resolve();
     }
     const provider = settings.provider ?? 'kokoro';
-    if (provider !== 'kokoro' && provider !== 'elevenlabs') {
+    if (provider !== 'kokoro' && provider !== 'elevenlabs' && provider !== 'openrouter') {
       this.options.output.status(id, 'unavailable', 'Choose a supported speech provider.');
       return Promise.resolve();
     }
@@ -332,6 +340,18 @@ export class SpeechService implements NarrationPort {
       this.options.output.status(id, 'unavailable', 'Choose an available ElevenLabs voice and speed.');
       return Promise.resolve();
     }
+    const openRouterModel = settings.openRouterModel ?? '';
+    const openRouterVoice = settings.openRouterVoice ?? '';
+    if (
+      provider === 'openrouter' &&
+      (this.options.openRouter === undefined ||
+        openRouterModel === '' ||
+        openRouterVoice === '' ||
+        this.options.openRouterAllowed?.(openRouterModel, openRouterVoice) === false)
+    ) {
+      this.options.output.status(id, 'unavailable', 'Choose an available OpenRouter model and voice.');
+      return Promise.resolve();
+    }
     // specs/SpeechTempo.tla, Admit: a transformed unit waits for the previous transform worker to retire.
     const listeningRate = speechListeningRate(settings.listeningSpeed);
     if (this.cloudBusy !== undefined || (listeningRate !== 1 && this.options.tempo?.busy() === true)) {
@@ -353,7 +373,9 @@ export class SpeechService implements NarrationPort {
       provider,
       computeMode,
       lifecycleAbort: new AbortController(),
-      cloudVoice: settings.elevenLabsVoice,
+      cloudVoice: provider === 'openrouter' ? openRouterVoice : settings.elevenLabsVoice,
+      openRouterModel,
+      openRouterZdr: settings.openRouterZdr === true,
       voice: voice ?? 'af_heart',
       speed: provider === 'elevenlabs' ? settings.elevenLabsSpeed : settings.speed,
       resolve,
@@ -376,8 +398,13 @@ export class SpeechService implements NarrationPort {
 
   private beginProvider(current: ActiveSpeech): void {
     // specs/OutputHandoff.tla, Admit: worker readiness cannot bypass admission.
+    // specs/OpenRouterCatalog.tla, Admit: recheck current evidence after output admission.
+    if (current.provider === 'openrouter' && this.options.openRouterAllowed?.(current.openRouterModel, current.cloudVoice) === false) {
+      this.fail(current, 'Choose an available OpenRouter model and voice.');
+      return;
+    }
     current.phase = 'loading';
-    if (current.provider === 'elevenlabs') this.startCloud(current);
+    if (current.provider !== 'kokoro') this.startCloud(current);
     else {
       this.armStartup(current, START_TIMEOUT_MS);
       void this.start(current);
@@ -401,7 +428,7 @@ export class SpeechService implements NarrationPort {
 
   /** CloudNarration: one request owns its slot until settlement or watchdog. */
   private startCloud(current: ActiveSpeech): void {
-    const cloud = this.options.cloud;
+    const cloud = current.provider === 'openrouter' ? this.options.openRouter : this.options.cloud;
     if (cloud === undefined) {
       this.failCloud(current, 'unknown');
       return;
@@ -421,7 +448,14 @@ export class SpeechService implements NarrationPort {
       this.cloudBusy = undefined;
     };
     try {
-      void cloud.synthesize({ text: current.text, voiceId: current.cloudVoice, speed: current.speed }, controller.signal).then(
+      const request =
+        'models' in cloud
+          ? cloud.synthesize(
+              { text: current.text, modelId: current.openRouterModel, voiceId: current.cloudVoice, zdr: current.openRouterZdr },
+              controller.signal,
+            )
+          : cloud.synthesize({ text: current.text, voiceId: current.cloudVoice, speed: current.speed }, controller.signal);
+      void request.then(
         (audio) => {
           release();
           if (this.current !== current || controller.signal.aborted) return;
@@ -441,18 +475,27 @@ export class SpeechService implements NarrationPort {
   private failCloud(current: ActiveSpeech, reason: CloudSpeechFailureReason): void {
     if (this.current !== current) return;
     try {
-      this.options.cloudDiagnostic?.(reason);
+      if (current.provider === 'openrouter') this.options.openRouterDiagnostic?.(reason);
+      else this.options.cloudDiagnostic?.(reason);
     } catch {
       /* Observability must not change speech behavior. */
     }
     if (reason === 'canceled') this.finish(current);
-    else this.fail(current, cloudFailureMessage(reason));
+    else this.fail(current, cloudFailureMessage(reason, current.provider));
+  }
+
+  /** Cancels a current selection when new catalog evidence excludes it. */
+  openRouterCatalogChanged(): void {
+    const current = this.current;
+    if (current?.provider === 'openrouter' && this.options.openRouterAllowed?.(current.openRouterModel, current.cloudVoice) === false) {
+      this.cancel();
+    }
   }
 
   /** A credential change invalidates current cloud audio and pending requests. */
   invalidateCloud(): void {
     this.cloudBusy?.controller.abort();
-    if (this.current?.provider === 'elevenlabs') this.cancel();
+    if (this.current !== undefined && this.current.provider !== 'kokoro') this.cancel();
   }
 
   private async start(current: ActiveSpeech): Promise<void> {
@@ -794,7 +837,7 @@ export class SpeechService implements NarrationPort {
   private finish(current: ActiveSpeech, showIdle = true): void {
     if (this.current !== current) return;
     this.current = undefined;
-    if (current.provider === 'elevenlabs' && this.cloudBusy?.id === current.id) this.cloudBusy.controller.abort();
+    if (current.provider !== 'kokoro' && this.cloudBusy?.id === current.id) this.cloudBusy.controller.abort();
     // specs/SpeechTempo.tla, Cancel: abort invalidates the transform; the worker slot retires on its own.
     current.processing?.controller.abort();
     // specs/WarmSynthesisWorker.tla, Cancel: the result is invalid now; the worker stays owned until it returns.

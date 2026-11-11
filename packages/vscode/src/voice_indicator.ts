@@ -22,7 +22,7 @@ export function voiceIndicator(
   if (facts.provider === 'kokoro' && (compute?.phase === 'failed' || compute?.failureReason !== undefined)) return 'unavailable';
   if (settingsValid === undefined) return 'checking';
   if (facts.routeAvailable === 'unknown') return 'checking';
-  if (facts.provider === 'elevenlabs') {
+  if (facts.provider === 'elevenlabs' || facts.provider === 'openrouter') {
     if (facts.keyConfigured === 'unknown') return 'checking';
     return facts.keyConfigured ? 'ready' : 'unavailable';
   }

@@ -6,7 +6,7 @@ const speechEvent = z.strictObject({
   kind: z.literal('speech'),
   event: z.enum(['preview', 'catalog', 'setup', 'capability', 'runtime', 'narration']),
   phase: z.enum(['received', 'blocked', 'dispatched', 'ready', 'failed']),
-  provider: z.enum(['kokoro', 'elevenlabs', 'unknown']),
+  provider: z.enum(['kokoro', 'elevenlabs', 'openrouter', 'unknown']),
   reason: z
     .enum([
       'unsupported',

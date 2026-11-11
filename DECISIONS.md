@@ -816,3 +816,43 @@ This changes presentation within the existing webview boundary. It introduces
 no runtime component or ownership boundary that requires Archi model exports.
 The original MIT license remains applicable; the upstream commit records the
 source of the adapted layout.
+
+## OpenRouter speech eligibility and policy
+
+Issue #49 adds OpenRouter within the existing speech service cloud slot and
+output route. Kokoro worker ownership remains with `SpeechLifecycle`. The
+provider owns bounded HTTPS requests; credentials remain in the local host's
+SecretStorage. Provider, key, model, voice and policy changes invalidate
+predecessor work rather than creating a second speech lifecycle.
+
+Discover eligible models with the authenticated `models/user` endpoint, which
+applies the supplied key's provider preferences, privacy settings and
+guardrails. Never substitute the public catalog after an authenticated error.
+The ZDR filter intersects that list with the public catalog's ZDR-capable
+models and sends `provider.zdr: true` on synthesis. Turning it off omits the
+request override and cannot weaken account guardrails. The account endpoint
+has no documented ZDR query parameter.
+
+OpenRouter's ZDR routing policy can permit Safety Retention when account
+settings allow it. Label the control ZDR and explain this qualification; do not
+claim the toggle independently guarantees strict zero retention. Corporate
+restrictions must be attached to the actual API key. No management key or
+full account-policy introspection is required.
+
+Catalog eligibility evidence belongs to the catalog owner, independently of
+request phase. A refresh or error retains known denial; an identity change
+invalidates it. UI, readiness and synthesis admission consume that evidence,
+and asynchronous admission rechecks it before network effects. A denial
+cancels pending speech so late credential reads cannot start requests.
+
+The first integration supports only explicitly verified PCM models and their
+advertised voices, initially the three documented Microsoft MAI-Voice model
+IDs. Their 24-kHz mono PCM output fits the existing WAV playback contract.
+Do not guess rates for other providers, introduce a decoder framework, or
+silently select another model. Broader format support requires an explicit
+format contract and its own verification. Existing listening speed applies
+after synthesis; no provider-specific synthesis speed is assumed.
+
+Sources: [OpenRouter TTS](https://openrouter.ai/docs/guides/overview/multimodal/tts),
+[account-filtered models](https://openrouter.ai/docs/api/api-reference/models/list-models-filtered-by-user-provider-preferences-privacy-settings-and-guardrails),
+and [ZDR policy](https://openrouter.ai/docs/guides/features/zdr).

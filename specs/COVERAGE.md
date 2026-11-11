@@ -236,3 +236,22 @@ Code goes without a spec for one of these reasons:
 | `panel_html.ts` | `panelHtml`, `settingSpeed` | Format |
 | `webview/panel.css` | all | Look |
 | `panel_messages.ts` | | Types |
+
+### `speech_openrouter.ts`
+
+| Functions | Spec |
+|---|---|
+| `models`, `catalog`, `synthesize` | `OpenRouterSpeech` (account eligibility, narrowing and sampled policy); solitary tests cover parsing and PCM validation. |
+| `request` | `OpenRouterSpeech` abstracts request failure; solitary tests cover bounds, cancellation and timeout. |
+
+### `openrouter.ts` in protocol
+
+| Functions | Spec |
+|---|---|
+| Schema declarations | Types; `openrouter.test.ts` checks the bounded provider catalog and request shapes. |
+
+### `speech_openrouter_catalog.ts`
+
+| Functions | Spec |
+|---|---|
+| `load`, `invalidate`, `contains`, eligibility admission | `OpenRouterCatalog` (identity, stale replies and remembered-pair eligibility). |

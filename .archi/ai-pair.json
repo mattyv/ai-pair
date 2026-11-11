@@ -2,9 +2,9 @@
   "version": 1,
   "bundleId": "277c3415-7b74-4008-8be4-8c14ae6d41dd",
   "revision": {
-    "number": 23,
-    "updatedAt": "2026-11-10T00:00:00.000Z",
-    "summary": "Model unified speech lifecycle ownership and restart acknowledgement"
+    "number": 24,
+    "updatedAt": "2026-11-11T00:00:00.000Z",
+    "summary": "Add OpenRouter speech within the existing cloud slot and output route"
   },
   "diagrams": [
     {
@@ -8194,14 +8194,14 @@
           },
           {
             "id": "elevenlabs-client",
-            "label": "ElevenLabs client\nBounded HTTPS synthesis and account voices",
+            "label": "ElevenLabs client\nBounded speech and account voices",
             "files": [
               "packages/vscode/src/speech_elevenlabs.ts",
               "packages/vscode/src/speech_pcm.ts",
               "packages/vscode/src/speech_catalog.ts"
             ],
             "group": "ext",
-            "x": 2140,
+            "x": 2300,
             "y": 342
           },
           {
@@ -8209,15 +8209,30 @@
             "label": "Speech credentials\nNative key prompt and SecretStorage",
             "files": ["packages/vscode/src/speech_credentials.ts"],
             "group": "ext",
-            "x": 2140,
+            "x": 2300,
             "y": 177
           },
           {
             "id": "elevenlabs-api",
             "label": "ElevenLabs cloud API\nSelected text and preview only",
             "files": [],
-            "x": 2440,
+            "x": 2800,
             "y": 342
+          },
+          {
+            "id": "openrouter-client",
+            "label": "OpenRouter client\nAccount catalog and PCM speech",
+            "files": ["packages/vscode/src/speech_openrouter.ts"],
+            "group": "ext",
+            "x": 2300,
+            "y": 492
+          },
+          {
+            "id": "openrouter-api",
+            "label": "OpenRouter API\nAccount catalog and selected narration",
+            "files": [],
+            "x": 2800,
+            "y": 492
           }
         ],
         "edges": [
@@ -8913,6 +8928,21 @@
             "from": "elevenlabs-client",
             "to": "speech-credentials",
             "label": "host-only key reader"
+          },
+          {
+            "from": "local-speech",
+            "to": "openrouter-client",
+            "label": "same cloud slot; no provider fallback"
+          },
+          {
+            "from": "openrouter-client",
+            "to": "openrouter-api",
+            "label": "bounded HTTPS; authenticated eligibility; ZDR routing"
+          },
+          {
+            "from": "openrouter-client",
+            "to": "speech-credentials",
+            "label": "separate host-only key slot"
           }
         ],
         "groups": [
@@ -9284,11 +9314,12 @@
           },
           {
             "id": "speech-service",
-            "label": "Speech service\nKokoro or ElevenLabs",
+            "label": "Speech service\nKokoro, ElevenLabs or OpenRouter",
             "files": [
               "packages/vscode/src/speech_service.ts",
               "packages/vscode/src/speech_elevenlabs.ts",
-              "packages/vscode/src/speech_worker_host.ts"
+              "packages/vscode/src/speech_worker_host.ts",
+              "packages/vscode/src/speech_openrouter.ts"
             ],
             "group": "extension",
             "x": 490,
@@ -9518,8 +9549,8 @@
           },
           {
             "id": "cloud-provider",
-            "label": "ElevenLabs\nSelected text from the local host",
-            "files": ["packages/vscode/src/speech_elevenlabs.ts"],
+            "label": "ElevenLabs or OpenRouter\nSelected text from the local host",
+            "files": ["packages/vscode/src/speech_elevenlabs.ts", "packages/vscode/src/speech_openrouter.ts"],
             "group": "cloud",
             "x": 2130,
             "y": 80
@@ -9793,7 +9824,7 @@
           "worker": [
             {
               "id": "provider-boundary",
-              "text": "Local Kokoro uses the bounded multipart path through one warm worker: one load, one inference at a time, one lookahead part. ElevenLabs retains one request per unit; legacy output stays one waveform. No future narration is synthesized.",
+              "text": "Local Kokoro uses the bounded multipart path through one warm worker: one load, one inference at a time, one lookahead part. Cloud speech retains one request per unit; legacy output stays one waveform. No future narration is synthesized.",
               "ts": 0
             }
           ],

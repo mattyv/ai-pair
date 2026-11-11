@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: swift, 2026-11-11.
+Last updated: OpenRouter speech, 2026-11-12.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -132,6 +132,7 @@ Last updated: swift, 2026-11-11.
 | `packages/protocol/src/index.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/local_audio.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/local_diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/protocol/src/openrouter.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/protocol/src/panel_action.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/panel_chunks.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 33.3% F 100.0% | - | - | - | - |
 | `packages/protocol/src/panel_update.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
@@ -144,6 +145,7 @@ Last updated: swift, 2026-11-11.
 | `packages/protocol/test/index.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/protocol/test/local_audio.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/local_diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/protocol/test/openrouter.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/protocol/test/panel_action.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/panel_chunks.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/panel_update.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -248,6 +250,8 @@ Last updated: swift, 2026-11-11.
 | `packages/vscode/src/speech_local_protocol.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.2% B 100.0% F 50.0% | - | - | - | - |
 | `packages/vscode/src/speech_model_manifest.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_native_output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 29.7% B 66.7% F 36.4% | - | - | - | - |
+| `packages/vscode/src/speech_openrouter.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_openrouter_catalog.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_output_preferences.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 85.7% B 76.3% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_output_router.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 68.9% B 50.0% F 80.0% | - | - | - | - |
 | `packages/vscode/src/speech_output_types.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
@@ -274,7 +278,7 @@ Last updated: swift, 2026-11-11.
 | `packages/vscode/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/view.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 88.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/voice_indicator.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 161 of 161 rules matched |
+| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 162 of 162 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/speech_audio.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/workspace_panel_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 84.4% B 46.1% F 100.0% | - | - | - | - |
@@ -409,6 +413,9 @@ Last updated: swift, 2026-11-11.
 | `packages/vscode/test/speech_local_protocol.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_native_output.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_native_spawn.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_openrouter.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_openrouter_catalog.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_openrouter_composed.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_output_discovery.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_output_preferences.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_output_router.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -556,6 +563,11 @@ Last updated: swift, 2026-11-11.
 | `specs/Narration.tla` | TLA+ | - | - | 20 of 20 actions | - | - | - |
 | `specs/Navigator.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Navigator.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
+| `specs/OpenRouterCatalog.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/OpenRouterCatalog.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
+| `specs/OpenRouterSpeech.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/OpenRouterSpeech.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
+| `specs/OpenRouterSpeech_Failure.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/OutputAdmission.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/OutputAdmission.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/OutputDiscoveryLifecycle.cfg` | TLC config | - | - | - | - | - | - |

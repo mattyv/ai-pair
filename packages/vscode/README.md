@@ -25,6 +25,13 @@ It adds:
     run **Download Kokoro model** to download about 94 MB, then **Preview voice**.
     Local speech requires a supported local Linux x64 desktop with glibc, such
     as Ubuntu; the rest of Pair works without speech.
+-   Optional OpenRouter speech with a separately stored API key, account-eligible
+    model and voice choices, and a **ZDR** filter. The filter narrows the
+    account's allowed models and requests OpenRouter's ZDR routing policy;
+    account Safety Retention settings still apply. Only supported PCM models
+    are shown, initially Microsoft's three documented MAI-Voice models.
+    Narration and previews use your OpenRouter credits and the selected
+    local speech output. No fallback to another provider is automatic.
 -   Optional ElevenLabs cloud speech, using the same selected narration and
     reading controls. Choose **ElevenLabs** in Settings, add your API key through
     the secure VS Code prompt, load your account voices, choose one and use

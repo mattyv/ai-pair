@@ -2,7 +2,7 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.31.0",
+  "version": "0.32.0",
   "publisher": "mattyv",
   "author": {
     "name": "mattyv"
@@ -189,7 +189,8 @@
           "type": "string",
           "enum": [
             "kokoro",
-            "elevenlabs"
+            "elevenlabs",
+            "openrouter"
           ],
           "default": "kokoro",
           "description": "Speech provider. ElevenLabs sends selected narration and previews to its service.",
@@ -204,6 +205,24 @@
           ],
           "default": "cpu",
           "description": "Kokoro compute mode. GPU requires verified local setup.",
+          "scope": "application"
+        },
+        "aiPair.speech.openRouterModel": {
+          "type": "string",
+          "default": "",
+          "description": "Selected compatible OpenRouter speech model ID.",
+          "scope": "application"
+        },
+        "aiPair.speech.openRouterVoice": {
+          "type": "string",
+          "default": "",
+          "description": "Selected OpenRouter model voice ID.",
+          "scope": "application"
+        },
+        "aiPair.speech.openRouterZdr": {
+          "type": "boolean",
+          "default": false,
+          "description": "Filter for ZDR routes and request OpenRouter's ZDR policy; account Safety Retention settings still apply.",
           "scope": "application"
         },
         "aiPair.speech.elevenLabsVoice": {

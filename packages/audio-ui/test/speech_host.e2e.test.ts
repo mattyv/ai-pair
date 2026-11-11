@@ -64,6 +64,8 @@ it('keeps speech disabled by default and retains a missing local device', async 
   const panel = {
     showSpeechReadiness: vi.fn(),
     showSpeechKeyStatus: vi.fn(),
+    showOpenRouterKeyStatus: vi.fn(),
+    showOpenRouterCatalog: vi.fn(),
     showSpeechOutputCatalog: vi.fn(),
     showSpeechCatalog: vi.fn(),
     showSpeechSettings: vi.fn(),
@@ -165,6 +167,8 @@ it('restores an available saved output without opening Settings', async () => {
   const panel = {
     showSpeechReadiness: vi.fn(),
     showSpeechKeyStatus: vi.fn(),
+    showOpenRouterKeyStatus: vi.fn(),
+    showOpenRouterCatalog: vi.fn(),
     showSpeechOutputCatalog: vi.fn(),
     showSpeechCatalog: vi.fn(),
     showSpeechSettings: vi.fn(),
@@ -227,6 +231,8 @@ it('retries a failed startup device listing from Settings', async () => {
   const panel = {
     showSpeechReadiness: vi.fn(),
     showSpeechKeyStatus: vi.fn(),
+    showOpenRouterKeyStatus: vi.fn(),
+    showOpenRouterCatalog: vi.fn(),
     showSpeechOutputCatalog: vi.fn(),
     showSpeechCatalog: vi.fn(),
     showSpeechSettings: vi.fn(),

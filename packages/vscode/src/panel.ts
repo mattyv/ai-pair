@@ -17,6 +17,7 @@ import type { ChatOrder, FromPanel, SpeechAction, SpeechEvent, SpeechState, ToPa
 import { ELEVENLABS_SPEEDS, SPEECH_SPEEDS, SPEECH_VOICES, type SpeechSettings } from './speech_types';
 import { SPEECH_LISTENING_RATES } from './speech_tempo';
 import type { CatalogView } from './speech_catalog';
+import type { OpenRouterCatalogView } from './speech_openrouter_catalog';
 import type { OutputPreferenceView } from './speech_output_preferences';
 import type { SpeechDiagnosticEvent } from './diagnostics';
 import type { Calibration, CalibrationView } from './calibration';
@@ -37,6 +38,9 @@ const LOCAL_SPEECH_MESSAGES: ReadonlySet<string> = new Set([
   'speechSettings',
   'speechComputeMode',
   'checkGpuSetup',
+  'openRouterKeySet',
+  'openRouterKeyRemove',
+  'openRouterModelsLoad',
   'speechKeySet',
   'speechKeyRemove',
   'speechVoicesLoad',
@@ -92,6 +96,11 @@ export interface PanelWiring {
     keyRefresh: () => void;
     loadVoices: (more: boolean) => void;
     validCloudVoice: (id: string) => boolean;
+    openRouterKeySet: () => Promise<void>;
+    openRouterKeyRemove: () => Promise<void>;
+    openRouterKeyRefresh: () => void;
+    loadOpenRouterModels: () => void;
+    validOpenRouterVoice: (modelId: string, voiceId: string) => boolean;
   };
 }
 
@@ -213,6 +222,14 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
 
   showSpeechCatalog(value: CatalogView): void {
     this.send({ type: 'speechCatalog', value });
+  }
+
+  showOpenRouterKeyStatus(hasKey: boolean): void {
+    this.send({ type: 'openRouterKeyStatus', hasKey });
+  }
+
+  showOpenRouterCatalog(value: OpenRouterCatalogView): void {
+    this.send({ type: 'openRouterCatalog', value });
   }
 
   showSpeechSettings(value: SpeechSettings): void {
@@ -445,6 +462,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     });
     this.send({ type: 'speechCloudSupport', supported });
     this.wiring.speech.keyRefresh();
+    this.wiring.speech.openRouterKeyRefresh();
     this.refreshSpeechSupport();
   }
 
@@ -519,13 +537,38 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
           SPEECH_VOICES.some((voice) => voice === message.value.voice) &&
           SPEECH_SPEEDS.some((speed) => speed === message.value.speed) &&
           (message.value.listeningSpeed === undefined || SPEECH_LISTENING_RATES.some((rate) => rate === message.value.listeningSpeed)) &&
-          (message.value.provider === 'kokoro' || message.value.provider === 'elevenlabs') &&
+          (message.value.provider === 'kokoro' || message.value.provider === 'elevenlabs' || message.value.provider === 'openrouter') &&
+          (message.value.openRouterZdr === undefined || typeof message.value.openRouterZdr === 'boolean') &&
+          (message.value.openRouterModel === undefined || typeof message.value.openRouterModel === 'string') &&
+          (message.value.openRouterVoice === undefined || typeof message.value.openRouterVoice === 'string') &&
+          (message.value.provider !== 'openrouter' ||
+            message.value.openRouterModel === undefined ||
+            message.value.openRouterModel === '' ||
+            message.value.openRouterVoice === undefined ||
+            message.value.openRouterVoice === '' ||
+            this.wiring.speech.validOpenRouterVoice(message.value.openRouterModel, message.value.openRouterVoice) ||
+            (message.value.openRouterModel === this.wiring.speech.settings.get().openRouterModel &&
+              message.value.openRouterVoice === this.wiring.speech.settings.get().openRouterVoice)) &&
           (message.value.elevenLabsVoice === '' ||
             this.wiring.speech.validCloudVoice(message.value.elevenLabsVoice) ||
             message.value.elevenLabsVoice === this.wiring.speech.settings.get().elevenLabsVoice) &&
           ELEVENLABS_SPEEDS.some((speed) => speed === message.value.elevenLabsSpeed)
         ) {
           this.wiring.speech.settings.set(message.value);
+        }
+        return;
+      case 'openRouterKeySet':
+      case 'openRouterKeyRemove':
+        if (!this.wiring.speech.cloudSupported()) return;
+        void (message.type === 'openRouterKeySet' ? this.wiring.speech.openRouterKeySet() : this.wiring.speech.openRouterKeyRemove()).catch(
+          () => {
+            this.send({ type: 'speechSetupState', pending: false, message: 'Could not update the API key.' });
+          },
+        );
+        return;
+      case 'openRouterModelsLoad':
+        if (this.wiring.speech.settings.get().provider === 'openrouter' && this.wiring.speech.cloudSupported()) {
+          this.wiring.speech.loadOpenRouterModels();
         }
         return;
       case 'speechKeySet':

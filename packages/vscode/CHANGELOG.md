@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.32.0
+
+-   Add OpenRouter speech with secure credentials, account-filtered model and
+    voice choices, and a ZDR policy filter.
+-   Keep previews and narration on the existing speech output route and
+    cancellation path.
+
 ## 0.31.0
 
 -   New icon: two speech bubbles as characters, a grey one for you and an

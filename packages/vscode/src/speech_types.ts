@@ -18,12 +18,15 @@ export interface SpeechSettings {
   provider: SpeechProvider;
   elevenLabsVoice: string;
   elevenLabsSpeed: number;
+  openRouterModel?: string;
+  openRouterVoice?: string;
+  openRouterZdr?: boolean;
   voice: string;
   speed: number;
 }
 
 /** The explicit narration provider, sampled at admission. */
-export type SpeechProvider = 'kokoro' | 'elevenlabs';
+export type SpeechProvider = 'kokoro' | 'elevenlabs' | 'openrouter';
 /** Supported ElevenLabs rates, independent of code playback speed. */
 // The list is the set of supported cloud rates.
 // oxlint-disable-next-line eslint/no-magic-numbers
@@ -48,6 +51,23 @@ export interface ElevenLabsVoicePage {
 export interface ElevenLabsSpeechPort {
   synthesize(request: { text: string; voiceId: string; speed: number }, signal: AbortSignal): Promise<SpeechAudioResult>;
   voices(cursor: string | undefined, signal: AbortSignal): Promise<ElevenLabsVoicePage>;
+}
+
+/** A voice supported by an account-accessible OpenRouter model. */
+export interface OpenRouterVoice {
+  id: string;
+  name: string;
+}
+/** A bounded, account-accessible speech model and its voices. */
+export interface OpenRouterModel {
+  id: string;
+  name: string;
+  voices: OpenRouterVoice[];
+}
+/** OpenRouter operations retain credentials inside the provider. */
+export interface OpenRouterSpeechPort {
+  synthesize(request: { text: string; modelId: string; voiceId: string; zdr: boolean }, signal: AbortSignal): Promise<SpeechAudioResult>;
+  models(zdr: boolean, signal: AbortSignal): Promise<OpenRouterModel[]>;
 }
 
 /** Safe local worker failure categories, without exception text or paths. */

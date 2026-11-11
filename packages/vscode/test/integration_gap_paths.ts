@@ -463,37 +463,72 @@ async function foreignTerminalExecution(api: Api): Promise<void> {
   controller.setConfirmCommands(false);
   controller.setSpeed(20);
   await closeTerminals();
+  const initialCommand = 'printf pair-initial';
+  const initialStarted = Promise.withResolvers<vscode.TerminalShellExecutionStartEvent>();
+  const initialEnded = Promise.withResolvers<vscode.TerminalShellExecutionEndEvent>();
+  let initialExecution: vscode.TerminalShellExecution | undefined;
+  let initialTerminal: vscode.Terminal | undefined;
+  const startListener = vscode.window.onDidStartTerminalShellExecution((event) => {
+    if (event.execution.commandLine.value === initialCommand) {
+      initialExecution = event.execution;
+      initialTerminal = event.terminal;
+      initialStarted.resolve(event);
+    }
+  });
+  const endListener = vscode.window.onDidEndTerminalShellExecution((event) => {
+    if (event.execution === initialExecution && event.terminal === initialTerminal) initialEnded.resolve(event);
+  });
   try {
     await controller.start('foreign terminal execution');
-    await controller.step([{ run: 'printf pair-initial', wait: 5 }]);
+    await controller.step([{ run: initialCommand, wait: 5 }]);
     const initial = await controller.step([]);
     assert.ok(
       initial.batches.some((batch) => batch.status === 'completed'),
       JSON.stringify(initial),
     );
-    const terminal = vscode.window.terminals.at(-1);
-    assert.ok(terminal?.shellIntegration, 'Pair terminal has no shell integration');
+    const initialRun = initial.batches.flatMap((batch) => batch.runs ?? []).find((run) => run.command === initialCommand);
+    assert.ok(initialRun, JSON.stringify(initial));
+    assert.equal(initialRun.running, undefined, 'Pair did not finish waiting for its initial command');
+    assert.equal(initialRun.exit_code, 0, 'Pair did not report a successful initial command');
+    const started = await Promise.race([
+      initialStarted.promise,
+      sleep(INTERRUPT_WAIT_MS).then(() => {
+        throw new Error('initial shell command did not start');
+      }),
+    ]);
+    const ended = await Promise.race([
+      initialEnded.promise,
+      sleep(INTERRUPT_WAIT_MS).then(() => {
+        throw new Error('initial shell command did not end');
+      }),
+    ]);
+    assert.equal(ended.execution, started.execution);
+    assert.equal(ended.terminal, started.terminal);
+    assert.equal(ended.exitCode, 0);
+    const terminal = started.terminal;
+    assert.ok(terminal.shellIntegration, 'Pair terminal has no shell integration');
+    assert.ok(vscode.window.terminals.includes(terminal), 'Pair terminal closed after the initial command');
     const command = 'printf foreign-terminal-command';
-    const ended = Promise.withResolvers<vscode.TerminalShellExecution>();
-    const listener = vscode.window.onDidEndTerminalShellExecution((event) => {
-      if (event.terminal === terminal && event.execution.commandLine.value === command) {
-        ended.resolve(event.execution);
-      }
+    const foreignEnded = Promise.withResolvers<vscode.TerminalShellExecutionEndEvent>();
+    let foreign: vscode.TerminalShellExecution | undefined;
+    const foreignListener = vscode.window.onDidEndTerminalShellExecution((event) => {
+      if (event.terminal === terminal && event.execution === foreign) foreignEnded.resolve(event);
     });
     try {
-      const foreign = terminal.shellIntegration.executeCommand(command);
+      foreign = terminal.shellIntegration.executeCommand(command);
       const output = (async () => {
         let text = '';
         for await (const chunk of foreign.read()) text += chunk;
         return text;
       })();
       const completed = await Promise.race([
-        ended.promise,
+        foreignEnded.promise,
         sleep(INTERRUPT_WAIT_MS).then(() => {
           throw new Error('foreign shell command did not end');
         }),
       ]);
-      assert.equal(completed, foreign);
+      assert.equal(completed.execution, foreign);
+      assert.equal(completed.execution.commandLine.value, command);
       const text = await Promise.race([
         output,
         sleep(INTERRUPT_WAIT_MS).then(() => {
@@ -502,7 +537,7 @@ async function foreignTerminalExecution(api: Api): Promise<void> {
       ]);
       assert.match(text, /foreign-terminal-command/);
     } finally {
-      listener.dispose();
+      foreignListener.dispose();
     }
     await controller.step([{ run: 'printf pair-after-foreign', wait: 5 }]);
     const after = await controller.step([]);
@@ -517,6 +552,8 @@ async function foreignTerminalExecution(api: Api): Promise<void> {
     );
     console.log('a foreign terminal execution keeps its terminal separate from the next Pair run');
   } finally {
+    startListener.dispose();
+    endListener.dispose();
     controller.endSession();
     await closeTerminals();
   }
