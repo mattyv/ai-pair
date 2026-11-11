@@ -23,7 +23,10 @@ function sink(name: string, description?: string) {
 }
 const invalidProps: unknown = JSON.parse('null');
 const remote = process.env.PIPEWIRE_REMOTE;
+const hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
 beforeEach(() => {
+  // PipeWire discovery runs only on Linux; the tests pin it so they pass on any host.
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
   delete process.env.PIPEWIRE_REMOTE;
   fake.dump = JSON.stringify([sink('test.sink', 'Test speakers')]);
   fake.help = '--pdeathsig';
@@ -31,6 +34,7 @@ beforeEach(() => {
   fake.calls = [];
 });
 afterEach(() => {
+  if (hostPlatform !== undefined) Object.defineProperty(process, 'platform', hostPlatform);
   if (remote === undefined) delete process.env.PIPEWIRE_REMOTE;
   else process.env.PIPEWIRE_REMOTE = remote;
 });

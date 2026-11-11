@@ -6,6 +6,7 @@ vi.mock('../../vscode/scripts/speech_runtime.mts', () => ({ stageSpeechRuntime: 
 vi.mock('esbuild', () => ({ build: mocks.build }));
 
 it('stages the shared offline runtime and worker for the companion', async () => {
+  mocks.stage.mockReturnValueOnce(true);
   await stageCompanionSpeech({ platform: 'linux', arch: 'x64', source: '/modules', destination: '/out' });
   expect(mocks.stage).toHaveBeenCalledWith({ platform: 'linux', arch: 'x64', source: '/modules', destination: '/out' });
   expect(mocks.build).toHaveBeenCalledWith(
@@ -24,7 +25,8 @@ it('stages the shared offline runtime and worker for the companion', async () =>
 
 it('stages both workers on unsupported platforms', async () => {
   mocks.build.mockClear();
-  await stageCompanionSpeech({ platform: 'darwin', arch: 'arm64', source: '/modules', destination: '/out' });
+  mocks.stage.mockReturnValueOnce(false);
+  await stageCompanionSpeech({ platform: 'win32', arch: 'x64', source: '/modules', destination: '/out' });
   expect(mocks.build).toHaveBeenCalledTimes(2);
   expect(mocks.build).toHaveBeenCalledWith(expect.objectContaining({ entryPoints: ['../vscode/src/speech_worker.ts'] }));
 });

@@ -1,7 +1,8 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { KOKORO_HOSTS } from '@ai-pair/protocol';
 
-/** Only a complete staged Linux x64 runtime advertises speech availability. */
+/** Only a complete runtime staged for this Kokoro host advertises speech availability. */
 export async function speechRuntimeAvailable(runtimeDirectory: string): Promise<boolean> {
   try {
     const value: unknown = JSON.parse(await fs.readFile(path.join(runtimeDirectory, 'runtime.json'), 'utf8'));
@@ -10,9 +11,10 @@ export async function speechRuntimeAvailable(runtimeDirectory: string): Promise<
       'available' in value &&
       value.available === true &&
       'platform' in value &&
-      value.platform === 'linux' &&
       'arch' in value &&
-      value.arch === 'x64'
+      value.arch === process.arch &&
+      value.platform === process.platform &&
+      KOKORO_HOSTS.includes(`${process.platform}-${process.arch}`)
     );
   } catch {
     return false;

@@ -2219,12 +2219,16 @@ current narration ID. A delivery attempt records its eligibility independently
 of whether playback started. TLC checked 28 states. Mutating the initial page
 outside its range violates `TypeOK`; accepting a stale ID violates
 `PlayingIsCurrent`; refusing an eligible delivery violates `AcceptedStarts`.
+The model takes the browser's permission to play as given. The page earns it
+by playing every clip through one shared element that any click or keypress
+in the panel unlocks, because a browser that wants a user gesture unlocks an
+element, not the page (#39). The model is unchanged.
 
 | Property | Test |
 |---|---|
 | `TypeOK` | `speech_audio.test.ts`: rejects invalid page and unit IDs and ignores duplicate audio. |
 | `PlayingIsCurrent` | `speech_audio.test.ts`: interrupts synchronously and never resurrects the old unit; ignores stale callbacks when a page or unit changes. |
-| `AcceptedStarts` | `speech_audio.test.ts`: plays only the current page and unit, then acknowledges and releases it. |
+| `AcceptedStarts` | `speech_audio.test.ts`: plays only the current page and unit, then acknowledges and releases it.; `panel.test.ts`: unlocks one shared player on a gesture so later narration can start without one. |
 
 ### `SpeechSetup`: verified model installation
 
@@ -2726,24 +2730,30 @@ independently and discarded.
 
 ## Speech platform evidence
 
-`SpeechPlatformEvidence` checks one local host for Linux x64 and positive
-evidence of the running process's GNU libc. A missing or failed process report
-can use independently verified process mappings; unknown evidence fails closed.
-Desktop and remote-host placement remain separate caller checks. The model
-abstracts the bounded probe and does not prove the operating system's mappings
-are truthful.
+`SpeechPlatformEvidence` checks one local host. Linux x64 is supported on
+positive evidence of the running process's GNU libc; a missing or failed
+process report can use independently verified process mappings, and unknown
+evidence fails closed. macOS on x64 or arm64 is supported on its platform and
+architecture alone, since it has one system C runtime (#39). Any other
+operating system, or Linux or macOS on another architecture, is rejected
+before any probe. Desktop and remote-host placement remain separate caller
+checks. The model abstracts the bounded probe, groups hosts into four classes
+rather than naming each `<platform>-<arch>`, and does not prove the operating
+system's mappings are truthful.
 
 | Property | Implementation and test mapping |
 |---|---|
 | `TypeOK` | Sanity check of the bounded state. |
-| `PositiveEvidence` | `speech_platform.test.ts`: positive report or mappings are required; musl and missing evidence are rejected. |
-| `RecognizesEvidence` | `speech_platform.test.ts`: accepts a valid runtime report and current-process GNU mappings, including versioned and Snap paths. |
+| `PositiveEvidence` | `speech_platform.test.ts`: positive report or mappings are required; musl and missing evidence are rejected; SpeechPlatformEvidence PositiveEvidence: rejects Windows, or macOS on another architecture, before probing. |
+| `RecognizesEvidence` | `speech_platform.test.ts`: accepts a valid runtime report and current-process GNU mappings, including versioned and Snap paths; SpeechPlatformEvidence RecognizesEvidence: accepts darwin arm64 and darwin x64 without libc probes. |
 | `CheckCompletes` | `speech_platform.test.ts`: the fixed process-maps reader rejects oversized or unreadable input and closes its descriptor. |
 
-TLC checked 19 generated and 19 distinct states. Disabling `GuardEvidence`
-violates `PositiveEvidence`; disabling `EnableCheck` violates
-`CheckCompletes`; disabling `EnablePositive` violates `RecognizesEvidence`.
-All three mutations were discarded.
+TLC checked 37 generated and 37 distinct states, no violation. Disabling
+`GuardEvidence` violates `PositiveEvidence`; disabling `EnableCheck` violates
+`CheckCompletes`; disabling `EnablePositive` violates `RecognizesEvidence`;
+disabling `GuardArch`, so any architecture is accepted, violates
+`PositiveEvidence`; disabling `EnableNonLinux`, the Linux-only check this
+replaced, violates `RecognizesEvidence`. All five mutations were discarded.
 
 ### `RecoveryBatchIds`: saved batch allocation
 
@@ -2989,7 +2999,10 @@ provider prerequisites, worker lifecycle and a recorded failure. The
 prerequisites abstract the
 provider-specific runtime, route, model, key, voice and GPU checks; their
 concrete mapping is tested separately. The model does not prove audibility,
-cloud credit availability, or hardware execution. Local readiness requires a ready
+cloud credit availability, or hardware execution. In that mapping the panel
+page, the default output, counts as an available route, since transport
+already says whether it is up; only a native device waits for discovery (#39).
+The model is unchanged. Local readiness requires a ready
 worker, while loading takes precedence over unknown prerequisites. Weak fairness
 makes the
 observation step eventually update the view.

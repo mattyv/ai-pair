@@ -52,8 +52,9 @@ It adds:
     Speech is off by default and needs no additional API key. In Settings,
     run **Download Kokoro model** to download about 94 MB, then **Preview voice**.
     Settings show the model path, pinned source and latest verification result.
-    Local speech requires a supported local Linux x64 desktop with glibc, such
-    as Ubuntu; the rest of Pair works without speech.
+    Local speech requires a local Linux x64 desktop with glibc, such as
+    Ubuntu, or a Mac (Apple silicon or Intel); the rest of Pair works without
+    speech. Install the VSIX built for your Mac's architecture.
 -   Experimental GPU acceleration for Kokoro on supported Linux x64 systems.
     In Settings, select **Auto** or **GPU** and choose **Set up GPU**. Setup
     requires the CPU model and may download an additional pinned model of about
@@ -104,9 +105,11 @@ companion belongs on the local side. It is optional for existing local use;
 remote speech requires it.
 
 The companion keeps its own local key and model storage. Add your ElevenLabs
-key through its secure Settings prompt, or set up Kokoro there. Its model still
-requires a supported Linux x64 desktop; cross-platform playback does not make
-Kokoro available on every operating system. No key or generated audio is sent
+key through its secure Settings prompt, or set up Kokoro there. The companion
+is built once, on Linux, so its Kokoro runs on a Linux x64 desktop only; on a
+Mac, use the main extension's local speech, or ElevenLabs through the companion.
+Cross-platform playback does not make Kokoro available on every operating
+system. No key or generated audio is sent
 to the workspace extension. Speech remains off until you enable it; Preview is
 an explicit test action.
 

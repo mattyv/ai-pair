@@ -29,7 +29,7 @@ FAKE
     "${ROOT}" "${BATS_TEST_TMPDIR}/run" "${BATS_TEST_TMPDIR}" \
     "${BATS_TEST_TMPDIR}/bin/code" "${ROOT}/packages/vscode" --no-sandbox
   [ "${status}" -eq 0 ]
-  [ "$(wc -l <"${RECORD}")" -eq 6 ]
+  [ "$(wc -l <"${RECORD}")" -eq 7 ]
   grep -q 'integration_catalog_paths.js' "${RECORD}"
   grep -q 'integration_companion_faults.js' "${RECORD}"
   grep -q 'integration_companion_version.js' "${RECORD}"
@@ -37,10 +37,11 @@ FAKE
   [ "$(grep -c -- '--remote-debugging-port=0' "${RECORD}")" -eq 2 ]
   grep -q 'integration_no_workspace.js' "${RECORD}"
   grep -q 'integration_restricted_runtime.js' "${RECORD}"
+  grep -q 'integration_release_extension_owner_paths.js' "${RECORD}"
   ! grep 'integration_no_workspace.js' "${RECORD}" | grep -Fq "${BATS_TEST_TMPDIR}/run/speech-faults/integration_no_workspace/workspace"
-  [ "$(grep -c -- '--shared-data-dir=' "${RECORD}")" -eq 6 ]
-  [ "$(grep -c -- '--password-store=basic' "${RECORD}")" -eq 6 ]
-  [ "$(grep -c "${NODE_V8_COVERAGE}" "${RECORD}.env")" -eq 6 ]
+  [ "$(grep -c -- '--shared-data-dir=' "${RECORD}")" -eq 7 ]
+  [ "$(grep -c -- '--password-store=basic' "${RECORD}")" -eq 7 ]
+  [ "$(grep -c "${NODE_V8_COVERAGE}" "${RECORD}.env")" -eq 7 ]
   grep -q 'unix:/nonexistent ai-pair-integration-no-audio' "${RECORD}.env"
   [ ! -e "${BATS_TEST_TMPDIR}/run/speech-faults" ]
 }
@@ -58,7 +59,7 @@ FAKE
     "${ROOT}" "${BATS_TEST_TMPDIR}/run" "${BATS_TEST_TMPDIR}" \
     "${BATS_TEST_TMPDIR}/bin/code" "${ROOT}/packages/vscode"
   [ "${status}" -eq 0 ]
-  [ "$(wc -l <"${RECORD}")" -eq 4 ]
+  [ "$(wc -l <"${RECORD}")" -eq 5 ]
   ! grep -q 'integration_catalog_paths.js' "${RECORD}"
   ! grep -q -- '--password-store=basic' "${RECORD}"
 }

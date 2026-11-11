@@ -1,4 +1,5 @@
 import * as fs from 'node:fs';
+import { KOKORO_HOSTS } from '@ai-pair/protocol';
 
 const MAX_MAPS_BYTES = 1_048_576;
 
@@ -32,10 +33,13 @@ export function processMaps(): string {
   }
 }
 
-/** Determines whether this process has the libc required by bundled Kokoro. */
+/** Determines whether this host can run bundled Kokoro: Linux x64 with GNU libc, or macOS on x64 or arm64. */
 export function detectSpeechPlatform(probe: SpeechPlatformProbe): SpeechPlatformResult {
-  if (probe.platform !== 'linux') return { supported: false, reason: 'host_platform' };
-  if (probe.arch !== 'x64') return { supported: false, reason: 'host_arch' };
+  // specs/SpeechPlatformEvidence.tla, Check: macOS has one system C runtime, so
+  // its platform and architecture are the whole check (#39).
+  if (!KOKORO_HOSTS.some((host) => host.startsWith(`${probe.platform}-`))) return { supported: false, reason: 'host_platform' };
+  if (!KOKORO_HOSTS.includes(`${probe.platform}-${probe.arch}`)) return { supported: false, reason: 'host_arch' };
+  if (probe.platform !== 'linux') return { supported: true };
   let reportFailed = false;
   try {
     const report = probe.report();

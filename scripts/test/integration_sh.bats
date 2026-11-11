@@ -42,6 +42,8 @@ for arg in "$@"; do
       RECORD="${RECORD}.speech.empty"; ENV_RECORD="${ENV_RECORD}.speech.empty" ;;
     --extensionTestsPath=*integration_restricted_runtime.js)
       RECORD="${RECORD}.speech.restricted"; ENV_RECORD="${ENV_RECORD}.speech.restricted" ;;
+    --extensionTestsPath=*integration_release_extension_owner_paths.js)
+      RECORD="${RECORD}.speech.owner"; ENV_RECORD="${ENV_RECORD}.speech.owner" ;;
   esac
 done
 printf '%s\n' "$@" >"${RECORD}"

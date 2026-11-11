@@ -12,12 +12,12 @@ readonly -a CURL_ARGS=(--fail --silent --show-error --location --retry 3
   -o "${OUTPUT}")
 
 if curl "${CURL_ARGS[@]}" "${DIRECT}v1.8.0/tla2tools.jar" \
-  && echo "${SHA256}  ${OUTPUT}" | sha256sum -c; then
+  && echo "${SHA256}  ${OUTPUT}" | sha256sum -c -; then
   exit 0
 fi
 rm -f "${OUTPUT}"
 if curl "${CURL_ARGS[@]}" "${API}718777374" \
-  && echo "${SHA256}  ${OUTPUT}" | sha256sum -c; then
+  && echo "${SHA256}  ${OUTPUT}" | sha256sum -c -; then
   exit 0
 fi
 rm -f "${OUTPUT}"

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.28.0
+
+-   Run local Kokoro speech on macOS, on Apple silicon and Intel Macs, as well
+    as on Linux x64. Each Mac architecture has its own VSIX; GPU acceleration
+    remains Linux only.
+-   Fix narration that failed with "Audio could not play" when it started long
+    after the last click: one click or keypress in the panel now enables
+    audio for the rest of the session.
+-   Fix the voice indicator staying grey ("readiness not checked") when
+    narration plays in the panel, the default output: it now turns green once
+    the voice is ready.
+
 ## 0.27.0
 
 -   Invite an optional programmer edit in the guided demo and provide a useful
