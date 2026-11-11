@@ -13,6 +13,16 @@ let extensionDirectory = URL(fileURLWithPath: #filePath)
   .deletingLastPathComponent()  // icon
   .deletingLastPathComponent()  // scripts
 
+/// The bytes of one pixel: red, green, blue, and alpha.
+let bytesPerPixel = 4
+
+/// Returns the red, green, and blue of the pixel at `x`, `y` in the image, top left first.
+func rgb(of image: CGImage, x: Int, y: Int) throws -> [Int] {
+  let data = try XCTUnwrap(image.dataProvider?.data) as Data
+  let start = y * image.bytesPerRow + x * bytesPerPixel
+  return data[start..<start + 3].map { Int($0) }
+}
+
 final class ColorTests: XCTestCase {
   func testParsesEachChannel() throws {
     let components = try XCTUnwrap(try color("#FF8000").components)
@@ -38,38 +48,34 @@ final class SVGTests: XCTestCase {
 
   func testBoxIsARect() {
     let box = Box(x: 1, y: 2, width: 3, height: 4, cornerRadius: 5, fill: "#ABCDEF")
-    XCTAssertEqual(svg(box), ##"  <rect x="1" y="2" width="3" height="4" rx="5" fill="#ABCDEF"/>"##)
-  }
-
-  func testTextStartsWhereItIsPlaced() throws {
-    let text = Text(
-      text: "(",
-      x: 10,
-      baseline: 98,
-      size: 46,
-      bold: false,
-      centered: false,
-      fill: "#FFD700"
-    )
-    XCTAssertEqual(try startX(text), 10)
     XCTAssertEqual(
-      try svg(text),
-      ##"  <text x="10" y="98" font-family="Menlo, 'DejaVu Sans Mono', monospace" font-size="46" fill="#FFD700">(</text>"##
+      svg(.box(box)),
+      ##"  <rect x="1" y="2" width="3" height="4" rx="5" fill="#ABCDEF"/>"##
     )
   }
 
-  func testCenteredBoldTextIsCenteredAndBold() throws {
-    let text = Text(
-      text: "Agent",
-      x: 76,
-      baseline: 42.5,
-      size: 20,
-      bold: true,
-      centered: true,
-      fill: "#1B1B1B"
+  func testTriangleIsAPolygonOfItsCorners() {
+    let triangle = Triangle(
+      CGPoint(x: 1, y: 2),
+      CGPoint(x: 3.5, y: 4),
+      CGPoint(x: 5, y: 6),
+      fill: "#ABCDEF"
     )
-    XCTAssertLessThan(try startX(text), 76)
-    XCTAssertTrue(try svg(text).contains(##"font-weight="bold""##))
+    XCTAssertEqual(svg(.triangle(triangle)), ##"  <polygon points="1,2 3.5,4 5,6" fill="#ABCDEF"/>"##)
+  }
+
+  func testCurveIsAStrokedQuadraticPathWithRoundEnds() {
+    let curve = Curve(
+      start: CGPoint(x: 1, y: 2),
+      control: CGPoint(x: 3, y: 4),
+      end: CGPoint(x: 5, y: 6),
+      lineWidth: 1.5,
+      stroke: "#ABCDEF"
+    )
+    XCTAssertEqual(
+      svg(.curve(curve)),
+      ##"  <path d="M1 2 Q3 4 5 6" fill="none" stroke="#ABCDEF" stroke-width="1.5" stroke-linecap="round"/>"##
+    )
   }
 }
 
@@ -80,7 +86,7 @@ final class ShippedIconTests: XCTestCase {
       encoding: .utf8
     )
     XCTAssertEqual(
-      try svgDocument(),
+      svgDocument(),
       shipped,
       "media/icon.svg is stale: swift run --package-path scripts/icon icon"
     )
@@ -90,6 +96,32 @@ final class ShippedIconTests: XCTestCase {
     let image = try render(size: Icon.pngSize)
     XCTAssertEqual(image.width, Icon.pngSize)
     XCTAssertEqual(image.height, Icon.pngSize)
+  }
+
+  func testDrawsEachPartInItsColor() throws {
+    // At the box's own size, one pixel is one unit of the box, y down.
+    let image = try render(size: Int(Icon.boxSize))
+    let dark = [0x1F, 0x1F, 0x1F]
+    let grey = [0xCC, 0xCC, 0xCC]
+    let orange = [0xE8, 0x87, 0x5B]
+    let parts: [(name: String, x: Int, y: Int, expected: [Int])] = [
+      ("the tile", 64, 10, dark),
+      ("the human's bubble", 30, 28, grey),
+      ("the human's tail", 26, 80, grey),
+      ("the human's eye", 24, 40, dark),
+      ("the human's smile", 33, 55, dark),
+      ("the agent's bubble", 60, 90, orange),
+      ("the agent's tail", 102, 108, orange),
+      ("the agent's eye", 80, 70, dark),
+      ("the agent's smile", 90, 90, dark),
+      ("the edge between the bubbles", 46, 60, dark),
+    ]
+    for part in parts {
+      let actual = try rgb(of: image, x: part.x, y: part.y)
+      for (channel, value) in actual.enumerated() {
+        XCTAssertEqual(value, part.expected[channel], accuracy: 2, part.name)
+      }
+    }
   }
 
   func testWritesBothFiles() throws {
@@ -103,7 +135,7 @@ final class ShippedIconTests: XCTestCase {
     try writePNG(to: png, size: 64)
     try writeSVG(to: svg)
     XCTAssertTrue(FileManager.default.fileExists(atPath: png))
-    XCTAssertEqual(try String(contentsOfFile: svg, encoding: .utf8), try svgDocument())
+    XCTAssertEqual(try String(contentsOfFile: svg, encoding: .utf8), svgDocument())
   }
 
   func testWritingWhereItCannotFails() {

@@ -5,7 +5,7 @@ import type { Api } from '../src/extension';
 
 export async function run(): Promise<void> {
   assert.equal(vscode.workspace.workspaceFolders, undefined, 'the test requires an empty window');
-  const extension = vscode.extensions.getExtension<Api>('michalstrba.ai-pair');
+  const extension = vscode.extensions.getExtension<Api>('mattyv.ai-pair');
   assert.ok(extension, 'main extension not found');
   const api = await extension.activate();
   await api.ready;

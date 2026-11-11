@@ -27,11 +27,11 @@ for fixture in integration_catalog_paths integration_companion_faults \
   mkdir -p "${profile}/${fixture}/extensions" "${profile}/${fixture}/workspace"
   if [[ "${fixture}" == integration_companion_faults ]]; then
     ln -s "${root}/packages/audio-ui" \
-      "${profile}/${fixture}/extensions/michalstrba.ai-pair-local-audio"
+      "${profile}/${fixture}/extensions/mattyv.ai-pair-local-audio"
   fi
   if [[ "${fixture}" == integration_workspace_incompatible ]]; then
     ln -s "${root}/packages/vscode/test/fixtures/incompatible_companion" \
-      "${profile}/${fixture}/extensions/michalstrba.ai-pair-local-audio"
+      "${profile}/${fixture}/extensions/mattyv.ai-pair-local-audio"
   fi
   development="${extension}"
   if [[ "${fixture}" == integration_companion_version ]]; then

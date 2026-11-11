@@ -2,8 +2,11 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.30.0",
-  "publisher": "michalstrba",
+  "version": "0.31.0",
+  "publisher": "mattyv",
+  "author": {
+    "name": "mattyv"
+  },
   "private": true,
   "license": "MIT",
   "categories": [
@@ -424,11 +427,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/faiface/ai-pair.git",
+    "url": "https://github.com/mattyv/ai-pair.git",
     "directory": "packages/vscode"
   },
-  "homepage": "https://github.com/faiface/ai-pair#readme",
+  "homepage": "https://github.com/mattyv/ai-pair#readme",
   "bugs": {
-    "url": "https://github.com/faiface/ai-pair/issues"
+    "url": "https://github.com/mattyv/ai-pair/issues"
   }
 }

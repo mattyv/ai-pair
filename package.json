@@ -62,7 +62,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/faiface/ai-pair.git"
+    "url": "https://github.com/mattyv/ai-pair.git"
   },
   "allowScripts": {
     "esbuild@0.28.2": true,

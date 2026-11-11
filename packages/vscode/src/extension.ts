@@ -1022,7 +1022,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     },
   );
   let prepareFailure: PanelPrepareFailure | undefined;
-  const companion = vscode.extensions.getExtension('michalstrba.ai-pair-local-audio');
+  const companion = vscode.extensions.getExtension('mattyv.ai-pair-local-audio');
   const placement = new PanelPlacement({
     epoch: connectionEpoch,
     remote: vscode.env.remoteName !== undefined,
@@ -1050,7 +1050,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     },
     failure: (reason) => {
       prepareFailure = reason;
-      if (vscode.extensions.getExtension('michalstrba.ai-pair-local-audio') !== undefined) {
+      if (vscode.extensions.getExtension('mattyv.ai-pair-local-audio') !== undefined) {
         log.info(`Local Audio preparation failed: ${reason}`);
       }
     },

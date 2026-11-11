@@ -84,7 +84,7 @@ export function waitForGestureWindow(): Promise<void> {
 
 /** Runs preview and selected live narration in an isolated VS Code profile. */
 export async function run(): Promise<void> {
-  const extension = vscode.extensions.getExtension('michalstrba.ai-pair');
+  const extension = vscode.extensions.getExtension('mattyv.ai-pair');
   assert.ok(extension, 'AI Pair extension not found');
   const exported: unknown = await extension.activate();
   assert.ok(isApi(exported), 'AI Pair did not export the speech integration API');

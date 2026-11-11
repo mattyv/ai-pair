@@ -1,8 +1,7 @@
-// The extension's icon: the agent's cursor and label as they look in the editor, typing inside
-// a pair of parens, as shapes in a 128x128 box, y down, like the SVG.
+// The extension's icon: two speech bubbles as characters, the human's in grey with round eyes and
+// the agent's in orange with cursor eyes, as shapes in a 128x128 box, y down, like the SVG.
 
 import CoreGraphics
-import CoreText
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
@@ -40,41 +39,57 @@ public struct Box: Sendable {
   }
 }
 
-/// A run of Menlo text in the same box, placed by its baseline.
-public struct Text: Sendable {
-  /// The characters.
-  public let text: String
-  /// Where it starts, or its center when `centered`.
-  public let x: CGFloat
-  /// The baseline's y.
-  public let baseline: CGFloat
-  /// The font size.
-  public let size: CGFloat
-  /// Menlo Bold, else Menlo Regular.
-  public let bold: Bool
-  /// Whether `x` is the center of the text, not its start.
-  public let centered: Bool
+/// A filled triangle in the box, such as a bubble's tail.
+public struct Triangle: Sendable {
+  /// The three corners, in drawing order.
+  public let corners: [CGPoint]
   /// The fill, as `#RRGGBB`.
   public let fill: String
 
-  /// Makes a run of text from its characters, place, size, weight, and fill.
-  public init(
-    text: String,
-    x: CGFloat,
-    baseline: CGFloat,
-    size: CGFloat,
-    bold: Bool,
-    centered: Bool,
-    fill: String
-  ) {
-    self.text = text
-    self.x = x
-    self.baseline = baseline
-    self.size = size
-    self.bold = bold
-    self.centered = centered
+  /// Makes a triangle from its three corners and fill.
+  public init(_ first: CGPoint, _ second: CGPoint, _ third: CGPoint, fill: String) {
+    self.corners = [first, second, third]
     self.fill = fill
   }
+}
+
+/// A stroked quadratic curve with round ends, such as a smile.
+public struct Curve: Sendable {
+  /// Where the curve starts.
+  public let start: CGPoint
+  /// The point the curve bends toward.
+  public let control: CGPoint
+  /// Where the curve ends.
+  public let end: CGPoint
+  /// The stroke's width.
+  public let lineWidth: CGFloat
+  /// The stroke, as `#RRGGBB`.
+  public let stroke: String
+
+  /// Makes a curve from its ends, its control point, and its stroke.
+  public init(
+    start: CGPoint,
+    control: CGPoint,
+    end: CGPoint,
+    lineWidth: CGFloat,
+    stroke: String
+  ) {
+    self.start = start
+    self.control = control
+    self.end = end
+    self.lineWidth = lineWidth
+    self.stroke = stroke
+  }
+}
+
+/// One of the icon's shapes.
+public enum Shape: Sendable {
+  /// A rounded rectangle.
+  case box(Box)
+  /// A filled triangle.
+  case triangle(Triangle)
+  /// A stroked curve.
+  case curve(Curve)
 }
 
 /// What can go wrong drawing or writing the icon.
@@ -89,12 +104,21 @@ public enum IconError: Error {
   case write(String)
 }
 
-/// The icon as shipped: its box, its shapes, and where the code goes under the label and cursor.
+/// The icon as shipped: its box and its shapes, in the order they are drawn.
 public enum Icon {
   /// The side of the square the shapes are placed in.
   public static let boxSize: CGFloat = 128
   /// The side of the PNG the extension ships.
   public static let pngSize = 256
+
+  /// The dark of the tile, the faces, and the gap between the bubbles.
+  static let dark = "#1F1F1F"
+  /// The human's bubble.
+  static let grey = "#CCCCCC"
+  /// The agent's bubble, the color of its cursor in the editor.
+  static let orange = "#E8875B"
+  /// The width of a smile.
+  static let smileWidth: CGFloat = 3.5
 
   /// The dark rounded square behind everything.
   public static let tile = Box(
@@ -103,49 +127,48 @@ public enum Icon {
     width: boxSize,
     height: boxSize,
     cornerRadius: 28,
-    fill: "#1F1F1F"
+    fill: dark
   )
-  /// The agent's label, as the editor shows it over the cursor.
-  public static let label = Box(
-    x: 38,
-    y: 20,
-    width: 76,
-    height: 31,
-    cornerRadius: 7,
-    fill: "#E8875B"
-  )
-  /// The agent's cursor.
-  public static let cursor = Box(
-    x: 38,
-    y: 60,
-    width: 8,
-    height: 45,
-    cornerRadius: 2,
-    fill: "#E8875B"
-  )
-  /// The label's text, and the code being typed.
-  public static let texts = [
-    Text(
-      text: "Agent",
-      x: 76,
-      baseline: 42.5,
-      size: 20,
-      bold: true,
-      centered: true,
-      fill: "#1B1B1B"
+  /// The human's bubble, its tail down and to the left, and its face: round eyes and a smile.
+  public static let human: [Shape] = [
+    .box(Box(x: 6, y: 22, width: 76, height: 50, cornerRadius: 12, fill: grey)),
+    .triangle(
+      Triangle(CGPoint(x: 24, y: 70), CGPoint(x: 40, y: 70), CGPoint(x: 24, y: 85), fill: grey)
     ),
-    Text(text: "(", x: 10, baseline: 98, size: 46, bold: false, centered: false, fill: "#FFD700"),
-    Text(text: ")", x: 42, baseline: 98, size: 46, bold: false, centered: false, fill: "#FFD700"),
-    Text(text: ";", x: 69, baseline: 98, size: 46, bold: false, centered: false, fill: "#CCCCCC"),
+    .box(Box(x: 19, y: 35, width: 10, height: 10, cornerRadius: 5, fill: dark)),
+    .box(Box(x: 37, y: 35, width: 10, height: 10, cornerRadius: 5, fill: dark)),
+    .curve(
+      Curve(
+        start: CGPoint(x: 26, y: 52),
+        control: CGPoint(x: 33, y: 58),
+        end: CGPoint(x: 40, y: 52),
+        lineWidth: smileWidth,
+        stroke: dark
+      )
+    ),
   ]
-  /// The boxes drawn first.
-  public static let boxesUnder = [tile]
-  /// The boxes drawn over the code.
-  public static let boxesOver = [label, cursor]
-  /// The code, drawn under the label and cursor.
-  public static var textsUnder: [Text] { texts.filter { !$0.centered } }
-  /// The label's text, drawn last.
-  public static var textsOver: [Text] { texts.filter { $0.centered } }
+  /// The agent's bubble over the human's, edged in dark to part them, its tail down and to the
+  /// right, and its face: text-cursor eyes and a smile.
+  public static let agent: [Shape] = [
+    .box(Box(x: 44, y: 48, width: 80, height: 54, cornerRadius: 14, fill: dark)),
+    .box(Box(x: 48, y: 52, width: 72, height: 46, cornerRadius: 10, fill: orange)),
+    .triangle(
+      Triangle(CGPoint(x: 88, y: 96), CGPoint(x: 104, y: 96), CGPoint(x: 104, y: 112), fill: orange)
+    ),
+    .box(Box(x: 77, y: 63, width: 6, height: 16, cornerRadius: 1.5, fill: dark)),
+    .box(Box(x: 97, y: 63, width: 6, height: 16, cornerRadius: 1.5, fill: dark)),
+    .curve(
+      Curve(
+        start: CGPoint(x: 83, y: 87),
+        control: CGPoint(x: 90, y: 93),
+        end: CGPoint(x: 97, y: 87),
+        lineWidth: smileWidth,
+        stroke: dark
+      )
+    ),
+  ]
+  /// Every shape, in the order it is drawn.
+  public static let shapes: [Shape] = [.box(tile)] + human + agent
 }
 
 let channelMax = 0xFF
@@ -163,36 +186,30 @@ public func color(_ hex: String) throws -> CGColor {
   )
 }
 
-func line(_ text: Text) throws -> CTLine {
-  let fontName = text.bold ? "Menlo-Bold" : "Menlo-Regular"
-  let font = CTFontCreateWithName(fontName as CFString, text.size, nil)
-  let attributes: [NSAttributedString.Key: Any] = [
-    .init(kCTFontAttributeName as String): font,
-    .init(kCTForegroundColorAttributeName as String): try color(text.fill),
-  ]
-  let string = NSAttributedString(string: text.text, attributes: attributes)
-  return CTLineCreateWithAttributedString(string)
-}
-
-/// Returns where the text starts: at `x`, or centered on it.
-public func startX(_ text: Text) throws -> CGFloat {
-  guard text.centered else { return text.x }
-  let width = CGFloat(CTLineGetTypographicBounds(try line(text), nil, nil, nil))
-  return text.x - width / 2
-}
-
-func draw(_ box: Box, in context: CGContext) throws {
-  let rect = CGRect(x: box.x, y: box.y, width: box.width, height: box.height)
-  let radius = box.cornerRadius
-  let path = CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
-  context.addPath(path)
-  context.setFillColor(try color(box.fill))
-  context.fillPath()
-}
-
-func draw(_ text: Text, in context: CGContext) throws {
-  context.textPosition = CGPoint(x: try startX(text), y: text.baseline)
-  CTLineDraw(try line(text), context)
+/// Draws a shape into the context, in the box's coordinates.
+func draw(_ shape: Shape, in context: CGContext) throws {
+  switch shape {
+  case .box(let box):
+    let rect = CGRect(x: box.x, y: box.y, width: box.width, height: box.height)
+    let radius = box.cornerRadius
+    context.addPath(
+      CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil)
+    )
+    context.setFillColor(try color(box.fill))
+    context.fillPath()
+  case .triangle(let triangle):
+    context.addLines(between: triangle.corners)
+    context.closePath()
+    context.setFillColor(try color(triangle.fill))
+    context.fillPath()
+  case .curve(let curve):
+    context.move(to: curve.start)
+    context.addQuadCurve(to: curve.end, control: curve.control)
+    context.setLineWidth(curve.lineWidth)
+    context.setLineCap(.round)
+    context.setStrokeColor(try color(curve.stroke))
+    context.strokePath()
+  }
 }
 
 /// Returns a number as SVG writes it: at most two decimals, no trailing zeros.
@@ -200,46 +217,59 @@ public func svgNumber(_ value: CGFloat) -> String {
   String(format: "%g", (value * 100).rounded() / 100)
 }
 
+/// Returns a point as SVG writes it, separated by `separator`.
+func svgPoint(_ point: CGPoint, separator: String) -> String {
+  "\(svgNumber(point.x))\(separator)\(svgNumber(point.y))"
+}
+
+/// Returns an SVG attribute, `name="value"`.
 func attribute(_ name: String, _ value: String) -> String {
   #"\#(name)="\#(value)""#
 }
 
-/// Returns the box as an SVG `rect`.
-public func svg(_ box: Box) -> String {
-  let attributes = [
-    attribute("x", svgNumber(box.x)),
-    attribute("y", svgNumber(box.y)),
-    attribute("width", svgNumber(box.width)),
-    attribute("height", svgNumber(box.height)),
-    attribute("rx", svgNumber(box.cornerRadius)),
-    attribute("fill", box.fill),
-  ]
-  return "  <rect \(attributes.joined(separator: " "))/>"
-}
-
-/// Returns the text as an SVG `text`, live for editing.
-public func svg(_ text: Text) throws -> String {
-  var attributes = [
-    attribute("x", svgNumber(try startX(text))),
-    attribute("y", svgNumber(text.baseline)),
-    attribute("font-family", "Menlo, 'DejaVu Sans Mono', monospace"),
-    attribute("font-size", svgNumber(text.size)),
-  ]
-  if text.bold {
-    attributes.append(attribute("font-weight", "bold"))
+/// Returns the shape as an SVG element: a `rect`, a `polygon`, or a `path`.
+public func svg(_ shape: Shape) -> String {
+  let attributes: [String]
+  let element: String
+  switch shape {
+  case .box(let box):
+    element = "rect"
+    attributes = [
+      attribute("x", svgNumber(box.x)),
+      attribute("y", svgNumber(box.y)),
+      attribute("width", svgNumber(box.width)),
+      attribute("height", svgNumber(box.height)),
+      attribute("rx", svgNumber(box.cornerRadius)),
+      attribute("fill", box.fill),
+    ]
+  case .triangle(let triangle):
+    element = "polygon"
+    let points = triangle.corners.map { svgPoint($0, separator: ",") }
+    attributes = [
+      attribute("points", points.joined(separator: " ")),
+      attribute("fill", triangle.fill),
+    ]
+  case .curve(let curve):
+    element = "path"
+    let start = svgPoint(curve.start, separator: " ")
+    let control = svgPoint(curve.control, separator: " ")
+    let end = svgPoint(curve.end, separator: " ")
+    attributes = [
+      attribute("d", "M\(start) Q\(control) \(end)"),
+      attribute("fill", "none"),
+      attribute("stroke", curve.stroke),
+      attribute("stroke-width", svgNumber(curve.lineWidth)),
+      attribute("stroke-linecap", "round"),
+    ]
   }
-  attributes.append(attribute("fill", text.fill))
-  return "  <text \(attributes.joined(separator: " "))>\(text.text)</text>"
+  return "  <\(element) \(attributes.joined(separator: " "))/>"
 }
 
-/// Returns the whole icon as an SVG document, with live text, for editing.
-public func svgDocument() throws -> String {
-  let body =
-    Icon.boxesUnder.map(svg) + (try Icon.textsUnder.map(svg)) + Icon.boxesOver.map(svg)
-    + (try Icon.textsOver.map(svg))
+/// Returns the whole icon as an SVG document.
+public func svgDocument() -> String {
   let viewBox = "0 0 \(svgNumber(Icon.boxSize)) \(svgNumber(Icon.boxSize))"
   let svgOpen = #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="\#(viewBox)">"#
-  return ([svgOpen] + body + ["</svg>", ""]).joined(separator: "\n")
+  return ([svgOpen] + Icon.shapes.map(svg) + ["</svg>", ""]).joined(separator: "\n")
 }
 
 /// Returns the icon rendered as a `size` by `size` bitmap.
@@ -261,18 +291,8 @@ public func render(size: Int) throws -> CGImage {
   let scale = CGFloat(size) / Icon.boxSize
   context.translateBy(x: 0, y: CGFloat(size))
   context.scaleBy(x: scale, y: -scale)
-  for box in Icon.boxesUnder {
-    try draw(box, in: context)
-  }
-  context.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
-  for text in Icon.textsUnder {
-    try draw(text, in: context)
-  }
-  for box in Icon.boxesOver {
-    try draw(box, in: context)
-  }
-  for text in Icon.textsOver {
-    try draw(text, in: context)
+  for shape in Icon.shapes {
+    try draw(shape, in: context)
   }
   guard let image = context.makeImage() else { throw IconError.render }
   return image

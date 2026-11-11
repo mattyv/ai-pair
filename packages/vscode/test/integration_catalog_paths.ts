@@ -51,7 +51,7 @@ async function catalog(api: Api, phase: string, reason?: string, more = false): 
 /** Runs the real legacy catalog with locally supplied provider HTTP responses. */
 export async function run(): Promise<void> {
   assert.equal(process.platform, 'linux', 'this fixture requires an isolated Linux basic-password profile');
-  const extension = vscode.extensions.getExtension<Api>('michalstrba.ai-pair');
+  const extension = vscode.extensions.getExtension<Api>('mattyv.ai-pair');
   assert.ok(extension && !extension.isActive, 'main extension must be inactive before installing the HTTP boundary');
   const fetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch');
   const promptDescriptor = Object.getOwnPropertyDescriptor(vscode.window, 'showInputBox');

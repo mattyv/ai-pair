@@ -6,7 +6,7 @@ import { expectNotification } from './integration_notification';
 
 /** Checks the real companion's incompatible-version warning and refusal. */
 export async function run(): Promise<void> {
-  const companion = vscode.extensions.getExtension('michalstrba.ai-pair-local-audio');
+  const companion = vscode.extensions.getExtension('mattyv.ai-pair-local-audio');
   assert.ok(companion, 'the real companion must be installed');
   await companion.activate();
   const answer: unknown = await vscode.commands.executeCommand('aiPair.localAudio.prepare', {

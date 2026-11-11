@@ -19,9 +19,9 @@ async function until(condition: () => boolean, description: string): Promise<voi
 
 /** Exercises the real companion attachment and panel in its own extension host. */
 export async function run(): Promise<void> {
-  const companion = vscode.extensions.getExtension('michalstrba.ai-pair-local-audio');
+  const companion = vscode.extensions.getExtension('mattyv.ai-pair-local-audio');
   assert.ok(companion, 'the local companion must be installed before main activation');
-  const main = vscode.extensions.getExtension<Api>('michalstrba.ai-pair');
+  const main = vscode.extensions.getExtension<Api>('mattyv.ai-pair');
   assert.ok(main, 'main extension not found');
   const api = await main.activate();
   await api.ready;
