@@ -243,7 +243,8 @@ it('waits for a successful commit acknowledgement before creating the session', 
   const placement = new PanelPlacement({
     epoch: 'epoch',
     remote: false,
-    timeoutMs: 100,
+    // Long enough that a slow runner cannot reach the deadline: this case is not about it.
+    timeoutMs: 60_000,
     prepare: () => Promise.resolve({ version: 2, epoch: 'epoch', token: 'token' }),
     beforeCommit,
     afterCommit,
