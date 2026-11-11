@@ -119,12 +119,17 @@ final class ShippedIconTests: XCTestCase {
       ("the agent's smile", 90, 90, dark),
       ("the edge between the bubbles", 46, 60, dark),
     ]
-    for part in parts {
+    // Each part reads "<name>: true" when every channel is within 2 of its color.
+    let drawn = try parts.map { part in
       let actual = try rgb(of: image, x: part.x, y: part.y)
-      for (channel, value) in actual.enumerated() {
-        XCTAssertEqual(value, part.expected[channel], accuracy: 2, part.name)
-      }
+      let off = zip(actual, part.expected).reduce(0) { max($0, abs($1.0 - $1.1)) }
+      return "\(part.name): \(off <= 2)"
     }
+    XCTAssertEqual(drawn, parts.map { "\($0.name): true" })
+  }
+
+  func testRenderingAtNoSizeFails() {
+    XCTAssertThrowsError(try render(size: 0))
   }
 
   func testWritesBothFiles() throws {
