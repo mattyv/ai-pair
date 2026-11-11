@@ -847,7 +847,7 @@ async function interruptedTypingAfterMarker(api: Api): Promise<void> {
 export async function synchronousNarrationFailure(api: Api): Promise<void> {
   const events: PanelEvent[] = [];
   let attempts = 0;
-  // Use the extension’s loaded constructor so coverage records the real source-mapped core bundle.
+  // Use the extension's loaded constructor so coverage records the real source-mapped core bundle.
   const LoadedController = z.custom<typeof Controller>((value) => typeof value === 'function').parse(api.controller.constructor);
   const controller = new LoadedController(
     api.editor,
