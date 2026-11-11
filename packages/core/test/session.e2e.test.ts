@@ -28,14 +28,14 @@ describe('where the controller and the player meet', () => {
     const narration = { ready, speak: vi.fn().mockResolvedValue(undefined), pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() };
     const { controller } = setup({}, {}, narration);
     await controller.start();
-    expect((await until(controller.step([{ say: 'One.' }]))).speechReminder).toBeUndefined();
-    expect((await until(controller.step([{ say: 'Two.' }]))).speechReminder).toBeUndefined();
-    expect((await until(controller.step([{ say: 'Three.' }]))).speechReminder).toBeUndefined();
+    expect((await until(controller.step([{ say: 'One.', speak: false }]))).speechReminder).toBeUndefined();
+    expect((await until(controller.step([{ say: 'Two.', speak: false }]))).speechReminder).toBeUndefined();
+    expect((await until(controller.step([{ say: 'Three.', speak: false }]))).speechReminder).toBeUndefined();
     ready.mockResolvedValue(true);
-    expect((await until(controller.step([{ say: 'Four.' }]))).speechReminder).toBe(true);
-    expect((await until(controller.step([{ say: 'Five.' }]))).speechReminder).toBeUndefined();
-    await until(controller.step([{ say: 'Selected.', speak: true }]));
-    expect((await until(controller.step([{ say: 'Six.' }]))).speechReminder).toBeUndefined();
+    expect((await until(controller.step([{ say: 'Four.', speak: false }]))).speechReminder).toBe(true);
+    expect((await until(controller.step([{ say: 'Five.', speak: false }]))).speechReminder).toBeUndefined();
+    await until(controller.step([{ say: 'Spoken.' }]));
+    expect((await until(controller.step([{ say: 'Six.', speak: false }]))).speechReminder).toBeUndefined();
   });
 
   it('waits for selected speech after reading before playing the next edit', async () => {

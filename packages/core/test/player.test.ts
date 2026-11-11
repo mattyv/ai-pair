@@ -560,13 +560,13 @@ describe('selected speech', () => {
     expect(posted(h)).toContainEqual({ type: 'say', text: 'After.' });
   });
 
-  it('waits for reading when speech finishes first and never speaks unflagged text', async () => {
+  it('waits for reading when speech finishes first and never speaks a say that opts out', async () => {
     const h = harness();
     const readingGate = Promise.withResolvers<boolean>();
     h.pacing.sleep.mockReturnValueOnce(readingGate.promise);
     const speak = vi.fn(() => Promise.resolve());
     Object.assign(h.stage, { narration: { speak, pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() } });
-    const result = h.player.play(1, [{ say: 'First.', speak: true }, { say: 'After.' }]);
+    const result = h.player.play(1, [{ say: 'First.' }, { say: 'After.', speak: false }]);
     await vi.waitFor(() => {
       expect(speak).toHaveBeenCalledTimes(1);
     });

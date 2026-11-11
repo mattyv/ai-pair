@@ -5,7 +5,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { ACTION_SCHEMA } from '../src/schemas';
-import { actionKinds, CURSOR_MARKER, fieldsProblem, moveProblem, spanProblem, ToolError, typeProblem } from '../src/index';
+import { actionKinds, CURSOR_MARKER, fieldsProblem, moveProblem, spanProblem, spokenSay, ToolError, typeProblem } from '../src/index';
 
 vi.mock('../src/wire', () => ({}));
 vi.mock('../src/paths', () => ({}));
@@ -107,6 +107,17 @@ describe('fieldsProblem', () => {
     ]) {
       expect({ action, problem: fieldsProblem(action) }).toEqual({ action, problem: undefined });
     }
+  });
+
+  it('Spoken: speaks a say by default, unless it opts out or its text cannot be spoken', () => {
+    expect(spokenSay({ say: 'Hello.' })).toBe(true);
+    expect(spokenSay({ say: 'Hello.', speak: true })).toBe(true);
+    expect(spokenSay({ say: 'Hello.', speak: false })).toBe(false);
+    expect(spokenSay({ say: Array.from({ length: 46 }, () => 'word').join(' ') })).toBe(false);
+    expect(spokenSay({ say: '```code```' })).toBe(false);
+    expect(spokenSay({ type: 'x' })).toBe(false);
+    expect(spokenSay('Hello.')).toBe(false);
+    expect(spokenSay(JSON.parse('null'))).toBe(false);
   });
 
   it('accepts only bounded plain speech units and allows unflagged narration', () => {

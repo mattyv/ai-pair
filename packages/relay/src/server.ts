@@ -22,7 +22,7 @@ declare const AI_PAIR_VERSION: string;
 export const MAX_ANSWERED = 16;
 
 /** Always loaded by the harness, so kept short; the full guide comes with `start`. */
-export const INSTRUCTIONS = `Live pair programming in the programmer's editor (VS Code with the AI Pair extension). When the programmer asks to pair, call \`start\` with your working directory: its result includes the pairing guide, which you follow for the whole session. During a session, everything you do through \`step\` appears in their editor at a human pace, with your narration, and they can interrupt or take over at any moment. Select useful short \`say\` messages for speech with \`speak: true\`; the programmer's speech setting controls playback. Never end your turn during a session; call \`listen\` instead.`;
+export const INSTRUCTIONS = `Live pair programming in the programmer's editor (VS Code with the AI Pair extension). When the programmer asks to pair, call \`start\` with your working directory: its result includes the pairing guide, which you follow for the whole session. During a session, everything you do through \`step\` appears in their editor at a human pace, with your narration, and they can interrupt or take over at any moment. Each short \`say\` is spoken aloud when the programmer has speech enabled; keep them short enough to speak. Never end your turn during a session; call \`listen\` instead.`;
 
 /** What `serve` runs with: the transport to the harness, the pairing guide, the relay's folder, the discovery folder, and the stream whose end closes the relay. */
 export interface ServeOptions {

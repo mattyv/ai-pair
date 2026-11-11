@@ -183,7 +183,9 @@ export function renderReport(report: Report, tool: ReportingTool): string {
     sections.push(renderBatch(b));
   }
   if (report.speechReminder) {
-    sections.push('Speech is available. Consider marking one concise `say` with `speak: true` in your next batch.');
+    sections.push(
+      'Speech is available, and your last batches had nothing it could speak. Keep each `say` within 45 words and 280 characters, and leave `speak` out, so it is spoken.',
+    );
   }
   if (report.submitted) sections.push(`Batch ${report.submitted.id} is ${report.submitted.status}.`);
   if (report.rejected) sections.push(renderRejected(report.rejected));

@@ -470,8 +470,7 @@ describe('serve', () => {
   });
 });
 
-it('always instructs agents to select useful speech while leaving playback to the programmer', () => {
-  expect(INSTRUCTIONS).toContain('`speak: true`');
-  expect(INSTRUCTIONS).toContain('useful short `say`');
-  expect(INSTRUCTIONS).toContain('speech setting controls playback');
+it('always tells agents that each short say is spoken while leaving playback to the programmer', () => {
+  expect(INSTRUCTIONS).toContain('Each short `say` is spoken aloud');
+  expect(INSTRUCTIONS).toContain('when the programmer has speech enabled');
 });

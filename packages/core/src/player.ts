@@ -3,6 +3,7 @@
 
 import * as nodePath from 'node:path';
 import {
+  spokenSay,
   actionKinds,
   CURSOR_MARKER,
   fieldsProblem,
@@ -418,7 +419,8 @@ export class Player {
       // specs/BatchFile.tla, `Say`: it acts in no file.
       panel.post({ type: 'say', text: action.say });
       // Speech is independent of the single reading timeline and starts only after display.
-      const narration = action.speak === true ? this.stage.narration : undefined;
+      // specs/Narration.tla, Display: a spoken unit starts once its text is shown.
+      const narration = spokenSay(action) ? this.stage.narration : undefined;
       let speech = Promise.resolve();
       if (narration !== undefined) {
         try {

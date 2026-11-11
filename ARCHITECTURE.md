@@ -91,12 +91,12 @@ diagram was inspected in headless Chromium without page errors.
     error categories without requiring a pairing session. The panel requests a
     snapshot explicitly; its clipboard
     export contains no chat, code, paths, command text, output, or tokens.
--   **Selected speech** is an optional port on the session controller. With the
+-   **Spoken narration** is an optional port on the session controller. With the
     local companion installed, the workspace port forwards bounded requests to
     the UI host. One local service owns playback, cancellation and page
     generations for both providers.
     Kokoro uses a local CPU worker after explicit model setup. The optional
-    ElevenLabs client sends only selected narration or an explicit voice preview
+    ElevenLabs client sends only spoken narration or an explicit voice preview
     to its fixed HTTPS API. Its API key stays in the local companion's VS Code
     SecretStorage; the panel receives key-presence status and
     bounded voice metadata. Cloud requests have independent deadlines and byte
@@ -111,7 +111,9 @@ diagram was inspected in headless Chromium without page errors.
     ownership until close. Page replacement and interruption invalidate the
     active unit. Speech and
     reading complete independently; speech never approves a command or releases
-    a reading hold. After three accepted batches without selected narration, the
+    a reading hold. Every `say` that fits the spoken bounds is spoken unless it
+    opts out, one unit at a time in order. After three accepted batches with
+    nothing spoken, the
     controller checks current readiness before adding a reminder to a step
     report. The companion readiness query is scoped to the connection epoch and
     returns only a Boolean; it does not synthesize speech or transfer keys,

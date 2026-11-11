@@ -111,9 +111,19 @@ export function speechProblem(text: unknown): string | undefined {
     Array.from(text).length > MAX_SPEECH_CHARACTERS ||
     text.trim().split(/\s+/u).length > MAX_SPEECH_WORDS
   ) {
-    return 'A spoken `say` must be plain, nonempty text of at most 280 Unicode characters and 45 words; shorten it or leave `speak` off.';
+    return 'A spoken `say` must be plain, nonempty text of at most 280 Unicode characters and 45 words; shorten it, or leave `speak` out to show it without speech.';
   }
   return undefined;
+}
+
+/**
+ * Reports whether an action is a `say` that is spoken: every `say` is, unless it opts out with
+ * `speak: false` or its text cannot be spoken, in which case it is shown only (#41).
+ */
+export function spokenSay(action: unknown): boolean {
+  // specs/ActionValidation.tla, Spoken: opting out and unspeakable text both leave the message shown only.
+  if (typeof action !== 'object' || action === null || !('say' in action)) return false;
+  return !('speak' in action && action.speak === false) && speechProblem(action.say) === undefined;
 }
 
 /**

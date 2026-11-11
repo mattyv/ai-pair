@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.29.0
+
+-   Speak every short message of the agent, in order, instead of at most one
+    selected message per batch: with speech enabled you can keep your eyes on
+    the code and still hear when the agent needs you. A message over 45 words
+    or 280 characters is shown without speech, and the agent can keep a
+    message silent with `speak: false`. The scripted demo speaks as well.
+    With ElevenLabs, this sends every spoken message to the provider.
+
 ## 0.28.0
 
 -   Run local Kokoro speech on macOS, on Apple silicon and Intel Macs, as well
