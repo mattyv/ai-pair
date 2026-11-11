@@ -1010,7 +1010,7 @@ describe('activate', () => {
     expect(await options.audio()).toMatchObject({
       provider: 'kokoro',
       output: 'default',
-      routeAvailable: 'unknown',
+      routeAvailable: true,
       lastPlayback: 'unknown',
     });
     fakes.settings.set('speech.provider', 'elevenlabs');

@@ -2999,7 +2999,10 @@ provider prerequisites, worker lifecycle and a recorded failure. The
 prerequisites abstract the
 provider-specific runtime, route, model, key, voice and GPU checks; their
 concrete mapping is tested separately. The model does not prove audibility,
-cloud credit availability, or hardware execution. Local readiness requires a ready
+cloud credit availability, or hardware execution. In that mapping the panel
+page, the default output, counts as an available route, since transport
+already says whether it is up; only a native device waits for discovery (#39).
+The model is unchanged. Local readiness requires a ready
 worker, while loading takes precedence over unknown prerequisites. Weak fairness
 makes the
 observation step eventually update the view.

@@ -204,7 +204,9 @@ export function activate(context: vscode.ExtensionContext): Api {
       keyConfigured: shuttingDown ? 'unknown' : keyConfigured,
       voiceConfigured: (settings.provider === 'kokoro' ? settings.voice : settings.elevenLabsVoice).trim() !== '',
       output: output === 'native' ? 'override' : output,
-      routeAvailable: !shuttingDown && output === 'native' && routeKnown ? outputPreferences.ready() : 'unknown',
+      // The panel page is the default route, and the transport fact says
+      // whether it is up; only a native device waits for discovery.
+      routeAvailable: shuttingDown ? 'unknown' : output !== 'native' ? true : routeKnown ? outputPreferences.ready() : 'unknown',
       runtimeReady: shuttingDown ? 'unknown' : !localSpeechSupported ? false : runtimeSpeechChecked ? runtimeSpeechSupported : 'unknown',
       modelReady: shuttingDown ? 'unknown' : modelReady,
       lastPlayback,

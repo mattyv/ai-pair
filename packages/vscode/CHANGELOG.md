@@ -8,6 +8,9 @@
 -   Fix narration that failed with "Audio could not play" when it started long
     after the last click: one click or keypress in the panel now enables
     audio for the rest of the session.
+-   Fix the voice indicator staying grey ("readiness not checked") when
+    narration plays in the panel, the default output: it now turns green once
+    the voice is ready.
 
 ## 0.27.0
 
