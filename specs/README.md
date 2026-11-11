@@ -329,8 +329,8 @@ no fairness. It does not model pixel placement or browser focus. TLC checked
 The click count witnesses user actions independently of menu state, so an open
 action that ignores a click violates `ClickShows`. TLC rejected five mutations:
 assigning a negative count violated `TypeOK`; retaining the previous menu on
-open violated `OneOpen`; opening no menu violated `RequestedVisible`; keeping the menu on
-close violated `ClosedWhenNone`; ignoring a click's requested menu violated
+open violated `OneOpen`; opening no menu violated `RequestedVisible`; keeping
+the menu on close violated `ClosedWhenNone`; ignoring a click's requested menu violated
 `ClickShows`. The click counter is bounded only for model checking.
 
 ### `Panel`: the history
