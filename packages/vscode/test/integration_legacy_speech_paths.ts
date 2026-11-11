@@ -95,6 +95,14 @@ export async function runLegacySpeechPaths(api: Api): Promise<void> {
     assert.equal(vscode.workspace.getConfiguration('aiPair').get('speech.voice'), 'af_heart');
     assert.equal(vscode.workspace.getConfiguration('aiPair').get('speech.speed'), 1.25);
 
+    // specs/ProviderChoice.tla, Success and KeyChange, made deterministic (#46): the first of two saves posted
+    // back to back settles after the second began, so it must not replace the newer choice; and a voice named
+    // after the key was removed is checked against the catalog, which is empty, so it is not restored.
+    api.panelMessage({ type: 'speechSettings', value: { ...value, speed: 1.5, elevenLabsVoice: 'removed_voice' } });
+    api.panelMessage({ type: 'speechSettings', value: { ...value, speed: 0.75 } });
+    await until(() => vscode.workspace.getConfiguration('aiPair').get('speech.speed') === 0.75, 'the later of two overlapping saves');
+    assert.equal(vscode.workspace.getConfiguration('aiPair').get('speech.elevenLabsVoice'), '');
+
     // Linux uses an isolated application store and the basic password backend.
     // The dummy prompt input never reaches a catalog, preview, or cloud request.
     if (process.platform === 'linux') {
