@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.30.0
+
+-   Keep toolbar controls accessible in narrow panels and popup menus inside
+    the panel viewport, adapting the layout from upstream PR #19.
+
 ## 0.29.0
 
 -   Speak every short message of the agent, in order, instead of at most one

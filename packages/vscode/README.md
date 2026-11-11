@@ -5,6 +5,8 @@
 This fork builds on the original [AI Pair project](https://github.com/faiface/ai-pair).
 It adds:
 
+-   Toolbar controls wrap in narrow panels, and their popup menus stay within
+    the panel viewport.
 -   A choice of conversation order and clearer message text.
 -   Clearer pause and playback status. Click the reading indicator to finish
     its timer, or hold it to pause the timer.

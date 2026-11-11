@@ -887,6 +887,46 @@ describe('the speed menus', () => {
   });
 });
 
+it('TypeOK, OneOpen, RequestedVisible, ClosedWhenNone, ClickShows: opening another menu closes the first and Escape closes the last', () => {
+  start();
+  click(element('speed'));
+  click(element('reading-speed'));
+  expect(element('speed-menu').hidden).toBe(true);
+  expect(element('speed').getAttribute('aria-expanded')).toBe('false');
+  expect(element('reading-menu').hidden).toBe(false);
+  click(element('code-mode'));
+  expect(element('reading-menu').hidden).toBe(true);
+  expect(element('code-mode-menu').hidden).toBe(false);
+  press(element('code-mode-menu'), 'Escape');
+  expect(element('code-mode-menu').hidden).toBe(true);
+  expect(document.activeElement).toBe(element('code-mode'));
+});
+
+it('repositions open menus on resize and scroll and keeps the focused item inside', () => {
+  start();
+  for (const [button, name] of [
+    ['speed', 'speed-menu'],
+    ['reading-speed', 'reading-menu'],
+    ['code-mode', 'code-mode-menu'],
+  ] as const) {
+    const menu = element(name);
+    vi.spyOn(menu, 'getBoundingClientRect').mockReturnValue(new window.DOMRect(10, 20, 80, 40));
+    vi.spyOn(element(button), 'getBoundingClientRect').mockReturnValue(new window.DOMRect(20, 800, 30, 20));
+    click(element(button));
+    const focused = document.activeElement;
+    ok(focused instanceof window.HTMLElement);
+    const rect = vi.spyOn(focused, 'getBoundingClientRect').mockReturnValue(new window.DOMRect(10, 80, 20, 20));
+    window.dispatchEvent(new window.Event('resize'));
+    expect(menu.scrollTop).toBeGreaterThan(0);
+    rect.mockReturnValue(new window.DOMRect(10, 0, 20, 10));
+    const before = menu.scrollTop;
+    window.dispatchEvent(new window.Event('resize'));
+    expect(menu.scrollTop).toBeLessThan(before);
+    document.dispatchEvent(new window.Event('scroll'));
+    click(element(button));
+  }
+});
+
 describe('the tooltips', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
