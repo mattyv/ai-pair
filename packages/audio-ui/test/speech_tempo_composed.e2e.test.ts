@@ -69,8 +69,6 @@ afterEach(async () => {
 });
 
 it('transforms two synthetic Kokoro parts in a real worker before local physical playback', async () => {
-  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
-  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
   directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-pair-tempo-composed-'));
   const workerPath = path.join(directory, 'tempo_worker.mjs');
   await esbuild.build({
@@ -82,6 +80,9 @@ it('transforms two synthetic Kokoro parts in a real worker before local physical
     entryPoints: [path.join(import.meta.dirname, '../../vscode/src/speech_tempo_worker.ts')],
     outfile: workerPath,
   });
+  // esbuild picks its native binary by platform, so the host is spoofed only after the build.
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
   const tempo = new SpeechTempoClient(workerPath);
   const signals: Array<(event: AudioEvent['type']) => void> = [];
   const closes: Array<ReturnType<typeof Promise.withResolvers<void>>> = [];

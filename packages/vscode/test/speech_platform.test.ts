@@ -136,8 +136,20 @@ describe('Kokoro platform evidence', () => {
   });
 
   it('rejects another OS or architecture before probing', () => {
-    expect(check(fail, fail, 'darwin').supported).toBe(false);
-    expect(check(fail, fail, 'linux', 'arm64').supported).toBe(false);
+    expect(check(fail, fail, 'freebsd')).toEqual({ supported: false, reason: 'host_platform' });
+    expect(check(fail, fail, 'linux', 'arm64')).toEqual({ supported: false, reason: 'host_arch' });
+  });
+
+  it.each([
+    ['darwin', 'arm64'],
+    ['darwin', 'x64'],
+  ])('SpeechPlatformEvidence RecognizesEvidence: accepts %s %s without libc probes', (platform, arch) => {
+    expect(check(fail, fail, platform, arch)).toEqual({ supported: true });
+  });
+
+  it('SpeechPlatformEvidence PositiveEvidence: rejects Windows, or macOS on another architecture, before probing', () => {
+    expect(check(fail, fail, 'win32', 'x64')).toEqual({ supported: false, reason: 'host_platform' });
+    expect(check(fail, fail, 'darwin', 'ppc64')).toEqual({ supported: false, reason: 'host_arch' });
   });
 
   it('reads bounded current-process maps and closes the descriptor', () => {

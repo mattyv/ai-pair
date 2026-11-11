@@ -133,7 +133,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `CodePlayback_Progress.cfg` | the same edits with fair progress and no pause or interrupt | holds | 11 |
 | `ReadingSkip.cfg` | two countdown IDs, hold, pause, turn and suspension changes | holds | 5,840 |
 | `ReadingHold.cfg` | matching hold and release with changing pause state | holds | 444 |
-| `Narration.cfg` | two units, two page and session epochs, interruptions and independent gates | holds | 7,328 |
+| `Narration.cfg` | two queued units, two page and session epochs, interruptions and independent gates | holds | 8,684 |
 | `SpeechWorker.cfg` | two jobs, cancellation, watchdog expiry and worker termination | holds | 19 |
 | `ReadingGesture.cfg` | short and long gestures across two countdown IDs | holds | 170 |
 | `ListeningHint.cfg` | status and session context | holds | 64 |
@@ -1871,6 +1871,7 @@ TLC and then reverted:
 | `MoveProblem` without its check for neither `at` nor `to` | `MoveExactly` |
 | omit the multi-close acknowledgment restriction | `MoveExactly` |
 | `SpanProblem` without its check for empty code | `SpanExactly` |
+| `Spoken` ignores `speak: false` (#41) | `SpokenByDefault` |
 
 Each names the test that proves the code obeys it:
 
@@ -1879,6 +1880,7 @@ Each names the test that proves the code obeys it:
 | `MoveExactly` | `protocol/test/index.test.ts`: MoveExactly, NeverThrows: gives no problem exactly for a valid move, and a message for every other; accepts the multiple-close acknowledgment only as true on line_end; `integration.ts`, in VS Code: MoveExactly, SpanExactly, NeverThrows: malformed actions refused by name in the editor; frames that aren't messages dropped |
 | `SpanExactly` | `protocol/test/index.test.ts`: SpanExactly, NeverThrows: gives no problem exactly for a valid span, and a message for every other; `integration.ts`, in VS Code: MoveExactly, SpanExactly, NeverThrows: 27 malformed actions refused by name in the editor; frames that aren't messages dropped |
 | `NeverThrows` | both tests |
+| `SpokenByDefault` | `protocol/test/index.test.ts`: Spoken: speaks a say by default, unless it opts out or its text cannot be spoken |
 
 ### Contracts checked by tests: `ActionValidation`, `Render`, `AgentSetup`
 
@@ -2021,9 +2023,11 @@ stale results and attempts to overlap work. The build stages a compatible C++
 runtime alongside the native binding; this packaging repair does not change
 the modeled worker ownership, cancellation, or watchdog behavior.
 
-### `Narration`: selected speech and reading gates
+### `Narration`: spoken units and reading gates
 
-`Narration.tla` models one outstanding selected unit, two successive units,
+`Narration.tla` models spoken units that queue behind one another (#41: every
+`say` is spoken unless it opts out, so a unit may be admitted while another is
+outstanding), one active unit at a time, two units,
 generation IDs, two page and session epochs, page loss, reply, pause, reading
 holds, and an independent command decision. `ReadyCurrent` and
 `CompletionCurrent` reject stale worker and page callbacks; `GateSafe` keeps
@@ -2034,9 +2038,39 @@ session eventually stay present and all pauses and holds eventually clear.
 The integration-only speech observation records `ended` or page failure only
 when the service accepts a callback for the current generation and page; idle
 after cancellation is not playback completion. The model abstracts the audio
-transport and the full queue implementation. The agent guide now recommends
-selecting useful narration without a per-session prompt; this changes the
-instruction, not the modeled speech or reading gates.
+transport and the full queue implementation. `QueueDrains` checks that every
+admitted unit is eventually displayed, under the same fairness. TLC checked
+8,684 distinct states with `Narration.cfg`.
+
+| Property | Test |
+|---|---|
+| `TypeOK` | The TypeScript compiler checks types |
+| `Ownership`, `QueueDrains` | `controller.test.ts`: Admit: queues a spoken batch behind another and accepts several spoken says in one batch |
+| `DisplayedBeforeSpeech`, `AdvanceAfterGates`, `Progress` | `player.test.ts`: waits for reading when speech finishes first and never speaks a say that opts out; `session.e2e.test.ts`: waits for selected speech after reading before playing the next edit |
+| `GateSafe` | `player.test.ts`: keeps reading and command approval after speech throw and reject |
+| `LiveOnly` | Nothing yet names it; the rehearsal player is built without a narration port |
+| `ReadyCurrent`, `CompletionCurrent`, `PlayingHasReady` | `speech_service.test.ts`: matches generation and page acknowledgements before resolving speech; never accepts a late ended event after playback starts and cancel or pageClosed occurs |
+| `NoPlayingWhilePaused` | `speech_service.test.ts`: retains prepared audio during pause and never revives canceled audio; resumes a prepared waveform only when the global pause clears |
+| `NoAudioWithoutPage`, `NoAudioWithoutSession` | `speech_service.test.ts`: cancels on page closure and ignores a late page acknowledgement |
+
+Each mutation below was applied alone, and TLC reported the named property:
+
+| Mutation | Violates |
+|---|---|
+| `Admit` accepts a third unit | `TypeOK` |
+| `Display` leaves the unit queued | `Ownership` |
+| `Ready` accepts a stale unit ID | `ReadyCurrent` |
+| `Display` does not record the display | `DisplayedBeforeSpeech` |
+| `Display` starts speech outside live mode | `LiveOnly` |
+| `StartSpeech` without a ready waveform | `PlayingHasReady` |
+| `StartSpeech` while paused | `NoPlayingWhilePaused` |
+| `Advance` before reading is done | `AdvanceAfterGates` |
+| `LosePage` leaves audio | `NoAudioWithoutPage` |
+| `Reply` leaves audio | `NoAudioWithoutSession` |
+| `Advance` is not fair | `Progress` |
+| `Display` is not fair | `QueueDrains` |
+| `SpeechError` approves the command | `GateSafe` |
+| `SpeechError` accepts a stale unit ID | `CompletionCurrent` |
 
 ### `ReadingHold`: scoped timer holds
 
@@ -2242,12 +2276,16 @@ current narration ID. A delivery attempt records its eligibility independently
 of whether playback started. TLC checked 28 states. Mutating the initial page
 outside its range violates `TypeOK`; accepting a stale ID violates
 `PlayingIsCurrent`; refusing an eligible delivery violates `AcceptedStarts`.
+The model takes the browser's permission to play as given. The page earns it
+by playing every clip through one shared element that any click or keypress
+in the panel unlocks, because a browser that wants a user gesture unlocks an
+element, not the page (#39). The model is unchanged.
 
 | Property | Test |
 |---|---|
 | `TypeOK` | `speech_audio.test.ts`: rejects invalid page and unit IDs and ignores duplicate audio. |
 | `PlayingIsCurrent` | `speech_audio.test.ts`: interrupts synchronously and never resurrects the old unit; ignores stale callbacks when a page or unit changes. |
-| `AcceptedStarts` | `speech_audio.test.ts`: plays only the current page and unit, then acknowledges and releases it. |
+| `AcceptedStarts` | `speech_audio.test.ts`: plays only the current page and unit, then acknowledges and releases it.; `panel.test.ts`: unlocks one shared player on a gesture so later narration can start without one. |
 
 ### `SpeechSetup`: verified model installation
 
@@ -2749,24 +2787,30 @@ independently and discarded.
 
 ## Speech platform evidence
 
-`SpeechPlatformEvidence` checks one local host for Linux x64 and positive
-evidence of the running process's GNU libc. A missing or failed process report
-can use independently verified process mappings; unknown evidence fails closed.
-Desktop and remote-host placement remain separate caller checks. The model
-abstracts the bounded probe and does not prove the operating system's mappings
-are truthful.
+`SpeechPlatformEvidence` checks one local host. Linux x64 is supported on
+positive evidence of the running process's GNU libc; a missing or failed
+process report can use independently verified process mappings, and unknown
+evidence fails closed. macOS on x64 or arm64 is supported on its platform and
+architecture alone, since it has one system C runtime (#39). Any other
+operating system, or Linux or macOS on another architecture, is rejected
+before any probe. Desktop and remote-host placement remain separate caller
+checks. The model abstracts the bounded probe, groups hosts into four classes
+rather than naming each `<platform>-<arch>`, and does not prove the operating
+system's mappings are truthful.
 
 | Property | Implementation and test mapping |
 |---|---|
 | `TypeOK` | Sanity check of the bounded state. |
-| `PositiveEvidence` | `speech_platform.test.ts`: positive report or mappings are required; musl and missing evidence are rejected. |
-| `RecognizesEvidence` | `speech_platform.test.ts`: accepts a valid runtime report and current-process GNU mappings, including versioned and Snap paths. |
+| `PositiveEvidence` | `speech_platform.test.ts`: positive report or mappings are required; musl and missing evidence are rejected; SpeechPlatformEvidence PositiveEvidence: rejects Windows, or macOS on another architecture, before probing. |
+| `RecognizesEvidence` | `speech_platform.test.ts`: accepts a valid runtime report and current-process GNU mappings, including versioned and Snap paths; SpeechPlatformEvidence RecognizesEvidence: accepts darwin arm64 and darwin x64 without libc probes. |
 | `CheckCompletes` | `speech_platform.test.ts`: the fixed process-maps reader rejects oversized or unreadable input and closes its descriptor. |
 
-TLC checked 19 generated and 19 distinct states. Disabling `GuardEvidence`
-violates `PositiveEvidence`; disabling `EnableCheck` violates
-`CheckCompletes`; disabling `EnablePositive` violates `RecognizesEvidence`.
-All three mutations were discarded.
+TLC checked 37 generated and 37 distinct states, no violation. Disabling
+`GuardEvidence` violates `PositiveEvidence`; disabling `EnableCheck` violates
+`CheckCompletes`; disabling `EnablePositive` violates `RecognizesEvidence`;
+disabling `GuardArch`, so any architecture is accepted, violates
+`PositiveEvidence`; disabling `EnableNonLinux`, the Linux-only check this
+replaced, violates `RecognizesEvidence`. All five mutations were discarded.
 
 ### `RecoveryBatchIds`: saved batch allocation
 
@@ -2827,10 +2871,12 @@ TLC mutations changed the action state outside its domain, delivered a reply
 early, let urgent input avoid interruption, and removed action fairness; each
 violated its corresponding property.
 
-### `SpeechReminder`: reminders for selected speech
+### `SpeechReminder`: reminders for spoken narration
 
 `SpeechReminder.tla` counts accepted unspoken batches up to three, resets on
-selected speech, and gates the next reminder on current readiness. A report
+a batch with a spoken `say` (its `selected`; since #41 any `say` that is
+spoken by default, so the model is unchanged), and gates the next reminder on
+current readiness. A report
 that emits a reminder resets the count. Readiness abstracts the local checks
 and cannot guarantee future synthesis or playback. All three actions fired in
 the TLC coverage run. The real controller and counter also meet in the core
@@ -3012,7 +3058,10 @@ provider prerequisites, worker lifecycle and a recorded failure. The
 prerequisites abstract the
 provider-specific runtime, route, model, key, voice and GPU checks; their
 concrete mapping is tested separately. The model does not prove audibility,
-cloud credit availability, or hardware execution. Local readiness requires a ready
+cloud credit availability, or hardware execution. In that mapping the panel
+page, the default output, counts as an available route, since transport
+already says whether it is up; only a native device waits for discovery (#39).
+The model is unchanged. Local readiness requires a ready
 worker, while loading takes precedence over unknown prerequisites. Weak fairness
 makes the
 observation step eventually update the view.

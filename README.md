@@ -43,19 +43,23 @@ It adds:
 -   Copyable session and speech diagnostics, plus a running version and build
     in Settings. Speech diagnostics show capability, button dispatch and safe
     failure categories without copying keys, narration or audio.
--   When enabled speech is available, the agent is encouraged to select a
-    concise explanation to speak, and may be reminded after several batches
-    without one. The reminder does not enable speech or make a provider request.
+-   When speech is enabled, every short message from the agent is spoken, one
+    after another, and typing waits for the voice, so you can keep your eyes on
+    the code and still hear when the agent needs you. A message over 45 words
+    or 280 characters is shown without speech, and the agent can keep one
+    silent. The agent may be reminded after several batches with nothing
+    spoken. The reminder does not enable speech or make a provider request.
+    The scripted demo speaks too.
 -   CPU/GPU changes and restarted speech wait for previous local work to finish
     shutting down before starting a replacement. GPU use still requires fresh
     checks, and physical validation of this lifecycle change remains open.
--   Optional local Kokoro speech for narration selected by the connected coding
-    agent, which selects useful short explanations without a per-session prompt.
+-   Optional local Kokoro speech for the connected coding agent's narration.
     Speech is off by default and needs no additional API key. In Settings,
     run **Download Kokoro model** to download about 94 MB, then **Preview voice**.
     Settings show the model path, pinned source and latest verification result.
-    Local speech requires a supported local Linux x64 desktop with glibc, such
-    as Ubuntu; the rest of Pair works without speech.
+    Local speech requires a local Linux x64 desktop with glibc, such as
+    Ubuntu, or a Mac (Apple silicon or Intel); the rest of Pair works without
+    speech. Install the VSIX built for your Mac's architecture.
 -   Experimental GPU acceleration for Kokoro on supported Linux x64 systems.
     In Settings, select **Auto** or **GPU** and choose **Set up GPU**. Setup
     requires the CPU model and may download an additional pinned model of about
@@ -81,8 +85,9 @@ It adds:
 -   Optional ElevenLabs cloud speech, using the same selected narration and
     reading controls. Choose **ElevenLabs** in Settings, add your API key through
     the secure VS Code prompt, load your account voices, choose one and use
-    **Preview voice**. Selected text and previews go to ElevenLabs and use your
-    account credits. Saving a key does not enable speech. Voice availability
+    **Preview voice**. Every spoken message and each preview goes to
+    ElevenLabs and uses your account credits. Saving a key does not enable
+    speech. Voice availability
     depends on your account; a free account may have no eligible API voices.
     Kokoro remains the local option and the default provider.
 -   A shared **Speech output** choice for both providers, with **System default**
@@ -106,9 +111,11 @@ companion belongs on the local side. It is optional for existing local use;
 remote speech requires it.
 
 The companion keeps its own local key and model storage. Add your ElevenLabs
-key through its secure Settings prompt, or set up Kokoro there. Its model still
-requires a supported Linux x64 desktop; cross-platform playback does not make
-Kokoro available on every operating system. No key or generated audio is sent
+key through its secure Settings prompt, or set up Kokoro there. The companion
+is built once, on Linux, so its Kokoro runs on a Linux x64 desktop only; on a
+Mac, use the main extension's local speech, or ElevenLabs through the companion.
+Cross-platform playback does not make Kokoro available on every operating
+system. No key or generated audio is sent
 to the workspace extension. Speech remains off until you enable it; Preview is
 an explicit test action.
 

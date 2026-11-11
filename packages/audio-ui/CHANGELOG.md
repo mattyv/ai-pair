@@ -1,9 +1,9 @@
 # Changelog
 
-## 0.28.0
+## 0.30.0
 
--   Keep toolbar controls accessible in narrow panels and popup menus inside
-    the panel viewport, adapting the layout from upstream PR #19.
+-   Keep the Local Audio companion version aligned with the main extension
+    through its 0.28.0 to 0.30.0 releases; the companion itself is unchanged.
 
 ## 0.27.0
 

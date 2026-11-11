@@ -41,6 +41,7 @@ function builds(): esbuild.BuildOptions[] {
 
 beforeEach(() => {
   vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({ version: '1.2.3' }));
+  vi.mocked(stageSpeechRuntime).mockReturnValue(true);
 });
 
 afterEach(() => {
@@ -94,16 +95,12 @@ it('bundles the extension, the page script, the page styles, and the relay, with
       define: { AI_PAIR_VERSION: '"1.2.3"' },
       outfile: 'dist/relay.js',
     },
-    ...(process.platform === 'linux' && process.arch === 'x64'
-      ? [
-          {
-            ...common,
-            format: 'esm',
-            entryPoints: ['src/speech_phonemizer_bridge.ts'],
-            outfile: 'dist/speech/node_modules/phonemizer/index.mjs',
-          },
-        ]
-      : []),
+    {
+      ...common,
+      format: 'esm',
+      entryPoints: ['src/speech_phonemizer_bridge.ts'],
+      outfile: 'dist/speech/node_modules/phonemizer/index.mjs',
+    },
     {
       ...common,
       format: 'esm',
@@ -190,25 +187,11 @@ it('changes the build ID when a nested staged runtime file changes', async () =>
 });
 
 it('keeps unsupported builds text-only without bundling the native bridge', async () => {
-  const realProcess = process;
-  vi.stubGlobal(
-    'process',
-    new Proxy(realProcess, {
-      get(target, key, receiver) {
-        if (key === 'platform') return 'darwin';
-        const value: unknown = Reflect.get(target, key, receiver);
-        return value;
-      },
-    }),
-  );
-  try {
-    await built();
-    expect(stageSpeechRuntime).toHaveBeenCalledOnce();
-    expect(builds().some((options) => options.outfile === 'dist/speech/node_modules/phonemizer/index.mjs')).toBe(false);
-    expect(builds().some((options) => options.outfile === 'dist/speech/worker.mjs')).toBe(true);
-  } finally {
-    vi.unstubAllGlobals();
-  }
+  vi.mocked(stageSpeechRuntime).mockReturnValue(false);
+  await built();
+  expect(stageSpeechRuntime).toHaveBeenCalledOnce();
+  expect(builds().some((options) => options.outfile === 'dist/speech/node_modules/phonemizer/index.mjs')).toBe(false);
+  expect(builds().some((options) => options.outfile === 'dist/speech/worker.mjs')).toBe(true);
 });
 
 it('does not read or follow a non-file entry in the staged runtime', async () => {

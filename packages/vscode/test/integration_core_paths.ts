@@ -108,14 +108,6 @@ export async function corePaths(api: Api, root: string): Promise<void> {
       'invalid_action',
       /not inside it/,
     );
-    await refused(
-      [
-        { say: 'One.', speak: true },
-        { say: 'Two.', speak: true },
-      ],
-      'invalid_action',
-      /only one selected narration/i,
-    );
     for (const text of ['  ', 'Look: ```code```', 'x'.repeat(TOO_LONG), Array.from({ length: TOO_MANY_WORDS }, () => 'w').join(' ')]) {
       await refused([{ say: text, speak: true }], 'invalid_action', /spoken `say` must be plain/);
     }
@@ -123,8 +115,6 @@ export async function corePaths(api: Api, root: string): Promise<void> {
     // A reading of a selected narration ends at its time; the clock's controls act only on the reading shown.
     let before = lastReadingId();
     await controller.step([{ say: 'Selected narration.', speak: true }]);
-    // One queued behind another is refused until the first has been reported.
-    await refused([{ say: 'Another.', speak: true }], 'invalid_action', /Wait for the current narration/);
     const id = await sayReading(before);
     controller.finishReading(UNKNOWN_READING);
     controller.holdReading(UNKNOWN_READING, true);

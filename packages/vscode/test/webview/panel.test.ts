@@ -1919,6 +1919,62 @@ it('silences the current audio synchronously before posting a reply and ignores 
   expect(play).toHaveBeenCalledOnce();
 });
 
+it('unlocks one shared player on a gesture so later narration can start without one (#39)', async () => {
+  const play = vi.fn<() => Promise<void>>().mockRejectedValue(new Error('no source'));
+  const pause = vi.fn<() => void>();
+  const players: FakeAudio[] = [];
+  class FakeAudio {
+    paused = true;
+    src = '';
+    play = play;
+    pause = pause;
+    constructor() {
+      players.push(this);
+    }
+    addEventListener(): void {}
+  }
+  vi.stubGlobal('Audio', FakeAudio);
+  vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:shared');
+  vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+  document.dispatchEvent(new window.Event('pointerdown'));
+  await Promise.resolve();
+  expect(play).toHaveBeenCalledOnce();
+  expect(pause).toHaveBeenCalledOnce();
+  send({ type: 'speechPage', pageId: 1 });
+  send({ type: 'speechStatus', id: 3, pageId: 1, state: 'preparing' });
+  send({ type: 'speechAudio', id: 3, pageId: 1, wavBase64: 'AQI=', durationMs: 100 });
+  expect(players).toHaveLength(1);
+  expect(players[0]?.src).toBe('blob:shared');
+  const playing = players[0];
+  if (playing !== undefined) playing.paused = false;
+  document.dispatchEvent(new window.Event('keydown'));
+  expect(play).toHaveBeenCalledTimes(2);
+  expect(pause).toHaveBeenCalledOnce();
+});
+
+it("drops a retired clip's listeners so its late error cannot fail the next clip", () => {
+  const player = new EventTarget();
+  class FakeAudio {
+    src = '';
+    play = vi.fn<() => Promise<void>>().mockResolvedValue();
+    pause = vi.fn<() => void>();
+    addEventListener(type: string, listener: () => void, options?: { signal?: AbortSignal }): void {
+      player.addEventListener(type, listener, options);
+    }
+  }
+  vi.stubGlobal('Audio', FakeAudio);
+  vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:retired');
+  vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+  send({ type: 'speechPage', pageId: 1 });
+  send({ type: 'speechStatus', id: 4, pageId: 1, state: 'preparing' });
+  send({ type: 'speechAudio', id: 4, pageId: 1, wavBase64: 'AQI=', durationMs: 100 });
+  send({ type: 'speechStatus', id: 5, pageId: 1, state: 'preparing' });
+  send({ type: 'speechAudio', id: 5, pageId: 1, wavBase64: 'AQI=', durationMs: 100 });
+  player.dispatchEvent(new Event('error'));
+  expect(posted()).toContainEqual({ type: 'speechEvent', id: 5, pageId: 1, event: 'failed' });
+  expect(posted()).not.toContainEqual({ type: 'speechEvent', id: 4, pageId: 1, event: 'failed' });
+});
+
 function unavailableAudio(): never {
   throw new Error('unavailable');
 }

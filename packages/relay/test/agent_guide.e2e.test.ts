@@ -3,16 +3,15 @@ import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { agentGuide } from '../src/server';
 
-it('guides each session to select bounded, safe spoken narration while respecting user settings', () => {
+it('guides each session to speak every bounded say, keep secrets silent, and respect user settings', () => {
   const guide = agentGuide(readFileSync('AGENT_GUIDE.md', 'utf8'));
   const narration = guide.split('## Narration')[1]?.split('\n## ')[0];
   expect(narration).toBeDefined();
-  expect(narration).toContain('one useful `say` in each batch');
-  expect(narration).toContain('`speak: true`');
+  expect(narration).toContain('Every `say` is spoken');
+  expect(narration).toContain('`speak: false`');
   expect(narration).toContain('280 Unicode characters');
   expect(narration).toContain('45 words');
-  expect(narration).toContain('one spoken `say` per batch');
   expect(narration).toContain('speech is disabled');
-  expect(narration).toContain('secrets');
+  expect(narration).toContain('a secret');
   expect(narration).toContain('cloud');
 });

@@ -1,9 +1,30 @@
 # Changelog
 
-## 0.28.0
+## 0.30.0
 
 -   Keep toolbar controls accessible in narrow panels and popup menus inside
     the panel viewport, adapting the layout from upstream PR #19.
+
+## 0.29.0
+
+-   Speak every short message of the agent, in order, instead of at most one
+    selected message per batch: with speech enabled you can keep your eyes on
+    the code and still hear when the agent needs you. A message over 45 words
+    or 280 characters is shown without speech, and the agent can keep a
+    message silent with `speak: false`. The scripted demo speaks as well.
+    With ElevenLabs, this sends every spoken message to the provider.
+
+## 0.28.0
+
+-   Run local Kokoro speech on macOS, on Apple silicon and Intel Macs, as well
+    as on Linux x64. Each Mac architecture has its own VSIX; GPU acceleration
+    remains Linux only.
+-   Fix narration that failed with "Audio could not play" when it started long
+    after the last click: one click or keypress in the panel now enables
+    audio for the rest of the session.
+-   Fix the voice indicator staying grey ("readiness not checked") when
+    narration plays in the panel, the default output: it now turns green once
+    the voice is ready.
 
 ## 0.27.0
 

@@ -169,14 +169,50 @@ let cloudSupported = false;
 let cloudHasKey = false;
 let cloudLoading = false;
 let speechSupported = false;
+let player: HTMLAudioElement | undefined;
+/**
+ * Returns the one audio element every clip plays through. A browser that wants
+ * a user gesture unlocks an element, not the page, so narration that starts
+ * long after a click plays only through an element a gesture already played
+ * (#39).
+ */
+function sharedPlayer(): HTMLAudioElement {
+  player ??= new Audio();
+  return player;
+}
+/** Unlocks the shared player during a gesture, unless a clip is playing. */
+function unlockPlayer(): void {
+  const audio = sharedPlayer();
+  if (!audio.paused) return;
+  audio.play().catch(() => {
+    // An empty or retired source rejects; the gesture has unlocked it anyway.
+  });
+  audio.pause();
+}
+document.addEventListener('pointerdown', unlockPlayer, /* useCapture= */ true);
+document.addEventListener('keydown', unlockPlayer, /* useCapture= */ true);
 const speechAudio = new SpeechAudio(
   (base64) => {
     const bytes = decodeWav(base64);
     const url = URL.createObjectURL(new Blob([Uint8Array.from(bytes).buffer], { type: 'audio/wav' }));
     try {
+      const audio = sharedPlayer();
+      // Aborting drops this clip's listeners, so a retired clip's late error
+      // cannot fail the next one; a new source also discards queued events.
+      const listeners = new AbortController();
+      audio.src = url;
       return {
-        audio: new Audio(url),
+        audio: {
+          play: () => audio.play(),
+          pause: () => {
+            audio.pause();
+          },
+          addEventListener: (type, listener) => {
+            audio.addEventListener(type, listener, { signal: listeners.signal });
+          },
+        },
         revoke: () => {
+          listeners.abort();
           URL.revokeObjectURL(url);
         },
       };
