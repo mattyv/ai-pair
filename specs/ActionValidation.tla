@@ -161,6 +161,15 @@ ASSUME SpeechExactly ==
     \A text \in SpeechTextKinds, flag \in SpeechFlags :
         ~SpeechProblem(text, flag) <=> ValidSpeech(text, flag)
 
+\* A say is spoken unless it opts out, whenever its text can be spoken (#41):
+\* a default-spoken say with unspeakable text stays valid and is shown only.
+Spoken(text, flag) == flag \in {"missing", "true"} /\ text = "within"
+ASSUME SpokenByDefault ==
+    /\ Spoken("within", "missing") /\ ~Spoken("within", "false")
+    /\ ~Spoken("tooLong", "missing") /\ ValidSpeech("tooLong", "missing")
+    /\ \A text \in SpeechTextKinds, flag \in SpeechFlags :
+        Spoken(text, flag) => ValidSpeech(text, flag)
+
 \* The engine accepts at least one and at most 510 phoneme content tokens.
 ContentCounts == {0, 1, 510, 511}
 TokensAccepted(n) == n > 0 /\ n <= 510
