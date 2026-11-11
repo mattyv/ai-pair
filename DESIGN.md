@@ -225,6 +225,12 @@ the `aiPair.speed` setting, which takes any value from 0.25 to 4. The reading
 menu next to it scales only the reading pause: `aiPair.readingSpeed`, with the
 same range (#109).
 
+**Toolbar layout.** Keep status readable as the panel narrows, and wrap the
+existing controls onto additional rows. Only one pace, reading-speed or
+code-display menu is open at a time. Keep its options within the viewport,
+with scrolling when needed, so the bottom composer does not hide choices.
+Escape closes the menu and returns focus to its trigger.
+
 **Code playback.** A separate toolbar dropdown and Settings offer Typing (the
 default), Lines, and Blocks. A selection takes effect at the next typing
 action. Lines and

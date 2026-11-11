@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.28.0
+
+-   Keep toolbar controls accessible in narrow panels and popup menus inside
+    the panel viewport, adapting the layout from upstream PR #19.
+
 ## 0.27.0
 
 -   Keep the Local Audio companion version aligned with the guided demo release.

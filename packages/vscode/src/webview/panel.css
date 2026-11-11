@@ -392,13 +392,14 @@ button:focus-visible {
   border: 1px solid var(--vscode-menu-border, var(--border));
   border-radius: 6px;
   box-shadow: 0 4px 14px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.18));
+  box-sizing: border-box;
   color: var(--vscode-menu-foreground, var(--fg));
   display: flex;
   flex-direction: column;
+  max-width: calc(100vw - 12px);
+  overflow: auto;
   padding: 4px;
-  position: absolute;
-  right: 0;
-  top: 28px;
+  position: fixed;
   z-index: 10;
 }
 

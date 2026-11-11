@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.28.0
+
+-   Keep toolbar controls accessible in narrow panels and popup menus inside
+    the panel viewport, adapting the layout from upstream PR #19.
+
 ## 0.27.0
 
 -   Invite an optional programmer edit in the guided demo and provide a useful

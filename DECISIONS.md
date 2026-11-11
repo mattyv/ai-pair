@@ -794,3 +794,25 @@ Focused coverage measurements retain each generated bundle's own source map.
 Merge source-level results only after remapping each bundle independently.
 Generated offsets can differ even when original source content matches. The
 complete native runner remains the final coverage gate; its floors stay intact.
+
+## Adapt upstream panel layout without changing pairing policy
+
+Issue #47 adopts the toolbar wrapping and anchored popup-menu layout from
+BedirT's MIT-licensed upstream PR #19, commit
+`25373cbef3d51a167440691c0680a2377e25a193`. A no-commit cherry-pick
+against `30828e9` in a disposable worktree produced 19 conflicting paths.
+The upstream monolithic `panelHtml.ts` has been replaced here by separate
+HTML, webview TypeScript and CSS files, with additional voice, settings and
+playback controls. The trial was discarded without changing the main checkout.
+
+Reuse the existing narrow-toolbar wrapping and adapt the compatible popup
+layout into those files instead of importing
+the PR's learning modes, program approvals or parent feature stack. Keep
+the current pace controls and command approval policy. A menu must remain
+usable inside a narrow or short viewport, and opening another menu must
+close its predecessor. Viewport resize must not strand an open menu.
+
+This changes presentation within the existing webview boundary. It introduces
+no runtime component or ownership boundary that requires Archi model exports.
+The original MIT license remains applicable; the upstream commit records the
+source of the adapted layout.

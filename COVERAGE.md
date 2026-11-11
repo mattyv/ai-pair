@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: integration, 2026-11-10.
+Last updated: css, 2026-11-11.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -316,8 +316,8 @@ Last updated: integration, 2026-11-10.
 | `packages/vscode/test/integration_player_gap_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_preserved_playback.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_recovery_restart.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_release_extension_owner_paths.ts` | TypeScript | - | test | test | - | - | - |
-| `packages/vscode/test/integration_release_extension_paths.ts` | TypeScript | - | test | test | - | - | - |
+| `packages/vscode/test/integration_release_extension_owner_paths.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_release_extension_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_render_diagnostic.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_restricted_runtime.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_runtime_identity.ts` | TypeScript | test | test | test | - | - | test |
@@ -571,6 +571,8 @@ Last updated: integration, 2026-11-10.
 | `specs/PairDefs.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/Panel.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Panel.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
+| `specs/PanelMenus.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/PanelMenus.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/PanelPlacement.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/PanelPlacement.tla` | TLA+ | - | - | 13 of 14 actions (never: UnsafeFallback) | - | - | - |
 | `specs/PanelReplay.cfg` | TLC config | - | - | - | - | - | - |

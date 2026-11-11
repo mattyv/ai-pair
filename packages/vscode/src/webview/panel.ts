@@ -576,7 +576,13 @@ function startReading(ms: number, id?: number): void {
 function showTip(el: HTMLElement): void {
   clearTimeout(tipTimer);
   tipPending = undefined;
-  if ((el === ui.speed && ui.speedMenu.hidden === false) || (el === ui.readingSpeed && ui.readingMenu.hidden === false)) return;
+  if (
+    (el === ui.speed && ui.speedMenu.hidden === false) ||
+    (el === ui.readingSpeed && ui.readingMenu.hidden === false) ||
+    (el === ui.codeMode && ui.codeModeMenu.hidden === false)
+  ) {
+    return;
+  }
   tipTarget = el;
   ui.tip.textContent = el.dataset.tip ?? '';
   ui.tip.hidden = false;
@@ -661,6 +667,28 @@ function setCodePlayback(value: CodePlayback): void {
   ui.codeMode.setAttribute('aria-label', `Code display: ${label}`);
 }
 
+/** Keeps menus inside the viewport while retaining their trigger as the anchor. */
+function placeMenu(button: HTMLButtonElement, menu: HTMLElement, keepFocusVisible = false): void {
+  const margin = 6;
+  menu.style.maxHeight = `${Math.max(0, window.innerHeight - margin * 2)}px`;
+  const anchor = button.getBoundingClientRect();
+  const bounds = menu.getBoundingClientRect();
+  const left = Math.max(margin, Math.min(anchor.right - bounds.width, window.innerWidth - margin - bounds.width));
+  const below = anchor.bottom;
+  const top = below + bounds.height <= window.innerHeight - margin ? below : anchor.top - bounds.height;
+  menu.style.left = `${left}px`;
+  menu.style.top = `${Math.max(margin, Math.min(top, window.innerHeight - margin - bounds.height))}px`;
+  const focused = document.activeElement;
+  if (keepFocusVisible && focused instanceof HTMLElement && menu.contains(focused)) {
+    const item = focused.getBoundingClientRect();
+    const visible = menu.getBoundingClientRect();
+    if (item.bottom > visible.bottom) menu.scrollTop += item.bottom - visible.bottom;
+    if (item.top < visible.top) menu.scrollTop -= visible.top - item.top;
+  }
+}
+
+const menuClosers: Array<() => void> = [];
+
 /** Wires a speed menu to its button, and returns what closes it. */
 function speedMenu(button: HTMLButtonElement, menu: HTMLElement, type: 'speed' | 'readingSpeed' | 'codePlayback'): () => void {
   function close(): void {
@@ -671,10 +699,19 @@ function speedMenu(button: HTMLButtonElement, menu: HTMLElement, type: 'speed' |
   button.addEventListener('click', (e) => {
     e.stopPropagation();
     const open = menu.hidden === true;
+    // specs/PanelMenus.tla, `Open` and `Close`.
+    if (open) {
+      for (const closeMenu of menuClosers) closeMenu();
+    }
     menu.hidden = !open;
+    if (open) placeMenu(button, menu);
     button.setAttribute('aria-expanded', String(open));
     button.classList.toggle('on', open);
-    if (open) menu.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
+    if (open) {
+      const selected = menu.querySelector<HTMLElement>('[aria-checked="true"]') ?? menu.querySelectorAll<HTMLElement>('button').item(0);
+      selected.focus({ preventScroll: true });
+      menu.scrollTop = selected.offsetTop - menu.clientHeight / 2 + selected.offsetHeight / 2;
+    }
   });
   for (const b of menu.querySelectorAll('button')) {
     b.addEventListener('click', () => {
@@ -698,11 +735,29 @@ function speedMenu(button: HTMLButtonElement, menu: HTMLElement, type: 'speed' |
       button.focus();
     }
   });
+  menuClosers.push(close);
   return close;
 }
 const closeSpeedMenu = speedMenu(ui.speed, ui.speedMenu, 'speed');
 const closeCodeModeMenu = speedMenu(ui.codeMode, ui.codeModeMenu, 'codePlayback');
 const closeReadingMenu = speedMenu(ui.readingSpeed, ui.readingMenu, 'readingSpeed');
+
+/** Repositions an open menu after the viewport or its anchor moves. */
+function repositionMenus(keepFocusVisible = false): void {
+  if (ui.speedMenu.hidden === false) placeMenu(ui.speed, ui.speedMenu, keepFocusVisible);
+  if (ui.codeModeMenu.hidden === false) placeMenu(ui.codeMode, ui.codeModeMenu, keepFocusVisible);
+  if (ui.readingMenu.hidden === false) placeMenu(ui.readingSpeed, ui.readingMenu, keepFocusVisible);
+}
+window.addEventListener('resize', () => {
+  repositionMenus(true);
+});
+document.addEventListener(
+  'scroll',
+  () => {
+    repositionMenus();
+  },
+  /* useCapture= */ true,
+);
 
 function setActive(on: boolean): void {
   active = on;
@@ -773,6 +828,7 @@ ui.history.addEventListener('scroll', () => {
   historyScrollHeight = ui.history.scrollHeight;
 });
 const historyResize = new ResizeObserver(() => {
+  repositionMenus(true);
   historyHeight = ui.history.clientHeight;
   historyScrollHeight = ui.history.scrollHeight;
   if (chatOrder === 'oldestFirst' && followingLatest) ui.history.scrollTop = ui.history.scrollHeight;
@@ -1655,10 +1711,12 @@ window.addEventListener('blur', hideTip);
 // button, which after a click could be End; Enter still does.
 document.addEventListener('keydown', (e) => {
   if (e.key !== ' ' || e.ctrlKey || e.metaKey || e.altKey || !active) return;
+  const target = e.target;
   if (
     e.target === ui.reply ||
     e.target === ui.skipReading ||
     e.target === ui.settings ||
+    (target instanceof Node && [ui.speedMenu, ui.readingMenu, ui.codeModeMenu].some((menu) => menu.contains(target))) ||
     (e.target instanceof Node && ui.settingsDialog.contains(e.target))
   ) {
     return;

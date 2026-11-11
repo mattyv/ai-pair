@@ -138,3 +138,95 @@ for (const { name, events } of STATES) {
     await expect(page).toHaveScreenshot(`${name}.png`, { animations: 'disabled' });
   });
 }
+
+test('menus stay reachable in a narrow, short panel and after resizing', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 240, height: 180 });
+  const post = await load(page);
+  await post({ type: 'session', active: true, task: 'Layout' });
+  for (const name of ['speed', 'reading-speed', 'code-mode']) {
+    await page.locator(`[data-ui="${name}"]`).click();
+    const menu = page.locator('.speed-menu:visible');
+    await expect(menu).toHaveCount(1);
+    const box = await menu.boundingBox();
+    expect(box).not.toBeNull();
+    if (box === null) throw new Error('Menu has no bounds');
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(240);
+    expect(box.y + box.height).toBeLessThanOrEqual(180);
+    await page.keyboard.press('Escape');
+  }
+  await page.locator('[data-ui="speed"]').click();
+  await page.setViewportSize({ width: 200, height: 130 });
+  await expect.poll(async () => (await page.locator('[data-ui="speed-menu"]').boundingBox())?.height).toBeLessThanOrEqual(130);
+  const box = await page.locator('[data-ui="speed-menu"]').boundingBox();
+  expect(box).not.toBeNull();
+  if (box === null) throw new Error('Menu has no bounds');
+  expect(box.x + box.width).toBeLessThanOrEqual(200);
+  expect(box.y + box.height).toBeLessThanOrEqual(130);
+  await page.screenshot({ path: testInfo.outputPath('narrow-short.png') });
+});
+
+test('a resized menu keeps the selected option visible and follows the bottom toolbar', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  const post = await load(page);
+  await post({ type: 'session', active: true, task: 'Layout' });
+  await post({ type: 'chatOrder', value: 'oldestFirst' });
+  await post({ type: 'readingSpeed', value: 2 });
+  await page.locator('[data-ui="reading-speed"]').click();
+  await page.setViewportSize({ width: 240, height: 130 });
+  const menu = page.locator('[data-ui="reading-menu"]');
+  const selected = menu.locator('[aria-checked="true"]');
+  await expect(selected).toBeFocused();
+  await expect
+    .poll(async () => {
+      const outer = await menu.boundingBox();
+      const inner = await selected.boundingBox();
+      return outer !== null && inner !== null && inner.y >= outer.y && inner.y + inner.height <= outer.y + outer.height;
+    })
+    .toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('bottom-short.png') });
+});
+
+test('toolbar controls remain reachable and menus accept keyboard selection', async ({ page }, testInfo) => {
+  const post = await load(page);
+  await post({ type: 'session', active: true, task: 'Layout' });
+  for (const width of [240, 320]) {
+    await page.setViewportSize({ width, height: 640 });
+    for (const button of await page.locator('.head button:visible').all()) {
+      const box = await button.boundingBox();
+      expect(box).not.toBeNull();
+      if (box === null) throw new Error('Control has no bounds');
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(width);
+    }
+    await page.screenshot({ path: testInfo.outputPath(`toolbar-${width}.png`) });
+  }
+  await page.locator('[data-ui="code-mode"]').click();
+  const lines = page.locator('[data-ui="code-mode-menu"] [data-code-playback="lines"]');
+  await lines.focus();
+  await page.keyboard.press('Space');
+  await expect(page.locator('[data-ui="code-mode"]')).toHaveText('Lines');
+});
+
+test('open menu follows its trigger when bottom band grows', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  const post = await load(page);
+  await post({ type: 'session', active: true, task: 'Layout' });
+  await post({ type: 'chatOrder', value: 'oldestFirst' });
+  const trigger = page.locator('[data-ui="code-mode"]');
+  const menu = page.locator('[data-ui="code-mode-menu"]');
+  await trigger.click();
+  const before = await trigger.boundingBox();
+  if (before === null) throw new Error('Trigger has no bounds');
+  await post({ type: 'say', text: 'A long message that makes the band taller. '.repeat(20) });
+  await expect.poll(async () => (await trigger.boundingBox())?.y).not.toBe(before.y);
+  await expect
+    .poll(async () => {
+      const anchor = await trigger.boundingBox();
+      const popup = await menu.boundingBox();
+      if (anchor === null || popup === null) return false;
+      return Math.abs(popup.y + popup.height - anchor.y) < 2 || Math.abs(popup.y - anchor.y - anchor.height) < 2;
+    })
+    .toBe(true);
+});

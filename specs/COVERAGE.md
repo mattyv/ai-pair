@@ -175,6 +175,7 @@ Code goes without a spec for one of these reasons:
 | `webview/speech_audio.ts` | page, unit, audio and controls | `SpeechPage` |
 | `voice_indicator.ts` | cached voice readiness projection | `VoiceIndicator` (`Observe`) |
 | `webview/panel.ts` | toolbar voice status and settings focus | `VoiceIndicator` (`Observe`) |
+| | `speedMenu` menu open and close transitions | `PanelMenus` (`Open`, `Close`) |
 | | toolbar and Settings mode choice | `PlaybackPreference` (`Choose`, `SetPace`) |
 | | diagnostics-copy button | `DiagnosticsCopy` (`Click`) |
 | | `setNow`, `add`, `addYou`, `addRun`, `addDivider`, `addOutside`, `fileCurrent`, `entry` | `Panel`; the scroll position: `PanelScroll` |
@@ -182,7 +183,7 @@ Code goes without a spec for one of these reasons:
 | | `handle`'s `run` case, `clearRun`, `setOutcome`, `setActive` | `RunBox`; `setActive` and replaying: `PanelReplay` |
 | | terminal setting and reveal controls | `TerminalPanel` (`SetAuto`, `Show`) |
 | | `handle`'s `session` case for a suspended or resumed session | `Resume` (`ShownIsState`) |
-| | `setState`, `syncStatus`, `statusText`, `arrive`, `startReading`, `syncReading`, `tick`, the tips, the speed menu, `syncAttach`, `takeAttach` | Look: status text gives actual pauses precedence while retaining confirmation or turn context |
+| | `setState`, `syncStatus`, `statusText`, `arrive`, `startReading`, `syncReading`, `tick`, the tips, `syncAttach`, `takeAttach` | Look: status text gives actual pauses precedence while retaining confirmation or turn context |
 | | `showCalibration` | Look |
 | | the `canStart` and `startEnded` messages, the Start a session button, its starting note | `Start` |
 | | `esc`, `codeLink`, `refLink` | Format |
