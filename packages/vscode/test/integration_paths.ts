@@ -577,6 +577,14 @@ export async function controllerPaths(api: Api, root: string): Promise<void> {
     held.discarded = controller.step([{ say: 'Again.' }]);
     event.waitUntil(sleep(SAVE_HOLD_MS));
   });
+  // The held batch's end clears the stale session in the same tick it is traced, so the step below waits for that
+  // instead of a fixed sleep, which a slow runner outlasted (#46).
+  const heldBatch = { ended: false };
+  const trace = controller.trace;
+  controller.trace = (line) => {
+    trace?.(line);
+    if (/^batch \d+ completed$/.test(line)) heldBatch.ended = true;
+  };
   await controller.step([{ move: { file: 'paths.txt', line: 2, to: 'line_end' } }, { type: `!${CURSOR_MARKER}` }]);
   for (let i = 0; i < DEMO_POLLS && held.discarded === undefined; i++) {
     await sleep(POLL_MS);
@@ -589,7 +597,11 @@ export async function controllerPaths(api: Api, root: string): Promise<void> {
   assert.deepEqual(statuses(timedOut), ['discarded']);
   // Still stale while the batch saves: a read shows the editor's text (specs/Rehearsal.tla, `Read`).
   assert.equal((await controller.read('paths.txt')).lines[1]?.text, 'gamma!');
-  await sleep(SAVE_HOLD_MS);
+  for (let i = 0; i < DEMO_POLLS && !heldBatch.ended; i++) {
+    await sleep(POLL_MS);
+  }
+  controller.trace = trace;
+  assert.ok(heldBatch.ended, 'the held batch never completed');
   const rehearsed = await controller.step([{ say: 'Now.' }]);
   assert.deepEqual(statuses(rehearsed), ['completed']);
   assert.ok(rehearsed.submitted, JSON.stringify(rehearsed));
