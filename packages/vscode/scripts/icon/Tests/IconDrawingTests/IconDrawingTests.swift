@@ -61,7 +61,10 @@ final class SVGTests: XCTestCase {
       CGPoint(x: 5, y: 6),
       fill: "#ABCDEF"
     )
-    XCTAssertEqual(svg(.triangle(triangle)), ##"  <polygon points="1,2 3.5,4 5,6" fill="#ABCDEF"/>"##)
+    XCTAssertEqual(
+      svg(.triangle(triangle)),
+      ##"  <polygon points="1,2 3.5,4 5,6" fill="#ABCDEF"/>"##
+    )
   }
 
   func testCurveIsAStrokedQuadraticPathWithRoundEnds() {
