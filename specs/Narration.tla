@@ -1,6 +1,6 @@
 ---- MODULE Narration ----------------------------------------------------------
 (******************************************************************************)
-(* Selected narration has one outstanding unit and two independent gates.   *)
+(* Spoken narration plays one unit at a time behind two independent gates.  *)
 (******************************************************************************)
 EXTENDS Naturals
 
@@ -12,7 +12,7 @@ vars == <<outstanding, queued, active, accepted, displayed, token, pageEpoch,
           held, paused, speech, page, session, command, advanced, mode>>
 
 TypeOK ==
-    /\ outstanding \in 0..1 /\ queued \in BOOLEAN /\ active \in BOOLEAN
+    /\ outstanding \in 0..2 /\ queued \in 0..2 /\ active \in BOOLEAN
     /\ accepted \in 0..2 /\ displayed \in BOOLEAN /\ token \in 0..2
     /\ pageEpoch \in 1..2 /\ sessionEpoch \in 1..2 /\ ready \in BOOLEAN
     /\ resultId \in 0..2 /\ resultPage \in 0..2 /\ resultSession \in 0..2
@@ -24,23 +24,25 @@ TypeOK ==
     /\ mode \in {"live", "rehearsal", "replay"}
 
 Init ==
-    /\ outstanding = 0 /\ queued = FALSE /\ active = FALSE /\ accepted = 0
+    /\ outstanding = 0 /\ queued = 0 /\ active = FALSE /\ accepted = 0
     /\ displayed = FALSE /\ token = 0 /\ pageEpoch = 1 /\ sessionEpoch = 1
     /\ ready = FALSE /\ resultId = 0 /\ resultPage = 0 /\ resultSession = 0
     /\ reading = "idle" /\ held = FALSE /\ paused = FALSE /\ speech = "idle"
     /\ page = TRUE /\ session = TRUE /\ command = "pending"
     /\ advanced = FALSE /\ mode = "live"
 
+\* A spoken unit may be admitted behind another one (#41): units queue, and
+\* Display starts the next only once the active one has advanced.
 Admit ==
-    /\ session /\ outstanding = 0 /\ accepted < 2
-    /\ outstanding' = outstanding + 1 /\ queued' = TRUE
+    /\ session /\ accepted < 2
+    /\ outstanding' = outstanding + 1 /\ queued' = queued + 1
     /\ accepted' = accepted + 1
     /\ UNCHANGED <<active, displayed, token, pageEpoch, sessionEpoch, ready,
                    resultId, resultPage, resultSession, reading, held, paused,
                    speech, page, session, command, advanced, mode>>
 Display ==
-    /\ session /\ queued /\ ~active
-    /\ queued' = FALSE /\ active' = TRUE /\ displayed' = TRUE
+    /\ session /\ queued > 0 /\ ~active
+    /\ queued' = queued - 1 /\ active' = TRUE /\ displayed' = TRUE
     /\ token' = token + 1 /\ reading' = "waiting" /\ held' = FALSE
     /\ ready' = FALSE /\ advanced' = FALSE
     /\ speech' = IF mode = "live" /\ page THEN "preparing" ELSE "done"
@@ -119,7 +121,7 @@ Cancel ==
                    mode>>
 Reply ==
     /\ session /\ session' = FALSE /\ outstanding' = 0
-    /\ queued' = FALSE /\ active' = FALSE /\ ready' = FALSE
+    /\ queued' = 0 /\ active' = FALSE /\ ready' = FALSE
     /\ speech' = IF speech \in {"preparing", "playing", "paused"}
                  THEN "canceled" ELSE speech
     /\ UNCHANGED <<accepted, displayed, token, pageEpoch, sessionEpoch,
@@ -176,6 +178,7 @@ Spec == Init /\ [][Next]_vars
 ProgressSpec == Spec /\ WF_vars(StartSpeech) /\ WF_vars(FinishReading) /\
     WF_vars(Advance) /\ (\A id \in 1..2, pg \in 1..2, sess \in 1..2 :
         WF_vars(Ready(id, pg, sess)) /\ WF_vars(SpeechEnded(id, pg, sess)))
+    /\ WF_vars(Display)
 Progress == (<>[](~paused /\ ~held /\ page /\ session)) =>
             [](active => <>~active)
 GateSafe ==
@@ -189,8 +192,10 @@ CompletionCurrent ==
     [][(speech \in {"preparing", "playing", "paused"} /\ speech' = "done") =>
        /\ resultId' = token /\ resultPage' = pageEpoch
        /\ resultSession' = sessionEpoch]_vars
-Ownership == outstanding = (IF queued THEN 1 ELSE 0) +
-                           (IF active THEN 1 ELSE 0)
+Ownership == outstanding = queued + (IF active THEN 1 ELSE 0)
+\* Every admitted unit is eventually displayed, however many wait before it.
+QueueDrains == (<>[](~paused /\ ~held /\ page /\ session)) =>
+               [](queued > 0 => <>(queued = 0))
 DisplayedBeforeSpeech ==
     speech \in {"preparing", "playing", "paused"} => displayed
 LiveOnly == speech \in {"preparing", "playing", "paused"} => mode = "live"

@@ -2,6 +2,7 @@
 // See PROTOCOL.md for the rules implemented here.
 
 import {
+  spokenSay,
   CURSOR_MARKER,
   ToolError,
   type Action,
@@ -42,11 +43,6 @@ const UNANCHORED =
   'Your previous batch was interrupted, discarded, or failed, so your cursor is where it stopped, not where that batch would have ended. `read` the file, then start this batch with a `move` or `select` that gives both `file` and `line`.';
 const FILE_REQUIRED =
   'Name the target file in a `move`, `select`, or `point` before the first edit in each batch. The cursor can be in a different file than you expect.';
-
-/** Identifies a selected narration even when a malformed action bypassed the schema. */
-function selectedSpeech(action: unknown): boolean {
-  return typeof action === 'object' && action !== null && 'say' in action && 'speak' in action && action.speak === true;
-}
 
 interface Batch {
   id: number;
@@ -471,24 +467,6 @@ export class Controller {
         this.render();
         return this.withCursor(session, report);
       }
-      // A selected unit cannot queue behind another selected unit, even while speech is disabled.
-      if (!session.stale && !session.ended && session.held.length === 0) {
-        const selected = actions.flatMap((action, index) => (selectedSpeech(action) ? [{ action, index: index + 1 }] : []));
-        const outstanding = session.queue.some((batch) => batch.actions.some((action) => selectedSpeech(action)));
-        const rejected = selected.length > 1 ? selected[1] : outstanding ? selected[0] : undefined;
-        if (rejected !== undefined) {
-          const message =
-            selected.length > 1
-              ? 'Submit only one selected narration per batch.'
-              : 'Wait for the current narration and report before selecting another.';
-          const report = {
-            ...this.snapshot(session, /* waiting= */ false),
-            rejected: { ...rejected, error: { kind: 'invalid_action' as const, message } },
-          };
-          this.render();
-          return this.withCursor(session, report);
-        }
-      }
       // Played in memory first, so what would fail is reported now, not when the batch plays (specs/Controller.tla, `Submit`).
       const rehearsal = session.stale || session.ended ? undefined : await this.rehearse(session, actions);
       // An interruption arriving meanwhile discards it, like any batch planned without knowing about it
@@ -500,7 +478,7 @@ export class Controller {
       if (current === true) {
         const queued: QueuedBatch = { id: this.nextBatchId++, actions, state: 'queued', after: rehearsal.after };
         session.queue.push(queued);
-        session.speechReminder.batch(actions.some((action) => selectedSpeech(action)));
+        session.speechReminder.batch(actions.some((action) => spokenSay(action)));
         this.trace?.(`batch ${queued.id} queued: ${actions.length} actions`);
         if (anchor?.anchored === true) session.anchorNeeded = false;
         this.kick(session);

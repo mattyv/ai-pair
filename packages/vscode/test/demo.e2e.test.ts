@@ -2,6 +2,7 @@
 // batch completes, and the code comes out right. Its own file is demo.test.ts.
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { spokenSay } from '@ai-pair/protocol';
 import { setup, until } from '../../core/test/fake';
 import { INITIAL_SERVER, SCRIPT, SERVER, stepScript, TODOS } from '../src/demo';
 
@@ -12,6 +13,12 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.useRealTimers();
+});
+
+it('speaks every line: each say in the script fits the spoken limits (#41)', () => {
+  const says = SCRIPT.flat().filter((action) => 'say' in action);
+  expect(says.length).toBeGreaterThan(0);
+  expect(says.filter((action) => !spokenSay(action))).toEqual([]);
 });
 
 it('plays through, typing the todos API', async () => {

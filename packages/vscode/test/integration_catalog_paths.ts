@@ -152,7 +152,7 @@ export async function run(): Promise<void> {
     api.controller.setReadingSpeed(100);
     await api.controller.start('pending speech readiness');
     for (let index = 0; index < 2; index++) {
-      const pending: Report = await api.controller.step([{ say: 'Pending.' }]);
+      const pending: Report = await api.controller.step([{ say: 'Pending.', speak: false }]);
       assert.equal(pending.speechReminder, undefined, 'pending placement must not prompt for speech');
     }
     const reporting = Promise.withResolvers<void>();
@@ -163,7 +163,7 @@ export async function run(): Promise<void> {
     };
     try {
       let thirdFinished = false;
-      const third = api.controller.step([{ say: 'Pending.' }]).then((result) => {
+      const third = api.controller.step([{ say: 'Pending.', speak: false }]).then((result) => {
         thirdFinished = true;
         return result;
       });
@@ -244,9 +244,9 @@ export async function run(): Promise<void> {
       assert.notEqual(start.isError, true);
       const before = requests;
       for (let index = 0; index < 3; index++) {
-        const result = await agent.callTool({ name: 'step', arguments: { actions: [{ say: 'A short explanation.' }] } });
+        const result = await agent.callTool({ name: 'step', arguments: { actions: [{ say: 'A short explanation.', speak: false }] } });
         assert.notEqual(result.isError, true);
-        if (index === 2) assert.match(JSON.stringify(result.content), /Speech is available.*speak: true/);
+        if (index === 2) assert.match(JSON.stringify(result.content), /Speech is available.*nothing it could speak/);
       }
       assert.equal(requests, before, 'a reminder must not contact the provider');
       await agent.callTool({ name: 'end', arguments: {} });

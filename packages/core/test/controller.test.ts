@@ -652,13 +652,13 @@ describe('speech reminders', () => {
     fakes.reminder.report.mockReturnValue(true);
     const h = harness({}, {}, narration);
     await h.controller.start('A task.');
-    const result = await report(h.controller.step([{ say: 'One.' }]));
+    const result = await report(h.controller.step([{ say: 'One.', speak: false }]));
     expect(fakes.reminder.batch).toHaveBeenCalledWith(false);
     expect(narration.ready).toHaveBeenCalledOnce();
     expect(fakes.reminder.report).toHaveBeenCalledWith(true);
     expect(result.speechReminder).toBe(true);
     fakes.reminder.due.mockReturnValue(false);
-    await report(h.controller.step([{ say: 'Selected.', speak: true }]));
+    await report(h.controller.step([{ say: 'Spoken.' }]));
     expect(fakes.reminder.batch).toHaveBeenLastCalledWith(true);
   });
 
@@ -685,28 +685,16 @@ describe('speech reminders', () => {
 });
 
 describe('steps and their batches', () => {
-  it('rejects another flagged batch while selected narration is outstanding', async () => {
+  it('Admit: queues a spoken batch behind another and accepts several spoken says in one batch', async () => {
     const h = await started();
     const finish = holdPlay();
-    await report(h.controller.step([{ say: 'One.', speak: true }]));
-    const second = await report(h.controller.step([{ say: 'Two.', speak: true }]));
-    expect(second.rejected?.error.message).toContain('current narration');
-    expect(player().play).toHaveBeenCalledTimes(1);
+    const first = await report(h.controller.step([{ say: 'One.' }, { say: 'Two.', speak: true }]));
+    expect(first.rejected).toBeUndefined();
+    const second = h.controller.step([{ say: 'Three.' }]);
     finish();
+    expect((await report(second)).rejected).toBeUndefined();
     await settle();
-  });
-
-  it('rejects two selected narrations in a single batch', async () => {
-    const h = await started();
-    const result = await report(
-      h.controller.step([
-        { say: 'One.', speak: true },
-        { say: 'Two.', speak: true },
-      ]),
-    );
-    expect(result.rejected?.index).toBe(2);
-    expect(result.rejected?.error.message).toContain('one');
-    expect(player().play).not.toHaveBeenCalled();
+    expect(player().play).toHaveBeenCalledTimes(2);
   });
 
   it('BatchEnds, ReadyAtHead: returns the first step immediately and blocks the second until the first finishes', async () => {

@@ -146,8 +146,11 @@ Behavior:
 ### Optional spoken narration
 
 Speech is off by default. Settings offers Kokoro locally and ElevenLabs through
-an explicit cloud provider choice. The coding agent marks only the explanations
-it wants spoken; their written text remains visible. Voice speed is independent
+an explicit cloud provider choice. Every short message of the coding agent is
+spoken, so the programmer can follow with their eyes on the code and hears
+when the agent needs them; the agent can keep one silent, and a message too
+long to speak is shown only (#41). The written text always remains visible.
+Voice speed is independent
 of code pace and the reading timer. Both reading and speech must finish before
 playback advances, so audio cannot rush a held reading interval.
 

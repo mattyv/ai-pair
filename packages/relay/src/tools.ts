@@ -104,7 +104,7 @@ const actionSchema = z.union(
         .boolean()
         .optional()
         .describe(
-          'Select concise narration for speech: normally mark one useful say in each batch, even if you do not know the setting. Playback occurs only when the programmer enables speech. Use at most one spoken say per batch and wait for the previous selected narration and report. The selected provider handles playback; the text remains visible when disabled.',
+          'Leave this out: a say is spoken by default when the programmer has speech enabled, and playback waits for the voice. A say over 280 characters or 45 words, or with a code fence, is shown without speech. Set false to show a say without speaking it, such as text holding a secret. Set true to require speech: the batch is rejected when the text cannot be spoken.',
         ),
     }).superRefine((narration, ctx) => {
       if (narration.speak === true) {
