@@ -1,3 +1,4 @@
+import { KOKORO_HOSTS } from '@ai-pair/protocol';
 import * as path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import type { NarrationPort } from '@ai-pair/core';
@@ -83,6 +84,9 @@ function cloudFailureMessage(reason: Exclude<CloudSpeechFailureReason, 'canceled
       return 'Cloud speech is unavailable. Continue reading.';
   }
 }
+
+/** Explains where bundled local speech runs (#39). */
+const UNSUPPORTED_HOST_MESSAGE = 'Local speech is available on a local Linux x64 desktop using glibc, or on a Mac.';
 
 /** Inputs needed by the speech service. */
 export interface SpeechServiceOptions {
@@ -288,9 +292,7 @@ export class SpeechService implements NarrationPort {
       this.options.output.status(
         id,
         'unavailable',
-        settings.provider === 'elevenlabs'
-          ? 'Cloud speech is available only on a local desktop.'
-          : 'Local speech is available on a local Linux x64 desktop using glibc.',
+        settings.provider === 'elevenlabs' ? 'Cloud speech is available only on a local desktop.' : UNSUPPORTED_HOST_MESSAGE,
       );
       return Promise.resolve();
     }
@@ -310,8 +312,11 @@ export class SpeechService implements NarrationPort {
       return Promise.resolve();
     }
     const voice = SPEECH_VOICES.find((candidate) => candidate === settings.voice);
-    if (provider === 'kokoro' && (this.options.kokoroSupported === false || process.platform !== 'linux' || process.arch !== 'x64')) {
-      this.options.output.status(id, 'unavailable', 'Local speech is available on a local Linux x64 desktop using glibc.');
+    if (
+      provider === 'kokoro' &&
+      (this.options.kokoroSupported === false || !KOKORO_HOSTS.includes(`${process.platform}-${process.arch}`))
+    ) {
+      this.options.output.status(id, 'unavailable', UNSUPPORTED_HOST_MESSAGE);
       return Promise.resolve();
     }
     if (provider === 'kokoro' && (voice === undefined || !SPEECH_SPEEDS.some((speed) => speed === settings.speed))) {

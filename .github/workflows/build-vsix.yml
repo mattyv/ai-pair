@@ -16,6 +16,51 @@ jobs:
   native:
     uses: ./.github/workflows/native-audio.yml
 
+  # Each Mac build stages its own architecture's Kokoro runtime from the
+  # runner's node_modules, so each target is packaged on its own runner (#39).
+  vsix-macos:
+    name: VSIX ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - target: darwin-arm64
+            runner: macos-26
+          - target: darwin-x64
+            runner: macos-15-intel
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - run: npm run test:coverage
+      - name: Package main extension
+        run: npm run package -w packages/vscode -- --target ${{ matrix.target }}
+      - name: Require the staged runtime for this target
+        shell: bash
+        run: |
+          arch="${{ matrix.target }}"
+          arch="${arch#darwin-}"
+          expected="{\"available\":true,\"platform\":\"darwin\",\"arch\":\"${arch}\"}"
+          test "$(cat packages/vscode/dist/speech/runtime.json)" == "${expected}"
+      - name: Name the artifact
+        id: artifact
+        shell: bash
+        run: |
+          version=$(node -p "require('./packages/vscode/package.json').version")
+          sha=$(git rev-parse --short=12 HEAD)
+          name="ai-pair-${{ matrix.target }}-${version}-${sha}.vsix"
+          mv "ai-pair-${{ matrix.target }}-${version}.vsix" "$name"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7
+        with:
+          path: ${{ steps.artifact.outputs.name }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 14
+
   vsix:
     needs: native
     runs-on: ubuntu-latest

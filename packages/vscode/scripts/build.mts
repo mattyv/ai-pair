@@ -58,8 +58,7 @@ await esbuild.build({
 const relayHash = createHash('sha256').update(fs.readFileSync('dist/relay.js')).digest('hex');
 
 // The worker resolves only the explicitly staged, offline CPU runtime.
-stageSpeechRuntime();
-if (process.platform === 'linux' && process.arch === 'x64') {
+if (stageSpeechRuntime()) {
   await esbuild.build({
     ...common,
     format: 'esm',

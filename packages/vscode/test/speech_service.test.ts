@@ -423,9 +423,9 @@ describe('SpeechService failures and races', () => {
   });
 
   it.each([
-    ['darwin', 'arm64'],
     ['win32', 'x64'],
     ['linux', 'arm64'],
+    ['darwin', 'ia32'],
   ])('leaves speech unavailable on %s %s', async (platform, arch) => {
     Object.defineProperty(process, 'platform', { value: platform, configurable: true });
     Object.defineProperty(process, 'arch', { value: arch, configurable: true });
@@ -441,6 +441,20 @@ describe('SpeechService failures and races', () => {
     await service.speak('Hello.');
     expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('local Linux'));
     expect(local.manager.acquire).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['darwin', 'arm64'],
+    ['darwin', 'x64'],
+  ])('admits local speech on %s %s', async (platform, arch) => {
+    const { service } = harness();
+    Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+    Object.defineProperty(process, 'arch', { value: arch, configurable: true });
+    const gate = service.speak('Hello.');
+    await settle();
+    expect(local.manager.acquire).toHaveBeenCalledOnce();
+    service.cancel();
+    await gate;
   });
 
   it('explains unsupported extension hosts without starting a worker', async () => {

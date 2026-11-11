@@ -128,7 +128,7 @@ function once<T>(f: (arg: T) => void): (arg: T) => void {
   };
 }
 
-/** The bundled runtime supports only a local Linux x64 glibc extension host. */
+/** The bundled runtime supports a local Linux x64 glibc or macOS extension host. */
 function speechSupported(): boolean {
   if (vscode.env.remoteName !== undefined || vscode.env.uiKind !== vscode.UIKind.Desktop || !localSpeechPlatform().supported) {
     return false;

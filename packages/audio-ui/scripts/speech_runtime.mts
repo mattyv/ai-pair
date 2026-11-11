@@ -12,7 +12,7 @@ export interface CompanionSpeechStageOptions {
 
 /** Stages the shared runtime and bundles its worker from the audio-ui package directory. */
 export async function stageCompanionSpeech(options: CompanionSpeechStageOptions): Promise<void> {
-  stageSpeechRuntime(options);
+  const staged = stageSpeechRuntime(options);
   const common: esbuild.BuildOptions = {
     bundle: true,
     platform: 'node',
@@ -20,7 +20,7 @@ export async function stageCompanionSpeech(options: CompanionSpeechStageOptions)
     target: 'node22',
     logLevel: 'warning',
   };
-  if (options.platform === 'linux' && options.arch === 'x64') {
+  if (staged) {
     await esbuild.build({
       ...common,
       entryPoints: ['../vscode/src/speech_phonemizer_bridge.ts'],

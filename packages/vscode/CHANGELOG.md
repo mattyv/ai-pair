@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.28.0
+
+-   Run local Kokoro speech on macOS, on Apple silicon and Intel Macs, as well
+    as on Linux x64. Each Mac architecture has its own VSIX; GPU acceleration
+    remains Linux only.
+
 ## 0.27.0
 
 -   Invite an optional programmer edit in the guided demo and provide a useful
