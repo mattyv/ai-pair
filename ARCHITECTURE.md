@@ -11,7 +11,7 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes the 0.27.0 release implementation.
+Status: describes the 0.33.0 release candidate.
 
 The source is `.archi/ai-pair.json`. To regenerate the page with
 Archi-Techture 1.5.1, set `ARCHI_TO_HTML` to its `out/tools/archi-to-html.js`
@@ -501,3 +501,27 @@ local boundary.
 The voice toolbar button projects existing cached audio facts through the local
 panel channel. It adds no process, device probe or component boundary; the
 source model and generated export retain the current attachment architecture.
+
+## OpenRouter cloud speech
+
+OpenRouter uses the existing `SpeechService` cloud slot and the same local
+output router as ElevenLabs. It does not own a second playback lifecycle.
+The local host owns a separate SecretStorage credential, selected model,
+voice and ZDR preference. Each admitted narration snapshots those preferences;
+changes invalidate stale catalog and synthesis work.
+
+The provider client reads the authenticated account catalog before applying
+the optional ZDR intersection. Public discovery never substitutes for account
+eligibility. The filter sends OpenRouter's ZDR request policy without claiming
+to override account Safety Retention settings. The user selects PCM or MP3;
+the provider client reserves local decode capacity before the paid request, and
+a local browser decoder normalizes the response to the existing bounded WAV
+contract. Each locally owned panel has its own decoder bridge. A boot token
+scopes probes and results to one actual webview document; disposal retires that
+document, while visibility changes do not. Decoder messages stay local and
+bypass companion panel forwarding. Missing credentials, rejected policy,
+unsupported formats and malformed output fail within speech; editing and
+readable narration remain available. Archi-Techture 1.5.1 validated the updated
+source, the HTML export was regenerated and normalized, and the normalizer tests
+passed. Headless Chromium rendered the VS Code integration view without page
+errors; the decoder boundary and its connections were visually checked.

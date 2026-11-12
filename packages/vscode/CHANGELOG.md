@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.33.0
+
+-   Discover OpenRouter speech models from the authenticated account, including
+    models without an advertised voice. Choose PCM or MP3; a locally owned
+    browser decoder normalizes supported responses for the existing speech
+    output route. Decoder admission happens before the paid request, and webview
+    reloads, failures and cancellation retire the correct request safely.
+-   OpenRouter does not publish codec compatibility in its model catalog.
+    Listed models may reject the chosen response format, voice or standard text
+    input; provider-specific parameters are not inferred.
+-   Show OpenRouter's advertised input and output rates in the model choices.
+    Billing units vary by model, so the exact catalog rates are shown without
+    guessing a unit.
+
+## 0.32.0
+
+-   Add OpenRouter speech with secure credentials, dynamically loaded
+    account-filtered model and voice choices, and a ZDR policy filter. This
+    version plays only its verified 24 kHz mono PCM contract; some listed
+    models may use an unsupported response format.
+-   Keep previews and narration on the existing speech output route and
+    cancellation path.
+
 ## 0.31.0
 
 -   New icon: two speech bubbles as characters, a grey one for you and an

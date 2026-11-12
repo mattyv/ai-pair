@@ -82,6 +82,18 @@ It adds:
     model loads once and stays loaded between narrations; a canceled or failed
     narration is never replayed, and a replacement worker waits until the old
     one has really exited. No new engine, download or key is involved.
+-   Optional OpenRouter speech with a separately stored API key, account-eligible
+    model and voice choices, and a **ZDR** filter. The filter narrows the
+    account's allowed models and requests OpenRouter's ZDR routing policy;
+    account Safety Retention settings still apply. Models and advertised voices
+    are loaded from your account instead of a hard-coded model list. Choose PCM
+    or MP3 for the selected model; supported responses are normalized in the
+    local panel to the same WAV playback format used by the other providers.
+    OpenRouter does not publish response-format compatibility in its account
+    catalog, so a listed model may reject the selected format, voice, or
+    standard text input. Provider-specific request parameters are not inferred.
+    Narration and previews use your OpenRouter credits and the selected local
+    speech output. No fallback to another provider is automatic.
 -   Optional ElevenLabs cloud speech, using the same selected narration and
     reading controls. Choose **ElevenLabs** in Settings, add your API key through
     the secure VS Code prompt, load your account voices, choose one and use

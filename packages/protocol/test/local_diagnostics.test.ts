@@ -31,3 +31,9 @@ it('accepts fixed narration failures and rejects private extra fields', () => {
   expect(localSpeechDiagnostics.parse([event])).toEqual([event]);
   expect(localSpeechDiagnostics.safeParse([{ ...event, text: 'private' }]).success).toBe(false);
 });
+
+it('accepts OpenRouter lifecycle facts while rejecting private content', () => {
+  const event = { kind: 'speech', event: 'preview', phase: 'ready', provider: 'openrouter', seq: 1, time: 1 };
+  expect(localSpeechDiagnostics.safeParse([event]).success).toBe(true);
+  expect(localSpeechDiagnostics.safeParse([{ ...event, key: 'private' }]).success).toBe(false);
+});

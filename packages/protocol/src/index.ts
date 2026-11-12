@@ -215,3 +215,6 @@ export * from './local_diagnostics';
 export * from './gpu_diagnostics';
 
 export * from './diagnostics';
+
+export * from './openrouter';
+export * from './speech_decode';

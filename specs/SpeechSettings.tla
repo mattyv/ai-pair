@@ -15,7 +15,8 @@ vars == <<provider, hasKey, epoch, page, revision, issued, latest, reqEpoch,
           reqPage, reqRevision, ready, owner, wanted, readIssued, readEpoch,
           readValue, shownKey, canceled, beforeKey, publicSecret,
           accepted, correct>>
-TypeOK == /\ provider \in {"local", "cloud"} /\ hasKey \in BOOLEAN
+TypeOK == /\ provider \in {"local", "elevenlabs", "openrouter"}
+          /\ hasKey \in BOOLEAN
           /\ epoch \in 0..MaxEpoch /\ page \in 1..2 /\ revision \in 0..3
           /\ issued \in 0..2 /\ latest \in 0..2 /\ owner \in 0..2
           /\ reqEpoch \in [Ids -> 0..MaxEpoch] /\ reqPage \in [Ids -> 1..2]
@@ -33,7 +34,8 @@ Init == /\ provider = "local" /\ hasKey = FALSE /\ epoch = 0 /\ page = 1
         /\ readValue = [i \in Ids |-> FALSE] /\ shownKey = FALSE
         /\ canceled = FALSE /\ beforeKey = FALSE /\ publicSecret = FALSE
         /\ accepted = FALSE /\ correct = FALSE
-Select(p) == /\ p \in {"local", "cloud"} /\ (p = provider \/ revision < 3)
+Select(p) == /\ p \in {"local", "elevenlabs", "openrouter"}
+             /\ (p = provider \/ revision < 3)
              /\ provider' = p
              /\ revision' = IF p = provider THEN revision ELSE revision + 1
              /\ latest' = 0 /\ owner' = 0 /\ wanted' = FALSE
@@ -74,12 +76,14 @@ ReadReply(i) == /\ i \in 1..readIssued
                     issued, latest, reqEpoch, reqPage, reqRevision, ready,
                     owner, wanted, readIssued, readEpoch, readValue,
                     beforeKey, publicSecret, accepted, correct>>
-Intent == /\ provider = "cloud" /\ hasKey /\ issued < 2 /\ wanted' = TRUE
+Intent == /\ provider \in {"elevenlabs", "openrouter"} /\ hasKey
+          /\ issued < 2 /\ wanted' = TRUE
           /\ UNCHANGED <<provider, hasKey, epoch, page, revision, issued,
               latest, reqEpoch, reqPage, reqRevision, ready, owner, readIssued,
               readEpoch, readValue, shownKey, canceled, beforeKey, publicSecret,
               accepted, correct>>
-Request == /\ provider = "cloud" /\ hasKey /\ wanted /\ issued < 2
+Request == /\ provider \in {"elevenlabs", "openrouter"} /\ hasKey
+           /\ wanted /\ issued < 2
            /\ issued' = issued + 1 /\ latest' = issued + 1 /\ wanted' = FALSE
            /\ reqEpoch' = [reqEpoch EXCEPT ![issued + 1] = epoch]
            /\ reqPage' = [reqPage EXCEPT ![issued + 1] = page]
@@ -88,7 +92,8 @@ Request == /\ provider = "cloud" /\ hasKey /\ wanted /\ issued < 2
            /\ UNCHANGED <<provider, hasKey, epoch, page, revision, ready,
                owner, readIssued, readEpoch, readValue, shownKey, beforeKey,
                publicSecret, accepted, correct>>
-Eligible(i) == /\ i \in Ids /\ i = latest /\ provider = "cloud" /\ hasKey
+Eligible(i) == /\ i \in Ids /\ i = latest
+               /\ provider \in {"elevenlabs", "openrouter"} /\ hasKey
                /\ reqEpoch[i] = epoch /\ reqPage[i] = page
                /\ reqRevision[i] = revision
 Accept(i) == Eligible(i)
@@ -107,17 +112,19 @@ Consume == /\ ready # {}
                latest, reqEpoch, reqPage, reqRevision, wanted, readIssued,
                readEpoch, readValue, shownKey, canceled, beforeKey,
                publicSecret>>
-Next == (\E p \in {"local", "cloud"}: Select(p))
+Next == (\E p \in {"local", "elevenlabs", "openrouter"}: Select(p))
         \/ (\E k \in BOOLEAN: ChangeKey(k)) \/ CancelPrompt \/ ReplacePage
         \/ Read \/ (\E i \in Ids: ReadReply(i)) \/ Intent \/ Request
         \/ (\E i \in Ids: Deliver(i)) \/ Consume
 Spec == Init /\ [][Next]_vars /\ WF_vars(Request) /\ WF_vars(Consume)
-RequestProgress == []((wanted /\ provider = "cloud" /\ hasKey /\ issued < 2)
-                    => <>(~wanted \/ provider # "cloud" \/ ~hasKey))
+RequestProgress == []((wanted /\ provider \in {"elevenlabs", "openrouter"}
+                        /\ hasKey /\ issued < 2)
+                    => <>(~wanted \/ provider = "local" \/ ~hasKey))
 ReplyProgress == \A i \in Ids:
     []((i \in ready /\ Eligible(i)) => <>(owner = i \/ ~Eligible(i)))
 CatalogSafe == owner # 0 =>
-    /\ provider = "cloud" /\ hasKey /\ reqEpoch[owner] = epoch
+    /\ provider \in {"elevenlabs", "openrouter"} /\ hasKey
+    /\ reqEpoch[owner] = epoch
     /\ reqPage[owner] = page /\ reqRevision[owner] = revision
 AcceptedSafe == accepted => correct
 ReadSafe == shownKey = hasKey

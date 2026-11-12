@@ -2208,3 +2208,255 @@ it('reconciles prewarming only for enabled local speech', () => {
   cloud.prepare();
   expect(local.manager.prepare).toHaveBeenCalledWith(false, false);
 });
+
+it('CloudNarration: snapshots OpenRouter model, voice and ZDR into the shared playback slot', async () => {
+  const openRouter = { synthesize: vi.fn().mockResolvedValue({ wav: new Uint8Array(44), durationMs: 1000 }), models: vi.fn() };
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  output.play.mockReturnValue(7);
+  const settings = {
+    enabled: true,
+    provider: 'openrouter' as const,
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: '',
+    elevenLabsSpeed: 1,
+    openRouterModel: 'model',
+    openRouterVoice: 'voice',
+    openRouterZdr: true,
+  };
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output,
+    settings: () => settings,
+    openRouter,
+  });
+  const gate = service.speak('Hello.');
+  settings.openRouterModel = 'changed';
+  await settle();
+  expect(openRouter.synthesize).toHaveBeenCalledWith(
+    { id: 1, format: 'pcm', text: 'Hello.', modelId: 'model', voiceId: 'voice', zdr: true },
+    expect.any(AbortSignal),
+  );
+  expect(output.play).toHaveBeenCalledOnce();
+  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+  await gate;
+});
+
+it('CloudNarration: cancels OpenRouter and ignores its late response after credential invalidation', async () => {
+  const pending = Promise.withResolvers<{ wav: Uint8Array; durationMs: number }>();
+  const openRouter = {
+    synthesize: vi.fn<import('../src/speech_types').OpenRouterSpeechPort['synthesize']>().mockReturnValue(pending.promise),
+    models: vi.fn(),
+  };
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  const settings = {
+    enabled: true,
+    provider: 'openrouter' as const,
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: '',
+    elevenLabsSpeed: 1,
+    openRouterModel: 'model',
+    openRouterVoice: 'voice',
+    openRouterZdr: false,
+  };
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output,
+    settings: () => settings,
+    openRouter,
+  });
+  const gate = service.speak('Hello.');
+  const signal = openRouter.synthesize.mock.calls[0]?.[1];
+  service.invalidateCloud();
+  await gate;
+  expect(signal?.aborted).toBe(true);
+  pending.resolve({ wav: new Uint8Array(44), durationMs: 1000 });
+  await settle();
+  expect(output.play).not.toHaveBeenCalled();
+});
+
+it('reports OpenRouter failures without naming another provider or leaking exception text', async () => {
+  const openRouter = { synthesize: vi.fn().mockRejectedValue({ kind: 'auth', secret: 'private' }), models: vi.fn() };
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  const settings = {
+    enabled: true,
+    provider: 'openrouter' as const,
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: '',
+    elevenLabsSpeed: 1,
+    openRouterModel: 'model',
+    openRouterVoice: 'voice',
+    openRouterZdr: false,
+  };
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output,
+    settings: () => settings,
+    openRouter,
+  });
+  await service.speak('Hello.');
+  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('OpenRouter'));
+  expect(JSON.stringify(output.status.mock.calls)).not.toContain('private');
+});
+
+it('requires an OpenRouter client and model but permits a provider-default voice', async () => {
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  const settings = {
+    enabled: true,
+    provider: 'openrouter' as const,
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: '',
+    elevenLabsSpeed: 1,
+    openRouterModel: '',
+    openRouterVoice: '',
+    openRouterZdr: false,
+  };
+  const openRouter = { synthesize: vi.fn(), models: vi.fn() };
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output,
+    settings: () => settings,
+    openRouter,
+  });
+  await service.speak('No model');
+  expect(openRouter.synthesize).not.toHaveBeenCalled();
+  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('model'));
+  settings.openRouterModel = 'model';
+  await service.speak('Default voice');
+  expect(openRouter.synthesize).toHaveBeenCalledWith(
+    { id: 2, format: 'pcm', text: 'Default voice', modelId: 'model', voiceId: '', zdr: false },
+    expect.any(AbortSignal),
+  );
+  const withoutClient = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output,
+    settings: () => settings,
+  });
+  settings.openRouterVoice = 'voice';
+  await withoutClient.speak('No client');
+  expect(openRouter.synthesize).toHaveBeenCalledOnce();
+});
+
+it('CatalogEligibility: blocks a remembered pair excluded by current catalog evidence', async () => {
+  const openRouter = { synthesize: vi.fn(), models: vi.fn() };
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  const allowed = vi.fn<(model: string, voice: string) => boolean>().mockReturnValue(false);
+  const settings = {
+    enabled: true,
+    provider: 'openrouter' as const,
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: '',
+    elevenLabsSpeed: 1,
+    openRouterModel: 'model',
+    openRouterVoice: 'voice',
+    openRouterZdr: true,
+  };
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output,
+    settings: () => settings,
+    openRouter,
+    openRouterAllowed: allowed,
+  });
+  await service.speak('No request');
+  expect(allowed).toHaveBeenCalledWith('model', 'voice');
+  expect(openRouter.synthesize).not.toHaveBeenCalled();
+  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('model and voice'));
+});
+
+it('CatalogEligibility: rechecks denial after output admission before dispatch', async () => {
+  const output = mock<SpeechOutput>();
+  const admission = Promise.withResolvers<boolean>();
+  output.prepare = vi.fn().mockReturnValue(admission.promise);
+  const openRouter = { synthesize: vi.fn(), models: vi.fn() };
+  let allowed = true;
+  const settings = {
+    enabled: true,
+    provider: 'openrouter' as const,
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: '',
+    elevenLabsSpeed: 1,
+    openRouterModel: 'model',
+    openRouterVoice: 'voice',
+    openRouterZdr: true,
+  };
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output,
+    settings: () => settings,
+    openRouter,
+    openRouterAllowed: () => allowed,
+  });
+  const gate = service.speak('No request');
+  allowed = false;
+  admission.resolve(true);
+  await gate;
+  expect(openRouter.synthesize).not.toHaveBeenCalled();
+  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('model and voice'));
+});
+
+it('CatalogEligibility: cancels an in-flight OpenRouter request when new evidence denies it', async () => {
+  const pending = Promise.withResolvers<{ wav: Uint8Array; durationMs: number }>();
+  const openRouter = {
+    synthesize: vi.fn<import('../src/speech_types').OpenRouterSpeechPort['synthesize']>().mockReturnValue(pending.promise),
+    models: vi.fn(),
+  };
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  let allowed = true;
+  const settings = {
+    enabled: true,
+    provider: 'openrouter' as const,
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: '',
+    elevenLabsSpeed: 1,
+    openRouterModel: 'model',
+    openRouterVoice: 'voice',
+    openRouterZdr: true,
+  };
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output,
+    settings: () => settings,
+    openRouter,
+    openRouterAllowed: () => allowed,
+  });
+  service.openRouterCatalogChanged();
+  const gate = service.speak('No request');
+  service.openRouterCatalogChanged();
+  const signal = openRouter.synthesize.mock.calls[0]?.[1];
+  allowed = false;
+  service.openRouterCatalogChanged();
+  await gate;
+  expect(signal?.aborted).toBe(true);
+  pending.resolve({ wav: new Uint8Array(44), durationMs: 1000 });
+  await settle();
+  expect(output.play).not.toHaveBeenCalled();
+});

@@ -218,3 +218,12 @@ it('marks listening speed experimental in the visible settings', () => {
   const label = page.querySelector('[data-ui="speech-listening-speed"]')?.closest('label');
   expect(label?.textContent).toContain('Listening speed (experimental)');
 });
+
+it('offers OpenRouter model, voice, secure key, and ZDR controls', () => {
+  const page = new window.DOMParser().parseFromString(panelHtml('vscode-resource:', 'panel.css', 'panel.js'), 'text/html');
+  expect(page.querySelector('[data-ui="speech-provider"] option[value="openrouter"]')).not.toBeNull();
+  expect(page.querySelector('[data-ui="openrouter-model"]')).not.toBeNull();
+  expect(page.querySelector('[data-ui="openrouter-voice"]')).not.toBeNull();
+  expect(page.querySelector('[data-ui="openrouter-key-set"]')).not.toBeNull();
+  expect(page.querySelector('[data-ui="openrouter-zdr"]')?.getAttribute('aria-pressed')).toBe('false');
+});

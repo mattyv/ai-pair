@@ -1747,6 +1747,10 @@ and a foreign shell-start event. It abstracts path and terminal-ID matching,
 which the existing `Terminals` model and terminal tests cover. TLC checked 48
 states. An unobserved background descendant is not modeled as detectable; live
 shells are retained on cleanup even after a foreground command ends.
+The native `foreignTerminalExecution` fixture first observes the initial Pair
+execution's actual start and end and verifies its successful run report before
+starting a foreign execution. This strengthens the test precondition; it does
+not change the modeled behavior or establish the cause of issue #53.
 
 | Mutation | Breaks |
 |---|---|
@@ -3214,3 +3218,167 @@ Independently setting `GuardCurrent` to false violates
 `CurrentResult`, setting `GuardSingle` to false violates `SingleWorker`, and
 setting `EnableStart` to false violates `DemandProgress`; these temporary
 negative-control configurations were discarded.
+
+### `OpenRouterSpeech`: account-scoped speech selection
+
+The finite model represents one account catalog request, optional ZDR
+narrowing, selection and synthesis admission. It abstracts network transport,
+individual model identities and voices (bounded by the shared protocol
+schemas), PCM parsing, and audio output. The policy can
+change before selection; after it stops changing, `StableProgress` requires
+that the request reach synthesis admission or account failure. Weak fairness
+of `Resolve`, `Narrow`, `Select`, and `Synthesize` assumes each continuously
+enabled step eventually occurs. It does not guarantee provider responses,
+playback, or progress when the setting changes forever.
+
+`OpenRouterSpeech.cfg` explores successful authentication: TLC checked 17
+generated and 12 distinct states. `OpenRouterSpeech_Failure.cfg` explores
+account failure: 7 generated and 4 distinct states. Both pass all safety and
+temporal properties. Terminal states are permitted.
+
+| Property | Implementation test |
+| --- | --- |
+| `TypeOK` | `openrouter.test.ts`: bounded catalog metadata, arbitrary bounded model and voice IDs, and rejection of MP3 requests until a decoder exists. |
+| `AccountOnly` | `speech_openrouter.test.ts`: `AccountOnly uses the authenticated account catalog and maps advertised voices`; `includes arbitrary advertised models and voices while preserving the account intersection`; `AccountOnly never falls back when authentication fails`. |
+| `ZdrSelection` | `speech_openrouter.test.ts`: `ZdrSelection intersects the authenticated catalog with the public ZDR catalog`. |
+| `PolicySampled` | `speech_openrouter.test.ts`: `PolicySampled sends the selected request and converts documented PCM`; `omits provider policy when ZDR is off`. |
+| `StableProgress` | `speech_openrouter.test.ts`: `AccountOnly uses the authenticated account catalog and maps advertised voices`; `PolicySampled sends the selected request and converts documented PCM`; `AccountOnly never falls back when authentication fails`. These tests check the corresponding outcomes, not fairness. |
+
+An invalid initial result violates `TypeOK`. Independent temporary mutations
+disabling authentication, allowing selection
+without narrowing, and inverting the sampled policy violated `AccountOnly`,
+`ZdrSelection`, and `PolicySampled`, respectively. Disabling each of
+`Authenticate`, `Select`, and `Synthesize` separately violated
+`StableProgress`. The mutations were discarded.
+
+### `OpenRouterCatalog`: remembered pair eligibility
+
+The model tracks two request generations, a remembered model and voice, the
+latest authoritative eligibility, and whether one admission has occurred.
+Unknown eligibility permits a restored selection before a catalog request;
+a current successful response can allow or deny it. Refreshing the same
+identity retains previous evidence, including a denial, while a response is
+pending or fails. Changing identity invalidates that evidence. An old response
+may arrive after invalidation or replacement, but cannot update eligibility.
+An admission records the evidence at that instant: the model does not revoke a
+request already admitted before a later denial. It abstracts request payloads,
+provider transport, user interface details, cancellation, and physical playback.
+Pricing labels on model choices are optional display data; they do not change
+model/voice eligibility or a transition in `OpenRouterCatalog.tla`.
+
+TLC checked `OpenRouterCatalog.cfg` with two generations: 71 generated and 36
+distinct states. The safety invariants and temporal properties passed. Terminal
+states are permitted. `StableProgress` assumes weak fairness of admission: if eligibility
+eventually remains non-denied, an enabled admission eventually happens.
+`CatalogProgress` separately checks that admission is enabled. Neither property
+guarantees progress when the caller does not make or sustain a request.
+
+| Property | Implementation test |
+| --- | --- |
+| `TypeOK` | `speech_openrouter_catalog.test.ts`: `CatalogProgress: permits an unknown restored pair` and `CatalogEligibility: rejects a remembered pair only after an authoritative catalog excludes it`. |
+| `CatalogStale` | `speech_openrouter_catalog.test.ts`: `CatalogStale: invalidation rejects late catalog replies`. |
+| `CatalogEligibility` | `speech_openrouter_catalog.test.ts`: `CatalogEligibility: rejects a remembered pair only after an authoritative catalog excludes it`; service tests cover preview and narration admission. |
+| `CatalogProgress` | `speech_openrouter_catalog.test.ts`: `CatalogProgress: permits an unknown restored pair`. |
+| `StableProgress` | `speech_openrouter_catalog.test.ts`: `CatalogProgress: permits an unknown restored pair` checks admission is possible; fairness is a model assumption. |
+| `DeniedRefresh` | `speech_openrouter_catalog.test.ts`: `DeniedRefresh: keeps a denial while refreshing the same identity and after failure`. |
+
+Independent negative controls allowing stale replies, allowing admission after
+a denial, disabling admission, clearing evidence during refresh, and assigning
+an invalid initial eligibility violated `CatalogStale`, `CatalogEligibility`,
+`CatalogProgress`, `DeniedRefresh`, and `TypeOK`, respectively. With the
+`CatalogProgress` invariant removed in the negative control, disabled
+admission also violates `StableProgress`. All mutations were discarded.
+
+### `OpenRouterBoot`: admission during a browser boot handshake
+
+The bounded model separates a candidate boot from the currently active
+browser document. A distinct boot freezes new admissions and cancels the active
+logical request before acknowledgement, but it retains any physical decoder
+slot. Only a matching acknowledgement activates the candidate; recovery to the
+current document resumes it without replacing the decoder. The model also
+checks that provider POSTs require admission and cannot happen during the
+handshake.
+
+| Property | Implementation test |
+| --- | --- |
+| `AdmissionFrozen` | `speech_decode_panel.e2e.test.ts`: no provider key read or POST while a new boot awaits acknowledgement. |
+| `NoPaidPostDuringBoot` | `speech_decode_panel.e2e.test.ts`: a deferred credential read is aborted when the replacement boot starts. |
+| `PostHasAdmission` | `speech_openrouter.test.ts`: decoder admission happens before credentials and the provider request. |
+| `RetainSlotOnBoot` | `speech_decode_panel.e2e.test.ts`: an active decode remains reserved during stale-token recovery. |
+| `RetainSlotOnRecovery` | `speech_decode_panel.e2e.test.ts`: recovering the current token does not release the physical decode slot. |
+
+### `OpenRouterDecode`: decoder admission and retirement
+
+The bounded model has two document generations, two request IDs and two probe
+IDs per page. A readiness probe is identified by page and probe ID. Probe
+failure or timeout invalidates the pending probe but its delayed delivery may
+still arrive; only a matching current live probe establishes readiness. A later
+probe on the same page has a different ID.
+
+The browser implements one shared in-flight codec self-test per document;
+retries join it rather than starting another. Distinct predecessor documents
+may complete their own self-tests until the corresponding document is
+destroyed. The model abstracts the physical codec work of those self-tests;
+it checks only the identity and acceptance of their readiness deliveries.
+
+`Admit` reserves a unique logical request before `Post` can perform the paid
+provider call. It requires current readiness and a free physical decode slot.
+`PostFailure` releases that admission after provider failure before decoding;
+`Cancel` releases it before or after POST. A late provider response may still
+arrive after either action, but cannot dispatch a decode for an invalid request.
+Cancellation does not release an in-flight decode slot. A replacement page is
+not proof of destruction. Only settlement or actual destruction of the owning
+document releases its physical slot. Settlement may succeed or fail; a
+successful result is accepted only for the current page and request.
+
+`CloudFree` is an external prerequisite, fixed to true in this model. The cloud
+request owner must establish it before admission and retain its own physical
+lease until the prior cloud operation retires, including after cancellation or
+failure before decode. The model does not prove that prerequisite. It abstracts
+network transport, payloads, codec validation, playback and browser internals;
+the implementation must establish that destruction means actual document
+destruction rather than logical page replacement. Admission does not guarantee
+that a subsequent provider call succeeds or that a decode starts.
+
+TLC checked `OpenRouterDecode.cfg` with the repository-pinned 1.8.0 jar: 482,436
+generated states, 125,266 distinct states and search depth 30. All invariants
+and temporal properties passed and all eleven actions fired; terminal states
+are allowed. Weak fairness for `Admit` and `Post` supports `StablePost`, which
+only says that at least one POST eventually occurs under stable preconditions.
+Neither the availability of a release action nor any property guarantees
+readiness, provider response, decode settlement, destruction or playback.
+
+| Property | Implementation test |
+| --- | --- |
+| `TypeOK` | `speech_decode.test.ts`: accepts locally scoped browser messages and rejects malformed identities. |
+| `ReadyBeforePaid` | `speech_openrouter.test.ts`: waits for per-request admission before reading credentials or making a paid request. |
+| `ExclusiveSlot` | `speech_decode_bridge.test.ts`: retains a canceled physical decode until its matching result arrives. |
+| `CurrentReadiness` | `speech_decode_bridge.test.ts`: times out a probe and ignores its late acknowledgement during a retry; `panel.test.ts`: keeps boot, challenge and decoder replies in the local view and retires only the replaced document. |
+| `CurrentDispatch` | `speech_decode_lifecycle.test.ts`: rejects late decode delivery and stale cancellation while allowing matching work. |
+| `CurrentResult` | `speech_decode_bridge.test.ts`: returns only the matching request and document result; `panel.test.ts`: keeps the current decoder on an old-view disposal and on visibility changes. |
+| `PostHasAdmission` | `speech_openrouter.test.ts`: reserves a decoder lease before the paid POST and retires it after decoding. |
+| `CanReleaseOnCancel` | `speech_decode_bridge.test.ts`: releases an admission canceled before decode and permits the next request. |
+| `CanReleaseOnFailure` | `speech_openrouter.test.ts`: releases the lease on provider failure, cancellation, or decode failure. |
+| `RetainOnCancel` | `speech_decode_bridge.test.ts`: retains a canceled physical decode until its matching result arrives. |
+| `CanAdmit` | `speech_decode_bridge.test.ts`: waits for the matching readiness response before granting a lease. |
+| `StablePost` | Nothing yet; fairness is a model assumption. |
+
+Each property was checked alone with the same two-page, two-request and
+two-probe bounds. The following temporary mutations were discarded. A trace
+lists the action sequence after the initial state; `StablePost` ends in a
+stuttering cycle. All violations were isolated to the named property.
+
+| Property | Mutation | Counterexample actions |
+| --- | --- | --- |
+| `TypeOK` | Invalid initial request identity. | Initial state. |
+| `ReadyBeforePaid` | Disable readiness guard. | `Admit`. |
+| `ExclusiveSlot` | Disable slot guard. | `Probe`, `ReadinessDelivery`, `Admit`, `Post`, `DecodeDelivery`, `Cancel`, `Admit`. |
+| `CurrentReadiness` | Accept stale probe delivery. | `Probe`, `ProbeFailure`, `ReadinessDelivery`. |
+| `CurrentDispatch` | Allow stale decode dispatch. | `Probe`, `ReadinessDelivery`, `Admit`, `Post`, `PostFailure`, `DecodeDelivery`. |
+| `CurrentResult` | Accept stale decoded result. | `Probe`, `ReadinessDelivery`, `Admit`, `Post`, `DecodeDelivery`, `Cancel`, `Settle`. |
+| `PostHasAdmission` | Do not record admission. | `Probe`, `ReadinessDelivery`, `Admit`. |
+| `CanReleaseOnCancel` | Cancellation leaves the request active. | `Probe`, `ReadinessDelivery`, `Admit`. |
+| `CanReleaseOnFailure` | Provider failure leaves the request active. | `Probe`, `ReadinessDelivery`, `Admit`, `Post`. |
+| `RetainOnCancel` | Cancellation clears the decode slot. | `Probe`, `ReadinessDelivery`, `Admit`, `Post`, `DecodeDelivery`, `Cancel`. |
+| `CanAdmit` | Disable admission. | `Probe`, `ReadinessDelivery`. |
+| `StablePost` | Disable admission. | `Probe`, `ReadinessDelivery`, then stuttering. |

@@ -44,3 +44,19 @@ describe('diagnostic snapshot', () => {
     expect(DIAGNOSTIC_SNAPSHOT_SCHEMA.safeParse({ ...snapshot, audio: { enabled: true, voice: 'private' } }).success).toBe(false);
   });
 });
+
+it('accepts OpenRouter readiness without allowing credentials', () => {
+  const audio = {
+    enabled: true,
+    provider: 'openrouter',
+    keyConfigured: true,
+    voiceConfigured: true,
+    output: 'default',
+    routeAvailable: 'unknown',
+    runtimeReady: 'unknown',
+    modelReady: 'unknown',
+    lastPlayback: 'unknown',
+  };
+  expect(DIAGNOSTIC_SNAPSHOT_SCHEMA.safeParse({ ...snapshot, audio }).success).toBe(true);
+  expect(DIAGNOSTIC_SNAPSHOT_SCHEMA.safeParse({ ...snapshot, audio: { ...audio, key: 'private' } }).success).toBe(false);
+});

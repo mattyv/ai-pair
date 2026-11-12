@@ -108,3 +108,18 @@ it('ignores a pending password prompt when the provider changes', async () => {
   await set;
   expect(storage.store).not.toHaveBeenCalled();
 });
+
+it('isolates the OpenRouter credential in its own native secret slot', async () => {
+  const storage = {
+    get: vi.fn().mockResolvedValue('secret'),
+    store: vi.fn().mockResolvedValue(undefined),
+    delete: vi.fn().mockResolvedValue(undefined),
+  };
+  const credentials = new SpeechCredentials(storage, vi.fn().mockResolvedValue('new'), vi.fn<() => void>(), 'aiPair.openRouter.apiKey');
+  await credentials.read();
+  await credentials.set();
+  await credentials.remove();
+  expect(storage.get).toHaveBeenCalledWith('aiPair.openRouter.apiKey');
+  expect(storage.store).toHaveBeenCalledWith('aiPair.openRouter.apiKey', 'new');
+  expect(storage.delete).toHaveBeenCalledWith('aiPair.openRouter.apiKey');
+});

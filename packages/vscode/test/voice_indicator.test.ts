@@ -76,3 +76,11 @@ it('shows current startup over an earlier playback failure, then preserves the f
   expect(voiceIndicator(failed, cpu, true, true)).toBe('unavailable');
   expect(voiceIndicator(failed, { ...cpu, phase: 'loading' }, false, true)).toBe('unavailable');
 });
+
+it('uses current OpenRouter key evidence without requiring a local runtime', () => {
+  expect(voiceIndicator({ ...ready, provider: 'openrouter', keyConfigured: true, runtimeReady: false }, undefined, true, true)).toBe(
+    'ready',
+  );
+  expect(voiceIndicator({ ...ready, provider: 'openrouter', keyConfigured: 'unknown' }, undefined, true, true)).toBe('checking');
+  expect(voiceIndicator({ ...ready, provider: 'openrouter', keyConfigured: false }, undefined, true, true)).toBe('unavailable');
+});

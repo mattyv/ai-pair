@@ -1,4 +1,4 @@
-/** Stores the ElevenLabs key only in VS Code SecretStorage. */
+/** Default credential slot for existing ElevenLabs installations. */
 const KEY = 'aiPair.elevenLabs.apiKey';
 
 interface SecretStore {
@@ -16,13 +16,14 @@ export class SpeechCredentials {
     private readonly storage: SecretStore,
     private readonly prompt: () => PromiseLike<string | undefined>,
     private readonly changed: () => void,
+    private readonly key = KEY,
   ) {}
 
   /** Reads a key for a host-side request only if no later change occurred. */
   async read(): Promise<string | undefined> {
     const epoch = this.epoch;
     await this.pending;
-    const key = await this.storage.get(KEY);
+    const key = await this.storage.get(this.key);
     return epoch === this.epoch ? key : undefined;
   }
 
@@ -38,14 +39,14 @@ export class SpeechCredentials {
     if (key === undefined || key.length === 0 || epoch !== this.epoch) return;
     this.epoch++;
     this.changed();
-    await this.mutate(() => this.storage.store(KEY, key));
+    await this.mutate(() => this.storage.store(this.key, key));
   }
 
   /** Removes the stored key and invalidates pending reads and prompts. */
   async remove(): Promise<void> {
     this.epoch++;
     this.changed();
-    await this.mutate(() => this.storage.delete(KEY));
+    await this.mutate(() => this.storage.delete(this.key));
   }
 
   /** Invalidates pending reads and prompts without changing the stored key. */

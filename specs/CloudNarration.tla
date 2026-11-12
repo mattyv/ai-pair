@@ -20,7 +20,7 @@ vars == <<provider, key, epoch, generation, request, requestEpoch, active,
                    staleDiagnosticChanged>>
 
 TypeOK ==
-    /\ provider \in {"local", "cloud"}
+    /\ provider \in {"local", "elevenlabs", "openrouter"}
     /\ key \in BOOLEAN /\ epoch \in 0..2 /\ generation \in 0..2
     /\ request \in 0..2 /\ requestEpoch \in 0..2
     /\ active \in BOOLEAN /\ aborted \in BOOLEAN /\ ready \in BOOLEAN
@@ -45,7 +45,8 @@ Init ==
     /\ staleDiagnosticChanged = FALSE
 
 Choose ==
-    /\ provider' \in {"local", "cloud"} /\ provider' # provider
+    /\ provider' \in {"local", "elevenlabs", "openrouter"}
+    /\ provider' # provider
     /\ active' = FALSE /\ aborted' = ((request # 0) \/ aborted)
     /\ ready' = FALSE /\ playing' = FALSE
     /\ UNCHANGED <<key, epoch, generation, request, requestEpoch, failed,
@@ -64,7 +65,8 @@ Credential ==
 
 Start ==
     /\ generation < 2 /\ ~active /\ (~GuardSingle \/ request = 0)
-    /\ (~GuardProvider \/ provider = "cloud") /\ (~GuardKey \/ key)
+    /\ (~GuardProvider \/ provider \in {"elevenlabs", "openrouter"})
+    /\ (~GuardKey \/ key)
     /\ generation' = generation + 1 /\ request' = generation + 1
     /\ requestEpoch' = epoch /\ active' = TRUE /\ aborted' = FALSE
     /\ dispatched' = FALSE /\ failed' = FALSE /\ ready' = FALSE
@@ -76,10 +78,11 @@ Start ==
 
 Dispatch ==
     /\ request # 0 /\ ~dispatched
-    /\ (~GuardProvider \/ provider = "cloud") /\ (~GuardKey \/ key)
+    /\ (~GuardProvider \/ provider \in {"elevenlabs", "openrouter"})
+    /\ (~GuardKey \/ key)
     /\ (~GuardEpoch \/ (active /\ ~aborted /\ requestEpoch = epoch))
     /\ dispatched' = TRUE /\ sent' = TRUE
-    /\ invalidSend' = (invalidSend \/ (provider # "cloud") \/ ~key)
+    /\ invalidSend' = (invalidSend \/ (provider = "local") \/ ~key)
     /\ staleAccepted' = (staleAccepted \/ ~active \/ aborted \/
                           (requestEpoch # epoch))
     /\ UNCHANGED <<provider, key, epoch, generation, request, requestEpoch,
@@ -97,7 +100,8 @@ Cancel ==
 
 Response ==
     /\ request # 0 /\ dispatched
-    /\ LET allowed == active /\ ~aborted /\ provider = "cloud" /\ key /\
+    /\ LET allowed == active /\ ~aborted /\
+                      provider \in {"elevenlabs", "openrouter"} /\ key /\
                       requestEpoch = epoch /\ request = generation
        IN /\ ready' = (allowed \/ ~GuardEpoch)
           /\ staleAccepted' = (staleAccepted \/ (~allowed /\ ready'))
@@ -179,12 +183,14 @@ NoRetry == ~retried
 RequestSettles == (request # 0) ~> (request = 0)
 EligibleStarts ==
     \A g \in 0..1:
-      (provider = "cloud" /\ key /\ request = 0 /\ ~active /\
+      (provider \in {"elevenlabs", "openrouter"} /\ key /\
+       request = 0 /\ ~active /\
        generation = g) ~>
-      (generation > g \/ provider # "cloud" \/ ~key)
+      (generation > g \/ provider = "local" \/ ~key)
 EligibleDispatch ==
     (request # 0 /\ active /\ ~aborted /\ ~dispatched /\
-     provider = "cloud" /\ key /\ requestEpoch = epoch) ~>
+     provider \in {"elevenlabs", "openrouter"} /\ key /\
+     requestEpoch = epoch) ~>
     (dispatched \/ request = 0 \/ ~active)
 ReadyPlays == ready ~> (playing \/ ~active)
 ================================================================================

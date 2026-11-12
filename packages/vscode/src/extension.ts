@@ -25,6 +25,9 @@ import { SpeechCredentials } from './speech_credentials';
 import { SpeechCatalog } from './speech_catalog';
 import { SpeechOutputPreferences } from './speech_output_preferences';
 import { ElevenLabsClient } from './speech_elevenlabs';
+import { OpenRouterClient } from './speech_openrouter';
+import { createOpenRouterAudioDecoder } from './speech_decode_bridge';
+import { OpenRouterCatalog } from './speech_openrouter_catalog';
 import { installedSpeechModel, setupSpeech, speechModelStatus } from './speech_setup';
 import { speechRuntimeAvailable } from './speech_runtime_status';
 import { localSpeechPlatform } from './speech_platform';
@@ -167,7 +170,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   let previewCapture = false;
   let previewSequence = 0;
   let previewId: number | undefined;
-  let previewProvider: 'kokoro' | 'elevenlabs' = 'kokoro';
+  let previewProvider: SpeechSettings['provider'] = 'kokoro';
   let catalogRequestActive = false;
   const localSpeechSupported = speechSupported();
   let runtimeSpeechSupported = false;
@@ -175,6 +178,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   const cloudSupported = vscode.env.remoteName === undefined && vscode.env.uiKind === vscode.UIKind.Desktop;
   let keyStatusEpoch = 0;
   let keyConfigured: boolean | 'unknown' = 'unknown';
+  let openRouterKeyConfigured: boolean | 'unknown' = 'unknown';
   let modelReady: boolean | 'unknown' = 'unknown';
   let modelGeneration = 0;
   let cloudVoiceInvalidated = false;
@@ -186,6 +190,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   let workspaceSession: WorkspaceSession | undefined;
   let shuttingDown = false;
   let catalog: SpeechCatalog;
+  let openRouterCatalog: OpenRouterCatalog;
   let outputPreferences: SpeechOutputPreferences;
   let outputRouter: SpeechOutputRouter;
   let speechSettings: { get: () => SpeechSettings; set: (value: SpeechSettings) => void };
@@ -198,11 +203,16 @@ export function activate(context: vscode.ExtensionContext): Api {
   function audioReadiness(): import('@ai-pair/protocol').AudioDiagnostics {
     const settings = speechSettings.get();
     const output = outputPreferences.choice().kind;
+    const openRouterModel = settings.openRouterModel ?? '';
+    const openRouterVoice = settings.openRouterVoice ?? '';
     return {
       enabled: settings.enabled,
       provider: settings.provider,
-      keyConfigured: shuttingDown ? 'unknown' : keyConfigured,
-      voiceConfigured: (settings.provider === 'kokoro' ? settings.voice : settings.elevenLabsVoice).trim() !== '',
+      keyConfigured: shuttingDown ? 'unknown' : settings.provider === 'openrouter' ? openRouterKeyConfigured : keyConfigured,
+      voiceConfigured:
+        settings.provider === 'openrouter'
+          ? openRouterModel.trim() !== '' && openRouterCatalog.allows(openRouterModel, openRouterVoice)
+          : (settings.provider === 'kokoro' ? settings.voice : settings.elevenLabsVoice).trim() !== '',
       output: output === 'native' ? 'override' : output,
       // The panel page is the default route, and the transport fact says
       // whether it is up; only a native device waits for discovery.
@@ -237,6 +247,8 @@ export function activate(context: vscode.ExtensionContext): Api {
     }
   }
   let credentials: SpeechCredentials;
+  let openRouterCredentials: SpeechCredentials;
+  let openRouterKeyEpoch = 0;
   const diagnostics = new Diagnostics({ version: AI_PAIR_VERSION, build: AI_PAIR_BUILD_ID });
   function record(event: DiagnosticEvent): void {
     diagnostics.record(event);
@@ -285,18 +297,31 @@ export function activate(context: vscode.ExtensionContext): Api {
     const choice = config().inspect<string>('speech.provider')?.globalValue;
     const cloudVoice: unknown = config().get('speech.elevenLabsVoice');
     const cloudSpeed: unknown = config().get('speech.elevenLabsSpeed');
+    const openRouterModel: unknown = config().get('speech.openRouterModel');
+    const openRouterVoice: unknown = config().get('speech.openRouterVoice');
+    const openRouterZdr: unknown = config().get('speech.openRouterZdr');
+    const openRouterFormat: unknown = config().get('speech.openRouterFormat');
     return {
       enabled: enabled === true,
       listeningSpeed: speechListeningRate(config().get('speech.listeningSpeed')),
       voice,
       speed: speechRate,
-      provider: choice === 'elevenlabs' ? 'elevenlabs' : 'kokoro',
+      provider: choice === 'elevenlabs' || choice === 'openrouter' ? choice : 'kokoro',
       elevenLabsVoice: !cloudVoiceInvalidated && typeof cloudVoice === 'string' ? cloudVoice : '',
       elevenLabsSpeed: typeof cloudSpeed === 'number' ? cloudSpeed : 1,
+      ...(typeof openRouterModel === 'string' || typeof openRouterVoice === 'string' || openRouterZdr === true || choice === 'openrouter'
+        ? {
+            openRouterModel: typeof openRouterModel === 'string' ? openRouterModel : '',
+            openRouterVoice: typeof openRouterVoice === 'string' ? openRouterVoice : '',
+            openRouterZdr: openRouterZdr === true,
+            openRouterFormat: openRouterFormat === 'pcm' ? 'pcm' : 'mp3',
+          }
+        : {}),
     };
   }
   let lastSpeechProvider = storedSpeechSettings().provider;
   let lastSpeechEnabled = storedSpeechSettings().enabled;
+  let lastOpenRouterSettings = storedSpeechSettings();
   speechSettings = {
     get: (): SpeechSettings => pendingSpeechSettings ?? storedSpeechSettings(),
     set: (value: SpeechSettings): void => {
@@ -306,7 +331,18 @@ export function activate(context: vscode.ExtensionContext): Api {
         if (prior.provider !== value.provider) {
           credentials.supersede();
           catalog.invalidate();
+          openRouterCredentials.supersede();
+          openRouterCatalog.invalidate();
         }
+      }
+      if (
+        prior.openRouterModel !== value.openRouterModel ||
+        prior.openRouterVoice !== value.openRouterVoice ||
+        prior.openRouterZdr !== value.openRouterZdr ||
+        prior.openRouterFormat !== value.openRouterFormat
+      ) {
+        speech.cancel();
+        if (prior.openRouterZdr !== value.openRouterZdr) openRouterCatalog.invalidate();
       }
       // specs/ProviderChoice.tla, Select: use the latest choice before disk writes settle.
       const restoresVoice = cloudVoiceInvalidated && value.elevenLabsVoice !== '' && catalog.contains(value.elevenLabsVoice);
@@ -315,6 +351,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       if (owner === 'legacy') speech.prepare();
       lastSpeechProvider = value.provider;
       lastSpeechEnabled = value.enabled;
+      lastOpenRouterSettings = value;
       panel.showSpeechSettings(pendingSpeechSettings);
       publishReadiness();
       const saveOperation = speechSaveTail.then(async () => {
@@ -326,6 +363,10 @@ export function activate(context: vscode.ExtensionContext): Api {
           ['speech.provider', value.provider],
           ['speech.elevenLabsVoice', value.elevenLabsVoice],
           ['speech.elevenLabsSpeed', value.elevenLabsSpeed],
+          ...(value.openRouterModel === undefined ? [] : [['speech.openRouterModel', value.openRouterModel] as [string, unknown]]),
+          ...(value.openRouterVoice === undefined ? [] : [['speech.openRouterVoice', value.openRouterVoice] as [string, unknown]]),
+          ...(value.openRouterZdr === undefined ? [] : [['speech.openRouterZdr', value.openRouterZdr] as [string, unknown]]),
+          ...(value.openRouterFormat === undefined ? [] : [['speech.openRouterFormat', value.openRouterFormat] as [string, unknown]]),
         ];
         for (const [key, setting] of updates) {
           await config().update(key, setting, vscode.ConfigurationTarget.Global);
@@ -351,6 +392,7 @@ export function activate(context: vscode.ExtensionContext): Api {
           const restored = storedSpeechSettings();
           lastSpeechProvider = restored.provider;
           lastSpeechEnabled = restored.enabled;
+          lastOpenRouterSettings = restored;
           panel.showSpeechSettings(restored);
           publishReadiness();
           void vscode.window.showErrorMessage('Could not save speech settings.');
@@ -379,6 +421,47 @@ export function activate(context: vscode.ExtensionContext): Api {
     },
   );
   const cloud = new ElevenLabsClient(() => credentials.read());
+  openRouterCredentials = new SpeechCredentials(
+    context.secrets,
+    () => vscode.window.showInputBox({ title: 'OpenRouter API key', password: true, ignoreFocusOut: true }),
+    () => {
+      openRouterKeyEpoch++;
+      openRouterKeyConfigured = 'unknown';
+      openRouterCatalog.invalidate();
+      speech.invalidateCloud();
+      speechSettings.set({ ...speechSettings.get(), openRouterModel: '', openRouterVoice: '' });
+      publishReadiness();
+    },
+    'aiPair.openRouter.apiKey',
+  );
+  const openRouter = new OpenRouterClient(
+    () => openRouterCredentials.read(),
+    undefined,
+    createOpenRouterAudioDecoder(() => panel),
+  );
+  openRouterCatalog = new OpenRouterCatalog(openRouter, (value) => {
+    if (!shuttingDown) {
+      if (value.state === 'ready') speech.openRouterCatalogChanged();
+      panel.showOpenRouterCatalog(value);
+      publishReadiness();
+    }
+  });
+  function refreshOpenRouterKey(): void {
+    const epoch = ++openRouterKeyEpoch;
+    openRouterKeyConfigured = 'unknown';
+    publishReadiness();
+    void openRouterCredentials.hasKey().then(
+      (hasKey) => {
+        if (shuttingDown || epoch !== openRouterKeyEpoch) return;
+        openRouterKeyConfigured = hasKey;
+        panel.showOpenRouterKeyStatus(hasKey);
+        publishReadiness();
+      },
+      () => {
+        if (!shuttingDown && epoch === openRouterKeyEpoch) panel.showOpenRouterKeyStatus(false);
+      },
+    );
+  }
   function refreshKey(): void {
     const epoch = ++keyStatusEpoch;
     keyConfigured = 'unknown';
@@ -475,7 +558,7 @@ export function activate(context: vscode.ExtensionContext): Api {
         ),
       audio: async () => {
         if (owner !== 'legacy') return undefined;
-        const hasKey = await credentials.hasKey();
+        const hasKey = await (speechSettings.get().provider === 'openrouter' ? openRouterCredentials : credentials).hasKey();
         return { ...audioReadiness(), keyConfigured: hasKey };
       },
     });
@@ -564,6 +647,19 @@ export function activate(context: vscode.ExtensionContext): Api {
           refreshKey();
         },
         keyRefresh: refreshKey,
+        openRouterKeySet: async () => {
+          await openRouterCredentials.set();
+          refreshOpenRouterKey();
+        },
+        openRouterKeyRemove: async () => {
+          await openRouterCredentials.remove();
+          refreshOpenRouterKey();
+        },
+        openRouterKeyRefresh: refreshOpenRouterKey,
+        loadOpenRouterModels: () => {
+          void openRouterCatalog.load(speechSettings.get().openRouterZdr === true);
+        },
+        validOpenRouterVoice: (model, voice) => openRouterCatalog.contains(model, voice),
         loadVoices: (more) => {
           void catalog.load(more);
         },
@@ -619,6 +715,7 @@ export function activate(context: vscode.ExtensionContext): Api {
         pageClosed: (pageId) => {
           speech.pageClosed(pageId);
           catalog.invalidate();
+          openRouterCatalog.invalidate();
         },
       },
     },
@@ -645,6 +742,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     discover: discoverPreferenceOutputs,
   });
   catalog = new SpeechCatalog(cloud, (value) => {
+    if (shuttingDown) return;
     if (value.reset) catalogRequestActive = false;
     else if (value.loading) catalogRequestActive = true;
     else if (catalogRequestActive) {
@@ -710,12 +808,17 @@ export function activate(context: vscode.ExtensionContext): Api {
     audioEvent: handleSpeechEvent,
   });
   speech = new SpeechService({
+    openRouterDiagnostic: (reason) => {
+      diagnostics.record({ kind: 'speech', event: 'narration', provider: 'openrouter', phase: 'failed', reason });
+    },
     cloudDiagnostic: (reason) => {
       diagnostics.record({ kind: 'speech', event: 'narration', provider: 'elevenlabs', phase: 'failed', reason });
     },
     runtimeDirectory: path.join(context.extensionPath, 'dist', 'speech'),
     tempo: new SpeechTempoClient(path.join(context.extensionPath, 'dist', 'speech', 'tempo_worker.mjs')),
     cloud,
+    openRouter,
+    openRouterAllowed: (model, voice) => openRouterCatalog.allows(model, voice),
     storageDirectory: context.globalStorageUri.fsPath,
     localDesktop: cloudSupported,
     kokoroSupported: localSpeechSupported,
@@ -733,6 +836,12 @@ export function activate(context: vscode.ExtensionContext): Api {
   function retireSpeech(): Promise<void> {
     shuttingDown = true;
     setupAbort.abort();
+    if (speechRetirement === undefined) {
+      credentials.supersede();
+      openRouterCredentials.supersede();
+      catalog.invalidate();
+      openRouterCatalog.invalidate();
+    }
     speechRetirement ??= Promise.all([previousRetirement, speech.dispose()]).then(() => {});
     return speechRetirement;
   }
@@ -752,7 +861,8 @@ export function activate(context: vscode.ExtensionContext): Api {
         local: () => localSpeechSupported && runtimeSpeechSupported,
         output: () => panel.speechPageIsReady() && nativeOutput.available() && outputPreferences.ready(),
         model: checkedModel,
-        key: () => credentials.hasKey(),
+        key: (provider) => (provider === 'openrouter' ? openRouterCredentials.hasKey() : credentials.hasKey()),
+        openRouterAllowed: (model, voice) => openRouterCatalog.allows(model, voice),
       });
     },
     speak: async (text) => {
@@ -874,6 +984,16 @@ export function activate(context: vscode.ExtensionContext): Api {
   context.subscriptions.push(
     vscode.commands.registerCommand('aiPair.copyDiagnostics', copyDiagnosticsFromCommand),
     context.secrets.onDidChange((event) => {
+      if (event.key === 'aiPair.openRouter.apiKey') {
+        function refreshLegacyOpenRouter(): void {
+          if (owner !== 'legacy' || shuttingDown) return;
+          openRouterCredentials.invalidate();
+          refreshOpenRouterKey();
+        }
+        if (owner === 'pending') void ownerReady.then(refreshLegacyOpenRouter);
+        else refreshLegacyOpenRouter();
+        return;
+      }
       if (event.key !== 'aiPair.elevenLabs.apiKey') return;
       function refreshLegacy(): void {
         if (owner !== 'legacy') return;
@@ -940,7 +1060,19 @@ export function activate(context: vscode.ExtensionContext): Api {
           if (current.provider !== lastSpeechProvider) {
             credentials.supersede();
             catalog.invalidate();
+            openRouterCredentials.supersede();
+            openRouterCatalog.invalidate();
           }
+          if (
+            current.openRouterModel !== lastOpenRouterSettings.openRouterModel ||
+            current.openRouterVoice !== lastOpenRouterSettings.openRouterVoice ||
+            current.openRouterZdr !== lastOpenRouterSettings.openRouterZdr ||
+            current.openRouterFormat !== lastOpenRouterSettings.openRouterFormat
+          ) {
+            speech.cancel();
+            if (current.openRouterZdr !== lastOpenRouterSettings.openRouterZdr) openRouterCatalog.invalidate();
+          }
+          lastOpenRouterSettings = current;
           lastSpeechProvider = current.provider;
           lastSpeechEnabled = current.enabled;
         }

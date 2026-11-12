@@ -110,6 +110,7 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
         <select data-ui="speech-provider">
           <option value="kokoro">Kokoro (local)</option>
           <option value="elevenlabs">ElevenLabs (cloud)</option>
+          <option value="openrouter">OpenRouter (cloud)</option>
         </select>
       </label>
       <label class="settings-field">Speech output
@@ -134,6 +135,29 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
           <option value="bm_george">George</option>
         </select>
       </label>
+      </div>
+      <div data-ui="openrouter" hidden>
+        <p>Selected narration and previews are sent to OpenRouter and may use account credits.</p>
+        <p data-ui="openrouter-key-status" role="status"></p>
+        <div class="settings-actions">
+          <button type="button" data-ui="openrouter-key-set" class="soft">Add or replace API key</button>
+          <button type="button" data-ui="openrouter-key-remove" class="soft">Remove API key</button>
+          <button type="button" data-ui="openrouter-load" class="soft">Load account models</button>
+        </div>
+        <label class="settings-field">Speech model
+          <select data-ui="openrouter-model"><option value="">Choose a model</option></select>
+        </label>
+        <p>OpenRouter rates are shown per billing unit. Units vary by model; check its pricing page for the unit and final cost.</p>
+        <label class="settings-field">Voice
+          <select data-ui="openrouter-voice"><option value="">Use provider default (if supported)</option></select>
+        </label>
+        <label class="settings-field">Response format
+          <select data-ui="openrouter-format"><option value="mp3">MP3</option><option value="pcm">PCM</option></select>
+        </label>
+        <p>Models may accept only one format. If a request fails, select the format listed for that model on OpenRouter.</p>
+        <button type="button" data-ui="openrouter-zdr" class="soft zdr-toggle" aria-pressed="false">ZDR filter: Off</button>
+        <p>Filters models with ZDR routes and requests OpenRouter's ZDR policy. Your account's Safety Retention settings still apply.</p>
+        <p data-ui="openrouter-status" role="status">Load speech models and advertised voices from your account. Some models allow a provider-default voice.</p>
       </div>
       <div data-ui="speech-cloud" hidden>
         <p>Selected narration and voice previews are sent to ElevenLabs and use your account credits.

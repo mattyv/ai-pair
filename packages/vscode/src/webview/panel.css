@@ -1026,3 +1026,8 @@ a:hover {
     min-width: 0;
   }
 }
+
+.zdr-toggle[aria-pressed='true'] {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}

@@ -10,7 +10,7 @@ export interface SpeechDiagnosticEvent {
   kind: 'speech';
   event: 'preview' | 'catalog' | 'setup' | 'capability' | 'runtime' | 'narration';
   phase: 'received' | 'blocked' | 'dispatched' | 'ready' | 'failed';
-  provider: 'kokoro' | 'elevenlabs' | 'unknown';
+  provider: 'kokoro' | 'elevenlabs' | 'openrouter' | 'unknown';
   reason?: SpeechDiagnosticReason;
 }
 export type SpeechDiagnosticReason =
@@ -53,7 +53,7 @@ const REQUEST_METHOD = new Set(['start', 'step', 'listen', 'end', 'read', 'calib
 const REQUEST_PHASE = new Set(['received', 'replied', 'failed', 'cancelled']);
 const SPEECH_EVENT = new Set(['preview', 'catalog', 'setup', 'capability', 'runtime', 'narration']);
 const SPEECH_PHASE = new Set(['received', 'blocked', 'dispatched', 'ready', 'failed']);
-const SPEECH_PROVIDER = new Set(['kokoro', 'elevenlabs', 'unknown']);
+const SPEECH_PROVIDER = new Set(['kokoro', 'elevenlabs', 'openrouter', 'unknown']);
 const SPEECH_REASON = new Set([
   'unsupported',
   'host_platform',

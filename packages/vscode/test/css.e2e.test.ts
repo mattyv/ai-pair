@@ -148,6 +148,8 @@ it('every rule in panel.css matches the page in some state', async () => {
     ui('voice-status')?.setAttribute('data-state', state);
     check();
   }
+  ui('openrouter-zdr')?.setAttribute('aria-pressed', 'true');
+  check();
   // VS Code's high contrast themes put their class on the body.
   document.body.classList.add('vscode-high-contrast-light');
   check();

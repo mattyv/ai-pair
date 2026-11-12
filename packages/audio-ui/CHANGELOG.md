@@ -1,10 +1,15 @@
 # Changelog
 
+## 0.32.0
+
+-   Add OpenRouter speech with secure credentials, account-filtered model and
+    voice choices, and a ZDR policy filter.
+-   Keep previews and narration on the existing speech output route and
+    cancellation path.
+
 ## 0.31.0
 
--   Publish under the `mattyv` publisher, so the companion's ID is now
-    `mattyv.ai-pair-local-audio`, matching the main extension's
-    `mattyv.ai-pair`.
+- Publish under the `mattyv` publisher, matching the main extension.
 
 ## 0.30.0
 

@@ -34,7 +34,7 @@ const events = z.union([
 /** Validates read-only audio facts without identifiers, text, or credentials. */
 export const AUDIO_DIAGNOSTICS_SCHEMA = z.strictObject({
   enabled: z.boolean(),
-  provider: z.enum(['kokoro', 'elevenlabs']),
+  provider: z.enum(['kokoro', 'elevenlabs', 'openrouter']),
   keyConfigured: z.union([z.boolean(), z.literal('unknown')]),
   voiceConfigured: z.boolean(),
   output: z.enum(['default', 'override', 'unknown']),
