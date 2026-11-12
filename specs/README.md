@@ -3223,7 +3223,8 @@ negative-control configurations were discarded.
 
 The finite model represents one account catalog request, optional ZDR
 narrowing, selection and synthesis admission. It abstracts network transport,
-individual models and voices, PCM parsing, and audio output. The policy can
+individual model identities and voices (bounded by the shared protocol
+schemas), PCM parsing, and audio output. The policy can
 change before selection; after it stops changing, `StableProgress` requires
 that the request reach synthesis admission or account failure. Weak fairness
 of `Resolve`, `Narrow`, `Select`, and `Synthesize` assumes each continuously
@@ -3237,8 +3238,8 @@ temporal properties. Terminal states are permitted.
 
 | Property | Implementation test |
 | --- | --- |
-| `TypeOK` | `openrouter.test.ts`: `accepts bounded catalog metadata and ignores provider additions` and `accepts only bounded PCM requests with optional ZDR enforcement`. |
-| `AccountOnly` | `speech_openrouter.test.ts`: `AccountOnly uses the authenticated account catalog and maps advertised voices`; `AccountOnly never falls back when authentication fails`. |
+| `TypeOK` | `openrouter.test.ts`: bounded catalog metadata, arbitrary bounded model and voice IDs, and rejection of MP3 requests until a decoder exists. |
+| `AccountOnly` | `speech_openrouter.test.ts`: `AccountOnly uses the authenticated account catalog and maps advertised voices`; `includes arbitrary advertised models and voices while preserving the account intersection`; `AccountOnly never falls back when authentication fails`. |
 | `ZdrSelection` | `speech_openrouter.test.ts`: `ZdrSelection intersects the authenticated catalog with the public ZDR catalog`. |
 | `PolicySampled` | `speech_openrouter.test.ts`: `PolicySampled sends the selected request and converts documented PCM`; `omits provider policy when ZDR is off`. |
 | `StableProgress` | `speech_openrouter.test.ts`: `AccountOnly uses the authenticated account catalog and maps advertised voices`; `PolicySampled sends the selected request and converts documented PCM`; `AccountOnly never falls back when authentication fails`. These tests check the corresponding outcomes, not fairness. |

@@ -2722,9 +2722,9 @@ it('reports OpenRouter catalog states and restores saved settings', () => {
   send({ type: 'openRouterCatalog', value: { state: 'error', verified: false, models: [], message: 'Unavailable.' } });
   expect(element('openrouter-status').textContent).toBe('Unavailable.');
   send({ type: 'openRouterCatalog', value: { state: 'ready', verified: true, models: [] } });
-  expect(element('openrouter-status').textContent).toContain('No compatible');
+  expect(element('openrouter-status').textContent).toContain('No eligible speech models');
   send({ type: 'openRouterCatalog', value: { state: 'idle', verified: false, models: [] } });
-  expect(element('openrouter-status').textContent).toContain('Load account models');
+  expect(element('openrouter-status').textContent).toContain('Load speech models');
   send({ type: 'speechCloudSupport', supported: true });
   send({ type: 'openRouterKeyStatus', hasKey: true });
   click(element('openrouter-key-remove'));
@@ -2827,7 +2827,7 @@ it('saves the ZDR choice before refreshing compatible account models', () => {
   ).toEqual(['speechSettings', 'openRouterModelsLoad']);
   expect(element('openrouter-status').textContent).not.toBe('Compatible account models loaded.');
   send({ type: 'openRouterCatalog', value: { state: 'ready', verified: true, models: [] } });
-  expect(element('openrouter-status').textContent).toContain('No compatible');
+  expect(element('openrouter-status').textContent).toContain('No eligible speech models');
 });
 
 it('saves ZDR without requesting a catalog when no key is saved', () => {

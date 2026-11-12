@@ -85,9 +85,12 @@ It adds:
 -   Optional OpenRouter speech with a separately stored API key, account-eligible
     model and voice choices, and a **ZDR** filter. The filter narrows the
     account's allowed models and requests OpenRouter's ZDR routing policy;
-    account Safety Retention settings still apply. Only supported PCM models
-    are shown, initially Microsoft's three documented MAI-Voice models.
-    Narration and previews use your OpenRouter credits and the selected
+    account Safety Retention settings still apply. Models and advertised voices
+    are loaded from your account instead of a hard-coded model list. This
+    version requests PCM and can play only responses that match AI Pair's
+    verified PCM audio contract; OpenRouter does not expose each model's
+    response format in its account catalog, so some listed models may not work
+    yet. Narration and previews use your OpenRouter credits and the selected
     local speech output. No fallback to another provider is automatic.
 -   Optional ElevenLabs cloud speech, using the same selected narration and
     reading controls. Choose **ElevenLabs** in Settings, add your API key through

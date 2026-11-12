@@ -38,6 +38,21 @@ it('ZdrSelection intersects the authenticated catalog with the public ZDR catalo
   expect(await new OpenRouterClient(async () => 'secret', fetcher).models(true, signal())).toEqual([]);
   expect(fetcher.mock.calls[1]?.[0]).toContain('zdr=true');
 });
+it('ZdrSelection reads model IDs even when the public catalog has no voice metadata', async () => {
+  const account = { data: [{ id: 'vendor/new-speech-model', name: 'New', supported_voices: [voice] }] };
+  const zdr = { data: [{ id: 'vendor/new-speech-model', name: 'New', supported_voices: null }] };
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(json(account)).mockResolvedValueOnce(json(zdr));
+  expect(await new OpenRouterClient(async () => 'secret', fetcher).models(true, signal())).toEqual([
+    { id: 'vendor/new-speech-model', name: 'New', voices: [{ id: voice, name: voice }] },
+  ]);
+});
+it('rejects a malformed ZDR model-ID catalog', async () => {
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(json(catalog))
+    .mockResolvedValueOnce(json({ data: [{ id: 1 }] }));
+  await expect(new OpenRouterClient(async () => 'secret', fetcher).models(true, signal())).rejects.toMatchObject({ kind: 'invalid' });
+});
 it('AccountOnly never falls back when authentication fails', async () => {
   const fetcher = vi.fn<typeof fetch>(async () => new Response('secret body', { status: 401 }));
   await expect(new OpenRouterClient(async () => 'secret', fetcher).models(true, signal())).rejects.toMatchObject({ kind: 'auth' });
@@ -62,7 +77,7 @@ it('PolicySampled sends the selected request and converts documented PCM', async
   expect(pcmToSpeech).toHaveBeenCalledWith(new Uint8Array([1, 0]));
   expect(result).toEqual({ wav: new Uint8Array([5]), durationMs: 601 });
 });
-it('rejects incompatible audio metadata and unsupported models', async () => {
+it('rejects incompatible audio metadata and invalid models', async () => {
   const fetcher = vi.fn<typeof fetch>(
     async () => new Response(new Uint8Array([1, 0]), { headers: { 'content-type': 'audio/pcm; rate=44100; channels=1' } }),
   );
@@ -70,7 +85,7 @@ it('rejects incompatible audio metadata and unsupported models', async () => {
   await expect(client.synthesize({ text: 'x', modelId: model, voiceId: voice, zdr: false }, signal())).rejects.toMatchObject({
     kind: 'invalid',
   });
-  await expect(client.synthesize({ text: 'x', modelId: 'unknown', voiceId: voice, zdr: false }, signal())).rejects.toMatchObject({
+  await expect(client.synthesize({ text: 'x', modelId: '', voiceId: voice, zdr: false }, signal())).rejects.toMatchObject({
     kind: 'invalid',
   });
 });
@@ -99,25 +114,39 @@ it('rejects absent credentials, rejected fetch and bad request arguments', async
     kind: 'invalid',
   });
 });
+it.each([null, {}, { data: null }, { data: [null] }, { data: [{}] }, { data: [{ id: 1 }] }])(
+  'rejects malformed catalog envelopes %#',
+  async (value) => {
+    const fetcher = vi.fn<typeof fetch>(async () => json(value));
+    await expect(new OpenRouterClient(async () => 'key', fetcher).models(false, signal())).rejects.toMatchObject({ kind: 'invalid' });
+  },
+);
 it.each([
-  null,
-  {},
-  { data: null },
-  { data: [null] },
-  { data: [{}] },
-  { data: [{ id: 1 }] },
-  { data: [{ id: model }] },
-  { data: [{ id: model, name: '', supported_voices: [] }] },
-  { data: [{ id: model, name: 'x', supported_voices: [1] }] },
-  { data: [{ id: model, name: 'x', supported_voices: ['!'] }] },
-])('rejects malformed catalog %#', async (value) => {
-  const fetcher = vi.fn<typeof fetch>(async () => json(value));
-  await expect(new OpenRouterClient(async () => 'key', fetcher).models(false, signal())).rejects.toMatchObject({ kind: 'invalid' });
+  { id: model, name: '', supported_voices: [] },
+  { id: model, name: 'x', supported_voices: [1] },
+  { id: model, name: 'x', supported_voices: ['bad\nvoice'] },
+])('skips a malformed model entry without losing the catalog response %#', async (entry) => {
+  const fetcher = vi.fn<typeof fetch>(async () => json({ data: [entry] }));
+  await expect(new OpenRouterClient(async () => 'key', fetcher).models(false, signal())).resolves.toEqual([]);
 });
-it('omits unsupported and voiceless models and retains the account intersection', async () => {
-  const data = { data: [{ id: 'other' }, { id: model, name: 'empty', supported_voices: [] }, ...catalog.data] };
-  const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(json(data)).mockResolvedValueOnce(json(catalog));
-  expect(await new OpenRouterClient(async () => 'key', fetcher).models(true, signal())).toHaveLength(1);
+it('includes arbitrary advertised models and voices while preserving the account intersection', async () => {
+  const extra = { id: 'vendor/new-speech-model', name: 'New voice', supported_voices: ['speaker/42 + natural'] };
+  const excluded = { id: 'provider/account-only', name: 'Account only', supported_voices: ['other'] };
+  const data = { data: [extra, excluded, { id: model, name: 'empty', supported_voices: [] }, ...catalog.data] };
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(json(data))
+    .mockResolvedValueOnce(json({ data: [extra, ...catalog.data] }));
+  expect(await new OpenRouterClient(async () => 'key', fetcher).models(true, signal())).toEqual([
+    { id: extra.id, name: extra.name, voices: [{ id: 'speaker/42 + natural', name: 'speaker/42 + natural' }] },
+    { id: model, name: 'MAI', voices: [{ id: voice, name: voice }] },
+  ]);
+});
+it('skips an account model without advertised voices instead of rejecting the catalog', async () => {
+  const fetcher = vi.fn<typeof fetch>(async () =>
+    json({ data: [{ id: 'vendor/default-voice', name: 'No voices', supported_voices: null }] }),
+  );
+  expect(await new OpenRouterClient(async () => 'key', fetcher).models(false, signal())).toEqual([]);
 });
 it('rejects invalid content, excessive bytes and invalid PCM conversion', async () => {
   const responses = [
@@ -255,6 +284,43 @@ it('discards an empty response arriving after cancellation', async () => {
   await Promise.resolve();
 });
 
+it('sends an opaque model identifier and voice without changing PCM policy', async () => {
+  const fetcher = vi.fn<typeof fetch>(
+    async () => new Response(new Uint8Array([1, 0]), { headers: { 'content-type': 'audio/pcm; rate=24000; channels=1' } }),
+  );
+  await new OpenRouterClient(async () => 'key', fetcher).synthesize(
+    { text: 'x', modelId: 'vendor/new-speech-model', voiceId: 'voice/42 + natural', zdr: false },
+    signal(),
+  );
+  const body = fetcher.mock.calls[0]?.[1]?.body;
+  if (typeof body !== 'string') throw new Error('missing body');
+  expect(openRouterSpeechRequest.parse(JSON.parse(body))).toEqual({
+    model: 'vendor/new-speech-model',
+    voice: 'voice/42 + natural',
+    input: 'x',
+    response_format: 'pcm',
+  });
+});
+it('requires explicit 24 kHz mono metadata for dynamically discovered models', async () => {
+  const fetcher = vi.fn<typeof fetch>(async () => new Response(new Uint8Array([1, 0]), { headers: { 'content-type': 'audio/pcm' } }));
+  await expect(
+    new OpenRouterClient(async () => 'secret', fetcher).synthesize(
+      { text: 'x', modelId: 'vendor/new-speech-model', voiceId: 'speaker/42', zdr: false },
+      signal(),
+    ),
+  ).rejects.toMatchObject({ kind: 'invalid' });
+});
+it('accepts a dynamically discovered model only when PCM metadata matches the playback contract', async () => {
+  const fetcher = vi.fn<typeof fetch>(
+    async () => new Response(new Uint8Array([1, 0]), { headers: { 'content-type': 'audio/pcm; rate=24000; channels=1' } }),
+  );
+  await expect(
+    new OpenRouterClient(async () => 'secret', fetcher).synthesize(
+      { text: 'x', modelId: 'vendor/new-speech-model', voiceId: 'speaker/42', zdr: false },
+      signal(),
+    ),
+  ).resolves.toEqual({ wav: new Uint8Array([5]), durationMs: 601 });
+});
 it('omits provider policy when ZDR is off', async () => {
   const fetcher = vi.fn<typeof fetch>(async () => new Response(new Uint8Array([1, 0]), { headers: { 'content-type': 'audio/pcm' } }));
   await new OpenRouterClient(async () => 'key', fetcher).synthesize({ text: 'x', modelId: model, voiceId: voice, zdr: false }, signal());

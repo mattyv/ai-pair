@@ -1502,14 +1502,14 @@ function handle(message: ToPanel): void {
       renderOpenRouterVoices();
       ui.openRouterStatus.textContent =
         message.value.state === 'loading'
-          ? 'Loading compatible account models...'
+          ? 'Loading account speech models...'
           : message.value.state === 'error'
-            ? (message.value.message ?? 'Could not load compatible models.')
+            ? (message.value.message ?? 'Could not load account speech models.')
             : message.value.state === 'ready'
               ? openRouterModels.length === 0
-                ? 'No compatible eligible models are available for this account and filter.'
-                : 'Compatible account models loaded.'
-              : 'Load account models to see compatible models and voices.';
+                ? 'No eligible speech models with advertised voices are available for this account and filter.'
+                : 'Account speech models loaded. Some may use an audio format this version cannot play.'
+              : 'Load speech models and advertised voices from your account. Some models may use an audio format this version cannot play.';
       syncSpeechProvider();
       return;
     }

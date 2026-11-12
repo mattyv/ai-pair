@@ -845,12 +845,15 @@ invalidates it. UI, readiness and synthesis admission consume that evidence,
 and asynchronous admission rechecks it before network effects. A denial
 cancels pending speech so late credential reads cannot start requests.
 
-The first integration supports only explicitly verified PCM models and their
-advertised voices, initially the three documented Microsoft MAI-Voice model
-IDs. Their 24-kHz mono PCM output fits the existing WAV playback contract.
-Do not guess rates for other providers, introduce a decoder framework, or
-silently select another model. Broader format support requires an explicit
-format contract and its own verification. Existing listening speed applies
+Load bounded model IDs and advertised voices from the authenticated speech
+catalog instead of maintaining a three-model allowlist. The catalog does not
+document each model's response format, so discovery does not prove playback
+compatibility. This integration requests PCM and accepts only the existing
+verified 24-kHz mono PCM contract; some account-listed models may therefore
+fail synthesis until support for their output format is implemented. Do not
+guess a format or sample rate, retry with another format after a paid request,
+or silently select another model. Broader format support needs its own decoder
+ownership and output-route verification. Existing listening speed applies
 after synthesis; no provider-specific synthesis speed is assumed.
 
 Sources: [OpenRouter TTS](https://openrouter.ai/docs/guides/overview/multimodal/tts),

@@ -2,8 +2,10 @@
 
 ## 0.32.0
 
--   Add OpenRouter speech with secure credentials, account-filtered model and
-    voice choices, and a ZDR policy filter.
+-   Add OpenRouter speech with secure credentials, dynamically loaded
+    account-filtered model and voice choices, and a ZDR policy filter. This
+    version plays only its verified 24 kHz mono PCM contract; some listed
+    models may use an unsupported response format.
 -   Keep previews and narration on the existing speech output route and
     cancellation path.
 

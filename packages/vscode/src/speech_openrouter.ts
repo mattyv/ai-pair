@@ -1,4 +1,4 @@
-import { openRouterCatalog, openRouterModelId, openRouterSpeechModel, openRouterSpeechRequest } from '@ai-pair/protocol';
+import { openRouterCatalog, openRouterSpeechModel, openRouterSpeechRequest } from '@ai-pair/protocol';
 import { pcmToSpeech } from './speech_pcm';
 import type { OpenRouterModel, OpenRouterSpeechPort, SpeechAudioResult } from './speech_types';
 
@@ -7,6 +7,8 @@ const SYNTHESIS_TIMEOUT_MS = 20_000;
 const CATALOG_TIMEOUT_MS = 10_000;
 const MAX_PCM_BYTES = 1_920_000;
 const MAX_CATALOG_BYTES = 1_048_576;
+/** Models whose documented default PCM contract is 24 kHz mono. */
+const DOCUMENTED_PCM_MODELS = new Set(['microsoft/mai-voice-2', 'microsoft/mai-voice-2.1', 'microsoft/mai-voice-2.1-flash']);
 // HTTP status values are protocol-defined.
 // oxlint-disable-next-line eslint/no-magic-numbers
 const AUTH_STATUSES = new Set([401, 403, 404]);
@@ -42,7 +44,16 @@ export class OpenRouterClient implements OpenRouterSpeechPort {
     });
     if (!payload.success) throw new OpenRouterError('invalid');
     // OpenRouterSpeech: Synthesize samples the request policy.
-    const bytes = await this.request(`${ORIGIN}/audio/speech`, 'POST', payload.data, signal, SYNTHESIS_TIMEOUT_MS, MAX_PCM_BYTES, 'audio');
+    const bytes = await this.request(
+      `${ORIGIN}/audio/speech`,
+      'POST',
+      payload.data,
+      signal,
+      SYNTHESIS_TIMEOUT_MS,
+      MAX_PCM_BYTES,
+      'audio',
+      DOCUMENTED_PCM_MODELS.has(request.modelId),
+    );
     try {
       return pcmToSpeech(bytes);
     } catch {
@@ -55,8 +66,7 @@ export class OpenRouterClient implements OpenRouterSpeechPort {
     const account = await this.catalog(`${ORIGIN}/models/user?output_modalities=speech`, signal);
     if (!zdr) return account;
     // OpenRouterSpeech: Narrow only removes account-eligible models.
-    const publicModels = await this.catalog(`${ORIGIN}/models?output_modalities=speech&zdr=true`, signal);
-    const allowed = new Set(publicModels.map((model) => model.id));
+    const allowed = await this.catalogIds(`${ORIGIN}/models?output_modalities=speech&zdr=true`, signal);
     return account.filter((model) => allowed.has(model.id));
   }
 
@@ -67,12 +77,23 @@ export class OpenRouterClient implements OpenRouterSpeechPort {
       const catalog = openRouterCatalog.parse(value);
       const models: OpenRouterModel[] = [];
       for (const item of catalog.data) {
-        if (!openRouterModelId.safeParse(item.id).success) continue;
-        const model = openRouterSpeechModel.parse(item);
-        const voices = model.supported_voices.map((voice) => ({ id: voice, name: voice }));
+        const parsed = openRouterSpeechModel.safeParse(item);
+        if (!parsed.success) continue;
+        const model = parsed.data;
+        const voices = (model.supported_voices ?? []).map((voice) => ({ id: voice, name: voice }));
         if (voices.length > 0) models.push({ id: model.id, name: model.name, voices });
       }
       return models;
+    } catch {
+      throw new OpenRouterError('invalid');
+    }
+  }
+
+  private async catalogIds(url: string, signal: AbortSignal): Promise<Set<string>> {
+    const bytes = await this.request(url, 'GET', undefined, signal, CATALOG_TIMEOUT_MS, MAX_CATALOG_BYTES, 'json');
+    try {
+      const value: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+      return new Set(openRouterCatalog.parse(value).data.map((item) => item.id));
     } catch {
       throw new OpenRouterError('invalid');
     }
@@ -86,6 +107,7 @@ export class OpenRouterClient implements OpenRouterSpeechPort {
     deadline: number,
     limit: number,
     kind: 'audio' | 'json',
+    documentedPcmContract = false,
   ): Promise<Uint8Array> {
     const controller = new AbortController();
     let timedOut = false;
@@ -133,12 +155,17 @@ export class OpenRouterClient implements OpenRouterSpeechPort {
       const contentType = response.headers.get('content-type') ?? '';
       const type = contentType.split(';')[0]?.trim().toLowerCase();
       if (kind === 'audio') {
+        let hasRate = false;
+        let hasChannels = false;
         for (const part of contentType.split(';').slice(1)) {
           const [parameter, value] = part.trim().toLowerCase().split('=');
-          if ((parameter === 'rate' && value !== '24000') || (parameter === 'channels' && value !== '1')) {
+          if (parameter === 'rate') hasRate = value === '24000';
+          if (parameter === 'channels') hasChannels = value === '1';
+          if ((parameter === 'rate' && !hasRate) || (parameter === 'channels' && !hasChannels)) {
             throw new OpenRouterError('invalid');
           }
         }
+        if (!documentedPcmContract && (!hasRate || !hasChannels)) throw new OpenRouterError('invalid');
       }
       if (kind === 'json' ? type !== 'application/json' : type !== 'audio/pcm') {
         throw new OpenRouterError('invalid');
