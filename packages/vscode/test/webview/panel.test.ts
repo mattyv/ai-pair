@@ -2713,8 +2713,8 @@ it('loads OpenRouter models and remembers the selected voice when ZDR changes', 
 
 it('shows the advertised rates for each OpenRouter model and explains that billing units vary', () => {
   vi.mocked(formatOpenRouterPricing)
-    .mockReturnValueOnce('$0.000015 input · $0 output per billing unit')
-    .mockReturnValueOnce('input rate unavailable · $0.0025 output per billing unit')
+    .mockReturnValueOnce('$0.000015 input, $0 output per billing unit')
+    .mockReturnValueOnce('input rate unavailable, $0.0025 output per billing unit')
     .mockReturnValueOnce('Pricing unavailable');
   const models = [
     { id: 'vendor/characters', name: 'Characters', voices: [], pricing: { prompt: '0.000015', completion: '0' } },
@@ -2724,9 +2724,9 @@ it('shows the advertised rates for each OpenRouter model and explains that billi
   send({ type: 'openRouterCatalog', value: { state: 'ready', verified: true, models } });
   const select = element('openrouter-model');
   if (!(select instanceof window.HTMLSelectElement)) throw new TypeError('Missing OpenRouter model selector');
-  expect(select.options[1]?.textContent).toBe('Characters — $0.000015 input · $0 output per billing unit');
-  expect(select.options[2]?.textContent).toBe('Seconds — input rate unavailable · $0.0025 output per billing unit');
-  expect(select.options[3]?.textContent).toBe('Unknown — Pricing unavailable');
+  expect(select.options[1]?.textContent).toBe('Characters: $0.000015 input, $0 output per billing unit');
+  expect(select.options[2]?.textContent).toBe('Seconds: input rate unavailable, $0.0025 output per billing unit');
+  expect(select.options[3]?.textContent).toBe('Unknown: Pricing unavailable');
   expect(formatOpenRouterPricing).toHaveBeenCalledWith(models[0]?.pricing);
   expect(formatOpenRouterPricing).toHaveBeenCalledWith(models[1]?.pricing);
   expect(formatOpenRouterPricing).toHaveBeenCalledWith(undefined);

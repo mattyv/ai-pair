@@ -11,5 +11,5 @@ export function formatOpenRouterPricing(pricing?: OpenRouterPricing): string {
   if (prompt === undefined && completion === undefined) return 'Pricing unavailable';
   const input = prompt === undefined ? 'input rate unavailable' : `$${prompt} input`;
   const output = completion === undefined ? 'output rate unavailable' : `$${completion} output`;
-  return `${input} · ${output} per billing unit`;
+  return `${input}, ${output} per billing unit`;
 }

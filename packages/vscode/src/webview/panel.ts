@@ -1499,7 +1499,7 @@ function handle(message: ToPanel): void {
       for (const model of openRouterModels) {
         const option = document.createElement('option');
         option.value = model.id;
-        option.textContent = `${model.name} — ${formatOpenRouterPricing(model.pricing)}`;
+        option.textContent = `${model.name}: ${formatOpenRouterPricing(model.pricing)}`;
         ui.openRouterModel.append(option);
       }
       if (
