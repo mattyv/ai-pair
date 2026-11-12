@@ -2390,8 +2390,8 @@ stuttering counterexample; the normal configuration checks deadlocks.
 |---|---|
 | `TypeOK` | `extension.test.ts`: TypeOK: ignores workspace attempts to select the cloud provider |
 | `ProviderAligned` | `extension.test.ts`: ProviderAligned: uses a selected provider immediately while its global setting is still being saved; ProviderAligned: does not cancel a preview on delayed settings echoes or unchanged disabled state |
-| `LatestHonored` | `extension.test.ts`: LatestHonored, Settlement: keeps the latest choice when an older global write settles; LatestHonored: does not roll back a newer provider when an older write fails |
-| `KeyClearsVoice` | `extension.test.ts`: KeyClearsVoice: clears an old account voice even while a settings save is pending; KeyClearsVoice: keeps the old account voice unavailable when a key-reset write fails |
+| `LatestHonored` | `extension.test.ts`: LatestHonored, Settlement: keeps the latest choice when an older global write settles; LatestHonored: does not roll back a newer provider when an older write fails; `integration_legacy_speech_paths.ts`, in VS Code: the later of two saves posted back to back wins (#46) |
+| `KeyClearsVoice` | `extension.test.ts`: KeyClearsVoice: clears an old account voice even while a settings save is pending; KeyClearsVoice: keeps the old account voice unavailable when a key-reset write fails; `integration_legacy_speech_paths.ts`, in VS Code: a voice named after the key was removed is not restored (#46) |
 | `Settlement` | `extension.test.ts`: Settlement: rolls back the latest provider and reports a failed settings write; LatestHonored, Settlement: keeps the latest choice when an older global write settles |
 
 ### `AudioOutput` and `OutputAdmission`: explicit speech routing
