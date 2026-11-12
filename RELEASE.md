@@ -3,9 +3,11 @@
 Use this checklist before publishing a release. Record the evidence and any
 remaining limitations with the release; a skipped check is not a pass.
 
-1.  Update [README.md](README.md) for the current installation, behavior, and
-    limitations. Check both extension IDs and the paired installation and
-    reload instructions.
+1.  Review and update [README.md](README.md), the packaged
+    [AI Pair README](packages/vscode/README.md), and the packaged
+    [Local Audio README](packages/audio-ui/README.md) for current installation,
+    behavior, and limitations. Check both extension IDs and the paired
+    installation and reload instructions.
 2.  Review the [architecture](ARCHITECTURE.md) and `.archi` model. If the
     architecture changed, update the source model and generated exports
     together and record how their synchronization was verified. Otherwise,

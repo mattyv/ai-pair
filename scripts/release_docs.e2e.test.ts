@@ -23,6 +23,22 @@ describe('release documentation', () => {
     }
   });
 
+  it('keeps packaged guides current and points to the full guide', () => {
+    for (const file of ['packages/vscode/README.md', 'packages/audio-ui/README.md']) {
+      const guide = read(file);
+      expect(guide).toContain('https://github.com/mattyv/ai-pair#readme');
+      expect(guide).toContain('OpenRouter');
+      expect(guide).toContain('ElevenLabs');
+      expect(guide).toContain('Listening speed');
+      expect(guide).toContain('speech_mode');
+      expect(guide).toContain('Allow all for session');
+      expect(guide).not.toContain('Only supported PCM models');
+    }
+    const checklist = read('RELEASE.md');
+    expect(checklist).toContain('packages/vscode/README.md');
+    expect(checklist).toContain('packages/audio-ui/README.md');
+  });
+
   it('links the release checklist and requires an architecture review', () => {
     expect(read('README.md')).toContain('(RELEASE.md)');
     const checklist = read('RELEASE.md');

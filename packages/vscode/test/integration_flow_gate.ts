@@ -40,7 +40,10 @@ async function within<T>(promise: Promise<T>, message: string): Promise<T> {
 export async function flowGatePaths(api: Api, root: string): Promise<void> {
   const file = path.join(root, 'flow-gate.txt');
   fs.writeFileSync(file, '');
+  const crlfFile = path.join(root, 'flow-gate-crlf.txt');
+  fs.writeFileSync(crlfFile, 'head\r\n');
   const document = await vscode.workspace.openTextDocument(file);
+  const crlfDocument = await vscode.workspace.openTextDocument(crlfFile);
   await vscode.window.showTextDocument(document);
   const calls: string[] = [];
   let finish: (() => void) | undefined;
@@ -91,6 +94,47 @@ export async function flowGatePaths(api: Api, root: string): Promise<void> {
     assert.equal((await within(report, 'batch did not finish after narration')).batches[0]?.status, 'completed');
     await within(controller.end(), 'session did not end');
 
+    await within(controller.start('bracket move with selection'), 'selection session did not start');
+    await within(controller.read('flow-gate.txt'), 'selection file was not read');
+    await within(controller.step([{ select: { file: 'flow-gate.txt', line: 1, text: 'typed' } }]), 'selection was not accepted');
+    assert.equal((await within(controller.step([]), 'selection did not finish')).batches[0]?.status, 'completed');
+    const selected = await within(controller.step([{ move: { to: 'next_close' } }]), 'selected bracket move did not settle');
+    assert.equal(selected.rejected?.error.kind, 'invalid_action');
+    assert.match(selected.rejected?.error.message ?? '', /requires one closing bracket immediately after an unselected cursor/);
+    await within(controller.end(), 'selection session did not end');
+
+    await within(controller.start('grouped typing after marker'), 'grouped typing session did not start');
+    await within(controller.read('flow-gate-crlf.txt'), 'grouped typing file was not read');
+    controller.setCodePlayback('lines');
+    await within(
+      controller.step([
+        { move: { file: 'flow-gate-crlf.txt', line: 1, to: 'line_end' } },
+        { type: `a${CURSOR_MARKER}\nb\nc` },
+        { type_fast: `X${CURSOR_MARKER}` },
+      ]),
+      'grouped typing was not accepted',
+    );
+    assert.equal((await within(controller.step([]), 'grouped typing did not finish')).batches[0]?.status, 'completed');
+    assert.equal(crlfDocument.getText(), 'headaX\r\nb\r\nc\r\n');
+    controller.setCodePlayback('typing');
+    await within(controller.end(), 'grouped typing session did not end');
+
+    await within(controller.start('grouped LF typing after marker'), 'LF typing session did not start');
+    await within(controller.read('flow-gate.txt'), 'LF typing file was not read');
+    controller.setCodePlayback('lines');
+    await within(
+      controller.step([
+        { move: { file: 'flow-gate.txt', line: 1, to: 'line_end' } },
+        { type: `a${CURSOR_MARKER}\nb\nc` },
+        { type_fast: `X${CURSOR_MARKER}` },
+      ]),
+      'LF typing was not accepted',
+    );
+    assert.equal((await within(controller.step([]), 'LF typing did not finish')).batches[0]?.status, 'completed');
+    assert.equal(document.getText(), 'typedaX\nb\nc');
+    controller.setCodePlayback('typing');
+    await within(controller.end(), 'LF typing session did not end');
+
     await within(controller.start('speech cancellation editor gate'), 'second session did not start');
     await within(
       controller.step([{ say: 'Cancelable narration.', speak: true, speech_mode: 'continue' }]),
@@ -104,7 +148,10 @@ export async function flowGatePaths(api: Api, root: string): Promise<void> {
     console.log('SpeechOverlap: real editor typing proceeds, later speech waits, and ending cancels');
   } finally {
     finish?.();
+    controller.setCodePlayback('typing');
     controller.endSession();
+    controller.disconnect();
     fs.rmSync(file, { force: true });
+    fs.rmSync(crlfFile, { force: true });
   }
 }

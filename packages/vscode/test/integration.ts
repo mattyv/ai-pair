@@ -48,6 +48,8 @@ import { renderDiagnosticPaths } from './integration_render_diagnostic';
 import { run as guidedDiagnosticPaths } from './integration_guided_diagnostics';
 import { exerciseReleaseExtensionPaths } from './integration_release_extension_paths';
 import { flowGatePaths } from './integration_flow_gate';
+import { speechCoveragePaths } from './integration_speech_coverage_paths';
+import { vscodeCoveragePaths } from './integration_vscode_coverage_paths';
 
 const EXPECTED_TODOS = `export interface Todo {
   id: number;
@@ -526,6 +528,7 @@ export async function run(): Promise<void> {
     { select: [] },
     { point: 5 },
     { say: 'x', loud: true },
+    { say: 'x', speech_mode: 'invalid' },
     { delete: false },
     { run: 'true', wait: '2' },
     { type: ['x'] },
@@ -1559,6 +1562,8 @@ export async function run(): Promise<void> {
   await runLegacySpeechPaths(api);
   await badSpeechSettings(api);
   await flowGatePaths(api, root);
+  await speechCoveragePaths(api);
+  await vscodeCoveragePaths(api);
   await gapPaths(api);
 
   // The window's file and its sockets go with it, at exit: here the file is gone already, and a socket is still open
