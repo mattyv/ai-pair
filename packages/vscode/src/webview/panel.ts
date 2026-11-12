@@ -9,7 +9,8 @@ import type { AgentState, CodePlayback, PanelEvent, Ref } from '@ai-pair/core';
 import type { ChatOrder, FromPanel, SpeechState, ToPanel } from '../panel_messages';
 import { SpeechAudio, decodeWav } from './speech_audio';
 import { localSpeechDecoder } from './speech_decode';
-import { ELEVENLABS_SPEEDS, SPEECH_SPEEDS, SPEECH_VOICES, type SpeechVoice } from '../speech_types';
+import { formatOpenRouterPricing } from '../speech_pricing';
+import { ELEVENLABS_SPEEDS, SPEECH_SPEEDS, SPEECH_VOICES, type OpenRouterModel, type SpeechVoice } from '../speech_types';
 import type { CalibrationView } from '../calibration';
 import type { OutputChoice } from '../speech_output_types';
 import { ELLIPSIS, LABEL_SEPARATOR, RANGE_DASH, RIGHT_ARROW, SPEED_SUFFIX } from '@ai-pair/core/constants';
@@ -180,7 +181,7 @@ let openRouterZdr = false;
 let openRouterFormat: 'pcm' | 'mp3' = 'mp3';
 let openRouterHasKey = false;
 let openRouterCatalogVerified = false;
-let openRouterModels: Array<{ id: string; name: string; voices: Array<{ id: string; name: string }> }> = [];
+let openRouterModels: OpenRouterModel[] = [];
 let cloudVoice = '';
 let cloudSpeed = 1;
 let cloudSupported = false;
@@ -1498,7 +1499,7 @@ function handle(message: ToPanel): void {
       for (const model of openRouterModels) {
         const option = document.createElement('option');
         option.value = model.id;
-        option.textContent = model.name;
+        option.textContent = `${model.name} — ${formatOpenRouterPricing(model.pricing)}`;
         ui.openRouterModel.append(option);
       }
       if (

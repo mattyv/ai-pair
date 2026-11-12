@@ -19,6 +19,23 @@ it('accepts a bounded model and advertised voice without an allowlist', () => {
     openRouterSpeechRequest.safeParse({ model: newModel, voice: 'voice/42 + natural', input: 'Hi', response_format: 'pcm' }).success,
   ).toBe(true);
 });
+it('preserves valid advertised pricing and keeps models with missing or malformed rates', () => {
+  const entry = { id: model, name: 'Speech', supported_voices: [], pricing: { prompt: '0.000015', completion: '0' } };
+  expect(openRouterSpeechModel.parse(entry)).toEqual(entry);
+  expect(openRouterSpeechModel.parse({ ...entry, pricing: { prompt: '1e-9', completion: '0.0025' } })).toMatchObject({
+    pricing: { prompt: '1e-9', completion: '0.0025' },
+  });
+  expect(openRouterSpeechModel.parse({ ...entry, pricing: { completion: '0.0025' } })).toMatchObject({
+    id: model,
+    pricing: { completion: '0.0025' },
+  });
+  for (const invalid of ['-1', 'Infinity', 'NaN', '1e999', '$2', '1'.repeat(80)]) {
+    const parsed = openRouterSpeechModel.parse({ ...entry, pricing: { prompt: invalid, completion: '0.0025' } });
+    expect(parsed).toMatchObject({ id: model, pricing: { completion: '0.0025' } });
+    expect(parsed.pricing?.prompt).toBeUndefined();
+  }
+  expect(openRouterSpeechModel.parse({ ...entry, pricing: 'malformed' })).toMatchObject({ id: model, name: 'Speech' });
+});
 it('rejects malformed or oversized catalog data', () => {
   for (const value of [{}, { data: [{}] }, { data: Array.from({ length: 501 }, () => ({ id: model })) }, { data: [{ id: '' }] }]) {
     expect(openRouterCatalog.safeParse(value).success).toBe(false);

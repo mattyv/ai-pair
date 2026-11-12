@@ -12,8 +12,10 @@ import { ELLIPSIS, LABEL_SEPARATOR, RANGE_DASH, RIGHT_ARROW, SPEED_SUFFIX } from
 import type { ToPanel } from '../../src/panel_messages';
 import { loadPage, ui } from '../page';
 import { voiceIndicator } from '../../src/voice_indicator';
+import { formatOpenRouterPricing } from '../../src/speech_pricing';
 
 vi.mock('../../src/voice_indicator', () => ({ voiceIndicator: vi.fn().mockReturnValue('checking') }));
+vi.mock('../../src/speech_pricing', () => ({ formatOpenRouterPricing: vi.fn().mockReturnValue('Pricing unavailable') }));
 vi.mock('../../src/webview/speech_decode', () => ({
   localSpeechDecoder:
     (sendMessage: (message: { type: string }) => void) =>
@@ -2707,6 +2709,30 @@ it('loads OpenRouter models and remembers the selected voice when ZDR changes', 
   send({ type: 'openRouterCatalog', value: { state: 'ready', verified: true, models: [] } });
   expect(model.value).toBe('');
   expect(element('speech-preview').hasAttribute('disabled')).toBe(true);
+});
+
+it('shows the advertised rates for each OpenRouter model and explains that billing units vary', () => {
+  vi.mocked(formatOpenRouterPricing)
+    .mockReturnValueOnce('$0.000015 input · $0 output per billing unit')
+    .mockReturnValueOnce('input rate unavailable · $0.0025 output per billing unit')
+    .mockReturnValueOnce('Pricing unavailable');
+  const models = [
+    { id: 'vendor/characters', name: 'Characters', voices: [], pricing: { prompt: '0.000015', completion: '0' } },
+    { id: 'vendor/seconds', name: 'Seconds', voices: [], pricing: { completion: '0.0025' } },
+    { id: 'vendor/unknown', name: 'Unknown', voices: [] },
+  ];
+  send({ type: 'openRouterCatalog', value: { state: 'ready', verified: true, models } });
+  const select = element('openrouter-model');
+  if (!(select instanceof window.HTMLSelectElement)) throw new TypeError('Missing OpenRouter model selector');
+  expect(select.options[1]?.textContent).toBe('Characters — $0.000015 input · $0 output per billing unit');
+  expect(select.options[2]?.textContent).toBe('Seconds — input rate unavailable · $0.0025 output per billing unit');
+  expect(select.options[3]?.textContent).toBe('Unknown — Pricing unavailable');
+  expect(formatOpenRouterPricing).toHaveBeenCalledWith(models[0]?.pricing);
+  expect(formatOpenRouterPricing).toHaveBeenCalledWith(models[1]?.pricing);
+  expect(formatOpenRouterPricing).toHaveBeenCalledWith(undefined);
+  expect(element('openrouter').textContent).toMatch(/units vary by model/i);
+  select.value = 'vendor/seconds';
+  expect(select.value).toBe('vendor/seconds');
 });
 
 it('saves only supported OpenRouter response formats', () => {

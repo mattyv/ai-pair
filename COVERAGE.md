@@ -262,6 +262,7 @@ Last updated: css, 2026-11-12.
 | `packages/vscode/src/speech_pcm.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 52.0% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_phonemizer_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_platform.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 81.6% B 63.6% F 100.0% | - | - | - | - |
+| `packages/vscode/src/speech_pricing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_readiness.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 79.5% B 80.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_runtime_status.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 90.0% B 33.3% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_segments.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 94.9% B 22.2% F 100.0% | - | - | - | - |
@@ -433,6 +434,7 @@ Last updated: css, 2026-11-12.
 | `packages/vscode/test/speech_pcm.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_phonemizer_bridge.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_platform.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_pricing.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_readiness.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_runtime.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_segments.test.ts` | TypeScript | test | test | test | - | - | test |

@@ -883,3 +883,11 @@ packaging. Keep browser-facing imports on explicit browser-safe subpaths.
 Sources: [OpenRouter TTS](https://openrouter.ai/docs/guides/overview/multimodal/tts),
 [account-filtered models](https://openrouter.ai/docs/api/api-reference/models/list-models-filtered-by-user-provider-preferences-privacy-settings-and-guardrails),
 and [ZDR policy](https://openrouter.ai/docs/guides/features/zdr).
+
+Show OpenRouter's advertised input (`pricing.prompt`) and output
+(`pricing.completion`) rates in the dynamic model choices. Preserve their exact
+catalog strings and label them as rates per billing unit. The API does not
+identify that unit, and TTS models may bill per character, token, or generated
+audio time; do not infer a universal unit or use these rates as an exact cost
+estimate. Missing or malformed pricing must not make an otherwise eligible
+model unusable.

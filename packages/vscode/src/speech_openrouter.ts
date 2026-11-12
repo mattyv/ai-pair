@@ -134,7 +134,9 @@ export class OpenRouterClient implements OpenRouterSpeechPort {
         if (!parsed.success) continue;
         const model = parsed.data;
         const voices = (model.supported_voices ?? []).map((voice) => ({ id: voice, name: voice }));
-        models.push({ id: model.id, name: model.name, voices });
+        const pricing = model.pricing;
+        const hasAdvertisedRate = pricing?.prompt !== undefined || pricing?.completion !== undefined;
+        models.push({ id: model.id, name: model.name, voices, ...(hasAdvertisedRate ? { pricing } : {}) });
       }
       return models;
     } catch {

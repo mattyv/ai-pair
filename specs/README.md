@@ -3263,6 +3263,8 @@ may arrive after invalidation or replacement, but cannot update eligibility.
 An admission records the evidence at that instant: the model does not revoke a
 request already admitted before a later denial. It abstracts request payloads,
 provider transport, user interface details, cancellation, and physical playback.
+Pricing labels on model choices are optional display data; they do not change
+model/voice eligibility or a transition in `OpenRouterCatalog.tla`.
 
 TLC checked `OpenRouterCatalog.cfg` with two generations: 71 generated and 36
 distinct states. The safety invariants and temporal properties passed. Terminal

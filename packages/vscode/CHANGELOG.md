@@ -10,6 +10,9 @@
 -   OpenRouter does not publish codec compatibility in its model catalog.
     Listed models may reject the chosen response format, voice or standard text
     input; provider-specific parameters are not inferred.
+-   Show OpenRouter's advertised input and output rates in the model choices.
+    Billing units vary by model, so the exact catalog rates are shown without
+    guessing a unit.
 
 ## 0.32.0
 

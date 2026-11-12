@@ -6,6 +6,7 @@ import { SpeechCredentials } from '../src/speech_credentials';
 import { OpenRouterClient } from '../src/speech_openrouter';
 import { OpenRouterCatalog } from '../src/speech_openrouter_catalog';
 import { SpeechService } from '../src/speech_service';
+import { formatOpenRouterPricing } from '../src/speech_pricing';
 import { encodeTempoWav } from '../src/speech_tempo_pcm';
 import type { OpenRouterAudioDecoder } from '../src/speech_types';
 
@@ -28,6 +29,24 @@ function catalogResponse(ids: string[]): Response {
     headers: { 'content-type': 'application/json' },
   });
 }
+
+it('retains account pricing through catalog publication and formats it for the model selector', async () => {
+  const fetcher = vi.fn<typeof fetch>(() =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify({ data: [{ id: model, name: 'Speech', supported_voices: [], pricing: { prompt: '0.000015', completion: '0' } }] }),
+        { headers: { 'content-type': 'application/json' } },
+      ),
+    ),
+  );
+  const client = new OpenRouterClient(() => Promise.resolve('synthetic-key'), fetcher);
+  const labels: string[] = [];
+  const catalog = new OpenRouterCatalog(client, (view) => {
+    if (view.state === 'ready') labels.push(...view.models.map((item) => `${item.name} — ${formatOpenRouterPricing(item.pricing)}`));
+  });
+  await catalog.load(false);
+  expect(labels).toEqual(['Speech — $0.000015 input · $0 output per billing unit']);
+});
 
 it('narrows account models by ZDR and plays only the selected authenticated PCM request', async () => {
   const calls: Array<{ url: string; init?: RequestInit }> = [];

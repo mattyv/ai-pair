@@ -66,6 +66,7 @@ export interface OpenRouterModel {
   id: string;
   name: string;
   voices: OpenRouterVoice[];
+  pricing?: { prompt?: string; completion?: string };
 }
 /** OpenRouter operations retain credentials inside the provider. */
 export interface OpenRouterSpeechPort {

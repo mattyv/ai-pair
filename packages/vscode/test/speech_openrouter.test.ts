@@ -35,6 +35,28 @@ it('AccountOnly uses the authenticated account catalog and maps advertised voice
   expect(fetcher.mock.calls[0]?.[0]).toContain('/models/user?output_modalities=speech');
   expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ headers: { authorization: 'Bearer secret' }, redirect: 'error' });
 });
+it('carries advertised model rates through the account catalog without excluding malformed pricing', async () => {
+  const data = openRouterCatalog.parse({
+    data: [
+      { id: 'vendor/characters', name: 'Characters', supported_voices: [], pricing: { prompt: '0.000015', completion: '0' } },
+      { id: 'vendor/seconds', name: 'Seconds', supported_voices: [], pricing: { completion: '0.0025' } },
+      { id: 'vendor/unknown', name: 'Unknown', supported_voices: [], pricing: { prompt: '-1', completion: 'NaN' } },
+      { id: 'vendor/missing', name: 'Missing', supported_voices: [] },
+    ],
+  });
+  const fetcher = vi.fn<typeof fetch>(async () => json(data));
+  const models = await new OpenRouterClient(async () => 'secret', fetcher, sharedDecoder).models(false, signal());
+  expect(models).toHaveLength(4);
+  expect(models[0]).toMatchObject({
+    id: 'vendor/characters',
+    pricing: { prompt: '0.000015', completion: '0' },
+  });
+  expect(models[1]).toMatchObject({ id: 'vendor/seconds', pricing: { completion: '0.0025' } });
+  expect(models[2]).toMatchObject({ id: 'vendor/unknown', name: 'Unknown', voices: [] });
+  expect(models[2]?.pricing?.prompt).toBeUndefined();
+  expect(models[2]?.pricing?.completion).toBeUndefined();
+  expect(models[3]).toMatchObject({ id: 'vendor/missing', name: 'Missing', voices: [] });
+});
 it('ZdrSelection intersects the authenticated catalog with the public ZDR catalog', async () => {
   const fetcher = vi
     .fn<typeof fetch>()

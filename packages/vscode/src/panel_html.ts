@@ -147,6 +147,7 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
         <label class="settings-field">Speech model
           <select data-ui="openrouter-model"><option value="">Choose a model</option></select>
         </label>
+        <p>OpenRouter rates are shown per billing unit. Units vary by model; check its pricing page for the unit and final cost.</p>
         <label class="settings-field">Voice
           <select data-ui="openrouter-voice"><option value="">Use provider default (if supported)</option></select>
         </label>
