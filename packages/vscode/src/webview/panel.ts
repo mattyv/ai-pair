@@ -8,6 +8,7 @@ import { SPEECH_LISTENING_RATES } from '../speech_tempo';
 import type { AgentState, CodePlayback, PanelEvent, Ref } from '@ai-pair/core';
 import type { ChatOrder, FromPanel, SpeechState, ToPanel } from '../panel_messages';
 import { SpeechAudio, decodeWav } from './speech_audio';
+import { localSpeechDecoder } from './speech_decode';
 import { ELEVENLABS_SPEEDS, SPEECH_SPEEDS, SPEECH_VOICES, type SpeechVoice } from '../speech_types';
 import type { CalibrationView } from '../calibration';
 import type { OutputChoice } from '../speech_output_types';
@@ -91,6 +92,7 @@ const ui = {
   openRouterLoad: $('openrouter-load', HTMLButtonElement),
   openRouterModel: $('openrouter-model', HTMLSelectElement),
   openRouterVoice: $('openrouter-voice', HTMLSelectElement),
+  openRouterFormat: $('openrouter-format', HTMLSelectElement),
   openRouterZdr: $('openrouter-zdr', HTMLButtonElement),
   openRouterStatus: $('openrouter-status', HTMLElement),
   speechKeyStatus: $('speech-key-status', HTMLElement),
@@ -175,6 +177,7 @@ let speechProvider: 'kokoro' | 'elevenlabs' | 'openrouter' = 'kokoro';
 let openRouterModel = '';
 let openRouterVoice = '';
 let openRouterZdr = false;
+let openRouterFormat: 'pcm' | 'mp3' = 'mp3';
 let openRouterHasKey = false;
 let openRouterCatalogVerified = false;
 let openRouterModels: Array<{ id: string; name: string; voices: Array<{ id: string; name: string }> }> = [];
@@ -1057,7 +1060,7 @@ function saveSpeechSettings(): void {
       elevenLabsVoice: cloudVoice,
       elevenLabsSpeed: cloudSpeed,
       ...(speechProvider === 'openrouter' || openRouterModel !== '' || openRouterVoice !== '' || openRouterZdr
-        ? { openRouterModel, openRouterVoice, openRouterZdr }
+        ? { openRouterModel, openRouterVoice, openRouterZdr, openRouterFormat }
         : {}),
     },
   });
@@ -1118,9 +1121,11 @@ function syncSpeechProvider(): void {
         ? !cloudSupported ||
           !openRouterHasKey ||
           openRouterModel === '' ||
-          openRouterVoice === '' ||
           (openRouterCatalogVerified &&
-            !openRouterModels.some((model) => model.id === openRouterModel && model.voices.some((voice) => voice.id === openRouterVoice)))
+            !openRouterModels.some(
+              (model) =>
+                model.id === openRouterModel && (openRouterVoice === '' || model.voices.some((voice) => voice.id === openRouterVoice)),
+            ))
         : !speechSupported);
 }
 
@@ -1152,7 +1157,7 @@ ui.speechProvider.addEventListener('change', () => {
 function renderOpenRouterVoices(): void {
   const placeholder = document.createElement('option');
   placeholder.value = '';
-  placeholder.textContent = 'Choose a voice';
+  placeholder.textContent = 'Use provider default (if supported)';
   ui.openRouterVoice.replaceChildren(placeholder);
   for (const voice of openRouterModels.find((model) => model.id === openRouterModel)?.voices ?? []) {
     const option = document.createElement('option');
@@ -1191,6 +1196,12 @@ ui.openRouterModel.addEventListener('change', () => {
 ui.openRouterVoice.addEventListener('change', () => {
   openRouterVoice = ui.openRouterVoice.value;
   syncSpeechProvider();
+  saveSpeechSettings();
+});
+ui.openRouterFormat.addEventListener('change', () => {
+  const value = ui.openRouterFormat.value;
+  if (value !== 'pcm' && value !== 'mp3') return;
+  openRouterFormat = value;
   saveSpeechSettings();
 });
 ui.openRouterZdr.addEventListener('click', () => {
@@ -1398,6 +1409,7 @@ function handle(message: ToPanel): void {
       openRouterModel = message.value.openRouterModel ?? '';
       openRouterVoice = message.value.openRouterVoice ?? '';
       openRouterZdr = message.value.openRouterZdr ?? false;
+      openRouterFormat = message.value.openRouterFormat === 'pcm' ? 'pcm' : 'mp3';
       if (
         !openRouterCatalogVerified &&
         openRouterModel !== '' &&
@@ -1409,6 +1421,7 @@ function handle(message: ToPanel): void {
         ui.openRouterModel.append(saved);
       }
       ui.openRouterModel.value = openRouterModel;
+      ui.openRouterFormat.value = openRouterFormat;
       renderOpenRouterVoices();
       ui.speechCloudSpeed.value = String(cloudSpeed);
       selectCloudVoice();
@@ -1821,7 +1834,11 @@ function followsHistory(): boolean {
   return scrollHeight - clientHeight - scrollTop <= 1 || (followingLatest && historyScrollHeight - historyHeight - scrollTop <= 1);
 }
 
+const handleDecode = localSpeechDecoder((message) => {
+  vscode.postMessage(message);
+}, crypto.randomUUID());
 window.addEventListener('message', (m: MessageEvent) => {
+  if (handleDecode(m.data)) return;
   // The extension posts only ToPanel messages.
   const follow = chatOrder === 'oldestFirst' && followsHistory();
   if (chatOrder === 'oldestFirst') followingLatest = follow;

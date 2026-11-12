@@ -8,7 +8,7 @@ import type { SpeechModelStatus } from './speech_setup';
 import type { CatalogView } from './speech_catalog';
 import type { OpenRouterCatalogView } from './speech_openrouter_catalog';
 import type { OutputChoice } from './speech_output_types';
-import type { AudioDiagnostics } from '@ai-pair/protocol';
+import type { AudioDiagnostics, SpeechDecodeFromPage } from '@ai-pair/protocol';
 import type { OutputPreferenceView } from './speech_output_preferences';
 
 export type SpeechState = 'preparing' | 'speaking' | 'paused' | 'unavailable' | 'idle';
@@ -20,6 +20,7 @@ export type ChatOrder = 'newestFirst' | 'oldestFirst';
 
 /** Messages from the page. */
 export type FromPanel =
+  | SpeechDecodeFromPage
   | { type: 'ready' }
   | { type: 'copyDiagnostics' }
   | { type: 'speechOutputRefresh' }

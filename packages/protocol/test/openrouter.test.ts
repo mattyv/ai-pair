@@ -37,7 +37,7 @@ it('accepts bounded PCM requests with optional ZDR enforcement', () => {
   const request = { model, voice, input: 'Hello', response_format: 'pcm' };
   expect(openRouterSpeechRequest.safeParse(request).success).toBe(true);
   expect(openRouterSpeechRequest.safeParse({ ...request, provider: { zdr: true } }).success).toBe(true);
-  expect(openRouterSpeechRequest.safeParse({ ...request, response_format: 'mp3' }).success).toBe(false);
+  expect(openRouterSpeechRequest.safeParse({ ...request, response_format: 'mp3' }).success).toBe(true);
   for (const value of [
     { ...request, provider: { zdr: false } },
     { ...request, input: '' },

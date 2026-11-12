@@ -14,6 +14,17 @@ import { loadPage, ui } from '../page';
 import { voiceIndicator } from '../../src/voice_indicator';
 
 vi.mock('../../src/voice_indicator', () => ({ voiceIndicator: vi.fn().mockReturnValue('checking') }));
+vi.mock('../../src/webview/speech_decode', () => ({
+  localSpeechDecoder:
+    (sendMessage: (message: { type: string }) => void) =>
+    (value: unknown): boolean => {
+      if (typeof value === 'object' && value !== null && 'type' in value && value.type === 'mockDecodePost') {
+        sendMessage({ type: 'speechDecodeReady' });
+        return true;
+      }
+      return false;
+    },
+}));
 
 // The test environment's globals, typed with happy-dom's types: the project's type check has no DOM library.
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
@@ -2698,6 +2709,34 @@ it('loads OpenRouter models and remembers the selected voice when ZDR changes', 
   expect(element('speech-preview').hasAttribute('disabled')).toBe(true);
 });
 
+it('saves only supported OpenRouter response formats', () => {
+  const provider = element('speech-provider');
+  const format = element('openrouter-format');
+  if (!(provider instanceof window.HTMLSelectElement) || !(format instanceof window.HTMLSelectElement)) {
+    throw new TypeError('Missing OpenRouter format controls');
+  }
+  provider.value = 'openrouter';
+  provider.dispatchEvent(new window.Event('change'));
+  for (const value of ['pcm', 'mp3'] as const) {
+    format.value = value;
+    format.dispatchEvent(new window.Event('change'));
+    expect(posted()).toContainEqual({
+      type: 'speechSettings',
+      // oxlint-disable-next-line typescript/no-unsafe-assignment -- Vitest's asymmetric matcher validates this value.
+      value: expect.objectContaining({ provider: 'openrouter', openRouterFormat: value }),
+    });
+  }
+  const beforeInvalid = posted().filter((message) => message.type === 'speechSettings').length;
+  format.value = '';
+  format.dispatchEvent(new window.Event('change'));
+  expect(posted().filter((message) => message.type === 'speechSettings')).toHaveLength(beforeInvalid);
+});
+
+it('sends decoder frames from the local page handler through the VS Code API', () => {
+  window.dispatchEvent(new window.MessageEvent('message', { data: { type: 'mockDecodePost' } }));
+  expect(posted()).toContainEqual({ type: 'speechDecodeReady' });
+});
+
 it('reports OpenRouter catalog states and restores saved settings', () => {
   send({
     type: 'speechSettings',
@@ -2711,8 +2750,12 @@ it('reports OpenRouter catalog states and restores saved settings', () => {
       openRouterModel: 'm',
       openRouterVoice: 'v',
       openRouterZdr: true,
+      openRouterFormat: 'pcm',
     },
   });
+  const format = element('openrouter-format');
+  if (!(format instanceof window.HTMLSelectElement)) throw new TypeError('Missing format select');
+  expect(format.value).toBe('pcm');
   send({ type: 'openRouterKeyStatus', hasKey: false });
   expect(element('openrouter-key-status').textContent).toBe('No API key saved.');
   send({ type: 'openRouterCatalog', value: { state: 'loading', verified: false, models: [] } });

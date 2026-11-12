@@ -13,6 +13,7 @@ import {
   SPEECH_VOICES,
   speechListeningRate,
   type ElevenLabsSpeechPort,
+  type OpenRouterAudioFormat,
   type OpenRouterSpeechPort,
   type LocalSpeechFailureReason,
   type SpeechProvider,
@@ -149,6 +150,7 @@ interface ActiveSpeech {
   cloudVoice: string;
   openRouterModel: string;
   openRouterZdr: boolean;
+  openRouterFormat: OpenRouterAudioFormat;
   voice: SpeechVoice;
   speed: number;
   resolve(): void;
@@ -346,7 +348,6 @@ export class SpeechService implements NarrationPort {
       provider === 'openrouter' &&
       (this.options.openRouter === undefined ||
         openRouterModel === '' ||
-        openRouterVoice === '' ||
         this.options.openRouterAllowed?.(openRouterModel, openRouterVoice) === false)
     ) {
       this.options.output.status(id, 'unavailable', 'Choose an available OpenRouter model and voice.');
@@ -376,6 +377,7 @@ export class SpeechService implements NarrationPort {
       cloudVoice: provider === 'openrouter' ? openRouterVoice : settings.elevenLabsVoice,
       openRouterModel,
       openRouterZdr: settings.openRouterZdr === true,
+      openRouterFormat: settings.openRouterFormat ?? 'pcm',
       voice: voice ?? 'af_heart',
       speed: provider === 'elevenlabs' ? settings.elevenLabsSpeed : settings.speed,
       resolve,
@@ -451,7 +453,14 @@ export class SpeechService implements NarrationPort {
       const request =
         'models' in cloud
           ? cloud.synthesize(
-              { text: current.text, modelId: current.openRouterModel, voiceId: current.cloudVoice, zdr: current.openRouterZdr },
+              {
+                id: current.id,
+                text: current.text,
+                modelId: current.openRouterModel,
+                voiceId: current.cloudVoice,
+                zdr: current.openRouterZdr,
+                format: current.openRouterFormat,
+              },
               controller.signal,
             )
           : cloud.synthesize({ text: current.text, voiceId: current.cloudVoice, speed: current.speed }, controller.signal);

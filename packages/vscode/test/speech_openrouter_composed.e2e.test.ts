@@ -6,9 +6,23 @@ import { SpeechCredentials } from '../src/speech_credentials';
 import { OpenRouterClient } from '../src/speech_openrouter';
 import { OpenRouterCatalog } from '../src/speech_openrouter_catalog';
 import { SpeechService } from '../src/speech_service';
+import { encodeTempoWav } from '../src/speech_tempo_pcm';
+import type { OpenRouterAudioDecoder } from '../src/speech_types';
 
 const model = 'microsoft/mai-voice-2';
 const other = 'microsoft/mai-voice-2.1';
+const decoder: OpenRouterAudioDecoder = {
+  admit: () => {
+    const controller = new AbortController();
+    return Promise.resolve({
+      signal: controller.signal,
+      decode: () => Promise.resolve(encodeTempoWav(new Int16Array([1, 2]), false)),
+      cancel: () => {
+        controller.abort();
+      },
+    });
+  },
+};
 function catalogResponse(ids: string[]): Response {
   return new Response(JSON.stringify({ data: ids.map((id) => ({ id, name: id, supported_voices: ['voice'] })) }), {
     headers: { 'content-type': 'application/json' },
@@ -41,7 +55,7 @@ it('narrows account models by ZDR and plays only the selected authenticated PCM 
     () => {},
     'aiPair.openRouter.apiKey',
   );
-  const client = new OpenRouterClient(() => credentials.read(), fetcher);
+  const client = new OpenRouterClient(() => credentials.read(), fetcher, decoder);
   const published: string[] = [];
   const catalog = new OpenRouterCatalog(client, (view) => {
     if (view.state === 'ready') published.push(...view.models.map((item) => item.id));
@@ -111,6 +125,7 @@ it('does not play a late synthesis response after cancellation', async () => {
       started.resolve();
       return response.promise;
     },
+    decoder,
   );
   const play = vi.fn(() => 1);
   const speech = new SpeechService({
@@ -145,10 +160,14 @@ it('does not fetch or play when catalog denial arrives while the secret read is 
   const key = Promise.withResolvers<string | undefined>();
   const secretRead = Promise.withResolvers<void>();
   const fetcher = vi.fn<typeof fetch>();
-  const client = new OpenRouterClient(() => {
-    secretRead.resolve();
-    return key.promise;
-  }, fetcher);
+  const client = new OpenRouterClient(
+    () => {
+      secretRead.resolve();
+      return key.promise;
+    },
+    fetcher,
+    decoder,
+  );
   let denied = false;
   const catalog = new OpenRouterCatalog(
     { models: () => Promise.resolve(denied ? [] : [{ id: model, name: 'Model', voices: [{ id: 'voice', name: 'Voice' }] }]) },

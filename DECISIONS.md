@@ -846,15 +846,39 @@ and asynchronous admission rechecks it before network effects. A denial
 cancels pending speech so late credential reads cannot start requests.
 
 Load bounded model IDs and advertised voices from the authenticated speech
-catalog instead of maintaining a three-model allowlist. The catalog does not
-document each model's response format, so discovery does not prove playback
-compatibility. This integration requests PCM and accepts only the existing
-verified 24-kHz mono PCM contract; some account-listed models may therefore
-fail synthesis until support for their output format is implemented. Do not
-guess a format or sample rate, retry with another format after a paid request,
-or silently select another model. Broader format support needs its own decoder
-ownership and output-route verification. Existing listening speed applies
-after synthesis; no provider-specific synthesis speed is assumed.
+catalog instead of maintaining a three-model allowlist. Include account-listed
+models without advertised voices and omit `voice` when the programmer chooses
+the provider default. The catalog does not document each model's response
+format, so discovery does not prove playback compatibility. Let the programmer
+select PCM or MP3 for the selected model; never guess, retry another format
+after a paid request, or silently select another model. A locally owned browser
+decoder converts bounded PCM or MP3 responses to the existing 24-kHz mono WAV
+contract before the selected output route plays them. Reserve a request-specific
+decoder lease before the paid POST. Retire it on every error, cancellation, or
+actual document destruction; a confirmed new webview boot invalidates a stale
+lease and aborts provider work that has not yet posted. Allocate replacement
+document identity before the handshake, but activate it only after its token is
+acknowledged. Repeated current or pending tokens are idempotent, so stale-token
+recovery cannot retire a live decoder. A running browser decode retains its
+physical slot until it settles or its owning document is destroyed.
+
+This covers models that accept the standard text input, chosen `response_format`
+and optional voice fields. It does not infer provider-specific parameters or
+guarantee that every account-listed model accepts every format or voice. Browser
+audio decoding can bound bytes before work starts but cannot guarantee a strict
+memory cap before the browser decoder allocates. Each browser document decodes
+an embedded short MP3 self-test before admitting a provider request; a failed
+self-test blocks the request before it can spend credits. Existing listening
+speed applies after normalization; no provider-specific synthesis speed is
+assumed. The self-test is an original 418-byte, 50-ms 440-Hz synthetic tone,
+encoded locally with the installed libmp3lame 3.100 and independently decoded
+with mpg123. Neither library is a runtime dependency.
+
+The browser decoder imports its message schema through the protocol package's
+`./speech_decode` leaf export. The aggregate protocol entry point also exports
+Node-only workspace and wire helpers; importing it into the webview pulled
+`node:path` and `node:os` into the browser bundle and broke production
+packaging. Keep browser-facing imports on explicit browser-safe subpaths.
 
 Sources: [OpenRouter TTS](https://openrouter.ai/docs/guides/overview/multimodal/tts),
 [account-filtered models](https://openrouter.ai/docs/api/api-reference/models/list-models-filtered-by-user-provider-preferences-privacy-settings-and-guardrails),

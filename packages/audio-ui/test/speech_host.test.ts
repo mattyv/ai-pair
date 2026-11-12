@@ -53,6 +53,7 @@ const fakes = vi.hoisted(() => ({
   openChanged: undefined as (() => void) | undefined,
   openPrompt: undefined as (() => PromiseLike<string | undefined>) | undefined,
   openReadKey: undefined as (() => Promise<string | undefined>) | undefined,
+  openDecoder: undefined as import('../../vscode/src/speech_types').OpenRouterAudioDecoder | undefined,
   openPublish: undefined as ((value: import('../../vscode/src/speech_openrouter_catalog').OpenRouterCatalogView) => void) | undefined,
   openDiagnostic: undefined as ((reason: 'auth') => void) | undefined,
   openHasKey: vi.fn<() => Promise<boolean>>().mockResolvedValue(false),
@@ -225,8 +226,14 @@ vi.mock('../../vscode/src/speech_credentials', () => ({
 vi.mock('../../vscode/src/speech_openrouter', () => ({
   OpenRouterClient: class {
     readonly client = true;
-    constructor(read: NonNullable<typeof fakes.openReadKey>) {
+    constructor(
+      read: NonNullable<typeof fakes.openReadKey>,
+      fetcher: typeof fetch | undefined,
+      decoder: import('../../vscode/src/speech_types').OpenRouterAudioDecoder,
+    ) {
+      void fetcher;
       fakes.openReadKey = read;
+      fakes.openDecoder = decoder;
     }
   },
 }));
@@ -369,6 +376,13 @@ it('prepares on activation and speech settings changes', () => {
   fakes.config.set('speech.computeMode', 'gpu');
   fakes.configChanged?.({ affectsConfiguration: () => true });
   expect(fakes.prepare).toHaveBeenCalledTimes(4);
+});
+
+it('routes OpenRouter decoder admission through the current local panel', async () => {
+  harness();
+  const decoder = fakes.openDecoder;
+  if (decoder === undefined) throw new Error('Missing decoder');
+  await expect(decoder.admit(42, new AbortController().signal)).rejects.toThrow('Decoder unavailable');
 });
 
 it('uses local settings and credentials through panel callbacks', async () => {
@@ -1173,12 +1187,14 @@ it('restores OpenRouter model, voice and ZDR settings in the local companion', (
   fakes.config.set('speech.openRouterModel', 'model');
   fakes.config.set('speech.openRouterVoice', 'voice');
   fakes.config.set('speech.openRouterZdr', true);
+  fakes.config.set('speech.openRouterFormat', 'pcm');
   const { host } = harness();
   expect(host.panelSpeech.settings.get()).toMatchObject({
     provider: 'openrouter',
     openRouterModel: 'model',
     openRouterVoice: 'voice',
     openRouterZdr: true,
+    openRouterFormat: 'pcm',
   });
 });
 

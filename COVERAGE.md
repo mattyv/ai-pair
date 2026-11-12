@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: OpenRouter speech, 2026-11-12.
+Last updated: css, 2026-11-12.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -138,6 +138,7 @@ Last updated: OpenRouter speech, 2026-11-12.
 | `packages/protocol/src/panel_update.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/paths.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 84.6% F 100.0% | - | - | - | - |
 | `packages/protocol/src/schemas.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/protocol/src/speech_decode.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/protocol/src/wire.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/test/command_channel.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -150,6 +151,7 @@ Last updated: OpenRouter speech, 2026-11-12.
 | `packages/protocol/test/panel_chunks.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/panel_update.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/paths.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/protocol/test/speech_decode.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/protocol/test/wire.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/src/guide.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.6% B 88.9% F 100.0% | - | - | - | - |
 | `packages/relay/src/link.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
@@ -203,6 +205,8 @@ Last updated: OpenRouter speech, 2026-11-12.
 | `packages/vscode/src/speech_catalog.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.9% B 89.7% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_compute_types.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_credentials.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/vscode/src/speech_decode_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_decode_lifecycle.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_elevenlabs.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 89.2% B 75.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_engine.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_gpu_asset_fs.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 26.1% B 100.0% F 0.0% | - | - | - | - |
@@ -281,6 +285,7 @@ Last updated: OpenRouter speech, 2026-11-12.
 | `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 162 of 162 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/speech_audio.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/webview/speech_decode.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/workspace_panel_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 84.4% B 46.1% F 100.0% | - | - | - | - |
 | `packages/vscode/src/workspace_session.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.8% B 94.1% F 73.3% | - | - | - | - |
 | `packages/vscode/test/agents.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -350,6 +355,11 @@ Last updated: OpenRouter speech, 2026-11-12.
 | `packages/vscode/test/speech_cached_assets.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_catalog.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_credentials.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_decode_bridge.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_decode_lifecycle.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_decode_output.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_decode_panel.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_decode_webview.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_elevenlabs.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_elevenlabs.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_engine.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -563,8 +573,12 @@ Last updated: OpenRouter speech, 2026-11-12.
 | `specs/Narration.tla` | TLA+ | - | - | 20 of 20 actions | - | - | - |
 | `specs/Navigator.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Navigator.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
+| `specs/OpenRouterBoot.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/OpenRouterBoot.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/OpenRouterCatalog.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/OpenRouterCatalog.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
+| `specs/OpenRouterDecode.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/OpenRouterDecode.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/OpenRouterSpeech.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/OpenRouterSpeech.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/OpenRouterSpeech_Failure.cfg` | TLC config | - | - | - | - | - | - |

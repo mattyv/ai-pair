@@ -21,6 +21,7 @@ export interface SpeechSettings {
   openRouterModel?: string;
   openRouterVoice?: string;
   openRouterZdr?: boolean;
+  openRouterFormat?: OpenRouterAudioFormat;
   voice: string;
   speed: number;
 }
@@ -36,6 +37,8 @@ export interface SpeechAudioResult {
   wav: Uint8Array;
   durationMs: number;
 }
+/** Response format requested from OpenRouter. */
+export type OpenRouterAudioFormat = 'pcm' | 'mp3';
 /** Safe fields displayed for an account voice. */
 export interface ElevenLabsVoice {
   id: string;
@@ -66,8 +69,26 @@ export interface OpenRouterModel {
 }
 /** OpenRouter operations retain credentials inside the provider. */
 export interface OpenRouterSpeechPort {
-  synthesize(request: { text: string; modelId: string; voiceId: string; zdr: boolean }, signal: AbortSignal): Promise<SpeechAudioResult>;
+  synthesize(
+    request: { id: number; text: string; modelId: string; voiceId: string; zdr: boolean; format: OpenRouterAudioFormat },
+    signal: AbortSignal,
+  ): Promise<SpeechAudioResult>;
   models(zdr: boolean, signal: AbortSignal): Promise<OpenRouterModel[]>;
+}
+/** One locally owned decoder request reserved before its paid provider call. */
+export interface OpenRouterAudioDecodeLease {
+  /** Aborted when its owning document or admission is revoked. */
+  readonly signal: AbortSignal;
+  decode(input: OpenRouterAudioInput, signal: AbortSignal): Promise<SpeechAudioResult>;
+  /** Invalidates logical work; a running browser decode keeps its physical slot until settlement. */
+  cancel(): void;
+}
+/** A bounded OpenRouter audio response with PCM layout when applicable. */
+export type OpenRouterAudioInput =
+  { format: 'mp3'; bytes: Uint8Array } | { format: 'pcm'; bytes: Uint8Array; sampleRate: number; channels: number };
+/** Admits local browser decoding before any OpenRouter synthesis POST. */
+export interface OpenRouterAudioDecoder {
+  admit(speechId: number, signal: AbortSignal): Promise<OpenRouterAudioDecodeLease>;
 }
 
 /** Safe local worker failure categories, without exception text or paths. */

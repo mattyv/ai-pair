@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import type { CodePlayback, Controller, PanelEvent, PanelPort, Ref, SharedSelection } from '@ai-pair/core';
 import {
   AUDIO_DIAGNOSTICS_SCHEMA,
+  speechDecodeFromPage,
   localPanelAction,
   localPanelUpdate,
   type AudioDiagnostics,
@@ -14,15 +15,19 @@ import {
 import { panelHtml, SPEEDS } from './panel_html';
 import { timings } from './timings';
 import type { ChatOrder, FromPanel, SpeechAction, SpeechEvent, SpeechState, ToPanel } from './panel_messages';
-import { ELEVENLABS_SPEEDS, SPEECH_SPEEDS, SPEECH_VOICES, type SpeechSettings } from './speech_types';
+import { ELEVENLABS_SPEEDS, SPEECH_SPEEDS, SPEECH_VOICES, type SpeechSettings, type OpenRouterAudioDecodeLease } from './speech_types';
 import { SPEECH_LISTENING_RATES } from './speech_tempo';
 import type { CatalogView } from './speech_catalog';
 import type { OpenRouterCatalogView } from './speech_openrouter_catalog';
 import type { OutputPreferenceView } from './speech_output_preferences';
 import type { SpeechDiagnosticEvent } from './diagnostics';
 import type { Calibration, CalibrationView } from './calibration';
+import { SpeechDecodeBridge } from './speech_decode_bridge';
+import type { DecodeDocument } from './speech_decode_lifecycle';
 
 const MAX_LOG = 400;
+const DECODE_PROBE_TIMEOUT_MS = 5000;
+const DECODE_TIMEOUT_MS = 30_000;
 
 /** The commands the panel may run: the ones its intro links to. */
 const PANEL_COMMANDS: ReadonlySet<string> = new Set(['aiPair.playDemo', 'aiPair.setUpAgent']);
@@ -123,6 +128,16 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   private companion?: CompanionPanelRouting;
   private speechPageId = 0;
   private speechPageReady = false;
+  private decodeToken?: string;
+  private readonly speechDecoder = new SpeechDecodeBridge({
+    post: (message) =>
+      this.decodeToken === undefined || this.view === undefined
+        ? Promise.resolve(false)
+        : Promise.resolve(this.view.webview.postMessage({ ...message, token: this.decodeToken })),
+    page: () => (this.decodeToken === undefined ? undefined : this.speechReadyPageId()),
+    probeTimeoutMs: DECODE_PROBE_TIMEOUT_MS,
+    decodeTimeoutMs: DECODE_TIMEOUT_MS,
+  });
   private speechSetupCheck = 0;
   private speechTransportAvailable = true;
   /** Everything posted so far, replayed when the view is (re)created. */
@@ -312,7 +327,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     this.view = view;
     this.speechPageId++;
     this.speechPageReady = false;
+    this.decodeToken = undefined;
     const pageId = this.speechPageId;
+    let document: DecodeDocument | undefined;
+    let documentToken: string | undefined;
+    let pending: { token: string; document: DecodeDocument; predecessor?: DecodeDocument } | undefined;
     const dist = vscode.Uri.joinPath(this.extensionUri, 'dist');
     view.webview.options = { enableScripts: true, localResourceRoots: [dist] };
     const style = view.webview.asWebviewUri(vscode.Uri.joinPath(dist, 'panel.css')).toString();
@@ -320,15 +339,73 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     view.webview.html = panelHtml(view.webview.cspSource, style, script, this.buildInfo.version, this.buildInfo.build);
     // The page posts only FromPanel messages; VS Code types them `any`.
     view.webview.onDidReceiveMessage((m: FromPanel) => {
-      if (this.view === view) this.receive(m, pageId);
+      const decoded = speechDecodeFromPage.safeParse(m);
+      if (this.view !== view) {
+        // A predecessor may still retire its own physical decode until its view is disposed.
+        if (
+          decoded.success &&
+          decoded.data.type === 'speechDecodeDone' &&
+          decoded.data.token === documentToken &&
+          document !== undefined &&
+          decoded.data.document.pageId === document.pageId &&
+          decoded.data.document.documentGeneration === document.documentGeneration
+        ) {
+          this.speechDecoder.decoded(document, decoded.data.requestId, decoded.data.value);
+        }
+        return;
+      }
+      if (decoded.success) {
+        const message = decoded.data;
+        if (message.type === 'speechDecodeBoot') {
+          if (message.token === documentToken && document !== undefined) {
+            pending = { token: message.token, document };
+            void view.webview.postMessage({ type: 'speechDecodeChallenge', token: message.token, document });
+          } else if (pending?.token === message.token) {
+            void view.webview.postMessage({ type: 'speechDecodeChallenge', token: message.token, document: pending.document });
+          } else {
+            const next = this.speechDecoder.prepare(pageId);
+            pending = { token: message.token, document: next, predecessor: document };
+            void view.webview.postMessage({ type: 'speechDecodeChallenge', token: message.token, document: next });
+          }
+        } else if (message.type === 'speechDecodeBootAck') {
+          if (
+            pending?.token !== message.token ||
+            pending.document.pageId !== message.document.pageId ||
+            pending.document.documentGeneration !== message.document.documentGeneration
+          ) {
+            return;
+          }
+          if (pending.document !== document) this.speechDecoder.activate(pending.document);
+          else this.speechDecoder.resume(pending.document);
+          if (pending.predecessor !== undefined) this.speechDecoder.destroy(pending.predecessor);
+          document = pending.document;
+          documentToken = pending.token;
+          this.decodeToken = pending.token;
+          pending = undefined;
+        } else if (
+          this.decodeToken === message.token &&
+          document !== undefined &&
+          document.pageId === message.document.pageId &&
+          document.documentGeneration === message.document.documentGeneration
+        ) {
+          if (message.type === 'speechDecodeReady') this.speechDecoder.ready(document, message.probeId, message.available);
+          else this.speechDecoder.decoded(document, message.requestId, message.value);
+        }
+        return;
+      }
+      if (typeof m === 'object' && m !== null && 'type' in m && typeof m.type === 'string' && m.type.startsWith('speechDecode')) return;
+      this.receive(m, pageId);
     });
     view.onDidDispose(() => {
+      if (document !== undefined) this.speechDecoder.destroy(document);
+      if (pending !== undefined) this.speechDecoder.destroy(pending.document);
       // specs/OutputReplacement.tla, Dispose: only destruction retires a replaced page.
       this.wiring.speech.outputPageRetired(pageId);
       // specs/Start.tla, `Dispose`: the page goes, its button and note with it.
       if (this.view === view) {
         this.view = undefined;
         this.speechPageReady = false;
+        this.decodeToken = undefined;
         this.wiring.speech.pageClosed(pageId);
         if (this.companion !== undefined) this.companion.closed(pageId);
         else {
@@ -383,6 +460,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   /** Returns the current ready page identity for output ownership. */
   speechReadyPageId(): number | undefined {
     return this.speechPageReady ? this.speechPageId : undefined;
+  }
+
+  /** Reserves the decoder belonging to this locally owned webview. */
+  admitSpeechDecode(id: number, signal: AbortSignal): Promise<OpenRouterAudioDecodeLease> {
+    return this.speechDecoder.admit(id, signal);
   }
 
   /** Refreshes runtime availability for the currently open page only. */
@@ -539,6 +621,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
           (message.value.listeningSpeed === undefined || SPEECH_LISTENING_RATES.some((rate) => rate === message.value.listeningSpeed)) &&
           (message.value.provider === 'kokoro' || message.value.provider === 'elevenlabs' || message.value.provider === 'openrouter') &&
           (message.value.openRouterZdr === undefined || typeof message.value.openRouterZdr === 'boolean') &&
+          (message.value.openRouterFormat === undefined ||
+            message.value.openRouterFormat === 'pcm' ||
+            message.value.openRouterFormat === 'mp3') &&
           (message.value.openRouterModel === undefined || typeof message.value.openRouterModel === 'string') &&
           (message.value.openRouterVoice === undefined || typeof message.value.openRouterVoice === 'string') &&
           (message.value.provider !== 'openrouter' ||

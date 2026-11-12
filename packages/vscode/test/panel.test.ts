@@ -6,11 +6,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mock, type MockProxy } from 'vitest-mock-extended';
 import * as vscode from 'vscode';
 import type { Controller, PanelEvent, Ref } from '@ai-pair/core';
-import { EXCERPT_SCHEMA, type Turn } from '@ai-pair/protocol';
+import { EXCERPT_SCHEMA, speechDecodeToPage, type Turn } from '@ai-pair/protocol';
 import type { Calibration } from '../src/calibration';
 import { NarrationPanel, type PanelWiring, type Starter } from '../src/panel';
 import { panelHtml, SPEEDS } from '../src/panel_html';
 import type { FromPanel, ToPanel } from '../src/panel_messages';
+import type { SpeechDecodeBridgeOptions } from '../src/speech_decode_bridge';
 
 /** What the mocked modules share with the tests, made before the `vi.mock` factories run. */
 const fakes = vi.hoisted(() => ({
@@ -18,6 +19,29 @@ const fakes = vi.hoisted(() => ({
   pick: undefined as number | undefined,
   /** workspace.fs.stat: whether a path is in the workspace. */
   stat: vi.fn<(uri: unknown) => Promise<unknown>>(() => Promise.resolve({})),
+  decodeActivate: vi.fn<(document: { pageId: number; documentGeneration: number }) => void>(),
+  decodeResume: vi.fn(),
+  decodePrepare: vi.fn<(page: number) => { pageId: number; documentGeneration: number }>(),
+  decodeDestroy: vi.fn(),
+  decodeReady: vi.fn(),
+  decodeDone: vi.fn(),
+  decodeAdmit: vi.fn(),
+  decodeOptions: vi.fn<(options: SpeechDecodeBridgeOptions) => void>(),
+}));
+
+vi.mock('../src/speech_decode_bridge', () => ({
+  SpeechDecodeBridge: class {
+    constructor(options: SpeechDecodeBridgeOptions) {
+      fakes.decodeOptions(options);
+    }
+    prepare = fakes.decodePrepare;
+    activate = fakes.decodeActivate;
+    resume = fakes.decodeResume;
+    destroy = fakes.decodeDestroy;
+    ready = fakes.decodeReady;
+    decoded = fakes.decodeDone;
+    admit = fakes.decodeAdmit;
+  },
 }));
 
 vi.mock('vscode', () => {
@@ -362,6 +386,113 @@ afterEach(() => {
 });
 
 describe('resolveWebviewView', () => {
+  it('posts decoder requests only to a booted local view and exposes its admission', async () => {
+    const { panel } = harness();
+    const options = fakes.decodeOptions.mock.calls[0]?.[0];
+    if (options === undefined) throw new Error('Missing decoder options');
+    const token = '95334bd8-9c15-4ea2-8988-dcbe2c029708';
+    const document = { pageId: 1, documentGeneration: 1 };
+    const message = { type: 'speechDecodeProbe' as const, document, probeId: 1 };
+    expect(await options.post(message)).toBe(false);
+    expect(options.page()).toBeUndefined();
+    const view = open(panel);
+    fakes.decodePrepare.mockReturnValue(document);
+    view.send({ type: 'speechDecodeBoot', token });
+    view.send({ type: 'speechDecodeBootAck', token, document: { ...document, documentGeneration: 9 } });
+    expect(await options.post(message)).toBe(false);
+    view.send({ type: 'speechDecodeBootAck', token, document });
+    view.send({ type: 'ready' });
+    expect(options.page()).toBe(1);
+    expect(await options.post(message)).toBe(true);
+    expect(
+      view.webview.postMessage.mock.calls.some(([posted]) => {
+        const parsed = speechDecodeToPage.safeParse(posted);
+        return parsed.success && parsed.data.type === 'speechDecodeProbe' && parsed.data.token === token;
+      }),
+    ).toBe(true);
+    const signal = new AbortController().signal;
+    void panel.admitSpeechDecode(42, signal);
+    expect(fakes.decodeAdmit).toHaveBeenCalledWith(42, signal);
+    view.receive({ type: 'speechDecodeDone', token: 'invalid' });
+    view.send({ type: 'speechDecodeBoot', token });
+    view.dispose();
+    expect(fakes.decodeDestroy).toHaveBeenCalledWith(document);
+    expect(await options.post(message)).toBe(false);
+  });
+  it('reuses a candidate for duplicate boots and the document for a repeated current token', () => {
+    const { panel } = harness();
+    const view = open(panel);
+    const document = { pageId: 1, documentGeneration: 1 };
+    const token = '95334bd8-9c15-4ea2-8988-dcbe2c029708';
+    fakes.decodePrepare.mockReturnValue(document);
+    view.send({ type: 'speechDecodeBoot', token });
+    const firstChallenge = view.posted.at(-1);
+    view.send({ type: 'speechDecodeBoot', token });
+    expect(view.posted.at(-1)).toEqual(firstChallenge);
+    expect(fakes.decodePrepare).toHaveBeenCalledOnce();
+    view.send({ type: 'speechDecodeBootAck', token, document });
+    expect(fakes.decodeActivate).toHaveBeenCalledWith(document);
+    view.send({ type: 'speechDecodeBoot', token });
+    expect(view.posted.at(-1)).toEqual(firstChallenge);
+    expect(fakes.decodePrepare).toHaveBeenCalledOnce();
+    view.send({ type: 'speechDecodeBootAck', token, document });
+    expect(fakes.decodeActivate).toHaveBeenCalledOnce();
+  });
+
+  it('keeps boot, challenge and decoder replies in the local view and retires only the replaced document', () => {
+    const { panel } = harness();
+    const forward = vi.fn<import('../src/panel').CompanionPanelRouting['forward']>();
+    panel.useCompanion({ forward, closed: vi.fn<import('../src/panel').CompanionPanelRouting['closed']>() });
+    const view = open(panel);
+    const first = { pageId: 1, documentGeneration: 1 };
+    const second = { pageId: 1, documentGeneration: 2 };
+    const token = '95334bd8-9c15-4ea2-8988-dcbe2c029708';
+    const token2 = 'a2b2f953-95f5-4fc8-945c-d6b3b9eb54e3';
+    fakes.decodePrepare.mockReturnValueOnce(first).mockReturnValueOnce(second);
+    view.send({ type: 'speechDecodeBoot', token });
+    expect(speechDecodeToPage.parse(view.posted.at(-1))).toEqual({ type: 'speechDecodeChallenge', token, document: first });
+    view.send({ type: 'speechDecodeBootAck', token, document: first });
+    view.send({ type: 'speechDecodeReady', token, document: first, probeId: 1, available: true });
+    expect(fakes.decodeReady).toHaveBeenCalledWith(first, 1, true);
+    view.send({ type: 'speechDecodeBoot', token: token2 });
+    view.send({ type: 'speechDecodeBootAck', token: token2, document: second });
+    expect(fakes.decodeDestroy).toHaveBeenCalledWith(first);
+    view.send({ type: 'speechDecodeDone', token, document: first, requestId: 1 });
+    expect(fakes.decodeDone).not.toHaveBeenCalled();
+    view.send({ type: 'speechDecodeDone', token: token2, document: second, requestId: 2 });
+    expect(fakes.decodeDone).toHaveBeenCalledWith(second, 2, undefined);
+    expect(forward).not.toHaveBeenCalled();
+    view.dispose();
+    expect(fakes.decodeDestroy).toHaveBeenCalledWith(second);
+  });
+
+  it('keeps the current decoder on an old-view disposal and on visibility changes', () => {
+    const { panel } = harness();
+    const token = '95334bd8-9c15-4ea2-8988-dcbe2c029708';
+    const token2 = 'a2b2f953-95f5-4fc8-945c-d6b3b9eb54e3';
+    const first = { pageId: 1, documentGeneration: 1 };
+    const second = { pageId: 2, documentGeneration: 2 };
+    fakes.decodePrepare.mockReturnValueOnce(first).mockReturnValueOnce(second);
+    const old = open(panel);
+    old.send({ type: 'speechDecodeBoot', token });
+    old.send({ type: 'speechDecodeBootAck', token, document: first });
+    const current = open(panel);
+    current.send({ type: 'speechDecodeBoot', token: token2 });
+    current.send({ type: 'speechDecodeBootAck', token: token2, document: second });
+    current.send({ type: 'speechPageHidden', pageId: 2 });
+    current.send({ type: 'speechPageVisible', pageId: 2 });
+    expect(fakes.decodeDestroy).not.toHaveBeenCalled();
+    old.send({ type: 'speechDecodeDone', token: token2, document: first, requestId: 1 });
+    expect(fakes.decodeDone).not.toHaveBeenCalled();
+    old.send({ type: 'speechDecodeDone', token, document: first, requestId: 1 });
+    expect(fakes.decodeDone).toHaveBeenCalledWith(first, 1, undefined);
+    old.dispose();
+    expect(fakes.decodeDestroy).toHaveBeenCalledExactlyOnceWith(first);
+    current.send({ type: 'speechDecodeReady', token: token2, document: second, probeId: 1, available: true });
+    expect(fakes.decodeReady).toHaveBeenCalledWith(second, 1, true);
+    current.dispose();
+    expect(fakes.decodeDestroy).toHaveBeenLastCalledWith(second);
+  });
   it("gives the page scripts, the extension's dist folder, and the page from panelHtml with its style and script", () => {
     const view = open(harness().panel);
     expect(view.webview.options).toEqual({ enableScripts: true, localResourceRoots: [vscode.Uri.file('/ext/dist')] });
@@ -1525,6 +1656,13 @@ it('routes OpenRouter key and catalog actions and validates the selected pair', 
   speech.validOpenRouterVoice.mockReturnValue(true);
   view.send({ type: 'speechSettings', value: choice });
   expect(speech.settings.set).toHaveBeenCalledWith(choice);
+  view.send({ type: 'speechSettings', value: { ...choice, openRouterFormat: 'pcm' } });
+  view.send({ type: 'speechSettings', value: { ...choice, openRouterFormat: 'mp3' } });
+  expect(speech.settings.set).toHaveBeenCalledWith({ ...choice, openRouterFormat: 'pcm' });
+  expect(speech.settings.set).toHaveBeenCalledWith({ ...choice, openRouterFormat: 'mp3' });
+  speech.settings.set.mockClear();
+  view.receive({ type: 'speechSettings', value: { ...choice, openRouterFormat: 'unsupported' } });
+  expect(speech.settings.set).not.toHaveBeenCalled();
   panel.showOpenRouterKeyStatus(true);
   panel.showOpenRouterCatalog({ state: 'ready', verified: true, models: [] });
   expect(view.posted).toContainEqual({ type: 'openRouterKeyStatus', hasKey: true });

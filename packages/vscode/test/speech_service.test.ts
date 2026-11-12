@@ -2237,7 +2237,7 @@ it('CloudNarration: snapshots OpenRouter model, voice and ZDR into the shared pl
   settings.openRouterModel = 'changed';
   await settle();
   expect(openRouter.synthesize).toHaveBeenCalledWith(
-    { text: 'Hello.', modelId: 'model', voiceId: 'voice', zdr: true },
+    { id: 1, format: 'pcm', text: 'Hello.', modelId: 'model', voiceId: 'voice', zdr: true },
     expect.any(AbortSignal),
   );
   expect(output.play).toHaveBeenCalledOnce();
@@ -2310,7 +2310,7 @@ it('reports OpenRouter failures without naming another provider or leaking excep
   expect(JSON.stringify(output.status.mock.calls)).not.toContain('private');
 });
 
-it('requires an OpenRouter client and a complete selected pair', async () => {
+it('requires an OpenRouter client and model but permits a provider-default voice', async () => {
   const output = mock<SpeechOutput>();
   output.prepare = undefined;
   const settings = {
@@ -2334,10 +2334,14 @@ it('requires an OpenRouter client and a complete selected pair', async () => {
     openRouter,
   });
   await service.speak('No model');
-  settings.openRouterModel = 'model';
-  await service.speak('No voice');
   expect(openRouter.synthesize).not.toHaveBeenCalled();
-  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('model and voice'));
+  expect(output.status).toHaveBeenCalledWith(1, 'unavailable', expect.stringContaining('model'));
+  settings.openRouterModel = 'model';
+  await service.speak('Default voice');
+  expect(openRouter.synthesize).toHaveBeenCalledWith(
+    { id: 2, format: 'pcm', text: 'Default voice', modelId: 'model', voiceId: '', zdr: false },
+    expect.any(AbortSignal),
+  );
   const withoutClient = new SpeechService({
     runtimeDirectory: '/runtime',
     storageDirectory: '/storage',
@@ -2347,7 +2351,7 @@ it('requires an OpenRouter client and a complete selected pair', async () => {
   });
   settings.openRouterVoice = 'voice';
   await withoutClient.speak('No client');
-  expect(openRouter.synthesize).not.toHaveBeenCalled();
+  expect(openRouter.synthesize).toHaveBeenCalledOnce();
 });
 
 it('CatalogEligibility: blocks a remembered pair excluded by current catalog evidence', async () => {

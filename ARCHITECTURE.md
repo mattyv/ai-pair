@@ -11,7 +11,7 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes the 0.27.0 release implementation.
+Status: describes the 0.33.0 release candidate.
 
 The source is `.archi/ai-pair.json`. To regenerate the page with
 Archi-Techture 1.5.1, set `ARCHI_TO_HTML` to its `out/tools/archi-to-html.js`
@@ -513,12 +513,15 @@ changes invalidate stale catalog and synthesis work.
 The provider client reads the authenticated account catalog before applying
 the optional ZDR intersection. Public discovery never substitutes for account
 eligibility. The filter sends OpenRouter's ZDR request policy without claiming
-to override account Safety Retention settings. The first adapter supports
-only documented PCM capabilities and returns the existing bounded WAV contract.
-Missing credentials, rejected policy and unsupported models fail within speech;
-editing and readable narration remain available.
-
-The OpenRouter diagram update was validated with Archi-Techture 1.5.1 on
-2026-11-11. The source and standalone HTML export were regenerated together;
-both normalizer suites passed. Headless Chromium rendered the integration
-diagram without page errors, and its provider boundaries were visually checked.
+to override account Safety Retention settings. The user selects PCM or MP3;
+the provider client reserves local decode capacity before the paid request, and
+a local browser decoder normalizes the response to the existing bounded WAV
+contract. Each locally owned panel has its own decoder bridge. A boot token
+scopes probes and results to one actual webview document; disposal retires that
+document, while visibility changes do not. Decoder messages stay local and
+bypass companion panel forwarding. Missing credentials, rejected policy,
+unsupported formats and malformed output fail within speech; editing and
+readable narration remain available. Archi-Techture 1.5.1 validated the updated
+source, the HTML export was regenerated and normalized, and the normalizer tests
+passed. Headless Chromium rendered the VS Code integration view without page
+errors; the decoder boundary and its connections were visually checked.

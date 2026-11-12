@@ -9,6 +9,7 @@ import { SpeechCatalog, type CatalogView } from '../../vscode/src/speech_catalog
 import { SpeechCredentials } from '../../vscode/src/speech_credentials';
 import { ElevenLabsClient } from '../../vscode/src/speech_elevenlabs';
 import { OpenRouterClient } from '../../vscode/src/speech_openrouter';
+import { createOpenRouterAudioDecoder } from '../../vscode/src/speech_decode_bridge';
 import { OpenRouterCatalog, type OpenRouterCatalogView } from '../../vscode/src/speech_openrouter_catalog';
 import { SpeechOutputPreferences, type OutputPreferenceView } from '../../vscode/src/speech_output_preferences';
 import { speechRuntimeAvailable } from '../../vscode/src/speech_runtime_status';
@@ -29,6 +30,7 @@ import { CompanionOutput } from './companion_output';
 
 /** The local panel operations used by the speech host. */
 export interface SpeechHostPanel {
+  admitSpeechDecode?(id: number, signal: AbortSignal): Promise<import('../../vscode/src/speech_types').OpenRouterAudioDecodeLease>;
   showSpeechReadiness(value: AudioDiagnostics): void;
   showSpeechKeyStatus(hasKey: boolean): void;
   showOpenRouterKeyStatus(hasKey: boolean): void;
@@ -183,6 +185,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     const openRouterModel: unknown = config().get('speech.openRouterModel');
     const openRouterVoice: unknown = config().get('speech.openRouterVoice');
     const openRouterZdr: unknown = config().get('speech.openRouterZdr');
+    const openRouterFormat: unknown = config().get('speech.openRouterFormat');
     return {
       enabled: enabled === true,
       listeningSpeed: speechListeningRate(config().get('speech.listeningSpeed')),
@@ -196,6 +199,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
             openRouterModel: typeof openRouterModel === 'string' ? openRouterModel : '',
             openRouterVoice: typeof openRouterVoice === 'string' ? openRouterVoice : '',
             openRouterZdr: openRouterZdr === true,
+            openRouterFormat: openRouterFormat === 'pcm' ? 'pcm' : 'mp3',
           }
         : {}),
     };
@@ -217,7 +221,8 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
       if (
         prior.openRouterModel !== value.openRouterModel ||
         prior.openRouterVoice !== value.openRouterVoice ||
-        prior.openRouterZdr !== value.openRouterZdr
+        prior.openRouterZdr !== value.openRouterZdr ||
+        prior.openRouterFormat !== value.openRouterFormat
       ) {
         speech.cancel();
         if (prior.openRouterZdr !== value.openRouterZdr) openRouterCatalog.invalidate();
@@ -250,6 +255,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
           ...(value.openRouterModel === undefined ? [] : [['speech.openRouterModel', value.openRouterModel] as [string, unknown]]),
           ...(value.openRouterVoice === undefined ? [] : [['speech.openRouterVoice', value.openRouterVoice] as [string, unknown]]),
           ...(value.openRouterZdr === undefined ? [] : [['speech.openRouterZdr', value.openRouterZdr] as [string, unknown]]),
+          ...(value.openRouterFormat === undefined ? [] : [['speech.openRouterFormat', value.openRouterFormat] as [string, unknown]]),
         ];
         for (const [key, setting] of updates) await config().update(key, setting, vscode.ConfigurationTarget.Global);
       });
@@ -309,7 +315,11 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     },
     'aiPair.openRouter.apiKey',
   );
-  const openRouter = new OpenRouterClient(() => openRouterCredentials.read());
+  const openRouter = new OpenRouterClient(
+    () => openRouterCredentials.read(),
+    undefined,
+    createOpenRouterAudioDecoder(() => options.panel()),
+  );
   openRouterCatalog = new OpenRouterCatalog(openRouter, (value) => {
     if (!disposed) {
       if (value.state === 'ready') speech.openRouterCatalogChanged();
@@ -706,7 +716,8 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
         if (
           current.openRouterModel !== last.openRouterModel ||
           current.openRouterVoice !== last.openRouterVoice ||
-          current.openRouterZdr !== last.openRouterZdr
+          current.openRouterZdr !== last.openRouterZdr ||
+          current.openRouterFormat !== last.openRouterFormat
         ) {
           speech.cancel();
           if (current.openRouterZdr !== last.openRouterZdr) openRouterCatalog.invalidate();
@@ -730,7 +741,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
       keyConfigured: current.provider === 'openrouter' ? openRouterKeyConfigured : keyConfigured,
       voiceConfigured:
         current.provider === 'openrouter'
-          ? openRouterModel.trim() !== '' && openRouterVoice.trim() !== '' && openRouterCatalog.allows(openRouterModel, openRouterVoice)
+          ? openRouterModel.trim() !== '' && openRouterCatalog.allows(openRouterModel, openRouterVoice)
           : (current.provider === 'kokoro' ? current.voice : current.elevenLabsVoice).trim() !== '',
       output: desktop ? (selected.kind === 'default' ? 'default' : 'override') : 'unknown',
       routeAvailable: !desktop || capability === undefined || (selected.kind !== 'default' && !routeDiscovered) ? 'unknown' : outputReady(),

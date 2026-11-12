@@ -3,7 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./speech_decode": "./src/speech_decode.ts"
+  },
   "dependencies": {
     "zod": "^4.6.7"
   }

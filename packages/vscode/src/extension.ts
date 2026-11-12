@@ -26,6 +26,7 @@ import { SpeechCatalog } from './speech_catalog';
 import { SpeechOutputPreferences } from './speech_output_preferences';
 import { ElevenLabsClient } from './speech_elevenlabs';
 import { OpenRouterClient } from './speech_openrouter';
+import { createOpenRouterAudioDecoder } from './speech_decode_bridge';
 import { OpenRouterCatalog } from './speech_openrouter_catalog';
 import { installedSpeechModel, setupSpeech, speechModelStatus } from './speech_setup';
 import { speechRuntimeAvailable } from './speech_runtime_status';
@@ -210,7 +211,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       keyConfigured: shuttingDown ? 'unknown' : settings.provider === 'openrouter' ? openRouterKeyConfigured : keyConfigured,
       voiceConfigured:
         settings.provider === 'openrouter'
-          ? openRouterModel.trim() !== '' && openRouterVoice.trim() !== '' && openRouterCatalog.allows(openRouterModel, openRouterVoice)
+          ? openRouterModel.trim() !== '' && openRouterCatalog.allows(openRouterModel, openRouterVoice)
           : (settings.provider === 'kokoro' ? settings.voice : settings.elevenLabsVoice).trim() !== '',
       output: output === 'native' ? 'override' : output,
       // The panel page is the default route, and the transport fact says
@@ -299,6 +300,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     const openRouterModel: unknown = config().get('speech.openRouterModel');
     const openRouterVoice: unknown = config().get('speech.openRouterVoice');
     const openRouterZdr: unknown = config().get('speech.openRouterZdr');
+    const openRouterFormat: unknown = config().get('speech.openRouterFormat');
     return {
       enabled: enabled === true,
       listeningSpeed: speechListeningRate(config().get('speech.listeningSpeed')),
@@ -312,6 +314,7 @@ export function activate(context: vscode.ExtensionContext): Api {
             openRouterModel: typeof openRouterModel === 'string' ? openRouterModel : '',
             openRouterVoice: typeof openRouterVoice === 'string' ? openRouterVoice : '',
             openRouterZdr: openRouterZdr === true,
+            openRouterFormat: openRouterFormat === 'pcm' ? 'pcm' : 'mp3',
           }
         : {}),
     };
@@ -335,7 +338,8 @@ export function activate(context: vscode.ExtensionContext): Api {
       if (
         prior.openRouterModel !== value.openRouterModel ||
         prior.openRouterVoice !== value.openRouterVoice ||
-        prior.openRouterZdr !== value.openRouterZdr
+        prior.openRouterZdr !== value.openRouterZdr ||
+        prior.openRouterFormat !== value.openRouterFormat
       ) {
         speech.cancel();
         if (prior.openRouterZdr !== value.openRouterZdr) openRouterCatalog.invalidate();
@@ -362,6 +366,7 @@ export function activate(context: vscode.ExtensionContext): Api {
           ...(value.openRouterModel === undefined ? [] : [['speech.openRouterModel', value.openRouterModel] as [string, unknown]]),
           ...(value.openRouterVoice === undefined ? [] : [['speech.openRouterVoice', value.openRouterVoice] as [string, unknown]]),
           ...(value.openRouterZdr === undefined ? [] : [['speech.openRouterZdr', value.openRouterZdr] as [string, unknown]]),
+          ...(value.openRouterFormat === undefined ? [] : [['speech.openRouterFormat', value.openRouterFormat] as [string, unknown]]),
         ];
         for (const [key, setting] of updates) {
           await config().update(key, setting, vscode.ConfigurationTarget.Global);
@@ -429,7 +434,11 @@ export function activate(context: vscode.ExtensionContext): Api {
     },
     'aiPair.openRouter.apiKey',
   );
-  const openRouter = new OpenRouterClient(() => openRouterCredentials.read());
+  const openRouter = new OpenRouterClient(
+    () => openRouterCredentials.read(),
+    undefined,
+    createOpenRouterAudioDecoder(() => panel),
+  );
   openRouterCatalog = new OpenRouterCatalog(openRouter, (value) => {
     if (!shuttingDown) {
       if (value.state === 'ready') speech.openRouterCatalogChanged();
@@ -1057,7 +1066,8 @@ export function activate(context: vscode.ExtensionContext): Api {
           if (
             current.openRouterModel !== lastOpenRouterSettings.openRouterModel ||
             current.openRouterVoice !== lastOpenRouterSettings.openRouterVoice ||
-            current.openRouterZdr !== lastOpenRouterSettings.openRouterZdr
+            current.openRouterZdr !== lastOpenRouterSettings.openRouterZdr ||
+            current.openRouterFormat !== lastOpenRouterSettings.openRouterFormat
           ) {
             speech.cancel();
             if (current.openRouterZdr !== lastOpenRouterSettings.openRouterZdr) openRouterCatalog.invalidate();

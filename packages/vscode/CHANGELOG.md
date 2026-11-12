@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.33.0
+
+-   Discover OpenRouter speech models from the authenticated account, including
+    models without an advertised voice. Choose PCM or MP3; a locally owned
+    browser decoder normalizes supported responses for the existing speech
+    output route. Decoder admission happens before the paid request, and webview
+    reloads, failures and cancellation retire the correct request safely.
+-   OpenRouter does not publish codec compatibility in its model catalog.
+    Listed models may reject the chosen response format, voice or standard text
+    input; provider-specific parameters are not inferred.
+
 ## 0.32.0
 
 -   Add OpenRouter speech with secure credentials, dynamically loaded

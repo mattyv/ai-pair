@@ -2587,6 +2587,7 @@ it('restores OpenRouter preferences and clears the selected pair when its creden
   fakes.settings.set('speech.openRouterModel', 'model');
   fakes.settings.set('speech.openRouterVoice', 'voice');
   fakes.settings.set('speech.openRouterZdr', true);
+  fakes.settings.set('speech.openRouterFormat', 'pcm');
   const h = activated();
   const wiring = h.panel.wiring.speech;
   expect(wiring.settings.get()).toMatchObject({
@@ -2594,6 +2595,7 @@ it('restores OpenRouter preferences and clears the selected pair when its creden
     openRouterModel: 'model',
     openRouterVoice: 'voice',
     openRouterZdr: true,
+    openRouterFormat: 'pcm',
   });
   vi.mocked(vscode.window.showInputBox).mockResolvedValueOnce('secret');
   await wiring.openRouterKeySet();
@@ -2695,6 +2697,32 @@ it('retires both credential prompts and catalog requests when the legacy host cl
   const previous = h.panel.showSpeechCatalog.mock.calls.length;
   catalog.publish({ voices: [], more: false, loading: false, error: false });
   expect(h.panel.showSpeechCatalog).toHaveBeenCalledTimes(previous);
+});
+
+function isOpenRouterAudioDecoder(value: unknown): value is import('../src/speech_types').OpenRouterAudioDecoder {
+  return typeof value === 'object' && value !== null && 'admit' in value && typeof value.admit === 'function';
+}
+
+it('routes OpenRouter decoder admission through the legacy panel', async () => {
+  const models = vi.spyOn(OpenRouterClient.prototype, 'models').mockImplementation(async function (
+    this: object,
+    zdr: boolean,
+    signal: AbortSignal,
+  ) {
+    void zdr;
+    void signal;
+    const decoder: unknown = Reflect.get(this, 'decoder');
+    if (!isOpenRouterAudioDecoder(decoder)) throw new Error('Missing decoder');
+    await expect(decoder.admit(42, new AbortController().signal)).rejects.toThrow('Decoder unavailable');
+    return [];
+  });
+  const h = activated();
+  await h.api.ready;
+  h.panel.wiring.speech.loadOpenRouterModels();
+  await vi.waitFor(() => {
+    expect(models).toHaveBeenCalledOnce();
+  });
+  models.mockRestore();
 });
 
 it('notifies the speech owner when a current OpenRouter catalog arrives', async () => {

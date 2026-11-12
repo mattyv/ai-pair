@@ -8221,7 +8221,7 @@
           },
           {
             "id": "openrouter-client",
-            "label": "OpenRouter client\nAccount catalog and PCM speech",
+            "label": "OpenRouter client\nAccount catalog, PCM and MP3 speech",
             "files": ["packages/vscode/src/speech_openrouter.ts"],
             "group": "ext",
             "x": 2300,
@@ -8233,6 +8233,26 @@
             "files": [],
             "x": 2800,
             "y": 492
+          },
+          {
+            "id": "speech-decoder-bridge",
+            "label": "Local decoder bridge\nBoot-scoped admission and cancellation",
+            "files": [
+              "packages/vscode/src/speech_decode_bridge.ts",
+              "packages/vscode/src/speech_decode_lifecycle.ts",
+              "packages/protocol/src/speech_decode.ts"
+            ],
+            "group": "ext",
+            "x": 2630,
+            "y": 650
+          },
+          {
+            "id": "browser-speech-decoder",
+            "label": "Browser speech decoder\nBounded MP3/PCM to 24-kHz mono WAV",
+            "files": ["packages/vscode/src/webview/speech_decode.ts"],
+            "group": "ui",
+            "x": 2810,
+            "y": 850
           }
         ],
         "edges": [
@@ -8943,6 +8963,26 @@
             "from": "openrouter-client",
             "to": "speech-credentials",
             "label": "separate host-only key slot"
+          },
+          {
+            "from": "openrouter-client",
+            "to": "speech-decoder-bridge",
+            "label": "reserve before paid POST; normalize responses"
+          },
+          {
+            "from": "speech-decoder-bridge",
+            "to": "browser-speech-decoder",
+            "label": "boot-token scoped local bytes and probe"
+          },
+          {
+            "from": "browser-speech-decoder",
+            "to": "speech-decoder-bridge",
+            "label": "readiness and normalized WAV result"
+          },
+          {
+            "from": "speech-decoder-bridge",
+            "to": "panelts",
+            "label": "direct local webview transport"
           }
         ],
         "groups": [

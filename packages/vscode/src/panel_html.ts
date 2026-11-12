@@ -148,11 +148,15 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
           <select data-ui="openrouter-model"><option value="">Choose a model</option></select>
         </label>
         <label class="settings-field">Voice
-          <select data-ui="openrouter-voice"><option value="">Choose a voice</option></select>
+          <select data-ui="openrouter-voice"><option value="">Use provider default (if supported)</option></select>
         </label>
+        <label class="settings-field">Response format
+          <select data-ui="openrouter-format"><option value="mp3">MP3</option><option value="pcm">PCM</option></select>
+        </label>
+        <p>Models may accept only one format. If a request fails, select the format listed for that model on OpenRouter.</p>
         <button type="button" data-ui="openrouter-zdr" class="soft zdr-toggle" aria-pressed="false">ZDR filter: Off</button>
         <p>Filters models with ZDR routes and requests OpenRouter's ZDR policy. Your account's Safety Retention settings still apply.</p>
-        <p data-ui="openrouter-status" role="status">Load speech models and advertised voices from your account. Some models may use an audio format this version cannot play.</p>
+        <p data-ui="openrouter-status" role="status">Load speech models and advertised voices from your account. Some models allow a provider-default voice.</p>
       </div>
       <div data-ui="speech-cloud" hidden>
         <p>Selected narration and voice previews are sent to ElevenLabs and use your account credits.

@@ -1,10 +1,15 @@
 import { openRouterCatalog, openRouterSpeechModel, openRouterSpeechRequest } from '@ai-pair/protocol';
 /* eslint-disable @typescript-eslint/require-await, unicorn/no-null -- Provider and Response mocks. */
 import { afterEach, expect, it, vi } from 'vitest';
-import { OpenRouterClient } from '../src/speech_openrouter';
-import { pcmToSpeech } from '../src/speech_pcm';
+import { OpenRouterClient, OpenRouterError } from '../src/speech_openrouter';
+import type { OpenRouterAudioDecodeLease, OpenRouterAudioDecoder } from '../src/speech_types';
 
-vi.mock('../src/speech_pcm', () => ({ pcmToSpeech: vi.fn(() => ({ wav: new Uint8Array([5]), durationMs: 601 })) }));
+const sharedLease = {
+  signal: new AbortController().signal,
+  decode: vi.fn<OpenRouterAudioDecodeLease['decode']>(async () => ({ wav: new Uint8Array([5]), durationMs: 601 })),
+  cancel: vi.fn(),
+};
+const sharedDecoder = { admit: vi.fn<OpenRouterAudioDecoder['admit']>(async () => sharedLease) };
 function rejectCancel(): Promise<void> {
   return Promise.reject(new Error('private'));
 }
@@ -24,7 +29,7 @@ afterEach(() => {
 
 it('AccountOnly uses the authenticated account catalog and maps advertised voices', async () => {
   const fetcher = vi.fn<typeof fetch>(async () => json(catalog));
-  expect(await new OpenRouterClient(async () => 'secret', fetcher).models(false, signal())).toEqual([
+  expect(await new OpenRouterClient(async () => 'secret', fetcher, sharedDecoder).models(false, signal())).toEqual([
     { id: model, name: 'MAI', voices: [{ id: voice, name: voice }] },
   ]);
   expect(fetcher.mock.calls[0]?.[0]).toContain('/models/user?output_modalities=speech');
@@ -35,14 +40,14 @@ it('ZdrSelection intersects the authenticated catalog with the public ZDR catalo
     .fn<typeof fetch>()
     .mockResolvedValueOnce(json(catalog))
     .mockResolvedValueOnce(json({ data: [] }));
-  expect(await new OpenRouterClient(async () => 'secret', fetcher).models(true, signal())).toEqual([]);
+  expect(await new OpenRouterClient(async () => 'secret', fetcher, sharedDecoder).models(true, signal())).toEqual([]);
   expect(fetcher.mock.calls[1]?.[0]).toContain('zdr=true');
 });
 it('ZdrSelection reads model IDs even when the public catalog has no voice metadata', async () => {
   const account = { data: [{ id: 'vendor/new-speech-model', name: 'New', supported_voices: [voice] }] };
   const zdr = { data: [{ id: 'vendor/new-speech-model', name: 'New', supported_voices: null }] };
   const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(json(account)).mockResolvedValueOnce(json(zdr));
-  expect(await new OpenRouterClient(async () => 'secret', fetcher).models(true, signal())).toEqual([
+  expect(await new OpenRouterClient(async () => 'secret', fetcher, sharedDecoder).models(true, signal())).toEqual([
     { id: 'vendor/new-speech-model', name: 'New', voices: [{ id: voice, name: voice }] },
   ]);
 });
@@ -51,17 +56,21 @@ it('rejects a malformed ZDR model-ID catalog', async () => {
     .fn<typeof fetch>()
     .mockResolvedValueOnce(json(catalog))
     .mockResolvedValueOnce(json({ data: [{ id: 1 }] }));
-  await expect(new OpenRouterClient(async () => 'secret', fetcher).models(true, signal())).rejects.toMatchObject({ kind: 'invalid' });
+  await expect(new OpenRouterClient(async () => 'secret', fetcher, sharedDecoder).models(true, signal())).rejects.toMatchObject({
+    kind: 'invalid',
+  });
 });
 it('AccountOnly never falls back when authentication fails', async () => {
   const fetcher = vi.fn<typeof fetch>(async () => new Response('secret body', { status: 401 }));
-  await expect(new OpenRouterClient(async () => 'secret', fetcher).models(true, signal())).rejects.toMatchObject({ kind: 'auth' });
+  await expect(new OpenRouterClient(async () => 'secret', fetcher, sharedDecoder).models(true, signal())).rejects.toMatchObject({
+    kind: 'auth',
+  });
   expect(fetcher).toHaveBeenCalledOnce();
 });
 it('PolicySampled sends the selected request and converts documented PCM', async () => {
   const fetcher = vi.fn<typeof fetch>(async () => new Response(new Uint8Array([1, 0]), { headers: { 'content-type': 'audio/pcm' } }));
-  const result = await new OpenRouterClient(async () => 'secret', fetcher).synthesize(
-    { text: 'private', modelId: model, voiceId: voice, zdr: true },
+  const result = await new OpenRouterClient(async () => 'secret', fetcher, sharedDecoder).synthesize(
+    { id: 1, format: 'pcm' as const, text: 'private', modelId: model, voiceId: voice, zdr: true },
     signal(),
   );
   const request = fetcher.mock.calls[0]?.[1];
@@ -74,18 +83,25 @@ it('PolicySampled sends the selected request and converts documented PCM', async
     response_format: 'pcm',
     provider: { zdr: true },
   });
-  expect(pcmToSpeech).toHaveBeenCalledWith(new Uint8Array([1, 0]));
+  expect(sharedLease.decode).toHaveBeenCalledWith(
+    { format: 'pcm', bytes: new Uint8Array([1, 0]), sampleRate: 24_000, channels: 1 },
+    expect.any(AbortSignal),
+  );
   expect(result).toEqual({ wav: new Uint8Array([5]), durationMs: 601 });
 });
 it('rejects incompatible audio metadata and invalid models', async () => {
   const fetcher = vi.fn<typeof fetch>(
-    async () => new Response(new Uint8Array([1, 0]), { headers: { 'content-type': 'audio/pcm; rate=44100; channels=1' } }),
+    async () => new Response(new Uint8Array([1, 0]), { headers: { 'content-type': 'audio/pcm; rate=7000; channels=1' } }),
   );
-  const client = new OpenRouterClient(async () => 'secret', fetcher);
-  await expect(client.synthesize({ text: 'x', modelId: model, voiceId: voice, zdr: false }, signal())).rejects.toMatchObject({
+  const client = new OpenRouterClient(async () => 'secret', fetcher, sharedDecoder);
+  await expect(
+    client.synthesize({ id: 1, format: 'pcm' as const, text: 'x', modelId: model, voiceId: voice, zdr: false }, signal()),
+  ).rejects.toMatchObject({
     kind: 'invalid',
   });
-  await expect(client.synthesize({ text: 'x', modelId: '', voiceId: voice, zdr: false }, signal())).rejects.toMatchObject({
+  await expect(
+    client.synthesize({ id: 1, format: 'pcm' as const, text: 'x', modelId: '', voiceId: voice, zdr: false }, signal()),
+  ).rejects.toMatchObject({
     kind: 'invalid',
   });
 });
@@ -97,7 +113,7 @@ it.each([
   [500, 'network'],
 ] as const)('sanitizes HTTP %i as %s', async (status, kind) => {
   const fetcher = vi.fn<typeof fetch>(async () => new Response('secret body', { status }));
-  await expect(new OpenRouterClient(async () => 'secret', fetcher).models(false, signal())).rejects.toMatchObject({ kind });
+  await expect(new OpenRouterClient(async () => 'secret', fetcher, sharedDecoder).models(false, signal())).rejects.toMatchObject({ kind });
 });
 it('rejects absent credentials, rejected fetch and bad request arguments', async () => {
   const fetcher = vi.fn<typeof fetch>(async () => {
@@ -105,12 +121,16 @@ it('rejects absent credentials, rejected fetch and bad request arguments', async
   });
   await expect(new OpenRouterClient(async () => undefined, fetcher).models(false, signal())).rejects.toMatchObject({ kind: 'key' });
   await expect(new OpenRouterClient(async () => '', fetcher).models(false, signal())).rejects.toMatchObject({ kind: 'key' });
-  const client = new OpenRouterClient(async () => 'secret', fetcher);
+  const client = new OpenRouterClient(async () => 'secret', fetcher, sharedDecoder);
   await expect(client.models(false, signal())).rejects.toMatchObject({ kind: 'network' });
-  await expect(client.synthesize({ text: '', modelId: model, voiceId: voice, zdr: false }, signal())).rejects.toMatchObject({
+  await expect(
+    client.synthesize({ id: 1, format: 'pcm' as const, text: '', modelId: model, voiceId: voice, zdr: false }, signal()),
+  ).rejects.toMatchObject({
     kind: 'invalid',
   });
-  await expect(client.synthesize({ text: 'x', modelId: model, voiceId: '', zdr: false }, signal())).rejects.toMatchObject({
+  await expect(
+    client.synthesize({ id: 1, format: 'pcm' as const, text: 'x', modelId: model, voiceId: 'bad\nvoice', zdr: false }, signal()),
+  ).rejects.toMatchObject({
     kind: 'invalid',
   });
 });
@@ -118,7 +138,9 @@ it.each([null, {}, { data: null }, { data: [null] }, { data: [{}] }, { data: [{ 
   'rejects malformed catalog envelopes %#',
   async (value) => {
     const fetcher = vi.fn<typeof fetch>(async () => json(value));
-    await expect(new OpenRouterClient(async () => 'key', fetcher).models(false, signal())).rejects.toMatchObject({ kind: 'invalid' });
+    await expect(new OpenRouterClient(async () => 'key', fetcher, sharedDecoder).models(false, signal())).rejects.toMatchObject({
+      kind: 'invalid',
+    });
   },
 );
 it.each([
@@ -127,7 +149,7 @@ it.each([
   { id: model, name: 'x', supported_voices: ['bad\nvoice'] },
 ])('skips a malformed model entry without losing the catalog response %#', async (entry) => {
   const fetcher = vi.fn<typeof fetch>(async () => json({ data: [entry] }));
-  await expect(new OpenRouterClient(async () => 'key', fetcher).models(false, signal())).resolves.toEqual([]);
+  await expect(new OpenRouterClient(async () => 'key', fetcher, sharedDecoder).models(false, signal())).resolves.toEqual([]);
 });
 it('includes arbitrary advertised models and voices while preserving the account intersection', async () => {
   const extra = { id: 'vendor/new-speech-model', name: 'New voice', supported_voices: ['speaker/42 + natural'] };
@@ -137,37 +159,38 @@ it('includes arbitrary advertised models and voices while preserving the account
     .fn<typeof fetch>()
     .mockResolvedValueOnce(json(data))
     .mockResolvedValueOnce(json({ data: [extra, ...catalog.data] }));
-  expect(await new OpenRouterClient(async () => 'key', fetcher).models(true, signal())).toEqual([
+  expect(await new OpenRouterClient(async () => 'key', fetcher, sharedDecoder).models(true, signal())).toEqual([
     { id: extra.id, name: extra.name, voices: [{ id: 'speaker/42 + natural', name: 'speaker/42 + natural' }] },
+    { id: model, name: 'empty', voices: [] },
     { id: model, name: 'MAI', voices: [{ id: voice, name: voice }] },
   ]);
 });
-it('skips an account model without advertised voices instead of rejecting the catalog', async () => {
+it('includes an account model without advertised voices instead of rejecting the catalog', async () => {
   const fetcher = vi.fn<typeof fetch>(async () =>
     json({ data: [{ id: 'vendor/default-voice', name: 'No voices', supported_voices: null }] }),
   );
-  expect(await new OpenRouterClient(async () => 'key', fetcher).models(false, signal())).toEqual([]);
+  expect(await new OpenRouterClient(async () => 'key', fetcher, sharedDecoder).models(false, signal())).toEqual([
+    { id: 'vendor/default-voice', name: 'No voices', voices: [] },
+  ]);
 });
 it('rejects invalid content, excessive bytes and invalid PCM conversion', async () => {
   const responses = [
     new Response('x', { headers: { 'content-type': 'text/html' } }),
-    new Response(new Uint8Array(1_920_001), { headers: { 'content-type': 'audio/pcm' } }),
-    new Response(new Uint8Array([1]), { headers: { 'content-type': 'audio/pcm; rate=24000; channels=2' } }),
+    new Response(new Uint8Array(15_360_001), { headers: { 'content-type': 'audio/pcm' } }),
+    new Response(new Uint8Array([1]), { headers: { 'content-type': 'audio/pcm; rate=24000; channels=3' } }),
     new Response(new Uint8Array([1]), { headers: { 'content-type': 'audio/pcm; rate=24000; channels=1' } }),
   ];
   const fetcher = vi.fn<typeof fetch>();
   for (const response of responses) fetcher.mockResolvedValueOnce(response);
-  const client = new OpenRouterClient(async () => 'key', fetcher);
-  const request = { text: 'x', modelId: model, voiceId: voice, zdr: false };
+  const client = new OpenRouterClient(async () => 'key', fetcher, sharedDecoder);
+  const request = { id: 1, format: 'pcm' as const, text: 'x', modelId: model, voiceId: voice, zdr: false };
   for (let index = 0; index < 3; index++) await expect(client.synthesize(request, signal())).rejects.toMatchObject({ kind: 'invalid' });
-  vi.mocked(pcmToSpeech).mockImplementationOnce(() => {
-    throw new Error('bad pcm');
-  });
-  await expect(client.synthesize(request, signal())).rejects.toMatchObject({ kind: 'invalid' });
+  sharedLease.decode.mockRejectedValueOnce(new Error('bad pcm'));
+  await expect(client.synthesize(request, signal())).rejects.toThrow('bad pcm');
 });
 it('cancels before and during a stalled request', async () => {
   const fetcher = vi.fn<typeof fetch>(() => new Promise(() => {}));
-  const client = new OpenRouterClient(async () => 'key', fetcher);
+  const client = new OpenRouterClient(async () => 'key', fetcher, sharedDecoder);
   const early = new AbortController();
   early.abort();
   await expect(client.models(false, early.signal)).rejects.toMatchObject({ kind: 'canceled' });
@@ -197,7 +220,7 @@ it('rejects missing content type and missing response body', async () => {
     .fn<typeof fetch>()
     .mockResolvedValueOnce(new Response())
     .mockResolvedValueOnce(new Response(null, { headers: { 'content-type': 'application/json' } }));
-  const client = new OpenRouterClient(async () => 'key', fetcher);
+  const client = new OpenRouterClient(async () => 'key', fetcher, sharedDecoder);
   await expect(client.models(false, signal())).rejects.toMatchObject({ kind: 'invalid' });
   await expect(client.models(false, signal())).rejects.toMatchObject({ kind: 'invalid' });
 });
@@ -211,7 +234,7 @@ it('discards late responses after cancellation and timeout', async () => {
           resolveFetch = resolve;
         }),
     );
-    const client = new OpenRouterClient(async () => 'key', fetcher);
+    const client = new OpenRouterClient(async () => 'key', fetcher, sharedDecoder);
     for (const timeout of [false, true]) {
       const controller = new AbortController();
       const pending = client.models(false, controller.signal);
@@ -252,7 +275,7 @@ it('ignores rejected body and reader cancellation', async () => {
   const badBody = new ReadableStream<Uint8Array>({ cancel: rejectCancel });
   const badReader = new ReadableStream<Uint8Array>({
     start(controller) {
-      controller.enqueue(new Uint8Array(1_920_001));
+      controller.enqueue(new Uint8Array(15_360_001));
     },
     cancel: rejectCancel,
   });
@@ -260,9 +283,11 @@ it('ignores rejected body and reader cancellation', async () => {
     .fn<typeof fetch>()
     .mockResolvedValueOnce(new Response(badBody, { status: 500 }))
     .mockResolvedValueOnce(new Response(badReader, { headers: { 'content-type': 'audio/pcm' } }));
-  const client = new OpenRouterClient(async () => 'key', fetcher);
+  const client = new OpenRouterClient(async () => 'key', fetcher, sharedDecoder);
   await expect(client.models(false, signal())).rejects.toMatchObject({ kind: 'network' });
-  await expect(client.synthesize({ text: 'x', modelId: model, voiceId: voice, zdr: false }, signal())).rejects.toMatchObject({
+  await expect(
+    client.synthesize({ id: 1, format: 'pcm' as const, text: 'x', modelId: model, voiceId: voice, zdr: false }, signal()),
+  ).rejects.toMatchObject({
     kind: 'invalid',
   });
 });
@@ -288,8 +313,8 @@ it('sends an opaque model identifier and voice without changing PCM policy', asy
   const fetcher = vi.fn<typeof fetch>(
     async () => new Response(new Uint8Array([1, 0]), { headers: { 'content-type': 'audio/pcm; rate=24000; channels=1' } }),
   );
-  await new OpenRouterClient(async () => 'key', fetcher).synthesize(
-    { text: 'x', modelId: 'vendor/new-speech-model', voiceId: 'voice/42 + natural', zdr: false },
+  await new OpenRouterClient(async () => 'key', fetcher, sharedDecoder).synthesize(
+    { id: 1, format: 'pcm' as const, text: 'x', modelId: 'vendor/new-speech-model', voiceId: 'voice/42 + natural', zdr: false },
     signal(),
   );
   const body = fetcher.mock.calls[0]?.[1]?.body;
@@ -304,8 +329,8 @@ it('sends an opaque model identifier and voice without changing PCM policy', asy
 it('requires explicit 24 kHz mono metadata for dynamically discovered models', async () => {
   const fetcher = vi.fn<typeof fetch>(async () => new Response(new Uint8Array([1, 0]), { headers: { 'content-type': 'audio/pcm' } }));
   await expect(
-    new OpenRouterClient(async () => 'secret', fetcher).synthesize(
-      { text: 'x', modelId: 'vendor/new-speech-model', voiceId: 'speaker/42', zdr: false },
+    new OpenRouterClient(async () => 'secret', fetcher, sharedDecoder).synthesize(
+      { id: 1, format: 'pcm' as const, text: 'x', modelId: 'vendor/new-speech-model', voiceId: 'speaker/42', zdr: false },
       signal(),
     ),
   ).rejects.toMatchObject({ kind: 'invalid' });
@@ -315,16 +340,191 @@ it('accepts a dynamically discovered model only when PCM metadata matches the pl
     async () => new Response(new Uint8Array([1, 0]), { headers: { 'content-type': 'audio/pcm; rate=24000; channels=1' } }),
   );
   await expect(
-    new OpenRouterClient(async () => 'secret', fetcher).synthesize(
-      { text: 'x', modelId: 'vendor/new-speech-model', voiceId: 'speaker/42', zdr: false },
+    new OpenRouterClient(async () => 'secret', fetcher, sharedDecoder).synthesize(
+      { id: 1, format: 'pcm' as const, text: 'x', modelId: 'vendor/new-speech-model', voiceId: 'speaker/42', zdr: false },
       signal(),
     ),
   ).resolves.toEqual({ wav: new Uint8Array([5]), durationMs: 601 });
 });
-it('omits provider policy when ZDR is off', async () => {
-  const fetcher = vi.fn<typeof fetch>(async () => new Response(new Uint8Array([1, 0]), { headers: { 'content-type': 'audio/pcm' } }));
-  await new OpenRouterClient(async () => 'key', fetcher).synthesize({ text: 'x', modelId: model, voiceId: voice, zdr: false }, signal());
+it('reserves a decoder lease before the paid POST and retires it after decoding', async () => {
+  const order: string[] = [];
+  const lease = {
+    signal: new AbortController().signal,
+    decode: vi.fn<OpenRouterAudioDecodeLease['decode']>(async () => {
+      order.push('decode');
+      return { wav: new Uint8Array([7]), durationMs: 1000 };
+    }),
+    cancel: vi.fn(() => {
+      order.push('cancel');
+    }),
+  };
+  const decoder = {
+    admit: vi.fn<OpenRouterAudioDecoder['admit']>(async () => {
+      order.push('admit');
+      return lease;
+    }),
+  };
+  const fetcher = vi.fn<typeof fetch>(async () => {
+    order.push('request');
+    return new Response(new Uint8Array([1, 2]), { headers: { 'content-type': 'audio/mpeg' } });
+  });
+  const abort = new AbortController();
+  const result = await new OpenRouterClient(async () => 'key', fetcher, decoder).synthesize(
+    { id: 18, text: 'x', modelId: 'vendor/mp3-model', voiceId: 'speaker', zdr: false, format: 'mp3' },
+    abort.signal,
+  );
+  expect(order).toEqual(['admit', 'request', 'decode', 'cancel']);
+  expect(decoder.admit).toHaveBeenCalledWith(18, abort.signal);
+  expect(lease.decode).toHaveBeenCalledWith({ format: 'mp3', bytes: new Uint8Array([1, 2]) }, expect.any(AbortSignal));
+  expect(result).toEqual({ wav: new Uint8Array([7]), durationMs: 1000 });
   const body = fetcher.mock.calls[0]?.[1]?.body;
   if (typeof body !== 'string') throw new Error('missing body');
-  expect(openRouterSpeechRequest.parse(JSON.parse(body))).toEqual({ model, voice, input: 'x', response_format: 'pcm' });
+  expect(openRouterSpeechRequest.parse(JSON.parse(body)).response_format).toBe('mp3');
+});
+
+it('waits for per-request admission before reading credentials or making a paid request', async () => {
+  let resolveAdmission: ((lease: OpenRouterAudioDecodeLease) => void) | undefined;
+  const lease = {
+    signal: new AbortController().signal,
+    decode: vi.fn(async () => ({ wav: new Uint8Array([7]), durationMs: 1000 })),
+    cancel: vi.fn(),
+  };
+  const decoder = {
+    admit: vi.fn<OpenRouterAudioDecoder['admit']>(
+      () =>
+        new Promise((resolve) => {
+          resolveAdmission = resolve;
+        }),
+    ),
+  };
+  const readKey = vi.fn(async () => 'key');
+  const fetcher = vi.fn<typeof fetch>(async () => new Response(new Uint8Array([2]), { headers: { 'content-type': 'audio/mpeg' } }));
+  const abort = new AbortController();
+  const pending = new OpenRouterClient(readKey, fetcher, decoder).synthesize(
+    { id: 3, text: 'x', modelId: 'vendor/mp3', voiceId: 'speaker', zdr: false, format: 'mp3' },
+    abort.signal,
+  );
+  expect(decoder.admit).toHaveBeenCalledWith(3, abort.signal);
+  expect(readKey).not.toHaveBeenCalled();
+  expect(fetcher).not.toHaveBeenCalled();
+  resolveAdmission?.(lease);
+  await expect(pending).resolves.toEqual({ wav: new Uint8Array([7]), durationMs: 1000 });
+  expect(lease.cancel).toHaveBeenCalledOnce();
+});
+
+it('does not pay if the admitted decoder document is destroyed while reading the key', async () => {
+  let resolveKey: ((key: string) => void) | undefined;
+  const admission = new AbortController();
+  const decode = vi.fn(async () => ({ wav: new Uint8Array([7]), durationMs: 1000 }));
+  const cancel = vi.fn(() => {
+    admission.abort();
+  });
+  const lease: OpenRouterAudioDecodeLease = { signal: admission.signal, decode, cancel };
+  const readKey = vi.fn(
+    () =>
+      new Promise<string>((resolve) => {
+        resolveKey = resolve;
+      }),
+  );
+  const fetcher = vi.fn<typeof fetch>();
+  const client = new OpenRouterClient(readKey, fetcher, { admit: async () => lease });
+  const pending = client.synthesize({ id: 21, text: 'x', modelId: 'vendor/mp3', voiceId: 'speaker', zdr: false, format: 'mp3' }, signal());
+  await vi.waitFor(() => {
+    expect(readKey.mock.calls).toHaveLength(1);
+  });
+  // A reload/disposal revokes the bridge lease while keychain IO is pending.
+  admission.abort();
+  resolveKey?.('key');
+  await expect(pending).rejects.toMatchObject({ kind: 'canceled' });
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(decode.mock.calls).toHaveLength(0);
+  expect(cancel.mock.calls).toHaveLength(1);
+});
+
+it('does not pay when decoder admission is missing, fails, or is canceled', async () => {
+  const request = { id: 4, text: 'x', modelId: 'vendor/mp3', voiceId: 'speaker', zdr: false, format: 'mp3' as const };
+  const fetcher = vi.fn<typeof fetch>();
+  const key = vi.fn(async () => 'key');
+  await expect(new OpenRouterClient(key, fetcher).synthesize(request, signal())).rejects.toMatchObject({ kind: 'invalid' });
+  const decoder = {
+    admit: vi.fn<OpenRouterAudioDecoder['admit']>(async () => {
+      throw new Error('private');
+    }),
+  };
+  await expect(new OpenRouterClient(key, fetcher, decoder).synthesize(request, signal())).rejects.toMatchObject({ kind: 'invalid' });
+  const canceled = new AbortController();
+  canceled.abort();
+  await expect(new OpenRouterClient(key, fetcher, decoder).synthesize(request, canceled.signal)).rejects.toMatchObject({
+    kind: 'canceled',
+  });
+  decoder.admit.mockRejectedValueOnce(new OpenRouterError('timeout'));
+  await expect(new OpenRouterClient(key, fetcher, decoder).synthesize(request, signal())).rejects.toMatchObject({ kind: 'timeout' });
+  expect(key).not.toHaveBeenCalled();
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it('releases the lease on provider failure, cancellation, or decode failure', async () => {
+  const request = { id: 5, text: 'x', modelId: 'vendor/mp3', voiceId: 'speaker', zdr: false, format: 'mp3' as const };
+  const lease = {
+    signal: new AbortController().signal,
+    decode: vi.fn<OpenRouterAudioDecodeLease['decode']>(async () => {
+      throw new Error('decode failed');
+    }),
+    cancel: vi.fn(),
+  };
+  const decoder = { admit: vi.fn(async () => lease) };
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(new Response('private', { status: 500 }))
+    .mockResolvedValueOnce(new Response(new Uint8Array([2]), { headers: { 'content-type': 'audio/mpeg' } }));
+  const client = new OpenRouterClient(async () => 'key', fetcher, decoder);
+  await expect(client.synthesize(request, signal())).rejects.toMatchObject({ kind: 'network' });
+  expect(lease.cancel).toHaveBeenCalledTimes(1);
+  await expect(client.synthesize(request, signal())).rejects.toThrow('decode failed');
+  expect(lease.cancel).toHaveBeenCalledTimes(2);
+  const abort = new AbortController();
+  abort.abort();
+  await expect(client.synthesize(request, abort.signal)).rejects.toMatchObject({ kind: 'canceled' });
+  expect(lease.cancel).toHaveBeenCalledTimes(3);
+});
+
+it('passes variable-rate stereo PCM through its admitted decoder lease', async () => {
+  const lease = {
+    signal: new AbortController().signal,
+    decode: vi.fn<OpenRouterAudioDecodeLease['decode']>(async () => ({ wav: new Uint8Array([5]), durationMs: 601 })),
+    cancel: vi.fn(),
+  };
+  const decoder = { admit: vi.fn<OpenRouterAudioDecoder['admit']>(async () => lease) };
+  const fetcher = vi.fn<typeof fetch>(
+    async () => new Response(new Uint8Array([1, 0, 2, 0]), { headers: { 'content-type': 'audio/pcm; rate=44100; channels=2' } }),
+  );
+  await new OpenRouterClient(async () => 'key', fetcher, decoder).synthesize(
+    { id: 6, text: 'x', modelId: 'vendor/pcm', voiceId: '', zdr: false, format: 'pcm' },
+    signal(),
+  );
+  expect(decoder.admit).toHaveBeenCalledOnce();
+  expect(lease.decode).toHaveBeenCalledWith(
+    { format: 'pcm', bytes: new Uint8Array([1, 0, 2, 0]), sampleRate: 44_100, channels: 2 },
+    expect.any(AbortSignal),
+  );
+  expect(lease.cancel).toHaveBeenCalledOnce();
+  const body = fetcher.mock.calls[0]?.[1]?.body;
+  if (typeof body !== 'string') throw new Error('missing body');
+  expect(openRouterSpeechRequest.parse(JSON.parse(body))).toEqual({ model: 'vendor/pcm', input: 'x', response_format: 'pcm' });
+});
+
+it('requires decoder admission before a PCM synthesis POST', async () => {
+  const request = { id: 9, text: 'x', modelId: model, voiceId: voice, zdr: false, format: 'pcm' as const };
+  const fetcher = vi.fn<typeof fetch>();
+  const key = vi.fn(async () => 'key');
+  await expect(new OpenRouterClient(key, fetcher).synthesize(request, signal())).rejects.toMatchObject({ kind: 'invalid' });
+  const decoder = {
+    admit: vi.fn<OpenRouterAudioDecoder['admit']>(async () => {
+      throw new Error('not ready');
+    }),
+  };
+  await expect(new OpenRouterClient(key, fetcher, decoder).synthesize(request, signal())).rejects.toMatchObject({ kind: 'invalid' });
+  expect(decoder.admit).toHaveBeenCalledOnce();
+  expect(key).not.toHaveBeenCalled();
+  expect(fetcher).not.toHaveBeenCalled();
 });

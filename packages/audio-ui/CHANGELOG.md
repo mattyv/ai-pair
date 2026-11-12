@@ -9,7 +9,7 @@
 
 ## 0.31.0
 
--   Publish under the `mattyv` publisher, matching the main extension.
+- Publish under the `mattyv` publisher, matching the main extension.
 
 ## 0.30.0
 

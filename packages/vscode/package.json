@@ -2,7 +2,7 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.32.0",
+  "version": "0.33.0",
   "publisher": "mattyv",
   "author": {
     "name": "mattyv"
@@ -223,6 +223,16 @@
           "type": "boolean",
           "default": false,
           "description": "Filter for ZDR routes and request OpenRouter's ZDR policy; account Safety Retention settings still apply.",
+          "scope": "application"
+        },
+        "aiPair.speech.openRouterFormat": {
+          "type": "string",
+          "enum": [
+            "pcm",
+            "mp3"
+          ],
+          "default": "mp3",
+          "description": "Audio response format requested from the selected OpenRouter speech model.",
           "scope": "application"
         },
         "aiPair.speech.elevenLabsVoice": {

@@ -28,9 +28,9 @@ export const openRouterSpeechModel = z.object({
 /** Validates a bounded speech request. */
 export const openRouterSpeechRequest = z.strictObject({
   model: openRouterModelId,
-  voice,
+  voice: voice.optional(),
   input: z.string().min(1).max(MAX_INPUT),
-  response_format: z.literal('pcm'),
+  response_format: z.enum(['pcm', 'mp3']),
   provider: z.strictObject({ zdr: z.literal(true) }).optional(),
 });
 /** The validated provider speech request. */

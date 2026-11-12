@@ -425,6 +425,13 @@
       "functions": 100
     }
   },
+  "packages/protocol/src/speech_decode.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/protocol/src/wire.ts": {
     "unit": {
       "lines": 100,
@@ -730,6 +737,20 @@
       "functions": 100
     }
   },
+  "packages/vscode/src/speech_decode_bridge.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/speech_decode_lifecycle.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/vscode/src/speech_elevenlabs.ts": {
     "unit": {
       "lines": 100,
@@ -991,6 +1012,13 @@
     }
   },
   "packages/vscode/src/webview/panel.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/webview/speech_decode.ts": {
     "unit": {
       "lines": 100,
       "branches": 100,

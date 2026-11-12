@@ -22,7 +22,7 @@ export class OpenRouterCatalog {
 
   /** Checks that a voice belongs to an accessible current model. */
   contains(model: string, voice: string): boolean {
-    return this.models.some((item) => item.id === model && item.voices.some((candidate) => candidate.id === voice));
+    return this.models.some((item) => item.id === model && (voice === '' || item.voices.some((candidate) => candidate.id === voice)));
   }
 
   /** Allows remembered choices until a current catalog proves them unavailable. */
