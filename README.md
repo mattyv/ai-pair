@@ -251,11 +251,11 @@ The design is written up in:
 ## Install
 
 You need **VS Code 1.106 or newer**. Install **AI Pair** from the [VS Code
-Marketplace](https://marketplace.visualstudio.com/items?itemName=michalstrba.ai-pair):
-in the Extensions view, search for `@id:michalstrba.ai-pair`, or run:
+Marketplace](https://marketplace.visualstudio.com/items?itemName=mattyv.ai-pair):
+in the Extensions view, search for `@id:mattyv.ai-pair`, or run:
 
 ```sh
-code --install-extension michalstrba.ai-pair
+code --install-extension mattyv.ai-pair
 ```
 
 For a build from this fork, open the [Build VSIX workflow](https://github.com/mattyv/ai-pair/actions/workflows/build-vsix.yml),
@@ -280,7 +280,7 @@ or output. Copying is explicit; timestamps and numeric IDs are included.
 To build it from source instead, you also need **Node.js 22.19 or newer**:
 
 ```sh
-git clone https://github.com/faiface/ai-pair.git
+git clone https://github.com/mattyv/ai-pair.git
 cd ai-pair
 npm install
 npm run package
@@ -426,7 +426,7 @@ npm run release -- patch   # or minor, major, or an exact version
 It runs every test, bumps the version, builds the `.vsix` once and publishes
 that file to the Marketplace, then commits, tags and pushes the release and
 makes a GitHub release with the `.vsix` attached. It asks before publishing,
-since a version can't be published twice. It needs `vsce login michalstrba` and
+since a version can't be published twice. It needs `vsce login mattyv` and
 `gh auth login` done once.
 
 ## License

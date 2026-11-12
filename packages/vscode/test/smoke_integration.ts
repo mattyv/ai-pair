@@ -19,7 +19,7 @@ function isApi(value: unknown): value is Api {
 
 /** Checks literal triple quotes and reconnect in the isolated VS Code workspace. */
 export async function run(): Promise<void> {
-  const extension = vscode.extensions.getExtension('michalstrba.ai-pair');
+  const extension = vscode.extensions.getExtension('mattyv.ai-pair');
   assert.ok(extension, 'AI Pair extension not found');
   const exported: unknown = await extension.activate();
   assert.ok(isApi(exported), 'AI Pair did not export its API');

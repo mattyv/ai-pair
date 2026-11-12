@@ -12,7 +12,7 @@ const snapshot = z.object({ events: z.array(z.looseObject({ kind: z.string() }))
 export async function run(): Promise<void> {
   assert.equal(process.platform, 'linux');
   assert.equal(process.arch, 'x64');
-  const extension = vscode.extensions.getExtension<Api>('michalstrba.ai-pair');
+  const extension = vscode.extensions.getExtension<Api>('mattyv.ai-pair');
   assert.ok(extension && !extension.isActive, 'main must be inactive before installing the evidence fault');
   const reportDescriptor = Object.getOwnPropertyDescriptor(process.report, 'getReport');
   const openDescriptor = Object.getOwnPropertyDescriptor(fs, 'openSync');

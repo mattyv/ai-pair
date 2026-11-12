@@ -186,7 +186,7 @@ export async function preservedPlaybackPaths(api: Api, root: string): Promise<vo
 
 /** Runs this fixture alone in an isolated extension host. */
 export async function run(): Promise<void> {
-  const extension = vscode.extensions.getExtension<Api>('michalstrba.ai-pair');
+  const extension = vscode.extensions.getExtension<Api>('mattyv.ai-pair');
   assert.ok(extension, 'extension not found');
   const api = await extension.activate();
   await api.ready;

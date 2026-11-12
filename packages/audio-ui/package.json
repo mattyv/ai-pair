@@ -2,8 +2,11 @@
   "name": "ai-pair-local-audio",
   "displayName": "AI Pair Local Audio",
   "description": "Local panel and audio companion for AI Pair.",
-  "version": "0.30.0",
-  "publisher": "michalstrba",
+  "version": "0.31.0",
+  "publisher": "mattyv",
+  "author": {
+    "name": "mattyv"
+  },
   "private": true,
   "license": "MIT",
   "engines": {
@@ -49,7 +52,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/faiface/ai-pair.git",
+    "url": "https://github.com/mattyv/ai-pair.git",
     "directory": "packages/audio-ui"
   }
 }

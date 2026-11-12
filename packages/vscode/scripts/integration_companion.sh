@@ -16,9 +16,9 @@ cp "${root}/packages/vscode/test/companion_restart_probe/"* "${profile}/probe/"
   && npx esbuild test/integration_companion_paths.ts \
     --bundle --platform=node --format=cjs --target=node22 --external:vscode \
     --outfile="${profile}/probe/case.cjs" --log-level=warning)
-ln -s "${extension}" "${profile}/extensions/michalstrba.ai-pair"
+ln -s "${extension}" "${profile}/extensions/mattyv.ai-pair"
 ln -s "${root}/packages/audio-ui" \
-  "${profile}/extensions/michalstrba.ai-pair-local-audio"
+  "${profile}/extensions/mattyv.ai-pair-local-audio"
 ln -s "${profile}/probe" \
   "${profile}/extensions/proof.companion-restart-probe"
 for stage in prepare verify; do

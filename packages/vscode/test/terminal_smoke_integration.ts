@@ -30,7 +30,7 @@ async function bounded<T>(work: Promise<T>): Promise<T> {
 
 /** Verifies Controller command reports while terminals remain open. */
 export async function run(): Promise<void> {
-  const extension = vscode.extensions.getExtension('michalstrba.ai-pair');
+  const extension = vscode.extensions.getExtension('mattyv.ai-pair');
   assert.ok(extension, 'AI Pair extension not found');
   const exported: unknown = await extension.activate();
   assert.ok(isApi(exported), 'AI Pair did not export its test API');

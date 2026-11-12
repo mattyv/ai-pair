@@ -161,7 +161,7 @@ export async function companionFaults(api: Api): Promise<void> {
 
 /** Runs transport faults in the main extension's isolated test host. */
 export async function run(): Promise<void> {
-  const extension = vscode.extensions.getExtension<Api>('michalstrba.ai-pair');
+  const extension = vscode.extensions.getExtension<Api>('mattyv.ai-pair');
   assert.ok(extension);
   const api = await extension.activate();
   await api.ready;
