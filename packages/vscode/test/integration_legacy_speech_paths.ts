@@ -139,6 +139,14 @@ export async function runLegacySpeechPaths(api: Api): Promise<void> {
       assert.equal(vscode.workspace.getConfiguration('aiPair').get('speech.elevenLabsVoice'), '');
     }
 
+    // The final field of this distinct save is written after every earlier queued
+    // save, including the settings update triggered by credential removal.
+    api.panelMessage({ type: 'speechSettings', value: { ...value, elevenLabsSpeed: 1.2 } });
+    await until(
+      () => vscode.workspace.getConfiguration('aiPair').get('speech.elevenLabsSpeed') === 1.2,
+      'the last field of the settings barrier',
+    );
+
     // Reject one real configuration update at the VS Code boundary. All other
     // configuration operations and the error notification remain real.
     const configurationDescriptor = Object.getOwnPropertyDescriptor(vscode.workspace, 'getConfiguration');

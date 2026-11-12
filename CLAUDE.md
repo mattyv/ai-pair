@@ -376,6 +376,8 @@ Set by Justine on 2026-10-07.
 
 ## Versioning
 
+Before cutting a release, follow [RELEASE.md](RELEASE.md).
+
 Set by Justine on 2026-10-08. The extension's version is `version` in
 `packages/vscode/package.json`, and every change that ships bumps it, following
 semantic versioning as it applies to VS Code extensions:

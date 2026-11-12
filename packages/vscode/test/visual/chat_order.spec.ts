@@ -658,7 +658,9 @@ test('real audio completion leaves the reading timer and command decision alone'
     )
     .toBe(true);
   await expect(page.getByText('Keep this visible.', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Run once', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Allow this command', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Allow all for session', exact: true })).toBeVisible();
   await expect(page.locator('[data-ui=dot]')).toHaveClass(/reading/);
   const forbidden = await page.evaluate(() => {
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
@@ -816,7 +818,7 @@ test('experimental GPU setup remains readable and explicit in a narrow Settings 
   await dialog.screenshot({ path: testInfo.outputPath('gpu-settings.png') });
 });
 
-test('voice status uses cached evidence and opens settings by keyboard at narrow and wide widths', async ({ page }) => {
+test('voice status uses cached evidence and Settings opens by keyboard at narrow and wide widths', async ({ page }) => {
   const post = await load(page);
   await post({ type: 'speechPage', pageId: 1 });
   await post({ type: 'speechTransport', available: true });
@@ -844,9 +846,11 @@ test('voice status uses cached evidence and opens settings by keyboard at narrow
     type: 'speechComputeState',
     value: { requestedMode: 'cpu', actualBackend: 'none', phase: 'loading', generation: 1, gpuCheck: { phase: 'idle' } },
   });
-  const starting = page.getByRole('button', { name: 'Voice: model starting' });
-  await expect(starting).toBeVisible();
-  const indicator = starting.locator('.voice-indicator');
+  const voice = page.getByRole('button', { name: 'Automatic narration' });
+  await expect(voice).toBeVisible();
+  await expect(voice).toHaveAttribute('aria-description', 'Voice: model starting');
+  await expect(voice).toHaveAttribute('aria-pressed', 'true');
+  const indicator = voice.locator('.voice-indicator');
   await expect(indicator).toHaveCSS('background-color', 'rgb(230, 126, 34)');
   await expect(indicator).toHaveCSS('animation-name', 'voice-starting');
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -858,23 +862,42 @@ test('voice status uses cached evidence and opens settings by keyboard at narrow
   });
   for (const width of [360, 720]) {
     await page.setViewportSize({ width, height: 640 });
-    const button = page.getByRole('button', { name: 'Voice: ready (checks passed)' });
+    await expect(voice).toBeVisible();
+    await expect(voice).toHaveAttribute('aria-description', 'Voice: ready (checks passed)');
+    const button = page.getByRole('button', { name: 'Settings', exact: true });
     await expect(button).toBeVisible();
     await button.focus();
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('combobox', { name: 'Speech provider' })).toBeFocused();
+    await expect(page.getByRole('combobox', { name: 'Chat order' })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(button).toBeFocused();
     const scrollWidth = await page.locator('html').evaluate((element: { scrollWidth: number }) => element.scrollWidth);
     expect(scrollWidth).toBeLessThanOrEqual(width);
   }
+  await voice.focus();
+  await page.keyboard.press('Enter');
+  await expect(voice).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('dialog', { name: 'Settings' })).not.toBeVisible();
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return (globalThis as unknown as { messages: Array<{ type: string; value?: { enabled?: boolean } }> }).messages.some(
+          (message) => message.type === 'speechSettings' && message.value?.enabled === false,
+        );
+      }),
+    )
+    .toBe(true);
+  await voice.focus();
+  await page.keyboard.press('Enter');
+  await expect(voice).toHaveAttribute('aria-pressed', 'true');
   await post({ type: 'speechReadiness', value: { ...facts, routeAvailable: 'unknown' } });
-  await expect(page.getByRole('button', { name: 'Voice: readiness not checked' })).toBeVisible();
+  await expect(voice).toHaveAttribute('aria-description', 'Voice: readiness not checked');
   await post({ type: 'speechReadiness', value: { ...facts, enabled: false } });
-  await expect(page.getByRole('button', { name: 'Automatic narration: off' })).toBeVisible();
+  await expect(voice).toHaveAttribute('aria-description', 'Automatic narration: off');
   await post({ type: 'speechReadiness', value: { ...facts, lastPlayback: 'failed' } });
-  await expect(page.getByRole('button', { name: 'Voice: unavailable' })).toBeVisible();
+  await expect(voice).toHaveAttribute('aria-description', 'Voice: unavailable');
   await post({ type: 'speechTransport', available: false });
   await post({ type: 'speechReadiness', value: facts });
-  await expect(page.getByRole('button', { name: 'Voice: unavailable' })).toBeVisible();
+  await expect(voice).toHaveAttribute('aria-description', 'Voice: unavailable');
 });

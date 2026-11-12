@@ -1,145 +1,110 @@
 # AI Pair Programmer
 
-## Voice status
+AI Pair lets a coding agent work in your editor at a pace you can follow,
+while you interrupt, ask questions, or take over the keyboard. This fork adds
+speech, local audio routing, and additional controls to the original project.
 
-The speaker icon beside the toolbar controls shows whether automatic narration
-is off, not checked, starting, ready, or unavailable. Hover for the reason, or
-select it to open speech settings. Ready means the available cached checks
-passed; it does not confirm audible sound or cloud account availability.
+## Get started
 
-When Kokoro narration is enabled, its model starts as the extension loads,
-before a Pair MCP session starts. The icon pulses orange during startup
-(static orange with reduced motion). Startup does not download missing models,
-speak text or make a paid cloud request.
+Install **AI Pair** (`mattyv.ai-pair`) and **AI Pair Local Audio**
+(`mattyv.ai-pair-local-audio`) as VSIX files from the same
+[GitHub release](https://github.com/mattyv/ai-pair/releases/latest). For a
+development build, use both artifacts from the same [Build VSIX workflow run](https://github.com/mattyv/ai-pair/actions/workflows/build-vsix.yml).
+Install AI Pair in the workspace and the audio companion locally on the
+computer with your speakers. In an SSH or container window, install the
+companion on the local side. Reload the VS Code window after installing or
+updating both extensions.
 
-## Demo and diagnostics
+Run **AI Pair: Set Up Agent** in the command palette, select your agent, then
+restart it so it reloads its MCP configuration. Open a project in VS Code,
+start the agent in that folder, and ask it to pair. See [Connect your
+agent](#connect-your-agent) for supported agents and configuration details.
 
-In Claude Code, run `/pair:demo` to guide a real Pair session in a fresh scratch
-file, including an optional programmer edit and a navigator comment, or
-`/pair:diagnose` to inspect connection, command, speech and audio
-status without changing settings. The legacy `/mcp__pair__demo` and
-`/mcp__pair__diagnose` forms also work. The demo uses the current speech
-setting; only you can confirm whether you heard it. Diagnostics alone do not
-run a paid speech preview.
+## Speech and audio
 
-The extension includes the corresponding `skills/ai-pair-demo/SKILL.md` and
-`skills/ai-pair-diagnose/SKILL.md`. Optionally copy their directories to your Claude
-`.claude/skills` directory for `/ai-pair-demo` and `/ai-pair-diagnose`. No
-skill or project configuration is installed automatically.
+Speech is off by default. Enable narration in Pair Settings or with the toolbar
+speaker button. The speaker status shows off, unchecked, starting, ready, or
+unavailable; hover for details. Ready reflects available cached checks, not
+proof that you can hear audio or that a cloud account is available. The toolbar
+button also mutes narration. Use **Preview voice** to test your selected voice
+and output; only you can confirm audibility.
 
-## Additions in this fork
+Choose a provider in Settings:
 
-This fork builds on the original [AI Pair project](https://github.com/faiface/ai-pair).
-It adds:
+-   **Kokoro** is local and needs no API key. Run **Download Kokoro model**
+    to install the pinned CPU model (about 94 MB), then preview a voice.
+    The local companion's Kokoro requires a Linux x64 desktop with glibc.
+    On a Mac, use the main extension without the companion for local Kokoro;
+    remote speech requires the companion. Mac main-extension builds support
+    Intel and Apple silicon.
+    Enabled Kokoro prepares at extension load without downloading, speaking,
+    or making a cloud request.
+-   **Kokoro GPU** is experimental on supported Linux x64 systems. Select
+    **Auto** or **GPU**, then **Set up GPU**. Setup requires the CPU model and
+    can download a pinned GPU model (about 326 MB). Auto may fall back to CPU;
+    GPU mode fails closed. One AMD system has been tested; wider hardware and
+    listening validation remain open.
+-   **ElevenLabs** uses a key saved through the secure VS Code prompt. Load
+    account voices, select one, and preview it. Available voices depend on the
+    account. Narration and previews use account credits.
+-   **OpenRouter** uses its own securely saved key. Load the account's eligible
+    speech models and advertised voices dynamically, then choose PCM or MP3.
+    The **ZDR** filter narrows the eligible models and requests OpenRouter's
+    ZDR routing policy; account Safety Retention settings still apply. The
+    catalog does not establish format, voice, or standard text-input
+    compatibility, so a listed model can reject a request. Provider-specific
+    parameters are not inferred. Previews and narration use account credits;
+    there is no automatic provider fallback.
 
--   Toolbar controls wrap in narrow panels, and their popup menus stay within
-    the panel viewport.
--   A choice of conversation order and clearer message text.
--   Clearer pause and playback status. Click the reading indicator to finish
-    its timer, or hold it to pause the timer.
--   Typing, Lines, or Blocks in a separate code-display dropdown and Settings.
-    The existing pace and reading-speed controls still adjust playback.
--   Quiet command terminals by default, with an option to reveal a run.
--   Copyable session and speech diagnostics, plus a running version and build
-    in Settings. Speech diagnostics show capability, button dispatch and safe
-    failure categories without copying keys, narration or audio.
--   When speech is enabled, every short message from the agent is spoken, one
-    after another, and typing waits for the voice, so you can keep your eyes on
-    the code and still hear when the agent needs you. A message over 45 words
-    or 280 characters is shown without speech, and the agent can keep one
-    silent. The agent may be reminded after several batches with nothing
-    spoken. The reminder does not enable speech or make a provider request.
-    The scripted demo speaks too.
--   CPU/GPU changes and restarted speech wait for previous local work to finish
-    shutting down before starting a replacement. GPU use still requires fresh
-    checks, and physical validation of this lifecycle change remains open.
--   Optional local Kokoro speech for the connected coding agent's narration.
-    Speech is off by default and needs no additional API key. In Settings,
-    run **Download Kokoro model** to download about 94 MB, then **Preview voice**.
-    Settings show the model path, pinned source and latest verification result.
-    Local speech requires a local Linux x64 desktop with glibc, such as
-    Ubuntu, or a Mac (Apple silicon or Intel); the rest of Pair works without
-    speech. Install the VSIX built for your Mac's architecture.
--   Experimental GPU acceleration for Kokoro on supported Linux x64 systems.
-    In Settings, select **Auto** or **GPU** and choose **Set up GPU**. Setup
-    requires the CPU model and may download an additional pinned model of about
-    326 MB. It checks the local runtime, physical AMD device and driver before
-    reporting readiness. CPU remains the default; Auto can fall back to CPU,
-    while GPU mode fails closed. One supplied AMD system has been tested;
-    broader hardware validation remains open.
--   Bounded sentence pipelining for local Kokoro in the audio companion. The
-    first sentence can play while one following part is prepared. The complete
-    selected text, reading countdown and output device stay fixed for the unit.
-    ElevenLabs continues to use one synthesis request per selected narration.
--   An experimental **Listening speed** setting (0.75, 1, 1.25 or 1.5; default 1)
-    that changes how fast the narration plays without changing its pitch. It is
-    separate from each provider's voice speed and from the reading and code
-    pace, is applied on your computer to the next narration or preview, and
-    never makes another cloud request. At 1 the audio is untouched. The stretch
-    has been checked with synthetic signals only; nobody has validated how
-    speech sounds at 0.75, 1.25 or 1.5, so treat those rates as a trial.
--   The local Kokoro engine now runs behind one versioned worker protocol. The
-    model loads once and stays loaded between narrations; a canceled or failed
-    narration is never replayed, and a replacement worker waits until the old
-    one has really exited. No new engine, download or key is involved.
--   Optional OpenRouter speech with a separately stored API key, account-eligible
-    model and voice choices, and a **ZDR** filter. The filter narrows the
-    account's allowed models and requests OpenRouter's ZDR routing policy;
-    account Safety Retention settings still apply. Models and advertised voices
-    are loaded from your account instead of a hard-coded model list. Choose PCM
-    or MP3 for the selected model; supported responses are normalized in the
-    local panel to the same WAV playback format used by the other providers.
-    OpenRouter does not publish response-format compatibility in its account
-    catalog, so a listed model may reject the selected format, voice, or
-    standard text input. Provider-specific request parameters are not inferred.
-    Narration and previews use your OpenRouter credits and the selected local
-    speech output. No fallback to another provider is automatic.
--   Optional ElevenLabs cloud speech, using the same selected narration and
-    reading controls. Choose **ElevenLabs** in Settings, add your API key through
-    the secure VS Code prompt, load your account voices, choose one and use
-    **Preview voice**. Every spoken message and each preview goes to
-    ElevenLabs and uses your account credits. Saving a key does not enable
-    speech. Voice availability
-    depends on your account; a free account may have no eligible API voices.
-    Kokoro remains the local option and the default provider.
--   A shared **Speech output** choice for both providers, with **System default**
-    or an explicit local device. The optional **AI Pair Local Audio** companion
-    owns playback on the computer running the VS Code window, including SSH
-    workspaces. Native adapters use PipeWire on Linux, CoreAudio on macOS and
-    WASAPI on Windows. Device choices stay local; unavailable devices report an
-    error rather than silently switching outputs. Linux needs `pw-play`,
-    `pw-dump` and `setpriv`; macOS and Windows helpers ship in the companion.
+The companion stores its keys and models locally; generated audio and keys are
+not sent to the workspace extension. Saving a key does not enable speech. Choose
+**Speech output** for the system default or an explicit local device. Linux
+playback requires `pw-play`, `pw-dump`, and `setpriv`; native playback helpers
+ship for macOS and Windows. Device availability and audible output depend on the
+local environment.
 
-[Download a fork build from GitHub Actions](https://github.com/mattyv/ai-pair/actions)
-(run **Build VSIX**, then download its artifact). The Marketplace link in the
-original README below installs the upstream version without these additions.
+**Listening speed** adjusts local playback without changing pitch, separately
+from a provider's synthesis speed and from code and reading pace. It applies to
+the next narration or preview and makes no additional provider request. Rates
+other than 1 are experimental and have only been checked with synthetic
+signals, not human listening.
 
-## Using the local audio companion
+By default, playback waits for spoken narration before the next action. Agents
+can choose `speech_mode: "continue"` to let commentary play over subsequent
+work; later spoken messages remain ordered. Questions that need an answer use
+`"wait"` followed by `listen`: audio finishing is not an answer. Ending the
+session stops outstanding speech. Short messages are eligible for narration;
+messages over 45 words or 280 characters are displayed without speech, and the
+agent can choose silence.
 
-Download both fork artifacts from the same **Build VSIX** run. Install AI Pair
-for the workspace and **AI Pair Local Audio** locally on the computer with your
-speakers, then reload the VS Code window. In an SSH or container window, the
-companion belongs on the local side. It is optional for existing local use;
-remote speech requires it.
+OpenRouter's compact toolbar subtotal uses provider-confirmed speech costs.
+It is approximate when compactly displayed and may be incomplete when costs
+are missing or still being retrieved. Hover or focus it for precise confirmed
+amounts and details; it is not a complete account bill.
 
-The companion keeps its own local key and model storage. Add your ElevenLabs
-key through its secure Settings prompt, or set up Kokoro there. The companion
-is built once, on Linux, so its Kokoro runs on a Linux x64 desktop only; on a
-Mac, use the main extension's local speech, or ElevenLabs through the companion.
-Cross-platform playback does not make Kokoro available on every operating
-system. No key or generated audio is sent
-to the workspace extension. Speech remains off until you enable it; Preview is
-an explicit test action.
+## Pair controls
 
-Native compilation, API-level playback and physical audibility are separate
-checks. The current Windows hosted runner has no default output device, so its
-stream test is reported as skipped rather than passed. Hardware and device-loss
-verification remains necessary for each target environment.
+The panel offers **Run once**, **Allow this command**, **Allow all for
+session**, and **Skip**. The middle choices grant session approval for that
+command or for all commands, respectively.
+**Require command approval** clears session grants and restores confirmation;
+an optional approval sound uses the system default output. The programmer can
+interrupt by replying or editing, take the keyboard with **My turn**, and hand
+it back. The agent can comment as navigator when useful and should build on
+user edits. At task completion it summarizes in Pair and listens until the
+programmer explicitly ends the session.
+
+In Claude Code, `/pair:demo` runs a guided Pair session and `/pair:diagnose`
+checks connection, command, speech, and audio status. The legacy
+`/mcp__pair__demo` and `/mcp__pair__diagnose` forms also work. The extension
+includes `skills/ai-pair-demo/SKILL.md` and `skills/ai-pair-diagnose/SKILL.md`;
+copy their directories to your Claude `.claude/skills` directory to use
+`/ai-pair-demo` and `/ai-pair-diagnose`. No skill is installed automatically.
+The demo follows your speech setting; diagnostics do not run a paid preview.
 
 ## Original project README
 
-**[Install it from the VS Code
-Marketplace](https://marketplace.visualstudio.com/items?itemName=michalstrba.ai-pair)**
+The following introduction is from the [original AI Pair project](https://github.com/faiface/ai-pair).
 
 ## For those of us who want, need, or love to stay close to the code
 
@@ -214,7 +179,7 @@ account. While you pair:
 |---|---|
 | say something to the agent | type in the reply box, press Enter. Typing pauses playback. In Settings, choose **Finish current action first** to wait for the action boundary; long commands can delay replies and Stop remains immediate. |
 | ask about some code | select it in the editor, then reply: the selection goes along (**x** leaves it out) |
-| let it run a command | **Run**, **Allow for session**, or **Skip** in the panel; **Show terminal** reveals the command's terminal |
+| let it run a command | **Run once**, **Allow this command**, **Allow all for session**, or **Skip**; **Show terminal** reveals the command's terminal |
 | stop it right now | **Interrupt**, or just edit the code: any edit interrupts |
 | look around | scroll or switch files. Playback pauses until you **Resume**, which brings you back to the agent's cursor |
 | write a part yourself | **My turn**. The agent becomes the navigator and comments as you type. **Hand back** returns the turn, with your reply if you typed one |
@@ -262,32 +227,12 @@ The design is written up in:
 
 ## Install
 
-You need **VS Code 1.106 or newer**. Install **AI Pair** from the [VS Code
-Marketplace](https://marketplace.visualstudio.com/items?itemName=mattyv.ai-pair):
-in the Extensions view, search for `@id:mattyv.ai-pair`, or run:
-
-```sh
-code --install-extension mattyv.ai-pair
-```
-
-For a build from this fork, open the [Build VSIX workflow](https://github.com/mattyv/ai-pair/actions/workflows/build-vsix.yml),
-choose a successful run for the branch you want, and download its `.vsix`
-artifact. Copy it to the Ubuntu host running VS Code and install it there:
-
-```sh
-code --install-extension /path/to/ai-pair-build.vsix
-```
-
-For a local development build, the VSIX can instead be taken directly from the
-shared repository folder (`/workspace/code/ai-pair` in the VM). Run the install
-command on the Ubuntu host using that folder's host path.
-
-Reload the VS Code window and restart the agent after updating. The Pair
-panel's Settings dialog shows the running version and build ID, so you can
-check what is actually loaded. For troubleshooting, **Copy diagnostics** in
-Settings copies recent connection, session, request, pause and command status
-metadata to the clipboard. It does not include chat, code, paths, command text,
-or output. Copying is explicit; timestamps and numeric IDs are included.
+You need **VS Code 1.106 or newer**. Install the paired VSIX artifacts from
+the same release as described in [Get started](#get-started). Reload the
+window and restart the agent. Settings shows the running version and build ID.
+**Copy diagnostics** explicitly copies bounded connection, session, request,
+pause, and command status metadata; it does not include chat, code, paths,
+command text, or output.
 
 To build it from source instead, you also need **Node.js 22.19 or newer**:
 
@@ -427,19 +372,10 @@ code --extensionDevelopmentPath="$PWD/packages/vscode" <a project folder>
 
 ### Releasing
 
-Add a section for the new version to
-[`packages/vscode/CHANGELOG.md`](packages/vscode/CHANGELOG.md), then, on an
-up-to-date `main`:
-
-```sh
-npm run release -- patch   # or minor, major, or an exact version
-```
-
-It runs every test, bumps the version, builds the `.vsix` once and publishes
-that file to the Marketplace, then commits, tags and pushes the release and
-makes a GitHub release with the `.vsix` attached. It asks before publishing,
-since a version can't be published twice. It needs `vsce login mattyv` and
-`gh auth login` done once.
+Follow the [release checklist](RELEASE.md), including the README and
+architecture review, paired artifacts, and verification evidence. The current
+`npm run release` script publishes the main extension; the companion and
+platform assets need separate checks.
 
 ## License
 
