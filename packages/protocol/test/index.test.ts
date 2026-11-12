@@ -150,8 +150,14 @@ describe('fieldsProblem', () => {
     expect(ACTION_SCHEMA.safeParse({ move: { to: 'line_end' }, speak: false }).success).toBe(false);
   });
 
+  it('validates speech mode only on say', () => {
+    expect(fieldsProblem({ say: 'hi', speech_mode: 'continue' })).toBeUndefined();
+    expect(fieldsProblem({ say: 'hi', speech_mode: 'other' })).toBe('`speech_mode` must be `wait` or `continue`.');
+    expect(fieldsProblem({ type: 'x', speech_mode: 'wait' })).toContain('Unknown field');
+  });
+
   it('names a field the action does not have, and what it has', () => {
-    expect(fieldsProblem({ say: 'hi', loud: true })).toBe('Unknown field `loud` in a `say` action: it has `say`, `speak`.');
+    expect(fieldsProblem({ say: 'hi', loud: true })).toBe('Unknown field `loud` in a `say` action: it has `say`, `speak`, `speech_mode`.');
     expect(fieldsProblem({ run: 'x', wait: 1, cwd: '/', env: {} })).toBe(
       'Unknown field `cwd`, `env` in a `run` action: it has `run`, `wait`.',
     );

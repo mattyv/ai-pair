@@ -4,6 +4,48 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const tempoPaths = vi.hoisted(() => [] as string[]);
+const costFake = vi.hoisted(() => ({
+  publish: undefined as ((value: import('../src/session_speech_cost').SessionSpeechCostView) => void) | undefined,
+  capture: vi.fn<() => (() => ((cost: number | undefined) => void) | undefined) | undefined>(),
+  captures: [] as Array<NonNullable<ConstructorParameters<typeof import('../src/speech_openrouter').OpenRouterClient>[3]>>,
+}));
+vi.mock('../src/session_speech_cost', () => ({
+  SessionSpeechCost: class {
+    constructor(publish: NonNullable<typeof costFake.publish>) {
+      costFake.publish = publish;
+    }
+    begin = vi.fn();
+    capture = costFake.capture;
+    start = vi.fn();
+    restore = vi.fn();
+    end = vi.fn();
+    view = vi.fn(() => ({ seen: false, total: 0, pending: 0, partial: false }));
+  },
+}));
+vi.mock('../src/speech_openrouter', () => ({
+  OpenRouterClient: class {
+    readonly decoder: import('../src/speech_types').OpenRouterAudioDecoder | undefined;
+    constructor(
+      readonly readKey: () => Promise<string | undefined>,
+      fetcher: typeof fetch | undefined,
+      decoder: import('../src/speech_types').OpenRouterAudioDecoder | undefined,
+      captureCost: NonNullable<ConstructorParameters<typeof import('../src/speech_openrouter').OpenRouterClient>[3]> | undefined,
+    ) {
+      void fetcher;
+      this.decoder = decoder;
+      if (captureCost !== undefined) costFake.captures.push(captureCost);
+    }
+    async models(zdr: boolean, signal: AbortSignal): Promise<Array<import('../src/speech_types').OpenRouterModel>> {
+      void zdr;
+      void signal;
+      if ((await this.readKey()) === undefined) throw new Error('Missing API key');
+      return [];
+    }
+    synthesize(): Promise<never> {
+      return Promise.reject(new Error('Unexpected OpenRouter synthesis'));
+    }
+  },
+}));
 vi.mock('../src/speech_tempo_client', () => ({
   SpeechTempoClient: class {
     constructor(path: string) {
@@ -320,6 +362,8 @@ const fakes = vi.hoisted(() => {
     readonly showReadingSpeed = vi.fn();
     readonly showChatOrder = vi.fn();
     readonly showReplyBehavior = vi.fn();
+    readonly showCommandApprovalSound = vi.fn();
+    readonly showCommandApprovals = vi.fn();
     readonly showCodePlayback = vi.fn();
     readonly showSpeechSettings = vi.fn<(value: SpeechSettings) => void>();
     readonly showSpeechComputeState = vi.fn();
@@ -332,6 +376,7 @@ const fakes = vi.hoisted(() => {
     readonly showSpeechOutputCatalog = vi.fn();
     readonly speechReadyPageId = vi.fn(() => 7);
     readonly showSpeechStatus = vi.fn();
+    readonly showSpeechCost = vi.fn();
     readonly playSpeech = vi.fn(() => 7);
     readonly controlSpeech = vi.fn();
     readonly refreshSpeechSupport = vi.fn();
@@ -356,6 +401,7 @@ const fakes = vi.hoisted(() => {
         calibration: () => unknown;
         starter: unknown;
         copyDiagnostics: () => Promise<void>;
+        requireCommandApproval: () => Promise<void>;
         speech: PanelWiring['speech'];
       },
       readonly chatOrder: { get: () => string; set: (value: string) => void },
@@ -364,6 +410,7 @@ const fakes = vi.hoisted(() => {
       readonly showTerminal: (id: number) => boolean,
       readonly codePlayback: { get: () => string; set: (value: string) => void },
       readonly replyBehavior: { get: () => string; set: (value: string) => void },
+      readonly commandApprovalSound: { get: () => boolean; set: (value: boolean) => void },
     ) {
       made.panels.push(this);
     }
@@ -433,6 +480,7 @@ const fakes = vi.hoisted(() => {
       | {
           narration: {
             speak: ReturnType<typeof vi.fn>;
+            waitForRetirement: ReturnType<typeof vi.fn>;
             pause: ReturnType<typeof vi.fn>;
             resume: ReturnType<typeof vi.fn>;
             cancel: ReturnType<typeof vi.fn>;
@@ -545,7 +593,7 @@ vi.mock('vscode', () => ({
         value !== null &&
         'epoch' in value
       ) {
-        return Promise.resolve({ version: 2, epoch: value.epoch, token: 'token' });
+        return Promise.resolve({ version: 3, epoch: value.epoch, token: 'token' });
       }
       if (name === 'aiPair.localAudio.activate') return Promise.resolve(true);
       if (name === 'aiPair.localAudio.gpuDiagnostics' && fakes.companionAvailable) return Promise.resolve(fakes.gpuSnapshot);
@@ -599,7 +647,13 @@ vi.mock('../src/panel_placement', () => ({
 }));
 vi.mock('../src/workspace_session', () => ({
   WorkspaceSession: class {
-    narration = { speak: vi.fn(() => Promise.resolve()), pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() };
+    narration = {
+      speak: vi.fn(() => Promise.resolve()),
+      waitForRetirement: vi.fn<(_: AbortSignal) => Promise<boolean>>().mockResolvedValue(true),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn(),
+    };
     constructor(options: import('../src/workspace_session').WorkspaceSessionOptions) {
       fakes.workspaceOptions = options;
       fakes.session = this;
@@ -745,6 +799,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.clearAllMocks();
   vi.restoreAllMocks();
+  costFake.captures.length = 0;
   fakes.listeners.clear();
   fakes.remoteName = undefined;
   fakes.settings.clear();
@@ -814,6 +869,12 @@ describe('activate', () => {
     expect(h.panel.showSelection).toHaveBeenCalledWith('a ref');
   });
 
+  it('persists the request to require command approval in global settings', async () => {
+    const h = activated();
+    await h.panel.wiring.requireCommandApproval();
+    expect(fakes.updated).toContainEqual(['confirmCommands', true, 1]);
+  });
+
   it('ChoiceSaved: reads, stores and applies the playback mode, defaulting invalid values to typing', () => {
     const h = activated();
     expect(h.controller.setCodePlayback).toHaveBeenCalledWith('typing');
@@ -843,6 +904,19 @@ describe('activate', () => {
     expect(h.panel.showReplyBehavior).toHaveBeenLastCalledWith('interrupt');
   });
 
+  it('persists the optional command approval sound and defaults invalid values to off', () => {
+    const h = activated();
+    expect(h.panel.commandApprovalSound.get()).toBe(false);
+    fakes.settings.set('commandApprovalSound', true);
+    changed('commandApprovalSound');
+    expect(h.panel.showCommandApprovalSound).toHaveBeenLastCalledWith(true);
+    h.panel.commandApprovalSound.set(false);
+    expect(fakes.updated).toContainEqual(['commandApprovalSound', false, 1]);
+    fakes.settings.set('commandApprovalSound', 'true');
+    changed('commandApprovalSound');
+    expect(h.panel.showCommandApprovalSound).toHaveBeenLastCalledWith(false);
+  });
+
   it('reads, saves, and applies the chat order, defaulting invalid values to newest first', () => {
     const h = activated();
     expect(h.panel.chatOrder.get()).toBe('newestFirst');
@@ -855,6 +929,23 @@ describe('activate', () => {
     fakes.settings.set('chatOrder', 'invalid');
     changed('chatOrder');
     expect(h.panel.showChatOrder).toHaveBeenLastCalledWith('newestFirst');
+  });
+
+  it('wires the local session speech cost to the legacy panel', () => {
+    const h = activated();
+    expect(h.panel.wiring.speech.sessionCost).toBeDefined();
+    const snapshot = { seen: true, total: 0.01, pending: 0, partial: false };
+    costFake.publish?.(snapshot);
+    expect(h.panel.showSpeechCost).toHaveBeenCalledWith(snapshot);
+  });
+
+  it('ignores a late session cost publication after the legacy host shuts down', async () => {
+    const h = activated();
+    await h.api.ready;
+    await deactivate();
+    h.panel.showSpeechCost.mockClear();
+    costFake.publish?.({ seen: true, total: 0.01, pending: 0, partial: false });
+    expect(h.panel.showSpeechCost).not.toHaveBeenCalled();
   });
 
   it('exposes the same preview service and page readiness to integration tests', async () => {
@@ -2018,6 +2109,41 @@ it('holds narration and secret changes while placement is pending, then selects 
   expect(fakes.providerRegistered).toHaveBeenCalledOnce();
 });
 
+it('rejects stale retirement admission and reports a current refusal', async () => {
+  fakes.companionAvailable = true;
+  const h = activated();
+  await h.api.ready;
+  const session = fakes.session;
+  if (session === undefined) throw new Error('No session');
+  const gate = Promise.withResolvers<boolean>();
+  session.narration.waitForRetirement.mockReturnValueOnce(gate.promise).mockResolvedValueOnce(false);
+  const stale = h.controller.narration.waitForRetirement?.(new AbortController().signal);
+  await vi.waitFor(() => {
+    expect(session.narration.waitForRetirement).toHaveBeenCalled();
+  });
+  h.controller.narration.cancel();
+  gate.resolve(true);
+  expect(await stale).toBe(false);
+  expect(await h.controller.narration.waitForRetirement?.(new AbortController().signal)).toBe(false);
+  expect(fakes.infos).toContain('Speech is still finishing. This message will be shown without audio.');
+});
+
+it('rejects an already aborted admission and allows an enabled legacy owner', async () => {
+  fakes.settings.set('speech.enabled', true);
+  const h = activated();
+  await h.api.ready;
+  const abort = new AbortController();
+  abort.abort();
+  expect(await h.controller.narration.waitForRetirement?.(abort.signal)).toBe(false);
+  expect(await h.controller.narration.waitForRetirement?.(new AbortController().signal)).toBe(true);
+});
+
+it('skips retirement admission for disabled legacy speech', async () => {
+  const h = activated();
+  await h.api.ready;
+  expect(await h.controller.narration.waitForRetirement?.(new AbortController().signal)).toBe(false);
+});
+
 it('routes companion controls, keys, frame acknowledgements and connection notices locally', async () => {
   fakes.companionAvailable = true;
   const h = activated();
@@ -2045,7 +2171,7 @@ it('routes companion controls, keys, frame acknowledgements and connection notic
   await command('aiPair.removeElevenLabsKey');
   expect(fakes.commandCalls.map(([name]) => name)).toContain('aiPair.localAudio.keySet');
   expect(fakes.commandCalls.map(([name]) => name)).toContain('aiPair.localAudio.keyRemove');
-  const frame = { version: 2 as const, connectionEpoch: 'test-epoch', sequence: 1, type: 'heartbeat' as const };
+  const frame = { version: 3 as const, connectionEpoch: 'test-epoch', sequence: 1, type: 'heartbeat' as const };
   await expect(options.send(frame)).resolves.toBeUndefined();
   fakes.frameAccepted = false;
   await expect(options.send(frame)).rejects.toThrow('not accepted');
@@ -2061,7 +2187,7 @@ it('exposes fixed prepare and commit commands and merges only valid local diagno
   await h.api.ready;
   const placement = fakes.placementOptions;
   if (placement === undefined) throw new Error('No placement');
-  const prepared = { version: 2 as const, epoch: 'test-epoch', token: 'token' };
+  const prepared = { version: 3 as const, epoch: 'test-epoch', token: 'token' };
   await expect(placement.prepare()).resolves.toEqual(prepared);
   await expect(placement.commit(prepared)).resolves.toBe(true);
   await h.panel.wiring.copyDiagnostics();
@@ -2098,7 +2224,7 @@ it('keeps companion command failures private and does not change panel ownership
   await h.api.ready;
   const placement = fakes.placementOptions;
   if (placement === undefined) throw new Error('No placement');
-  const prepared = { version: 2 as const, epoch: 'test-epoch', token: 'token' };
+  const prepared = { version: 3 as const, epoch: 'test-epoch', token: 'token' };
   fakes.failedCommands.add('aiPair.localAudio.prepare');
   fakes.failedCommands.add('aiPair.localAudio.commit');
   fakes.failedCommands.add('aiPair.localAudio.keySet');
@@ -2134,10 +2260,12 @@ it('defaults invalid listening speed and persists it without changing synthesis 
   expect(settings.get()).toMatchObject({ listeningSpeed: 1, speed: 1, elevenLabsSpeed: 1 });
   fakes.settings.set('speech.listeningSpeed', 9);
   expect(settings.get()).toMatchObject({ listeningSpeed: 1 });
-  settings.set({ ...settings.get(), listeningSpeed: 1.25 });
+  fakes.settings.set('speech.listeningSpeed', 1.1);
+  expect(settings.get()).toMatchObject({ listeningSpeed: 1.1 });
+  settings.set({ ...settings.get(), listeningSpeed: 1.1 });
   expect(speech.cancel).not.toHaveBeenCalled();
   await vi.waitFor(() => {
-    expect(fakes.updated).toContainEqual(['speech.listeningSpeed', 1.25, 1]);
+    expect(fakes.updated).toContainEqual(['speech.listeningSpeed', 1.1, 1]);
   });
 });
 
@@ -2723,6 +2851,16 @@ it('routes OpenRouter decoder admission through the legacy panel', async () => {
     expect(models).toHaveBeenCalledOnce();
   });
   models.mockRestore();
+});
+
+it('gives the OpenRouter client a callback that captures the current session cost', () => {
+  const dispatch = vi.fn<() => ((cost: number | undefined) => void) | undefined>();
+  costFake.capture.mockReturnValueOnce(dispatch);
+  activated();
+  const capture = costFake.captures.at(-1);
+  if (capture === undefined) throw new Error('No cost capture callback');
+  expect(capture()).toBe(dispatch);
+  expect(costFake.capture).toHaveBeenCalledOnce();
 });
 
 it('notifies the speech owner when a current OpenRouter catalog arrives', async () => {

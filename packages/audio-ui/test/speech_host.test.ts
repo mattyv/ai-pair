@@ -54,6 +54,9 @@ const fakes = vi.hoisted(() => ({
   openPrompt: undefined as (() => PromiseLike<string | undefined>) | undefined,
   openReadKey: undefined as (() => Promise<string | undefined>) | undefined,
   openDecoder: undefined as import('../../vscode/src/speech_types').OpenRouterAudioDecoder | undefined,
+  openCostCapture: undefined as (() => (() => ((cost: number | undefined) => void) | undefined) | undefined) | undefined,
+  costPublish: undefined as ((view: import('../../vscode/src/session_speech_cost').SessionSpeechCostView) => void) | undefined,
+  costCapture: vi.fn<() => (() => ((cost: number | undefined) => void) | undefined) | undefined>(),
   openPublish: undefined as ((value: import('../../vscode/src/speech_openrouter_catalog').OpenRouterCatalogView) => void) | undefined,
   openDiagnostic: undefined as ((reason: 'auth') => void) | undefined,
   openHasKey: vi.fn<() => Promise<boolean>>().mockResolvedValue(false),
@@ -91,6 +94,19 @@ const fakes = vi.hoisted(() => ({
   modelStatus: vi
     .fn()
     .mockResolvedValue({ path: '/model', source: 'https://example.test', revision: 'abc', verified: false, download: 'missing' }),
+}));
+
+vi.mock('../../vscode/src/session_speech_cost', () => ({
+  SessionSpeechCost: class {
+    constructor(publish: NonNullable<typeof fakes.costPublish>) {
+      fakes.costPublish = publish;
+    }
+    capture = fakes.costCapture;
+    start = vi.fn();
+    restore = vi.fn();
+    end = vi.fn();
+    view = vi.fn(() => ({ seen: false, total: 0, pending: 0, partial: false }));
+  },
 }));
 vi.mock('../../vscode/src/speech_gpu_client', () => ({ createGpuSynthesisClient: fakes.gpuClientFactory }));
 vi.mock('../../vscode/src/speech_gpu_host_binding', () => ({
@@ -230,10 +246,12 @@ vi.mock('../../vscode/src/speech_openrouter', () => ({
       read: NonNullable<typeof fakes.openReadKey>,
       fetcher: typeof fetch | undefined,
       decoder: import('../../vscode/src/speech_types').OpenRouterAudioDecoder,
+      captureCost: NonNullable<typeof fakes.openCostCapture>,
     ) {
       void fetcher;
       fakes.openReadKey = read;
       fakes.openDecoder = decoder;
+      fakes.openCostCapture = captureCost;
     }
   },
 }));
@@ -343,6 +361,7 @@ function harness(
     showSpeechSettings: vi.fn(),
     showSpeechComputeState: vi.fn(),
     showSpeechStatus: vi.fn(),
+    showSpeechCost: vi.fn(),
     refreshSpeechSupport: vi.fn(),
   };
   const diagnostic = vi.fn<(event: SpeechDiagnosticEvent) => void>();
@@ -358,6 +377,25 @@ function harness(
   });
   return { host, adapter, panel, list, diagnostic };
 }
+
+it('keeps the OpenRouter cost ledger in the local companion host', () => {
+  const { host, panel } = harness();
+  expect(host.panelSpeech.sessionCost).toBeDefined();
+  fakes.openCostCapture?.();
+  expect(fakes.costCapture).toHaveBeenCalledOnce();
+  const snapshot = { seen: true, total: 0.03, pending: 0, partial: false };
+  fakes.costPublish?.(snapshot);
+  expect(panel.showSpeechCost).toHaveBeenCalledWith(snapshot);
+});
+
+it('ignores a late cost update after the host is disposed', async () => {
+  const { host, panel } = harness();
+  const publish = fakes.costPublish;
+  if (publish === undefined) throw new Error('Missing cost publisher');
+  await host.dispose();
+  publish({ seen: true, total: 0.03, pending: 0, partial: false });
+  expect(panel.showSpeechCost).not.toHaveBeenCalled();
+});
 
 it('prepares on activation and speech settings changes', () => {
   fakes.config.set('speech.enabled', true);
@@ -762,11 +800,13 @@ it('defaults invalid listening speed and persists it independently of synthesis 
   expect(host.panelSpeech.settings.get()).toMatchObject({ listeningSpeed: 1, speed: 1, elevenLabsSpeed: 1 });
   fakes.config.set('speech.listeningSpeed', 9);
   expect(host.panelSpeech.settings.get()).toMatchObject({ listeningSpeed: 1 });
+  fakes.config.set('speech.listeningSpeed', 1.1);
+  expect(host.panelSpeech.settings.get()).toMatchObject({ listeningSpeed: 1.1 });
   const current = host.panelSpeech.settings.get();
-  host.panelSpeech.settings.set({ ...current, listeningSpeed: 1.25 });
+  host.panelSpeech.settings.set({ ...current, listeningSpeed: 1.1 });
   expect(fakes.cancel).not.toHaveBeenCalled();
   await vi.waitFor(() => {
-    expect(fakes.update).toHaveBeenCalledWith('speech.listeningSpeed', 1.25, 1);
+    expect(fakes.update).toHaveBeenCalledWith('speech.listeningSpeed', 1.1, 1);
   });
   void host.dispose();
 });

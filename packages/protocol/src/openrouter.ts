@@ -46,6 +46,10 @@ export const openRouterSpeechRequest = z.strictObject({
   response_format: z.enum(['pcm', 'mp3']),
   provider: z.strictObject({ zdr: z.literal(true) }).optional(),
 });
+/** Validates the provider-reported generation identity and nonnegative charge. */
+export const openRouterGeneration = z.object({
+  data: z.object({ id: z.string().min(1).max(MAX_MODEL_ID), total_cost: z.number().nonnegative() }),
+});
 /** The validated provider speech request. */
 export type OpenRouterSpeechRequest = z.infer<typeof openRouterSpeechRequest>;
 /** The validated displayed model fields. */

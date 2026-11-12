@@ -2237,10 +2237,39 @@ it('CloudNarration: snapshots OpenRouter model, voice and ZDR into the shared pl
   settings.openRouterModel = 'changed';
   await settle();
   expect(openRouter.synthesize).toHaveBeenCalledWith(
-    { id: 1, format: 'pcm', text: 'Hello.', modelId: 'model', voiceId: 'voice', zdr: true },
+    { id: 1, format: 'pcm', text: 'Hello.', modelId: 'model', voiceId: 'voice', zdr: true, purpose: 'narration' },
     expect.any(AbortSignal),
   );
   expect(output.play).toHaveBeenCalledOnce();
+  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+  await gate;
+});
+
+it('marks an OpenRouter voice preview separately from session narration', async () => {
+  const openRouter = { synthesize: vi.fn().mockResolvedValue({ wav: new Uint8Array(44), durationMs: 1000 }), models: vi.fn() };
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  output.play.mockReturnValue(7);
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output,
+    openRouter,
+    settings: () => ({
+      enabled: true,
+      provider: 'openrouter',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+      openRouterModel: 'model',
+      openRouterVoice: 'voice',
+    }),
+  });
+  const gate = service.preview();
+  await settle();
+  expect(openRouter.synthesize).toHaveBeenCalledWith(expect.objectContaining({ purpose: 'preview' }), expect.any(AbortSignal));
   service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
   await gate;
 });
@@ -2339,7 +2368,7 @@ it('requires an OpenRouter client and model but permits a provider-default voice
   settings.openRouterModel = 'model';
   await service.speak('Default voice');
   expect(openRouter.synthesize).toHaveBeenCalledWith(
-    { id: 2, format: 'pcm', text: 'Default voice', modelId: 'model', voiceId: '', zdr: false },
+    { id: 2, format: 'pcm', text: 'Default voice', modelId: 'model', voiceId: '', zdr: false, purpose: 'narration' },
     expect.any(AbortSignal),
   );
   const withoutClient = new SpeechService({

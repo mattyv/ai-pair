@@ -27,11 +27,18 @@ describe('cross-host panel actions', () => {
       { type: 'replyBehavior', value: 'finishAction' },
       { type: 'chatOrder', value: 'newestFirst' },
       { type: 'showTerminals', value: true },
+      { type: 'commandApprovalSound', value: true },
+      { type: 'revokeCommandApprovals' },
+      { type: 'commandApprovalSound', value: false },
       { type: 'showTerminal', id: 1 },
       { type: 'speed', value: 1 },
       { type: 'readingSpeed', value: 1 },
       { type: 'codePlayback', value: 'typing' },
       { type: 'runDecision', id: 1, run: true, remember: false },
+      { type: 'runDecision', id: 1, run: true, remember: true },
+      { type: 'runDecision', id: 1, run: true, scope: 'once' },
+      { type: 'runDecision', id: 1, run: true, scope: 'command' },
+      { type: 'runDecision', id: 1, run: true, scope: 'all' },
     ]) {
       expect(localPanelAction.safeParse(action).success).toBe(true);
     }
@@ -41,6 +48,7 @@ describe('cross-host panel actions', () => {
     for (const action of [
       { type: 'replyBehavior', value: 'invalid' },
       { type: 'replyBehavior', value: 'interrupt', extra: true },
+      { type: 'commandApprovalSound', value: 'true' },
       { type: 'speechKeySet' },
       { type: 'command', command: 'arbitrary.exec' },
       { type: 'reply', text: 'Hello', secret: 'key' },
@@ -49,6 +57,7 @@ describe('cross-host panel actions', () => {
       { type: 'open', file: 'file', line: -1 },
       { type: 'showTerminal', id: 0 },
       { type: 'runDecision', id: 1, run: 'yes' },
+      { type: 'runDecision', id: 1, run: true, scope: 'forever' },
     ]) {
       expect(localPanelAction.safeParse(action).success).toBe(false);
     }

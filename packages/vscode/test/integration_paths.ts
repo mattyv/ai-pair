@@ -272,7 +272,7 @@ export async function playerPaths(api: Api, root: string): Promise<void> {
   controller.decideRun(await runShown('echo declined', 'confirm'), /* run= */ false);
   assert.equal((await controller.step([])).batches[0]?.error?.kind, 'command_declined');
   await controller.step([{ run: 'echo remembered' }]);
-  controller.decideRun(await runShown('echo remembered', 'confirm'), /* run= */ true, /* remember= */ true);
+  controller.decideRun(await runShown('echo remembered', 'confirm'), /* run= */ true, 'command');
   assert.deepEqual(statuses(await controller.step([])), ['completed']);
   assert.deepEqual(statuses(await played([{ run: 'echo remembered' }])), ['completed']);
   await controller.step([{ run: 'echo asked' }]);
@@ -281,6 +281,23 @@ export async function playerPaths(api: Api, root: string): Promise<void> {
   // Nothing had happened yet, so the batch counts as discarded (specs/Actions.tla, `Stop`).
   assert.deepEqual(statuses(await controller.listen()), ['discarded']);
   await runShown('echo asked', 'declined');
+
+  // CommandApproval: an explicit all grant applies to different commands until this session ends.
+  await controller.step([{ run: 'echo approve-all' }]);
+  controller.decideRun(await runShown('echo approve-all', 'confirm'), /* run= */ true, 'all');
+  assert.deepEqual(statuses(await controller.step([])), ['completed']);
+  assert.deepEqual(statuses(await played([{ run: 'echo approved-another' }])), ['completed']);
+  assert.equal(
+    api.history().some((event) => event.type === 'run' && event.command === 'echo approved-another' && event.phase === 'confirm'),
+    false,
+  );
+  const savedApproval = controller.saved;
+  assert.equal(savedApproval?.scene.allowAllCommands, true);
+  await controller.end();
+  await controller.start('fresh command approvals');
+  await controller.step([{ run: 'echo fresh-approval' }]);
+  controller.decideRun(await runShown('echo fresh-approval', 'confirm'), /* run= */ false);
+  assert.equal((await controller.step([])).batches[0]?.error?.kind, 'command_declined');
   controller.setConfirmCommands(false);
 
   // An interrupt during the save before a command stops it before it starts (specs/Terminals.tla, `AbortBeforeStart`).

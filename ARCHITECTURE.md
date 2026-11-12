@@ -525,3 +525,42 @@ readable narration remain available. Archi-Techture 1.5.1 validated the updated
 source, the HTML export was regenerated and normalized, and the normalizer tests
 passed. Headless Chromium rendered the VS Code integration view without page
 errors; the decoder boundary and its connections were visually checked.
+
+The local credential host owns a `SessionSpeechCost` ledger and uses the
+OpenRouter generation ID to request the provider's reported `total_cost`.
+Its request captures the Pair session before admission; a late result cannot
+change a later session. The cost lookup is bounded, uses the same credential
+snapshot as synthesis, and does not delay playback. The panel displays the
+confirmed subtotal with pending or incomplete status. Settings previews do
+not count. A restored host cannot reconstruct earlier costs, so it marks the
+session partial. The source model and HTML export include the local ledger and
+the existing OpenRouter boundary; the model was validated with Archi-Techture
+1.5.1 and the HTML regenerated and normalized with the repository script.
+
+Usage lookup starts after the synthesis response settles, so an unfinished
+audio stream cannot consume the publication retry window. Five bounded GET
+attempts use delays of 1, 2, 4 and 8 seconds; each attempt has a five-second
+deadline. This is an eventual-consistency allowance, not a provider timing
+guarantee. Fixed cost-reason categories explain missing generation IDs,
+unpublished costs, failed lookups and restored-session gaps without exposing
+credentials, IDs, narration or provider responses.
+
+Command approval grants remain owned by the controller's session. The panel
+renders its authoritative approval snapshot and forwards revocation through
+the same companion transport as other controls. Requiring approval clears
+both all-command and exact-command grants and enables command confirmation.
+It applies to subsequent commands and does not stop a command already running.
+
+Spoken `say` actions default to `speech_mode: "wait"`. An explicit `"continue"`
+keeps the normal reading pause but allows following actions to run before the
+voice finishes. The session's player holds one logical outstanding-speech
+barrier: a later spoken message waits behind it rather than starting a second
+voice or building an unbounded speech queue. Questions use wait mode followed
+by `listen`; speech completion alone does not imply a programmer reply.
+
+Logical speech completion does not establish physical retirement. The existing
+narration port and output owners retain that responsibility. Remote admission
+waits for a matching terminal acknowledgement with a separate three-second
+retirement bound and abort/disposal cleanup. Unavailable admission leaves the
+text visible and reports unavailable speech. Session end and interruption stop
+remaining asynchronous speech; they do not add a new session-end drain phase.

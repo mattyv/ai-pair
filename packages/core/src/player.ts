@@ -57,6 +57,8 @@ export interface Scene {
   pointFar: boolean;
   /** Commands the programmer allowed to run without asking, until the session ends. */
   allowedCommands: Set<string>;
+  /** Whether the programmer allowed every command for this session. */
+  allowAllCommands?: boolean;
 }
 
 /** Where actions take effect: the programmer's editor, or a copy of it in memory. */
@@ -189,6 +191,7 @@ export class Player {
   commandRunning = false;
   private playing?: Playing;
   private readingId?: number;
+  private speech?: Promise<void>;
   private pendingEdit?: { file: string; cursor: number; selection?: { start: number; end: number }; span?: Range; touched: boolean };
 
   constructor(
@@ -416,6 +419,9 @@ export class Player {
     }
 
     if ('say' in action) {
+      // specs/SpeechOverlap.tla, Start: do not dispatch a second unit over the first.
+      await this.speech;
+      if (this.stage.pacing.isInterrupted) return { kind: 'interrupted' };
       // specs/BatchFile.tla, `Say`: it acts in no file.
       panel.post({ type: 'say', text: action.say });
       // Speech is independent of the single reading timeline and starts only after display.
@@ -424,7 +430,10 @@ export class Player {
       let speech = Promise.resolve();
       if (narration !== undefined) {
         try {
-          speech = narration.speak(action.say).catch(() => {});
+          const available = (await narration.waitForRetirement?.(this.stage.pacing.signal)) ?? true;
+          if (this.stage.pacing.isInterrupted) return { kind: 'interrupted', consumed: true };
+          if (available) speech = narration.speak(action.say).catch(() => {});
+          this.speech = speech;
         } catch {
           // A broken optional speech port cannot prevent reading the message.
         }
@@ -439,7 +448,8 @@ export class Player {
       this.readingId = undefined;
       this.reading = false;
       this.stage.render();
-      if (narration !== undefined) {
+      if (!read || this.stage.pacing.isInterrupted) return { kind: 'interrupted', consumed: true };
+      if (narration !== undefined && action.speech_mode !== 'continue') {
         await speech;
         // The speech gate can finish while globally paused; reuse the now-idle timeline.
         const unpaused = read && (await this.stage.pacing.sleep(0));
@@ -604,7 +614,8 @@ export class Player {
     const id = nextRunId++;
     const signal = this.stage.pacing.signal;
 
-    if (config.confirmCommands && !scene.allowedCommands.has(command)) {
+    // specs/CommandApproval.tla, Ask and RunAllowed: an all-command grant belongs to this session.
+    if (this.stage.config().confirmCommands && scene.allowAllCommands !== true && !scene.allowedCommands.has(command)) {
       // specs/RunBox.tla, `SaveAndConfirm`.
       panel.post({ type: 'run', id, command, phase: 'confirm' });
       this.reading = true;

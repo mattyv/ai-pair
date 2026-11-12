@@ -35,11 +35,19 @@ export const localPanelAction = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('replyBehavior'), value: z.enum(['interrupt', 'finishAction']) }),
   z.strictObject({ type: z.literal('chatOrder'), value: z.enum(['newestFirst', 'oldestFirst']) }),
   z.strictObject({ type: z.literal('showTerminals'), value: z.boolean() }),
+  z.strictObject({ type: z.literal('commandApprovalSound'), value: z.boolean() }),
+  z.strictObject({ type: z.literal('revokeCommandApprovals') }),
   z.strictObject({ type: z.literal('showTerminal'), id }),
   z.strictObject({ type: z.literal('speed'), value: speed }),
   z.strictObject({ type: z.literal('readingSpeed'), value: speed }),
   z.strictObject({ type: z.literal('codePlayback'), value: z.enum(['typing', 'lines', 'blocks']) }),
-  z.strictObject({ type: z.literal('runDecision'), id, run: z.boolean(), remember: z.boolean().optional() }),
+  z.strictObject({
+    type: z.literal('runDecision'),
+    id,
+    run: z.boolean(),
+    scope: z.enum(['once', 'command', 'all']).optional(),
+    remember: z.boolean().optional(),
+  }),
 ]);
 
 /** A validated webview action that may be forwarded to the workspace extension. */

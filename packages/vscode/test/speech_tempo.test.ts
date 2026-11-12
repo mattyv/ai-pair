@@ -17,6 +17,13 @@ function frequency(samples: Int16Array): number {
 }
 
 describe('stretchSpeechPcm', () => {
+  it.each([0.8, 1.05, 1.45] as const)('preserves a voiced tone at intermediate rate %s', (rate) => {
+    const input = tone(220, SAMPLE_RATE);
+    const result = stretchSpeechPcm(input, rate);
+    expect(result.length).toBe(Math.round(input.length / rate));
+    expect(Math.abs(frequency(result) - 220)).toBeLessThan(8);
+  });
+
   it('preserves the original samples exactly at 1.0 without aliasing them', () => {
     const input = tone(220, 2000);
     const result = stretchSpeechPcm(input, 1);

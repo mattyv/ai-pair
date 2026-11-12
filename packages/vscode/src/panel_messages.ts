@@ -10,6 +10,7 @@ import type { OpenRouterCatalogView } from './speech_openrouter_catalog';
 import type { OutputChoice } from './speech_output_types';
 import type { AudioDiagnostics, SpeechDecodeFromPage } from '@ai-pair/protocol';
 import type { OutputPreferenceView } from './speech_output_preferences';
+import type { SessionSpeechCostView } from './session_speech_cost';
 
 export type SpeechState = 'preparing' | 'speaking' | 'paused' | 'unavailable' | 'idle';
 export type SpeechEvent = 'started' | 'ended' | 'failed';
@@ -63,21 +64,24 @@ export type FromPanel =
   | { type: 'replyBehavior'; value: 'interrupt' | 'finishAction' }
   | { type: 'chatOrder'; value: ChatOrder }
   | { type: 'showTerminals'; value: boolean }
+  | { type: 'commandApprovalSound'; value: boolean }
+  | { type: 'revokeCommandApprovals' }
   | { type: 'showTerminal'; id: number }
   | { type: 'speed'; value: number }
   | { type: 'readingSpeed'; value: number }
   | { type: 'codePlayback'; value: CodePlayback }
-  | { type: 'runDecision'; id: number; run: boolean; remember?: boolean };
+  | { type: 'runDecision'; id: number; run: boolean; scope?: 'once' | 'command' | 'all'; remember?: boolean };
 
 /** Messages to the page: the session's events, and the panel's own. */
 export type ToPanel =
   | PanelEvent
   /** The log, for a page that just loaded. */
-  | { type: 'replay'; events: PanelEvent[] }
+  | { type: 'replay'; events: PanelEvent[]; costSessionGeneration?: number; costSessionActive?: boolean }
   /** The programmer's selection, offered with a reply. */
   | { type: 'selection'; ref: Ref | undefined }
   | { type: 'speechPage'; pageId: number }
   | { type: 'speechReadiness'; value: AudioDiagnostics }
+  | { type: 'speechCost'; value: SessionSpeechCostView }
   | { type: 'speechTransport'; available: boolean }
   | { type: 'speechSupport'; supported: boolean }
   | { type: 'speechModelStatus'; value: SpeechModelStatus }
@@ -98,6 +102,8 @@ export type ToPanel =
   | { type: 'replyBehavior'; value: 'interrupt' | 'finishAction' }
   | { type: 'chatOrder'; value: ChatOrder }
   | { type: 'showTerminals'; value: boolean }
+  | { type: 'commandApprovalSound'; value: boolean }
+  | { type: 'commandApprovals'; all: boolean; count: number; confirmationRequired: boolean }
   | { type: 'speed'; value: number }
   | { type: 'readingSpeed'; value: number }
   | { type: 'codePlayback'; value: CodePlayback }

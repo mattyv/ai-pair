@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { NarrationPort } from '@ai-pair/core';
 import { CompanionNarration } from '../src/companion_narration';
 
-const base = { version: 2 as const, connectionEpoch: 'connection', jobId: '1', pageEpoch: 4 };
+const base = { version: 3 as const, connectionEpoch: 'connection', jobId: '1', pageEpoch: 4 };
 
 function fixture(initialSequence = 0) {
   let sequence = initialSequence;

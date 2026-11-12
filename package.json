@@ -13,6 +13,7 @@
     "release": "node scripts/release.ts",
     "package": "npm run package -w packages/vscode",
     "test": "vitest run",
+    "test:flows": "vitest run packages/relay/test/scripted_agent.e2e.test.ts packages/relay/test/speech_overlap.e2e.test.ts packages/core/test/session.e2e.test.ts packages/vscode/test/command_approval_composed.e2e.test.ts",
     "test:coverage": "vitest run --coverage && node scripts/coverage_report.ts --unit && node scripts/coverage_report.ts --css --check",
     "test:integration:coverage": "npm run test:integration:coverage -w packages/vscode",
     "test:shell": "bats scripts/test",

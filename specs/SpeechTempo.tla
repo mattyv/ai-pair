@@ -1,4 +1,6 @@
 ---- MODULE SpeechTempo --------------------------------------------------------
+\* `slow` abstracts any supported non-normal 0.05-step listening rate; the
+\* concrete numeric membership is checked at the settings and worker boundary.
 EXTENDS Naturals
 
 CONSTANTS GuardSnapshot, GuardStale, GuardBound, GuardTail, GuardExclusive,

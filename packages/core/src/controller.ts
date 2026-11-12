@@ -87,7 +87,7 @@ interface CursorAnchor {
 /** A session as the window saves it across a reload, as JSON: what it needs to carry on (#25). */
 export interface SavedSession {
   task?: string;
-  scene: Pick<Scene, 'root' | 'turn' | 'cursor' | 'selection'> & { allowedCommands: string[] };
+  scene: Pick<Scene, 'root' | 'turn' | 'cursor' | 'selection' | 'allowAllCommands'> & { allowedCommands: string[] };
   finished: BatchResult[];
   /** The next batch ID, absent in sessions saved by older versions. */
   nextBatchId?: number;
@@ -307,6 +307,7 @@ export class Controller {
       } else if (waiting && !waiting.ended) {
         throw new ToolError('session_active', 'A pairing session is already active in this window.');
       }
+      // specs/CommandApproval.tla, Fresh: a new session begins with no all-command grant.
       const scene: Scene = {
         root: at,
         turn: 'agent',
@@ -411,7 +412,14 @@ export class Controller {
     const { root, turn, cursor, selection } = session.scene;
     return {
       task: session.task,
-      scene: { root, turn, cursor, selection, allowedCommands: [...session.scene.allowedCommands] },
+      scene: {
+        root,
+        turn,
+        cursor,
+        selection,
+        allowedCommands: [...session.scene.allowedCommands],
+        ...(session.scene.allowAllCommands === true ? { allowAllCommands: true } : {}),
+      },
       finished: session.finished,
       nextBatchId: this.nextBatchId,
       // specs/Resume.tla, Store: a queued reply survives reload without changing the live queue.
@@ -431,6 +439,8 @@ export class Controller {
       focus: 'cursor',
       pointFar: false,
       allowedCommands: new Set(saved.scene.allowedCommands),
+      // specs/CommandApproval.tla, Suspend and Resume: preserve only an explicit grant from the saved session.
+      allowAllCommands: saved.scene.allowAllCommands === true,
     };
     const session = this.open(scene, saved.task);
     session.suspended = true;
@@ -867,6 +877,26 @@ export class Controller {
     this.config = { ...this.config, confirmCommands: confirm };
   }
 
+  /** Returns the current session's automatic command approvals. */
+  get commandApprovals(): { all: boolean; commands: string[]; confirmationRequired: boolean } {
+    const scene = this.session?.ended === true ? undefined : this.session?.scene;
+    return {
+      all: scene?.allowAllCommands === true,
+      commands: scene === undefined ? [] : [...scene.allowedCommands],
+      confirmationRequired: this.config.confirmCommands,
+    };
+  }
+
+  /** Revokes automatic approvals without changing a pending or running command. */
+  revokeCommandApprovals(): void {
+    const scene = this.session?.scene;
+    if (scene === undefined) return;
+    // specs/CommandApproval.tla, Revoke: clear both forms of session grant.
+    scene.allowedCommands.clear();
+    scene.allowAllCommands = false;
+    this.onChange?.();
+  }
+
   /** Resolves a path the agent gave against the session's root: for a file the bridge reads itself. */
   resolveFile(file: string): string {
     return this.resolvePath(this.requireSession(), file);
@@ -883,15 +913,18 @@ export class Controller {
   }
 
   /**
-   * Takes the programmer's answer to a `run` waiting for confirmation. `remember`: run exactly this
-   * command without asking for the rest of the session.
+   * Takes the programmer's answer to a `run` waiting for confirmation. The scope can allow this run,
+   * this exact command, or all commands for the rest of this session.
    */
-  decideRun(id: number, run: boolean, remember = false): void {
+  decideRun(id: number, run: boolean, scope: 'once' | 'command' | 'all' = 'once'): void {
     const session = this.session;
     if (!session) return;
     const c = session.confirming;
-    if (c?.id !== id) return;
-    if (run && remember) session.scene.allowedCommands.add(c.command);
+    if (c?.id !== id || session.ended || session.suspended || session.timeline.signal.aborted) return;
+    // specs/CommandApproval.tla, Decide: stale or declined decisions cannot grant approval.
+    session.confirming = undefined;
+    if (run && scope === 'command') session.scene.allowedCommands.add(c.command);
+    if (run && scope === 'all') session.scene.allowAllCommands = true;
     c.decide(run);
   }
 
@@ -900,11 +933,12 @@ export class Controller {
     const signal = session.timeline.signal;
     // An interrupt during the save before it: the abort event has fired already.
     if (signal.aborted) return Promise.resolve(false);
+    let ownConfirmation: Session['confirming'];
     return new Promise<boolean>((resolve) => {
       function abort(): void {
         resolve(false);
       }
-      session.confirming = {
+      ownConfirmation = {
         id,
         command,
         decide: (run) => {
@@ -912,9 +946,10 @@ export class Controller {
           resolve(run);
         },
       };
+      session.confirming = ownConfirmation;
       signal.addEventListener('abort', abort, { once: true });
     }).finally(() => {
-      session.confirming = undefined;
+      if (session.confirming === ownConfirmation) session.confirming = undefined;
     });
   }
 

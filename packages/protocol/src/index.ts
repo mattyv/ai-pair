@@ -134,9 +134,12 @@ export function spokenSay(action: unknown): boolean {
 export function fieldsProblem(action: object): string | undefined {
   const kind = actionKinds(action)[0];
   if (kind === undefined) return undefined;
-  const allowed = kind === 'run' ? ['run', 'wait'] : kind === 'say' ? ['say', 'speak'] : [kind];
+  const allowed = kind === 'run' ? ['run', 'wait'] : kind === 'say' ? ['say', 'speak', 'speech_mode'] : [kind];
   const extra = Object.keys(action).filter((k) => !allowed.includes(k));
   if (extra.length > 0) return `Unknown field ${fieldList(extra)} in a \`${kind}\` action: it has ${fieldList(allowed)}.`;
+  if ('speech_mode' in action && action.speech_mode !== undefined && action.speech_mode !== 'wait' && action.speech_mode !== 'continue') {
+    return '`speech_mode` must be `wait` or `continue`.';
+  }
   if ('speak' in action && action.speak !== undefined && typeof action.speak !== 'boolean') {
     return '`speak` must be a boolean.';
   }

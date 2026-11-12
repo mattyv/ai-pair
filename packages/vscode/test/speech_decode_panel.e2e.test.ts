@@ -52,7 +52,9 @@ function open(panel: NarrationPanel): { send: (value: unknown) => void; close: (
 }
 function harness(): { panel: NarrationPanel; wiring: ReturnType<typeof mockDeep<PanelWiring>> } {
   const wiring = mockDeep<PanelWiring>();
-  const controller = mock<ReturnType<PanelWiring['controller']>>();
+  const controller = mock<ReturnType<PanelWiring['controller']>>({
+    commandApprovals: { all: false, commands: [], confirmationRequired: true },
+  });
   const calibration = mock<ReturnType<PanelWiring['calibration']>>();
   wiring.controller.mockReturnValue(controller);
   wiring.calibration.mockReturnValue(calibration);
@@ -93,6 +95,7 @@ function harness(): { panel: NarrationPanel; wiring: ReturnType<typeof mockDeep<
     () => false,
     { get: () => 'typing', set: vi.fn<(value: 'typing' | 'lines' | 'blocks') => void>() },
     { get: () => 'interrupt', set: vi.fn<(value: 'interrupt' | 'finishAction') => void>() },
+    { get: () => false, set: vi.fn<(value: boolean) => void>() },
   );
   return { panel, wiring };
 }

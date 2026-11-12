@@ -172,6 +172,39 @@ it('blocks a saved OpenRouter pair excluded by the current account catalog', asy
   expect(await speechReady(options)).toBe(false);
 });
 
+it('admits OpenRouter provider-default voice only when the catalog allows it', async () => {
+  let allowed = true;
+  const options = {
+    settings: () => ({
+      enabled: true,
+      provider: 'openrouter' as const,
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+      openRouterModel: 'model',
+      openRouterVoice: '',
+    }),
+    desktop: () => true,
+    local: () => false,
+    output: () => true,
+    model: () => Promise.resolve(false),
+    key: () => Promise.resolve(true),
+    openRouterAllowed: (model: string, voice: string) => allowed && model === 'model' && voice === '',
+  };
+  expect(await speechReady(options)).toBe(true);
+  allowed = false;
+  expect(await speechReady(options)).toBe(false);
+  expect(await speechReady({ ...options, openRouterAllowed: undefined })).toBe(false);
+
+  allowed = true;
+  const key = Promise.withResolvers<boolean>();
+  const pending = speechReady({ ...options, key: () => key.promise });
+  allowed = false;
+  key.resolve(true);
+  expect(await pending).toBe(false);
+});
+
 it('rejects readiness when catalog evidence changes while a key check is pending', async () => {
   let allowed = true;
   const key = Promise.withResolvers<boolean>();

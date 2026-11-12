@@ -32,8 +32,9 @@ export async function speechReady(options: SpeechReadiness): Promise<boolean> {
     if (settings.elevenLabsVoice.length === 0 || !ELEVENLABS_SPEEDS.some((speed) => speed === settings.elevenLabsSpeed)) return false;
     available = await options.key('elevenlabs');
   } else {
-    if (openRouterModel.length === 0 || openRouterVoice.length === 0) return false;
-    if (options.openRouterAllowed?.(openRouterModel, openRouterVoice) === false) return false;
+    if (openRouterModel.length === 0) return false;
+    const allowed = options.openRouterAllowed?.(openRouterModel, openRouterVoice);
+    if (allowed === false || (openRouterVoice === '' && allowed !== true)) return false;
     available = await options.key('openrouter');
   }
   return (
@@ -42,6 +43,9 @@ export async function speechReady(options: SpeechReadiness): Promise<boolean> {
     options.desktop() &&
     options.output() &&
     (settings.provider !== 'kokoro' || options.local()) &&
-    (settings.provider !== 'openrouter' || options.openRouterAllowed?.(openRouterModel, openRouterVoice) !== false)
+    (settings.provider !== 'openrouter' ||
+      (openRouterVoice === ''
+        ? options.openRouterAllowed?.(openRouterModel, openRouterVoice) === true
+        : options.openRouterAllowed?.(openRouterModel, openRouterVoice) !== false))
   );
 }

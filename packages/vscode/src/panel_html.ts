@@ -44,7 +44,8 @@ const ICONS = {
   swap: svg('<path d="M7 7h11l-3-3M17 17H6l3 3"/>'),
   exit: svg('<path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h11"/>'),
   send: svg('<path d="M4 12l16-8-6 16-2.5-6.5z"/>'),
-  voice: svg('<path d="M4 9v6h4l5 4V5L8 9H4zM17 9a5 5 0 010 6"/>'),
+  voice: svg('<path d="M4 9v6h4l5 4V5L8 9H4zM17 9a5 5 0 010 6"/>', 'voice-on'),
+  voiceMuted: svg('<path d="M4 9v6h4l5 4V5L8 9H4zM3 3l18 18"/>', 'voice-muted'),
   settings: svg(
     '<circle cx="12" cy="12" r="3"/>' +
       '<path d="M10 2h4l.5 2.4 1.9.8 2.1-1.3 1.4 1.4-1.3 2.1.8 1.9L22 10v4l-2.6.5-.8 1.9 ' +
@@ -103,6 +104,14 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
     <section class="settings-section">
       <h2>Commands</h2>
       <label class="settings-check"><input type="checkbox" data-ui="show-terminals"> Show terminals automatically</label>
+      <label class="settings-check">
+        <input type="checkbox" data-ui="command-approval-sound">
+        Play a sound when command approval is needed
+      </label>
+      <p>The approval sound uses your system default audio output.</p>
+      <p data-ui="command-approvals-status">No session command grants.</p>
+      <button type="button" data-ui="revoke-command-approvals" disabled>Require command approval</button>
+      <p>Turns command confirmation on and clears remembered session grants.</p>
     </section>
     <section class="settings-section">
       <h2>Speech</h2>
@@ -121,10 +130,8 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
       <p data-ui="speech-output-status" role="status"></p>
       <label class="settings-check"><input type="checkbox" data-ui="speech-enabled"> Speak selected narration automatically</label>
       <label class="settings-field">Listening speed (experimental)
-        <select data-ui="speech-listening-speed">
-          <option value="0.75">0.75x</option><option value="1" selected>1.0x</option>
-          <option value="1.25">1.25x</option><option value="1.5">1.5x</option>
-        </select>
+        <input type="range" data-ui="speech-listening-speed" min="0.75" max="1.5" step="0.05" value="1" aria-valuetext="1.00x">
+        <span data-ui="speech-listening-speed-value" aria-hidden="true">1.00x</span>
       </label>
       <div data-ui="speech-local">
       <label class="settings-field">Voice
@@ -157,7 +164,9 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
         <p>Models may accept only one format. If a request fails, select the format listed for that model on OpenRouter.</p>
         <button type="button" data-ui="openrouter-zdr" class="soft zdr-toggle" aria-pressed="false">ZDR filter: Off</button>
         <p>Filters models with ZDR routes and requests OpenRouter's ZDR policy. Your account's Safety Retention settings still apply.</p>
-        <p data-ui="openrouter-status" role="status">Load speech models and advertised voices from your account. Some models allow a provider-default voice.</p>
+        <p data-ui="openrouter-status" role="status">
+          Load speech models and advertised voices from your account. Some models allow a provider-default voice.
+        </p>
       </div>
       <div data-ui="speech-cloud" hidden>
         <p>Selected narration and voice previews are sent to ElevenLabs and use your account credits.
@@ -322,10 +331,13 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
             data-ui="voice-status"
             class="quiet voice-status"
             data-state="checking"
-            aria-label="Voice: readiness not checked"
-            aria-haspopup="dialog"
-            data-tip="Voice: readiness not checked"
-          >${ICONS.voice}<span class="voice-indicator" aria-hidden="true"></span></button>
+            aria-label="Automatic narration"
+            aria-pressed="false"
+            aria-description="Voice: readiness not checked"
+            data-tip="Enable narration (Voice: readiness not checked)"
+            disabled
+          >${ICONS.voice}${ICONS.voiceMuted}<span class="voice-indicator" aria-hidden="true"></span></button>
+          <span data-ui="speech-cost" class="speech-cost" role="status" tabindex="0" data-tip="" hidden></span>
           <button
             type="button"
             data-ui="settings"
@@ -359,13 +371,19 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
           <div data-ui="run-cmd" class="run-cmd"></div>
           <button type="button" data-ui="show-terminal" class="quiet" hidden>Show terminal</button>
           <div class="run-actions">
-            <button type="button" data-ui="run-go" class="primary">${ICONS.play}<span>Run</span></button>
+            <button type="button" data-ui="run-go" class="primary">${ICONS.play}<span>Run once</span></button>
             <button
               type="button"
               data-ui="run-always"
               class="soft"
               data-tip="Run it, and run exactly this command without asking until the session ends"
-            >Allow for session</button>
+            >Allow this command</button>
+            <button
+              type="button"
+              data-ui="run-all"
+              class="soft"
+              data-tip="Run every command without asking until this Pair session ends"
+            >Allow all for session</button>
             <button type="button" data-ui="run-skip" class="quiet">Skip</button>
           </div>
         </div>

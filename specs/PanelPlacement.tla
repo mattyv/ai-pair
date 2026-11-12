@@ -48,7 +48,8 @@ ExpireBeforeCommit ==
     /\ UNCHANGED <<committed, companionRegistered, lateSeen, badEarly,
                    badFallback, acked>>
 
-\* An installed companion that did not prepare selects no owner.
+\* An installed companion that did not prepare selects no owner. This includes
+\* a version 2 companion paired with the version 3 workspace protocol.
 RejectInstalled ==
     /\ phase \in {"activating", "preparing", "prepared"} /\ ~committed
     /\ phase' = "incompatible" /\ tokenValid' = FALSE

@@ -26,6 +26,7 @@ import { SpeechCatalog } from './speech_catalog';
 import { SpeechOutputPreferences } from './speech_output_preferences';
 import { ElevenLabsClient } from './speech_elevenlabs';
 import { OpenRouterClient } from './speech_openrouter';
+import { SessionSpeechCost } from './session_speech_cost';
 import { createOpenRouterAudioDecoder } from './speech_decode_bridge';
 import { OpenRouterCatalog } from './speech_openrouter_catalog';
 import { installedSpeechModel, setupSpeech, speechModelStatus } from './speech_setup';
@@ -189,6 +190,9 @@ export function activate(context: vscode.ExtensionContext): Api {
   let ownerReady: Promise<void>;
   let workspaceSession: WorkspaceSession | undefined;
   let shuttingDown = false;
+  const sessionCost = new SessionSpeechCost((value) => {
+    if (!shuttingDown) panel.showSpeechCost(value);
+  });
   let catalog: SpeechCatalog;
   let openRouterCatalog: OpenRouterCatalog;
   let outputPreferences: SpeechOutputPreferences;
@@ -438,6 +442,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     () => openRouterCredentials.read(),
     undefined,
     createOpenRouterAudioDecoder(() => panel),
+    () => sessionCost.capture(),
   );
   openRouterCatalog = new OpenRouterCatalog(openRouter, (value) => {
     if (!shuttingDown) {
@@ -505,6 +510,12 @@ export function activate(context: vscode.ExtensionContext): Api {
     get: () => config().get<unknown>('showTerminalsAutomatically') === true,
     set: (value: boolean) => {
       void config().update('showTerminalsAutomatically', value, vscode.ConfigurationTarget.Global);
+    },
+  };
+  const commandApprovalSound = {
+    get: () => config().get<unknown>('commandApprovalSound') === true,
+    set: (value: boolean) => {
+      void config().update('commandApprovalSound', value, vscode.ConfigurationTarget.Global);
     },
   };
   // Frames and panel messages at the Trace level, which VS Code hides unless it is set, and resets
@@ -593,7 +604,9 @@ export function activate(context: vscode.ExtensionContext): Api {
       calibration: () => calibration,
       starter,
       copyDiagnostics,
+      requireCommandApproval: () => Promise.resolve(config().update(CONFIRM_COMMANDS, true, vscode.ConfigurationTarget.Global)),
       speech: {
+        sessionCost,
         readiness: audioReadiness,
         computeState: () => speech.computeState(),
         computeMode: (value) => {
@@ -725,6 +738,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     (id) => editor.showTerminal(id),
     codePlayback,
     replyBehavior,
+    commandApprovalSound,
   );
   outputPreferences = new SpeechOutputPreferences({
     initial: context.globalState.get<unknown>('speechOutput'),
@@ -869,6 +883,17 @@ export function activate(context: vscode.ExtensionContext): Api {
       const generation = narrationGeneration;
       await ownerReady;
       if (!shuttingDown && generation === narrationGeneration) await selectedNarration?.speak(text);
+    },
+    waitForRetirement: async (signal) => {
+      const generation = narrationGeneration;
+      await ownerReady;
+      if (shuttingDown || generation !== narrationGeneration || signal.aborted) return false;
+      if (owner === 'legacy' && !speechSettings.get().enabled) return false;
+      const selected = selectedNarration;
+      const ready = (await selected?.waitForRetirement?.(signal)) ?? true;
+      const current = !shuttingDown && generation === narrationGeneration && selected === selectedNarration && !signal.aborted;
+      if (!ready && current) void vscode.window.showWarningMessage('Speech is still finishing. This message will be shown without audio.');
+      return ready && current;
     },
     pause: () => {
       selectedNarration?.pause();
@@ -1083,6 +1108,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       if (e.affectsConfiguration('aiPair.replyBehavior')) panel.showReplyBehavior(replyBehavior.get());
       if (e.affectsConfiguration('aiPair.chatOrder')) panel.showChatOrder(chatOrder.get());
       if (e.affectsConfiguration('aiPair.showTerminalsAutomatically')) panel.showTerminalPreference(terminalSettings.get());
+      if (e.affectsConfiguration('aiPair.commandApprovalSound')) panel.showCommandApprovalSound(commandApprovalSound.get());
       if (e.affectsConfiguration('aiPair.speed')) {
         controller.setSpeed(speed.get());
         panel.showSpeed(speed.get());
@@ -1099,6 +1125,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       if (e.affectsConfiguration('aiPair.agentName')) editor.setAgentName(config().get(AGENT_NAME, 'Agent'));
       if (e.affectsConfiguration('aiPair.confirmCommands')) {
         controller.setConfirmCommands(config().get(CONFIRM_COMMANDS, true));
+        panel.showCommandApprovals();
       }
     }),
     vscode.commands.registerCommand('aiPair.playDemo', () => {

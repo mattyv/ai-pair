@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LocalAudioFrame } from '@ai-pair/protocol';
 import { LocalConnection } from '../src/local_connection';
 
-const first = { version: 2, connectionEpoch: 'one', sequence: 1, type: 'attach' };
+const first = { version: 3, connectionEpoch: 'one', sequence: 1, type: 'attach' };
 const heartbeat = { ...first, sequence: 2, type: 'heartbeat' };
 
 afterEach(() => {

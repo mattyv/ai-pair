@@ -1,6 +1,9 @@
 import type { NarrationPort } from '@ai-pair/core';
 import { LOCAL_AUDIO_VERSION, localAudioFrame, speechProblem, type LocalAudioFrame } from '@ai-pair/protocol';
 
+/** Maximum wait for a previous physical owner after logical settlement. */
+const RETIREMENT_TIMEOUT_MS = 3000;
+
 /** Dependencies of the workspace-side narration command proxy. */
 export interface RemoteNarrationOptions {
   epoch: string;
@@ -14,6 +17,7 @@ interface Job {
   id: string;
   page: number;
   resolve: () => void;
+  waiters: Set<() => void>;
   timer?: ReturnType<typeof setTimeout>;
   deadline: number;
   remaining: number;
@@ -39,6 +43,7 @@ export class RemoteNarration implements NarrationPort {
       id: String(++this.nextJob),
       page,
       resolve,
+      waiters: new Set(),
       settled: false,
       paused: false,
       deadline: 0,
@@ -67,9 +72,37 @@ export class RemoteNarration implements NarrationPort {
     // specs/LocalAudioOwnership.tla, Ack: stale jobs, pages and connections cannot release the slot.
     this.ackSequence = frame.sequence;
     this.current = undefined;
+    for (const waiter of job.waiters) waiter();
     clearTimeout(job.timer);
     this.settle(job);
     return true;
+  }
+
+  /** Waits boundedly for the matching terminal acknowledgement without queuing text. */
+  waitForRetirement(signal: AbortSignal): Promise<boolean> {
+    const job = this.current;
+    if (this.closed || signal.aborted) return Promise.resolve(false);
+    if (job === undefined) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      let timer: ReturnType<typeof setTimeout>;
+      const waiter = {
+        finish: (ready: boolean): void => {
+          clearTimeout(timer);
+          signal.removeEventListener('abort', waiter.abort);
+          job.waiters.delete(waiter.retired);
+          resolve(ready);
+        },
+        retired: (): void => {
+          waiter.finish(!this.closed);
+        },
+        abort: (): void => {
+          waiter.finish(false);
+        },
+      };
+      timer = setTimeout(waiter.abort, RETIREMENT_TIMEOUT_MS);
+      job.waiters.add(waiter.retired);
+      signal.addEventListener('abort', waiter.abort, { once: true });
+    });
   }
 
   /** Pauses only the current unit. */
@@ -104,6 +137,7 @@ export class RemoteNarration implements NarrationPort {
   dispose(): void {
     this.cancel();
     this.closed = true;
+    for (const waiter of this.current?.waiters ?? []) waiter();
   }
 
   /** Arms only the remaining unpaused terminal-acknowledgement budget. */

@@ -1,3 +1,4 @@
+import type { SpeechCostResult } from '../src/session_speech_cost';
 import { openRouterCatalog, openRouterSpeechModel, openRouterSpeechRequest } from '@ai-pair/protocol';
 /* eslint-disable @typescript-eslint/require-await, unicorn/no-null -- Provider and Response mocks. */
 import { afterEach, expect, it, vi } from 'vitest';
@@ -25,6 +26,203 @@ const catalog = openRouterCatalog.parse({ data: [openRouterSpeechModel.parse({ i
 afterEach(() => {
   vi.restoreAllMocks();
   vi.clearAllMocks();
+});
+
+it('tracks a narration charge from response headers even when audio decoding fails', async () => {
+  const done = vi.fn<(cost: SpeechCostResult) => void>();
+  const begin = vi.fn(() => done);
+  const usage = { cost: vi.fn().mockResolvedValue(0.025) };
+  const decoder: OpenRouterAudioDecoder = {
+    admit: vi.fn().mockResolvedValue({ ...sharedLease, decode: vi.fn().mockRejectedValue(new Error('audio failed')) }),
+  };
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response(new Uint8Array([1, 0]), { headers: { 'content-type': 'audio/pcm', 'x-generation-id': 'gen-tts-1' } }));
+  const client = new OpenRouterClient(
+    async () => 'first-key',
+    fetcher,
+    decoder,
+    () => begin,
+    usage,
+  );
+  await expect(
+    client.synthesize({ id: 1, format: 'pcm', text: 'x', modelId: model, voiceId: voice, zdr: false, purpose: 'narration' }, signal()),
+  ).rejects.toThrow('audio failed');
+  expect(begin).toHaveBeenCalledOnce();
+  expect(usage.cost).toHaveBeenCalledWith('gen-tts-1', 'first-key');
+  expect(done).toHaveBeenCalledWith(0.025);
+});
+
+it('waits for the audio stream to finish before looking up its charge', async () => {
+  const started = Promise.withResolvers<void>();
+  const close = Promise.withResolvers<void>();
+  const done = vi.fn<(cost: SpeechCostResult) => void>();
+  const usage = { cost: vi.fn().mockResolvedValue(0.025) };
+  const body = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      started.resolve();
+      await close.promise;
+      controller.enqueue(new Uint8Array([1, 0]));
+      controller.close();
+    },
+  });
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response(body, { headers: { 'content-type': 'audio/pcm', 'x-generation-id': 'gen-tts-1' } }));
+  const client = new OpenRouterClient(
+    async () => 'key',
+    fetcher,
+    sharedDecoder,
+    () => () => done,
+    usage,
+  );
+  const speaking = client.synthesize(
+    { id: 1, format: 'pcm', text: 'x', modelId: model, voiceId: voice, zdr: false, purpose: 'narration' },
+    signal(),
+  );
+  await started.promise;
+  await vi.waitFor(() => {
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, 0);
+  });
+  expect(usage.cost).not.toHaveBeenCalled();
+  close.resolve();
+  await speaking;
+  await vi.waitFor(() => {
+    expect(done).toHaveBeenCalledWith(0.025);
+  });
+  expect(usage.cost).toHaveBeenCalledWith('gen-tts-1', 'key');
+});
+
+it('does not track voice previews and marks missing generation IDs unavailable', async () => {
+  const done = vi.fn<(cost: SpeechCostResult) => void>();
+  const begin = vi.fn(() => done);
+  const usage = { cost: vi.fn() };
+  const fetcher = vi.fn<typeof fetch>(async () => new Response(new Uint8Array([1, 0]), { headers: { 'content-type': 'audio/pcm' } }));
+  const client = new OpenRouterClient(
+    async () => 'key',
+    fetcher,
+    sharedDecoder,
+    () => begin,
+    usage,
+  );
+  const request = { id: 1, format: 'pcm' as const, text: 'x', modelId: model, voiceId: voice, zdr: false };
+  await client.synthesize({ ...request, purpose: 'preview' }, signal());
+  expect(begin).not.toHaveBeenCalled();
+  await client.synthesize({ ...request, purpose: 'narration' }, signal());
+  expect(begin).toHaveBeenCalledOnce();
+  expect(done).toHaveBeenCalledWith('missing-generation-id');
+  expect(usage.cost).not.toHaveBeenCalled();
+});
+
+it('never waits for a pending charge lookup before playing generated audio', async () => {
+  const result = Promise.withResolvers<number | undefined>();
+  const done = vi.fn<(cost: SpeechCostResult) => void>();
+  const usage = { cost: vi.fn().mockReturnValue(result.promise) };
+  const fetcher = vi.fn<typeof fetch>(
+    async () => new Response(new Uint8Array([1, 0]), { headers: { 'content-type': 'audio/pcm', 'x-generation-id': 'gen-tts-1' } }),
+  );
+  const client = new OpenRouterClient(
+    async () => 'key',
+    fetcher,
+    sharedDecoder,
+    () => () => done,
+    usage,
+  );
+  await expect(
+    client.synthesize({ id: 1, format: 'pcm', text: 'x', modelId: model, voiceId: voice, zdr: false, purpose: 'narration' }, signal()),
+  ).resolves.toEqual({ wav: new Uint8Array([5]), durationMs: 601 });
+  expect(done).not.toHaveBeenCalled();
+  result.resolve(0.02);
+  await vi.waitFor(() => {
+    expect(done).toHaveBeenCalledWith(0.02);
+  });
+});
+
+it('marks a dispatched request with no response partial when interrupted', async () => {
+  const pending = Promise.withResolvers<Response>();
+  const fetcher = vi.fn<typeof fetch>().mockReturnValue(pending.promise);
+  const done = vi.fn<(cost: SpeechCostResult) => void>();
+  const usage = { cost: vi.fn() };
+  const client = new OpenRouterClient(
+    async () => 'key',
+    fetcher,
+    sharedDecoder,
+    () => () => done,
+    usage,
+  );
+  const controller = new AbortController();
+  const speaking = client.synthesize(
+    { id: 1, format: 'pcm', text: 'x', modelId: model, voiceId: voice, zdr: false, purpose: 'narration' },
+    controller.signal,
+  );
+  await vi.waitFor(() => {
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+  controller.abort();
+  await expect(speaking).rejects.toMatchObject({ kind: 'canceled' });
+  expect(done).toHaveBeenCalledWith(undefined);
+  expect(usage.cost).not.toHaveBeenCalled();
+});
+
+it('does not look up or settle twice for a response arriving after cancellation', async () => {
+  const response = Promise.withResolvers<Response>();
+  const fetcher = vi.fn<typeof fetch>().mockReturnValue(response.promise);
+  const done = vi.fn<(cost: SpeechCostResult) => void>();
+  const usage = { cost: vi.fn() };
+  const client = new OpenRouterClient(
+    async () => 'key',
+    fetcher,
+    sharedDecoder,
+    () => () => done,
+    usage,
+  );
+  const controller = new AbortController();
+  const speaking = client.synthesize(
+    { id: 1, format: 'pcm', text: 'x', modelId: model, voiceId: voice, zdr: false, purpose: 'narration' },
+    controller.signal,
+  );
+  await vi.waitFor(() => {
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+  controller.abort();
+  await expect(speaking).rejects.toMatchObject({ kind: 'canceled' });
+  response.resolve(new Response(new Uint8Array([1, 0]), { headers: { 'content-type': 'audio/pcm', 'x-generation-id': 'late' } }));
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, 0);
+  });
+  expect(done).toHaveBeenCalledOnce();
+  expect(done).toHaveBeenCalledWith(undefined);
+  expect(usage.cost).not.toHaveBeenCalled();
+});
+
+it('marks rejected synthesis and rejected cost lookups as unavailable without changing audio results', async () => {
+  const done = vi.fn<(cost: SpeechCostResult) => void>();
+  const usage = { cost: vi.fn().mockRejectedValue(new Error('private')) };
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(new Response('', { status: 401 }))
+    .mockResolvedValueOnce(
+      new Response(new Uint8Array([1, 0]), {
+        headers: { 'content-type': 'audio/pcm', 'x-generation-id': 'gen-tts-1' },
+      }),
+    );
+  const client = new OpenRouterClient(
+    async () => 'key',
+    fetcher,
+    sharedDecoder,
+    () => () => done,
+    usage,
+  );
+  const request = { id: 1, format: 'pcm' as const, text: 'x', modelId: model, voiceId: voice, zdr: false, purpose: 'narration' as const };
+  await expect(client.synthesize(request, signal())).rejects.toMatchObject({ kind: 'auth' });
+  expect(done).toHaveBeenCalledWith(undefined);
+  await expect(client.synthesize(request, signal())).resolves.toEqual({ wav: new Uint8Array([5]), durationMs: 601 });
+  await vi.waitFor(() => {
+    expect(done).toHaveBeenCalledTimes(2);
+  });
 });
 
 it('AccountOnly uses the authenticated account catalog and maps advertised voices', async () => {

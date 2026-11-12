@@ -86,6 +86,11 @@ const SCENARIO: object[] = [
   { type: 'session', active: false, reason: 'agent', summary: 'Done: the API has its tests.' },
   { type: 'session', active: true, task: 'Add tests', rules: ['.ai-pair/GUIDE.md'] },
   { type: 'speechPage', pageId: 1 },
+  {
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  },
+  { type: 'speechCost', value: { seen: true, total: 0.0012, pending: 0, partial: false } },
   { type: 'speechStatus', pageId: 1, id: 1, state: 'preparing' },
   { type: 'state', state: 'typing', turn: 'agent', paused: false },
   { type: 'say', text: 'Typing the test for `createTodo` in `src/todos.ts`, then a link: https://example.com.' },

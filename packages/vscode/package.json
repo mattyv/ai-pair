@@ -2,7 +2,7 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.33.0",
+  "version": "0.34.0",
   "publisher": "mattyv",
   "author": {
     "name": "mattyv"
@@ -280,8 +280,20 @@
           "type": "number",
           "enum": [
             0.75,
+            0.8,
+            0.85,
+            0.9,
+            0.95,
             1,
+            1.05,
+            1.1,
+            1.15,
+            1.2,
             1.25,
+            1.3,
+            1.35,
+            1.4,
+            1.45,
             1.5
           ],
           "default": 1,
@@ -292,6 +304,12 @@
           "type": "boolean",
           "default": false,
           "description": "Show AI Pair command terminals automatically. Hidden terminals are not restored after a workspace reload; terminals without shell integration are shown.",
+          "scope": "application"
+        },
+        "aiPair.commandApprovalSound": {
+          "type": "boolean",
+          "default": false,
+          "description": "Play a short sound when a new command needs your approval.",
           "scope": "application"
         },
         "aiPair.replyBehavior": {

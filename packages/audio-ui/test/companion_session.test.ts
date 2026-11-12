@@ -198,7 +198,7 @@ function routing(): Routing {
 it('registers one provider and forwards local commands and diagnostics', async () => {
   const current = session();
   expect(fake.register).toHaveBeenCalledOnce();
-  expect(fake.attach).toHaveBeenCalledWith({ version: 2, connectionEpoch: 'epoch', sequence: 1, type: 'attach' });
+  expect(fake.attach).toHaveBeenCalledWith({ version: 3, connectionEpoch: 'epoch', sequence: 1, type: 'attach' });
   fake.accept.mockReturnValue(true);
   expect(current.accept({ frame: 'test' })).toBe(true);
   await current.keySet();
@@ -223,7 +223,7 @@ it('registers one provider and forwards local commands and diagnostics', async (
   expect(fake.narrationOptions?.page()).toBe(7);
   expect(fake.narrationOptions?.observation()).toMatchObject({ id: 1 });
   expect(fake.narrationOptions?.nextSequence()).toBe(1);
-  await fake.channelOptions?.send({ version: 2, connectionEpoch: 'epoch', sequence: 2, type: 'heartbeat' });
+  await fake.channelOptions?.send({ version: 3, connectionEpoch: 'epoch', sequence: 2, type: 'heartbeat' });
   expect(fake.execute).toHaveBeenCalledOnce();
   void current.dispose();
   expect(await current.ready('epoch')).toBe(false);
@@ -291,7 +291,7 @@ it('forwards a deferred reply without canceling local narration', () => {
 
 it('delivers complete panel updates and ignores heartbeats', () => {
   const current = session();
-  const common = { version: 2 as const, connectionEpoch: 'epoch', sequence: 2 };
+  const common = { version: 3 as const, connectionEpoch: 'epoch', sequence: 2 };
   fake.connectionOptions?.receive({ ...common, type: 'heartbeat' });
   expect(fake.receiveNarration).not.toHaveBeenCalled();
   const speak = { ...common, type: 'pause' as const, jobId: 'one', pageEpoch: 7 };
@@ -402,6 +402,9 @@ it('provides safe local-only panel settings and refuses workspace operations', a
   invoke(field(args[11], 'set'), 'lines');
   expect(invoke(field(args[12], 'get'))).toBe('interrupt');
   invoke(field(args[12], 'set'), 'finishAction');
+  expect(invoke(field(args[13], 'get'))).toBe(false);
+  invoke(field(args[13], 'set'), true);
+  expect(invoke(field(args[13], 'get'))).toBe(false);
   void current.dispose();
 });
 

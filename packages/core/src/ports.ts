@@ -8,6 +8,8 @@ export interface NarrationPort {
   ready?: () => Promise<boolean>;
   /** Speaks one displayed unit and resolves on completion, cancellation, or text-only fallback. */
   speak: (text: string) => Promise<void>;
+  /** Waits boundedly for any previous physical owner; false leaves narration unavailable. */
+  waitForRetirement?: (signal: AbortSignal) => Promise<boolean>;
   /** Pauses audio or prevents a prepared waveform from starting. */
   pause: () => void;
   /** Resumes only the current uncanceled audio. */
@@ -154,8 +156,8 @@ export type PlayerEditor = Omit<EditorPort, 'cleanupIdleTerminals' | 'diagnostic
 /** Something the panel shows: a session starting or ending, a status, a word to the programmer, a report. */
 export type PanelEvent =
   /** `rules`: the project guides the agent was given (#23). */
-  | { type: 'session'; active: true; task?: string; rules?: string[]; suspended?: true; resumed?: true }
-  | { type: 'session'; active: false; reason: 'agent' | 'programmer' | 'disconnected'; summary?: string }
+  | { type: 'session'; active: true; task?: string; rules?: string[]; suspended?: true; resumed?: true; costSessionGeneration?: number }
+  | { type: 'session'; active: false; reason: 'agent' | 'programmer' | 'disconnected'; summary?: string; costSessionGeneration?: number }
   | { type: 'say'; text: string }
   | { type: 'reading'; ms: number; id?: number; owner?: 'code' }
   | { type: 'state'; state: AgentState; turn: Turn; paused: boolean; ready?: number }

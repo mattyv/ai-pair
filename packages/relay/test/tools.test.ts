@@ -47,6 +47,15 @@ afterEach(() => {
 });
 
 describe('selected narration', () => {
+  it('accepts speech modes only on say and rejects unknown modes', () => {
+    vi.mocked(actionKinds).mockReturnValue(['say']);
+    expect(problems({ say: 'hello', speech_mode: 'wait' })).toEqual([]);
+    expect(problems({ say: 'hello', speech_mode: 'continue' })).toEqual([]);
+    expect(problems({ say: 'hello', speech_mode: 'later' })).not.toEqual([]);
+    vi.mocked(actionKinds).mockReturnValue(['delete']);
+    expect(problems({ delete: true, speech_mode: 'continue' })).not.toEqual([]);
+  });
+
   it('checks flagged text and leaves unflagged narration alone', () => {
     vi.mocked(actionKinds).mockReturnValue(['say']);
     vi.mocked(speechProblem).mockReturnValue('shorten the narration');
@@ -187,4 +196,11 @@ it('tells the agent a say is spoken by default without overriding the user setti
   expect(schema).toContain('Set false to show a say without speaking it');
   expect(schema).toContain('when the programmer has speech enabled');
   expect(schema).not.toContain('Request local speech');
+});
+
+it('keeps a session open through natural pauses and ends only on an explicit request', () => {
+  expect(TOOLS.listen.description).toContain('natural pause, silence, or task completion is not a request');
+  expect(TOOLS.listen.description).toContain('send the summary as a Pair `say` via `step`');
+  expect(TOOLS.listen.description).toContain('do not return a final conversational answer');
+  expect(TOOLS.end.description).toContain('only when the programmer explicitly asks to end the Pair session');
 });

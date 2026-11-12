@@ -14,12 +14,14 @@ const panelEvent = z.union([
     rules: z.array(text).optional(),
     suspended: z.literal(true).optional(),
     resumed: z.literal(true).optional(),
+    costSessionGeneration: z.int().positive().optional(),
   }),
   z.strictObject({
     type: z.literal('session'),
     active: z.literal(false),
     reason: z.enum(['agent', 'programmer', 'disconnected']),
     summary: text.optional(),
+    costSessionGeneration: z.int().positive().optional(),
   }),
   z.strictObject({ type: z.literal('say'), text }),
   z.strictObject({ type: z.literal('reading'), ms: number, id: number.optional(), owner: z.literal('code').optional() }),
@@ -53,12 +55,26 @@ const calibration = z.union([
 /** Validates visible workspace updates, excluding speech settings, secrets, and audio. */
 export const localPanelUpdate = z.union([
   ...panelEvent.options,
-  z.strictObject({ type: z.literal('replay'), events: z.array(panelEvent).max(MAX_REPLAY_EVENTS) }),
+  z
+    .strictObject({
+      type: z.literal('replay'),
+      events: z.array(panelEvent).max(MAX_REPLAY_EVENTS),
+      costSessionGeneration: z.int().positive().optional(),
+      costSessionActive: z.boolean().optional(),
+    })
+    .refine((value) => (value.costSessionGeneration === undefined) === (value.costSessionActive === undefined)),
   z.strictObject({ type: z.literal('selection'), ref: reference.optional() }),
   z.strictObject({ type: z.literal('focusReply') }),
   z.strictObject({ type: z.literal('replyBehavior'), value: z.enum(['interrupt', 'finishAction']) }),
   z.strictObject({ type: z.literal('chatOrder'), value: z.enum(['newestFirst', 'oldestFirst']) }),
   z.strictObject({ type: z.literal('showTerminals'), value: z.boolean() }),
+  z.strictObject({ type: z.literal('commandApprovalSound'), value: z.boolean() }),
+  z.strictObject({
+    type: z.literal('commandApprovals'),
+    all: z.boolean(),
+    count: z.int().nonnegative(),
+    confirmationRequired: z.boolean(),
+  }),
   z.strictObject({ type: z.literal('speed'), value: number }),
   z.strictObject({ type: z.literal('readingSpeed'), value: number }),
   z.strictObject({ type: z.literal('codePlayback'), value: z.enum(['typing', 'lines', 'blocks']) }),

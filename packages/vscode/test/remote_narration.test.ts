@@ -26,12 +26,85 @@ afterEach(() => {
 });
 
 describe('remote narration port', () => {
+  it('bounds retirement admission and recovers when a late terminal arrives', async () => {
+    vi.useFakeTimers();
+    const port = new RemoteNarration({
+      epoch: 'connection',
+      page: () => 4,
+      timeoutMs: 100,
+      send: vi.fn<(_: unknown) => void>(),
+      nextSequence: sequence(),
+    });
+    void port.speak('One.');
+    port.cancel();
+    const waiting = port.waitForRetirement(new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(await waiting).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(
+      port.ack({ version: 3, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'canceled' }),
+    ).toBe(true);
+    expect(await port.waitForRetirement(new AbortController().signal)).toBe(true);
+  });
+
+  it('refuses retirement waits when already aborted or disposed', async () => {
+    const port = new RemoteNarration({
+      epoch: 'connection',
+      page: () => 4,
+      timeoutMs: 100,
+      send: vi.fn<(_: unknown) => void>(),
+      nextSequence: sequence(),
+    });
+    const controller = new AbortController();
+    controller.abort();
+    expect(await port.waitForRetirement(controller.signal)).toBe(false);
+    port.dispose();
+    expect(await port.waitForRetirement(new AbortController().signal)).toBe(false);
+  });
+
+  it('aborts or disposes a retirement wait promptly', async () => {
+    vi.useFakeTimers();
+    const port = new RemoteNarration({
+      epoch: 'connection',
+      page: () => 4,
+      timeoutMs: 100,
+      send: vi.fn<(_: unknown) => void>(),
+      nextSequence: sequence(),
+    });
+    void port.speak('One.');
+    port.cancel();
+    const controller = new AbortController();
+    const aborted = port.waitForRetirement(controller.signal);
+    controller.abort();
+    expect(await aborted).toBe(false);
+    const disposed = port.waitForRetirement(new AbortController().signal);
+    port.dispose();
+    expect(await disposed).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('waits for physical retirement before admitting a successor', async () => {
+    vi.useFakeTimers();
+    const send = vi.fn<(_: unknown) => void>();
+    const port = new RemoteNarration({ epoch: 'connection', page: () => 4, timeoutMs: 100, send, nextSequence: sequence() });
+    void port.speak('One.');
+    port.cancel();
+    const ready = port.waitForRetirement(new AbortController().signal);
+    expect(
+      port.ack({ version: 3, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'canceled' }),
+    ).toBe(true);
+    expect(await ready).toBe(true);
+    void port.speak('Two.');
+    expect(send.mock.calls.at(-1)?.[0]).toMatchObject({ type: 'speak', jobId: '2' });
+    port.dispose();
+  });
+
   it('settles only a matching current terminal and rejects stale acknowledgements', async () => {
     const send = vi.fn<(_: unknown) => void>();
     const port = new RemoteNarration({ epoch: 'connection', page: () => 4, timeoutMs: 100, send, nextSequence: sequence() });
     const job = port.speak('Short narration.');
     expect(send.mock.calls[0]?.[0]).toEqual({
-      version: 2,
+      version: 3,
       connectionEpoch: 'connection',
       sequence: 1,
       type: 'speak',
@@ -40,17 +113,17 @@ describe('remote narration port', () => {
       text: 'Short narration.',
     });
     expect(
-      port.ack({ version: 2, connectionEpoch: 'old', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
+      port.ack({ version: 3, connectionEpoch: 'old', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
     ).toBe(false);
     expect(
-      port.ack({ version: 2, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 3, outcome: 'ended' }),
+      port.ack({ version: 3, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 3, outcome: 'ended' }),
     ).toBe(false);
     expect(
-      port.ack({ version: 2, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
+      port.ack({ version: 3, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
     ).toBe(true);
     await job;
     expect(
-      port.ack({ version: 2, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
+      port.ack({ version: 3, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
     ).toBe(false);
   });
 
@@ -67,7 +140,7 @@ describe('remote narration port', () => {
     expect(send).toHaveBeenCalledTimes(2);
     expect(send.mock.calls[1]?.[0]).toMatchObject({ type: 'cancel', jobId: '1' });
     expect(
-      port.ack({ version: 2, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'canceled' }),
+      port.ack({ version: 3, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'canceled' }),
     ).toBe(true);
     void port.speak('Three.');
     expect(send.mock.calls[2]?.[0]).toMatchObject({ type: 'speak', jobId: '2' });
@@ -130,7 +203,7 @@ describe('remote narration port', () => {
     });
     const first = port.speak('One.');
     const terminal = {
-      version: 2,
+      version: 3,
       connectionEpoch: 'connection',
       sequence: 1,
       type: 'terminal',
@@ -157,7 +230,7 @@ describe('remote narration port', () => {
     const job = port.speak('One.');
     const callback: unknown = timers.mock.calls[0]?.[0];
     expect(
-      port.ack({ version: 2, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
+      port.ack({ version: 3, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
     ).toBe(true);
     await job;
     if (!isTimerCallback(callback)) throw new Error('No timeout callback');
@@ -188,7 +261,7 @@ describe('remote narration port', () => {
     await vi.advanceTimersByTimeAsync(59);
     expect(send).toHaveBeenCalledTimes(3);
     expect(
-      port.ack({ version: 2, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
+      port.ack({ version: 3, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
     ).toBe(true);
     await job;
   });
@@ -212,11 +285,11 @@ it('keeps a long multipart unit paused and retains its slot after timeout until 
     { type: 'resume' },
     { type: 'cancel' },
   ]);
-  expect(port.ack({ version: 2, connectionEpoch: 'old', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' })).toBe(
+  expect(port.ack({ version: 3, connectionEpoch: 'old', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' })).toBe(
     false,
   );
   expect(
-    port.ack({ version: 2, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'canceled' }),
+    port.ack({ version: 3, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'canceled' }),
   ).toBe(true);
   void port.speak('Next.');
   expect(send.mock.calls[4]?.[0]).toMatchObject({ type: 'speak', jobId: '2' });

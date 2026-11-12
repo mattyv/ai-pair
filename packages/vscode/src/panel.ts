@@ -24,6 +24,7 @@ import type { SpeechDiagnosticEvent } from './diagnostics';
 import type { Calibration, CalibrationView } from './calibration';
 import { SpeechDecodeBridge } from './speech_decode_bridge';
 import type { DecodeDocument } from './speech_decode_lifecycle';
+import type { SessionSpeechCost, SessionSpeechCostView } from './session_speech_cost';
 
 const MAX_LOG = 400;
 const DECODE_PROBE_TIMEOUT_MS = 5000;
@@ -74,7 +75,9 @@ export interface PanelWiring {
   starter: Starter;
   /** Copies the sanitized diagnostics snapshot on explicit request. */
   copyDiagnostics: () => Promise<void>;
+  requireCommandApproval: () => Promise<void>;
   speech: {
+    sessionCost?: Pick<SessionSpeechCost, 'start' | 'restore' | 'end' | 'view'>;
     readiness?: () => AudioDiagnostics;
     computeState: () => SpeechComputeState;
     computeMode: (value: SpeechComputeMode) => void;
@@ -140,6 +143,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   });
   private speechSetupCheck = 0;
   private speechTransportAvailable = true;
+  private observedCostSession = false;
+  /** Session generation is local to this workspace/companion connection. */
+  private workspaceCostGeneration = 0;
+  private workspaceCostActive = false;
+  private companionCostGeneration?: number;
   /** Everything posted so far, replayed when the view is (re)created. */
   private readonly log: PanelEvent[] = [];
   /** After each post: the window saves the history with a session, for a reload (#25). */
@@ -180,6 +188,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     private readonly showTerminal: (id: number) => boolean,
     private readonly codePlayback: { get: () => CodePlayback; set: (value: CodePlayback) => void },
     private readonly replyBehavior: { get: () => 'interrupt' | 'finishAction'; set: (value: 'interrupt' | 'finishAction') => void },
+    private readonly commandApprovalSound: { get: () => boolean; set: (value: boolean) => void },
   ) {}
 
   /** Posts to the page, if there is one. */
@@ -191,6 +200,19 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   /** Sends validated cached readiness facts to the current page. */
   showSpeechReadiness(value: AudioDiagnostics): void {
     this.send({ type: 'speechReadiness', value: AUDIO_DIAGNOSTICS_SCHEMA.parse(value) });
+  }
+
+  /** Displays the local provider-confirmed session speech subtotal. */
+  showSpeechCost(value: SessionSpeechCostView): void {
+    if (this.remote === undefined) this.send({ type: 'speechCost', value });
+  }
+
+  /** Updates the local cost owner only for actual Pair session transitions. */
+  private costSession(event: Extract<PanelEvent, { type: 'session' }>): void {
+    this.observedCostSession = true;
+    if (!event.active) this.wiring.speech.sessionCost?.end();
+    else if (event.suspended === true || event.resumed === true) this.wiring.speech.sessionCost?.restore();
+    else this.wiring.speech.sessionCost?.start();
   }
 
   /** Reports whether the local speech connection remains usable. */
@@ -207,6 +229,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   /** Syncs the persisted terminal preference to the page. */
   showTerminalPreference(value: boolean): void {
     this.send({ type: 'showTerminals', value });
+  }
+
+  /** Syncs the command approval cue preference to the current page. */
+  showCommandApprovalSound(value: boolean): void {
+    this.send({ type: 'commandApprovalSound', value });
   }
 
   /** Sends audio only to a ready page, never to the history log. */
@@ -289,8 +316,25 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     this.send({ type: 'timings', tipDelayMs: timings.tipDelayMs, tipWarmMs: timings.tipWarmMs });
   }
 
+  /** Sends the session owner's current approval snapshot. */
+  showCommandApprovals(): void {
+    const approvals = this.wiring.controller().commandApprovals;
+    this.send({
+      type: 'commandApprovals',
+      all: approvals.all,
+      count: approvals.commands.length,
+      confirmationRequired: approvals.confirmationRequired,
+    });
+  }
+
   // specs/PanelReplay.tla, `Post`: the event onto the log, the oldest cut beyond MAX_LOG.
   post(event: PanelEvent): void {
+    if (event.type === 'session') {
+      const fresh = event.active && event.suspended !== true && event.resumed !== true;
+      if (fresh || (event.active && this.workspaceCostGeneration === 0)) this.workspaceCostGeneration++;
+      this.workspaceCostActive = event.active;
+      if (this.remote === undefined) this.costSession(event);
+    }
     this.log.push(event);
     if (this.log.length > MAX_LOG) {
       const cut = this.log.splice(0, this.log.length - MAX_LOG);
@@ -299,11 +343,17 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       const session = cut.findLast((e) => e.type === 'session');
       if (session && !this.log.some((e) => e.type === 'session')) this.log.unshift(session);
     }
-    this.send(event);
+    // specs/CostReplay.tla, Fresh: identity and session state share one update.
+    this.send(
+      event.type === 'session' && this.remote !== undefined && this.workspaceCostGeneration > 0
+        ? { ...event, costSessionGeneration: this.workspaceCostGeneration }
+        : event,
+    );
     if (event.type === 'session') {
       void vscode.commands.executeCommand('setContext', 'aiPair.active', event.active);
       if (event.active) this.reveal();
       if (!event.active) this.wiring.calibration().cancel();
+      this.showCommandApprovals();
     }
     this.onPost?.();
   }
@@ -427,7 +477,40 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   showRemoteUpdate(value: unknown): void {
     if (this.companion === undefined || this.view === undefined) return;
     const parsed = localPanelUpdate.safeParse(value);
-    if (parsed.success) void this.view.webview.postMessage(parsed.data);
+    if (parsed.success) {
+      if (parsed.data.type === 'session' && parsed.data.costSessionGeneration !== undefined) {
+        const fresh = parsed.data.active && parsed.data.suspended !== true && parsed.data.resumed !== true;
+        this.syncCompanionCost(parsed.data.costSessionGeneration, parsed.data.active, fresh);
+      } else if (
+        parsed.data.type === 'replay' &&
+        parsed.data.costSessionGeneration !== undefined &&
+        parsed.data.costSessionActive !== undefined
+      ) {
+        this.syncCompanionCost(parsed.data.costSessionGeneration, parsed.data.costSessionActive, false);
+      } else if (parsed.data.type === 'session' && this.companionCostGeneration === undefined) this.costSession(parsed.data);
+      else if (parsed.data.type === 'replay' && this.companionCostGeneration === undefined && !this.observedCostSession) {
+        const last = parsed.data.events.findLast((event) => event.type === 'session');
+        if (last?.type === 'session' && last.active) {
+          this.observedCostSession = true;
+          this.wiring.speech.sessionCost?.restore();
+        }
+      }
+      void this.view.webview.postMessage(parsed.data);
+    }
+  }
+
+  /** Reconciles cost ownership to a workspace session update or replay snapshot. */
+  private syncCompanionCost(generation: number, active: boolean, fresh: boolean): void {
+    if (this.companionCostGeneration !== undefined && generation < this.companionCostGeneration) return;
+    if (this.companionCostGeneration !== generation) {
+      // specs/CostReplay.tla, Fresh and Reopen: preserve same-session costs, never another session's.
+      if (this.companionCostGeneration !== undefined) this.wiring.speech.sessionCost?.end();
+      this.companionCostGeneration = generation;
+      this.observedCostSession = true;
+      if (fresh) this.wiring.speech.sessionCost?.start();
+      else this.wiring.speech.sessionCost?.restore();
+    }
+    if (!active) this.wiring.speech.sessionCost?.end();
   }
 
   /** Attaches the locally owned companion page without registering a second provider. */
@@ -530,6 +613,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     this.speechPageReady = true;
     this.send({ type: 'speechPage', pageId });
     this.showSpeechTransport(this.speechTransportAvailable);
+    const cost = this.wiring.speech.sessionCost?.view();
+    if (cost !== undefined) this.showSpeechCost(cost);
     this.showSpeechSettings(this.wiring.speech.settings.get());
     this.showSpeechComputeState(this.wiring.speech.computeState());
     if (this.wiring.speech.readiness !== undefined) this.showSpeechReadiness(this.wiring.speech.readiness());
@@ -746,7 +831,15 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         controller().resume('reply');
         this.showChatOrder(this.chatOrder.get());
         this.showReplyBehavior(this.replyBehavior.get());
-        this.send({ type: 'replay', events: this.log });
+        this.showCommandApprovalSound(this.commandApprovalSound.get());
+        this.showCommandApprovals();
+        this.send({
+          type: 'replay',
+          events: this.log,
+          ...(this.remote !== undefined && this.workspaceCostGeneration > 0
+            ? { costSessionGeneration: this.workspaceCostGeneration, costSessionActive: this.workspaceCostActive }
+            : {}),
+        });
         this.showTerminalPreference(this.terminalSettings.get());
         this.showSpeed(this.speed.get());
         this.showReadingSpeed(this.readingSpeed.get());
@@ -765,6 +858,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       case 'showTerminals':
         // specs/TerminalPanel.tla, `SetAuto`.
         if (typeof message.value === 'boolean') this.terminalSettings.set(message.value);
+        return;
+      case 'commandApprovalSound':
+        if (typeof message.value === 'boolean') this.commandApprovalSound.set(message.value);
         return;
       case 'showTerminal':
         // specs/TerminalPanel.tla, `Show`: unavailable never creates a replacement.
@@ -837,9 +933,31 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         if (this.remote === undefined) this.wiring.speech.stop();
         controller().endSession();
         return;
-      case 'runDecision':
-        controller().decideRun(message.id, message.run, message.remember);
+      case 'revokeCommandApprovals':
+        controller().setConfirmCommands(true);
+        controller().revokeCommandApprovals();
+        this.showCommandApprovals();
+        void this.wiring.requireCommandApproval().then(
+          () => {
+            this.showCommandApprovals();
+          },
+          () => {
+            void vscode.window.showErrorMessage('Could not save command approval settings. Confirmation is on for this window.');
+            this.showCommandApprovals();
+          },
+        );
         return;
+      case 'runDecision': {
+        const scope =
+          message.scope === 'command' || message.scope === 'all'
+            ? message.scope
+            : message.scope === undefined && message.remember === true
+              ? 'command'
+              : 'once';
+        controller().decideRun(message.id, message.run, scope);
+        this.showCommandApprovals();
+        return;
+      }
       case 'open': {
         const uri = vscode.Uri.file(this.resolvePath(message.file));
         const position = new vscode.Position(Math.max(0, message.line - 1), 0);

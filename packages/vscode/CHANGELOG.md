@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.34.0
+
+-   Show provider-confirmed OpenRouter speech costs as a compact toolbar
+    subtotal, with precise amounts and missing-cost explanations on hover or
+    keyboard focus. Wait for speech responses to settle before looking up
+    costs, and retry unpublished generation records within a bounded window.
+-   Add session-wide command approval and a Require command approval control
+    that immediately clears remembered grants and re-enables confirmation.
+-   Keep listening speed available across speech providers with finer slider
+    control. Add an optional command-approval sound and toolbar narration mute.
+-   Let agents choose `speech_mode: "continue"` for spoken narration over
+    subsequent typing. The default `"wait"` finishes speaking before the next
+    action; later spoken messages remain ordered. Ending the session stops
+    any outstanding asynchronous speech.
+-   Keep Pair open at task completion: guide agents to summarize through Pair
+    and listen until the programmer explicitly ends the session.
+-   Add a bounded scripted MCP agent regression gate for combined playback,
+    approval, interruption and reconnect flows, with reproducible failure traces.
+
 ## 0.33.0
 
 -   Discover OpenRouter speech models from the authenticated account, including

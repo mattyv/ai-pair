@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.34.0
+
+-   Share the compact OpenRouter cost subtotal, detailed cost explanations,
+    finer listening-speed control and narration mute with the main extension.
+-   Forward session command approvals and their explicit reset through the
+    existing local companion connection.
+-   Keep asynchronous narration ordered and admit a successor only after the
+    previous remote speech unit has retired, with bounded unavailable fallback.
+-   Preserve safe cost ownership across restored sessions and panel recreation.
+-   Update both extensions together for the current audio protocol and controls.
+
 ## 0.32.0
 
 -   Add OpenRouter speech with secure credentials, account-filtered model and

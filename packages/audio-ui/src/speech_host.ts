@@ -9,6 +9,7 @@ import { SpeechCatalog, type CatalogView } from '../../vscode/src/speech_catalog
 import { SpeechCredentials } from '../../vscode/src/speech_credentials';
 import { ElevenLabsClient } from '../../vscode/src/speech_elevenlabs';
 import { OpenRouterClient } from '../../vscode/src/speech_openrouter';
+import { SessionSpeechCost, type SessionSpeechCostView } from '../../vscode/src/session_speech_cost';
 import { createOpenRouterAudioDecoder } from '../../vscode/src/speech_decode_bridge';
 import { OpenRouterCatalog, type OpenRouterCatalogView } from '../../vscode/src/speech_openrouter_catalog';
 import { SpeechOutputPreferences, type OutputPreferenceView } from '../../vscode/src/speech_output_preferences';
@@ -32,6 +33,7 @@ import { CompanionOutput } from './companion_output';
 export interface SpeechHostPanel {
   admitSpeechDecode?(id: number, signal: AbortSignal): Promise<import('../../vscode/src/speech_types').OpenRouterAudioDecodeLease>;
   showSpeechReadiness(value: AudioDiagnostics): void;
+  showSpeechCost(value: SessionSpeechCostView): void;
   showSpeechKeyStatus(hasKey: boolean): void;
   showOpenRouterKeyStatus(hasKey: boolean): void;
   showOpenRouterCatalog(value: OpenRouterCatalogView): void;
@@ -117,6 +119,9 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
   let previewCapture = false;
   let previewId: number | undefined;
   let previewSequence = 0;
+  const sessionCost = new SessionSpeechCost((value) => {
+    if (!disposed) options.panel()?.showSpeechCost(value);
+  });
   const setupAbort = new AbortController();
   const binding =
     !desktop || options.gpuProof === undefined
@@ -319,6 +324,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     () => openRouterCredentials.read(),
     undefined,
     createOpenRouterAudioDecoder(() => options.panel()),
+    () => sessionCost.capture(),
   );
   openRouterCatalog = new OpenRouterCatalog(openRouter, (value) => {
     if (!disposed) {
@@ -561,6 +567,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     );
   }
   const panelSpeech: PanelWiring['speech'] = {
+    sessionCost,
     readiness: audioDiagnostics,
     computeState: () => compute.state(),
     computeMode: (value) => {

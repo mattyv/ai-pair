@@ -141,6 +141,7 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
       calibration: workspaceOnly,
       starter: { available: () => Promise.resolve(false), start: () => Promise.resolve() },
       copyDiagnostics: () => Promise.resolve(),
+      requireCommandApproval: workspaceOnly,
       speech: host.panelSpeech,
     },
     { get: () => 'newestFirst', set: () => {} },
@@ -149,6 +150,7 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
     () => false,
     { get: () => 'typing', set: () => {} },
     { get: () => 'interrupt', set: () => {} },
+    { get: () => false, set: () => {} },
   );
   function sendAction(action: LocalPanelAction, page: number): void {
     void channel.send({

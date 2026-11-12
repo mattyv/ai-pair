@@ -144,7 +144,33 @@ ambiguous *and* expensive to reverse. Don't ask permission for routine steps.
 -   **Every `say` is spoken.** The programmer's eyes are often on the code,
     so your voice is how they follow you, and how they notice that you need
     them. Each `say` is read aloud, in order, and playback waits for the voice
-    before it goes on. Write each one to be heard: a `say` is spoken only when
+    before it goes on by default. Use `speech_mode: "continue"` for explanatory
+    commentary when useful work can proceed while it plays. For example, put a short
+    explanation with `speak: true` before the corresponding `type` in the same batch.
+    Playback proceeds after the reading pause while the voice continues; a later
+    `say` waits for the earlier voice. Use `speech_mode: "wait"` (the default)
+    for questions, choices, and instructions the programmer needs to hear before
+    the next action, and for closing remarks. For example, ask a short question
+    with `speak: true` and `speech_mode: "wait"`, then call `listen` and wait for
+    the answer before acting on it: audio completion is not a response. Ending
+    the session cancels any voice still playing. `speech_mode` controls ordering,
+    not whether the text is eligible for speech. For example, these are actions
+    in one batch after placing the cursor in the intended file:
+
+    ```json
+    [
+      {"say": "This returns the greeting.", "speak": true, "speech_mode": "continue"},
+      {"type": "return greeting;"}
+    ]
+    ```
+
+    A question can be its own batch, followed by `listen`:
+
+    ```json
+    [{"say": "Would you like a different greeting?", "speak": true, "speech_mode": "wait"}]
+    ```
+
+    Write each one to be heard: a `say` is spoken only when
     it is nonempty plain text of at most 280 Unicode characters and 45 words
     with no code fences; a longer one is shown without speech, so split it. Do
     not recite code. Put `speak: false` on a `say` that should not be heard,
@@ -403,7 +429,10 @@ the Rainbow Passage for the calibration"):
     programmer to resume; it says why. Don't resubmit them. Say so briefly if
     it matters, and call `listen`.
 -   **Never end your turn during a session.** When you're done or waiting, call
-    `listen`.
+    `listen`. A natural pause, silence, or task completion is not a request to
+    end the Pair session. When the task is done, send a short summary as a Pair
+    `say` in a `step`, then call `listen`. Do not return a final conversational
+    answer while the session is active; the programmer may have more for you.
 
 ### Starting and ending
 
@@ -420,7 +449,10 @@ the Rainbow Passage for the calibration"):
     were, and the report says what happened meanwhile. Carry on from there, but
     read the files you were working in again before you give a line number.
 -   **When the task is done,** say so in a short summary and call `listen`. The
-    programmer may have more for you. If they say they're done, call `end`.
+    summary belongs in a Pair `say` action in a `step`, not a final
+    conversational answer. Call `end` only if the programmer explicitly asks
+    to end the Pair session; do not infer it from a pause, silence, or task
+    completion.
 -   **When you receive an `end` event,** the session is over. Stop using the
     pair tools, give a brief summary in the conversation, and end your turn. The
     programmer is back to working with you as usual.

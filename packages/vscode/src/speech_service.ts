@@ -460,6 +460,7 @@ export class SpeechService implements NarrationPort {
                 voiceId: current.cloudVoice,
                 zdr: current.openRouterZdr,
                 format: current.openRouterFormat,
+                purpose: current.preview ? 'preview' : 'narration',
               },
               controller.signal,
             )

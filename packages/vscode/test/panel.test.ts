@@ -144,8 +144,10 @@ interface Harness {
     set: ReturnType<typeof vi.fn<(value: 'interrupt' | 'finishAction') => void>>;
   };
   terminalSettings: { get: ReturnType<typeof vi.fn<() => boolean>>; set: ReturnType<typeof vi.fn<(value: boolean) => void>> };
+  commandApprovalSound: { get: ReturnType<typeof vi.fn<() => boolean>>; set: ReturnType<typeof vi.fn<(value: boolean) => void>> };
   showTerminal: ReturnType<typeof vi.fn<(id: number) => boolean>>;
   copyDiagnostics: ReturnType<typeof vi.fn<() => Promise<void>>>;
+  requireCommandApproval: ReturnType<typeof vi.fn<() => Promise<void>>>;
   codePlayback: {
     get: ReturnType<typeof vi.fn<() => 'typing' | 'lines' | 'blocks'>>;
     set: ReturnType<typeof vi.fn<(value: 'typing' | 'lines' | 'blocks') => void>>;
@@ -206,6 +208,7 @@ function harness(
   turn: Turn = 'agent',
   buildInfo = { version: '0.10.0', build: 'test-build' },
   readiness?: () => import('@ai-pair/protocol').AudioDiagnostics,
+  sessionCost?: PanelWiring['speech']['sessionCost'],
 ): Harness {
   const traced: string[] = [];
   const speed = { get: vi.fn(() => SPEEDS[1] ?? 0), set: vi.fn<(value: number) => void>() };
@@ -219,14 +222,17 @@ function harness(
     set: vi.fn<(value: 'interrupt' | 'finishAction') => void>(),
   };
   const terminalSettings = { get: vi.fn(() => false), set: vi.fn<(value: boolean) => void>() };
+  const commandApprovalSound = { get: vi.fn(() => false), set: vi.fn<(value: boolean) => void>() };
   const showTerminal = vi.fn<(id: number) => boolean>();
   const codePlayback = {
     get: vi.fn<() => 'typing' | 'lines' | 'blocks'>(() => 'typing'),
     set: vi.fn<(value: 'typing' | 'lines' | 'blocks') => void>(),
   };
   const copyDiagnostics = vi.fn<() => Promise<void>>().mockResolvedValue();
+  const requireCommandApproval = vi.fn<() => Promise<void>>().mockResolvedValue();
   const speech = {
     ...(readiness === undefined ? {} : { readiness }),
+    ...(sessionCost === undefined ? {} : { sessionCost }),
     settings: {
       get: vi.fn<() => import('../src/speech_types').SpeechSettings>(() => ({
         enabled: false,
@@ -274,7 +280,7 @@ function harness(
     event: vi.fn(),
     pageClosed: vi.fn(),
   };
-  const controller = mock<Controller>({ turn });
+  const controller = mock<Controller>({ turn, commandApprovals: { all: false, commands: [], confirmationRequired: true } });
   const controllerAccessor = vi.fn(() => controller);
   const calibration = mock<Calibration>();
   calibration.reply.mockReturnValue(false);
@@ -290,13 +296,21 @@ function harness(
       traced.push(line);
     },
     vscode.Uri.file(EXTENSION),
-    { controller: controllerAccessor, calibration: () => calibration, starter, copyDiagnostics, speech },
+    {
+      controller: controllerAccessor,
+      calibration: () => calibration,
+      starter,
+      copyDiagnostics,
+      requireCommandApproval,
+      speech,
+    },
     chatOrder,
     buildInfo,
     terminalSettings,
     showTerminal,
     codePlayback,
     replyBehavior,
+    commandApprovalSound,
   );
   const onPost = vi.fn<() => void>();
   panel.onPost = onPost;
@@ -304,6 +318,7 @@ function harness(
     panel,
     controller,
     controllerAccessor,
+    requireCommandApproval,
     calibration,
     starter,
     speed,
@@ -311,6 +326,7 @@ function harness(
     chatOrder,
     replyBehavior,
     terminalSettings,
+    commandApprovalSound,
     showTerminal,
     copyDiagnostics,
     speech,
@@ -785,6 +801,8 @@ describe('receive', () => {
       { type: 'speechSupport', supported: true },
       { type: 'chatOrder', value: 'newestFirst' },
       { type: 'replyBehavior', value: 'interrupt' },
+      { type: 'commandApprovalSound', value: false },
+      { type: 'commandApprovals', all: false, count: 0, confirmationRequired: true },
       { type: 'replay', events: [{ type: 'say', text: 'hi' }] },
       { type: 'showTerminals', value: false },
       { type: 'speed', value: SPEEDS[1] },
@@ -801,14 +819,48 @@ describe('receive', () => {
     ]);
   });
 
+  it('publishes the owner snapshot and routes revocation from the page', () => {
+    const { panel, controller } = harness();
+    controller.commandApprovals.all = true;
+    controller.commandApprovals.commands.push('npm test');
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(view.posted).toContainEqual({ type: 'commandApprovals', all: true, count: 1, confirmationRequired: true });
+    controller.commandApprovals.all = false;
+    controller.commandApprovals.commands.length = 0;
+    view.send({ type: 'revokeCommandApprovals' });
+    expect(controller.setConfirmCommands.mock.calls).toEqual([[true]]);
+    expect(controller.revokeCommandApprovals.mock.calls).toEqual([[]]);
+    expect(view.posted.at(-1)).toEqual({ type: 'commandApprovals', all: false, count: 0, confirmationRequired: true });
+  });
+
+  it('requires confirmation immediately while persistence is pending and reports a failed write', async () => {
+    const { panel, controller, requireCommandApproval } = harness();
+    const saving = Promise.withResolvers<void>();
+    requireCommandApproval.mockReturnValue(saving.promise);
+    const view = open(panel);
+    view.send({ type: 'revokeCommandApprovals' });
+    expect(controller.setConfirmCommands.mock.calls).toEqual([[true]]);
+    expect(controller.revokeCommandApprovals.mock.calls).toEqual([[]]);
+    expect(requireCommandApproval).toHaveBeenCalledOnce();
+    saving.reject(new Error('write failed'));
+    await flush();
+    expect(vi.mocked(vscode.window.showErrorMessage)).toHaveBeenCalledWith(
+      'Could not save command approval settings. Confirmation is on for this window.',
+    );
+    expect(controller.setConfirmCommands.mock.calls).toEqual([[true]]);
+  });
+
   it('sends the saved order before replay and accepts only valid choices', () => {
     const { panel, chatOrder } = harness();
     chatOrder.get.mockReturnValue('oldestFirst');
     const view = open(panel);
     view.send({ type: 'ready' });
-    expect(view.posted.slice(7, 10)).toEqual([
+    expect(view.posted.slice(7, 12)).toEqual([
       { type: 'chatOrder', value: 'oldestFirst' },
       { type: 'replyBehavior', value: 'interrupt' },
+      { type: 'commandApprovalSound', value: false },
+      { type: 'commandApprovals', all: false, count: 0, confirmationRequired: true },
       { type: 'replay', events: [] },
     ]);
     view.send({ type: 'chatOrder', value: 'newestFirst' });
@@ -833,6 +885,18 @@ describe('receive', () => {
     expect(replyBehavior.set.mock.calls).toEqual([['interrupt']]);
     panel.showReplyBehavior('finishAction');
     expect(view.posted).toContainEqual({ type: 'replyBehavior', value: 'finishAction' });
+  });
+
+  it('restores and validates the optional command approval sound', () => {
+    const { panel, commandApprovalSound } = harness();
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(view.posted).toContainEqual({ type: 'commandApprovalSound', value: false });
+    view.receive({ type: 'commandApprovalSound', value: true });
+    view.receive({ type: 'commandApprovalSound', value: 'true' });
+    expect(commandApprovalSound.set.mock.calls).toEqual([[true]]);
+    panel.showCommandApprovalSound(true);
+    expect(view.posted).toContainEqual({ type: 'commandApprovalSound', value: true });
   });
 
   it('receiveFromPage: handles an object with a string type as the page would, and drops anything else', () => {
@@ -969,11 +1033,25 @@ describe('receive', () => {
     view.send({ type: 'interrupt' });
     view.send({ type: 'end' });
     view.send({ type: 'runDecision', id: 3, run: true, remember: false });
+    view.send({ type: 'runDecision', id: 4, run: true, remember: true });
+    view.send({ type: 'runDecision', id: 5, run: true, scope: 'all' });
+    view.send({ type: 'runDecision', id: 6, run: true, scope: 'command' });
+    view.send({ type: 'runDecision', id: 7, run: false, scope: 'once' });
+    view.send({ type: 'runDecision', id: 8, run: true, scope: 'once', remember: true });
+    view.receive({ type: 'runDecision', id: 9, run: true, scope: 'invalid', remember: true });
     expect(controller.pause.mock.calls).toEqual([[]]);
     expect(controller.resume.mock.calls).toEqual([[]]);
     expect(controller.userInterrupt.mock.calls).toEqual([[]]);
     expect(controller.endSession.mock.calls).toEqual([[]]);
-    expect(controller.decideRun.mock.calls).toEqual([[3, true, false]]);
+    expect(controller.decideRun.mock.calls).toEqual([
+      [3, true, 'once'],
+      [4, true, 'command'],
+      [5, true, 'all'],
+      [6, true, 'command'],
+      [7, false, 'once'],
+      [8, true, 'once'],
+      [9, true, 'once'],
+    ]);
   });
 
   it("turn: hands the turn back on the programmer's turn, with the selection when attached", () => {
@@ -1217,6 +1295,18 @@ it('validates page events and preferences before forwarding speech controls', ()
       type: 'speechSettings',
       value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, listeningSpeed: 9, elevenLabsVoice: '', elevenLabsSpeed: 1 },
     },
+    {
+      type: 'speechSettings',
+      value: {
+        enabled: true,
+        provider: 'kokoro',
+        voice: 'af_heart',
+        speed: 1,
+        listeningSpeed: 1.03,
+        elevenLabsVoice: '',
+        elevenLabsSpeed: 1,
+      },
+    },
   ]) {
     view.receive(value);
   }
@@ -1230,10 +1320,15 @@ it('validates page events and preferences before forwarding speech controls', ()
     type: 'speechSettings',
     value: { enabled: true, provider: 'kokoro', voice: 'bf_emma', speed: 1, listeningSpeed: 0.75, elevenLabsVoice: '', elevenLabsSpeed: 1 },
   });
+  view.send({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'kokoro', voice: 'bf_emma', speed: 1, listeningSpeed: 1.1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
   view.send({ type: 'speechStop' });
   expect(speech.settings.set.mock.calls).toEqual([
     [{ enabled: true, provider: 'kokoro', voice: 'bf_emma', speed: 1.25, elevenLabsVoice: '', elevenLabsSpeed: 1 }],
     [{ enabled: true, provider: 'kokoro', voice: 'bf_emma', speed: 1, listeningSpeed: 0.75, elevenLabsVoice: '', elevenLabsSpeed: 1 }],
+    [{ enabled: true, provider: 'kokoro', voice: 'bf_emma', speed: 1, listeningSpeed: 1.1, elevenLabsVoice: '', elevenLabsSpeed: 1 }],
   ]);
   expect(speech.stop.mock.calls).toEqual([[]]);
 });
@@ -1492,11 +1587,17 @@ describe('remote panel port', () => {
     const send = vi.fn<(message: ToPanel) => void>();
     panel.attachRemote(1, send);
     panel.receiveRemote(1, { type: 'ready' });
+    panel.showSpeechCost({ seen: true, total: 0.2, pending: 0, partial: false });
+    expect(send.mock.calls.map(([message]) => message.type)).not.toContain('speechCost');
     expect(speech.keyRefresh).not.toHaveBeenCalled();
     expect(speech.settings.get).not.toHaveBeenCalled();
     panel.post({ type: 'say', text: 'Hello.' });
     expect(send).toHaveBeenCalledWith({ type: 'say', text: 'Hello.' });
     panel.receiveRemote(1, { type: 'reply', text: 'Continue.' });
+    for (const scope of ['once', 'command', 'all'] as const) {
+      panel.receiveRemote(1, { type: 'runDecision', id: 5, run: true, scope });
+      expect(controller.decideRun.mock.calls).toContainEqual([5, true, scope]);
+    }
     expect(controller.userMessage.mock.calls.length).toBeGreaterThan(0);
     expect(speech.stop).not.toHaveBeenCalled();
     panel.closeRemote(1);
@@ -1521,7 +1622,123 @@ it('routes remote interrupt, turn, end and page disposal without stopping remote
   expect(controller.releaseReadingHold.mock.calls).toHaveLength(1);
 });
 
+it('tracks legacy sessions and restores a reloaded session as partial', () => {
+  const cost = {
+    start: vi.fn(),
+    restore: vi.fn(),
+    end: vi.fn(),
+    view: vi.fn(() => ({ seen: false, total: 0, pending: 0, partial: false })),
+  };
+  const { panel } = harness('agent', undefined, undefined, cost);
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  expect(view.posted).toContainEqual({ type: 'speechCost', value: cost.view() });
+  panel.post({ type: 'session', active: true, task: 'new' });
+  panel.post({ type: 'session', active: true, suspended: true });
+  panel.post({ type: 'session', active: false, reason: 'programmer' });
+  expect(cost.start).toHaveBeenCalledOnce();
+  expect(cost.restore).toHaveBeenCalledOnce();
+  expect(cost.end).toHaveBeenCalledOnce();
+});
+
 describe('companion panel port', () => {
+  it('distinguishes the same replayed session from a new session missed while the page was absent', () => {
+    const cost = {
+      start: vi.fn(),
+      restore: vi.fn(),
+      end: vi.fn(),
+      view: vi.fn(() => ({ seen: true, total: 0.2, pending: 0, partial: false })),
+    };
+    const { panel } = harness('agent', undefined, undefined, cost);
+    panel.useCompanion({
+      forward: vi.fn<import('../src/panel').CompanionPanelRouting['forward']>(),
+      closed: vi.fn<import('../src/panel').CompanionPanelRouting['closed']>(),
+    });
+    open(panel);
+    panel.showRemoteUpdate({ type: 'session', active: true, costSessionGeneration: 1 });
+    expect(cost.start).toHaveBeenCalledOnce();
+    panel.showRemoteUpdate({ type: 'replay', events: [], costSessionGeneration: 1, costSessionActive: true });
+    expect(cost.restore).not.toHaveBeenCalled();
+    expect(cost.end).not.toHaveBeenCalled();
+    // The workspace saw another session while this page was absent.
+    panel.showRemoteUpdate({ type: 'replay', events: [], costSessionGeneration: 2, costSessionActive: true });
+    expect(cost.end).toHaveBeenCalledOnce();
+    expect(cost.restore).toHaveBeenCalledOnce();
+    panel.showRemoteUpdate({ type: 'replay', events: [], costSessionGeneration: 2, costSessionActive: true });
+    expect(cost.restore).toHaveBeenCalledOnce();
+    // A late update for the old session must not close the current ledger.
+    panel.showRemoteUpdate({ type: 'session', active: false, reason: 'agent', costSessionGeneration: 1 });
+    expect(cost.end).toHaveBeenCalledOnce();
+    panel.showRemoteUpdate({ type: 'session', active: false, reason: 'agent', costSessionGeneration: 2 });
+    expect(cost.end).toHaveBeenCalledTimes(2);
+  });
+
+  it('sends the current session generation when the companion page reconnects', () => {
+    const { panel } = harness();
+    const send = vi.fn<(message: import('../src/panel_messages').ToPanel) => void>();
+    panel.post({ type: 'session', active: true, task: 'one' });
+    panel.post({ type: 'session', active: false, reason: 'agent' });
+    panel.post({ type: 'session', active: true, task: 'two' });
+    panel.attachRemote(1, send);
+    panel.receiveRemote(1, { type: 'ready' });
+    const replay = send.mock.calls.map(([message]) => message).find((message) => message.type === 'replay');
+    expect(replay).toMatchObject({
+      type: 'replay',
+      costSessionGeneration: 2,
+      costSessionActive: true,
+    });
+    if (replay?.type !== 'replay') throw new TypeError('No replay was sent');
+    expect(replay.events).toHaveLength(3);
+    panel.post({ type: 'session', active: true, task: 'three' });
+    expect(send).toHaveBeenCalledWith({ type: 'session', active: true, task: 'three', costSessionGeneration: 3 });
+  });
+
+  it('tracks new, resumed and ended sessions from the local companion updates', () => {
+    const cost = {
+      start: vi.fn(),
+      restore: vi.fn(),
+      end: vi.fn(),
+      view: vi.fn(() => ({ seen: true, total: 0.2, pending: 0, partial: false })),
+    };
+    const { panel } = harness('agent', undefined, undefined, cost);
+    panel.useCompanion({
+      forward: vi.fn<import('../src/panel').CompanionPanelRouting['forward']>(),
+      closed: vi.fn<import('../src/panel').CompanionPanelRouting['closed']>(),
+    });
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(view.posted).toContainEqual({ type: 'speechCost', value: cost.view() });
+    panel.showRemoteUpdate({ type: 'session', active: true, task: 'fresh' });
+    panel.showRemoteUpdate({ type: 'session', active: true, resumed: true });
+    panel.showRemoteUpdate({ type: 'session', active: false, reason: 'agent' });
+    panel.showRemoteUpdate({ type: 'replay', events: [{ type: 'session', active: true }] });
+    expect(cost.start).toHaveBeenCalledOnce();
+    expect(cost.restore).toHaveBeenCalledOnce();
+    expect(cost.end).toHaveBeenCalledOnce();
+  });
+
+  it('restores a replayed active session without resetting on page recreation', () => {
+    const cost = {
+      start: vi.fn(),
+      restore: vi.fn(),
+      end: vi.fn(),
+      view: vi.fn(() => ({ seen: true, total: 0.2, pending: 0, partial: true })),
+    };
+    const { panel } = harness('agent', undefined, undefined, cost);
+    panel.useCompanion({
+      forward: vi.fn<import('../src/panel').CompanionPanelRouting['forward']>(),
+      closed: vi.fn<import('../src/panel').CompanionPanelRouting['closed']>(),
+    });
+    open(panel);
+    panel.showRemoteUpdate({ type: 'replay', events: [] });
+    panel.showRemoteUpdate({ type: 'replay', events: [{ type: 'session', active: false, reason: 'agent' }] });
+    expect(cost.restore).not.toHaveBeenCalled();
+    panel.showRemoteUpdate({ type: 'replay', events: [{ type: 'session', active: true }] });
+    panel.showRemoteUpdate({ type: 'replay', events: [{ type: 'session', active: true }] });
+    expect(cost.restore).toHaveBeenCalledOnce();
+    expect(cost.start).not.toHaveBeenCalled();
+  });
+
   it('keeps speech local and forwards validated workspace actions with the local page identity', () => {
     const { panel, controller, controllerAccessor, speech } = harness();
     const forward = vi.fn<(action: import('@ai-pair/protocol').LocalPanelAction, pageId: number) => void>();
@@ -1533,6 +1750,10 @@ describe('companion panel port', () => {
     expect(forward).toHaveBeenCalledWith({ type: 'ready' }, 1);
     view.send({ type: 'reply', text: 'Continue.' });
     expect(forward).toHaveBeenCalledWith({ type: 'reply', text: 'Continue.' }, 1);
+    for (const scope of ['once', 'command', 'all'] as const) {
+      view.send({ type: 'runDecision', id: 4, run: true, scope });
+      expect(forward).toHaveBeenCalledWith({ type: 'runDecision', id: 4, run: true, scope }, 1);
+    }
     expect(controller.userMessage.mock.calls).toHaveLength(0);
     panel.showRemoteUpdate({ type: 'say', text: 'From workspace.' });
     expect(view.posted).toContainEqual({ type: 'say', text: 'From workspace.' });
@@ -1557,7 +1778,7 @@ describe('companion panel port', () => {
     view.receive({ type: 'command', command: 'arbitrary.exec' });
     view.receive({ type: 'reply', text: 'x'.repeat(65_537) });
     expect(controller.userMessage.mock.calls).toHaveLength(0);
-    expect(forward).toHaveBeenCalledTimes(2);
+    expect(forward).toHaveBeenCalledTimes(5);
     view.dispose();
     expect(closed).toHaveBeenCalledWith(1);
     expect(controller.releaseReadingHold.mock.calls).toHaveLength(0);

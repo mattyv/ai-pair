@@ -100,6 +100,12 @@ const actionSchema = z.union(
         .describe(
           "Narrate right before the actions it describes: what you're doing, why, and how your code does it. It's about your code and your choices, not how the language or its libraries work (unless the programmer asked to learn them). Explain the code, don't recite it. One to three sentences; `backticks` render as code. Playback pauses so the programmer can read it.",
         ),
+      speech_mode: z
+        .enum(['wait', 'continue'])
+        .optional()
+        .describe(
+          'Use continue to proceed after the reading pause while speech plays; wait is the default and waits for speech too. Use wait for questions and closing remarks.',
+        ),
       speak: z
         .boolean()
         .optional()
@@ -223,12 +229,12 @@ After a report says a batch was interrupted, discarded, or failed, your cursor i
   },
   listen: {
     description:
-      "Wait for the programmer. First collects the reports of your queued batches, then returns when the programmer does something: a message (with the code they had selected, if any), an edit of theirs, a turn change, or ending the session. Call it whenever you're done or waiting: during a session, never end your turn. During the programmer's turn you're the navigator (only `say` and `point` work), and `listen` also returns shortly after they stop typing, so you can comment. If nothing happened in time, it says so: call it again.",
+      "Wait for the programmer. First collects the reports of your queued batches, then returns when the programmer does something: a message (with the code they had selected, if any), an edit of theirs, a turn change, or ending the session. Call it whenever you're done or waiting: during a session, never end your turn. A natural pause, silence, or task completion is not a request to end the session. When the task is done, send the summary as a Pair `say` via `step`, then call `listen`; do not return a final conversational answer while the session is active. The programmer decides when to pause or end. During the programmer's turn you're the navigator (only `say` and `point` work), and `listen` also returns shortly after they stop typing, so you can comment. If nothing happened in time, it says so: call it again.",
     inputSchema: {},
   },
   end: {
     description:
-      "End the session, when the programmer says they're done. Anything still queued plays out first. Afterwards the pair tools are unavailable until the next `start`; continue the conversation normally.",
+      'End the session only when the programmer explicitly asks to end the Pair session. Do not infer this from a natural pause, silence, or task completion. Anything still queued plays out first. Afterwards the pair tools are unavailable until the next `start`; continue the conversation normally.',
     inputSchema: {
       summary: z.string().optional().describe('One or two sentences, shown to the programmer as the closing message.'),
     },

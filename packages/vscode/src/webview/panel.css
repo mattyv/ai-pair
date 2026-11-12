@@ -303,6 +303,11 @@ button:focus-visible {
   position: relative;
 }
 
+.voice-status[aria-pressed='false'] .voice-on,
+.voice-status[aria-pressed='true'] .voice-muted {
+  display: none;
+}
+
 .voice-indicator {
   background: var(--vscode-descriptionForeground, var(--fg));
   border: 1px solid var(--vscode-editor-background);
@@ -897,6 +902,12 @@ a:hover {
   gap: 4px;
 }
 
+.settings-field input[type='range'] {
+  accent-color: var(--accent);
+  margin: 0;
+  width: 100%;
+}
+
 .settings-check {
   align-items: flex-start;
   display: flex;
@@ -996,6 +1007,11 @@ a:hover {
 }
 
 /* Local speech */
+.speech-cost {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .speech-live:not([hidden]) {
   align-items: center;
   display: flex;

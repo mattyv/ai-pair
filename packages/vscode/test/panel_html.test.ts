@@ -120,6 +120,55 @@ it('shows the running extension version and build in the panel', () => {
   expect(page.querySelector('.controls .build-identity')).toBeNull();
 });
 
+it('provides a hidden session speech cost status on the main panel', () => {
+  const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js');
+  const page = new window.DOMParser().parseFromString(html, 'text/html');
+  const cost = page.querySelector('[data-ui="speech-cost"]');
+  ok(cost instanceof window.HTMLElement);
+  expect(cost.hidden).toBe(true);
+  expect(cost.getAttribute('role')).toBe('status');
+  const previous = cost.previousElementSibling;
+  ok(previous instanceof window.HTMLElement);
+  expect(previous.dataset.ui).toBe('voice-status');
+  expect(cost.getAttribute('tabindex')).toBe('0');
+});
+
+it('offers explicit command approval scopes', () => {
+  const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js');
+  const page = new window.DOMParser().parseFromString(html, 'text/html');
+  expect(page.querySelector('[data-ui="run-go"]')?.textContent).toContain('Run once');
+  const command = page.querySelector('[data-ui="run-always"]');
+  const all = page.querySelector('[data-ui="run-all"]');
+  ok(command instanceof window.HTMLElement);
+  ok(all instanceof window.HTMLElement);
+  expect(command.textContent).toBe('Allow this command');
+  expect(command.dataset.tip).toContain('exactly this command');
+  expect(all.textContent).toBe('Allow all for session');
+  expect(all.dataset.tip).toContain('every command');
+  expect(page.querySelector('[data-ui="run-skip"]')?.textContent).toBe('Skip');
+});
+
+it('offers an optional sound for command approvals, disabled by default', () => {
+  const page = new window.DOMParser().parseFromString(panelHtml('vscode-resource:', 'panel.css', 'panel.js'), 'text/html');
+  const cue = page.querySelector('[data-ui="command-approval-sound"]');
+  ok(cue instanceof window.HTMLInputElement);
+  expect(cue.type).toBe('checkbox');
+  expect(cue.checked).toBe(false);
+  expect(cue.closest('label')?.textContent).toContain('Play a sound when command approval is needed');
+  expect(cue.closest('section')?.textContent).toContain('The approval sound uses your system default audio output.');
+});
+
+it('offers one accessible narration toggle in the toolbar, disabled until settings load', () => {
+  const page = new window.DOMParser().parseFromString(panelHtml('vscode-resource:', 'panel.css', 'panel.js'), 'text/html');
+  const button = page.querySelector('[data-ui="voice-status"]');
+  ok(button instanceof window.HTMLButtonElement);
+  expect(button.getAttribute('aria-label')).toBe('Automatic narration');
+  expect(button.getAttribute('aria-pressed')).toBe('false');
+  expect(button.disabled).toBe(true);
+  expect(button.querySelector('.voice-indicator')).not.toBeNull();
+  expect(button.closest('.controls')).not.toBeNull();
+});
+
 it('escapes the running version and build as text in Settings', () => {
   const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js', '<version>', 'id&more');
   const page = new window.DOMParser().parseFromString(html, 'text/html');
@@ -215,8 +264,16 @@ it('offers explicit cloud controls without exposing a key input', () => {
 it('marks listening speed experimental in the visible settings', () => {
   const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js');
   const page = new window.DOMParser().parseFromString(html, 'text/html');
-  const label = page.querySelector('[data-ui="speech-listening-speed"]')?.closest('label');
+  const slider = page.querySelector('[data-ui="speech-listening-speed"]');
+  ok(slider instanceof window.HTMLInputElement);
+  const label = slider.closest('label');
   expect(label?.textContent).toContain('Listening speed (experimental)');
+  expect(slider.type).toBe('range');
+  expect([slider.min, slider.max, slider.step, slider.value]).toEqual(['0.75', '1.5', '0.05', '1']);
+  expect(page.querySelector('[data-ui="speech-listening-speed-value"]')?.textContent).toBe('1.00x');
+  expect(slider.closest('[data-ui="speech-local"]')).toBeNull();
+  expect(slider.closest('[data-ui="speech-cloud"]')).toBeNull();
+  expect(slider.closest('[data-ui="openrouter"]')).toBeNull();
 });
 
 it('offers OpenRouter model, voice, secure key, and ZDR controls', () => {

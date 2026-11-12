@@ -34891,7 +34891,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 },
                 {
                   id: "controller",
-                  label: "Session Controller\nQueues batches, builds reports",
+                  label: "Session Controller\nQueues and revocable approvals",
                   files: ["packages/core/src/controller.ts", "packages/core/src/rehearsal.ts"],
                   group: "extension",
                   x: 780.5,
@@ -35117,7 +35117,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 player: [
                   {
                     id: "n-overviewplayer",
-                    text: "Carries out queued work at a human pace and signals each completed action to the session controller.",
+                    text: "Carries out queued work at a human pace. A per-session logical speech barrier supports wait or continue narration while later utterances stay ordered through bounded owner admission; physical playback ownership remains in the narration port.",
                     ts: 0,
                   },
                 ],
@@ -35198,7 +35198,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 },
                 {
                   id: "controller",
-                  label: "Session Controller\nQueues batches, builds reports",
+                  label: "Session Controller\nQueues and revocable approvals",
                   files: [
                     "packages/core/src/controller.ts",
                     "packages/core/src/index.ts",
@@ -39727,11 +39727,19 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 { id: "elevenlabs-api", label: "ElevenLabs cloud API\nSelected text and preview only", files: [], x: 2800, y: 342 },
                 {
                   id: "openrouter-client",
-                  label: "OpenRouter client\nAccount catalog, PCM and MP3 speech",
-                  files: ["packages/vscode/src/speech_openrouter.ts"],
+                  label: "OpenRouter client\nSpeech, catalog, settled cost lookup",
+                  files: ["packages/vscode/src/speech_openrouter.ts", "packages/vscode/src/speech_openrouter_usage.ts"],
                   group: "ext",
                   x: 2300,
                   y: 492,
+                },
+                {
+                  id: "session-speech-cost",
+                  label: "Session speech cost\nSubtotal and unavailable reasons",
+                  files: ["packages/vscode/src/session_speech_cost.ts", "packages/audio-ui/src/speech_host.ts"],
+                  group: "ext",
+                  x: 1850,
+                  y: 520,
                 },
                 { id: "openrouter-api", label: "OpenRouter API\nAccount catalog and selected narration", files: [], x: 2800, y: 492 },
                 {
@@ -40029,7 +40037,10 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 { from: "extts", to: "speech-credentials", label: "masked key entry" },
                 { from: "elevenlabs-client", to: "speech-credentials", label: "host-only key reader" },
                 { from: "local-speech", to: "openrouter-client", label: "same cloud slot; no provider fallback" },
-                { from: "openrouter-client", to: "openrouter-api", label: "bounded HTTPS; authenticated eligibility; ZDR routing" },
+                { from: "openrouter-client", to: "openrouter-api", label: "bounded HTTPS; eligibility, speech and generation cost" },
+                { from: "openrouter-client", to: "session-speech-cost", label: "session-scoped dispatched request and confirmed cost" },
+                { from: "panelts", to: "session-speech-cost", label: "new, resumed and ended Pair sessions" },
+                { from: "session-speech-cost", to: "panelts", label: "local subtotal, pending and partial state" },
                 { from: "openrouter-client", to: "speech-credentials", label: "separate host-only key slot" },
                 { from: "openrouter-client", to: "speech-decoder-bridge", label: "reserve before paid POST; normalize responses" },
                 { from: "speech-decoder-bridge", to: "browser-speech-decoder", label: "boot-token scoped local bytes and probe" },

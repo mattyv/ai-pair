@@ -71,6 +71,7 @@ it('keeps speech disabled by default and retains a missing local device', async 
     showSpeechSettings: vi.fn(),
     showSpeechComputeState: vi.fn(),
     showSpeechStatus: vi.fn(),
+    showSpeechCost: vi.fn(),
     refreshSpeechSupport: vi.fn(),
   };
   const host = createSpeechHost({
@@ -174,6 +175,7 @@ it('restores an available saved output without opening Settings', async () => {
     showSpeechSettings: vi.fn(),
     showSpeechComputeState: vi.fn(),
     showSpeechStatus: vi.fn(),
+    showSpeechCost: vi.fn(),
     refreshSpeechSupport: vi.fn(),
   };
   const host = createSpeechHost({
@@ -238,6 +240,7 @@ it('retries a failed startup device listing from Settings', async () => {
     showSpeechSettings: vi.fn(),
     showSpeechComputeState: vi.fn(),
     showSpeechStatus: vi.fn(),
+    showSpeechCost: vi.fn(),
     refreshSpeechSupport: vi.fn(),
   };
   const host = createSpeechHost({

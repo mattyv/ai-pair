@@ -26,10 +26,17 @@ checks for a unique expected marker; inspect its output and exit code. Do not
 install dependencies or change project source. Report the observed result and
 scratch file location.
 
-Select one useful short `say` with `speak: true`. This follows the current
-speech setting; it does not enable speech. Ask the programmer whether they
-heard it if audio confirmation is wanted. A ready status alone cannot establish
-that sound was audible.
+While writing the example, demonstrate overlap: use a useful plain-text `say`
+of at most 45 words and 280 Unicode characters with `speak: true` and
+`speech_mode: "continue"`, followed by meaningful code in a `type` action in the
+same batch. The typing can proceed after the reading pause while speech plays.
+Then use a short spoken question with `speak: true` and `speech_mode: "wait"`,
+for example asking whether the programmer wants a different example. Call
+`listen`; do not continue until they reply, skip or defer, or the session ends.
+Follow their answer. These actions respect the current speech setting; never
+enable speech or change the provider. If speech is disabled, the text still
+appears. Ask whether they heard it if audio confirmation is wanted. A ready
+status alone cannot establish that sound was audible.
 
 After verifying the saved marker, invite the programmer to make a small, safe edit
 in the scratch file, such as change a value or a returned message. Explain

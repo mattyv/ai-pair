@@ -7,6 +7,7 @@ import { OpenRouterClient } from '../src/speech_openrouter';
 import { OpenRouterCatalog } from '../src/speech_openrouter_catalog';
 import { SpeechService } from '../src/speech_service';
 import { formatOpenRouterPricing } from '../src/speech_pricing';
+import { SessionSpeechCost } from '../src/session_speech_cost';
 import { encodeTempoWav } from '../src/speech_tempo_pcm';
 import type { OpenRouterAudioDecoder } from '../src/speech_types';
 
@@ -29,6 +30,62 @@ function catalogResponse(ids: string[]): Response {
     headers: { 'content-type': 'application/json' },
   });
 }
+
+it('adds provider-confirmed narration cost to the pairing session without delaying playback', async () => {
+  const ledger = new SessionSpeechCost(() => {});
+  ledger.start();
+  const usage = Promise.withResolvers<Response>();
+  const fetcher = vi.fn<typeof fetch>((input) => {
+    const url = input instanceof Request ? input.url : input.toString();
+    if (url.includes('/generation?')) return usage.promise;
+    return Promise.resolve(
+      new Response(new Uint8Array([1, 0, 2, 0]), {
+        headers: { 'content-type': 'audio/pcm', 'x-generation-id': 'gen-tts-1' },
+      }),
+    );
+  });
+  const client = new OpenRouterClient(
+    () => Promise.resolve('synthetic-key'),
+    fetcher,
+    decoder,
+    () => ledger.capture(),
+  );
+  const played = Promise.withResolvers<number>();
+  const speech = new SpeechService({
+    runtimeDirectory: '',
+    storageDirectory: '',
+    localDesktop: true,
+    openRouter: client,
+    settings: () => ({
+      enabled: true,
+      provider: 'openrouter',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+      openRouterModel: model,
+      openRouterVoice: 'voice',
+    }),
+    output: {
+      play: (id) => {
+        played.resolve(id);
+        return 1;
+      },
+      control: () => {},
+      status: () => {},
+    },
+  });
+  const speaking = speech.speak('A synthetic narration.');
+  const id = await played.promise;
+  expect(ledger.view()).toEqual({ seen: true, total: 0, pending: 1, partial: false });
+  speech.audioEvent({ id, pageId: 1, event: 'ended' });
+  await speaking;
+  usage.resolve(new Response(JSON.stringify({ data: { id: 'gen-tts-1', total_cost: 0.012 } })));
+  await vi.waitFor(() => {
+    expect(ledger.view()).toEqual({ seen: true, total: 0.012, pending: 0, partial: false });
+  });
+  await speech.dispose();
+});
 
 it('retains account pricing through catalog publication and formats it for the model selector', async () => {
   const fetcher = vi.fn<typeof fetch>(() =>

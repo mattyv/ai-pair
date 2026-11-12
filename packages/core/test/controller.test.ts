@@ -1835,6 +1835,37 @@ describe('pause and resume', () => {
 });
 
 describe('commands to confirm', () => {
+  it('reports approval settings with no session and after the session ends', async () => {
+    const idle = harness();
+    idle.controller.setConfirmCommands(false);
+    expect(idle.controller.commandApprovals).toEqual({ all: false, commands: [], confirmationRequired: false });
+    const h = await started();
+    expect(h.controller.commandApprovals).toEqual({ all: false, commands: [], confirmationRequired: true });
+    const command = stage().confirm(1, 'npm test');
+    h.controller.decideRun(1, true, 'command');
+    await command;
+    h.controller.endSession();
+    expect(h.controller.commandApprovals).toEqual({ all: false, commands: [], confirmationRequired: true });
+  });
+
+  it('Revoke: clears both kinds of session grant and persists the cleared state', async () => {
+    const h = await started();
+    const command = stage().confirm(1, 'npm test');
+    h.controller.decideRun(1, true, 'command');
+    await command;
+    const all = stage().confirm(2, 'echo all');
+    h.controller.decideRun(2, true, 'all');
+    await all;
+    expect(h.controller.commandApprovals).toEqual({ all: true, commands: ['npm test'], confirmationRequired: true });
+    const changed = vi.fn<() => void>();
+    h.controller.onChange = changed;
+    h.controller.revokeCommandApprovals();
+    expect(changed).toHaveBeenCalledOnce();
+    expect(h.controller.commandApprovals).toEqual({ all: false, commands: [], confirmationRequired: true });
+    expect(h.controller.saved?.scene.allowedCommands).toEqual([]);
+    expect(h.controller.saved?.scene.allowAllCommands).toBeUndefined();
+  });
+
   it('decides a run: yes once, yes for the session, no, an answer to another run, and nothing with no session', async () => {
     const h = await started();
     const once = stage().confirm(1, 'ls');
@@ -1844,14 +1875,115 @@ describe('commands to confirm', () => {
     expect(await once).toBe(true);
     expect(scene().allowedCommands.size).toBe(0);
     const remembered = stage().confirm(2, 'npm test');
-    h.controller.decideRun(2, true, /* remember= */ true);
+    h.controller.decideRun(2, true, 'command');
     expect(await remembered).toBe(true);
     expect(scene().allowedCommands).toEqual(new Set(['npm test']));
     const declined = stage().confirm(3, 'rm -rf .');
-    h.controller.decideRun(3, false, /* remember= */ true);
+    h.controller.decideRun(3, false, 'command');
     expect(await declined).toBe(false);
     expect(scene().allowedCommands.has('rm -rf .')).toBe(false);
     harness().controller.decideRun(1, true);
+  });
+
+  it('Revoke: leaves a pending confirmation unresolved until an explicit decision', async () => {
+    const h = await started();
+    const waiting = stage().confirm(1, 'npm test');
+    h.controller.revokeCommandApprovals();
+    expect(await pending(waiting)).toBe(true);
+    h.controller.decideRun(1, false);
+    expect(await waiting).toBe(false);
+    expect(h.controller.commandApprovals).toEqual({ all: false, commands: [], confirmationRequired: true });
+    harness().controller.revokeCommandApprovals();
+  });
+
+  it('CurrentAllGrant: grants all commands only on a current accepted decision and clears it for a fresh session', async () => {
+    const h = await started();
+    const first = stage().confirm(1, 'echo one');
+    h.controller.decideRun(2, true, 'all');
+    expect(await pending(first)).toBe(true);
+    expect(scene().allowAllCommands).not.toBe(true);
+    h.controller.decideRun(1, false, 'all');
+    expect(await first).toBe(false);
+    expect(scene().allowAllCommands).not.toBe(true);
+
+    const next = stage().confirm(3, 'echo two');
+    h.controller.decideRun(3, true, 'all');
+    expect(await next).toBe(true);
+    expect(scene().allowAllCommands).toBe(true);
+    expect(scene().allowedCommands).toEqual(new Set());
+    expect(h.controller.saved?.scene.allowAllCommands).toBe(true);
+
+    h.controller.disconnect();
+    await h.controller.start('Resumed.');
+    expect(scene().allowAllCommands).toBe(true);
+    const saved = h.controller.saved;
+    expect(saved).toBeDefined();
+    const restored = harness();
+    if (saved === undefined) throw new Error('Missing saved session');
+    restored.controller.revive(saved);
+    expect(scene().allowAllCommands).toBe(true);
+    await restored.controller.start('Resumed.');
+    expect(scene().allowAllCommands).toBe(true);
+    restored.controller.endSession();
+    await restored.controller.start('Fresh.');
+    expect(scene().allowAllCommands).not.toBe(true);
+  });
+
+  it('CurrentAllGrant: an older saved session without the grant cannot allow every command', () => {
+    const h = harness();
+    h.controller.revive({ scene: { turn: 'agent', allowedCommands: [] }, finished: [], events: [] });
+    expect(scene().allowAllCommands).not.toBe(true);
+  });
+
+  it('CurrentAllGrant: ignores a non-boolean saved grant', () => {
+    const h = harness();
+    const saved: unknown = JSON.parse(
+      '{"scene":{"turn":"agent","allowedCommands":[],"allowAllCommands":"true"},"finished":[],"events":[]}',
+    );
+    if (!isSavedSession(saved)) throw new Error('Expected a saved session');
+    h.controller.revive(saved);
+    expect(scene().allowAllCommands).toBe(false);
+  });
+
+  it('CurrentAllGrant: a late decision from a replaced suspended session cannot grant the new session', async () => {
+    const h = await started();
+    const old = stage().confirm(1, 'echo old');
+    h.controller.disconnect();
+    expect(await old).toBe(false);
+    await h.controller.start('New directory.', '/other');
+    const current = stage().confirm(2, 'echo current');
+    h.controller.decideRun(1, true, 'all');
+    expect(await pending(current)).toBe(true);
+    expect(scene().allowAllCommands).not.toBe(true);
+    h.controller.decideRun(2, false);
+    expect(await current).toBe(false);
+  });
+
+  it('CurrentAllGrant: a duplicate or interrupted decision cannot grant all commands', async () => {
+    const h = await started();
+    const declined = stage().confirm(1, 'echo no');
+    h.controller.decideRun(1, false);
+    h.controller.decideRun(1, true, 'all');
+    expect(await declined).toBe(false);
+    expect(scene().allowAllCommands).not.toBe(true);
+
+    const interrupted = stage().confirm(2, 'echo stop');
+    h.controller.userInterrupt();
+    h.controller.decideRun(2, true, 'all');
+    expect(await interrupted).toBe(false);
+    expect(scene().allowAllCommands).not.toBe(true);
+  });
+
+  it('CurrentAllGrant: retiring an earlier confirmation keeps a successor confirmation current', async () => {
+    const h = await started();
+    const first = stage().confirm(1, 'echo one');
+    h.controller.decideRun(1, true);
+    const second = stage().confirm(2, 'echo two');
+    expect(await first).toBe(true);
+    h.controller.decideRun(2, true, 'all');
+    expect(await pending(second)).toBe(false);
+    expect(await second).toBe(true);
+    expect(scene().allowAllCommands).toBe(true);
   });
 
   it('answers no for an interrupt while it waits, and at once when one came before it asked', async () => {

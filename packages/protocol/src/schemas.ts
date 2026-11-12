@@ -34,11 +34,11 @@ export const SPAN_SCHEMA = z.union([
 ]);
 
 /** Other action kinds cannot take the narration modifier. */
-const NO_SPEAK = { speak: z.never().optional() };
+const NO_SPEAK = { speak: z.never().optional(), speech_mode: z.never().optional() };
 
 /** Checks an {@link Action}. */
 export const ACTION_SCHEMA = z.union([
-  z.object({ say: z.string(), speak: z.boolean().optional() }),
+  z.object({ say: z.string(), speak: z.boolean().optional(), speech_mode: z.enum(['wait', 'continue']).optional() }),
   z.object({ move: MOVE_TARGET_SCHEMA, ...NO_SPEAK }),
   z.object({ select: SPAN_SCHEMA, ...NO_SPEAK }),
   z.object({ type: z.string(), ...NO_SPEAK }),

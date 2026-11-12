@@ -14,6 +14,14 @@ import { loadPage, ui } from '../page';
 import { voiceIndicator } from '../../src/voice_indicator';
 import { formatOpenRouterPricing } from '../../src/speech_pricing';
 
+const approvalSound = vi.hoisted(() => ({ play: vi.fn<() => void>(), unlock: vi.fn<() => void>(), dispose: vi.fn<() => void>() }));
+vi.mock('../../src/webview/approval_sound', () => ({
+  ApprovalSound: class {
+    play = approvalSound.play;
+    unlock = approvalSound.unlock;
+    dispose = approvalSound.dispose;
+  },
+}));
 vi.mock('../../src/voice_indicator', () => ({ voiceIndicator: vi.fn().mockReturnValue('checking') }));
 vi.mock('../../src/speech_pricing', () => ({ formatOpenRouterPricing: vi.fn().mockReturnValue('Pricing unavailable') }));
 vi.mock('../../src/webview/speech_decode', () => ({
@@ -58,6 +66,9 @@ let post: Mock<(message: { type: string }) => void>;
 let resizeHistory: () => void;
 
 beforeEach(async () => {
+  approvalSound.play.mockClear();
+  approvalSound.unlock.mockClear();
+  approvalSound.dispose.mockClear();
   targets = [window, document, document.documentElement].map((target) => ({ target, spy: vi.spyOn(target, 'addEventListener') }));
   post = vi.fn<(message: { type: string }) => void>();
   vi.stubGlobal(
@@ -143,6 +154,51 @@ function start(): void {
   send({ type: 'session', active: true });
 }
 
+it('explains unavailable costs and clears old explanations for a new session', () => {
+  const cost = element('speech-cost');
+  const cases = [
+    ['restored', 'Earlier costs are unknown because this session was restored.'],
+    ['missing-generation-id', 'OpenRouter did not return a generation ID.'],
+    ['generation-not-published', 'OpenRouter has not published the generation cost within the lookup window.'],
+    ['generation-lookup-failed', 'The OpenRouter generation cost lookup failed.'],
+  ] as const;
+  for (const [reason, explanation] of cases) {
+    send({ type: 'speechCost', value: { seen: true, total: 0, pending: 0, partial: true, reasons: [reason] } });
+    expect(cost.dataset.tip).toContain(explanation);
+    expect(cost.getAttribute('aria-label')).toContain(explanation);
+  }
+  send({ type: 'speechCost', value: { seen: false, total: 0, pending: 0, partial: false } });
+  expect(cost.dataset.tip).toBe('');
+});
+
+it('shows provider-confirmed session speech costs and makes missing costs clear', () => {
+  const cost = element('speech-cost');
+  expect(cost.hidden).toBe(true);
+  send({ type: 'speechCost', value: { seen: true, total: 0, pending: 1, partial: false } });
+  expect(cost.hidden).toBe(false);
+  expect(cost.textContent).toBe('calculating...');
+  send({ type: 'speechCost', value: { seen: true, total: 0.0012, pending: 1, partial: false } });
+  expect(cost.textContent).toBe('$0.0012');
+  send({ type: 'speechCost', value: { seen: true, total: 0.0012, pending: 1, partial: true } });
+  expect(cost.textContent).toBe('$0.0012*');
+  expect(cost.dataset.tip).toContain('OpenRouter speech this session: $0.001200 (updating; incomplete)');
+  expect(cost.getAttribute('aria-label')).toBe(cost.dataset.tip);
+  send({ type: 'speechCost', value: { seen: true, total: 0.0012, pending: 0, partial: true } });
+  expect(cost.textContent).toBe('$0.0012*');
+  send({ type: 'speechCost', value: { seen: true, total: 0, pending: 0, partial: true } });
+  expect(cost.textContent).toBe('unavailable*');
+  send({ type: 'speechCost', value: { seen: true, total: 0, pending: 1, partial: true } });
+  expect(cost.textContent).toBe('calculating...*');
+  send({ type: 'speechCost', value: { seen: true, total: 0, pending: 0, partial: false } });
+  expect(cost.textContent).toBe('$0.0000');
+  send({ type: 'speechCost', value: { seen: true, total: 0.00000001, pending: 0, partial: false } });
+  expect(cost.textContent).toBe('<$0.0001');
+  send({ type: 'session', active: false, reason: 'agent' });
+  expect(cost.hidden).toBe(false);
+  send({ type: 'speechCost', value: { seen: false, total: 0, pending: 0, partial: false } });
+  expect(cost.hidden).toBe(true);
+});
+
 /** Returns the listeners the script added on a target for an event, to call them directly. */
 function listenersFor(target: Target, name: string): Listener[] {
   const calls = targets.find((t) => t.target === target)?.spy.mock.calls ?? [];
@@ -187,6 +243,18 @@ function tip(): string | undefined {
   return element('tip').hidden ? undefined : text('tip');
 }
 
+it('refreshes and hides an open speech cost tooltip as accounting changes', () => {
+  vi.useFakeTimers();
+  send({ type: 'speechCost', value: { seen: true, total: 0, pending: 1, partial: false } });
+  hover(element('speech-cost'));
+  vi.advanceTimersByTime(TIP_DELAY_MS);
+  expect(tip()).toContain('calculating');
+  send({ type: 'speechCost', value: { seen: true, total: 0.0012, pending: 0, partial: false } });
+  expect(tip()).toContain('$0.001200');
+  send({ type: 'speechCost', value: { seen: false, total: 0, pending: 0, partial: false } });
+  expect(tip()).toBeUndefined();
+});
+
 /** Starts a session with every kind of link: the intro's commands, a file and a URL in messages, code references. */
 function withEveryLink(): void {
   start();
@@ -206,6 +274,26 @@ function startHidden(): boolean {
 function noteHidden(): boolean {
   return element('starting').hidden;
 }
+
+describe('command approval controls', () => {
+  it('shows current session grants and requests their revocation', () => {
+    const status = element('command-approvals-status');
+    const button = element('revoke-command-approvals');
+    send({ type: 'commandApprovals', all: true, count: 1, confirmationRequired: true });
+    expect(status.textContent).toContain('All commands');
+    button.click();
+    expect(posted()).toContainEqual({ type: 'revokeCommandApprovals' });
+    send({ type: 'commandApprovals', all: false, count: 2, confirmationRequired: true });
+    expect(status.textContent).toContain('2 command');
+    send({ type: 'commandApprovals', all: false, count: 0, confirmationRequired: true });
+    expect(status.textContent).toContain('No session');
+    send({ type: 'commandApprovals', all: false, count: 0, confirmationRequired: false });
+    expect(status.textContent).toContain('confirmation is off');
+    expect(button.hasAttribute('disabled')).toBe(false);
+    send({ type: 'commandApprovals', all: false, count: 0, confirmationRequired: true });
+    expect(button.hasAttribute('disabled')).toBe(true);
+  });
+});
 
 describe('loading', () => {
   it('posts ready once it has wired the page', () => {
@@ -646,6 +734,40 @@ describe('the run box (specs/RunBox.tla)', () => {
     start();
   });
 
+  it('plays an optional cue only for a new live approval prompt', () => {
+    const cue = element('command-approval-sound');
+    if (!(cue instanceof window.HTMLInputElement)) throw new TypeError('Missing approval sound setting');
+    expect(cue.checked).toBe(false);
+    runPhase('confirm');
+    expect(approvalSound.play).not.toHaveBeenCalled();
+    cue.checked = true;
+    cue.dispatchEvent(new window.Event('change'));
+    expect(posted()).toContainEqual({ type: 'commandApprovalSound', value: true });
+    expect(approvalSound.unlock).toHaveBeenCalledOnce();
+    send({ type: 'run', id: 1, command: 'npm test', phase: 'running' });
+    expect(approvalSound.play).not.toHaveBeenCalled();
+    send({ type: 'run', id: 2, command: 'pwd', phase: 'confirm' });
+    expect(approvalSound.play).toHaveBeenCalledOnce();
+    send({ type: 'run', id: 2, command: 'pwd', phase: 'confirm' });
+    send({ type: 'replay', events: [{ type: 'run', id: 3, command: 'ls', phase: 'confirm' }] });
+    expect(approvalSound.play).toHaveBeenCalledOnce();
+    cue.checked = false;
+    cue.dispatchEvent(new window.Event('change'));
+    expect(posted()).toContainEqual({ type: 'commandApprovalSound', value: false });
+    send({ type: 'commandApprovalSound', value: false });
+    expect(cue.checked).toBe(false);
+    send({ type: 'run', id: 4, command: 'echo done', phase: 'confirm' });
+    expect(approvalSound.play).toHaveBeenCalledOnce();
+    send({ type: 'commandApprovalSound', value: true });
+    document.dispatchEvent(new window.MouseEvent('pointerdown', { bubbles: true }));
+    expect(approvalSound.unlock).toHaveBeenCalledTimes(2);
+    send({ type: 'session', active: true, task: 'A new session' });
+    send({ type: 'run', id: 2, command: 'pwd', phase: 'confirm' });
+    expect(approvalSound.play).toHaveBeenCalledTimes(2);
+    window.dispatchEvent(new window.Event('unload'));
+    expect(approvalSound.dispose).toHaveBeenCalledOnce();
+  });
+
   it('BoxMatches: shows the box while a command waits for a decision, and while it runs', () => {
     expect(boxShown()).toBe(false);
     runPhase('confirm');
@@ -700,16 +822,18 @@ describe('the run box (specs/RunBox.tla)', () => {
     runPhase('confirm');
     click(element('run-go'));
     click(element('run-always'));
+    click(element('run-all'));
     click(element('run-skip'));
-    expect(posted().slice(-3)).toEqual([
-      { type: 'runDecision', id: 1, run: true, remember: false },
-      { type: 'runDecision', id: 1, run: true, remember: true },
-      { type: 'runDecision', id: 1, run: false, remember: false },
+    expect(posted().slice(-4)).toEqual([
+      { type: 'runDecision', id: 1, run: true, scope: 'once' },
+      { type: 'runDecision', id: 1, run: true, scope: 'command' },
+      { type: 'runDecision', id: 1, run: true, scope: 'all' },
+      { type: 'runDecision', id: 1, run: false, scope: 'once' },
     ]);
     runPhase('declined');
     click(element('run-go'));
     expect(posted().at(-1)?.type).toBe('runDecision');
-    expect(posted().filter((m) => m.type === 'runDecision')).toHaveLength(3);
+    expect(posted().filter((m) => m.type === 'runDecision')).toHaveLength(4);
   });
 
   it.each([
@@ -2470,7 +2594,7 @@ it('acknowledges matching browser audio stop only after the clip is silenced', a
   expect(posted()).toContainEqual({ type: 'speechRetired', id: 2, pageId: 1 });
 });
 
-it('saves listening speed independently of both provider synthesis speeds', () => {
+it('saves fine listening speed independently of synthesis speeds and retains it across providers', () => {
   send({
     type: 'speechSettings',
     value: {
@@ -2484,8 +2608,10 @@ it('saves listening speed independently of both provider synthesis speeds', () =
     },
   });
   const speed = element('speech-listening-speed');
-  if (!(speed instanceof window.HTMLSelectElement)) throw new TypeError('Missing listening speed');
-  speed.value = '1.25';
+  if (!(speed instanceof window.HTMLInputElement)) throw new TypeError('Missing listening speed slider');
+  speed.value = '1.1';
+  speed.dispatchEvent(new window.Event('input'));
+  expect(text('speech-listening-speed-value')).toBe('1.10x');
   speed.dispatchEvent(new window.Event('change'));
   expect(posted()).toContainEqual({
     type: 'speechSettings',
@@ -2496,9 +2622,19 @@ it('saves listening speed independently of both provider synthesis speeds', () =
       speed: 1.25,
       elevenLabsVoice: 'voice',
       elevenLabsSpeed: 1.2,
-      listeningSpeed: 1.25,
+      listeningSpeed: 1.1,
     },
   });
+  const provider = element('speech-provider');
+  if (!(provider instanceof window.HTMLSelectElement)) throw new TypeError('Missing speech provider');
+  for (const value of ['kokoro', 'openrouter', 'elevenlabs']) {
+    provider.value = value;
+    provider.dispatchEvent(new window.Event('change'));
+    expect(speed.value).toBe('1.1');
+    expect(text('speech-listening-speed-value')).toBe('1.10x');
+    const sent: unknown = posted().at(-1);
+    expect(sent).toMatchObject({ type: 'speechSettings', value: { provider: value, listeningSpeed: 1.1 } });
+  }
 });
 
 it('shows the requested and actual Kokoro compute backend and starts an explicit check', () => {
@@ -2611,9 +2747,10 @@ it('shows a fixed explanation for every GPU check failure and reports setup prog
   expect(text('gpu-status')).toContain('verify: 2');
 });
 
-it('updates voice readiness without opening settings and opens speech controls', () => {
+it('updates voice readiness independently of the narration toggle', () => {
   const button = element('voice-status');
-  expect(button.getAttribute('aria-label')).toContain('not checked');
+  expect(button.getAttribute('aria-label')).toBe('Automatic narration');
+  expect(button.getAttribute('aria-description')).toContain('not checked');
   vi.mocked(voiceIndicator).mockReturnValue('ready');
   send({ type: 'speechTransport', available: true });
   send({
@@ -2631,15 +2768,54 @@ it('updates voice readiness without opening settings and opens speech controls',
     },
   });
   send({ type: 'speechComputeState', value: { requestedMode: 'cpu', actualBackend: 'none', gpuCheck: { phase: 'idle' } } });
-  expect(button.getAttribute('aria-label')).toContain('ready');
+  expect(button.getAttribute('aria-description')).toContain('ready');
   vi.mocked(voiceIndicator).mockReturnValue('starting');
   send({ type: 'speechTransport', available: true });
   expect(button.dataset.state).toBe('starting');
-  expect(button.getAttribute('aria-label')).toBe('Voice: model starting');
-  click(button);
-  expect(document.activeElement).toBe(element('speech-provider'));
+  expect(button.getAttribute('aria-description')).toBe('Voice: model starting');
+  click(element('settings'));
   element('settings-dialog').dispatchEvent(new window.Event('close'));
-  expect(document.activeElement).toBe(button);
+  expect(document.activeElement).toBe(element('settings'));
+});
+
+it('mutes active narration from the toolbar without pausing the session and toggles it back on', async () => {
+  const pause = vi.fn<() => void>();
+  class FakeAudio {
+    pause = pause;
+    play(): Promise<void> {
+      return Promise.resolve();
+    }
+    addEventListener(): void {}
+  }
+  vi.stubGlobal('Audio', FakeAudio);
+  vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:toggle');
+  vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+  const button = element('voice-status');
+  if (!(button instanceof window.HTMLButtonElement)) throw new TypeError('Missing narration toggle');
+  expect(button.disabled).toBe(true);
+  send({ type: 'speechPage', pageId: 1 });
+  send({
+    type: 'speechSettings',
+    value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+  });
+  expect(button.disabled).toBe(false);
+  expect(button.getAttribute('aria-pressed')).toBe('true');
+  send({ type: 'speechStatus', pageId: 1, id: 2, state: 'preparing' });
+  send({ type: 'speechAudio', pageId: 1, id: 2, wavBase64: 'AQI=', durationMs: 100 });
+  await Promise.resolve();
+  click(button);
+  expect(pause).toHaveBeenCalledOnce();
+  expect(button.getAttribute('aria-pressed')).toBe('false');
+  expect(element('speech-enabled')).toHaveProperty('checked', false);
+  expect(posted()).toContainEqual({
+    type: 'speechSettings',
+    value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1, listeningSpeed: 1 },
+  });
+  expect(posted().filter((message) => message.type === 'pause' || message.type === 'interrupt')).toEqual([]);
+  click(button);
+  expect(button.getAttribute('aria-pressed')).toBe('true');
+  expect(element('speech-enabled')).toHaveProperty('checked', true);
+  expect(posted().at(-1)).toMatchObject({ type: 'speechSettings', value: { enabled: true } });
 });
 
 it('restores the settings button when the dialog closes without a recorded opener', () => {
@@ -2651,10 +2827,51 @@ it('refreshes an open voice tooltip when readiness changes', () => {
   vi.useFakeTimers();
   hover(element('voice-status'));
   vi.advanceTimersByTime(TIP_DELAY_MS);
-  expect(tip()).toBe('Voice: readiness not checked');
+  expect(tip()).toBe('Enable narration (Voice: readiness not checked)');
   vi.mocked(voiceIndicator).mockReturnValue('unavailable');
   send({ type: 'speechTransport', available: false });
-  expect(tip()).toBe('Voice: unavailable');
+  expect(tip()).toBe('Enable narration (Voice: unavailable)');
+});
+
+it('shows OpenRouter provider-default voice as ready only with current allowed-voice evidence', () => {
+  vi.mocked(voiceIndicator).mockImplementation((facts, ...context) =>
+    context[2] === true && facts?.voiceConfigured === true ? 'ready' : 'unavailable',
+  );
+  try {
+    send({
+      type: 'speechSettings',
+      value: {
+        enabled: true,
+        provider: 'openrouter',
+        voice: 'af_heart',
+        speed: 1,
+        elevenLabsVoice: '',
+        elevenLabsSpeed: 1,
+        openRouterModel: 'model',
+        openRouterVoice: '',
+      },
+    });
+    send({ type: 'openRouterCatalog', value: { state: 'ready', verified: true, models: [{ id: 'model', name: 'Model', voices: [] }] } });
+    send({ type: 'speechTransport', available: true });
+    const facts = {
+      enabled: true,
+      provider: 'openrouter' as const,
+      keyConfigured: true,
+      voiceConfigured: true,
+      output: 'default' as const,
+      routeAvailable: true,
+      runtimeReady: true,
+      modelReady: true,
+      lastPlayback: 'unknown' as const,
+    };
+    send({ type: 'speechReadiness', value: facts });
+    expect(element('voice-status').dataset.state).toBe('ready');
+    expect(vi.mocked(voiceIndicator).mock.lastCall?.[3]).toBe(true);
+    send({ type: 'speechReadiness', value: { ...facts, voiceConfigured: false } });
+    expect(element('voice-status').dataset.state).toBe('unavailable');
+  } finally {
+    vi.mocked(voiceIndicator).mockReset().mockReturnValue('checking');
+  }
 });
 
 it('loads OpenRouter models and remembers the selected voice when ZDR changes', () => {

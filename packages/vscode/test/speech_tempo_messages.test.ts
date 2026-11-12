@@ -11,12 +11,25 @@ it('accepts bounded owned PCM with immutable worker, unit, part and rate identit
   for (const invalid of [
     { ...request, epoch: 0 },
     { ...request, part: 4 },
-    { ...request, rate: 0.9 },
+    { ...request, rate: 0.93 },
     { ...request, pcm: new Int16Array() },
     { ...request, pcm: new Int16Array(960_001) },
     { ...request, secret: 'private' },
   ]) {
     expect(TEMPO_REQUEST.safeParse(invalid).success).toBe(false);
     expect(FAKE_REQUEST.safeParse(invalid).success).toBe(false);
+  }
+});
+
+it('accepts every five-percent listening speed and rejects values outside those steps', () => {
+  const request = { type: 'transform', epoch: 1, unitId: 2, part: 0, pcm: Int16Array.from([1, -1]) };
+  for (const rate of [0.75, 0.8, 0.85, 0.9, 0.95, 1, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35, 1.4, 1.45, 1.5]) {
+    expect(TEMPO_REQUEST.safeParse({ ...request, rate }).success).toBe(true);
+    expect(FAKE_REQUEST.safeParse({ ...request, rate }).success).toBe(true);
+    expect(TEMPO_RESPONSE.safeParse({ ...request, rate, type: 'result' }).success).toBe(true);
+  }
+  for (const rate of [0.74, 0.77, 1.03, 1.51]) {
+    expect(TEMPO_REQUEST.safeParse({ ...request, rate }).success).toBe(false);
+    expect(FAKE_REQUEST.safeParse({ ...request, rate }).success).toBe(false);
   }
 });

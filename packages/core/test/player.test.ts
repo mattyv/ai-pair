@@ -540,6 +540,76 @@ describe('say', () => {
 });
 
 describe('selected speech', () => {
+  it('interrupts a say waiting for the previous speech before display', async () => {
+    const h = harness();
+    const speech = Promise.withResolvers<void>();
+    Object.assign(h.stage, { narration: { speak: vi.fn(() => speech.promise), pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() } });
+    const playing = h.player.play(1, [{ say: 'First', speech_mode: 'continue' }, { say: 'Second' }]);
+    await vi.waitFor(() => {
+      expect(posted(h)).toContainEqual({ type: 'say', text: 'First' });
+    });
+    h.pacing.interrupt();
+    speech.resolve();
+    expect((await playing).result.status).toBe('interrupted');
+    expect(posted(h)).not.toContainEqual({ type: 'say', text: 'Second' });
+  });
+
+  it('honors unavailable or interrupted admission before speech dispatch', async () => {
+    const h = harness();
+    const speak = vi.fn(() => Promise.resolve());
+    const gate = Promise.withResolvers<boolean>();
+    const waitForRetirement = vi.fn().mockResolvedValueOnce(false).mockReturnValueOnce(gate.promise);
+    Object.assign(h.stage, { narration: { speak, waitForRetirement, pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() } });
+    await h.player.play(1, [{ say: 'Unavailable' }]);
+    expect(speak).not.toHaveBeenCalled();
+    const playing = h.player.play(2, [{ say: 'Interrupted' }]);
+    await vi.waitFor(() => {
+      expect(waitForRetirement).toHaveBeenCalledTimes(2);
+    });
+    h.pacing.interrupt();
+    gate.resolve(false);
+    expect((await playing).result.status).toBe('interrupted');
+    expect(speak).not.toHaveBeenCalled();
+  });
+
+  it('consumes a continued say interrupted during its reading pause', async () => {
+    const h = harness();
+    const read = Promise.withResolvers<boolean>();
+    h.pacing.sleep.mockReturnValueOnce(read.promise);
+    Object.assign(h.stage, {
+      narration: { speak: vi.fn(() => new Promise<void>(() => {})), pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() },
+    });
+    const playing = h.player.play(1, [{ say: 'Read.', speech_mode: 'continue' }]);
+    await vi.waitFor(() => {
+      expect(h.player.reading).toBe(true);
+    });
+    h.pacing.interrupt();
+    read.resolve(false);
+    expect((await playing).result.status).toBe('interrupted');
+  });
+
+  it('ContinueProgress: advances after reading while speech continues, then gates the next say', async () => {
+    const h = harness({ files: { 'a.ts': '' }, scene: { cursor: { file: A, offset: 0 } } });
+    const readingGate = Promise.withResolvers<boolean>();
+    h.pacing.sleep.mockReturnValueOnce(readingGate.promise);
+    const speechGate = Promise.withResolvers<void>();
+    const speak = vi.fn().mockReturnValueOnce(speechGate.promise).mockResolvedValue(undefined);
+    Object.assign(h.stage, { narration: { speak, pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() } });
+    const result = h.player.play(1, [{ say: 'Working.', speech_mode: 'continue' }, { type: 'x' }, { say: 'Question?' }]);
+    await vi.waitFor(() => {
+      expect(speak).toHaveBeenCalledTimes(1);
+    });
+    expect(h.editor.edit).not.toHaveBeenCalled();
+    readingGate.resolve(true);
+    await vi.waitFor(() => {
+      expect(h.editor.edit).toHaveBeenCalled();
+    });
+    expect(speak).toHaveBeenCalledTimes(1);
+    speechGate.resolve();
+    await result;
+    expect(speak).toHaveBeenCalledTimes(2);
+  });
+
   it('displays selected text before requesting speech and waits for both gates', async () => {
     const h = harness();
     const readingGate = Promise.withResolvers<boolean>();
@@ -1025,10 +1095,34 @@ describe('run', () => {
     expect(phases(h).slice(-4)).toEqual(['confirm', 'declined', 'confirm', 'declined']);
   });
 
+  it('Revoke: reads current confirmation policy after a pending save', async () => {
+    const h = harness({ files: { 'a.ts': 'x' }, scene: { cursor: { file: A, offset: 1 } } });
+    const saved = Promise.withResolvers<void>();
+    const saving = Promise.withResolvers<void>();
+    h.editor.save.mockImplementation(() => {
+      saving.resolve();
+      return saved.promise;
+    });
+    const run = played(h, [{ type: `y${CURSOR_MARKER}` }, { run: 'npm test' }]);
+    await saving.promise;
+    h.stage.config = () => ({ ...CONFIG, confirmCommands: true });
+    saved.resolve();
+    await run;
+    expect(h.confirm).toHaveBeenCalledOnce();
+    expect(phases(h)).toEqual(['confirm', 'running', 'done']);
+  });
+
   it('runs a command the programmer allowed for the session without asking', async () => {
     const h = harness({ config: { confirmCommands: true }, scene: { allowedCommands: new Set(['ls']) } });
     await played(h, [{ run: 'ls' }]);
     expect(phases(h)).toEqual(['running', 'done']);
+  });
+
+  it('RunHasApproval: runs different commands without asking after the session-wide grant', async () => {
+    const h = harness({ config: { confirmCommands: true }, scene: { allowAllCommands: true } });
+    await played(h, [{ run: 'echo one' }, { run: 'echo two' }]);
+    expect(h.confirm).not.toHaveBeenCalled();
+    expect(phases(h)).toEqual(['running', 'done', 'running', 'done']);
   });
 
   it("FailSave: doesn't run when the batch's edits can't be saved, and names the files once", async () => {

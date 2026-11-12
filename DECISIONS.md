@@ -59,6 +59,16 @@ Issue discussions and working notes hold the detailed evidence and history.
     and pending playback is guarded by session identity. A crash before the
     asynchronous save can still reuse an ID within a resumed session.
 
+## Session ending
+
+-   Keep the Pair session open at a natural pause or when a task is done. The
+    agent sends its summary through a Pair `say` action, then calls `listen`;
+    it calls `end` only when the programmer explicitly asks to end the Pair
+    session. This is agent guidance, not a runtime restriction on the `end`
+    tool. A one-shot agent's final answer can end that agent process; client
+    shutdown then closes the relay's stdin. Losing the editor connection
+    suspends Pair without proving that either process exited.
+
 ## Conversation panel
 
 -   Offer newest-first and oldest-first chat order, retaining newest-first as the
@@ -891,3 +901,74 @@ identify that unit, and TTS models may bill per character, token, or generated
 audio time; do not infer a universal unit or use these rates as an exact cost
 estimate. Missing or malformed pricing must not make an otherwise eligible
 model unusable.
+
+The Pair panel shows an OpenRouter speech subtotal for the current Pair session
+using provider-reported generation `total_cost`, rather than guessing billing
+units from catalog rates. A request enters the local ledger at POST dispatch;
+the generation ID is captured from the response before decoding, so failures
+after provider synthesis still count. Lookup runs independently of playback,
+uses the credential sampled for that POST, and retries a bounded number of
+not-yet-published results. Missing identifiers, invalid or unavailable results,
+and restored hosts with unknown prior usage mark the subtotal incomplete.
+Preview requests do not count. A new Pair session resets the ledger; suspend,
+resume, view recreation and session end retain it. IDs, keys, narration and
+charges are not added to logs or diagnostics. The subtotal is an in-memory
+provider-reported figure, not an invoice or a total for other providers.
+
+Start generation-cost lookup after the speech response settles. Retry only
+the idempotent usage GET, with five attempts and 1, 2, 4 and 8-second delays;
+each attempt is bounded to five seconds. The provider publishes no timing
+guarantee, so exhausted lookups remain incomplete. Show fixed reasons on the
+subtotal's tooltip; retain earlier unknown costs after restore instead of
+claiming a complete total. This fixes a reproduced local timing race, without
+establishing the cause of a specific account's missing costs.
+
+Offer an explicit Require command approval control. It re-enables command
+confirmation and clears both session-wide and remembered exact-command
+permissions. The controller owns grants, and saved state reflects revocation.
+An already-running command continues; later commands require a new decision.
+The current controller enforces confirmation before the preference write
+settles, and the player checks the current policy after saving files. A failed
+preference write is shown to the programmer; confirmation remains enabled for
+the current window, but its persistence across restart is not guaranteed.
+
+## Scripted MCP flow regression gate
+
+Use a scripted MCP client with the real relay, editor WebSocket, controller
+and player to verify selected combined flow and recovery scenarios. Control
+external effects and bound each operation with a seed and trace on failure.
+Deliberately held effects establish that deadlines detect blocked work and
+that releasing or canceling the hold permits recovery. Keep legitimate
+approval, pause and listening waits distinct from unexplained stalls.
+The fixed eight seeds cover two programmer-event orders. This is bounded
+regression evidence, not exhaustive state-space or real-model validation.
+Keep the separate real-editor and packaged integration gates; details are in
+[the flow gate guide](docs/flow-regression-gate.md).
+
+The session speech subtotal appears beside the voice control in four-decimal
+form, with an asterisk for incomplete accounting. Its focusable tooltip and
+accessible label retain the six-decimal amount, pending state and fixed reasons.
+Positive costs below the compact precision use a less-than value rather than
+appearing free; the ledger and its precision are unchanged.
+
+## Per-action speech pacing
+
+A `say` may set `speech_mode` to `continue` to let later actions proceed after
+its normal reading pause while the voice plays. The default `wait` preserves
+the existing gate. A later `say` waits for the preceding speech; the Player
+keeps only one logical speech and the output owner retains physical ownership.
+An interrupted or ended session cancels outstanding voice, so questions and
+closing remarks should use `wait`. A remote owner that has not retired within
+three seconds prevents another speech and reports text-only fallback; a late
+matching acknowledgement can release the slot. A disabled legacy owner skips
+admission; a disabled but unresponsive companion can still incur this bounded
+retirement delay because its setting is owned by the companion. This bounds
+the delay without claiming cancellation proves physical retirement.
+
+The agent guide explains when to use each speech ordering mode and separates
+voice completion from a human response. The bundled `/ai-pair-demo` demonstrates
+`continue` narration alongside useful
+editing and a `wait` question followed by listening. It uses the programmer's
+existing speech setting and does not infer audibility from readiness. The
+scripted demo remains separate; this instruction change does not alter session
+ownership or the runtime architecture.

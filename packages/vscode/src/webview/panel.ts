@@ -8,11 +8,13 @@ import { SPEECH_LISTENING_RATES } from '../speech_tempo';
 import type { AgentState, CodePlayback, PanelEvent, Ref } from '@ai-pair/core';
 import type { ChatOrder, FromPanel, SpeechState, ToPanel } from '../panel_messages';
 import { SpeechAudio, decodeWav } from './speech_audio';
+import { ApprovalSound } from './approval_sound';
 import { localSpeechDecoder } from './speech_decode';
 import { formatOpenRouterPricing } from '../speech_pricing';
 import { ELEVENLABS_SPEEDS, SPEECH_SPEEDS, SPEECH_VOICES, type OpenRouterModel, type SpeechVoice } from '../speech_types';
 import type { CalibrationView } from '../calibration';
 import type { OutputChoice } from '../speech_output_types';
+import type { SessionSpeechCostView } from '../session_speech_cost';
 import { ELLIPSIS, LABEL_SEPARATOR, RANGE_DASH, RIGHT_ARROW, SPEED_SUFFIX } from '@ai-pair/core/constants';
 
 declare function acquireVsCodeApi(): { postMessage(message: FromPanel): void };
@@ -59,6 +61,11 @@ const EXIT_TERMINATED = 143;
 const TENTHS = 10;
 /** How close a menu speed must be to the setting to count as chosen. */
 const SPEED_TOLERANCE = 0.01;
+/** Display small speech charges without rounding a positive amount to zero. */
+const COST_DECIMALS = 6;
+const COMPACT_COST_DECIMALS = 4;
+const MIN_COMPACT_COST = 0.0001;
+const MIN_DISPLAYABLE_COST = 0.000001;
 
 type RunPhase = Extract<PanelEvent, { type: 'run' }>['phase'];
 
@@ -105,7 +112,8 @@ const ui = {
   speechVoicesMore: $('speech-voices-more', HTMLButtonElement),
   speechVoice: $('speech-voice', HTMLSelectElement),
   speechSpeed: $('speech-speed', HTMLSelectElement),
-  speechListeningSpeed: $('speech-listening-speed', HTMLSelectElement),
+  speechListeningSpeed: $('speech-listening-speed', HTMLInputElement),
+  speechListeningSpeedValue: $('speech-listening-speed-value', HTMLElement),
   speechSetup: $('speech-setup', HTMLButtonElement),
   speechSetupPrimary: $('speech-setup-primary', HTMLElement),
   speechSetupSecondary: $('speech-setup-secondary', HTMLElement),
@@ -121,7 +129,11 @@ const ui = {
   speechLive: $('speech-live', HTMLElement),
   speechLiveStatus: $('speech-live-status', HTMLElement),
   speechStopLive: $('speech-stop-live', HTMLButtonElement),
+  speechCost: $('speech-cost', HTMLElement),
   showTerminals: $('show-terminals', HTMLInputElement),
+  commandApprovalSound: $('command-approval-sound', HTMLInputElement),
+  commandApprovalsStatus: $('command-approvals-status', HTMLElement),
+  revokeCommandApprovals: $('revoke-command-approvals', HTMLButtonElement),
   showTerminal: $('show-terminal', HTMLButtonElement),
   dot: $('dot', HTMLElement),
   skipReading: $('skip-reading', HTMLButtonElement),
@@ -158,6 +170,7 @@ const ui = {
   runCmd: $('run-cmd', HTMLElement),
   runGo: $('run-go', HTMLButtonElement),
   runAlways: $('run-always', HTMLButtonElement),
+  runAll: $('run-all', HTMLButtonElement),
   runSkip: $('run-skip', HTMLButtonElement),
   history: $('history', HTMLElement),
   tip: $('tip', HTMLElement),
@@ -168,7 +181,6 @@ let voiceFacts: AudioDiagnostics | undefined;
 let voiceCompute: SpeechComputeState | undefined;
 let voiceTransport = false;
 let voiceSettingsValid: boolean | undefined;
-let settingsReturn: HTMLButtonElement;
 let speechPage = 0;
 let speechId = 0;
 let speechCanceled = false;
@@ -208,8 +220,16 @@ function unlockPlayer(): void {
   });
   audio.pause();
 }
-document.addEventListener('pointerdown', unlockPlayer, /* useCapture= */ true);
-document.addEventListener('keydown', unlockPlayer, /* useCapture= */ true);
+const approvalSound = new ApprovalSound();
+function unlockAudio(): void {
+  unlockPlayer();
+  if (ui.commandApprovalSound.checked) approvalSound.unlock();
+}
+document.addEventListener('pointerdown', unlockAudio, /* useCapture= */ true);
+document.addEventListener('keydown', unlockAudio, /* useCapture= */ true);
+window.addEventListener('unload', () => {
+  approvalSound.dispose();
+});
 const speechAudio = new SpeechAudio(
   (base64) => {
     const bytes = decodeWav(base64);
@@ -266,6 +286,8 @@ let selectionDismissed = false;
 let runId: number | undefined = undefined;
 /** The run box waits for the programmer's decision on its command. */
 let runConfirming = false;
+/** Confirmations already shown in this Pair session, including replayed ones. */
+const shownApprovals = new Set<number>();
 /** Text of the current message. */
 let current: string | undefined = undefined;
 /** Whether the current message is in the history already. */
@@ -1008,20 +1030,14 @@ function syncVoiceStatus(): void {
     unavailable: 'Voice: unavailable',
   };
   ui.voiceStatus.dataset.state = indicator;
-  ui.voiceStatus.setAttribute('aria-label', labels[indicator]);
-  ui.voiceStatus.dataset.tip = labels[indicator];
+  ui.voiceStatus.setAttribute('aria-pressed', String(speechEnabled));
+  ui.voiceStatus.setAttribute('aria-description', labels[indicator]);
+  ui.voiceStatus.dataset.tip = `${speechEnabled ? 'Mute narration' : 'Enable narration'} (${labels[indicator]})`;
   if (tipTarget === ui.voiceStatus) showTip(ui.voiceStatus);
 }
 
-ui.voiceStatus.addEventListener('click', () => {
-  settingsReturn = ui.voiceStatus;
-  ui.settingsDialog.showModal();
-  ui.speechProvider.focus();
-});
-
 // specs/Panel.tla, `OpenSettings` and `CloseSettings`.
 ui.settings.addEventListener('click', () => {
-  settingsReturn = ui.settings;
   ui.settingsDialog.showModal();
   ui.chatOrder.focus();
 });
@@ -1029,10 +1045,17 @@ ui.settingsClose.addEventListener('click', () => {
   ui.settingsDialog.close();
 });
 ui.settingsDialog.addEventListener('close', () => {
-  (settingsReturn ?? ui.settings).focus();
+  ui.settings.focus();
 });
 function isSpeechVoice(value: string): value is SpeechVoice {
   return SPEECH_VOICES.some((voice) => voice === value);
+}
+
+/** Shows the selected listening speed while the user moves the slider. */
+function showListeningSpeed(): void {
+  const label = `${Number(ui.speechListeningSpeed.value).toFixed(2)}x`;
+  ui.speechListeningSpeedValue.textContent = label;
+  ui.speechListeningSpeed.setAttribute('aria-valuetext', label);
 }
 
 function saveSpeechSettings(): void {
@@ -1256,9 +1279,25 @@ ui.speechVoicesMore.addEventListener('click', () => {
   vscode.postMessage({ type: 'speechVoicesMore' });
 });
 ui.speechEnabled.addEventListener('change', saveSpeechSettings);
+ui.voiceStatus.addEventListener('click', () => {
+  ui.speechEnabled.checked = !speechEnabled;
+  saveSpeechSettings();
+});
 ui.speechVoice.addEventListener('change', saveSpeechSettings);
 ui.speechSpeed.addEventListener('change', saveSpeechSettings);
-ui.speechListeningSpeed.addEventListener('change', saveSpeechSettings);
+ui.speechListeningSpeed.addEventListener('input', showListeningSpeed);
+ui.speechListeningSpeed.addEventListener('change', () => {
+  showListeningSpeed();
+  saveSpeechSettings();
+});
+ui.revokeCommandApprovals.addEventListener('click', () => {
+  vscode.postMessage({ type: 'revokeCommandApprovals' });
+});
+
+ui.commandApprovalSound.addEventListener('change', () => {
+  if (ui.commandApprovalSound.checked) approvalSound.unlock();
+  vscode.postMessage({ type: 'commandApprovalSound', value: ui.commandApprovalSound.checked });
+});
 ui.speechCompute.addEventListener('change', () => {
   const value = ui.speechCompute.value;
   if (value === 'cpu' || value === 'auto' || value === 'gpu') vscode.postMessage({ type: 'speechComputeMode', value });
@@ -1306,8 +1345,54 @@ ui.chatOrder.addEventListener('change', () => {
   vscode.postMessage({ type: 'chatOrder', value });
 });
 
+const COST_REASON_TEXT = {
+  'restored': 'Earlier costs are unknown because this session was restored.',
+  'missing-generation-id': 'OpenRouter did not return a generation ID.',
+  'generation-not-published': 'OpenRouter has not published the generation cost within the lookup window.',
+  'generation-lookup-failed': 'The OpenRouter generation cost lookup failed.',
+};
+
+/** Renders the provider-confirmed subtotal and any unresolved charges. */
+function showSpeechCost(value: SessionSpeechCostView): void {
+  ui.speechCost.hidden = !value.seen;
+  if (!value.seen) {
+    if (tipTarget === ui.speechCost || tipPending === ui.speechCost) hideTip();
+    ui.speechCost.dataset.tip = '';
+    ui.speechCost.setAttribute('aria-label', '');
+    return;
+  }
+  let detail: string;
+  if (value.total === 0 && value.pending > 0) {
+    detail = `calculating${ELLIPSIS}${value.partial ? ' (some costs unavailable)' : ''}`;
+  } else if (value.total === 0 && value.partial) {
+    detail = 'cost unavailable';
+  } else {
+    const amount = value.total > 0 && value.total < MIN_DISPLAYABLE_COST ? '<$0.000001' : `$${value.total.toFixed(COST_DECIMALS)}`;
+    const costState =
+      value.pending > 0 ? (value.partial ? ' (updating; incomplete)' : ' (updating)') : value.partial ? ' (incomplete)' : '';
+    detail = `${amount}${costState}`;
+  }
+  const reasons = value.reasons?.map((reason) => COST_REASON_TEXT[reason]).join(' ') ?? '';
+  const explanation = `OpenRouter speech this session: ${detail}${reasons === '' ? '' : ` ${reasons}`}`;
+  ui.speechCost.dataset.tip = explanation;
+  ui.speechCost.setAttribute('aria-label', explanation);
+  let compact: string;
+  if (value.total === 0 && value.pending > 0) {
+    compact = `calculating${ELLIPSIS}`;
+  } else if (value.total === 0 && value.partial) {
+    compact = 'unavailable';
+  } else {
+    compact = value.total > 0 && value.total < MIN_COMPACT_COST ? '<$0.0001' : `$${value.total.toFixed(COMPACT_COST_DECIMALS)}`;
+  }
+  ui.speechCost.textContent = `${compact}${value.partial ? '*' : ''}`;
+  if (tipTarget === ui.speechCost) showTip(ui.speechCost);
+}
+
 function handle(message: ToPanel): void {
   switch (message.type) {
+    case 'speechCost':
+      showSpeechCost(message.value);
+      return;
     case 'speechReadiness':
       voiceFacts = message.value;
       syncVoiceStatus();
@@ -1388,7 +1473,7 @@ function handle(message: ToPanel): void {
         message.value.provider === 'kokoro'
           ? SPEECH_VOICES.some((voice) => voice === message.value.voice) && SPEECH_SPEEDS.some((speed) => speed === message.value.speed)
           : message.value.provider === 'openrouter'
-            ? (message.value.openRouterModel ?? '') !== '' && (message.value.openRouterVoice ?? '') !== ''
+            ? (message.value.openRouterModel ?? '') !== ''
             : message.value.elevenLabsVoice.trim() !== '' && ELEVENLABS_SPEEDS.some((speed) => speed === message.value.elevenLabsSpeed);
       voiceFacts = {
         enabled: message.value.enabled,
@@ -1401,7 +1486,6 @@ function handle(message: ToPanel): void {
         modelReady: 'unknown',
         lastPlayback: 'unknown',
       };
-      syncVoiceStatus();
       if (speechEnabled && !message.value.enabled) stopSpeechLocally();
       speechEnabled = message.value.enabled;
       speechProvider = message.value.provider;
@@ -1428,9 +1512,12 @@ function handle(message: ToPanel): void {
       selectCloudVoice();
       syncSpeechProvider();
       ui.speechEnabled.checked = message.value.enabled;
+      ui.voiceStatus.disabled = false;
+      syncVoiceStatus();
       ui.speechVoice.value = message.value.voice;
       ui.speechSpeed.value = String(message.value.speed);
       ui.speechListeningSpeed.value = String(message.value.listeningSpeed ?? 1);
+      showListeningSpeed();
       return;
     case 'speechCloudSupport':
       cloudSupported = message.supported;
@@ -1627,6 +1714,19 @@ function handle(message: ToPanel): void {
     case 'showTerminals':
       ui.showTerminals.checked = message.value;
       return;
+    case 'commandApprovals':
+      ui.commandApprovalsStatus.textContent = !message.confirmationRequired
+        ? 'Command confirmation is off: all commands are automatically approved.'
+        : message.all
+          ? `All commands are automatically approved for this session (${message.count} remembered).`
+          : message.count > 0
+            ? `${message.count} command(s) automatically approved for this session.`
+            : 'No session command grants.';
+      ui.revokeCommandApprovals.disabled = message.confirmationRequired && !message.all && message.count === 0;
+      return;
+    case 'commandApprovalSound':
+      ui.commandApprovalSound.checked = message.value;
+      return;
     case 'replyBehavior':
       ui.replyBehavior.value = message.value;
       return;
@@ -1669,6 +1769,7 @@ function handle(message: ToPanel): void {
           return;
         }
         // specs/Resume.tla, `Start`: a new session replaces any old suspension.
+        shownApprovals.clear();
         clearRun();
         suspended = false;
         fileCurrent();
@@ -1723,6 +1824,12 @@ function handle(message: ToPanel): void {
     case 'run': {
       // specs/RunBox.tla, Show: confirm and running show the box; a phase that ends the run clears it.
       if (message.phase === 'confirm' || message.phase === 'running') {
+        // specs/CommandCue.tla, Handle: replay and repeated IDs never sound.
+        if (message.phase === 'confirm') {
+          const first = !shownApprovals.has(message.id);
+          shownApprovals.add(message.id);
+          if (first && !replaying && ui.commandApprovalSound.checked) approvalSound.play();
+        }
         runId = message.id;
         runConfirming = message.phase === 'confirm';
         ui.showTerminal.hidden = runConfirming;
@@ -1822,8 +1929,8 @@ function sendReply(): void {
   }
 }
 
-function decide(run: boolean, remember: boolean): void {
-  if (runId !== undefined) vscode.postMessage({ type: 'runDecision', id: runId, run, remember });
+function decide(run: boolean, scope: 'once' | 'command' | 'all'): void {
+  if (runId !== undefined) vscode.postMessage({ type: 'runDecision', id: runId, run, scope });
 }
 
 // ---- Wiring ----------------------------------------------------------------
@@ -1890,13 +1997,16 @@ ui.attachX.addEventListener('click', () => {
   syncAttach();
 });
 ui.runGo.addEventListener('click', () => {
-  decide(/* run= */ true, /* remember= */ false);
+  decide(/* run= */ true, 'once');
 });
 ui.runAlways.addEventListener('click', () => {
-  decide(/* run= */ true, /* remember= */ true);
+  decide(/* run= */ true, 'command');
+});
+ui.runAll.addEventListener('click', () => {
+  decide(/* run= */ true, 'all');
 });
 ui.runSkip.addEventListener('click', () => {
-  decide(/* run= */ false, /* remember= */ false);
+  decide(/* run= */ false, 'once');
 });
 ui.end.addEventListener('click', () => {
   stopSpeechLocally();

@@ -71,7 +71,15 @@ export interface OpenRouterModel {
 /** OpenRouter operations retain credentials inside the provider. */
 export interface OpenRouterSpeechPort {
   synthesize(
-    request: { id: number; text: string; modelId: string; voiceId: string; zdr: boolean; format: OpenRouterAudioFormat },
+    request: {
+      id: number;
+      text: string;
+      modelId: string;
+      voiceId: string;
+      zdr: boolean;
+      format: OpenRouterAudioFormat;
+      purpose?: 'narration' | 'preview';
+    },
     signal: AbortSignal,
   ): Promise<SpeechAudioResult>;
   models(zdr: boolean, signal: AbortSignal): Promise<OpenRouterModel[]>;

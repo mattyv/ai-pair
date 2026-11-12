@@ -10,6 +10,11 @@ describe('cross-host panel updates', () => {
       { type: 'focusReply' },
       { type: 'replyBehavior', value: 'interrupt' },
       { type: 'replyBehavior', value: 'finishAction' },
+      { type: 'commandApprovalSound', value: true },
+      { type: 'commandApprovals', all: true, count: 2, confirmationRequired: true },
+      { type: 'commandApprovalSound', value: false },
+      { type: 'session', active: true, costSessionGeneration: 1 },
+      { type: 'replay', events: [], costSessionGeneration: 1, costSessionActive: true },
       { type: 'calibration', view: { phase: 'idle' } },
     ]) {
       expect(localPanelUpdate.safeParse(update).success).toBe(true);
@@ -20,6 +25,9 @@ describe('cross-host panel updates', () => {
     for (const update of [
       { type: 'replyBehavior', value: 'invalid' },
       { type: 'replyBehavior', value: 'finishAction', extra: true },
+      { type: 'commandApprovalSound', value: 'true' },
+      { type: 'session', active: true, costSessionGeneration: 0 },
+      { type: 'replay', events: [], costSessionGeneration: 1 },
       { type: 'speechAudio', wavBase64: 'abc' },
       { type: 'speechSettings', value: { key: 'secret' } },
       { type: 'command', command: 'arbitrary' },

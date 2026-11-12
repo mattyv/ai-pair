@@ -133,7 +133,8 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `CodePlayback_Progress.cfg` | the same edits with fair progress and no pause or interrupt | holds | 11 |
 | `ReadingSkip.cfg` | two countdown IDs, hold, pause, turn and suspension changes | holds | 5,840 |
 | `ReadingHold.cfg` | matching hold and release with changing pause state | holds | 444 |
-| `Narration.cfg` | two queued units, two page and session epochs, interruptions and independent gates | holds | 8,684 |
+| `Narration.cfg` | default wait, two queued units, two page and session epochs, interruptions and independent gates | holds | 8,684 |
+| `SpeechOverlap.cfg`, `SpeechOverlap_Continue.cfg` | two jobs and two sessions; fair gates, with and without terminal fairness | holds | 141 |
 | `SpeechWorker.cfg` | two jobs, cancellation, watchdog expiry and worker termination | holds | 19 |
 | `ReadingGesture.cfg` | short and long gestures across two countdown IDs | holds | 170 |
 | `ListeningHint.cfg` | status and session context | holds | 64 |
@@ -2029,7 +2030,9 @@ the modeled worker ownership, cancellation, or watchdog behavior.
 
 ### `Narration`: spoken units and reading gates
 
-`Narration.tla` models spoken units that queue behind one another (#41: every
+`Narration.tla` models the default wait mode. `SpeechOverlap.tla` models the
+additional continue mode below. `Narration.tla` models spoken units that queue
+behind one another (#41: every
 `say` is spoken unless it opts out, so a unit may be admitted while another is
 outstanding), one active unit at a time, two units,
 generation IDs, two page and session epochs, page loss, reply, pause, reading
@@ -2075,6 +2078,32 @@ Each mutation below was applied alone, and TLC reported the named property:
 | `Display` is not fair | `QueueDrains` |
 | `SpeechError` approves the command | `GateSafe` |
 | `SpeechError` accepts a stale unit ID | `CompletionCurrent` |
+
+### `SpeechOverlap`: per-action speech pacing
+
+`SpeechOverlap.tla` models one logical action and one physical owner. Wait mode
+requires reading and speech completion; continue mode advances after reading.
+An end or stop invalidates the session but retains physical ownership until a
+matching terminal event. `SpeechOverlap.cfg` assumes fair reading, advance and
+terminal events; `SpeechOverlap_Continue.cfg` omits terminal fairness and
+checks that continue advances or the session stops. Both explore 141 distinct
+states. The model abstracts admission timeout, pause, the owner wrapper and
+reused local IDs across sessions; implementation tests cover these boundaries.
+
+| Property | Test |
+|---|---|
+| `TypeOK` | TypeScript checks implementation types. |
+| `WaitGate`, `ReadingGate` | `player.test.ts`: displays selected text before requesting speech and waits for both gates. |
+| `NoOverwrite`, `ContinueProgress` | `player.test.ts`: ContinueProgress: advances after reading while speech continues, then gates the next say. |
+| `MatchingTerminal`, `NoOldOwner` | `remote_narration.test.ts`: settles only a matching current terminal and rejects stale acknowledgements. |
+| `CancelOnEnd` | Controller end cancels narration. |
+| `Progress` | `player.test.ts`: displays selected text before requesting speech and waits for both gates. |
+
+Mutations allowing a busy successor, advancing wait early, advancing before
+reading, and ending without cancellation violate `NoOverwrite`, `WaitGate`,
+`ReadingGate`, and `CancelOnEnd`, respectively. Accepting stale terminal
+identity violates `MatchingTerminal`. Requiring speech completion in continue
+mode violates `ContinueProgress` without terminal fairness.
 
 ### `ReadingHold`: scoped timer holds
 
@@ -3382,3 +3411,86 @@ stuttering cycle. All violations were isolated to the named property.
 | `RetainOnCancel` | Cancellation clears the decode slot. | `Probe`, `ReadinessDelivery`, `Admit`, `Post`, `DecodeDelivery`, `Cancel`. |
 | `CanAdmit` | Disable admission. | `Probe`, `ReadinessDelivery`. |
 | `StablePost` | Disable admission. | `Probe`, `ReadinessDelivery`, then stuttering. |
+
+### `SessionSpeechCost`: local pairing-session cost ownership
+
+`Capture` records the session before the request waits for admission and
+`Dispatch` records the actual paid POST. `Resolve` accepts a confirmed cost
+only for that session and `Unavailable` marks a current result partial. New
+sessions discard the previous subtotal; an already-dispatched request may
+settle after its session ends, until a fresh session replaces it. The model
+abstracts provider currency values as request membership, network timing,
+preview exclusion, panel replay, credentials and audio. Those boundaries need
+implementation tests; the model does not establish billing accuracy or
+provider availability.
+
+The panel presents the same ledger as a compact toolbar subtotal beside the
+voice control. Its focusable tooltip retains the precise subtotal, pending and
+incomplete states, and fixed missing-cost reasons; an asterisk marks incomplete
+values. This presentation does not change the modeled ledger.
+
+Fixed missing-cost reasons are presentation metadata on the same partial
+state. Stream-settlement ordering and the bounded publication backoff are
+covered by deterministic tests in `speech_openrouter.test.ts` and
+`speech_openrouter_usage.test.ts`; they remain outside this model's network
+timing abstraction.
+
+TLC checked `SessionSpeechCost.cfg` with two session increments and two
+requests per session: 144,385 generated states, 47,988 distinct states and
+depth 21. Invariants and `AccountingProgress` passed. Progress assumes fair
+resolution of a valid dispatched request; it ends if a fresh session replaces it.
+
+| Property | Implementation test |
+| --- | --- |
+| `TypeOK` | `session_speech_cost.test.ts`: marks invalid provider values partial and retains finite subtotals. |
+| `CurrentOnly` | `session_speech_cost.test.ts`: ignores a late charge after a fresh session begins. |
+| `NoDoubleCount` | `session_speech_cost.test.ts`: accumulates confirmed charges once. |
+| `CurrentDispatch` | `session_speech_cost.test.ts`: rejects a previous session request delayed before provider dispatch. |
+| `AccountingProgress` | `session_speech_cost.test.ts`: accumulates provider-confirmed charges once and retains them after end. |
+
+Temporary mutations were checked independently and discarded. Removing the
+current-session guard from `Resolve` violated `CurrentOnly` after `Capture`,
+`Dispatch`, `Start`, `Resolve`. Keeping a resolved request pending violated
+`NoDoubleCount` after `Capture`, `Dispatch`, `Resolve`. Allowing stale
+`Dispatch` violated `CurrentDispatch` after `Capture`, `Start`, `Dispatch`.
+Dropping valid resolution effects violated `AccountingProgress`.
+
+### `CommandApproval`: session-scoped command permission
+
+The model distinguishes global confirmation settings, an individual command grant,
+and an explicit grant for all commands in the current session. It rejects stale
+and interrupted decisions,
+preserves grants on resume, and clears them on a fresh session or an explicit
+`Revoke`. Revocation leaves a pending confirmation unresolved. TLC checked 612
+distinct states to depth 12. `PromptProgress` assumes fair decision or
+interruption. `ResetEnforces` checks that the reset action turns confirmation on
+and clears both grant types. Three temporary mutations that retained the global
+bypass, remembered commands, or the all-command grant each violated
+`ResetEnforces` (the all-command mutation was checked with the overlapping
+`CurrentAllGrant` and `RunHasApproval` invariants disabled). Temporary mutations
+violated `TypeOK`, `CurrentAllGrant`,
+`RunHasApproval` and `PromptProgress`. The corresponding lifecycle and stale
+decision cases are exercised in `core/test/controller.test.ts` and
+`core/test/player.test.ts`; `vscode/test/integration_paths.ts` also exercises
+the session-wide grant through the editor. `Revoke` is checked by the named
+`Revoke` cases in `core/test/controller.test.ts`; those cases verify both grant
+forms and a pending confirmation; `core/test/player.test.ts` checks policy at
+admission after a delayed save.
+
+### `CommandCue`: command approval sound
+
+The model permits a cue only for a newly shown live confirmation when sound is
+enabled. Replay, duplicate IDs, running and automatically approved commands are
+silent. TLC checked 518 distinct states to depth 10. Temporary mutations
+violated `TypeOK`, `CueCorrect` and `EventProgress`. Panel webview tests cover
+the live confirmation and replay; `webview/approval_sound.test.ts` covers audio
+playback and cleanup.
+
+### `CostReplay`: companion session identity
+
+This model covers replay identity and ledger ownership when a companion page
+is absent across a session change; it does not model other transport failures.
+TLC checked 19 distinct states to depth 6. Temporary mutations violated
+`TypeOK`, `CurrentLedger`, `SamePreserved` and `ReopenProgress`. The regression
+in `vscode/test/panel.test.ts` checks same-session replay and a new session
+missed while the page was absent.

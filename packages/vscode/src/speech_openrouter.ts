@@ -1,4 +1,6 @@
+import type { SpeechCostResult } from './session_speech_cost';
 import { openRouterCatalog, openRouterSpeechModel, openRouterSpeechRequest } from '@ai-pair/protocol';
+import { OpenRouterUsage } from './speech_openrouter_usage';
 import type {
   OpenRouterAudioDecoder,
   OpenRouterAudioFormat,
@@ -38,6 +40,11 @@ interface PcmResponse {
   channels: number;
 }
 type AudioResponse = Mp3Response | PcmResponse;
+type CostDispatch = () => ((cost: SpeechCostResult) => void) | undefined;
+interface RequestOptions {
+  documentedPcmContract?: boolean;
+  beginCost?: CostDispatch;
+}
 
 /** Safe categories for provider failures. */
 export type OpenRouterErrorKind = 'key' | 'auth' | 'rate' | 'network' | 'timeout' | 'invalid' | 'canceled';
@@ -72,10 +79,20 @@ export class OpenRouterClient implements OpenRouterSpeechPort {
     private readonly readKey: () => Promise<string | undefined>,
     private readonly fetcher: typeof fetch = fetch,
     private readonly decoder?: OpenRouterAudioDecoder,
+    private readonly captureCost?: () => CostDispatch | undefined,
+    private readonly usage: Pick<OpenRouterUsage, 'cost'> = new OpenRouterUsage(fetcher),
   ) {}
 
   async synthesize(
-    request: { id: number; text: string; modelId: string; voiceId: string; zdr: boolean; format: OpenRouterAudioFormat },
+    request: {
+      id: number;
+      text: string;
+      modelId: string;
+      voiceId: string;
+      zdr: boolean;
+      format: OpenRouterAudioFormat;
+      purpose?: 'narration' | 'preview';
+    },
     signal: AbortSignal,
   ): Promise<SpeechAudioResult> {
     const payload = openRouterSpeechRequest.safeParse({
@@ -88,6 +105,14 @@ export class OpenRouterClient implements OpenRouterSpeechPort {
     if (!payload.success) throw new OpenRouterError('invalid');
     const decoder = this.decoder;
     if (decoder === undefined) throw new OpenRouterError('invalid');
+    let beginCost: CostDispatch | undefined;
+    if (request.purpose === 'narration') {
+      try {
+        beginCost = this.captureCost?.();
+      } catch {
+        // Cost reporting is optional and cannot prevent speech.
+      }
+    }
     // OpenRouterDecode, Admit: reserve local decode capacity before the paid provider POST.
     const lease = await decoder.admit(request.id, signal).catch((error: unknown) => {
       if (error instanceof OpenRouterError) throw error;
@@ -99,9 +124,12 @@ export class OpenRouterClient implements OpenRouterSpeechPort {
       // OpenRouterSpeech: Synthesize samples the request policy.
       const response =
         request.format === 'mp3'
-          ? await this.request(`${ORIGIN}/audio/speech`, 'POST', payload.data, linked.signal, SYNTHESIS_TIMEOUT_MS, MAX_MP3_BYTES, 'mp3')
+          ? await this.request(`${ORIGIN}/audio/speech`, 'POST', payload.data, linked.signal, SYNTHESIS_TIMEOUT_MS, MAX_MP3_BYTES, 'mp3', {
+              beginCost,
+            })
           : await this.request(`${ORIGIN}/audio/speech`, 'POST', payload.data, linked.signal, SYNTHESIS_TIMEOUT_MS, MAX_PCM_BYTES, 'pcm', {
               documentedPcmContract: DOCUMENTED_PCM_MODELS.has(request.modelId),
+              beginCost,
             });
       if (response.kind === 'mp3') return await lease.decode({ format: 'mp3', bytes: response.bytes }, linked.signal);
       return await lease.decode(
@@ -162,7 +190,7 @@ export class OpenRouterClient implements OpenRouterSpeechPort {
     deadline: number,
     limit: number,
     kind: 'json',
-    options?: { documentedPcmContract?: boolean },
+    options?: RequestOptions,
   ): Promise<JsonResponse>;
   private async request(
     url: string,
@@ -172,7 +200,7 @@ export class OpenRouterClient implements OpenRouterSpeechPort {
     deadline: number,
     limit: number,
     kind: 'mp3',
-    options?: { documentedPcmContract?: boolean },
+    options?: RequestOptions,
   ): Promise<Mp3Response>;
   private async request(
     url: string,
@@ -182,7 +210,7 @@ export class OpenRouterClient implements OpenRouterSpeechPort {
     deadline: number,
     limit: number,
     kind: 'pcm',
-    options?: { documentedPcmContract?: boolean },
+    options?: RequestOptions,
   ): Promise<PcmResponse>;
   private async request(
     url: string,
@@ -192,7 +220,7 @@ export class OpenRouterClient implements OpenRouterSpeechPort {
     deadline: number,
     limit: number,
     kind: OpenRouterAudioFormat | 'json',
-    options: { documentedPcmContract?: boolean } = {},
+    options: RequestOptions = {},
   ): Promise<JsonResponse | AudioResponse> {
     const controller = new AbortController();
     let timedOut = false;
@@ -207,6 +235,17 @@ export class OpenRouterClient implements OpenRouterSpeechPort {
     }, deadline);
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     let responseBody: ReadableStream<Uint8Array> | undefined;
+    let pendingCost: ((cost: SpeechCostResult) => void) | undefined;
+    let generation: { id: string; key: string } | undefined;
+    function finishCost(cost: SpeechCostResult): void {
+      const finish = pendingCost;
+      pendingCost = undefined;
+      try {
+        finish?.(cost);
+      } catch {
+        // Cost display cannot affect speech.
+      }
+    }
     const abort = new Promise<never>((_, reject) => {
       function fail(): void {
         reject(new OpenRouterError(timedOut ? 'timeout' : 'canceled'));
@@ -220,6 +259,13 @@ export class OpenRouterClient implements OpenRouterSpeechPort {
       if (key === undefined || key.length === 0) throw new OpenRouterError('key');
       const headers: Record<string, string> = { authorization: `Bearer ${key}` };
       if (body !== undefined) headers['content-type'] = 'application/json';
+      if (options.beginCost !== undefined) {
+        try {
+          pendingCost = options.beginCost();
+        } catch {
+          // An observer is optional and cannot prevent speech.
+        }
+      }
       const response = await this.fetcher(url, {
         method,
         headers,
@@ -227,6 +273,11 @@ export class OpenRouterClient implements OpenRouterSpeechPort {
         signal: controller.signal,
         redirect: 'error',
       });
+      if (pendingCost !== undefined && response.ok) {
+        const id = response.headers.get('x-generation-id');
+        if (id !== null && id !== '') generation = { id, key };
+        else finishCost('missing-generation-id');
+      }
       responseBody = response.body ?? undefined;
       if (controller.signal.aborted) {
         if (response.body !== null) void response.body.cancel().catch(() => {});
@@ -296,6 +347,30 @@ export class OpenRouterClient implements OpenRouterSpeechPort {
       if (error instanceof OpenRouterError) throw error;
       throw new OpenRouterError('network');
     } finally {
+      if (generation !== undefined && pendingCost !== undefined) {
+        const { id, key } = generation;
+        const finish = pendingCost;
+        pendingCost = undefined;
+        void Promise.resolve()
+          .then(() => this.usage.cost(id, key))
+          .then(
+            (cost) => {
+              try {
+                finish(cost);
+              } catch {
+                /* Cost display cannot affect speech. */
+              }
+            },
+            () => {
+              try {
+                finish(undefined);
+              } catch {
+                /* Cost display cannot affect speech. */
+              }
+            },
+          );
+      }
+      finishCost(undefined);
       clearTimeout(timer);
       signal.removeEventListener('abort', onAbort);
       if (reader !== undefined) void reader.cancel().catch(() => {});
