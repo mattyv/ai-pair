@@ -21,6 +21,9 @@ export async function vscodeCoveragePaths(api: Api): Promise<void> {
   const original = settings.inspect<unknown>('confirmCommands')?.globalValue;
   const { controller } = api;
   const terminals = new Set(vscode.window.terminals);
+  // The previous session can remain retained until its final report is taken.
+  controller.endSession();
+  controller.disconnect();
   try {
     await settings.update('confirmCommands', false, target);
     api.panelMessage({ type: 'revokeCommandApprovals' });
