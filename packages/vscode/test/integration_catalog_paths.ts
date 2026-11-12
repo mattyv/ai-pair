@@ -83,6 +83,7 @@ export async function run(): Promise<void> {
     'speech.openRouterModel',
     'speech.openRouterVoice',
     'speech.openRouterZdr',
+    'speech.openRouterFormat',
   ];
   const original = keys.map((key) => settings.inspect<unknown>(key)?.globalValue);
   const value = { enabled: false, voice: 'af_heart', speed: 1, provider: 'elevenlabs', elevenLabsVoice: '', elevenLabsSpeed: 1 };
@@ -305,7 +306,15 @@ export async function run(): Promise<void> {
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 200);
     });
-    const routerValue = { ...value, enabled: true, provider: 'openrouter', openRouterModel: '', openRouterVoice: '', openRouterZdr: true };
+    const routerValue = {
+      ...value,
+      enabled: true,
+      provider: 'openrouter',
+      openRouterModel: '',
+      openRouterVoice: '',
+      openRouterZdr: true,
+      openRouterFormat: 'pcm',
+    };
     api.panelMessage({ type: 'speechSettings', value: routerValue });
     for (let attempt = 0; attempt < 100 && vscode.workspace.getConfiguration('aiPair').get('speech.provider') !== 'openrouter'; attempt++) {
       await new Promise<void>((resolve) => {
@@ -335,6 +344,16 @@ export async function run(): Promise<void> {
       });
     }
     assert.equal(vscode.workspace.getConfiguration('aiPair').get('speech.openRouterVoice'), routerVoice);
+    for (
+      let attempt = 0;
+      attempt < 100 && vscode.workspace.getConfiguration('aiPair').get('speech.openRouterFormat') !== 'pcm';
+      attempt++
+    ) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 50);
+      });
+    }
+    assert.equal(vscode.workspace.getConfiguration('aiPair').get('speech.openRouterFormat'), 'pcm');
     api.panelMessage({ type: 'speechPreview' });
     for (let attempt = 0; attempt < 100 && !routerRequests.some((request) => request.url.pathname === '/api/v1/audio/speech'); attempt++) {
       await new Promise<void>((resolve) => {
