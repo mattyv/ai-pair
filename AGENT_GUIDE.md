@@ -360,6 +360,12 @@ type_fast ";▌"
     don't guess. Every `line` you give comes from an up-to-date `read` or
     report, copied as it shows it. A move to a line you haven't been shown at
     that number is rejected with `line_not_seen`, which says where it is now.
+    Fully displayed new-side and context lines in a navigator's numbered diff
+    also count as seen. Copy their explicit new-side numbers; do not count from
+    hunk headers. Deleted lines, omitted text and headers alone do not count.
+    These displays are numbered review diffs, not patches to apply. For a
+    `point`, use text still present exactly on that line; a still-present
+    prefix works while typing continues, but line shifts still need a `read`.
 -   **Up to date means nothing has changed the lines above it since.** A report
     shows the code of a batch that already played; any batch you've submitted
     after it that adds or removes lines above the spot makes its numbers stale.
@@ -465,6 +471,12 @@ the Rainbow Passage for the calibration"):
     point, then listen. A programmer message cancels queued `say` and `point`
     actions because their new direction can make older advice stale. Do not
     queue a multi-point review whose later points depend on no reply.
+    A plain handback with no message or attached selection preserves queued
+    navigator observations. A message or new selection can change the intent
+    and still cancels them. Taking the turn and hand requests keep their
+    interruption behavior. A plain turn change keeps manual Pause active; the
+    programmer uses Resume to release it. Never assume a paused queue has
+    finished playing.
 -   **When a report says playback is paused,** your batches are waiting for the
     programmer to resume; it says why. Don't resubmit them. Say so briefly if
     it matters, and call `listen`.

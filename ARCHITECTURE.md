@@ -649,3 +649,26 @@ This does not change the editor-relay protocol version.
 Archi-Techture 1.5.1 validated the updated source. Its generated HTML export
 was normalized and rendered in Chromium without page errors; preference owner,
 activity owner and their connections were visually inspected.
+
+## Navigator follow-up boundaries
+
+The controller records visible diff-line identities at the report snapshot;
+replayed historical diffs cannot authorize successor identities. A non-mutating
+tracked-text guard also withholds sightings from an older pending edit report
+after a newer agent edit; it cannot reset the live line tracker. Edit
+interruption provenance is independent of programmer authorship. Navigator
+wake admission considers pending meaningful changes and meaningful activity
+already reported during the current unacknowledged typing burst, preserving
+timeout-before-pause behavior while suppressing unreported type-and-undo noise.
+
+Plain handback preserves eligible talk-only work. Its rehearsal basis follows
+programmer edits and the authoritative new turn. Browser, panel and companion
+forward no-message turn intent to the workspace instead of eagerly canceling
+from replicated turn state. Explicit new direction still cancels. Existing
+local/remote narration owners retain retirement; this adds no audio lifecycle.
+
+Plain turn changes preserve manual Pause rather than clear local pause reasons
+before the workspace decision arrives. Draft-empty events retain their own
+pause semantics. This avoids a paused-audio restart without another pending
+intent owner; explicit Resume releases manual Pause. Message/selection handback
+retains cancellation before resume.

@@ -151,6 +151,48 @@ describe('scripted agent flows', () => {
     await h.call(client, 'end');
   });
 
+  it('allows pointing to lines delivered in a navigator diff', async () => {
+    const h = await setup(591);
+    h.controller.setTimeouts({ navigatorIdleMs: 30, maxBlockMs: 500 });
+    const client = await h.connect();
+    await h.call(client, 'start');
+    h.controller.takeTurn();
+    await h.call(client, 'listen');
+    const listening = h.call(client, 'listen');
+    await h.waitFor('listen received', () => h.trace.filter((line) => line.startsWith('socket ') && line.endsWith('listen')).length >= 2);
+    h.editor.userEdit('src/a.ts', { offset: 0, deleteLength: 0, text: 'observed line' });
+    expect(await listening).toContain('observed line');
+    const result = await h.call(client, 'step', { actions: [{ point: { file: 'a.ts', line: 1, text: 'observed line' } }] });
+    expect(result).toContain('Batch 1 is playing');
+    await h.call(client, 'step', { actions: [] });
+    expect(h.panel.events).toContainEqual(expect.objectContaining({ type: 'point', line: 1 }));
+    h.editor.userEdit('src/a.ts', { offset: 13, deleteLength: 0, text: ' suffix' });
+    const sameLine = await h.call(client, 'step', { actions: [{ point: { file: 'a.ts', line: 1, text: 'observed line' } }] });
+    expect(sameLine).toContain('Batch 2 is playing');
+    await h.call(client, 'step', { actions: [] });
+    h.editor.userEdit('src/a.ts', { offset: 0, deleteLength: 0, text: 'new line\n' });
+    const shifted = await h.call(client, 'step', { actions: [{ point: { file: 'a.ts', line: 2, text: 'observed line' } }] });
+    expect(shifted).toContain("haven't seen line 2");
+    await h.call(client, 'end');
+  });
+
+  it('does not report a typing pause for an edit undone before the quiet interval', async () => {
+    const h = await setup(592);
+    h.controller.setTimeouts({ navigatorIdleMs: 40, maxBlockMs: 180 });
+    const client = await h.connect();
+    await h.call(client, 'start');
+    h.controller.takeTurn();
+    await h.call(client, 'listen');
+    const listening = h.call(client, 'listen');
+    await h.waitFor('listen received', () => h.trace.filter((line) => line.startsWith('socket ') && line.endsWith('listen')).length >= 2);
+    h.editor.userEdit('src/a.ts', { offset: 0, deleteLength: 0, text: 'temporary' });
+    h.editor.userEdit('src/a.ts', { offset: 0, deleteLength: 9, text: '' });
+    const result = await listening;
+    expect(result).not.toContain('Listen returned because typing paused');
+    expect(result).toContain('idle timeout elapsed');
+    await h.call(client, 'end');
+  });
+
   it('suspends and resumes after the editor websocket drops', async () => {
     const h = await setup(101);
     const first = await h.connect();

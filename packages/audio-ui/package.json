@@ -2,7 +2,7 @@
   "name": "ai-pair-local-audio",
   "displayName": "AI Pair Local Audio",
   "description": "Local panel and audio companion for AI Pair.",
-  "version": "0.38.0",
+  "version": "0.38.1",
   "publisher": "mattyv",
   "author": {
     "name": "mattyv"

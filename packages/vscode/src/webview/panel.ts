@@ -2034,10 +2034,10 @@ ui.interrupt.addEventListener('click', () => {
   vscode.postMessage({ type: 'interrupt' });
 });
 ui.turn.addEventListener('click', () => {
-  stopSpeechLocally();
   const handingBack = turn === 'programmer';
   const message = handingBack ? takeDraft() : '';
   const attach = handingBack && takeAttach();
+  if (message !== '' || attach) stopSpeechLocally();
   vscode.postMessage({ type: 'turn', ...(message ? { message } : {}), ...(attach ? { attach } : {}) });
 });
 ui.attachX.addEventListener('click', () => {

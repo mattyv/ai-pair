@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.38.1
+
+-   Recognize visible navigator diff lines under the existing line-staleness
+    rules. Preserve queued observations on a plain handback without a message.
+-   Suppress net-zero navigator change reports and typing-pause wakes while
+    retaining meaningful activity already reported by a timeout.
+
 ## 0.38.0
 
 -   Add persistent Quiet, Helpful and Coach navigator commentary preferences.

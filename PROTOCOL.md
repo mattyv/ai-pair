@@ -211,7 +211,11 @@ Returns when:
 Navigator reports include the return reason and elapsed controller wait time.
 They distinguish a typing pause, idle timeout, turn change, programmer message
 and granted hand request. Programmer edits remain numbered diffs, independent
-of the agent cursor window. The programmer cursor is a separate position fact;
+of the agent cursor window. Full visible new-side/context lines authorize
+their snapshot line identities; deletions and omitted content do not. The
+numbered display preserves hunk boundaries and change signs, but is not a
+directly applicable unified patch. Replaying an old diff cannot authorize
+newer line identities. The programmer cursor is a separate position fact;
 it does not move the agent cursor or transfer the turn.
 
 The optional top-level `navigatorCommentary` report field is `quiet`, `helpful`
@@ -675,6 +679,13 @@ agent receives `{ kind: "turn", to: "programmer" }`.
 message). The agent receives the programmer's edits since the last report and
 `{ kind: "turn", to: "agent", message? }`.
 
+A plain handback with no message or attached selection preserves eligible
+queued navigator `say`/`point` actions. New direction still interrupts them.
+The driver can continue from the actual current text and turn; stale rehearsal
+state must not restore old code or revive interrupted editing work.
+A plain turn change preserves manual Pause until Resume; it does not discard
+that paused work. Message/selection handback retains cancel-before-resume.
+
 ## Files, saving, and native tools
 
 -   Files the agent edits via the protocol are **saved automatically** when a
@@ -792,9 +803,11 @@ Programmer presses "My turn".
 ... programmer writes a loop, pauses typing ...
 <- Editor text changed in src/server.ts:
   @@ -20,2 +20,4 @@
-  ...
--> read src/server.ts, from line 20: the loop is on line 21
--> step
+   20: const todos = loadTodos();
+  +21: for (let i = 0; i <= todos.length; i++) {
+  +22:   send(todos[i]);
+   23: }
+-> step: use the displayed new-side line, without counting or another read
 [{ "point": { "line": 21, "text": "for (let i = 0; i <= todos.length; i++)" } },
  { "say": "Careful: `<=` will go one past the end." }]
 -> listen

@@ -82,8 +82,9 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `FileText.cfg` | one file, `MaxChanges = 4` changes | holds | 123 |
 | `Outside.cfg` | one file, `MaxWrites = 5` contents | holds | 614 |
 | `Navigator.cfg` | `MaxEdits = 3` | holds | 136 |
+| `NavigatorFollowup.cfg` | two files, two texts, plain handback and visible lines | holds | 864 |
 | `NavigatorCommentary.cfg` | three modes, one pending report, cancellation and replay | holds | 213 |
-| `EditEvents.cfg` | one file, 3 texts, `MaxEdits = 4` | holds | 516 |
+| `EditEvents.cfg` | one file, 3 texts, `MaxEdits = 4` | holds | 843 |
 | `Scroll.cfg` | `NumLines = 8` lines, a view of `ViewHeight = 4`, `MaxMoves = 2`, `MaxFollowSwitches = 2`, `scrollBeyondLastLine` on and off, the programmer's turn | holds | 14,131 |
 | `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
 | `Resume.cfg` | 2 directories, `MaxSessions = 3`, revive and replacement updates enabled | holds | 56 |
@@ -145,9 +146,10 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `QuietTerminals.cfg` | quiet default, fallback and guarded cleanup | holds | 9 |
 | `QuietTerminals_Visible.cfg` | automatic show, fallback and guarded cleanup | holds | 11 |
 | `TerminalReuse.cfg` | shell state, exposure, pending drain and foreign starts | holds | 48 |
-| `Turns.cfg` | batches of up to 2 actions, `MaxTurns = 2` turn changes | holds | 1,530 |
+| `Turns.cfg` | batches of up to 2 actions, `MaxTurns = 2` turn changes | holds | 1,419 |
 | `Reload.cfg` | `NumLines = 5` lines, any of them changed on disk, a selection at a line's start or not | holds | 320 |
-| `Rehearsal.cfg` | `MaxLines = 3` lines, `MaxOthers = 2` changes by others, `MaxProgrammerEdits = 1`, `MaxBatches = 2` batches, `MaxQueued = 2` queued, either turn, `ReportWaitsForQueue = TRUE` | holds, in about 200 seconds | 6,721,044 |
+| `Rehearsal.cfg` | full configured bounds | not completed for this change | |
+| `Rehearsal.cfg` (reduced) | `MaxLines = 2`, `MaxOthers = 1`, `MaxProgrammerEdits = 1`, `MaxBatches = 1`, `MaxQueued = 2` | holds | 11,712 |
 | `BatchFile.cfg` | files `sourceFile`, `destinationFile`, and `otherFile`, `MaxActions = 4` actions a batch, `FallBackToNamed = TRUE`, `CursorInNamed = TRUE`, a selection or none | holds | 330 |
 | `Diagnostics.cfg` | `MaxBatches = 3`, provider available or not, completed, interrupted, and failed batches | holds | 168 |
 | `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await, including a rejected typing edit | holds | 3,115 |
@@ -1369,6 +1371,43 @@ leaves it.
 | `CurrentAtDelivery`, `RestoreKeepsMode` | `controller.test.ts`: CurrentAtDelivery, RestoreKeepsMode: projects the current mode on start, pending listen and replay; CurrentAtDelivery: projects after an asynchronous cursor lookup on resume |
 | `EventuallySettled` | `controller.test.ts`: BlockedReturns: returns with `waiting` after MAX_BLOCK; cancellation and fairness are abstracted here. |
 
+### `NavigatorFollowup`: burst, handback and visible lines
+
+This bounded model abstracts two files and two texts. A timeout records whether
+it delivered a meaningful change; a subsequent timer evaluation wakes only for
+that activity or a pending net change. `ready` means the timer was evaluated,
+including the no-wake case. `ConsumePause` resets burst evidence. The handback
+transition models only plain handback; taking the turn interrupts in `Turns`
+and `Rehearsal`. Message handback interruption is outside this model. `Show`
+abstracts visible versus omitted lines; line identity through subsequent edits
+is modeled separately by `LineIdentity` and
+`Rehearsal`. It does not model diff parsing or speech. Historical diffs whose
+text no longer matches the tracked current text grant no line sightings, so a
+current read may be needed.
+
+| Spec | Code |
+|---|---|
+| `Edit`, `Timeout`, `Fire`, `ConsumePause` | `userEdit`, `snapshot`, navigator timer and `finishCall` |
+| `HandBack` | `handBack` without message or selection |
+| `Show`, `Accept` | numbered diff sightings, `saw`, and rehearsal line checks |
+
+| Mutation | Property violated |
+|---|---|
+| `PreserveQueue = FALSE` | `QueuePreserved` |
+| `PreserveBaseline = FALSE` | `WakeMatches` |
+| `VisibleOnly = FALSE` or `CheckCurrent = FALSE` | `VisibleLinesOnly` |
+| Initialize `pending` with an outside-domain file | `TypeOK` |
+| Remove fairness for `Fire` | `EventuallyReady` |
+| Always wake in `Fire`, or retain observed activity in `ConsumePause` | `WakeMatches` |
+
+| Property | Test |
+|---|---|
+| `TypeOK` | TypeScript and protocol schemas |
+| `QueuePreserved` | `controller.test.ts`: PlainHandback: keeps queued navigator speech |
+| `WakeMatches` | `controller.test.ts`: NoEmptyWake: undo before a report does not wake navigator listen; ObservedBurst: a timeout followed by undo still reports the reversal at a pause |
+| `VisibleLinesOnly` | `diff.test.ts`: numbers only visible new-side lines in a bounded diff; `controller.test.ts`: VisibleLinesOnly: restored diff cannot authorize current shifted line IDs; VisibleLinesOnly: stale event text does not replace the live line tracker |
+| `EventuallyReady` | `controller.test.ts`: ObservedBurst: a timeout followed by undo still reports the reversal at a pause |
+
 ### `Navigator`: the programmer's edits, reported when they pause
 
 `userEdit`, the navigator timer, `navigatorReady` for `listen`, and `snapshot` in
@@ -1379,7 +1418,9 @@ fix: an edit takes back `navigatorReady`, which a pause before it set, so a
 `listen` made after the programmer resumes typing waits for their next pause.
 A timeout may report an edit before the pause; the pause remains reportable on
 the next listen. The model abstracts elapsed wall-clock time and the editor.
-Strong fairness of `Return` rules out repeated timeouts starving a ready call;
+The timer model over-approximates ready after any edit; `NavigatorFollowup`
+refines that choice for net-zero bursts and timeout-observed activity. Strong
+fairness of `Return` rules out repeated timeouts starving a ready call;
 in code a ready call is pumped synchronously before its timeout. Restored
 notices carry an edit generation, so later edits invalidate a bounced pause.
 

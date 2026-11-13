@@ -18,7 +18,7 @@ import {
 } from '@ai-pair/protocol';
 import { DIAGNOSTIC_SNAPSHOT_WARNING } from './constants';
 import { reportDiagnostic } from './diagnostic_delivery';
-import { boundedDiff, lineChanges } from './diff';
+import { lineChanges, numberedDiff } from './diff';
 import { LineIds, type Sighting } from './lines';
 import { agentPath, displayPath, Player, type Failure, type Scene } from './player';
 import {
@@ -68,8 +68,7 @@ type ReportedEdit = Extract<Event, { kind: 'edit' }> & { interrupted?: true };
 
 /**
  * An edit since the last report, which the report diffs (specs/EditEvents.tla, `Record`): the file's text at the
- * first edit since then, and now. `interrupted`: a change the programmer didn't make, to a file the playing or queued
- * batches edit.
+ * first edit since then, and now. `interrupted` records whether an edit actually interrupted playback.
  */
 interface RecordedEdit {
   kind: 'edit';
@@ -136,6 +135,7 @@ interface Session {
   /** Its agent disconnected, or the window reloaded: it waits for a `start` from its directory (#25). */
   suspended: boolean;
   navigatorReady: boolean;
+  navigatorObserved: boolean;
   navigatorGeneration: number;
   navigatorTimer?: ReturnType<typeof setTimeout>;
   /** The cursor's line as the agent last saw it in a report, so reports only show it when it changed. */
@@ -159,11 +159,11 @@ interface Call {
 }
 
 /**
- * Returns whether an event interrupts. Everything does, except changes the programmer didn't make to files no batch
- * is going to edit. An event it holds for is `Interrupt` in specs/ListenGrace.tla.
+ * Returns whether an event interrupts. Recorded edits carry their actual interruption; restored programmer edits retain
+ * the existing conservative treatment. An event it holds for is `Interrupt` in specs/ListenGrace.tla.
  */
 function interrupting(e: PendingEvent): boolean {
-  return e.kind !== 'edit' || e.by === 'programmer' || e.interrupted === true;
+  return e.kind !== 'edit' || ('before' in e ? e.interrupted === true : e.by === 'programmer' || e.interrupted === true);
 }
 
 /** Returns whether an event is an edit since the last report, which awaits its diff. */
@@ -411,6 +411,7 @@ export class Controller {
       ended: false,
       suspended: false,
       navigatorReady: false,
+      navigatorObserved: false,
       navigatorGeneration: ++this.noticeGeneration,
       lines,
       seen: new Map(),
@@ -663,12 +664,16 @@ export class Controller {
     const session = this.activeSession();
     if (!session) return;
     if (session.scene.turn === 'agent') this.flushDeferred(session);
-    this.recordEdit(session, file, before, after, changes, 'programmer');
+    const recorded = this.recordEdit(session, file, before, after, changes, 'programmer');
     if (session.scene.turn === 'agent') {
+      recorded.interrupted = true;
       // specs/Player.tla, `TypeBefore` and `TypeAfter`, and specs/Rehearsal.tla, `EditAsProgrammer`: the edit
       // interrupts playback.
       this.interrupt(session);
     } else {
+      if (!session.stale) {
+        for (const batch of session.queue) followChange(batch.after, file, after, changes);
+      }
       // Interrupting nothing (specs/Controller.tla, `EditQuietly`). Typing again: the pause the timer marked is
       // over, so wait for the next (specs/Navigator.tla, `EditAsProgrammer`).
       session.navigatorReady = false;
@@ -677,7 +682,8 @@ export class Controller {
       session.navigatorTimer = setTimeout(() => {
         // specs/Navigator.tla, `Fire`.
         if (this.session !== session || session.scene.turn !== 'programmer') return;
-        session.navigatorReady = true;
+        session.navigatorReady =
+          session.navigatorObserved || session.events.some((event) => isRecorded(event) && event.before !== event.after);
         this.pump();
       }, this.config.navigatorIdleMs);
     }
@@ -759,6 +765,7 @@ export class Controller {
     const session = this.activeSession();
     if (!session || session.scene.turn === 'agent') return;
     session.scene.turn = 'agent';
+    session.navigatorObserved = false;
     session.navigatorReady = false;
     session.navigatorGeneration = ++this.noticeGeneration;
     clearTimeout(session.navigatorTimer);
@@ -768,8 +775,8 @@ export class Controller {
     this.flushDeferred(session);
     session.events.push(event);
     this.panel.post({ type: 'turn', to: 'agent', message, ref: selection && this.ref(selection) });
-    // specs/Turns.tla and specs/Rehearsal.tla, `ChangeTurn`: the turn changes, and playback is interrupted.
-    this.interrupt(session);
+    // specs/Turns.tla and specs/Rehearsal.tla: plain handback preserves navigator work.
+    if (message !== undefined || selection !== undefined) this.interrupt(session);
     this.update();
   }
 
@@ -1135,7 +1142,11 @@ export class Controller {
 
   /** Plays a batch in memory, from where the queued batches leave off, or the editor as it is (specs/Rehearsal.tla, `Submit`). */
   private rehearse(session: Session, actions: Action[]): ReturnType<typeof rehearse> {
-    const from = session.queue.at(-1)?.after ?? { scene: session.scene, texts: new Map(), lines: session.lines, edits: new Set<string>() };
+    const previous = session.queue.at(-1)?.after;
+    const from =
+      previous === undefined
+        ? { scene: session.scene, texts: new Map(), lines: session.lines, edits: new Set<string>() }
+        : { ...previous, scene: { ...previous.scene, turn: session.scene.turn } };
     return rehearse(
       this.editor,
       this.config,
@@ -1258,6 +1269,7 @@ export class Controller {
     }
     const programmerCursor = this.editor.programmerCursor();
     const report = this.snapshot(session, /* waiting= */ timedOut && !session.ended && call.kind !== 'end', call.batch);
+    if (call.kind === 'listen' && wakeReason === 'typing_pause') session.navigatorObserved = false;
     if (
       call.kind === 'listen' &&
       !session.ended &&
@@ -1393,7 +1405,12 @@ export class Controller {
       if (before === after) {
         events.push({ kind: 'edit', file, diff: '', by: e.by });
       } else {
-        events.push({ kind: 'edit', file, ...boundedDiff(file, before, after), by: e.by });
+        const shown = numberedDiff(file, before, after);
+        if (session.lines.matches(e.file, after)) {
+          this.saw(session, session.lines, { file: e.file, text: after, lines: shown.lines });
+        }
+        if (session.scene.turn === 'programmer') session.navigatorObserved = true;
+        events.push({ kind: 'edit', file, diff: shown.diff, by: e.by, ...(shown.omitted === undefined ? {} : { omitted: shown.omitted }) });
       }
     }
     session.finished = [];

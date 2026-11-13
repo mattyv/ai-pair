@@ -947,15 +947,19 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         if (this.remote === undefined) this.wiring.speech.stop();
         controller().userInterrupt();
         return;
-      case 'turn':
-        if (this.remote === undefined) this.wiring.speech.stop();
-        controller().resume();
+      case 'turn': {
+        const selection = message.attach === true ? this.selection.current() : undefined;
+        if (this.remote === undefined && (controller().turn !== 'programmer' || message.message !== undefined || selection !== undefined)) {
+          this.wiring.speech.stop();
+        }
         if (controller().turn === 'programmer') {
-          controller().handBack(message.message, message.attach === true ? this.selection.current() : undefined);
+          controller().handBack(message.message, selection);
         } else {
           controller().takeTurn();
         }
+        if (message.message !== undefined || selection !== undefined) controller().resume();
         return;
+      }
       case 'end':
         if (this.remote === undefined) this.wiring.speech.stop();
         controller().endSession();

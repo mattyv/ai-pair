@@ -12,7 +12,7 @@ import { mock } from 'vitest-mock-extended';
 import { CURSOR_MARKER, REPORT_SCHEMA, type Action, type BatchResult, type Report } from '@ai-pair/protocol';
 import { defaultConfig, type Config } from '../src/config';
 import { Controller, isSavedSession, type SavedSession } from '../src/controller';
-import { boundedDiff, lineChanges } from '../src/diff';
+import { numberedDiff, lineChanges } from '../src/diff';
 import { followChange, rehearse } from '../src/rehearsal';
 import type { LineIds, Sighting } from '../src/lines';
 import type { Failure, Scene, Stage } from '../src/player';
@@ -24,6 +24,7 @@ const fakes = vi.hoisted(() => {
   /** A LineIds, faked: the methods the controller calls. */
   interface FakeLines {
     of: ReturnType<typeof vi.fn<(file: string, text: string) => number[]>>;
+    matches: ReturnType<typeof vi.fn<(file: string, text: string) => boolean>>;
     apply: ReturnType<typeof vi.fn>;
     adopt: ReturnType<typeof vi.fn>;
     fork: ReturnType<typeof vi.fn>;
@@ -101,6 +102,7 @@ const fakes = vi.hoisted(() => {
     /** Returns a LineIds, faked: each line's identity is its number, unless a test says otherwise. */
     fakeLines: (): FakeLines => ({
       of: vi.fn((...[, text]: [string, string]) => [...text.split('\n').keys()].map((i) => i + 1)),
+      matches: vi.fn(() => true),
       apply: vi.fn(),
       adopt: vi.fn(),
       fork: vi.fn(),
@@ -184,7 +186,7 @@ vi.mock('../src/rehearsal', () => ({
   followChange: vi.fn(),
 }));
 vi.mock('../src/diff', () => ({
-  boundedDiff: vi.fn((...[file, before, after]: [string, string, string]) => ({ diff: `${file}: ${before} -> ${after}` })),
+  numberedDiff: vi.fn((...[file, before, after]: [string, string, string]) => ({ diff: `${file}: ${before} -> ${after}`, lines: [] })),
   lineChanges: vi.fn((...[, changes]: [string, unknown]) => changes),
 }));
 vi.mock('../src/text', () => ({
@@ -2478,7 +2480,7 @@ describe('reports', () => {
     await h.controller.start(undefined, '/work');
     h.controller.userEdit('/work/src/a.ts', 'a', 'b', []);
     await report(h.controller.listen());
-    expect(boundedDiff).toHaveBeenCalledWith('src/a.ts', 'a', 'b');
+    expect(numberedDiff).toHaveBeenCalledWith('src/a.ts', 'a', 'b');
   });
 });
 
@@ -2606,4 +2608,143 @@ describe('NavigatorCommentary projection', () => {
     await settle(CONFIG.maxBlockMs);
     expect((await report(replay)).navigatorCommentary).toBe('coach');
   });
+});
+
+it('NoEmptyWake: undo before a report does not wake navigator listen', async () => {
+  const h = await started();
+  h.controller.takeTurn();
+  await report(h.controller.listen());
+  const listening = h.controller.listen();
+  h.controller.userEdit(A, 'a', 'ab', [{ offset: 1, deleteLength: 0, text: 'b' }]);
+  h.controller.userEdit(A, 'ab', 'a', [{ offset: 1, deleteLength: 1, text: '' }]);
+  await settle(CONFIG.navigatorIdleMs);
+  expect(await pending(listening)).toBe(true);
+  h.controller.userMessage('done');
+  expect((await report(listening)).events).not.toContainEqual(expect.objectContaining({ kind: 'edit' }));
+});
+
+it('PlainHandback: keeps queued navigator speech', async () => {
+  const h = await started();
+  h.controller.takeTurn();
+  await report(h.controller.listen());
+  const finish = holdPlay();
+  await report(h.controller.step(SAY));
+  const queued = h.controller.step(SAY);
+  await settle();
+  h.controller.handBack();
+  finish();
+  expect((await report(queued)).batches).not.toContainEqual(expect.objectContaining({ status: 'discarded' }));
+});
+
+it('NoEmptyWake: a later undone burst stays quiet after an observed pause', async () => {
+  const h = await started();
+  h.controller.takeTurn();
+  await report(h.controller.listen());
+  h.controller.userEdit(A, 'a', 'ab', [{ offset: 1, deleteLength: 0, text: 'b' }]);
+  await settle(CONFIG.navigatorIdleMs);
+  expect((await report(h.controller.listen())).navigator?.wakeReason).toBe('typing_pause');
+  const listening = h.controller.listen();
+  h.controller.userEdit(A, 'ab', 'abc', [{ offset: 2, deleteLength: 0, text: 'c' }]);
+  h.controller.userEdit(A, 'abc', 'ab', [{ offset: 2, deleteLength: 1, text: '' }]);
+  await settle(CONFIG.navigatorIdleMs);
+  expect(await pending(listening)).toBe(true);
+  h.controller.userMessage('done');
+  await report(listening);
+});
+
+it('ObservedBurst: a timeout followed by undo still reports the reversal at a pause', async () => {
+  const h = await started();
+  h.controller.takeTurn();
+  await report(h.controller.listen());
+  h.controller.setTimeouts({ navigatorIdleMs: 20, maxBlockMs: 10 });
+  const listening = h.controller.listen();
+  h.controller.userEdit(A, 'a', 'ab', [{ offset: 1, deleteLength: 0, text: 'b' }]);
+  await settle(10);
+  expect((await report(listening)).events).toContainEqual(expect.objectContaining({ kind: 'edit' }));
+  h.controller.userEdit(A, 'ab', 'a', [{ offset: 1, deleteLength: 1, text: '' }]);
+  await settle(20);
+  const pause = await report(h.controller.listen());
+  expect(pause.navigator?.wakeReason).toBe('typing_pause');
+  expect(pause.events).toContainEqual(expect.objectContaining({ kind: 'edit' }));
+});
+
+it('PlainHandback: queued navigator rehearsal follows edits and uses the current driver turn', async () => {
+  const h = await started();
+  h.controller.takeTurn();
+  await report(h.controller.listen());
+  const finish = holdPlay();
+  await report(h.controller.step(SAY));
+  const changes = [{ offset: 1, deleteLength: 0, text: 'b' }];
+  h.controller.userEdit(A, 'a', 'ab', changes);
+  expect(followChange).toHaveBeenCalledWith(expect.anything(), A, 'ab', changes);
+  h.controller.handBack();
+  const next = h.controller.step(SAY);
+  await settle();
+  expect(vi.mocked(rehearse).mock.calls.at(-1)?.[2].scene.turn).toBe('agent');
+  finish();
+  await report(next);
+});
+
+it('VisibleLinesOnly: restored diff cannot authorize current shifted line IDs', async () => {
+  const h = await started();
+  h.controller.takeTurn();
+  await report(h.controller.listen());
+  vi.mocked(numberedDiff).mockReturnValueOnce({ diff: '@@ -1 +1 @@\n+2: shown', lines: [2] });
+  sessionLines().of.mockReturnValueOnce([10, 20]).mockReturnValueOnce([10, 20]);
+  h.controller.userEdit(A, 'a', 'a\nb', [{ offset: 1, deleteLength: 0, text: '\nb' }]);
+  await settle(CONFIG.navigatorIdleMs);
+  const first = await report(h.controller.listen());
+  h.controller.restore(first);
+  await report(h.controller.listen());
+  await report(h.controller.step(SAY));
+  const knows = vi.mocked(rehearse).mock.calls.at(-1)?.[4];
+  expect(knows?.(A, 2, 20)).toBe(true);
+  expect(knows?.(A, 2, 30)).toBe(false);
+  expect(knows?.(A, 1, 10)).toBe(false);
+});
+
+it('VisibleLinesOnly: stale event text does not replace the live line tracker', async () => {
+  const h = await started();
+  h.controller.takeTurn();
+  await report(h.controller.listen());
+  vi.mocked(numberedDiff).mockReturnValueOnce({ diff: '+1: old', lines: [1] });
+  h.controller.userEdit(A, 'a', 'old', [{ offset: 0, deleteLength: 1, text: 'old' }]);
+  sessionLines().matches.mockReturnValueOnce(false);
+  sessionLines().of.mockClear();
+  await settle(CONFIG.navigatorIdleMs);
+  await report(h.controller.listen());
+  expect(sessionLines().matches).toHaveBeenCalledWith(A, 'old');
+  expect(sessionLines().of).not.toHaveBeenCalled();
+});
+
+it('does not follow a programmer edit into an interrupted stale rehearsal', async () => {
+  const h = await started();
+  const finish = holdPlay();
+  await report(h.controller.step(SAY));
+  h.controller.takeTurn();
+  const changes = [{ offset: 1, deleteLength: 0, text: 'b' }];
+  h.controller.userEdit(A, 'a', 'ab', changes);
+  expect(followChange).not.toHaveBeenCalled();
+  finish();
+  await settle();
+});
+
+it('reports a truncated diff without granting sightings for omitted lines', async () => {
+  const h = await started();
+  h.controller.takeTurn();
+  await report(h.controller.listen());
+  vi.mocked(numberedDiff).mockReturnValueOnce({ diff: '@@ -1,1 +1,201 @@', omitted: 201, lines: [] });
+  h.controller.userEdit(A, 'a', 'b', [{ offset: 0, deleteLength: 1, text: 'b' }]);
+  await settle(CONFIG.navigatorIdleMs);
+  const observed = await report(h.controller.listen());
+  expect(observed.events).toContainEqual({
+    kind: 'edit',
+    file: 'a.ts',
+    by: 'programmer',
+    diff: '@@ -1,1 +1,201 @@',
+    omitted: 201,
+  });
+  await report(h.controller.step(SAY));
+  const knows = vi.mocked(rehearse).mock.calls.at(-1)?.[4];
+  expect(knows?.(A, 1, 1)).toBe(false);
 });

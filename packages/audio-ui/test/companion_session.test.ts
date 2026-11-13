@@ -259,6 +259,27 @@ it('forwards panel controls only after local retirement and clears pause reasons
   void current.dispose();
 });
 
+it('forwards a plain turn without interrupting or clearing local pause reasons', () => {
+  const current = session();
+  routing().forward({ type: 'turn' }, 7);
+  expect(fake.interrupt).not.toHaveBeenCalled();
+  expect(fake.send).toHaveBeenCalledWith(expect.objectContaining({ action: { type: 'turn' }, pageEpoch: 7 }));
+  expect(fake.setPause).not.toHaveBeenCalled();
+  void current.dispose();
+});
+
+it.each([{ message: 'Change direction' }, { attach: true }])('retires local speech before forwarding a turn with content', (content) => {
+  const current = session();
+  routing().forward({ type: 'turn', ...content }, 7);
+  expect(fake.interrupt).toHaveBeenCalledOnce();
+  expect(fake.send).toHaveBeenCalledWith(expect.objectContaining({ action: { type: 'turn', ...content }, pageEpoch: 7 }));
+  expect(fake.setPause.mock.calls).toEqual([
+    [false, 'draft'],
+    [false, 'manual'],
+  ]);
+  void current.dispose();
+});
+
 it('forwards navigator commentary to the workspace', () => {
   const current = session();
   routing().forward({ type: 'navigatorCommentary', value: 'coach' }, 7);

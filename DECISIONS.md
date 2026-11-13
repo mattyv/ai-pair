@@ -1131,3 +1131,37 @@ cursor lookup. Restoring canceled activity evidence cannot restore an old
 preference. Configuration changes do not wake a pending listen or alter edit
 evidence, turn ownership, pause timing or queued narration. The active agent
 receives a change on the next returned report, not an unsolicited MCP push.
+
+## Navigator follow-up: sightings, handback and net-zero activity
+
+Count only full, visible new-side and context lines in navigator diffs as
+line sightings. Bind them to the snapshot's line identities. Deleted lines,
+hunk headers without content and omitted content confer no new sighting.
+Replay cannot bind an old diff to successor text. Keep the existing line-shift
+staleness and exact substring checks: a still-present prefix can be pointed
+at while typing continues on the same line, without fuzzy matching.
+Before granting sightings, compare the event's after-text to the current
+tracked text without mutating the tracker. A pending historical edit can be
+reported after an agent edit; it confers no new sighting if the texts differ.
+Use `read` for those historical reports rather than replace live identities.
+
+A plain no-message handback preserves eligible queued navigator observations.
+A message or attached selection still introduces new intent and cancels stale
+advice. Taking the turn and hand requests retain interruption behavior. Core
+turn state is authoritative; browser and companion do not infer a handback
+from potentially stale displayed state. Plain takeover and handback preserve
+manual Pause until explicit Resume. Draft-empty events release only the draft
+pause through its existing owner. Message/selection handback retains its
+cancel-before-resume behavior. This replaces the old blanket turn auto-resume,
+avoiding a paused-audio blip without pending-intent state or a turn replica.
+For a no-message takeover, cancellation can wait for the workspace round trip.
+Existing narration owners retain physical retirement responsibility; successor
+speech cannot bypass it.
+Refresh retained talk-only rehearsal state against real programmer edits and
+the new driver turn, so the next driver batch uses current text and identities.
+
+Separate edit authorship from actual interruption. Net-zero navigator edits
+should not produce empty change reports or a typing-pause wake. Preserve the
+later pause acknowledgement when a timeout already reported meaningful work;
+an undo after such a report is itself a reportable reversal. Keep generation
+checks when restoring canceled reports and consider all edited files.

@@ -1,5 +1,12 @@
 # AI Pair Local Audio
 
+A plain **Hand back** without a reply or attached selection preserves queued
+navigator observations. A reply, attached selection, takeover or hand request
+keeps its interruption behavior. A plain turn change keeps manual **Pause**
+active until **Resume**. Typing then undoing to the last reported text
+does not create a new typing-pause report; meaningful edits already reported
+by an idle timeout still receive their later pause acknowledgement.
+
 In Pair Settings, **Navigator commentary** controls how much the agent comments
 while you take a turn: **Quiet** for important issues and direct answers,
 **Helpful** (default) for a first-pause acknowledgement and useful observations,

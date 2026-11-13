@@ -41329,7 +41329,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
               ],
               edges: [
                 { from: "editor", to: "controller", label: "eligible edit / caret" },
-                { from: "controller", to: "relay", label: "activity + preference" },
+                { from: "controller", to: "relay", label: "numbered diff + preference" },
                 { from: "programmer", to: "editor", label: "native input", labelPosition: { distance: 0.5, offset: { x: 65, y: 0 } } },
                 { from: "relay", to: "agent", label: "MCP result", labelPosition: { distance: 0.5, offset: { x: -65, y: 0 } } },
                 {
@@ -41356,21 +41356,21 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 controller: [
                   {
                     id: "navigator-owner",
-                    text: "The controller owns edit generations, the quiet timer, pause acknowledgement and the immutable report snapshot. A timeout can report edits without consuming the later pause acknowledgement. Navigator idle limit defaults to 10 seconds; the agent limit remains 45 seconds. Reason and elapsed wait distinguish timeout from activity. Session changes invalidate stale timers. Project current commentary configuration after asynchronous cursor lookup. Replay restores activity facts, never an old preference.",
+                    text: "The controller owns edit generations, the quiet timer, pause acknowledgement and the immutable report snapshot. A timeout can report edits without consuming the later pause acknowledgement. Navigator idle limit defaults to 10 seconds; the agent limit remains 45 seconds. Reason and elapsed wait distinguish timeout from activity. Session changes invalidate stale timers. Project current commentary configuration after asynchronous cursor lookup. Replay restores activity facts, never an old preference. Record snapshot identities only for full visible new-side/context diff lines. Net-zero edits without an actual interruption are suppressed. Preserve later pause acknowledgement for meaningful work already reported by timeout. Plain handback keeps eligible navigator work with current rehearsal text/turn; new intent still interrupts.",
                     ts: 0,
                   },
                 ],
                 relay: [
                   {
                     id: "schema-report",
-                    text: "Real MCP ListTools and calls validate the same narration mode and delivery enums. Delivery is advisory; no provider application is inferred. Reports identify programmer changes independently from the old agent cursor excerpt, label the human cursor, and invite useful commentary.",
+                    text: "Real MCP ListTools and calls validate the same narration mode and delivery enums. Delivery is advisory; no provider application is inferred. Reports identify programmer changes independently from the old agent cursor excerpt, label the human cursor, and invite useful commentary. Numbered diff lines preserve change signs and hunk boundaries but are review displays, not directly applicable patches. Deleted or omitted lines do not confer sightings.",
                     ts: 0,
                   },
                 ],
                 agent: [
                   {
                     id: "commentary-policy",
-                    text: "Follow the reported Quiet, Helpful or Coach preference. Helpful is the default; Quiet skips routine reassurance, and Coach adds useful explanation grounded in verified history. Explicit conversation requests override saved guidance. Read before remaining quiet and give one observation per batch. Immediate messages discard queued advice.",
+                    text: "Follow the reported Quiet, Helpful or Coach preference. Helpful is the default; Quiet skips routine reassurance, and Coach adds useful explanation grounded in verified history. Explicit conversation requests override saved guidance. Read before remaining quiet and give one observation per batch. Immediate messages discard queued advice. Copy explicitly numbered new-side lines rather than counting hunks; existing staleness and exact-text rules remain.",
                     ts: 0,
                   },
                 ],
@@ -41378,6 +41378,13 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                   {
                     id: "preference-owner",
                     text: "The workspace host persists Quiet, Helpful or Coach with the general preferences. The companion forwards typed intent and displays the owner snapshot. Audio enablement remains independent. A setting change does not wake listen or alter turn, edit or timer state.",
+                    ts: 0,
+                  },
+                ],
+                programmer: [
+                  {
+                    id: "turn-authority",
+                    text: "Browser and companion forward no-message turn intent to the authoritative workspace controller instead of eagerly canceling from stale displayed turn state. A plain handback preserves talk-only work; takeover and explicit new direction interrupt. Existing narration owners retain cancellation retirement. Plain turn changes retain manual Pause until explicit Resume. Draft pause follows its existing draft-empty event. No pending intent state is added.",
                     ts: 0,
                   },
                 ],

@@ -55,3 +55,25 @@ export function lineChanges(before: string, changes: Change[]): Change[] {
   }
   return split;
 }
+
+/** Returns a numbered display diff and the new-side lines actually shown. */
+export function numberedDiff(file: string, before: string, after: string): { diff: string; lines: number[]; omitted?: number } {
+  const bounded = boundedDiff(file, before, after);
+  if (bounded.omitted !== undefined) return { ...bounded, lines: [] };
+  const lines: number[] = [];
+  let number = 0;
+  const display = bounded.diff.split('\n').map((line) => {
+    const header = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line);
+    if (header !== null) {
+      number = Number(header[1]);
+      return line;
+    }
+    if (line.startsWith('+') || line.startsWith(' ')) {
+      const shown = number++;
+      lines.push(shown);
+      return `${line[0]}${shown}: ${line.slice(1)}`;
+    }
+    return line;
+  });
+  return { diff: display.join('\n'), lines };
+}

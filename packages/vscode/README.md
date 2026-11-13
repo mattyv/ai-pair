@@ -21,6 +21,16 @@ Reports identify typing pauses and idle timeouts. Ask the agent to "comment as
 I write" for more active commentary. A reply cancels queued observations, so
 the guide asks for one point per batch.
 
+A plain **Hand back** without a reply or attached selection preserves queued
+navigator observations. A reply, attached selection, takeover or hand request
+keeps its interruption behavior. A plain turn change keeps manual **Pause**
+active until **Resume**. Typing then undoing to the last reported text
+does not create a new typing-pause report; meaningful edits already reported
+by an idle timeout still receive their later pause acknowledgement.
+Visible new-side lines in the numbered diff can be pointed at without another
+read, subject to the existing line-staleness and exact-text checks. Deleted
+and omitted lines do not count as seen.
+
 In Pair Settings, **Navigator commentary** controls how much the agent comments
 while you take a turn: **Quiet** for important issues and direct answers,
 **Helpful** (default) for a first-pause acknowledgement and useful observations,

@@ -183,6 +183,8 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
         narration.setLocalPause(false, 'draft');
         narration.setLocalPause(false, 'manual');
         sendAction(action, page);
+      } else if (action.type === 'turn' && action.message === undefined && action.attach !== true) {
+        sendAction(action, page);
       } else if (action.type === 'reply' || action.type === 'interrupt' || action.type === 'turn' || action.type === 'end') {
         const stopped = narration.interruptThen(() => {
           sendAction(action, page);

@@ -292,7 +292,7 @@ describe('native editor events and Navigator', () => {
       const report = await listening;
       expect(report.navigator).toMatchObject({ wakeReason: 'typing_pause', programmerCursor: { file: FILE, line: 1, column: 6 } });
       expect(report.events).toEqual([
-        { kind: 'edit', file: FILE, by: 'programmer', diff: '@@ -0,0 +1,1 @@\n+hello\n\\ No newline at end of file' },
+        { kind: 'edit', file: FILE, by: 'programmer', diff: '@@ -0,0 +1,1 @@\n+1: hello\n\\ No newline at end of file' },
       ]);
     } finally {
       controller.endSession();

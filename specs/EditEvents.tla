@@ -93,6 +93,9 @@ Init ==
 \* userEdit in the agent's turn: it interrupts.
 EditAsProgrammer(t) == Record(t, TRUE, TRUE)
 
+\* During the programmer turn an edit is quiet.
+EditAsNavigator(t) == Record(t, TRUE, FALSE)
+
 \* otherEdit, to a file the queued batches edit (`planned`) or not.
 EditAsOther(t, planned) == Record(t, FALSE, planned)
 
@@ -114,6 +117,7 @@ Report ==
 
 Next ==
     \/ \E t \in Contents : EditAsProgrammer(t)
+    \/ \E t \in Contents : EditAsNavigator(t)
     \/ \E t \in Contents, planned \in BOOLEAN : EditAsOther(t, planned)
     \/ Report
 

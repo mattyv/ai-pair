@@ -2062,6 +2062,34 @@ it('restores reply timing and applies a change to a drafted reply', () => {
   expect(posted()).toContainEqual({ type: 'reply', text: 'Now', attach: false });
 });
 
+it('leaves speech playing for a bare turn even with stale displayed turn', async () => {
+  const pause = vi.fn<() => void>();
+  const play = vi.fn<() => Promise<void>>().mockResolvedValue();
+  class FakeAudio {
+    pause = pause;
+    play = play;
+    addEventListener(): void {}
+  }
+  vi.stubGlobal('Audio', FakeAudio);
+  vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:test');
+  vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+  start();
+  send({ type: 'speechPage', pageId: 1 });
+  send({ type: 'speechStatus', id: 7, pageId: 1, state: 'preparing' });
+  send({ type: 'speechAudio', id: 7, pageId: 1, wavBase64: 'AQI=', durationMs: 100 });
+  await Promise.resolve();
+  expect(play).toHaveBeenCalledOnce();
+  pause.mockClear();
+  click(element('turn'));
+  expect(pause).not.toHaveBeenCalled();
+  expect(posted()).toContainEqual({ type: 'turn' });
+  send({ type: 'state', state: 'navigator', turn: 'programmer', paused: false });
+  typeReply('Change direction');
+  click(element('turn'));
+  expect(pause).toHaveBeenCalledOnce();
+  expect(posted()).toContainEqual({ type: 'turn', message: 'Change direction' });
+});
+
 it('silences the current audio synchronously before posting a reply and ignores late audio', async () => {
   const pause = vi.fn<() => void>();
   const play = vi.fn<() => Promise<void>>().mockResolvedValue();

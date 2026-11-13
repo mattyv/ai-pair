@@ -1111,7 +1111,7 @@ describe('receive', () => {
     const view = open(panel);
     view.send({ type: 'turn', message: 'yours', attach: true });
     view.send({ type: 'turn' });
-    expect(controller.resume.mock.calls).toEqual([[], []]);
+    expect(controller.resume.mock.calls).toEqual([[]]);
     expect(controller.handBack.mock.calls).toEqual([
       ['yours', SELECTION],
       [undefined, undefined],
@@ -1119,9 +1119,20 @@ describe('receive', () => {
     expect(controller.takeTurn.mock.calls).toEqual([]);
   });
 
+  it('preserves local speech on a plain handback and stops it for a message', () => {
+    const { panel, speech } = harness('programmer');
+    const view = open(panel);
+    view.send({ type: 'turn' });
+    expect(speech.stop).not.toHaveBeenCalled();
+    view.send({ type: 'turn', message: 'Please change it' });
+    expect(speech.stop).toHaveBeenCalledOnce();
+  });
+
   it("turn: takes the turn on the agent's turn", () => {
-    const { panel, controller } = harness('agent');
+    const { panel, controller, speech } = harness('agent');
     open(panel).send({ type: 'turn' });
+    expect(speech.stop.mock.calls).toHaveLength(1);
+    expect(controller.resume.mock.calls).toHaveLength(0);
     expect(controller.takeTurn.mock.calls).toEqual([[]]);
     expect(controller.handBack.mock.calls).toEqual([]);
   });

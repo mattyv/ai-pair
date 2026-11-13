@@ -205,3 +205,12 @@ it(
   },
   EXHAUSTIVE_MS,
 );
+
+it('checks tracked text without replacing the current line identities', () => {
+  const lines = LineIds.editor();
+  const ids = lines.of('a', 'new');
+  expect(lines.matches('a', 'old')).toBe(false);
+  expect(lines.matches('missing', 'old')).toBe(false);
+  expect(lines.matches('a', 'new')).toBe(true);
+  expect(lines.of('a', 'new')).toEqual(ids);
+});
