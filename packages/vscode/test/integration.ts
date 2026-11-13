@@ -357,7 +357,7 @@ export async function run(): Promise<void> {
     first.batches.map((b) => b.status),
     ['completed'],
   );
-  assert.deepEqual(first.events, [{ kind: 'edit', file: 'other.txt', diff: '@@ -1,1 +1,1 @@\n-before\n+after', by: 'other' }]);
+  assert.deepEqual(first.events, [{ kind: 'edit', file: 'other.txt', diff: '@@ -1,1 +1,1 @@\n-before\n+1: after', by: 'other' }]);
   const toolDone = await controller.step([]);
   assert.deepEqual(
     toolDone.batches.map((b) => b.status),
@@ -814,7 +814,7 @@ export async function run(): Promise<void> {
   const waited = Date.now() - listenedAt;
   assert.ok(waited > 2000, `listen returned ${waited} ms after the programmer typed`);
   assert.deepEqual(
-    afterPause.events.map((e) => e.kind === 'edit' && e.diff.includes('+abcde')),
+    afterPause.events.map((e) => e.kind === 'edit' && e.diff.includes('+1: abcde')),
     [true],
   );
   await controller.end();
