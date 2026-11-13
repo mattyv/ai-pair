@@ -267,6 +267,11 @@ describe('relay', () => {
   it('rejects malformed actions before they reach the editor', async () => {
     const client = await connect();
     await call(client, 'start');
+    const speech = await call(client, 'step', { actions: [{ say: Array.from({ length: 46 }, () => 'a').join(' '), speak: true }] });
+    expect(speech.error).toBe(true);
+    expect(speech.text).toContain('actions[0]');
+    expect(speech.text).toContain('46/45 words, 91/280 Unicode characters');
+    expect(panel.says()).toEqual([]);
     const bad = await call(client, 'step', { actions: [{ typo: 'x' }] });
     expect(bad.text).toMatch(/Not an action/);
     // Two actions in one object: zod would otherwise strip one of them silently.

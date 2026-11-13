@@ -103,15 +103,14 @@ const MAX_SPEECH_WORDS = 45;
 
 /** Returns why text cannot be used as a selected spoken unit. */
 export function speechProblem(text: unknown): string | undefined {
-  if (
-    typeof text !== 'string' ||
-    text.trim() === '' ||
-    text.includes('```') ||
-    text.includes('~~~') ||
-    Array.from(text).length > MAX_SPEECH_CHARACTERS ||
-    text.trim().split(/\s+/u).length > MAX_SPEECH_WORDS
-  ) {
-    return 'A spoken `say` must be plain, nonempty text of at most 280 Unicode characters and 45 words; shorten it, or leave `speak` out to show it without speech.';
+  const guidance =
+    'A spoken `say` must be plain, nonempty text of at most 280 Unicode characters and 45 words. Shorten it, or leave `speak` out to show it without speech.';
+  if (typeof text !== 'string') return guidance;
+  const trimmed = text.trim();
+  const characters = Array.from(text).length;
+  const words = trimmed === '' ? 0 : trimmed.split(/\s+/u).length;
+  if (trimmed === '' || text.includes('```') || text.includes('~~~') || characters > MAX_SPEECH_CHARACTERS || words > MAX_SPEECH_WORDS) {
+    return `${guidance} Received: ${words}/${MAX_SPEECH_WORDS} words, ${characters}/${MAX_SPEECH_CHARACTERS} Unicode characters.`;
   }
   return undefined;
 }
@@ -134,11 +133,18 @@ export function spokenSay(action: unknown): boolean {
 export function fieldsProblem(action: object): string | undefined {
   const kind = actionKinds(action)[0];
   if (kind === undefined) return undefined;
-  const allowed = kind === 'run' ? ['run', 'wait'] : kind === 'say' ? ['say', 'speak', 'speech_mode'] : [kind];
+  const allowed = kind === 'run' ? ['run', 'wait'] : kind === 'say' ? ['say', 'speak', 'speech_mode', 'speech_delivery'] : [kind];
   const extra = Object.keys(action).filter((k) => !allowed.includes(k));
   if (extra.length > 0) return `Unknown field ${fieldList(extra)} in a \`${kind}\` action: it has ${fieldList(allowed)}.`;
   if ('speech_mode' in action && action.speech_mode !== undefined && action.speech_mode !== 'wait' && action.speech_mode !== 'continue') {
     return '`speech_mode` must be `wait` or `continue`.';
+  }
+  if (
+    'speech_delivery' in action &&
+    action.speech_delivery !== undefined &&
+    (typeof action.speech_delivery !== 'string' || !['neutral', 'curious', 'excited', 'whispering'].includes(action.speech_delivery))
+  ) {
+    return '`speech_delivery` must be `neutral`, `curious`, `excited`, or `whispering`.';
   }
   if ('speak' in action && action.speak !== undefined && typeof action.speak !== 'boolean') {
     return '`speak` must be a boolean.';

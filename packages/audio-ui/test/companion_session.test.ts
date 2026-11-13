@@ -1,7 +1,7 @@
+import { LOCAL_AUDIO_VERSION, type LocalAudioFrame, type LocalPanelAction } from '@ai-pair/protocol';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { mock } from 'vitest-mock-extended';
 import type * as vscode from 'vscode';
-import type { LocalAudioFrame, LocalPanelAction } from '@ai-pair/protocol';
 import { createCompanionSession } from '../src/companion_session';
 
 interface Routing {
@@ -198,7 +198,7 @@ function routing(): Routing {
 it('registers one provider and forwards local commands and diagnostics', async () => {
   const current = session();
   expect(fake.register).toHaveBeenCalledOnce();
-  expect(fake.attach).toHaveBeenCalledWith({ version: 3, connectionEpoch: 'epoch', sequence: 1, type: 'attach' });
+  expect(fake.attach).toHaveBeenCalledWith({ version: LOCAL_AUDIO_VERSION, connectionEpoch: 'epoch', sequence: 1, type: 'attach' });
   fake.accept.mockReturnValue(true);
   expect(current.accept({ frame: 'test' })).toBe(true);
   await current.keySet();
@@ -223,7 +223,7 @@ it('registers one provider and forwards local commands and diagnostics', async (
   expect(fake.narrationOptions?.page()).toBe(7);
   expect(fake.narrationOptions?.observation()).toMatchObject({ id: 1 });
   expect(fake.narrationOptions?.nextSequence()).toBe(1);
-  await fake.channelOptions?.send({ version: 3, connectionEpoch: 'epoch', sequence: 2, type: 'heartbeat' });
+  await fake.channelOptions?.send({ version: LOCAL_AUDIO_VERSION, connectionEpoch: 'epoch', sequence: 2, type: 'heartbeat' });
   expect(fake.execute).toHaveBeenCalledOnce();
   void current.dispose();
   expect(await current.ready('epoch')).toBe(false);
@@ -291,7 +291,7 @@ it('forwards a deferred reply without canceling local narration', () => {
 
 it('delivers complete panel updates and ignores heartbeats', () => {
   const current = session();
-  const common = { version: 3 as const, connectionEpoch: 'epoch', sequence: 2 };
+  const common = { version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, connectionEpoch: 'epoch', sequence: 2 };
   fake.connectionOptions?.receive({ ...common, type: 'heartbeat' });
   expect(fake.receiveNarration).not.toHaveBeenCalled();
   const speak = { ...common, type: 'pause' as const, jobId: 'one', pageEpoch: 7 };

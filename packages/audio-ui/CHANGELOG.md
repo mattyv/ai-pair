@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.35.0
+
+-   Add optional bounded narration context and model-supported delivery cues.
+
+-   Keep the companion version aligned with the main extension.
+
 ## 0.34.0
 
 -   Share the compact OpenRouter cost subtotal, detailed cost explanations,

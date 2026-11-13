@@ -64,6 +64,10 @@
       <div class="settings-actions"><button type="button" data-ui="speech-output-refresh" class="soft">Refresh outputs</button></div>
       <p data-ui="speech-output-status" role="status"></p>
       <label class="settings-check"><input type="checkbox" data-ui="speech-enabled"> Speak selected narration automatically</label>
+      <label class="settings-field">Speech context and delivery cues
+        <select data-ui="speech-context"><option value="off">Off</option><option value="on">On</option></select>
+      </label>
+      <p data-ui="speech-context-capability"></p>
       <label class="settings-field">Listening speed (experimental)
         <input type="range" data-ui="speech-listening-speed" min="0.75" max="1.5" step="0.05" value="1" aria-valuetext="1.00x">
         <span data-ui="speech-listening-speed-value" aria-hidden="true">1.00x</span>

@@ -123,6 +123,14 @@ ambiguous *and* expensive to reverse. Don't ask permission for routine steps.
 
 ## Narration
 
+When it suits the text, choose `speech_delivery` as `neutral`, `curious`,
+`excited`, or `whispering` on a `say` action. Use the context you already have;
+do not make an extra model call. The cue is separate from `speech_mode`:
+`wait` and `continue` still control ordering. Cues are optional and only
+supported by selected models. When the programmer enables speech context,
+compatible models may receive a bounded window of previously completed agent
+narration; no conversation history or programmer replies are sent for it.
+
 -   **Cover what, why, and how.** *What* you're about to do; *why*: the intent,
     how it connects to the rest, the tradeoffs; and *how* the code does it: the
     approach, the constructs you're using, the choices in the code itself. The

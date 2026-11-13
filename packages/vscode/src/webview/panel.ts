@@ -1,3 +1,4 @@
+import { speechContextCapabilities } from '../speech_context_capabilities';
 import { voiceIndicator } from '../voice_indicator';
 import type { AudioDiagnostics } from '@ai-pair/protocol';
 import type { SpeechComputeState } from '../speech_compute_types';
@@ -101,6 +102,8 @@ const ui = {
   openRouterModel: $('openrouter-model', HTMLSelectElement),
   openRouterVoice: $('openrouter-voice', HTMLSelectElement),
   openRouterFormat: $('openrouter-format', HTMLSelectElement),
+  speechContext: $('speech-context', HTMLSelectElement),
+  speechContextCapability: $('speech-context-capability', HTMLElement),
   openRouterZdr: $('openrouter-zdr', HTMLButtonElement),
   openRouterStatus: $('openrouter-status', HTMLElement),
   speechKeyStatus: $('speech-key-status', HTMLElement),
@@ -1077,6 +1080,7 @@ function saveSpeechSettings(): void {
     type: 'speechSettings',
     value: {
       enabled: speechEnabled,
+      contextEnabled: ui.speechContext.value === 'on',
       voice,
       speed,
       listeningSpeed,
@@ -1122,6 +1126,15 @@ function catalogFailure(reason: string | undefined): string {
 }
 let outputReady = true;
 function syncSpeechProvider(): void {
+  const capabilities = speechContextCapabilities(speechProvider, openRouterModel);
+  ui.speechContextCapability.textContent =
+    capabilities.previousText && !openRouterZdr
+      ? 'Previous context requires Zero Data Retention. Delivery cues and ordinary narration remain available.'
+      : capabilities.previousText
+        ? 'Previous context and delivery cues supported.'
+        : capabilities.tags
+          ? 'Delivery cues only; previous context is not supported.'
+          : 'Unsupported by this model; ordinary speech only.';
   const cloud = speechProvider === 'elevenlabs';
   ui.speechLocal.hidden = speechProvider !== 'kokoro';
   ui.speechLocalModel.hidden = speechProvider !== 'kokoro';
@@ -1279,6 +1292,7 @@ ui.speechVoicesMore.addEventListener('click', () => {
   vscode.postMessage({ type: 'speechVoicesMore' });
 });
 ui.speechEnabled.addEventListener('change', saveSpeechSettings);
+ui.speechContext.addEventListener('change', saveSpeechSettings);
 ui.voiceStatus.addEventListener('click', () => {
   ui.speechEnabled.checked = !speechEnabled;
   saveSpeechSettings();
@@ -1512,6 +1526,7 @@ function handle(message: ToPanel): void {
       selectCloudVoice();
       syncSpeechProvider();
       ui.speechEnabled.checked = message.value.enabled;
+      ui.speechContext.value = message.value.contextEnabled === true ? 'on' : 'off';
       ui.voiceStatus.disabled = false;
       syncVoiceStatus();
       ui.speechVoice.value = message.value.voice;

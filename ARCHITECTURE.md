@@ -11,7 +11,14 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes the 0.33.0 release candidate.
+Status: describes the 0.35.0 release candidate.
+
+The core `SpeechContext` owns the bounded session-scoped completed narration
+buffer and invalidates it when session identity or configuration changes.
+The panel supplies accepted identity from its existing replay mechanism. The
+local `SpeechService` coordinates playback completion and sends previous text
+only to a compatible provider. Delivery
+cues travel with narration across the validated local audio boundary.
 
 The source is `.archi/ai-pair.json`. To regenerate the page with
 Archi-Techture 1.5.1, set `ARCHI_TO_HTML` to its `out/tools/archi-to-html.js`

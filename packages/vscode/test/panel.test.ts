@@ -209,6 +209,7 @@ function harness(
   buildInfo = { version: '0.10.0', build: 'test-build' },
   readiness?: () => import('@ai-pair/protocol').AudioDiagnostics,
   sessionCost?: PanelWiring['speech']['sessionCost'],
+  narrationSession?: PanelWiring['speech']['narrationSession'],
 ): Harness {
   const traced: string[] = [];
   const speed = { get: vi.fn(() => SPEEDS[1] ?? 0), set: vi.fn<(value: number) => void>() };
@@ -233,6 +234,7 @@ function harness(
   const speech = {
     ...(readiness === undefined ? {} : { readiness }),
     ...(sessionCost === undefined ? {} : { sessionCost }),
+    ...(narrationSession === undefined ? {} : { narrationSession }),
     settings: {
       get: vi.fn<() => import('../src/speech_types').SpeechSettings>(() => ({
         enabled: false,
@@ -1911,7 +1913,7 @@ it('scopes OpenRouter catalog and reports key failure without leaking errors', a
   await flush();
   expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Could not update the API key.' });
   expect(JSON.stringify(view.posted)).not.toContain('private');
-  for (const bad of [{ openRouterZdr: 'yes' }, { openRouterModel: 1 }, { openRouterVoice: 1 }]) {
+  for (const bad of [{ contextEnabled: 'yes' }, { openRouterZdr: 'yes' }, { openRouterModel: 1 }, { openRouterVoice: 1 }]) {
     view.receive({ type: 'speechSettings', value: { ...settings, ...bad } });
   }
   expect(speech.settings.set).not.toHaveBeenCalled();
@@ -1919,4 +1921,42 @@ it('scopes OpenRouter catalog and reports key failure without leaking errors', a
   speech.settings.get.mockReturnValue(saved);
   view.send({ type: 'speechSettings', value: saved });
   expect(speech.settings.set).toHaveBeenCalledWith(saved);
+});
+
+it('tracks narration session identity independently of cost ownership', () => {
+  const narrationSession = vi.fn<(id: number, ongoing: boolean) => void>();
+  const { panel } = harness('agent', undefined, undefined, undefined, narrationSession);
+  panel.post({ type: 'session', active: true, task: 'one' });
+  panel.post({ type: 'session', active: true, suspended: true });
+  panel.post({ type: 'session', active: true, resumed: true });
+  panel.post({ type: 'session', active: false, reason: 'programmer' });
+  panel.post({ type: 'session', active: true, task: 'two' });
+  expect(narrationSession.mock.calls).toEqual([
+    [1, true],
+    [1, true],
+    [1, true],
+    [1, false],
+    [2, true],
+  ]);
+});
+
+it('reconciles companion narration identity on replay and rejects stale sessions', () => {
+  const narrationSession = vi.fn<(id: number, ongoing: boolean) => void>();
+  const { panel } = harness('agent', undefined, undefined, undefined, narrationSession);
+  panel.useCompanion({
+    forward: vi.fn<import('../src/panel').CompanionPanelRouting['forward']>(),
+    closed: vi.fn<(page: number) => void>(),
+  });
+  open(panel);
+  panel.showRemoteUpdate({ type: 'session', active: true, costSessionGeneration: 1 });
+  panel.showRemoteUpdate({ type: 'replay', events: [], costSessionGeneration: 1, costSessionActive: true });
+  panel.showRemoteUpdate({ type: 'replay', events: [], costSessionGeneration: 2, costSessionActive: true });
+  panel.showRemoteUpdate({ type: 'session', active: false, reason: 'agent', costSessionGeneration: 1 });
+  panel.showRemoteUpdate({ type: 'session', active: false, reason: 'agent', costSessionGeneration: 2 });
+  expect(narrationSession.mock.calls).toEqual([
+    [1, true],
+    [1, true],
+    [2, true],
+    [2, false],
+  ]);
 });

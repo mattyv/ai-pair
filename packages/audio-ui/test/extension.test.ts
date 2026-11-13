@@ -1,3 +1,4 @@
+import { LOCAL_AUDIO_VERSION } from '@ai-pair/protocol';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as vscode from 'vscode';
 import { mock } from 'vitest-mock-extended';
@@ -65,7 +66,7 @@ describe('local companion activation', () => {
 
   it('prepares without registering a provider and commits only once', () => {
     const subscriptions: vscode.Disposable[] = [];
-    fake.prepare.mockReturnValue({ version: 3, epoch: 'epoch', token: 'token' });
+    fake.prepare.mockReturnValue({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'epoch', token: 'token' });
     fake.commit
       .mockImplementationOnce(() => {
         fake.register?.();
@@ -77,7 +78,7 @@ describe('local companion activation', () => {
     const commit = fake.commands.get('aiPair.localAudio.commit');
     expect(prepare).toBeDefined();
     expect(commit).toBeDefined();
-    const prepared: unknown = prepare?.({ version: 3, epoch: 'epoch' });
+    const prepared: unknown = prepare?.({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'epoch' });
     expect(createCompanionSession).not.toHaveBeenCalled();
     expect(commit?.(prepared)).toBe(true);
     expect(fake.commands.get('aiPair.localAudio.status')?.(undefined)).toEqual({ id: 1, state: 'speaking', started: true });
@@ -114,7 +115,7 @@ it('rejects malformed commit and makes unattached commands safe', async () => {
 
 it('forwards attached commands to the local session and disposes it', async () => {
   const subscriptions: vscode.Disposable[] = [];
-  fake.prepare.mockReturnValue({ version: 3, epoch: 'epoch', token: 'token' });
+  fake.prepare.mockReturnValue({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'epoch', token: 'token' });
   fake.commit.mockImplementation(() => {
     fake.register?.();
     return true;
@@ -148,7 +149,11 @@ it('isolates audio diagnostics callback failures', () => {
     throw new Error('private');
   });
   activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
-  fake.commands.get('aiPair.localAudio.commit')?.({ version: 3, epoch: 'epoch', token: 'token' });
+  fake.commands.get('aiPair.localAudio.commit')?.({
+    version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+    epoch: 'epoch',
+    token: 'token',
+  });
   expect(fake.commands.get('aiPair.localAudio.audioDiagnostics')?.(undefined)).toBeUndefined();
 });
 
@@ -218,7 +223,11 @@ it('acknowledges a replacement commit only after its first frame can be accepted
     fake.register?.();
     return true;
   });
-  const value = fake.commands.get('aiPair.localAudio.commit')?.({ version: 3, epoch: 'epoch', token: 'token' });
+  const value = fake.commands.get('aiPair.localAudio.commit')?.({
+    version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+    epoch: 'epoch',
+    token: 'token',
+  });
   let acknowledged = false;
   const pending = Promise.resolve(value).then((result) => {
     acknowledged = true;
@@ -268,8 +277,10 @@ it('keeps the accepted epoch when a later invalid commit arrives before startup'
     })
     .mockReturnValueOnce(false);
   const commit = fake.commands.get('aiPair.localAudio.commit');
-  const accepted = Promise.resolve(commit?.({ version: 3, epoch: 'accepted', token: 'token' }));
-  expect(commit?.({ version: 3, epoch: 'rejected', token: 'wrong' })).toBe(false);
+  const accepted = Promise.resolve(
+    commit?.({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'accepted', token: 'token' }),
+  );
+  expect(commit?.({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'rejected', token: 'wrong' })).toBe(false);
   stopped.resolve();
   await previous;
   expect(await accepted).toBe(true);
@@ -289,7 +300,13 @@ it('rejects readiness and commit when the previous companion cannot retire', asy
     fake.register?.();
     return true;
   });
-  const commit = Promise.resolve(fake.commands.get('aiPair.localAudio.commit')?.({ version: 3, epoch: 'epoch', token: 'token' }));
+  const commit = Promise.resolve(
+    fake.commands.get('aiPair.localAudio.commit')?.({
+      version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+      epoch: 'epoch',
+      token: 'token',
+    }),
+  );
   failed.reject(new Error('private'));
   await expect(previous).rejects.toThrow('private');
   expect(await readiness).toBe(false);

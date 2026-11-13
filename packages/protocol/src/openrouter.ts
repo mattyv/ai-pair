@@ -5,6 +5,7 @@ const MAX_VOICES = 500;
 const MAX_NAME = 160;
 const MAX_MODEL_ID = 256;
 const MAX_INPUT = 10_000;
+const MAX_PREVIOUS_TEXT = 500;
 const MAX_RATE_LENGTH = 64;
 const voice = z
   .string()
@@ -44,7 +45,16 @@ export const openRouterSpeechRequest = z.strictObject({
   voice: voice.optional(),
   input: z.string().min(1).max(MAX_INPUT),
   response_format: z.enum(['pcm', 'mp3']),
-  provider: z.strictObject({ zdr: z.literal(true) }).optional(),
+  provider: z
+    .strictObject({
+      zdr: z.literal(true),
+      options: z
+        .strictObject({
+          elevenlabs: z.strictObject({ previous_text: z.string().refine((text) => Array.from(text).length <= MAX_PREVIOUS_TEXT) }),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 /** Validates the provider-reported generation identity and nonnegative charge. */
 export const openRouterGeneration = z.object({

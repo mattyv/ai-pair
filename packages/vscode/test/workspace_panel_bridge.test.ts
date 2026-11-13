@@ -1,7 +1,8 @@
+import { LOCAL_AUDIO_VERSION } from '@ai-pair/protocol';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkspacePanelBridge } from '../src/workspace_panel_bridge';
 
-const base = { version: 3, connectionEpoch: 'epoch' };
+const base = { version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, connectionEpoch: 'epoch' };
 
 describe('workspace panel bridge', () => {
   it('accepts only ordered current-page actions and terminal acknowledgements', () => {

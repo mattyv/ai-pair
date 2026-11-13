@@ -2,7 +2,7 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.34.0",
+  "version": "0.35.0",
   "publisher": "mattyv",
   "author": {
     "name": "mattyv"
@@ -179,6 +179,12 @@
     "configuration": {
       "title": "AI Pair",
       "properties": {
+        "aiPair.speech.contextEnabled": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "description": "Allow supported speech models to use recent completed narration and delivery cues."
+        },
         "aiPair.speech.enabled": {
           "type": "boolean",
           "default": false,

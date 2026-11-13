@@ -2,9 +2,9 @@
   "version": 1,
   "bundleId": "277c3415-7b74-4008-8be4-8c14ae6d41dd",
   "revision": {
-    "number": 27,
+    "number": 28,
     "updatedAt": "2026-11-12T00:00:00.000Z",
-    "summary": "Add ordered wait-or-continue narration with bounded remote retirement admission"
+    "summary": "Add session-local completed narration context and delivery cues"
   },
   "diagrams": [
     {
@@ -10023,8 +10023,8 @@
         "nodes": [
           {
             "id": "service",
-            "label": "Speech service\nNarration, chunks and playback",
-            "files": ["packages/vscode/src/speech_service.ts"],
+            "label": "Speech service + core context\nPlayback and bounded history",
+            "files": ["packages/vscode/src/speech_service.ts", "packages/core/src/speech_context.ts"],
             "x": 40,
             "y": 80
           },

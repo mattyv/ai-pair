@@ -432,7 +432,11 @@ export class Player {
         try {
           const available = (await narration.waitForRetirement?.(this.stage.pacing.signal)) ?? true;
           if (this.stage.pacing.isInterrupted) return { kind: 'interrupted', consumed: true };
-          if (available) speech = narration.speak(action.say).catch(() => {});
+          if (available) {
+            speech = (
+              action.speech_delivery === undefined ? narration.speak(action.say) : narration.speak(action.say, action.speech_delivery)
+            ).catch(() => {});
+          }
           this.speech = speech;
         } catch {
           // A broken optional speech port cannot prevent reading the message.

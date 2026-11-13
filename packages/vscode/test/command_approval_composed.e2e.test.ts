@@ -1,3 +1,4 @@
+import { LOCAL_AUDIO_VERSION } from '@ai-pair/protocol';
 import { afterEach, expect, it, vi } from 'vitest';
 import { mock } from 'vitest-mock-extended';
 import { setup, throughStorage, advance, until } from '../../core/test/fake';
@@ -52,7 +53,14 @@ it('Revoke: a current companion page clears grants, stale pages cannot revoke, a
   });
   let sequence = 0;
   function send(pageEpoch: number, action: unknown): boolean {
-    return bridge.accept({ version: 3, connectionEpoch: 'epoch', sequence: ++sequence, type: 'panelAction', pageEpoch, action });
+    return bridge.accept({
+      version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+      connectionEpoch: 'epoch',
+      sequence: ++sequence,
+      type: 'panelAction',
+      pageEpoch,
+      action,
+    });
   }
   expect(send(1, { type: 'ready' })).toBe(true);
   await controller.step([{ run: 'npm test' }]);

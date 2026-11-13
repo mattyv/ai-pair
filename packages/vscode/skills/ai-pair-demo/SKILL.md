@@ -59,3 +59,8 @@ waiting. After draining and verifying the demo, ask for permission to end the
 session you created, and call `listen` for their answer. End it only when they
 agree; otherwise keep listening or follow their instructions. Never end a
 session you did not create. Report the observed result and scratch file location.
+
+When appropriate, an optional `speech_delivery` cue (`neutral`, `curious`,
+`excited`, or `whispering`) can color supported speech. It is independent of
+`wait` and `continue`; choose it from the conversation already available.
+Speech context is an opt-in setting and does not enable audio.

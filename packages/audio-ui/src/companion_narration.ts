@@ -46,7 +46,7 @@ export class CompanionNarration {
       const job: Job = { id: frame.jobId, page: frame.pageEpoch, canceled: false, previousId: this.options.observation()?.id };
       this.current = job;
       try {
-        void this.options.speech.speak(frame.text).then(
+        void this.options.speech.speak(frame.text, frame.delivery).then(
           () => {
             const observed = this.options.observation();
             const ended = observed !== undefined && observed.id !== job.previousId && observed.started && observed.terminal === 'ended';

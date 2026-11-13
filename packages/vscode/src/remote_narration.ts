@@ -35,7 +35,7 @@ export class RemoteNarration implements NarrationPort {
   constructor(private readonly options: RemoteNarrationOptions) {}
 
   /** Sends one bounded narration and waits for its matching terminal acknowledgement. */
-  speak(text: string): Promise<void> {
+  speak(text: string, delivery?: import('@ai-pair/protocol').SpeechDelivery): Promise<void> {
     const page = this.options.page();
     if (this.closed || this.current !== undefined || page === undefined || speechProblem(text) !== undefined) return Promise.resolve();
     const { promise, resolve } = Promise.withResolvers<void>();
@@ -51,7 +51,7 @@ export class RemoteNarration implements NarrationPort {
     };
     this.current = job;
     this.arm(job);
-    this.send({ ...this.envelope(), type: 'speak', jobId: job.id, pageEpoch: page, text });
+    this.send({ ...this.envelope(), type: 'speak', jobId: job.id, pageEpoch: page, text, ...(delivery === undefined ? {} : { delivery }) });
     return promise;
   }
 

@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: css, 2026-11-12.
+Last updated: css, 2026-11-13.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -85,6 +85,7 @@ Last updated: css, 2026-11-12.
 | `packages/audio-ui/test/native_output.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/packaging.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/sentence_pipeline.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/speech_context_flow.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/audio-ui/test/speech_host.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_host.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_restart_handshake.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -103,6 +104,7 @@ Last updated: css, 2026-11-12.
 | `packages/core/src/player.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 99.1% F 100.0% | - | - | - | - |
 | `packages/core/src/ports.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/rehearsal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/core/src/speech_context.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/core/src/speech_reminder.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/structural_typing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 45.7% B 66.7% F 100.0% | - | - | - | - |
 | `packages/core/src/text.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
@@ -120,6 +122,7 @@ Last updated: css, 2026-11-12.
 | `packages/core/test/player.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/rehearsal.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/session.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
+| `packages/core/test/speech_context.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/core/test/speech_reminder.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/core/test/structural_typing.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/core/test/text.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -208,6 +211,7 @@ Last updated: css, 2026-11-12.
 | `packages/vscode/src/setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 85.1% B 85.4% F 83.3% | - | - | - | - |
 | `packages/vscode/src/speech_catalog.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.9% B 89.7% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_compute_types.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_context_capabilities.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_credentials.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_decode_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_decode_lifecycle.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -301,6 +305,7 @@ Last updated: css, 2026-11-12.
 | `packages/vscode/test/css.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/vscode/test/demo_skill.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/diagnostics_collector.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/editor.test.ts` | TypeScript | test | test | test | test | - | test |
@@ -319,6 +324,7 @@ Last updated: css, 2026-11-12.
 | `packages/vscode/test/integration_companion_version.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_core_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_deferred_settlement.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_diagnostic_coverage_paths.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/integration_flow_gate.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/integration_gap_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_gpu_process.ts` | TypeScript | test | test | test | - | - | test |
@@ -339,9 +345,11 @@ Last updated: css, 2026-11-12.
 | `packages/vscode/test/integration_render_diagnostic.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_restricted_runtime.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_runtime_identity.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_speech_coverage_paths.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/integration_speech_reminder.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_startup_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_terminal_cleanup.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_vscode_coverage_paths.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/integration_workspace_incompatible.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/launcher.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/output.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -364,6 +372,7 @@ Last updated: css, 2026-11-12.
 | `packages/vscode/test/speech_audio.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_cached_assets.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_catalog.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_context_capabilities.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_credentials.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_decode_bridge.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_decode_lifecycle.test.ts` | TypeScript | test | - | test | - | - | test |
@@ -498,6 +507,7 @@ Last updated: css, 2026-11-12.
 | `scripts/normalize_architecture.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `scripts/release.test.ts` | TypeScript | test | test | test | test | - | test |
 | `scripts/release.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `scripts/release_docs.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `scripts/specs_needed.sh` | Shell | - | - | - | - | - | - |
 | `scripts/stylelint.config.ts` | TypeScript | - | - | - | - | - | - |
 | `specs/ActionValidation.cfg` | TLC config | - | - | - | - | - | - |
@@ -677,6 +687,8 @@ Last updated: css, 2026-11-12.
 | `specs/SettingsAccess.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/SpeechBackendHandoff.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechBackendHandoff.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
+| `specs/SpeechContext.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/SpeechContext.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/SpeechLifecycle.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechLifecycle.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/SpeechOverlap.cfg` | TLC config | - | - | - | - | - | - |

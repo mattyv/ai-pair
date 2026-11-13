@@ -10,6 +10,15 @@ import type { ElevenLabsSpeechPort, LocalSpeechFailureReason, SpeechSettings } f
 import { decodeSpeechWav, encodeTempoWav } from '../src/speech_tempo_pcm';
 import type { SpeechLifecycle, SpeechLifecycleOptions, SpeechLifecycleResult, SpeechLifecycleSnapshot } from '../src/speech_lifecycle';
 
+const contextDouble = vi.hoisted(() => ({ session: vi.fn(), configure: vi.fn(), disconnect: vi.fn(), capture: vi.fn() }));
+vi.mock('@ai-pair/core', () => ({
+  // A constructor mock must be constructable.
+  // oxlint-disable-next-line eslint/prefer-arrow-callback
+  SpeechContext: vi.fn(function () {
+    return contextDouble;
+  }),
+}));
+
 const fake = vi.hoisted(() => {
   const Worker = vi.fn();
   const makeLifecycle = vi.fn<(options: SpeechLifecycleOptions) => SpeechLifecycle>();
@@ -2488,4 +2497,67 @@ it('CatalogEligibility: cancels an in-flight OpenRouter request when new evidenc
   pending.resolve({ wav: new Uint8Array(44), durationMs: 1000 });
   await settle();
   expect(output.play).not.toHaveBeenCalled();
+});
+
+it('SpeechContext: completes only accepted playback and cancels other captures', async () => {
+  const complete = vi.fn();
+  const cancel = vi.fn();
+  contextDouble.capture.mockReturnValue({ previousText: 'Earlier', complete, cancel });
+  const openRouter = { synthesize: vi.fn().mockResolvedValue({ wav: new Uint8Array(44), durationMs: 1000 }), models: vi.fn() };
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  output.play.mockReturnValue(7);
+  const service = new SpeechService({
+    runtimeDirectory: '',
+    storageDirectory: '',
+    localDesktop: true,
+    output,
+    openRouter,
+    settings: () => ({
+      enabled: true,
+      contextEnabled: true,
+      provider: 'openrouter',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+      openRouterModel: 'elevenlabs/eleven-v4',
+      openRouterVoice: 'voice',
+      openRouterZdr: true,
+    }),
+  });
+  service.setNarrationSession('session', true);
+  service.configureNarrationContext();
+  const done = service.speak('Hello', 'curious');
+  await settle();
+  expect(openRouter.synthesize).toHaveBeenCalledWith(
+    expect.objectContaining({ text: '[curious] Hello', previousText: 'Earlier' }),
+    expect.any(AbortSignal),
+  );
+  service.audioEvent({ id: 1, pageId: 8, event: 'ended' });
+  expect(complete).not.toHaveBeenCalled();
+  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+  await done;
+  expect(complete).toHaveBeenCalledOnce();
+  const canceled = service.speak('Cancel');
+  service.cancel();
+  await canceled;
+  expect(complete).toHaveBeenCalledOnce();
+  expect(cancel).toHaveBeenCalledTimes(2);
+  contextDouble.capture.mockReset();
+  await service.dispose();
+  expect(contextDouble.disconnect).toHaveBeenCalled();
+});
+
+it('SpeechContext: configures an empty OpenRouter voice when none is selected', async () => {
+  const service = new SpeechService({
+    runtimeDirectory: '',
+    storageDirectory: '',
+    localDesktop: true,
+    output: mock<SpeechOutput>(),
+    settings: () => ({ enabled: true, provider: 'openrouter', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+  });
+  service.configureNarrationContext();
+  expect(contextDouble.configure).toHaveBeenLastCalledWith({ enabled: false, provider: 'openrouter', model: '', voice: '' });
+  await service.dispose();
 });

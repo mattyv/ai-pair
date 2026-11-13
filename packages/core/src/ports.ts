@@ -1,13 +1,13 @@
 // What the core needs from the editor and the narration panel.
 
-import type { Excerpt, PauseReason, Turn } from '@ai-pair/protocol';
+import type { Excerpt, PauseReason, SpeechDelivery, Turn } from '@ai-pair/protocol';
 
 /** Controls one optional live narration without owning reading or command decisions. */
 export interface NarrationPort {
   /** Reports whether enabled narration is currently available. */
   ready?: () => Promise<boolean>;
   /** Speaks one displayed unit and resolves on completion, cancellation, or text-only fallback. */
-  speak: (text: string) => Promise<void>;
+  speak: (text: string, delivery?: SpeechDelivery) => Promise<void>;
   /** Waits boundedly for any previous physical owner; false leaves narration unavailable. */
   waitForRetirement?: (signal: AbortSignal) => Promise<boolean>;
   /** Pauses audio or prevents a prepared waveform from starting. */

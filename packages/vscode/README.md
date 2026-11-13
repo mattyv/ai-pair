@@ -1,5 +1,15 @@
 # AI Pair
 
+Optional **Speech context and delivery cues** can be enabled in Pair Settings.
+For supported models, the provider receives up to three previously completed
+agent utterances, bounded to 500 Unicode code points, to improve continuity.
+Previous context requires OpenRouter Zero Data Retention; ordinary narration
+and supported delivery cues remain available without it.
+This is plain previous agent narration, not chat history; it is held only for
+the current session. OpenRouter ElevenLabs v4 supports previous text and
+delivery cues; v3, v3 conversational and v4 turbo support delivery cues only.
+Other models use ordinary speech. This does not enable speech, change the
+provider, add a microphone, or create a voice chat.
 AI Pair lets a coding agent work in your editor at a pace you can follow. You
 can interrupt, ask questions, or take the keyboard while the agent navigates.
 This fork builds on the [original project](https://github.com/faiface/ai-pair).

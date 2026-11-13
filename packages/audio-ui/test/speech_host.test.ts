@@ -14,6 +14,8 @@ import type { SpeechDiagnosticEvent } from '../../vscode/src/diagnostics';
 import { createSpeechHost } from '../src/speech_host';
 
 const fakes = vi.hoisted(() => ({
+  configureContext: vi.fn<() => void>(),
+  setContextSession: vi.fn<(id: string | number, ongoing: boolean) => void>(),
   gpuClientFactory: vi.fn<typeof import('../../vscode/src/speech_gpu_client').createGpuSynthesisClient>(),
   setupBusy: vi.fn<() => boolean>().mockReturnValue(false),
   computeUsable: vi.fn<() => boolean>().mockReturnValue(true),
@@ -187,6 +189,8 @@ vi.mock('../../vscode/src/speech_service', () => ({
       }
       return gpuCheck;
     }
+    configureNarrationContext = fakes.configureContext;
+    setNarrationSession = fakes.setContextSession;
     prepare = fakes.prepare;
     cancel = fakes.cancel;
     invalidateCloud = fakes.invalidateCloud;
@@ -491,7 +495,7 @@ it('keeps the latest setting while serialized writes are pending and rolls back 
   });
   pending.resolve();
   await vi.waitFor(() => {
-    expect(fakes.update).toHaveBeenCalledTimes(14);
+    expect(fakes.update).toHaveBeenCalledTimes(16);
   });
   expect(panel.showSpeechSettings).toHaveBeenCalledTimes(3);
   fakes.update.mockRejectedValueOnce(new Error('private'));
@@ -618,6 +622,7 @@ it('reads local settings, previews installed models, and keeps cloud unavailable
   fakes.installed.mockResolvedValueOnce('/model');
   const { host, panel } = harness();
   expect(host.panelSpeech.settings.get()).toEqual({
+    contextEnabled: false,
     enabled: true,
     voice: 'am_michael',
     speed: 1.25,
@@ -643,7 +648,7 @@ it('restores a newly validated voice and ignores a superseded failed save', asyn
   const { host } = harness();
   fakes.credentialChanged?.();
   await vi.waitFor(() => {
-    expect(fakes.update).toHaveBeenCalledTimes(7);
+    expect(fakes.update).toHaveBeenCalledTimes(8);
   });
   const blocked = Promise.withResolvers<void>();
   fakes.update.mockReturnValueOnce(blocked.promise);
@@ -657,7 +662,7 @@ it('restores a newly validated voice and ignores a superseded failed save', asyn
   host.panelSpeech.settings.set(second);
   blocked.reject(new Error('old failure'));
   await vi.waitFor(() => {
-    expect(fakes.update).toHaveBeenCalledTimes(15);
+    expect(fakes.update).toHaveBeenCalledTimes(17);
   });
   expect(fakes.errorMessage).not.toHaveBeenCalled();
   fakes.config.set('speech.elevenLabsVoice', 'new_voice');
@@ -1370,4 +1375,21 @@ it('loads models with the pending ZDR choice before settings persistence finishe
   expect(fakes.openLoad).toHaveBeenCalledWith(true);
   save.resolve();
   await host.dispose();
+});
+
+it('applies pending and external context changes immediately and forwards session identity', () => {
+  const { host } = harness();
+  const configure = fakes.configureContext;
+  const seen: boolean[] = [];
+  configure.mockImplementation(() => {
+    seen.push(host.panelSpeech.settings.get().contextEnabled === true);
+  });
+  const initial = host.panelSpeech.settings.get();
+  host.panelSpeech.settings.set({ ...initial, contextEnabled: true });
+  host.panelSpeech.settings.set({ ...initial, contextEnabled: false });
+  expect(seen).toEqual([true, false]);
+  host.panelSpeech.narrationSession?.(9, true);
+  expect(fakes.setContextSession).toHaveBeenCalledWith(9, true);
+  fakes.configChanged?.({ affectsConfiguration: () => true });
+  expect(seen).toEqual([true, false, false]);
 });

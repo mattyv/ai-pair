@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { localAudioFrame } from '../src/local_audio';
+import { localAudioFrame, LOCAL_AUDIO_VERSION } from '../src/local_audio';
 
 const fake = vi.hoisted(() => ({ problem: vi.fn<(text: unknown) => string | undefined>() }));
 vi.mock('../src/index', () => ({ speechProblem: fake.problem }));
@@ -7,13 +7,13 @@ beforeEach(() => {
   fake.problem.mockReset();
 });
 
-const base = { version: 3, connectionEpoch: 'connection-1', sequence: 1 };
+const base = { version: 4, connectionEpoch: 'connection-1', sequence: 1 };
 const owner = { jobId: 'job-1', pageEpoch: 1 };
 
 describe('local audio command frames', () => {
-  it('accepts version 3 and rejects version 2 companion frames', () => {
-    expect(localAudioFrame.safeParse({ ...base, version: 3, type: 'attach' }).success).toBe(true);
-    expect(localAudioFrame.safeParse({ ...base, version: 2, type: 'attach' }).success).toBe(false);
+  it('accepts version 4 and rejects version 3 companion frames', () => {
+    expect(localAudioFrame.safeParse({ ...base, version: 4, type: 'attach' }).success).toBe(true);
+    expect(localAudioFrame.safeParse({ ...base, version: 3, type: 'attach' }).success).toBe(false);
   });
   it('accepts the bounded commands and terminal acknowledgements', () => {
     for (const frame of [
@@ -33,7 +33,7 @@ describe('local audio command frames', () => {
 
   it('rejects wrong versions, unknown commands, extra keys and invalid identities', () => {
     for (const frame of [
-      { ...base, type: 'attach', version: 2 },
+      { ...base, type: 'attach', version: 3 },
       { ...base, type: 'exec', command: 'arbitrary' },
       { ...base, type: 'panelAction', pageEpoch: 1, action: { type: 'speechKeySet' } },
       { ...base, type: 'attach', secret: 'must not cross' },
@@ -49,5 +49,14 @@ describe('local audio command frames', () => {
     fake.problem.mockReturnValue('invalid');
     expect(localAudioFrame.safeParse({ ...base, ...owner, type: 'speak', text: 'bad' }).success).toBe(false);
     expect(fake.problem).toHaveBeenCalledWith('bad');
+  });
+});
+
+describe('speech delivery frame', () => {
+  it('accepts a delivery on speak and rejects it elsewhere', () => {
+    const deliveryBase = { version: LOCAL_AUDIO_VERSION, connectionEpoch: 'c', sequence: 1, jobId: 'j', pageEpoch: 1 };
+    expect(localAudioFrame.safeParse({ ...deliveryBase, type: 'speak', text: 'Hello', delivery: 'curious' }).success).toBe(true);
+    expect(localAudioFrame.safeParse({ ...deliveryBase, type: 'speak', text: 'Hello', delivery: 'angry' }).success).toBe(false);
+    expect(localAudioFrame.safeParse({ ...deliveryBase, type: 'pause', delivery: 'neutral' }).success).toBe(false);
   });
 });

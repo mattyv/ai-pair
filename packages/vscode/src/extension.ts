@@ -307,6 +307,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     const openRouterFormat: unknown = config().get('speech.openRouterFormat');
     return {
       enabled: enabled === true,
+      contextEnabled: config().get('speech.contextEnabled') === true,
       listeningSpeed: speechListeningRate(config().get('speech.listeningSpeed')),
       voice,
       speed: speechRate,
@@ -352,6 +353,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       const restoresVoice = cloudVoiceInvalidated && value.elevenLabsVoice !== '' && catalog.contains(value.elevenLabsVoice);
       const generation = ++speechSaveGeneration;
       pendingSpeechSettings = { ...value, listeningSpeed: speechListeningRate(value.listeningSpeed) };
+      speech.configureNarrationContext();
       if (owner === 'legacy') speech.prepare();
       lastSpeechProvider = value.provider;
       lastSpeechEnabled = value.enabled;
@@ -361,6 +363,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       const saveOperation = speechSaveTail.then(async () => {
         const updates: Array<[string, unknown]> = [
           ['speech.enabled', value.enabled],
+          ['speech.contextEnabled', value.contextEnabled === true],
           ['speech.listeningSpeed', speechListeningRate(value.listeningSpeed)],
           ['speech.voice', value.voice],
           ['speech.speed', value.speed],
@@ -382,6 +385,7 @@ export function activate(context: vscode.ExtensionContext): Api {
           // specs/ProviderChoice.tla, Success: an older write cannot replace a newer choice.
           if (generation !== speechSaveGeneration) return;
           pendingSpeechSettings = undefined;
+          speech.configureNarrationContext();
           if (restoresVoice) cloudVoiceInvalidated = false;
           panel.showSpeechSettings(storedSpeechSettings());
           publishReadiness();
@@ -390,6 +394,7 @@ export function activate(context: vscode.ExtensionContext): Api {
           // specs/ProviderChoice.tla, Failure: only the latest failed write rolls back.
           if (generation !== speechSaveGeneration) return;
           pendingSpeechSettings = undefined;
+          speech.configureNarrationContext();
           speech.cancel();
           if (owner === 'legacy') speech.prepare();
           catalog.invalidate();
@@ -607,6 +612,9 @@ export function activate(context: vscode.ExtensionContext): Api {
       requireCommandApproval: () => Promise.resolve(config().update(CONFIRM_COMMANDS, true, vscode.ConfigurationTarget.Global)),
       speech: {
         sessionCost,
+        narrationSession: (id, ongoing) => {
+          speech.setNarrationSession(id, ongoing);
+        },
         readiness: audioReadiness,
         computeState: () => speech.computeState(),
         computeMode: (value) => {
@@ -879,10 +887,10 @@ export function activate(context: vscode.ExtensionContext): Api {
         openRouterAllowed: (model, voice) => openRouterCatalog.allows(model, voice),
       });
     },
-    speak: async (text) => {
+    speak: async (text, delivery) => {
       const generation = narrationGeneration;
       await ownerReady;
-      if (!shuttingDown && generation === narrationGeneration) await selectedNarration?.speak(text);
+      if (!shuttingDown && generation === narrationGeneration) await selectedNarration?.speak(text, delivery);
     },
     waitForRetirement: async (signal) => {
       const generation = narrationGeneration;
@@ -1079,6 +1087,7 @@ export function activate(context: vscode.ExtensionContext): Api {
           }
         }
         const current = speechSettings.get();
+        speech.configureNarrationContext();
         // specs/ProviderChoice.tla, External: persistence echoes cannot undo a pending choice.
         if (pendingSpeechSettings === undefined) {
           if ((lastSpeechEnabled && !current.enabled) || current.provider !== lastSpeechProvider) speech.cancel();

@@ -78,6 +78,7 @@ export interface PanelWiring {
   requireCommandApproval: () => Promise<void>;
   speech: {
     sessionCost?: Pick<SessionSpeechCost, 'start' | 'restore' | 'end' | 'view'>;
+    narrationSession?: (id: number, ongoing: boolean) => void;
     readiness?: () => AudioDiagnostics;
     computeState: () => SpeechComputeState;
     computeMode: (value: SpeechComputeMode) => void;
@@ -333,6 +334,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       const fresh = event.active && event.suspended !== true && event.resumed !== true;
       if (fresh || (event.active && this.workspaceCostGeneration === 0)) this.workspaceCostGeneration++;
       this.workspaceCostActive = event.active;
+      if (this.remote === undefined) {
+        this.wiring.speech.narrationSession?.(this.workspaceCostGeneration, event.active);
+      }
       if (this.remote === undefined) this.costSession(event);
     }
     this.log.push(event);
@@ -502,6 +506,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   /** Reconciles cost ownership to a workspace session update or replay snapshot. */
   private syncCompanionCost(generation: number, active: boolean, fresh: boolean): void {
     if (this.companionCostGeneration !== undefined && generation < this.companionCostGeneration) return;
+    this.wiring.speech.narrationSession?.(generation, active);
     if (this.companionCostGeneration !== generation) {
       // specs/CostReplay.tla, Fresh and Reopen: preserve same-session costs, never another session's.
       if (this.companionCostGeneration !== undefined) this.wiring.speech.sessionCost?.end();
@@ -701,6 +706,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       case 'speechSettings':
         if (
           typeof message.value?.enabled === 'boolean' &&
+          (message.value.contextEnabled === undefined || typeof message.value.contextEnabled === 'boolean') &&
           SPEECH_VOICES.some((voice) => voice === message.value.voice) &&
           SPEECH_SPEEDS.some((speed) => speed === message.value.speed) &&
           (message.value.listeningSpeed === undefined || SPEECH_LISTENING_RATES.some((rate) => rate === message.value.listeningSpeed)) &&

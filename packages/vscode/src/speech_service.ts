@@ -1,7 +1,8 @@
-import { KOKORO_HOSTS } from '@ai-pair/protocol';
+import { KOKORO_HOSTS, type SpeechDelivery } from '@ai-pair/protocol';
+import { SpeechContext, type NarrationPort } from '@ai-pair/core';
+import { speechContextCapabilities } from './speech_context_capabilities';
 import * as path from 'node:path';
 import { Worker } from 'node:worker_threads';
-import type { NarrationPort } from '@ai-pair/core';
 import { LocalSynthesisClient, type LocalListener, type LocalSynthesisOutcome, type LocalSynthesisPort } from './speech_local_client';
 import { LOCAL_MAX_DURATION_MS, LOCAL_MAX_WAV_BYTES, LOCAL_MIN_WAV_BYTES, LOCAL_WORKER_TIMEOUT_MS } from './speech_local_protocol';
 import { installedSpeechModel } from './speech_setup';
@@ -160,6 +161,8 @@ interface ActiveSpeech {
   pageId?: number;
   started: boolean;
   preview: boolean;
+  context?: ReturnType<SpeechContext['capture']>;
+  providerText: string;
   timer?: ReturnType<typeof setTimeout>;
   deadline?: number;
   remaining: number;
@@ -179,6 +182,7 @@ const MAX_DURATION_MS = LOCAL_MAX_DURATION_MS;
 
 /** Coordinates one local synthesis job and one page-owned audio buffer. */
 export class SpeechService implements NarrationPort {
+  private readonly context = new SpeechContext();
   private nextId = 1;
   private current?: ActiveSpeech;
   private paused = false;
@@ -282,11 +286,32 @@ export class SpeechService implements NarrationPort {
     );
   }
 
+  /** Updates context from the accepted pairing session projection. */
+  setNarrationSession(id: string | number, ongoing: boolean): void {
+    this.context.session(id, ongoing);
+  }
+
+  /** Applies selection changes immediately, including changes between turns. */
+  configureNarrationContext(): void {
+    const settings = this.options.settings();
+    const model = settings.openRouterModel ?? '';
+    const voice = settings.provider === 'openrouter' ? (settings.openRouterVoice ?? '') : settings.elevenLabsVoice;
+    this.context.configure({
+      enabled:
+        settings.contextEnabled === true &&
+        settings.openRouterZdr === true &&
+        speechContextCapabilities(settings.provider, model).previousText,
+      provider: settings.provider,
+      model,
+      voice,
+    });
+  }
+
   /** Speaks an explicitly selected live unit when enabled. */
-  speak(text: string): Promise<void> {
+  speak(text: string, delivery?: SpeechDelivery): Promise<void> {
     if (!this.options.settings().enabled) return Promise.resolve();
     if (this.current?.preview === true) this.cancel();
-    return this.begin(text, false);
+    return this.begin(text, false, delivery);
   }
 
   /** Plays the fixed, visible voice sample without requiring a pairing session. */
@@ -294,7 +319,7 @@ export class SpeechService implements NarrationPort {
     return this.begin(SPEECH_PREVIEW_TEXT, true);
   }
 
-  private begin(text: string, preview: boolean): Promise<void> {
+  private begin(text: string, preview: boolean, delivery?: SpeechDelivery): Promise<void> {
     if (this.current !== undefined || this.disposed) return Promise.resolve();
     const id = this.nextId++;
     const settings = this.options.settings();
@@ -359,10 +384,19 @@ export class SpeechService implements NarrationPort {
       this.options.output.status(id, 'unavailable', 'Speech is still finishing; try again shortly.');
       return Promise.resolve();
     }
+    this.configureNarrationContext();
+    const capabilities = speechContextCapabilities(provider, openRouterModel);
+    const context = preview ? undefined : this.context.capture(text);
+    const cue =
+      !preview && settings.contextEnabled === true && capabilities.tags && delivery !== undefined && delivery !== 'neutral'
+        ? `[${delivery}] `
+        : '';
     const { promise, resolve } = Promise.withResolvers<void>();
     const current: ActiveSpeech = {
       id,
       text,
+      context,
+      providerText: cue + text,
       parts: provider === 'kokoro' && this.options.output.parts === true ? speechSegments(text) : [text],
       multipart: false,
       nextPart: 0,
@@ -455,7 +489,8 @@ export class SpeechService implements NarrationPort {
           ? cloud.synthesize(
               {
                 id: current.id,
-                text: current.text,
+                text: current.providerText,
+                ...(current.context?.previousText === undefined ? {} : { previousText: current.context.previousText }),
                 modelId: current.openRouterModel,
                 voiceId: current.cloudVoice,
                 zdr: current.openRouterZdr,
@@ -734,6 +769,7 @@ export class SpeechService implements NarrationPort {
         } else this.lookahead(current);
         return undefined;
       }
+      current.context?.complete();
       this.finish(current);
       return 'ended';
     } else {
@@ -798,6 +834,7 @@ export class SpeechService implements NarrationPort {
   /** Releases the worker and all pending speech. */
   async dispose(): Promise<void> {
     this.disposed = true;
+    this.context.disconnect();
     this.cancel();
     await Promise.all([this.options.tempo?.dispose().catch(() => {}), this.lifecycle.dispose()]);
   }
@@ -847,6 +884,7 @@ export class SpeechService implements NarrationPort {
   private finish(current: ActiveSpeech, showIdle = true): void {
     if (this.current !== current) return;
     this.current = undefined;
+    current.context?.cancel();
     if (current.provider !== 'kokoro' && this.cloudBusy?.id === current.id) this.cloudBusy.controller.abort();
     // specs/SpeechTempo.tla, Cancel: abort invalidates the transform; the worker slot retires on its own.
     current.processing?.controller.abort();

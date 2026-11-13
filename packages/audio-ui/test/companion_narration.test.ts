@@ -1,8 +1,9 @@
+import { LOCAL_AUDIO_VERSION } from '@ai-pair/protocol';
 import { describe, expect, it, vi } from 'vitest';
 import type { NarrationPort } from '@ai-pair/core';
 import { CompanionNarration } from '../src/companion_narration';
 
-const base = { version: 3 as const, connectionEpoch: 'connection', jobId: '1', pageEpoch: 4 };
+const base = { version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, connectionEpoch: 'connection', jobId: '1', pageEpoch: 4 };
 
 function fixture(initialSequence = 0) {
   let sequence = initialSequence;
@@ -33,7 +34,7 @@ describe('companion narration receiver', () => {
   it('plays one current page unit and acknowledges its actual settlement', async () => {
     const { narration, speak, send, pending } = fixture();
     expect(narration.receive({ ...base, type: 'speak', sequence: 1, text: 'Hello.' })).toBe(true);
-    expect(speak).toHaveBeenCalledWith('Hello.');
+    expect(speak).toHaveBeenCalledWith('Hello.', undefined);
     expect(narration.receive({ ...base, type: 'speak', sequence: 2, jobId: '2', text: 'Second.' })).toBe(false);
     expect(send.mock.calls[0]?.[0]).toMatchObject({ jobId: '2', outcome: 'failed' });
     pending.resolve();
@@ -183,4 +184,11 @@ describe('companion narration receiver', () => {
     expect(send).not.toHaveBeenCalled();
     expect(narration.receive({ ...base, pageEpoch: 3, type: 'pause', sequence: 3 })).toBe(false);
   });
+});
+
+it('forwards a delivery cue to the local speech owner', () => {
+  const { narration, speak } = fixture();
+  expect(narration.receive({ ...base, type: 'speak', sequence: 1, text: 'Hello.', delivery: 'curious' })).toBe(true);
+  expect(speak).toHaveBeenCalledWith('Hello.', 'curious');
+  narration.dispose();
 });

@@ -748,3 +748,41 @@ it('requires decoder admission before a PCM synthesis POST', async () => {
   expect(key).not.toHaveBeenCalled();
   expect(fetcher).not.toHaveBeenCalled();
 });
+
+it('preserves ZDR while sending bounded previous narration as ElevenLabs provider metadata', async () => {
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response(new Uint8Array([1, 0]), { headers: { 'content-type': 'audio/pcm; rate=24000; channels=1' } }));
+  const client = new OpenRouterClient(async () => 'key', fetcher, sharedDecoder);
+  await client.synthesize(
+    {
+      id: 1,
+      format: 'pcm',
+      text: '[curious] Hello',
+      modelId: 'elevenlabs/eleven-v4',
+      voiceId: 'voice',
+      zdr: true,
+      previousText: 'Earlier',
+    },
+    signal(),
+  );
+  const body = fetcher.mock.calls[0]?.[1]?.body;
+  expect(typeof body).toBe('string');
+  if (typeof body !== 'string') throw new Error('Expected JSON body');
+  expect(JSON.parse(body)).toMatchObject({
+    input: '[curious] Hello',
+    provider: { zdr: true, options: { elevenlabs: { previous_text: 'Earlier' } } },
+  });
+});
+
+it('rejects previous-text metadata without ZDR before making a provider request', async () => {
+  const fetcher = vi.fn<typeof fetch>();
+  const client = new OpenRouterClient(async () => 'key', fetcher, sharedDecoder);
+  await expect(
+    client.synthesize(
+      { id: 1, format: 'pcm', text: 'Hello', modelId: 'elevenlabs/eleven-v4', voiceId: 'voice', zdr: false, previousText: 'Earlier' },
+      signal(),
+    ),
+  ).rejects.toMatchObject({ kind: 'invalid' });
+  expect(fetcher).not.toHaveBeenCalled();
+});

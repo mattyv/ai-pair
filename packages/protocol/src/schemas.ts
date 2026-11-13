@@ -33,12 +33,23 @@ export const SPAN_SCHEMA = z.union([
   SPAN_TARGET_SCHEMA.pick({ file: true, line: true }).extend({ from: z.string(), through: z.string() }),
 ]);
 
+/** Validates the optional expressive delivery cue. */
+export const SPEECH_DELIVERY_SCHEMA = z.enum(['neutral', 'curious', 'excited', 'whispering']);
+
+/** An expressive delivery cue for speech. */
+export type SpeechDelivery = z.infer<typeof SPEECH_DELIVERY_SCHEMA>;
+
 /** Other action kinds cannot take the narration modifier. */
-const NO_SPEAK = { speak: z.never().optional(), speech_mode: z.never().optional() };
+const NO_SPEAK = { speak: z.never().optional(), speech_mode: z.never().optional(), speech_delivery: z.never().optional() };
 
 /** Checks an {@link Action}. */
 export const ACTION_SCHEMA = z.union([
-  z.object({ say: z.string(), speak: z.boolean().optional(), speech_mode: z.enum(['wait', 'continue']).optional() }),
+  z.object({
+    say: z.string(),
+    speak: z.boolean().optional(),
+    speech_mode: z.enum(['wait', 'continue']).optional(),
+    speech_delivery: SPEECH_DELIVERY_SCHEMA.optional(),
+  }),
   z.object({ move: MOVE_TARGET_SCHEMA, ...NO_SPEAK }),
   z.object({ select: SPAN_SCHEMA, ...NO_SPEAK }),
   z.object({ type: z.string(), ...NO_SPEAK }),

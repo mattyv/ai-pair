@@ -29,3 +29,4 @@ export { defaultTiming, withOverrides, type Cadence, type Reading, type Timing, 
 export { Bridge, type BridgeOptions } from './bridge';
 
 export { reportDiagnostic } from './diagnostic_delivery';
+export { SpeechContext, type SpeechContextCapture, type SpeechContextConfig } from './speech_context';

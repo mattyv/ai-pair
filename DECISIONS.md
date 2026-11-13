@@ -10,6 +10,20 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   GPT-6.1 Terra agents write code and tests; GPT-6 Astra agents review them.
     Resolve findings and verify the resulting changes before reporting completion.
 
+## Speech continuity and delivery
+
+-   Context is opt-in and session-local: retain at most three completed agent
+    utterances and 500 Unicode code points. Exclude previews, interrupted or
+    failed speech, and text that was never spoken. Ordinary cancellation and
+    suspension preserve completed history; ending or replacing the session
+    clears it. Configuration changes invalidate old completions.
+-   Only OpenRouter ElevenLabs v4 receives previous text and delivery cues;
+    v3, v3 conversational, and v4 turbo receive cues only. Other models use
+    ordinary speech. This limits provider disclosure and avoids claiming
+    support for unverified context behavior. Previous text requires OpenRouter
+    Zero Data Retention; when it is off, supported cues and ordinary speech
+    remain available.
+
 ## Speech backend handoff
 
 -   Retire the previous local worker and wait for its matching exit before
@@ -972,3 +986,10 @@ editing and a `wait` question followed by listening. It uses the programmer's
 existing speech setting and does not infer audibility from readiness. The
 scripted demo remains separate; this instruction change does not alter session
 ownership or the runtime architecture.
+
+## Spoken narration rejection counts
+
+Spoken narration errors report both whitespace-delimited word and Unicode code
+point counts for string inputs. This helps agents shorten rejected text without
+echoing potentially sensitive narration. Non-string inputs have no counts, and
+the existing eligibility rules and display-only fallback remain unchanged.

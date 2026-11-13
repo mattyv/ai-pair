@@ -5,7 +5,17 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { ACTION_SCHEMA } from '../src/schemas';
-import { actionKinds, CURSOR_MARKER, fieldsProblem, moveProblem, spanProblem, spokenSay, ToolError, typeProblem } from '../src/index';
+import {
+  actionKinds,
+  CURSOR_MARKER,
+  fieldsProblem,
+  moveProblem,
+  spanProblem,
+  speechProblem,
+  spokenSay,
+  ToolError,
+  typeProblem,
+} from '../src/index';
 
 vi.mock('../src/wire', () => ({}));
 vi.mock('../src/paths', () => ({}));
@@ -145,6 +155,25 @@ describe('fieldsProblem', () => {
     }
   });
 
+  it('reports counts for rejected strings without including their text', () => {
+    const cases: Array<[string, string]> = [
+      [Array.from({ length: 46 }, () => 'a').join(' '), '46/45 words, 91/280 Unicode characters'],
+      ['\u{1F600}'.repeat(281), '1/45 words, 281/280 Unicode characters'],
+      [Array.from({ length: 46 }, () => '\u{1F600}'.repeat(7)).join(' '), '46/45 words, 367/280 Unicode characters'],
+      ['', '0/45 words, 0/280 Unicode characters'],
+      ['  \n ', '0/45 words, 4/280 Unicode characters'],
+      ['```secret```', '1/45 words, 12/280 Unicode characters'],
+      ['~~~secret~~~', '1/45 words, 12/280 Unicode characters'],
+    ];
+    for (const [input, counts] of cases) {
+      const problem = speechProblem(input);
+      expect(problem).toContain(counts);
+      expect(problem).toContain('leave `speak` out');
+      if (input.includes('secret')) expect(problem).not.toContain('secret');
+    }
+    expect(speechProblem(42)).not.toContain('Received:');
+  });
+
   it('does not strip a speech modifier from a different action at the schema boundary', () => {
     expect(ACTION_SCHEMA.safeParse({ delete: true, speak: true }).success).toBe(false);
     expect(ACTION_SCHEMA.safeParse({ move: { to: 'line_end' }, speak: false }).success).toBe(false);
@@ -157,7 +186,9 @@ describe('fieldsProblem', () => {
   });
 
   it('names a field the action does not have, and what it has', () => {
-    expect(fieldsProblem({ say: 'hi', loud: true })).toBe('Unknown field `loud` in a `say` action: it has `say`, `speak`, `speech_mode`.');
+    expect(fieldsProblem({ say: 'hi', loud: true })).toBe(
+      'Unknown field `loud` in a `say` action: it has `say`, `speak`, `speech_mode`, `speech_delivery`.',
+    );
     expect(fieldsProblem({ run: 'x', wait: 1, cwd: '/', env: {} })).toBe(
       'Unknown field `cwd`, `env` in a `run` action: it has `run`, `wait`.',
     );
@@ -230,4 +261,16 @@ it('validates structural newline indentation and rejects unknown fields', () => 
   for (const newline of [undefined, jsonNull, [], {}, { indent: '' }, { indent: 'x' }, { indent: ' ', extra: true }]) {
     expect(fieldsProblem({ newline })).toBeDefined();
   }
+});
+
+describe('speech delivery', () => {
+  it('accepts valid delivery only on say actions', () => {
+    for (const speech_delivery of ['neutral', 'curious', 'excited', 'whispering']) {
+      expect(ACTION_SCHEMA.safeParse({ say: 'Hello', speech_delivery }).success).toBe(true);
+      expect(fieldsProblem({ say: 'Hello', speech_delivery })).toBeUndefined();
+    }
+    expect(ACTION_SCHEMA.safeParse({ say: 'Hello', speech_delivery: 'angry' }).success).toBe(false);
+    expect(ACTION_SCHEMA.safeParse({ run: 'pwd', speech_delivery: 'curious' }).success).toBe(false);
+    expect(fieldsProblem({ say: 'Hello', speech_delivery: 'angry' })).toBeDefined();
+  });
 });

@@ -70,3 +70,17 @@ it('accepts bounded PCM requests with optional ZDR enforcement', () => {
     expect(openRouterSpeechRequest.safeParse(value).success).toBe(false);
   }
 });
+it('accepts bounded previous speech alongside zero data retention', () => {
+  const request = {
+    model,
+    voice,
+    input: 'Hi',
+    response_format: 'pcm',
+    provider: { zdr: true, options: { elevenlabs: { previous_text: 'Earlier.' } } },
+  };
+  expect(openRouterSpeechRequest.safeParse(request).success).toBe(true);
+  expect(
+    openRouterSpeechRequest.safeParse({ ...request, provider: { zdr: true, options: { elevenlabs: { previous_text: '\u{1F600}'.repeat(501) } } } })
+      .success,
+  ).toBe(false);
+});

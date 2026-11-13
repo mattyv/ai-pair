@@ -92,6 +92,7 @@ export class OpenRouterClient implements OpenRouterSpeechPort {
       zdr: boolean;
       format: OpenRouterAudioFormat;
       purpose?: 'narration' | 'preview';
+      previousText?: string;
     },
     signal: AbortSignal,
   ): Promise<SpeechAudioResult> {
@@ -100,7 +101,14 @@ export class OpenRouterClient implements OpenRouterSpeechPort {
       ...(request.voiceId === '' ? {} : { voice: request.voiceId }),
       input: request.text,
       response_format: request.format,
-      ...(request.zdr ? { provider: { zdr: true } } : {}),
+      ...(request.zdr || request.previousText !== undefined
+        ? {
+            provider: {
+              zdr: request.zdr,
+              ...(request.previousText === undefined ? {} : { options: { elevenlabs: { previous_text: request.previousText } } }),
+            },
+          }
+        : {}),
     });
     if (!payload.success) throw new OpenRouterError('invalid');
     const decoder = this.decoder;

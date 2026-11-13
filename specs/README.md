@@ -429,7 +429,8 @@ reverted:
 |---|---|
 | `Post` sets `liveViewSession` to every event, "other" too | `TypeOK` |
 | `KeepSession = FALSE`, the code before #54 | `ReplayShowsSession` |
-| `Post` never cuts the log | `Bounded` |
+| `Post` never cuts the log | `TypeOK` | `captures only completed speech and preserves it across cancellation and replay` |
+| `Bounded` |
 | `Post` leaves a non-session event off the log | `LogsPosts` |
 
 Every invariant names the test that proves the code obeys it:
@@ -438,6 +439,7 @@ Every invariant names the test that proves the code obeys it:
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `ReplayShowsSession` | `panel.test.ts`: ReplayShowsSession and Bounded: keeps the session's start in the log however many events follow it; ReplayShowsSession: replays the session's end when that is the last session event |
+| `TypeOK` | `captures only completed speech and preserves it across cancellation and replay` |
 | `Bounded` | `panel.test.ts`: ReplayShowsSession and Bounded: keeps the session's start in the log however many events follow it |
 | `LogsPosts` | `panel.test.ts`: LogsPosts: a posted event is on the log a new view replays |
 
@@ -1886,6 +1888,7 @@ Each names the test that proves the code obeys it:
 | `SpanExactly` | `protocol/test/index.test.ts`: SpanExactly, NeverThrows: gives no problem exactly for a valid span, and a message for every other; `integration.ts`, in VS Code: MoveExactly, SpanExactly, NeverThrows: 27 malformed actions refused by name in the editor; frames that aren't messages dropped |
 | `NeverThrows` | both tests |
 | `SpokenByDefault` | `protocol/test/index.test.ts`: Spoken: speaks a say by default, unless it opts out or its text cannot be spoken |
+| `SpeechExactly` | `protocol/test/index.test.ts`: accepts only bounded plain speech units and allows unflagged narration; reports counts for rejected strings. The count feedback changes only error formatting, which the model does not represent. |
 
 ### Contracts checked by tests: `ActionValidation`, `Render`, `AgentSetup`
 
@@ -2183,7 +2186,8 @@ bounds, speech-only events and independent snapshots.
 | Mutation | Breaks |
 |---|---|
 | append the raw event instead of its safe projection | `TypeOK`, `OnlyAllowed` |
-| stop dropping the oldest event at capacity | `Bounded` |
+| stop dropping the oldest event at capacity | `TypeOK` | `captures only completed speech and preserves it across cancellation and replay` |
+| `Bounded` |
 | copy an empty history instead of the current history | `CopiedExactly` |
 | record without appending | `Recorded` |
 | disable recording | `RecordsEventually` |
@@ -2191,6 +2195,7 @@ bounds, speech-only events and independent snapshots.
 | Property | Test |
 |---|---|
 | `TypeOK`, `OnlyAllowed` | `diagnostics.test.ts`: TypeOK, OnlyAllowed: rejects unrecognized speech enums and records capability without a reason; copies only allowlisted fields and rejects malformed input and unsafe identity strings |
+| `TypeOK` | `captures only completed speech and preserves it across cancellation and replay` |
 | `Bounded` | `diagnostics.test.ts`: bounds its history while retaining the latest state and returns independent snapshots |
 | `CopiedExactly` | `diagnostics.test.ts`: starts with unavailable states and records typed events in order |
 | `Recorded`, `RecordsEventually` | `diagnostics.test.ts`: OnlyAllowed, Recorded: records speech lifecycle without secret extras even when no session exists; retains valid request, integration and completion events |
@@ -3494,3 +3499,26 @@ TLC checked 19 distinct states to depth 6. Temporary mutations violated
 `TypeOK`, `CurrentLedger`, `SamePreserved` and `ReopenProgress`. The regression
 in `vscode/test/panel.test.ts` checks same-session replay and a new session
 missed while the page was absent.
+
+## Speech context
+
+`SpeechContext.tla` models logical completed narration history, session and
+setting resets, capture snapshots, cancellation and stale completion. It does
+not model physical playback ownership or Unicode strings; the implementation
+bounds those strings separately. The finite model has four utterances and three
+reset generations, with weak fairness for capture.
+
+| Check | Implementation test |
+| --- | --- |
+| `TypeOK` | `captures only completed speech and preserves it across cancellation and replay` |
+| `Bounded` | `bounds history to three utterances and 500 Unicode code points including separators` |
+| `ValidHistory` | `captures only completed speech and preserves it across cancellation and replay`; `invalidates stale completion on reset and superseding capture`; `resets on setting changes, session end and disconnect` |
+| `PriorSnapshot` | `captures only completed speech and preserves it across cancellation and replay` |
+| `EventualCapture` | `captures only completed speech and preserves it across cancellation and replay` |
+
+TLC checked `SpeechContext.cfg`: 2,450 distinct states, pass. Disabling the
+generation guard, clearing history on cancel, trimming, or append-on-complete
+respectively violated `ValidHistory`, `ValidHistory`, `Bounded`, and
+`ValidHistory`. Capturing the current utterance in its own snapshot violates
+`PriorSnapshot`; disabling capture violates `EventualCapture`. Initializing
+`pending` outside its declared range violates `TypeOK`.

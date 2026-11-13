@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.35.0
+
+-   Add optional bounded narration context and model-supported delivery cues.
+
+-   Report word and Unicode character counts when selected spoken narration is
+    rejected, so agents can shorten it.
+
 ## 0.34.0
 
 -   Show provider-confirmed OpenRouter speech costs as a compact toolbar

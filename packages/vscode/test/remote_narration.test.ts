@@ -1,3 +1,4 @@
+import { LOCAL_AUDIO_VERSION } from '@ai-pair/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RemoteNarration } from '../src/remote_narration';
 
@@ -42,7 +43,15 @@ describe('remote narration port', () => {
     expect(await waiting).toBe(false);
     expect(vi.getTimerCount()).toBe(0);
     expect(
-      port.ack({ version: 3, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'canceled' }),
+      port.ack({
+        version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+        connectionEpoch: 'connection',
+        sequence: 1,
+        type: 'terminal',
+        jobId: '1',
+        pageEpoch: 4,
+        outcome: 'canceled',
+      }),
     ).toBe(true);
     expect(await port.waitForRetirement(new AbortController().signal)).toBe(true);
   });
@@ -91,7 +100,15 @@ describe('remote narration port', () => {
     port.cancel();
     const ready = port.waitForRetirement(new AbortController().signal);
     expect(
-      port.ack({ version: 3, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'canceled' }),
+      port.ack({
+        version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+        connectionEpoch: 'connection',
+        sequence: 1,
+        type: 'terminal',
+        jobId: '1',
+        pageEpoch: 4,
+        outcome: 'canceled',
+      }),
     ).toBe(true);
     expect(await ready).toBe(true);
     void port.speak('Two.');
@@ -104,7 +121,7 @@ describe('remote narration port', () => {
     const port = new RemoteNarration({ epoch: 'connection', page: () => 4, timeoutMs: 100, send, nextSequence: sequence() });
     const job = port.speak('Short narration.');
     expect(send.mock.calls[0]?.[0]).toEqual({
-      version: 3,
+      version: LOCAL_AUDIO_VERSION,
       connectionEpoch: 'connection',
       sequence: 1,
       type: 'speak',
@@ -113,17 +130,49 @@ describe('remote narration port', () => {
       text: 'Short narration.',
     });
     expect(
-      port.ack({ version: 3, connectionEpoch: 'old', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
+      port.ack({
+        version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+        connectionEpoch: 'old',
+        sequence: 1,
+        type: 'terminal',
+        jobId: '1',
+        pageEpoch: 4,
+        outcome: 'ended',
+      }),
     ).toBe(false);
     expect(
-      port.ack({ version: 3, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 3, outcome: 'ended' }),
+      port.ack({
+        version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+        connectionEpoch: 'connection',
+        sequence: 1,
+        type: 'terminal',
+        jobId: '1',
+        pageEpoch: 3,
+        outcome: 'ended',
+      }),
     ).toBe(false);
     expect(
-      port.ack({ version: 3, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
+      port.ack({
+        version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+        connectionEpoch: 'connection',
+        sequence: 1,
+        type: 'terminal',
+        jobId: '1',
+        pageEpoch: 4,
+        outcome: 'ended',
+      }),
     ).toBe(true);
     await job;
     expect(
-      port.ack({ version: 3, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
+      port.ack({
+        version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+        connectionEpoch: 'connection',
+        sequence: 1,
+        type: 'terminal',
+        jobId: '1',
+        pageEpoch: 4,
+        outcome: 'ended',
+      }),
     ).toBe(false);
   });
 
@@ -140,7 +189,15 @@ describe('remote narration port', () => {
     expect(send).toHaveBeenCalledTimes(2);
     expect(send.mock.calls[1]?.[0]).toMatchObject({ type: 'cancel', jobId: '1' });
     expect(
-      port.ack({ version: 3, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'canceled' }),
+      port.ack({
+        version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+        connectionEpoch: 'connection',
+        sequence: 1,
+        type: 'terminal',
+        jobId: '1',
+        pageEpoch: 4,
+        outcome: 'canceled',
+      }),
     ).toBe(true);
     void port.speak('Three.');
     expect(send.mock.calls[2]?.[0]).toMatchObject({ type: 'speak', jobId: '2' });
@@ -203,7 +260,7 @@ describe('remote narration port', () => {
     });
     const first = port.speak('One.');
     const terminal = {
-      version: 3,
+      version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
       connectionEpoch: 'connection',
       sequence: 1,
       type: 'terminal',
@@ -230,7 +287,15 @@ describe('remote narration port', () => {
     const job = port.speak('One.');
     const callback: unknown = timers.mock.calls[0]?.[0];
     expect(
-      port.ack({ version: 3, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
+      port.ack({
+        version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+        connectionEpoch: 'connection',
+        sequence: 1,
+        type: 'terminal',
+        jobId: '1',
+        pageEpoch: 4,
+        outcome: 'ended',
+      }),
     ).toBe(true);
     await job;
     if (!isTimerCallback(callback)) throw new Error('No timeout callback');
@@ -261,7 +326,15 @@ describe('remote narration port', () => {
     await vi.advanceTimersByTimeAsync(59);
     expect(send).toHaveBeenCalledTimes(3);
     expect(
-      port.ack({ version: 3, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' }),
+      port.ack({
+        version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+        connectionEpoch: 'connection',
+        sequence: 1,
+        type: 'terminal',
+        jobId: '1',
+        pageEpoch: 4,
+        outcome: 'ended',
+      }),
     ).toBe(true);
     await job;
   });
@@ -285,13 +358,37 @@ it('keeps a long multipart unit paused and retains its slot after timeout until 
     { type: 'resume' },
     { type: 'cancel' },
   ]);
-  expect(port.ack({ version: 3, connectionEpoch: 'old', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'ended' })).toBe(
-    false,
-  );
   expect(
-    port.ack({ version: 3, connectionEpoch: 'connection', sequence: 1, type: 'terminal', jobId: '1', pageEpoch: 4, outcome: 'canceled' }),
+    port.ack({
+      version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+      connectionEpoch: 'old',
+      sequence: 1,
+      type: 'terminal',
+      jobId: '1',
+      pageEpoch: 4,
+      outcome: 'ended',
+    }),
+  ).toBe(false);
+  expect(
+    port.ack({
+      version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+      connectionEpoch: 'connection',
+      sequence: 1,
+      type: 'terminal',
+      jobId: '1',
+      pageEpoch: 4,
+      outcome: 'canceled',
+    }),
   ).toBe(true);
   void port.speak('Next.');
   expect(send.mock.calls[4]?.[0]).toMatchObject({ type: 'speak', jobId: '2' });
+  port.dispose();
+});
+
+it('forwards delivery cues in the local speech frame', () => {
+  const send = vi.fn<(_: unknown) => void>();
+  const port = new RemoteNarration({ epoch: 'connection', page: () => 4, timeoutMs: 100, send, nextSequence: sequence() });
+  void port.speak('Hello.', 'curious');
+  expect(send).toHaveBeenCalledWith(expect.objectContaining({ type: 'speak', text: 'Hello.', delivery: 'curious' }));
   port.dispose();
 });

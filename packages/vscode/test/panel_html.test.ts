@@ -284,3 +284,11 @@ it('offers OpenRouter model, voice, secure key, and ZDR controls', () => {
   expect(page.querySelector('[data-ui="openrouter-key-set"]')).not.toBeNull();
   expect(page.querySelector('[data-ui="openrouter-zdr"]')?.getAttribute('aria-pressed')).toBe('false');
 });
+
+it('offers an opt-in speech context selector and a capability explanation', () => {
+  const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js');
+  const page = new window.DOMParser().parseFromString(html, 'text/html');
+  expect(page.querySelector('[data-ui="speech-context"] option[value="off"]')?.textContent).toBe('Off');
+  expect(page.querySelector('[data-ui="speech-context"] option[value="on"]')?.textContent).toBe('On');
+  expect(page.querySelector('[data-ui="speech-context-capability"]')).not.toBeNull();
+});
