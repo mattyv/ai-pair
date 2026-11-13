@@ -125,7 +125,9 @@ checks connection, command, speech, and audio status. The legacy
 includes `skills/ai-pair-demo/SKILL.md` and `skills/ai-pair-diagnose/SKILL.md`;
 copy their directories to your Claude `.claude/skills` directory to use
 `/ai-pair-demo` and `/ai-pair-diagnose`. No skill is installed automatically.
-The demo follows your speech setting; diagnostics do not run a paid preview.
+The demo follows your speech setting, demonstrates raising a hand, and cleans up
+verified temporary files when it ends unless you ask to keep them. If cleanup
+cannot run, it reports the retained paths. Diagnostics do not run a paid preview.
 
 ## Original project README
 

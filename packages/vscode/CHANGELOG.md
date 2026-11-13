@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.37.0
+
+-   Demonstrate the hand control in the guided demo and clean up verified
+    temporary files after the programmer agrees to end.
+
 ## 0.36.1
 
 -   Forward the fixed interjection voice prompt through the production narration

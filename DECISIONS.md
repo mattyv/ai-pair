@@ -39,6 +39,13 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   Invite a real programmer edit in the scratch file and comment on the
     observed report as navigator. The edit is optional; the agent waits for the
     programmer and does not take back their turn or end without permission.
+-   Demonstrate the hand request during overlapping narration and typing; the
+    panel supplies the cached acknowledgement. After the programmer agrees to
+    end, clean up only verified, unchanged demo-owned files and an empty demo
+    directory through Pair. If the programmer holds the turn, offer a handback
+    for cleanup or retaining the files; `run` cannot execute on their turn.
+    Preserve uncertain or user-retained work. A lost session leaves the files
+    in place; the skill cannot guarantee cleanup.
 -   Run diagnostics on a bounded temporary connection, independent of session
     ownership. Return only schema-validated metadata and fixed errors; audio
     readiness cannot establish that the programmer heard playback. A preview

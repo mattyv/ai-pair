@@ -50,3 +50,8 @@ rates other than 1 remain experimental. Agents can use `speech_mode: "continue"`
 for narration over subsequent work; default `"wait"` finishes speech first.
 The panel offers **Allow all for session** for commands and **Require command
 approval** to clear grants. Speech readiness does not prove audible output.
+
+The guided Pair demo includes the hand control and its fixed voice prompt,
+using your current speech settings. It cleans up verified demo files after
+completion; uncertain files or work you ask to keep are retained. If cleanup
+cannot run, the demo reports the retained paths.

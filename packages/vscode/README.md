@@ -11,6 +11,10 @@ conversation history. Relevant voice, synthesis, privacy or credential changes
 invalidate it; the next use creates a new clip. Replays make no new synthesis
 request. Generating a cloud clip may use account credits.
 
+The guided `/ai-pair-demo` demonstrates the hand control and cleans up verified
+temporary files after you agree to end, unless you ask to keep them. If cleanup
+cannot run, it reports the retained paths.
+
 Pair narration connects relevant choices to earlier verified work; ask for a
 teaching style for more concept explanations without compulsory exercises.
 
