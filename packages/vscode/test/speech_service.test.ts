@@ -2561,3 +2561,227 @@ it('SpeechContext: configures an empty OpenRouter voice when none is selected', 
   expect(contextDouble.configure).toHaveBeenLastCalledWith({ enabled: false, provider: 'openrouter', model: '', voice: '' });
   await service.dispose();
 });
+
+it('replays the fixed attention cue without another synthesis or narration context', async () => {
+  const { service, output, local: engine } = harness();
+  contextDouble.capture.mockClear();
+  const first = service.attentionCue();
+  await settle();
+  await engine.ready();
+  expect(engine.calls[0]?.request.text).toBe("What's up?");
+  await engine.audio(1);
+  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+  await first;
+  const second = service.attentionCue();
+  await settle();
+  expect(engine.calls).toHaveLength(1);
+  expect(output.play).toHaveBeenLastCalledWith(2, new Uint8Array(44), 1000);
+  expect(contextDouble.capture).not.toHaveBeenCalled();
+  service.audioEvent({ id: 2, pageId: 7, event: 'ended' });
+  await second;
+});
+
+it('does not cache a canceled attention cue', async () => {
+  const { service, output, local: engine } = harness();
+  const first = service.attentionCue();
+  await settle();
+  await engine.ready();
+  service.cancel();
+  await first;
+  await engine.audio(1);
+  expect(output.play).not.toHaveBeenCalled();
+  const second = service.attentionCue();
+  await settle();
+  await engine.ready();
+  expect(engine.calls).toHaveLength(2);
+  service.cancel();
+  await second;
+});
+
+it('does not synthesize attention audio while disabled', async () => {
+  const { service, output, local: engine } = harness(false);
+  await service.attentionCue();
+  expect(engine.manager.acquire).not.toHaveBeenCalled();
+  expect(output.play).not.toHaveBeenCalled();
+});
+
+it('invalidates attention audio eagerly when settings change away and back', async () => {
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  output.play.mockReturnValue(7);
+  const engine = newLocal();
+  let voice = 'af_heart';
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output,
+    settings: () => ({ enabled: true, provider: 'kokoro', voice, speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+  });
+  const first = service.attentionCue();
+  await settle();
+  await engine.ready();
+  await engine.audio(1);
+  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+  await first;
+  voice = 'am_michael';
+  service.configureNarrationContext();
+  voice = 'af_heart';
+  service.configureNarrationContext();
+  const second = service.attentionCue();
+  await settle();
+  await engine.ready();
+  expect(engine.calls).toHaveLength(2);
+  service.cancel();
+  await second;
+});
+
+it('rejects a late attention result after a settings change', async () => {
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  output.play.mockReturnValue(7);
+  const engine = newLocal();
+  let voice = 'af_heart';
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output,
+    settings: () => ({ enabled: true, provider: 'kokoro', voice, speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+  });
+  const first = service.attentionCue();
+  await settle();
+  await engine.ready();
+  voice = 'am_michael';
+  service.configureNarrationContext();
+  await first;
+  await engine.audio(1);
+  expect(output.play).not.toHaveBeenCalled();
+  const second = service.attentionCue();
+  await settle();
+  await engine.ready();
+  expect(engine.calls).toHaveLength(2);
+  service.cancel();
+  await second;
+});
+
+it('reserves the current route again when replaying attention audio', async () => {
+  const { service, output, local: engine } = harness();
+  output.prepare = vi.fn().mockResolvedValue(true);
+  const first = service.attentionCue();
+  await settle();
+  await engine.ready();
+  await engine.audio(1);
+  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+  await first;
+  const second = service.attentionCue();
+  await settle();
+  expect(output.prepare).toHaveBeenCalledWith(2);
+  expect(engine.calls).toHaveLength(1);
+  service.audioEvent({ id: 2, pageId: 7, event: 'ended' });
+  await second;
+});
+
+it('rejects attention synthesis when settings change before notification', async () => {
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  output.play.mockReturnValue(7);
+  const engine = newLocal();
+  let voice = 'af_heart';
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output,
+    settings: () => ({ enabled: true, provider: 'kokoro', voice, speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+  });
+  const cue = service.attentionCue();
+  await settle();
+  await engine.ready();
+  voice = 'am_michael';
+  await engine.audio(1);
+  await cue;
+  expect(output.play).not.toHaveBeenCalled();
+});
+
+it('retries attention synthesis after a failed result', async () => {
+  const { service, output, local: engine } = harness();
+  const first = service.attentionCue();
+  await settle();
+  await engine.ready();
+  await engine.failure(1);
+  await first;
+  expect(output.play).not.toHaveBeenCalled();
+  const second = service.attentionCue();
+  await settle();
+  await engine.ready();
+  expect(engine.calls).toHaveLength(2);
+  service.cancel();
+  await second;
+});
+
+it('rejects cached attention when settings change during output admission', async () => {
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  output.play.mockReturnValue(7);
+  const engine = newLocal();
+  let voice = 'af_heart';
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output,
+    settings: () => ({ enabled: true, provider: 'kokoro', voice, speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+  });
+  const first = service.attentionCue();
+  await settle();
+  await engine.ready();
+  await engine.audio(1);
+  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+  await first;
+  const admission = Promise.withResolvers<boolean>();
+  output.prepare = vi.fn().mockReturnValue(admission.promise);
+  const second = service.attentionCue();
+  voice = 'am_michael';
+  admission.resolve(true);
+  await second;
+  expect(output.play).toHaveBeenCalledOnce();
+});
+
+it('rejects attention completion after a settings change during playback', async () => {
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  output.play.mockReturnValue(7);
+  const engine = newLocal();
+  let voice = 'af_heart';
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output,
+    settings: () => ({ enabled: true, provider: 'kokoro', voice, speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+  });
+  const first = service.attentionCue();
+  await settle();
+  await engine.ready();
+  await engine.audio(1);
+  voice = 'am_michael';
+  expect(service.audioEvent({ id: 1, pageId: 7, event: 'ended' })).toBeUndefined();
+  await first;
+  const second = service.attentionCue();
+  await settle();
+  await engine.ready();
+  expect(engine.calls).toHaveLength(2);
+  service.cancel();
+  await second;
+});

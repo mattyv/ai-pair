@@ -267,6 +267,9 @@ export class Controller {
   private chain: Promise<unknown> = Promise.resolve();
   private nextBatchId = 1;
   private readonly pauseReasons = new Set<PauseReason>();
+  private attention: 'none' | 'requested' | 'granted' = 'none';
+  private attentionRelease: (() => void) | undefined;
+  private attentionWait: Promise<void> = Promise.resolve();
   private speed = 1;
   private readingSpeed = 1;
   private codePlayback: import('./typing').CodePlayback = 'typing';
@@ -320,9 +323,10 @@ export class Controller {
       };
       this.open(scene, task);
       this.diagnostic({ kind: 'session', state: 'active' });
-      this.diagnostic({ kind: 'pause', paused: this.pauseReasons.size > 0, reasons: [...this.pauseReasons] });
+      this.reportPause();
       this.trace?.(`session started${task === undefined ? '' : `: ${task}`}`);
       this.panel.post({ type: 'session', active: true, task, ...(rules !== undefined && rules.length > 0 ? { rules } : {}) });
+      this.panel.post({ type: 'attention', state: 'none' });
       this.render();
       return { batches: [], events: [], turn: scene.turn };
     });
@@ -366,6 +370,7 @@ export class Controller {
         readingSpeed: () => this.readingSpeed,
         codePlayback: () => this.codePlayback,
         narration: this.narration,
+        attentionBoundary: (speech) => this.attentionBoundary(s, speech),
         afterAction: () => {
           if (s.deferredMessages.length > 0) this.interrupt(s);
         },
@@ -445,7 +450,7 @@ export class Controller {
     const session = this.open(scene, saved.task);
     session.suspended = true;
     this.diagnostic({ kind: 'session', state: 'suspended' });
-    this.diagnostic({ kind: 'pause', paused: this.pauseReasons.size > 0, reasons: [...this.pauseReasons] });
+    this.reportPause();
     this.trace?.('session revived after a reload, suspended');
     // specs/RecoveryBatchIds.tla, `Reload`: restore the saved allocation high-water mark.
     const next = saved.nextBatchId;
@@ -455,6 +460,7 @@ export class Controller {
     session.events = [...saved.events];
     // specs/Resume.tla, `ReloadWindow`: the replayed history may end with the session live (#138).
     this.panel.post({ type: 'session', active: true, task: session.task, suspended: true });
+    this.panel.post({ type: 'attention', state: 'none' });
     this.render();
   }
 
@@ -600,12 +606,14 @@ export class Controller {
   userMessage(text: string, selection?: SharedSelection, defer = false): void {
     const session = this.activeSession();
     if (!session) return;
+    const attentionGranted = this.attention === 'granted';
+    this.releaseAttention();
     const event: PendingEvent = selection
       ? { kind: 'message', text, selection: this.excerpt(session, selection) }
       : { kind: 'message', text };
     this.panel.post({ type: 'programmer', text, ref: selection && this.ref(selection) });
     // specs/DeferredMessage.tla, SendDeferred: hold the event until the current action finishes.
-    if (defer && session.queue[0]?.state === 'playing' && !session.timeline.isInterrupted) {
+    if (defer && !attentionGranted && session.queue[0]?.state === 'playing' && !session.timeline.isInterrupted) {
       session.deferredMessages.push(event);
     } else {
       this.flushDeferred(session);
@@ -782,15 +790,101 @@ export class Controller {
     this.update();
   }
 
+  /** Reports the pause reasons derived from their respective owners. */
+  private reportPause(): void {
+    const reasons: PauseReason[] = [...this.pauseReasons];
+    if (this.attention === 'granted') reasons.push('attention');
+    this.diagnostic({ kind: 'pause', paused: reasons.length > 0, reasons });
+  }
+
+  /** Requests the floor, or cancels a pending request. */
+  requestAttention(): void {
+    const session = this.activeSession();
+    if (session === undefined) return;
+    if (this.attention === 'requested') {
+      this.releaseAttention();
+      return;
+    }
+    if (this.attention === 'granted') return;
+    this.attention = 'requested';
+    this.attentionWait = new Promise<void>((resolve) => {
+      this.attentionRelease = resolve;
+    });
+    this.panel.post({ type: 'attention', state: 'requested' });
+    if (!session.running) void this.attentionBoundary(session, session.player.currentSpeech ?? Promise.resolve());
+  }
+
+  /** Grants only at a safe boundary, after existing speech drains. */
+  private async attentionBoundary(session: Session, speech: Promise<void>): Promise<void> {
+    if (this.attention === 'none') return;
+    const wait = this.attentionWait;
+    if (this.attention === 'requested') {
+      // specs/Attention.tla, Drain and Grant: cancellation wins over a slow voice.
+      await Promise.race([speech, wait]);
+      if (this.session !== session) return;
+      if (wait !== this.attentionWait || this.attentionState() !== 'requested') {
+        return this.attentionBoundary(session, speech);
+      }
+      this.attention = 'granted';
+      this.reportPause();
+      if (this.session !== session) return;
+      if (this.attentionState() !== 'granted' || wait !== this.attentionWait) {
+        return this.attentionBoundary(session, speech);
+      }
+      this.panel.post({ type: 'attention', state: 'granted' });
+      this.render();
+      if (this.attentionState() !== 'granted' || wait !== this.attentionWait) {
+        return this.attentionBoundary(session, speech);
+      }
+      this.panel.post({ type: 'say', text: "What's up?" });
+      if (this.attention === 'granted' && wait === this.attentionWait && this.pauseReasons.size === 0) {
+        void this.narration?.attentionCue?.().catch(() => {});
+      }
+    }
+    await wait;
+    if (this.session === session && this.attentionState() !== 'none') {
+      await this.attentionBoundary(session, speech);
+    }
+  }
+
+  /** Reads attention after an asynchronous boundary. */
+  private attentionState(): 'none' | 'requested' | 'granted' {
+    return this.attention;
+  }
+
+  /** Releases only the attention hold and invalidates its pending grant. */
+  private releaseAttention(): void {
+    if (this.attention === 'none') return;
+    const granted = this.attention === 'granted';
+    const release = this.attentionRelease;
+    this.attention = 'none';
+    this.attentionRelease = undefined;
+    const releasedWait = Promise.resolve();
+    this.attentionWait = releasedWait;
+    release?.();
+    if (granted) {
+      this.narration?.cancel();
+      this.reportPause();
+    }
+    if (this.attentionWait === releasedWait) this.panel.post({ type: 'attention', state: 'none' });
+    this.render();
+  }
+
   /** Adds a pause reason, and pauses playback (specs/Timeline.tla, `Pause`). */
   pause(reason: PauseReason = 'programmer'): void {
     const changed = !this.pauseReasons.has(reason);
     if (changed) this.trace?.(`pause ${reason}`);
     this.pauseReasons.add(reason);
-    if (changed) this.diagnostic({ kind: 'pause', paused: true, reasons: [...this.pauseReasons] });
+    if (changed) this.reportPause();
     this.session?.timeline.pause();
     this.narration?.pause();
     this.render();
+  }
+
+  /** Shows the agent cursor without changing playback or turn. */
+  revealCursor(): void {
+    // specs/RevealCursor.tla, `Request`: navigation does not change session state.
+    this.editor.revealCursor();
   }
 
   /**
@@ -799,6 +893,10 @@ export class Controller {
    * `SendReply`, issue 125).
    */
   resume(reason?: PauseReason, { reveal = true }: { reveal?: boolean } = {}): void {
+    if (reason === undefined && this.attention !== 'none') {
+      this.releaseAttention();
+      return;
+    }
     if (this.pauseReasons.size === 0) return;
     const before = this.pauseReasons.size;
     const lookedAway = this.pauseReasons.has('away');
@@ -809,7 +907,7 @@ export class Controller {
       this.pauseReasons.delete(reason);
     }
     if (this.pauseReasons.size !== before) {
-      this.diagnostic({ kind: 'pause', paused: this.pauseReasons.size > 0, reasons: [...this.pauseReasons] });
+      this.reportPause();
     }
     if (this.pauseReasons.size > 0) return;
     this.narration?.resume();
@@ -968,7 +1066,7 @@ export class Controller {
   }
 
   get isPaused(): boolean {
-    return this.pauseReasons.size > 0;
+    return this.pauseReasons.size > 0 || this.attention === 'granted';
   }
 
   get turn(): Turn | undefined {
@@ -1239,7 +1337,9 @@ export class Controller {
     if (submitted && submitted.state !== 'done') report.submitted = { id: submitted.id, status: submitted.state };
     if (waiting) report.waiting = true;
     // The agent's batches are held: it's told why, so it can say so or wait (#149).
-    if (this.pauseReasons.size > 0) report.paused = [...this.pauseReasons];
+    if (this.pauseReasons.size > 0 || this.attention === 'granted') {
+      report.paused = [...this.pauseReasons, ...(this.attention === 'granted' ? ['attention' as const] : [])];
+    }
     if (session.mayRepeat) report.repeated = true;
     session.mayRepeat = false;
     // A rejection handed back by `restore`, one per report: while more are held, new batches are still discarded
@@ -1253,6 +1353,7 @@ export class Controller {
   }
 
   private close(session: Session): void {
+    this.releaseAttention();
     this.trace?.('session closed');
     this.diagnostic({ kind: 'session', state: 'ended' });
     this.session = undefined;
@@ -1286,6 +1387,7 @@ export class Controller {
   }
 
   private interrupt(session: Session): void {
+    this.releaseAttention();
     this.flushDeferred(session);
     this.narration?.cancel();
     markStale(session);
@@ -1371,6 +1473,9 @@ export class Controller {
       }
     } finally {
       session.running = false;
+      if (this.session === session && this.attention === 'requested') {
+        void this.attentionBoundary(session, session.player.currentSpeech ?? Promise.resolve());
+      }
     }
   }
 
@@ -1413,7 +1518,7 @@ export class Controller {
   private state(): AgentState {
     const session = this.session;
     if (!session || session.scene.turn === 'programmer') return 'navigator';
-    if (this.pauseReasons.size > 0) return 'paused';
+    if (this.pauseReasons.size > 0 || this.attention === 'granted') return 'paused';
     if (session.queue.length > 0) return session.player.reading ? 'read' : session.player.commandRunning ? 'running' : 'typing';
     // `Status` in specs/ListenGrace.tla: with the queue empty, "listening" during a listen or its grace, then "absent" once quiet.
     const waiting = this.grace !== undefined && !session.events.some(interrupting);
@@ -1426,13 +1531,21 @@ export class Controller {
     const state = this.state();
     this.editor.renderCursor(session ? this.cursorView(session) : undefined, state, session?.scene.focus ?? 'cursor');
     if (!session) return;
-    const paused = this.pauseReasons.size > 0;
+    const paused = this.pauseReasons.size > 0 || this.attention === 'granted';
     // specs/ReadyCount.tla, Accept/Start/Discard: count accepted batches not yet playing.
     const ready = session.queue.filter((batch) => batch.state === 'queued').length;
-    const key = `${state}/${session.scene.turn}/${paused}/${ready}`;
+    const speechPaused = this.pauseReasons.size > 0;
+    const key = `${state}/${session.scene.turn}/${paused}/${ready}/${speechPaused}`;
     if (key === this.lastPosted) return;
     this.lastPosted = key;
     this.trace?.(`status ${state}, ${session.scene.turn}'s turn${paused ? ', paused' : ''}`);
-    this.panel.post({ type: 'state', state, turn: session.scene.turn, paused, ready });
+    this.panel.post({
+      type: 'state',
+      state,
+      turn: session.scene.turn,
+      paused,
+      ready,
+      ...(this.attention === 'granted' ? { speechPaused } : {}),
+    });
   }
 }

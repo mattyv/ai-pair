@@ -591,6 +591,24 @@ describe('resolveWebviewView', () => {
   });
 });
 
+describe('attention', () => {
+  it('forwards a hand press to the controller', () => {
+    const { panel, controller } = harness();
+    panel.receiveFromPage({ type: 'attention' });
+    expect(controller.requestAttention.mock.calls).toHaveLength(1);
+  });
+});
+
+describe('cursor navigation', () => {
+  it('ShowsCursor: forwards the action without changing playback', () => {
+    const { panel, controller } = harness();
+    panel.receiveFromPage({ type: 'revealCursor' });
+    expect(controller.revealCursor.mock.calls).toHaveLength(1);
+    expect(controller.pause.mock.calls).toHaveLength(0);
+    expect(controller.resume.mock.calls).toHaveLength(0);
+  });
+});
+
 describe('post', () => {
   it('LogsPosts: a posted event is on the log a new view replays', () => {
     const panel = harness().panel;
@@ -995,6 +1013,15 @@ describe('receive', () => {
     view.send({ type: 'readingSpeed', value: 7 });
     expect(speed.set.mock.calls).toEqual([[SPEEDS[0]]]);
     expect(readingSpeed.set.mock.calls).toEqual([[SPEEDS[3]]]);
+  });
+
+  it('delivers a held reply before resuming so the owner can release attention safely', () => {
+    const { panel, controller } = harness();
+    const view = open(panel);
+    view.send({ type: 'draft', empty: false });
+    view.send({ type: 'reply', text: 'Hello' });
+    expect(controller.userMessage.mock.invocationCallOrder[0]).toBeLessThan(controller.resume.mock.invocationCallOrder[0] ?? 0);
+    expect(controller.resume.mock.calls).toEqual([[undefined, { reveal: false }]]);
   });
 
   it("ReplyMeansDraft: a reply the calibration takes ends the draft's pause; any other resumes without revealing and is sent on", () => {

@@ -8,6 +8,8 @@ export interface NarrationPort {
   ready?: () => Promise<boolean>;
   /** Speaks one displayed unit and resolves on completion, cancellation, or text-only fallback. */
   speak: (text: string, delivery?: SpeechDelivery) => Promise<void>;
+  /** Plays the fixed attention cue using the current voice. */
+  attentionCue?: () => Promise<void>;
   /** Waits boundedly for any previous physical owner; false leaves narration unavailable. */
   waitForRetirement?: (signal: AbortSignal) => Promise<boolean>;
   /** Pauses audio or prevents a prepared waveform from starting. */
@@ -140,6 +142,8 @@ export interface EditorPort {
   renderPoint(point?: { file: string; start: number; end: number }): void;
   /** Highlights a newly inserted code group while it is read. */
   renderCodeReading?(range?: { file: string; start: number; end: number }): void;
+  /** Focuses the actual agent cursor, independently of the follow target. */
+  revealCursor(): void;
   /** Brings the programmer's view back to what it follows. */
   reveal(): void;
   /** Keeps what the view follows in view, after a keystroke, move, selection or point of the agent changed it. */
@@ -151,7 +155,10 @@ export interface EditorPort {
 }
 
 /** What a `Player` asks of the editor: the rest of `EditorPort` is the controller's. */
-export type PlayerEditor = Omit<EditorPort, 'cleanupIdleTerminals' | 'diagnostics' | 'isDirty' | 'renderCursor' | 'reveal'>;
+export type PlayerEditor = Omit<
+  EditorPort,
+  'cleanupIdleTerminals' | 'diagnostics' | 'isDirty' | 'renderCursor' | 'reveal' | 'revealCursor'
+>;
 
 /** Something the panel shows: a session starting or ending, a status, a word to the programmer, a report. */
 export type PanelEvent =
@@ -159,8 +166,9 @@ export type PanelEvent =
   | { type: 'session'; active: true; task?: string; rules?: string[]; suspended?: true; resumed?: true; costSessionGeneration?: number }
   | { type: 'session'; active: false; reason: 'agent' | 'programmer' | 'disconnected'; summary?: string; costSessionGeneration?: number }
   | { type: 'say'; text: string }
+  | { type: 'attention'; state: 'none' | 'requested' | 'granted' }
   | { type: 'reading'; ms: number; id?: number; owner?: 'code' }
-  | { type: 'state'; state: AgentState; turn: Turn; paused: boolean; ready?: number }
+  | { type: 'state'; state: AgentState; turn: Turn; paused: boolean; ready?: number; speechPaused?: boolean }
   | { type: 'programmer'; text: string; ref?: Ref }
   | { type: 'turn'; to: Turn; message?: string; ref?: Ref }
   | { type: 'interrupt' }

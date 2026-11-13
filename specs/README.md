@@ -61,6 +61,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 
 | Config | Bounds | Result | Distinct states |
 |---|---|---|---|
+| `AttentionCache.cfg` | two settings changes, one pending completion and cancellation | holds | 52 |
 | `Serialize.cfg` | `NumCalls = 2` calls, each empty or not, the session ending, an interrupt, and the socket closing at any point | holds | 3,646 |
 | `Wire.cfg` | `NumSockets = 2` sockets, `NumCalls = 2` calls | holds | 43,426 |
 | `StructuralTyping.cfg` | both operations, closed and opaque field categories, selection and one or two closes | holds | 288 |
@@ -429,8 +430,7 @@ reverted:
 |---|---|
 | `Post` sets `liveViewSession` to every event, "other" too | `TypeOK` |
 | `KeepSession = FALSE`, the code before #54 | `ReplayShowsSession` |
-| `Post` never cuts the log | `TypeOK` | `captures only completed speech and preserves it across cancellation and replay` |
-| `Bounded` |
+| `Post` never cuts the log | `Bounded` |
 | `Post` leaves a non-session event off the log | `LogsPosts` |
 
 Every invariant names the test that proves the code obeys it:
@@ -1903,6 +1903,25 @@ above (#163); this contract holds the relay's schema and the player to them.
 | Every field of a `Report` appears in its rendered text | `relay/test/render.test.ts`: renders every field of a report |
 | Setting up an agent changes only its `pair` entry, and twice equals once | `vscode/test/agents.test.ts`: AgentSetup, for the TOML and JSON configs |
 
+### Attention cue cache
+
+`AttentionCache.tla` models a single pending synthesis and cache generation,
+including a late completion after cancellation or a settings change. The model
+abstracts the existing worker and output lease lifecycles; it does not prove
+physical retirement. `JobRetires` assumes weak fairness of completion.
+
+| Property | Code evidence |
+|---|---|
+| `TypeOK` | Bounded model state; no direct test |
+| `CurrentCache` | `rejects a late attention result after a settings change`; `does not cache a canceled attention cue` |
+| `CurrentPlayback` | `invalidates attention audio eagerly when settings change away and back`; `reserves the current route again when replaying attention audio` |
+| `JobRetires` | Existing speech lifecycle retirement tests; completion fairness is an environmental assumption |
+
+Removing the completion identity guard produces a `CurrentCache`
+counterexample after a settings change and late completion. Removing the replay
+admission guard violates `CurrentPlayback`. The model does not
+prove waveform correctness or physical playback retirement.
+
 ## Keeping specs and code in step
 
 Nothing ties a spec to its code but the tables above. When code in one of the
@@ -2186,8 +2205,7 @@ bounds, speech-only events and independent snapshots.
 | Mutation | Breaks |
 |---|---|
 | append the raw event instead of its safe projection | `TypeOK`, `OnlyAllowed` |
-| stop dropping the oldest event at capacity | `TypeOK` | `captures only completed speech and preserves it across cancellation and replay` |
-| `Bounded` |
+| stop dropping the oldest event at capacity | `Bounded` |
 | copy an empty history instead of the current history | `CopiedExactly` |
 | record without appending | `Recorded` |
 | disable recording | `RecordsEventually` |
@@ -3522,3 +3540,64 @@ respectively violated `ValidHistory`, `ValidHistory`, `Bounded`, and
 `ValidHistory`. Capturing the current utterance in its own snapshot violates
 `PriorSnapshot`; disabling capture violates `EventualCapture`. Initializing
 `pending` outside its declared range violates `TypeOK`.
+
+### `RevealCursor`: explicit cursor navigation
+
+The finite model starts with or without a cursor, each turn and either pause
+state. `Request` and `Show` preserve turn and pause; weak fairness for both
+models an accepted request and a responsive editor. `RevealCursor.cfg` passes
+with 24 distinct states. It abstracts editor failures and cannot revoke a
+navigation already accepted by VS Code.
+
+| Property | Implementation evidence |
+| --- | --- |
+| `TypeOK` | Model type check. |
+| `ShowsCursor` | `editor.test.ts`: ShowsCursor; `panel.test.ts`: ShowsCursor; `controller.test.ts`: ShowsCursor. |
+| `NoCursorNoNavigation` | `editor.test.ts`: NoCursorNoNavigation. |
+| `EventuallyHandled` | `webview/panel.test.ts`: ShowsCursor; editor responsiveness is an environment assumption. |
+| `PreservesPlayback` | `controller.test.ts`: ShowsCursor; `panel.test.ts`: ShowsCursor. |
+
+Mutations to an invalid visible value, always show the wrong file, and show a
+file without a cursor violate `TypeOK`, `ShowsCursor`, and
+`NoCursorNoNavigation`, respectively. A `Show` that never sets `shown`
+violates `EventuallyHandled`. Toggling pause during `Show` violates
+`PreservesPlayback`.
+
+### `RemoteCue`: cue retirement across hosts
+
+The model bounds one cue job and its acknowledgement, with weak fairness for
+send, physical retirement, and acceptance. `RemoteCue.cfg` passes with six
+distinct states. It abstracts transport loss and timeout; the existing
+`LocalAudioOwnership` model covers leases and connection epochs.
+
+| Property | Implementation evidence |
+| --- | --- |
+| `TypeOK` | Model type check. |
+| `NoEarlyReuse` | `companion_narration.test.ts`: NoEarlyReuse; `remote_narration.test.ts`: NoEarlyReuse. |
+| `AckMatches` | `companion_narration.test.ts`: AckMatches; `remote_narration.test.ts`: NoEarlyReuse. |
+| `EventuallyResolved` | `remote_narration.test.ts`: NoEarlyReuse; retirement fairness is an environment assumption. |
+
+Mutating the acknowledged ID, releasing the owner on cancel, or using an
+out-of-range acknowledgement violates `AckMatches`, `NoEarlyReuse`, and
+`TypeOK`, respectively. Never resolving violates `EventuallyResolved`.
+
+## Attention
+
+`Attention.tla` models a single playback action and speech unit, an independent
+pause, a cancelable attention request, and a granted hold. The action's edit
+version is a bit so the state space is finite without constraining progress.
+Weak fairness of `Boundary`, `Drain`, and `Grant` assumes the active action and
+speech eventually finish; cancellation may also end a request. The model does
+not represent session generations, cue caching, or physical audio retirement.
+
+| Configuration | Bounds | Result |
+| --- | --- | --- |
+| `Attention.cfg` | Two edit versions; one action and one speech unit | Pass, 136 distinct states |
+
+| Property | Code evidence | Mutation checked |
+| --- | --- | --- |
+| `TypeOK` | Attention composed tests in `session.e2e.test.ts` | Setting an edit version to 2 violates `TypeOK`. |
+| `HeldStopsEdits` | `Attention: holds later edits until the requested floor is released after speech drains` | Allowing a boundary while idle violates `HeldStopsEdits`. |
+| `GrantAfterDrain` | `Attention: idle continued speech drains before granting the floor` | Granting with speech active violates `GrantAfterDrain`. |
+| `CueRespectsPause` | `Attention: releasing the floor keeps a separate programmer pause` | Starting a cue while paused violates `CueRespectsPause`. |
+| `RequestedProgress` | `Attention: lowering a pending hand releases the boundary and rejects the late grant` | Disabling grant violates `RequestedProgress`. |

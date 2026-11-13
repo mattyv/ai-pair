@@ -80,7 +80,9 @@ it('accepts bounded previous speech alongside zero data retention', () => {
   };
   expect(openRouterSpeechRequest.safeParse(request).success).toBe(true);
   expect(
-    openRouterSpeechRequest.safeParse({ ...request, provider: { zdr: true, options: { elevenlabs: { previous_text: '\u{1F600}'.repeat(501) } } } })
-      .success,
+    openRouterSpeechRequest.safeParse({
+      ...request,
+      provider: { zdr: true, options: { elevenlabs: { previous_text: '\u{1F600}'.repeat(501) } } },
+    }).success,
   ).toBe(false);
 });

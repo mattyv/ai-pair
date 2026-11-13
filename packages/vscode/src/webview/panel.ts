@@ -142,6 +142,8 @@ const ui = {
   skipReading: $('skip-reading', HTMLButtonElement),
   status: $('status-text', HTMLElement),
   pause: $('pause', HTMLButtonElement),
+  revealCursor: $('reveal-cursor', HTMLButtonElement),
+  attention: $('attention', HTMLButtonElement),
   interrupt: $('interrupt', HTMLButtonElement),
   turn: $('turn', HTMLButtonElement),
   turnLabel: $('turn-label', HTMLElement),
@@ -275,6 +277,8 @@ let active = false;
 let calibrating = false;
 let turn = 'agent';
 let paused = false;
+let speechPaused = false;
+let attention: 'none' | 'requested' | 'granted' = 'none';
 let replaying = false;
 /** The session's agent is gone, and the session waits for it to come back (#25). */
 let suspended = false;
@@ -710,6 +714,7 @@ function setState(e: Extract<PanelEvent, { type: 'state' }>): void {
   ready = e.ready ?? 0;
   turn = e.turn;
   paused = e.paused;
+  speechPaused = e.speechPaused ?? e.paused;
   document.body.classList.toggle('paused', paused);
   document.body.classList.toggle('programmer-turn', turn === 'programmer');
   ui.pause.classList.toggle('on', paused);
@@ -843,6 +848,7 @@ function setActive(on: boolean): void {
   active = on;
   document.body.classList.toggle('active', on);
   ui.reply.disabled = !on && !calibrating;
+  ui.attention.disabled = !on;
   if (!on) {
     ready = 0;
     suspended = false;
@@ -1685,7 +1691,7 @@ function handle(message: ToPanel): void {
       return;
     case 'speechAudio':
       if (message.pageId === speechPage && message.id === speechId && !speechCanceled) {
-        speechAudio.audio(message.id, message.pageId, message.wavBase64, paused);
+        speechAudio.audio(message.id, message.pageId, message.wavBase64, speechPaused);
       }
       return;
     case 'speechControl':
@@ -1881,6 +1887,16 @@ function handle(message: ToPanel): void {
       selectionDismissed = false;
       syncAttach();
       return;
+    case 'attention': {
+      attention = message.state;
+      const label = attention === 'none' ? 'Raise hand' : attention === 'requested' ? 'Lower hand' : 'Focus reply';
+      ui.attention.setAttribute('aria-label', label);
+      ui.attention.setAttribute('aria-pressed', String(attention !== 'none'));
+      ui.attention.classList.toggle('on', attention !== 'none');
+      setTip(ui.attention, label);
+      if (attention === 'granted' && !replaying) ui.reply.focus();
+      return;
+    }
     case 'focusReply':
       ui.reply.focus();
       return;
@@ -1993,6 +2009,14 @@ ui.reply.addEventListener('keydown', (e) => {
   }
 });
 ui.send.addEventListener('click', sendReply);
+ui.attention.addEventListener('click', () => {
+  if (attention === 'granted') ui.reply.focus();
+  else vscode.postMessage({ type: 'attention' });
+});
+ui.revealCursor.addEventListener('click', () => {
+  vscode.postMessage({ type: 'revealCursor' });
+});
+
 ui.pause.addEventListener('click', () => {
   vscode.postMessage({ type: paused ? 'resume' : 'pause' });
 });

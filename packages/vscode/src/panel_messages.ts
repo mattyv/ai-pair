@@ -47,6 +47,8 @@ export type FromPanel =
   | { type: 'reply'; text: string; attach?: boolean; defer?: boolean }
   | { type: 'draft'; empty: boolean }
   | { type: 'pause' }
+  | { type: 'revealCursor' }
+  | { type: 'attention' }
   | { type: 'resume' }
   | { type: 'interrupt' }
   | { type: 'turn'; message?: string; attach?: boolean }

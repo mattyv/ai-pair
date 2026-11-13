@@ -5,6 +5,8 @@ describe('cross-host panel updates', () => {
   it('accepts the visible session, replay, and workspace UI updates', () => {
     for (const update of [
       { type: 'say', text: 'Hello.' },
+      { type: 'attention', state: 'granted' },
+      { type: 'state', state: 'paused', turn: 'agent', paused: true, speechPaused: false },
       { type: 'replay', events: [{ type: 'session', active: true, task: 'Pair' }] },
       { type: 'selection', ref: { file: 'a.ts', line: 1, endLine: 2 } },
       { type: 'focusReply' },
@@ -23,6 +25,8 @@ describe('cross-host panel updates', () => {
 
   it('rejects audio, speech settings, arbitrary commands, and unexpected properties', () => {
     for (const update of [
+      { type: 'attention', state: 'invalid' },
+      { type: 'state', state: 'paused', turn: 'agent', paused: true, speechPaused: 'false' },
       { type: 'replyBehavior', value: 'invalid' },
       { type: 'replyBehavior', value: 'finishAction', extra: true },
       { type: 'commandApprovalSound', value: 'true' },

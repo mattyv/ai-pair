@@ -182,7 +182,8 @@ const fakes = vi.hoisted(() => {
       return Promise.resolve(doc);
     }),
     applyEdit: vi.fn((edit: FakeWorkspaceEdit) => Promise.resolve(edit.replace.mock.calls.length > 0)),
-    showTextDocument: vi.fn<(doc: FakeDocument, options: unknown) => Promise<void>>(() => Promise.resolve()),
+    showTextDocument: vi.fn<(doc: FakeDocument, options: unknown) => Promise<FakeEditor | void>>(() => Promise.resolve()),
+    showErrorMessage: vi.fn<(message: string) => Promise<void>>(() => Promise.resolve()),
     diagnostics:
       vi.fn<
         () => Array<{ severity: number; message: string; source?: string; range: { start: { line: number }; end: { line: number } } }>
@@ -215,6 +216,7 @@ vi.mock('vscode', () => ({
       return fakes.visible;
     },
     showTextDocument: fakes.showTextDocument,
+    showErrorMessage: fakes.showErrorMessage,
     onDidChangeActiveTextEditor: fakes.event('active'),
     onDidChangeTextEditorVisibleRanges: fakes.event('visibleRanges'),
     onDidChangeVisibleTextEditors: fakes.event('visibleEditors'),
@@ -748,6 +750,89 @@ describe('show', () => {
     expect(doc.save.mock.calls).toEqual([]);
     expect(fakes.writeFile.mock.calls).toEqual([]);
     expect(fakes.showTextDocument.mock.calls).toHaveLength(1);
+  });
+});
+
+describe('reveal cursor', () => {
+  it('ShowsCursor: focuses the actual cursor even while following a point and paused', async () => {
+    const view = inView(FILE);
+    fakes.showTextDocument.mockResolvedValue(view);
+    const { editor } = made();
+    editor.renderCursor({ file: FILE, offset: 5 }, 'paused', 'point');
+    editor.renderPoint({ file: OTHER, start: 0, end: 2 });
+    editor.revealCursor();
+    await vi.waitFor(() => {
+      expect(view.revealRange).toHaveBeenCalled();
+    });
+    expect(fakes.showTextDocument.mock.calls.at(-1)?.[1]).toMatchObject({ preserveFocus: false });
+    expect(view.revealRange.mock.calls.at(-1)?.[1]).toBe(fakes.reveal.InCenter);
+  });
+
+  it('does not navigate when the cursor disappears while opening its document', async () => {
+    fakes.onDisk.add(FILE);
+    const opening = Promise.withResolvers<InstanceType<typeof fakes.FakeDocument>>();
+    fakes.openTextDocument.mockReturnValue(opening.promise);
+    const { editor } = made();
+    editor.renderCursor({ file: FILE, offset: 5 }, 'paused', 'cursor');
+    editor.revealCursor();
+    await vi.waitFor(() => {
+      expect(fakes.openTextDocument).toHaveBeenCalled();
+    });
+    editor.renderCursor(undefined, 'absent', 'cursor');
+    opening.resolve(new fakes.FakeDocument(FILE));
+    await vi.waitFor(() => {
+      expect(fakes.showTextDocument).not.toHaveBeenCalled();
+    });
+  });
+
+  it('does not open the document when the cursor disappears during file preparation', async () => {
+    const stat = Promise.withResolvers<object>();
+    fakes.stat.mockReturnValue(stat.promise);
+    const { editor } = made();
+    editor.renderCursor({ file: FILE, offset: 5 }, 'paused', 'cursor');
+    editor.revealCursor();
+    editor.renderCursor(undefined, 'absent', 'cursor');
+    stat.resolve({});
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fakes.openTextDocument).not.toHaveBeenCalled();
+  });
+
+  it('does not scroll a stale cursor after VS Code shows its file', async () => {
+    fakes.onDisk.add(FILE);
+    const active = inView(OTHER);
+    active.viewColumn = 2;
+    fakes.active = active;
+    const shown = Promise.withResolvers<FakeEditor>();
+    fakes.showTextDocument.mockReturnValue(shown.promise);
+    const { editor } = made();
+    editor.renderCursor({ file: FILE, offset: 5 }, 'paused', 'cursor');
+    editor.revealCursor();
+    await vi.waitFor(() => {
+      expect(fakes.showTextDocument).toHaveBeenCalled();
+    });
+    expect(fakes.showTextDocument.mock.calls[0]?.[1]).toMatchObject({ viewColumn: 2 });
+    editor.renderCursor(undefined, 'absent', 'cursor');
+    const view = inView(FILE);
+    shown.resolve(view);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(view.revealRange).not.toHaveBeenCalled();
+  });
+
+  it('reports an editor failure without leaving navigation held', async () => {
+    fakes.onDisk.add(FILE);
+    fakes.openTextDocument.mockRejectedValue(new Error('open failed'));
+    const { editor } = made();
+    editor.renderCursor({ file: FILE, offset: 5 }, 'paused', 'cursor');
+    editor.revealCursor();
+    await vi.waitFor(() => {
+      expect(fakes.showErrorMessage).toHaveBeenCalledWith('Could not reveal the agent cursor.');
+    });
+  });
+
+  it('NoCursorNoNavigation: does nothing without an agent cursor', () => {
+    const { editor } = made();
+    editor.revealCursor();
+    expect(fakes.showTextDocument).not.toHaveBeenCalled();
   });
 });
 

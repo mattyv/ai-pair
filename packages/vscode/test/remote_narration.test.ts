@@ -27,6 +27,23 @@ afterEach(() => {
 });
 
 describe('remote narration port', () => {
+  it('NoEarlyReuse: sends a scoped cue and waits for its terminal acknowledgement', async () => {
+    const send = vi.fn<(_: unknown) => void>();
+    const port = new RemoteNarration({ epoch: 'connection', page: () => 4, timeoutMs: 100, send, nextSequence: sequence() });
+    const cue = port.attentionCue();
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ type: 'attentionCue', jobId: '1', pageEpoch: 4 }));
+    port.ack({
+      version: LOCAL_AUDIO_VERSION,
+      connectionEpoch: 'connection',
+      sequence: 1,
+      type: 'terminal',
+      jobId: '1',
+      pageEpoch: 4,
+      outcome: 'ended',
+    });
+    await cue;
+  });
+
   it('bounds retirement admission and recovers when a late terminal arrives', async () => {
     vi.useFakeTimers();
     const port = new RemoteNarration({

@@ -64,7 +64,7 @@ export const ACTION_SCHEMA = z.union([
 export const TURN_SCHEMA = z.enum(['agent', 'programmer']);
 
 /** Checks a {@link PauseReason}. */
-export const PAUSE_REASON_SCHEMA = z.enum(['programmer', 'reply', 'away', 'calibrate']);
+export const PAUSE_REASON_SCHEMA = z.enum(['programmer', 'reply', 'away', 'calibrate', 'attention']);
 
 /** Checks a {@link BatchStatus}. */
 export const BATCH_STATUS_SCHEMA = z.enum(['completed', 'interrupted', 'failed', 'discarded']);

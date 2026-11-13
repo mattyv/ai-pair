@@ -300,6 +300,7 @@ Last updated: css, 2026-11-13.
 | `packages/vscode/src/workspace_panel_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 84.4% B 46.1% F 100.0% | - | - | - | - |
 | `packages/vscode/src/workspace_session.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.8% B 94.1% F 73.3% | - | - | - | - |
 | `packages/vscode/test/agents.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/vscode/test/attention_composed.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/calibration.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/command_approval_composed.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/css.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -516,6 +517,10 @@ Last updated: css, 2026-11-13.
 | `specs/Actions.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/Anchor.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Anchor.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
+| `specs/Attention.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/Attention.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/AttentionCache.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/AttentionCache.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/AudioOutput.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/AudioOutput.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/BatchFile.cfg` | TLC config | - | - | - | - | - | - |
@@ -666,8 +671,12 @@ Last updated: css, 2026-11-13.
 | `specs/Rehearsal.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/Reload.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Reload.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
+| `specs/RemoteCue.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/RemoteCue.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/Resume.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Resume.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
+| `specs/RevealCursor.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/RevealCursor.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/RunBox.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/RunBox.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/RuntimeIdentity.cfg` | TLC config | - | - | - | - | - | - |

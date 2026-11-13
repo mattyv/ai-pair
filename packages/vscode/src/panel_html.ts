@@ -38,11 +38,16 @@ function svg(paths: string, cls = ''): string {
 }
 
 const ICONS = {
+  cursor: svg('<path d="M5 3l12 9-6 1-3 6z"/>'),
   pause: svg('<path d="M9 5v14M15 5v14"/>', 'pause'),
   resume: svg('<path d="M8 5l11 7-11 7z"/>', 'resume'),
   stop: svg('<rect x="6" y="6" width="12" height="12" rx="2"/>'),
   swap: svg('<path d="M7 7h11l-3-3M17 17H6l3 3"/>'),
   exit: svg('<path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h11"/>'),
+  attention: svg(
+    '<path d="M8 11V5a1 1 0 0 1 2 0v5-7a1 1 0 0 1 2 0v7-6a1 1 0 0 1 2 0v6-4' +
+      'a1 1 0 0 1 2 0v7c0 4-2 7-6 7-3 0-4-2-6-5l-1-2a1 1 0 0 1 2-1l3 3"/>',
+  ),
   send: svg('<path d="M4 12l16-8-6 16-2.5-6.5z"/>'),
   voice: svg('<path d="M4 9v6h4l5 4V5L8 9H4zM17 9a5 5 0 010 6"/>', 'voice-on'),
   voiceMuted: svg('<path d="M4 9v6h4l5 4V5L8 9H4zM3 3l18 18"/>', 'voice-muted'),
@@ -276,6 +281,8 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
             data-tip="Pause (Space)"
             aria-keyshortcuts="Space"
           >${ICONS.pause}${ICONS.resume}</button>
+          <button type="button" data-ui="reveal-cursor" class="quiet" aria-label="Reveal agent cursor"
+            data-tip="Reveal agent cursor">${ICONS.cursor}</button>
           <button
             type="button"
             data-ui="interrupt"
@@ -424,6 +431,8 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
           aria-label="Reply to the agent"
           placeholder="Reply to the agent${ELLIPSIS}"
         ></textarea>
+        <button type="button" data-ui="attention" class="quiet" aria-label="Raise hand" data-tip="Raise hand"
+          aria-pressed="false" disabled>${ICONS.attention}</button>
         <button type="button" data-ui="send" class="quiet" aria-label="Send" data-tip="Send (Enter)">${ICONS.send}</button>
       </div>
     </div>

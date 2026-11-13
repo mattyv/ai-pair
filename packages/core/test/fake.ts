@@ -92,6 +92,7 @@ export class FakeEditor implements EditorPort {
   renderPoint(point: { file: string; start: number; end: number } | undefined): void {
     this.point = point;
   }
+  revealCursor(): void {}
   reveal(): void {
     this.reveals++;
     this.revealedFocus = this.focus;

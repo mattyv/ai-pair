@@ -10,6 +10,7 @@ const PAUSE_REASONS: Record<PauseReason, string> = {
   reply: 'the programmer is typing a reply',
   away: 'the programmer is looking at another file, or scrolled away from your cursor',
   calibrate: 'the programmer is calibrating their reading speed',
+  attention: 'the programmer requested the floor',
 };
 
 /** Who made an edit the programmer didn't make. */

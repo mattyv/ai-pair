@@ -24,3 +24,11 @@ it('explains when narration overlaps work and when a question needs an answer', 
   expect(narration).toMatch(/`listen`[\s\S]*audio completion is not a response/);
   expect(narration).toContain('`speak: true`');
 });
+
+it('delivers teaching guidance grounded in verified shared history and bounded narration', () => {
+  const guide = agentGuide(readFileSync('AGENT_GUIDE.md', 'utf8'));
+  expect(guide).toMatch(/conversation or verified\s+session history supports that claim/);
+  expect(guide).toMatch(/Do not assume the programmer heard canceled speech/);
+  expect(guide).toMatch(/do not require quizzes, exercises, or an answer before continuing/);
+  expect(guide).toMatch(/Keep the normal speech\s+limits/);
+});

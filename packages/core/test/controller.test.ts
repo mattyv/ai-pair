@@ -1756,6 +1756,198 @@ describe('the cursor in a report', () => {
 });
 
 describe('pause and resume', () => {
+  it('Attention: grants idle floor, publishes paused state and releases only its hold', async () => {
+    const narration = mock<NarrationPort>();
+    narration.attentionCue = vi.fn().mockResolvedValue(undefined);
+    const h = harness({}, {}, narration);
+    await h.controller.start();
+    h.controller.requestAttention();
+    await settle();
+    expect(posted(h)).toContainEqual({ type: 'attention', state: 'granted' });
+    expect(h.controller.isPaused).toBe(true);
+    expect(narration.attentionCue).toHaveBeenCalledOnce();
+    h.controller.resume();
+    expect(h.controller.isPaused).toBe(false);
+    expect(narration.cancel).toHaveBeenCalled();
+  });
+
+  it('Attention: cancel and disconnect fence a pending speech completion', async () => {
+    const h = await started();
+    const { promise, resolve } = Promise.withResolvers<void>();
+    h.controller.requestAttention();
+    h.controller.requestAttention();
+    h.controller.requestAttention();
+    const currentStage = stage();
+    if (currentStage.attentionBoundary === undefined) throw new Error('Missing boundary');
+    const waiting = currentStage.attentionBoundary(promise);
+    h.controller.disconnect();
+    h.controller.endSession();
+    resolve();
+    await waiting;
+    expect(posted(h)).not.toContainEqual({ type: 'attention', state: 'granted' });
+  });
+
+  it('Attention: an ordinary action boundary does not wait', async () => {
+    await started();
+    const currentStage = stage();
+    if (currentStage.attentionBoundary === undefined) throw new Error('Missing boundary');
+    await currentStage.attentionBoundary(Promise.resolve());
+  });
+
+  it('Attention: reports a granted hold and tolerates repeated or inactive clicks', async () => {
+    const h = harness();
+    h.controller.requestAttention();
+    expect(posted(h)).toEqual([]);
+    await h.controller.start();
+    h.controller.requestAttention();
+    await settle();
+    h.controller.requestAttention();
+    expect((await report(h.controller.listen())).paused).toEqual(['attention']);
+    h.controller.resume();
+  });
+
+  it('Attention: waits for a running player to finish before granting at idle', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    void h.controller.step([{ say: 'Working.' }]);
+    await settle();
+    h.controller.requestAttention();
+    finish();
+    await settle();
+    expect(posted(h)).toContainEqual({ type: 'attention', state: 'granted' });
+    h.controller.resume();
+  });
+
+  it('Attention: diagnostic release prevents stale grant publication', async () => {
+    const narration = mock<NarrationPort>();
+    narration.attentionCue = vi.fn().mockResolvedValue(undefined);
+    const h = harness({}, {}, narration);
+    await h.controller.start();
+    h.controller.onDiagnostic = (event) => {
+      if (event.kind === 'pause' && event.reasons.includes('attention')) h.controller.resume();
+    };
+    h.controller.requestAttention();
+    await settle();
+    expect(h.controller.isPaused).toBe(false);
+    expect(posted(h)).not.toContainEqual({ type: 'attention', state: 'granted' });
+    expect(narration.attentionCue).not.toHaveBeenCalled();
+  });
+
+  it('Attention: diagnostic observer closing the session fences grant publication', async () => {
+    const h = await started();
+    h.controller.onDiagnostic = (event) => {
+      if (event.kind === 'pause' && event.reasons.includes('attention')) {
+        h.controller.disconnect();
+        h.controller.endSession();
+      }
+    };
+    h.controller.requestAttention();
+    await settle();
+    expect(posted(h)).not.toContainEqual({ type: 'attention', state: 'granted' });
+  });
+
+  it('Attention: a diagnostic observer can request a successor during release', async () => {
+    const h = await started();
+    h.controller.requestAttention();
+    await settle();
+    const currentStage = stage();
+    if (currentStage.attentionBoundary === undefined) throw new Error('Missing boundary');
+    let finished = false;
+    const waiting = currentStage.attentionBoundary(Promise.resolve()).then(() => {
+      finished = true;
+    });
+    h.controller.onDiagnostic = (event) => {
+      if (event.kind === 'pause' && !event.paused) {
+        h.controller.onDiagnostic = undefined;
+        h.controller.requestAttention();
+      }
+    };
+    h.controller.resume();
+    expect(posted(h).at(-1)).not.toEqual({ type: 'attention', state: 'none' });
+    await settle();
+    expect(h.controller.isPaused).toBe(true);
+    expect(finished).toBe(false);
+    h.controller.resume();
+    await waiting;
+    expect(finished).toBe(true);
+  });
+
+  it('Attention: a reentrant observer can release before the cue is posted', async () => {
+    const h = await started();
+    h.panel.post.mockImplementation((event) => {
+      if (event.type === 'attention' && event.state === 'granted') h.controller.resume();
+    });
+    h.controller.requestAttention();
+    await settle();
+    expect(posted(h)).not.toContainEqual({ type: 'say', text: "What's up?" });
+  });
+
+  it('Attention: an observer may replace a grant before its cue', async () => {
+    const h = await started();
+    let replaced = false;
+    h.panel.post.mockImplementation((event) => {
+      if (event.type === 'attention' && event.state === 'granted' && !replaced) {
+        replaced = true;
+        h.controller.resume();
+        h.controller.requestAttention();
+      }
+    });
+    h.controller.requestAttention();
+    await settle();
+    expect(posted(h).filter((event) => event.type === 'attention' && event.state === 'granted')).toHaveLength(2);
+    expect(posted(h).filter((event) => event.type === 'say' && event.text === "What's up?")).toHaveLength(1);
+    h.controller.resume();
+  });
+
+  it('Attention: a second boundary waits for the same granted hold and its successor', async () => {
+    const h = await started();
+    h.controller.requestAttention();
+    await settle();
+    const currentStage = stage();
+    if (currentStage.attentionBoundary === undefined) throw new Error('Missing boundary');
+    const waiting = currentStage.attentionBoundary(Promise.resolve());
+    h.controller.resume();
+    h.controller.requestAttention();
+    await settle();
+    expect(h.controller.isPaused).toBe(true);
+    h.controller.resume();
+    await waiting;
+  });
+
+  it('Attention: an observer may release on text before audio starts', async () => {
+    const narration = mock<NarrationPort>();
+    narration.attentionCue = vi.fn().mockRejectedValue(new Error('unavailable'));
+    const h = harness({}, {}, narration);
+    await h.controller.start();
+    h.panel.post.mockImplementation((event) => {
+      if (event.type === 'say' && event.text === "What's up?") h.controller.resume();
+    });
+    h.controller.requestAttention();
+    await settle();
+    expect(narration.attentionCue).not.toHaveBeenCalled();
+  });
+
+  it('Attention: unavailable audio does not prevent releasing the floor', async () => {
+    const narration = mock<NarrationPort>();
+    narration.attentionCue = vi.fn().mockRejectedValue(new Error('unavailable'));
+    const h = harness({}, {}, narration);
+    await h.controller.start();
+    h.controller.requestAttention();
+    await settle();
+    expect(h.controller.isPaused).toBe(true);
+    h.controller.resume();
+  });
+
+  it('ShowsCursor: requests cursor navigation without changing pause or turn', async () => {
+    const h = await started();
+    h.controller.pause();
+    const turn = h.controller.turn;
+    h.controller.revealCursor();
+    expect(h.editor.revealCursor.mock.calls).toHaveLength(1);
+    expect(h.controller.isPaused).toBe(true);
+    expect(h.controller.turn).toBe(turn);
+  });
+
   it('pauses speech until all pause reasons clear and cancels it on a reply', async () => {
     const narration = mock<NarrationPort>();
     const h = harness({}, {}, narration);

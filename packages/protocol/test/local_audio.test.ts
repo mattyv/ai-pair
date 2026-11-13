@@ -7,13 +7,13 @@ beforeEach(() => {
   fake.problem.mockReset();
 });
 
-const base = { version: 4, connectionEpoch: 'connection-1', sequence: 1 };
+const base = { version: 5, connectionEpoch: 'connection-1', sequence: 1 };
 const owner = { jobId: 'job-1', pageEpoch: 1 };
 
 describe('local audio command frames', () => {
-  it('accepts version 4 and rejects version 3 companion frames', () => {
-    expect(localAudioFrame.safeParse({ ...base, version: 4, type: 'attach' }).success).toBe(true);
-    expect(localAudioFrame.safeParse({ ...base, version: 3, type: 'attach' }).success).toBe(false);
+  it('accepts version 5 and rejects version 4 companion frames', () => {
+    expect(localAudioFrame.safeParse({ ...base, version: 5, type: 'attach' }).success).toBe(true);
+    expect(localAudioFrame.safeParse({ ...base, version: 4, type: 'attach' }).success).toBe(false);
   });
   it('accepts the bounded commands and terminal acknowledgements', () => {
     for (const frame of [
@@ -22,6 +22,7 @@ describe('local audio command frames', () => {
       { ...base, type: 'panelChunk', pageEpoch: 1, messageId: 1, index: 0, count: 1, data: '{}' },
       { ...base, type: 'panelAction', pageEpoch: 1, action: { type: 'reply', text: 'Hello.' } },
       { ...base, ...owner, type: 'speak', text: 'A short narration.' },
+      { ...base, ...owner, type: 'attentionCue' },
       { ...base, ...owner, type: 'pause' },
       { ...base, ...owner, type: 'resume' },
       { ...base, ...owner, type: 'cancel' },

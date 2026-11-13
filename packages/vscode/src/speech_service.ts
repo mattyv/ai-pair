@@ -161,6 +161,9 @@ interface ActiveSpeech {
   pageId?: number;
   started: boolean;
   preview: boolean;
+  attention: boolean;
+  cueGeneration: number;
+  cueAudio?: { wav: Uint8Array; durationMs: number };
   context?: ReturnType<SpeechContext['capture']>;
   providerText: string;
   timer?: ReturnType<typeof setTimeout>;
@@ -189,6 +192,9 @@ export class SpeechService implements NarrationPort {
   private readonly lifecycle: SpeechLifecycle;
   private cloudBusy?: { id: number; controller: AbortController; timer: ReturnType<typeof setTimeout> };
   private disposed = false;
+  private cueKey?: string;
+  private cueGeneration = 0;
+  private cueCache?: { wav: Uint8Array; durationMs: number };
   private cpuFailure = 'Local speech could not start. Retry setup.';
 
   constructor(private readonly options: SpeechServiceOptions) {
@@ -294,6 +300,25 @@ export class SpeechService implements NarrationPort {
   /** Applies selection changes immediately, including changes between turns. */
   configureNarrationContext(): void {
     const settings = this.options.settings();
+    const key = JSON.stringify([
+      settings.enabled,
+      settings.provider,
+      settings.voice,
+      settings.speed,
+      settings.elevenLabsVoice,
+      settings.elevenLabsSpeed,
+      settings.openRouterModel,
+      settings.openRouterVoice,
+      settings.openRouterZdr,
+      settings.openRouterFormat,
+      speechListeningRate(settings.listeningSpeed),
+    ]);
+    if (this.cueKey !== key) {
+      this.cueKey = key;
+      this.cueGeneration++;
+      this.cueCache = undefined;
+      if (this.current?.attention === true) this.cancel();
+    }
     const model = settings.openRouterModel ?? '';
     const voice = settings.provider === 'openrouter' ? (settings.openRouterVoice ?? '') : settings.elevenLabsVoice;
     this.context.configure({
@@ -319,7 +344,13 @@ export class SpeechService implements NarrationPort {
     return this.begin(SPEECH_PREVIEW_TEXT, true);
   }
 
-  private begin(text: string, preview: boolean, delivery?: SpeechDelivery): Promise<void> {
+  /** Plays the fixed attention cue without adding it to narration context. */
+  attentionCue(): Promise<void> {
+    if (!this.options.settings().enabled) return Promise.resolve();
+    return this.begin("What's up?", false, undefined, true);
+  }
+
+  private begin(text: string, preview: boolean, delivery?: SpeechDelivery, attention = false): Promise<void> {
     if (this.current !== undefined || this.disposed) return Promise.resolve();
     const id = this.nextId++;
     const settings = this.options.settings();
@@ -386,7 +417,7 @@ export class SpeechService implements NarrationPort {
     }
     this.configureNarrationContext();
     const capabilities = speechContextCapabilities(provider, openRouterModel);
-    const context = preview ? undefined : this.context.capture(text);
+    const context = preview || attention ? undefined : this.context.capture(text);
     const cue =
       !preview && settings.contextEnabled === true && capabilities.tags && delivery !== undefined && delivery !== 'neutral'
         ? `[${delivery}] `
@@ -420,6 +451,8 @@ export class SpeechService implements NarrationPort {
       durationMs: 0,
       started: false,
       preview,
+      attention,
+      cueGeneration: this.cueGeneration,
       remaining: START_TIMEOUT_MS,
     };
     current.multipart = current.parts.length > 1;
@@ -437,6 +470,10 @@ export class SpeechService implements NarrationPort {
     // specs/OpenRouterCatalog.tla, Admit: recheck current evidence after output admission.
     if (current.provider === 'openrouter' && this.options.openRouterAllowed?.(current.openRouterModel, current.cloudVoice) === false) {
       this.fail(current, 'Choose an available OpenRouter model and voice.');
+      return;
+    }
+    if (current.attention && this.cueCache !== undefined) {
+      this.acceptAudio(current, 0, this.cueCache);
       return;
     }
     current.phase = 'loading';
@@ -539,6 +576,8 @@ export class SpeechService implements NarrationPort {
 
   /** A credential change invalidates current cloud audio and pending requests. */
   invalidateCloud(): void {
+    this.cueGeneration++;
+    this.cueCache = undefined;
     this.cloudBusy?.controller.abort();
     if (this.current !== undefined && this.current.provider !== 'kokoro') this.cancel();
   }
@@ -627,6 +666,10 @@ export class SpeechService implements NarrationPort {
 
   /** Applies listening speed locally before exposing a waveform to playback. */
   private receiveAudio(current: ActiveSpeech, part: number, audio: { wav: Uint8Array; durationMs: number }, final: boolean): void {
+    if (current.attention) {
+      this.configureNarrationContext();
+      if (this.current !== current) return;
+    }
     if (
       audio.wav.length < MIN_WAV_BYTES ||
       audio.wav.length > MAX_WAV_BYTES ||
@@ -678,6 +721,10 @@ export class SpeechService implements NarrationPort {
 
   /** Bounds the complete transformed unit and buffers at most one next part. */
   private acceptAudio(current: ActiveSpeech, part: number, audio: { wav: Uint8Array; durationMs: number }): void {
+    if (current.attention) {
+      this.configureNarrationContext();
+      if (this.current !== current) return;
+    }
     // specs/SpeechTempo.tla, Result and Play: duration and the aggregate bound come from the transformed samples.
     if (
       audio.wav.length < MIN_WAV_BYTES ||
@@ -694,6 +741,7 @@ export class SpeechService implements NarrationPort {
       current.buffered = { part, wav: audio.wav, durationMs: audio.durationMs };
       return;
     }
+    if (current.attention) current.cueAudio = { wav: audio.wav.slice(), durationMs: audio.durationMs };
     current.part = part;
     current.wav = audio.wav;
     current.durationMs = audio.durationMs;
@@ -749,6 +797,10 @@ export class SpeechService implements NarrationPort {
       this.fail(current, 'Audio could not play. Use Preview voice to enable audio.');
       return 'failed';
     } else if (event.event === 'ended') {
+      if (current.attention) {
+        this.configureNarrationContext();
+        if (this.current !== current) return undefined;
+      }
       if (current.multipart && !current.started) {
         this.fail(current, 'Audio could not play. Use Preview voice to enable audio.');
         return 'failed';
@@ -768,6 +820,10 @@ export class SpeechService implements NarrationPort {
           if (!this.paused) this.play(current);
         } else this.lookahead(current);
         return undefined;
+      }
+      // specs/AttentionCache.tla, Complete: only the still-current generation may populate the cache.
+      if (current.attention && current.cueGeneration === this.cueGeneration && current.cueAudio !== undefined) {
+        this.cueCache = current.cueAudio;
       }
       current.context?.complete();
       this.finish(current);

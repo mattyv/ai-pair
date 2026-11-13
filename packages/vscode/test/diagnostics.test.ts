@@ -110,7 +110,7 @@ describe('diagnostics', () => {
       { kind: 'pause', paused: 'secret', reasons: [] },
       { kind: 'pause', paused: false, reasons: 'secret' },
       { kind: 'pause', paused: true, reasons: ['secret'] },
-      { kind: 'pause', paused: true, reasons: ['away', 'away', 'away', 'away', 'away'] },
+      { kind: 'pause', paused: true, reasons: ['away', 'away', 'away', 'away', 'away', 'away'] },
       { kind: 'pause', paused: true, reasons: [] },
       { kind: 'request', connectionId: 1, id: -1, method: 'step', phase: 'received' },
       { kind: 'request', connectionId: -1, id: 1, method: 'step', phase: 'received' },

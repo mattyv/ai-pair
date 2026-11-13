@@ -23,6 +23,155 @@ function reload(editor: ReturnType<typeof setup>['editor']): void {
 // With the test config, a beat is 100 ms and `type` takes 100 ms per character.
 
 describe('where the controller and the player meet', () => {
+  it('Attention: holds later edits until the requested floor is released after speech drains', async () => {
+    const { promise, resolve } = Promise.withResolvers<void>();
+    const narration = {
+      speak: vi.fn(() => promise),
+      attentionCue: vi.fn().mockResolvedValue(undefined),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn(),
+    };
+    const { editor, controller, panel } = setup({ 'a.ts': '' }, {}, narration);
+    await controller.start();
+    await controller.step([
+      { say: 'Speaking.', speech_mode: 'continue' },
+      { move: { file: 'a.ts', line: 1, to: 'line_end' } },
+      { type: `x${CURSOR_MARKER}` },
+    ]);
+    controller.requestAttention();
+    await advance(3000);
+    expect(editor.text('a.ts')).toBe('');
+    expect(narration.pause).not.toHaveBeenCalled();
+    expect(panel.events).not.toContainEqual({ type: 'attention', state: 'granted' });
+    resolve();
+    await advance(20);
+    expect(panel.events).toContainEqual({ type: 'attention', state: 'granted' });
+    expect(narration.attentionCue).toHaveBeenCalledOnce();
+    expect(editor.text('a.ts')).toBe('');
+    controller.resume();
+    await until(controller.step([]));
+    expect(editor.text('a.ts')).toBe('x');
+  });
+
+  it('Attention: idle continued speech drains before granting the floor', async () => {
+    const { promise, resolve } = Promise.withResolvers<void>();
+    const narration = {
+      speak: vi.fn(() => promise),
+      attentionCue: vi.fn().mockResolvedValue(undefined),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn(),
+    };
+    const { controller, panel } = setup({}, {}, narration);
+    await controller.start();
+    await until(controller.step([{ say: 'Still speaking.', speech_mode: 'continue' }]));
+    await advance(1000);
+    controller.requestAttention();
+    await advance(10);
+    expect(panel.events).not.toContainEqual({ type: 'attention', state: 'granted' });
+    resolve();
+    await advance(10);
+    expect(panel.events).toContainEqual({ type: 'attention', state: 'granted' });
+    expect(panel.events).toContainEqual(expect.objectContaining({ type: 'state', paused: true, speechPaused: false }));
+  });
+
+  it('Attention: lowering a pending hand releases the boundary and rejects the late grant', async () => {
+    const { promise, resolve } = Promise.withResolvers<void>();
+    const narration = {
+      speak: vi.fn(() => promise),
+      attentionCue: vi.fn().mockResolvedValue(undefined),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn(),
+    };
+    const { editor, controller, panel } = setup({ 'a.ts': '' }, {}, narration);
+    await controller.start();
+    await controller.step([
+      { say: 'Speaking.', speech_mode: 'continue' },
+      { move: { file: 'a.ts', line: 1, to: 'line_end' } },
+      { type: `x${CURSOR_MARKER}` },
+    ]);
+    controller.requestAttention();
+    await advance(2000);
+    controller.requestAttention();
+    await until(controller.step([]));
+    expect(editor.text('a.ts')).toBe('x');
+    resolve();
+    await advance(10);
+    expect(panel.events).not.toContainEqual({ type: 'attention', state: 'granted' });
+    expect(narration.attentionCue).not.toHaveBeenCalled();
+  });
+
+  it('Attention: releasing the floor keeps a separate programmer pause', async () => {
+    const narration = {
+      speak: vi.fn().mockResolvedValue(undefined),
+      attentionCue: vi.fn().mockResolvedValue(undefined),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn(),
+    };
+    const { controller, panel } = setup({}, {}, narration);
+    await controller.start();
+    controller.pause();
+    controller.requestAttention();
+    await advance(10);
+    expect(panel.events).toContainEqual({ type: 'attention', state: 'granted' });
+    expect(narration.attentionCue).not.toHaveBeenCalled();
+    controller.resume();
+    expect(narration.resume).not.toHaveBeenCalled();
+    expect(panel.events).toContainEqual(expect.objectContaining({ type: 'state', paused: true }));
+  });
+
+  it('Attention: a renewed request at a waiting boundary blocks the next edit', async () => {
+    const { promise, resolve } = Promise.withResolvers<void>();
+    const narration = { speak: vi.fn(() => promise), pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() };
+    const { editor, controller, panel } = setup({ 'a.ts': '' }, {}, narration);
+    await controller.start();
+    await controller.step([
+      { say: 'Speaking.', speech_mode: 'continue' },
+      { move: { file: 'a.ts', line: 1, to: 'line_end' } },
+      { type: `x${CURSOR_MARKER}` },
+    ]);
+    controller.requestAttention();
+    await advance(1000);
+    controller.requestAttention();
+    controller.requestAttention();
+    await advance(1000);
+    expect(editor.text('a.ts')).toBe('');
+    resolve();
+    await advance(10);
+    expect(panel.events).toContainEqual({ type: 'attention', state: 'granted' });
+    expect(editor.text('a.ts')).toBe('');
+  });
+
+  it('Attention: a deferred reply at the granted floor interrupts before another edit', async () => {
+    const { editor, controller, panel } = setup({ 'a.ts': '' });
+    await controller.start();
+    await controller.step([{ say: 'Reading.' }, { move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `x${CURSOR_MARKER}` }]);
+    controller.requestAttention();
+    await advance(2000);
+    expect(panel.events).toContainEqual({ type: 'attention', state: 'granted' });
+    controller.userMessage('Wait.', undefined, true);
+    await until(controller.step([]));
+    expect(editor.text('a.ts')).toBe('');
+  });
+
+  it('Attention: a renewed request at the first action boundary blocks that action', async () => {
+    const { editor, controller, panel } = setup({ 'a.ts': '' });
+    await controller.start();
+    controller.requestAttention();
+    await advance(10);
+    expect(panel.events).toContainEqual({ type: 'attention', state: 'granted' });
+    await controller.step([{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `x${CURSOR_MARKER}` }]);
+    controller.resume();
+    controller.requestAttention();
+    await advance(1000);
+    expect(panel.events.filter((event) => event.type === 'attention' && event.state === 'granted')).toHaveLength(2);
+    expect(editor.text('a.ts')).toBe('');
+    expect(editor.shown).toEqual([]);
+  });
+
   it('reminds after three accepted unspoken batches only while speech is ready', async () => {
     const ready = vi.fn().mockResolvedValue(false);
     const narration = { ready, speak: vi.fn().mockResolvedValue(undefined), pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() };

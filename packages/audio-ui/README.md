@@ -1,5 +1,19 @@
 # AI Pair Local Audio
 
+Use the hand button beside Reply to request a chance to interject. The agent
+finishes the current speech and safe action before handing you the floor. Press
+it again while waiting to lower your hand; once the floor is yours, press it
+to focus Reply. The panel shows "What's up?" and, when speech is available,
+plays the same cue. Other pauses still apply.
+
+The fixed voice prompt is generated on first use and cached in memory, without
+conversation history. Relevant voice, synthesis, privacy or credential changes
+invalidate it; the next use creates a new clip. Replays make no new synthesis
+request. Generating a cloud clip may use account credits.
+
+Pair narration connects relevant choices to earlier verified work; ask for a
+teaching style for more concept explanations without compulsory exercises.
+
 Optional **Speech context and delivery cues** can be enabled in Pair Settings.
 For supported models, the provider receives up to three previously completed
 agent utterances, bounded to 500 Unicode code points, to improve continuity.

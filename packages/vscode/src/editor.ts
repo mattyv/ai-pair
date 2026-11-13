@@ -380,6 +380,36 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
     this.redraw();
   }
 
+  /** Focuses and centers the agent cursor without changing the follow target. */
+  revealCursor(): void {
+    const cursor = this.cursor;
+    if (cursor === undefined) return;
+    // specs/RevealCursor.tla, `Show`: navigation preserves playback and turn.
+    this.showing++;
+    const current = (): boolean => this.cursor?.file === cursor.file && this.cursor.offset === cursor.offset;
+    void this.create(cursor.file)
+      .then(async () => {
+        if (!current()) return;
+        const document = await vscode.workspace.openTextDocument(vscode.Uri.file(cursor.file));
+        if (!current()) return;
+        const editor = await vscode.window.showTextDocument(document, {
+          preview: false,
+          preserveFocus: false,
+          viewColumn: this.visibleEditor(cursor.file)?.viewColumn ?? vscode.window.activeTextEditor?.viewColumn,
+        });
+        if (!current()) return;
+        const position = document.positionAt(cursor.offset);
+        editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+      })
+      .catch(() => {
+        void vscode.window.showErrorMessage('Could not reveal the agent cursor.');
+      })
+      .finally(() => {
+        this.showing--;
+        this.selfNav();
+      });
+  }
+
   reveal(): void {
     // specs/Scroll.tla, `Follow`: a pause ends in `resume`, which reveals the target.
     const target = this.target();

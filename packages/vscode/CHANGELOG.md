@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.36.0
+
+-   Add a raise-hand control beside Reply to request a pause after the current
+    explanation, with a locally cached voice acknowledgement.
+-   Add a control beside Pause to reveal the agent cursor in the editor.
+-   Connect narration to verified earlier work and support a requested teaching
+    style without requiring exercises or changing agent configuration.
+
 ## 0.35.0
 
 -   Add optional bounded narration context and model-supported delivery cues.

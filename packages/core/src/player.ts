@@ -74,6 +74,8 @@ export interface Stage {
   codePlayback(): CodePlayback;
   /** Live narration only; omitted for rehearsal. */
   narration?: NarrationPort;
+  /** Waits at an attention boundary after draining the current speech. */
+  attentionBoundary?(speech: Promise<void>): Promise<void>;
   /** Runs after each live action has finished. */
   afterAction?(): void;
   /** Shows the agent cursor and state after a change. */
@@ -209,6 +211,11 @@ export class Player {
     return this.readingId !== undefined;
   }
 
+  /** Returns the current speech unit, including a continued final unit. */
+  get currentSpeech(): Promise<void> {
+    return this.speech ?? Promise.resolve();
+  }
+
   /** Plays a batch, saves the files it edited, and says how it went, and which lines that shows. */
   async play(
     id: number,
@@ -323,6 +330,8 @@ export class Player {
     let effect = false;
     // specs/Actions.tla: `perform` takes an action's steps (`Proceed`, `TakeEffect`), and each pass after it is `FinishAction`.
     for (const [i, action] of actions.entries()) {
+      // specs/Attention.tla, Grant: no new action starts while the floor is held.
+      await this.stage.attentionBoundary?.(this.speech ?? Promise.resolve());
       // specs/Turns.tla, `Perform`, and specs/Actions.tla, `StopBeforeAction`: an interrupt stops the batch between actions.
       if (this.stage.pacing.isInterrupted) return this.stopped(id, actions.slice(i), effect);
       let outcome: Outcome;
@@ -333,6 +342,7 @@ export class Player {
       }
       // specs/DeferredMessage.tla, FinishAction: deliver a queued reply at the action boundary.
       this.stage.afterAction?.();
+      await this.stage.attentionBoundary?.(this.speech ?? Promise.resolve());
       const rest = actions.slice(i + 1);
       if (outcome.kind === 'interrupted') {
         if (outcome.consumed === true) return this.stopped(id, rest, /* effect= */ true);
@@ -707,6 +717,7 @@ export class Player {
     let typed = '';
     let atomIndex = 0;
     for (const [i, chunk] of chunks.entries()) {
+      if (i > 0 && mode !== 'typing') await this.stage.attentionBoundary?.(this.speech ?? Promise.resolve());
       // specs/Actions.tla, `StopAtCheck`: cut after a chunk, it returns only what's left of it.
       if (!(await this.delay(chunk.delay))) {
         if (typed === '') return { kind: 'interrupted' };

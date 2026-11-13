@@ -89,6 +89,23 @@ const STATES: Array<{ name: string; events: object[] }> = [
     ],
   },
   {
+    name: 'attention-requested',
+    events: [
+      { type: 'session', active: true, task: 'Add tests' },
+      { type: 'state', state: 'typing', turn: 'agent', paused: false, speechPaused: false },
+      { type: 'attention', state: 'requested' },
+    ],
+  },
+  {
+    name: 'attention-granted',
+    events: [
+      { type: 'session', active: true, task: 'Add tests' },
+      { type: 'state', state: 'paused', turn: 'agent', paused: true, speechPaused: false },
+      { type: 'say', text: "What's up?" },
+      { type: 'attention', state: 'granted' },
+    ],
+  },
+  {
     name: 'your-turn',
     events: [
       { type: 'session', active: true, task: 'Add tests' },

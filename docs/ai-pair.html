@@ -40820,7 +40820,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 service: [
                   {
                     id: "service-scope",
-                    text: "The service owns narration, chunking, tempo and playback while the manager owns backend resources. A current unit waits for cleanup; stale work cannot synthesize or play.",
+                    text: "The service owns narration, chunking, tempo and playback while the manager owns backend resources. A current unit waits for cleanup; stale work cannot synthesize or play. The same service owns one in-memory fixed attention-cue waveform, committed only after accepted playback completes. Relevant settings invalidate the cache; cue synthesis has no narration context and reuses existing backend and output leases.",
                     ts: 0,
                   },
                 ],
@@ -41169,6 +41169,113 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                   {
                     id: "restart-ownership",
                     text: "New host/session creation waits for prior retirement, and workspace transport starts only after a successful commit acknowledgement. Restart restores preferences, not workers, capability, proof, or output reservation. A fresh GPU acquisition requires fresh proof.",
+                    ts: 0,
+                  },
+                ],
+              },
+            },
+          },
+          {
+            id: "attention-interjection",
+            name: "Raise-hand interjection",
+            type: "architecture",
+            origin: "llm",
+            generation: { focus: "Controller-owned safe interjection and bounded context-free voice acknowledgement" },
+            doc: {
+              type: "architecture",
+              autoLayoutApplied: true,
+              nodes: [
+                {
+                  id: "panel",
+                  label: "Pair panel\nHand and state projection",
+                  files: ["packages/vscode/src/webview/panel.ts", "packages/vscode/src/panel_html.ts"],
+                  x: 40,
+                  y: 160,
+                },
+                {
+                  id: "controller",
+                  label: "Controller\nAttention state owner",
+                  files: ["packages/core/src/controller.ts"],
+                  x: 580,
+                  y: 160,
+                },
+                { id: "player", label: "Player\nSafe work and voice boundary", files: ["packages/core/src/player.ts"], x: 1120, y: 160 },
+                {
+                  id: "speech",
+                  label: "Speech service\nFixed cue cache owner",
+                  files: ["packages/vscode/src/speech_service.ts"],
+                  x: 580,
+                  y: 560,
+                },
+                {
+                  id: "route",
+                  label: "Output router\nDevice and retirement",
+                  files: ["packages/vscode/src/speech_output_router.ts"],
+                  x: 1120,
+                  y: 560,
+                },
+              ],
+              edges: [
+                {
+                  from: "panel",
+                  to: "controller",
+                  label: "request / lower hand",
+                  labelPosition: { distance: 0.5, offset: { x: 0, y: -25 } },
+                },
+                {
+                  from: "controller",
+                  to: "player",
+                  label: "boundary rendezvous",
+                  labelPosition: { distance: 0.5, offset: { x: 0, y: -25 } },
+                },
+                {
+                  from: "player",
+                  to: "controller",
+                  label: "boundary and voice settled",
+                  vertices: [
+                    { x: 1290, y: 400 },
+                    { x: 750, y: 400 },
+                  ],
+                  labelPosition: { distance: 0.5, offset: { x: 0, y: -25 } },
+                },
+                {
+                  from: "controller",
+                  to: "speech",
+                  label: "held: play fixed cue",
+                  labelPosition: { distance: 0.5, offset: { x: -65, y: 0 } },
+                },
+                { from: "speech", to: "route", label: "fresh route admission", labelPosition: { distance: 0.5, offset: { x: 0, y: -25 } } },
+                {
+                  from: "controller",
+                  to: "panel",
+                  label: "authoritative state",
+                  vertices: [
+                    { x: 750, y: 350 },
+                    { x: 210, y: 350 },
+                  ],
+                  labelPosition: { distance: 0.5, offset: { x: 0, y: 25 } },
+                },
+              ],
+              groups: [],
+              comments: {
+                controller: [
+                  {
+                    id: "attention-owner",
+                    text: "The controller owns idle, requested and granted attention state scoped to the current session. The player supplies a safe work boundary and drains existing narration before granting. The attention hold prevents subsequent work; it must not pause the acknowledgement cue. Other pause reasons remain effective. Reply or explicit cancellation invalidates the request; stale completion cannot grant a successor session.",
+                    ts: 0,
+                  },
+                ],
+                speech: [
+                  {
+                    id: "attention-cache",
+                    text: "One fixed context-free cue is synthesized lazily and remembered in process memory after successful playback. Relevant synthesis, privacy or credential changes invalidate it; stale or canceled results cannot populate it. No prior narration is sent or appended. Cache replay makes no provider request and routes through the current selected output. Disabled or failed audio leaves the text cue and work hold usable.",
+                    ts: 0,
+                  },
+                ],
+                panel: [
+                  {
+                    id: "attention-view",
+                    text: "The hand button sits beside Reply. Pending click lowers the hand; granted click focuses Reply. The page projects controller state rather than owning a second lifecycle. Reveal agent cursor beside Pause is navigation only and does not alter turn or playback.",
                     ts: 0,
                   },
                 ],

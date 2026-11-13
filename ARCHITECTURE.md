@@ -101,7 +101,11 @@ diagram was inspected in headless Chromium without page errors.
 -   **Spoken narration** is an optional port on the session controller. With the
     local companion installed, the workspace port forwards bounded requests to
     the UI host. One local service owns playback, cancellation and page
-    generations for both providers.
+    generations for both providers. The same service owns one in-memory,
+    context-free attention cue: it reserves the current output route on each
+    playback and caches only completed audio. Speech-setting or credential
+    changes invalidate it; output-device changes use the new route. The cue is
+    excluded from narration context.
     Kokoro uses a local CPU worker after explicit model setup. The optional
     ElevenLabs client sends only spoken narration or an explicit voice preview
     to its fixed HTTPS API. Its API key stays in the local companion's VS Code
@@ -571,3 +575,25 @@ waits for a matching terminal acknowledgement with a separate three-second
 retirement bound and abort/disposal cleanup. Unavailable admission leaves the
 text visible and reports unavailable speech. Session end and interruption stop
 remaining asynchronous speech; they do not add a new session-end drain phase.
+
+## Raise-hand interjection
+
+The controller owns the session-scoped attention request and hold. The player
+reaches a safe edit or reading boundary and drains its current logical
+speech before granting the floor. The hold blocks subsequent work without
+pausing the fixed acknowledgement cue. A separate derived `speechPaused`
+projection preserves ordinary audio pauses while the panel shows work held.
+The page renders this state; it does not schedule the transition itself.
+
+The local speech service owns one in-memory, context-free acknowledgement
+waveform and uses the existing synthesis, tempo, output-admission and retirement
+paths. Relevant settings or credential changes invalidate it. A cache miss is
+synthesized only on use; a hit selects the current output without another
+provider request. Failed or canceled playback cannot populate the cache.
+
+The Archi source includes the `Raise-hand interjection` ownership diagram and
+updates the speech-service responsibility. Archi-Techture 1.5.1 validated the
+source; its HTML export was regenerated and normalized. Both normalizer suites
+passed, and headless Chromium rendered the new diagram without page errors.
+Its labels and connections were visually inspected. This establishes diagram
+validity and rendering, not hardware audibility.

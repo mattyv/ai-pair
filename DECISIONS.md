@@ -993,3 +993,60 @@ Spoken narration errors report both whitespace-delimited word and Unicode code
 point counts for string inputs. This helps agents shorten rejected text without
 echoing potentially sensitive narration. Non-string inputs have no counts, and
 the existing eligibility rules and display-only fallback remain unchanged.
+
+## Portable teaching narration
+
+Deliver brief teaching guidance through the existing MCP pairing guide rather
+than changing a user's Claude or Codex configuration. Claude offers an
+Explanatory output style; Codex supports reusable skills, but no shared
+harness control was verified. The programmer successfully tried Anthropic's
+explanatory approach in chat before requesting this integration.
+
+The guide uses original, concise instructions informed by that assessment;
+no upstream plugin code or hook is imported. Connections to earlier work must
+be supported by conversation or verified session history. Similar repository
+code is not evidence of shared experience, and completed narration is not
+proof of learning. Teaching adapts to the programmer's request without forced
+exercises, extra model calls, or a new learner-history store. Existing speech
+limits and pacing apply. This instruction-only change does not alter runtime
+ownership or the architecture model; live session quality remains a human
+assessment rather than a unit-test claim.
+
+## Attention cue cache
+
+The local `SpeechService` owns a single in-memory, context-free waveform for
+the fixed attention cue. It reuses existing synthesis, tempo and output leases,
+and reserves the selected output afresh for every playback. Only a completed
+playback populates the cache. Synthesis-affecting settings and credential changes
+invalidate it eagerly; the next request synthesizes lazily. It never enters the
+session narration context. This saves repeat provider requests while retaining
+text-only operation if speech is unavailable. The cache is not persisted.
+
+## Explicit cursor navigation
+
+The toolbar can focus the editor at the agent's actual cursor without changing
+turn or playback. It uses the editor's authoritative cursor rather than the
+current follow target, which may be a pointed or narrated range. With no cursor
+it does nothing. Cursor identity is checked after asynchronous preparation; a
+navigation already accepted by VS Code cannot be recalled.
+
+Remote attention cues use the existing narration job lease and a versioned,
+text-free command. A terminal acknowledgement requires observed output or a
+failure; cancellation retains the lease until output retirement is confirmed.
+
+## Raising a hand during playback
+
+The controller owns a transient attention state: none, requested, or granted.
+A request waits at the next action boundary, or the next completed code-reading
+chunk, and lets the current speech unit drain before granting the floor. The
+hold stops further playback but does not pause the voice being drained. A second
+click cancels a pending request; a reply or Resume releases a granted hold.
+Ordinary pause reasons remain separate, so the fixed attention cue cannot
+bypass them. Stopping, disconnecting, or replacing the session invalidates the
+request. A continued speech unit remains owned by the player after its batch
+ends and must drain before an idle request is granted.
+
+The cue is optional and failures leave the text and floor available. Attention
+is not restored as live state after reload; the controller publishes a fresh
+snapshot after restoration. The bounded model abstracts the audio owner's
+physical retirement, settings, and cue cache; those require separate checks.

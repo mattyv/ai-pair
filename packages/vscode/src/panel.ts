@@ -904,8 +904,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
           controller().resume('reply');
           return;
         }
-        controller().resume(undefined, { reveal: false });
+        // The owner sees the held reply before resume releases attention.
         controller().userMessage(message.text, message.attach === true ? this.selection.current() : undefined, message.defer === true);
+        controller().resume(undefined, { reveal: false });
         return;
       case 'draft':
         // Typing a reply pauses playback, the way a pair stops when you start talking (specs/Draft.tla, `TypeDraft`, `Clear`).
@@ -914,6 +915,12 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         } else {
           controller().pause('reply');
         }
+        return;
+      case 'attention':
+        controller().requestAttention();
+        break;
+      case 'revealCursor':
+        controller().revealCursor();
         return;
       case 'pause':
         controller().pause();

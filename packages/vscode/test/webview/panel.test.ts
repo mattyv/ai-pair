@@ -932,6 +932,11 @@ describe('the controls', () => {
     expect(posted()).toEqual([{ type: 'pause' }, { type: 'resume' }, { type: 'interrupt' }, { type: 'end' }]);
   });
 
+  it('ShowsCursor: requests cursor navigation without changing playback', () => {
+    click(element('reveal-cursor'));
+    expect(posted()).toEqual([{ type: 'revealCursor' }]);
+  });
+
   it('takes the turn bare, and hands it back with the reply and the selection', () => {
     click(element('turn'));
     send({ type: 'state', state: 'navigator', turn: 'programmer', paused: false });
@@ -3386,4 +3391,84 @@ it('shows context capabilities for supported and unsupported models', () => {
   expect(text('speech-context-capability')).toContain('Delivery cues only');
   send({ type: 'speechSettings', value: { ...base, openRouterModel: 'other/model' } });
   expect(text('speech-context-capability')).toContain('ordinary speech only');
+});
+
+it('requests and cancels attention from the hand button using the owner snapshot', () => {
+  start();
+  const hand = element('attention');
+  click(hand);
+  expect(post).toHaveBeenLastCalledWith({ type: 'attention' });
+  send({ type: 'attention', state: 'requested' });
+  expect(hand.getAttribute('aria-label')).toBe('Lower hand');
+  expect(hand.classList.contains('on')).toBe(true);
+  click(hand);
+  expect(post).toHaveBeenLastCalledWith({ type: 'attention' });
+  send({ type: 'attention', state: 'granted' });
+  expect(hand.getAttribute('aria-label')).toBe('Focus reply');
+  expect(document.activeElement).toBe(element('reply'));
+  click(hand);
+  expect(document.activeElement).toBe(element('reply'));
+  send({ type: 'attention', state: 'none' });
+  expect(hand.getAttribute('aria-label')).toBe('Raise hand');
+  expect(hand.classList.contains('on')).toBe(false);
+});
+
+it('plays the cue under the attention hold but respects an independent speech pause', async () => {
+  const play = vi.fn<() => Promise<void>>().mockResolvedValue();
+  class FakeAudio {
+    pause(): void {}
+    play = play;
+    addEventListener(): void {}
+  }
+  vi.stubGlobal('Audio', FakeAudio);
+  vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:test');
+  vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+  start();
+  send({ type: 'speechPage', pageId: 1 });
+  send({ type: 'state', state: 'paused', turn: 'agent', paused: true, speechPaused: false });
+  send({ type: 'speechStatus', id: 1, pageId: 1, state: 'preparing' });
+  send({ type: 'speechAudio', id: 1, pageId: 1, wavBase64: 'AQI=', durationMs: 100 });
+  await Promise.resolve();
+  expect(play).toHaveBeenCalledOnce();
+  send({ type: 'speechControl', id: 1, pageId: 1, action: 'stop' });
+  send({ type: 'state', state: 'paused', turn: 'agent', paused: true, speechPaused: true });
+  send({ type: 'speechStatus', id: 2, pageId: 1, state: 'preparing' });
+  send({ type: 'speechAudio', id: 2, pageId: 1, wavBase64: 'AQI=', durationMs: 100 });
+  await Promise.resolve();
+  expect(play).toHaveBeenCalledOnce();
+});
+
+it('disables the hand outside a session and restores its state without focusing on replay', () => {
+  const hand = element('attention');
+  if (!(hand instanceof window.HTMLButtonElement)) throw new TypeError('Missing hand button');
+  expect(hand.disabled).toBe(true);
+  send({
+    type: 'replay',
+    events: [
+      { type: 'session', active: true },
+      { type: 'attention', state: 'granted' },
+    ],
+  });
+  expect(hand.disabled).toBe(false);
+  expect(hand.getAttribute('aria-label')).toBe('Focus reply');
+  expect(document.activeElement).not.toBe(element('reply'));
+  send({ type: 'attention', state: 'none' });
+  send({ type: 'session', active: false, reason: 'agent' });
+  expect(hand.disabled).toBe(true);
+});
+
+it.each(['requested', 'granted'] as const)('clears a replayed %s hand when the revived owner resets attention', (state) => {
+  send({
+    type: 'replay',
+    events: [
+      { type: 'session', active: true },
+      { type: 'attention', state },
+    ],
+  });
+  send({ type: 'session', active: true, suspended: true });
+  send({ type: 'attention', state: 'none' });
+  post.mockClear();
+  click(element('attention'));
+  expect(posted()).toEqual([{ type: 'attention' }]);
+  expect(element('attention').getAttribute('aria-label')).toBe('Raise hand');
 });
