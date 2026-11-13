@@ -350,7 +350,13 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   }
 
   renderCursor(cursor: CursorView | undefined, state: AgentState, focus: Focus): void {
+    const previous = this.cursor?.file;
+    if (previous !== undefined && previous !== cursor?.file && !this.inWorkspace(previous)) this.mirror.delete(previous);
     this.cursor = cursor;
+    if (cursor !== undefined && previous !== cursor.file) {
+      const doc = this.openDocument(cursor.file);
+      if (doc !== undefined) this.track(doc);
+    }
     this.focus = focus;
     const changed = state !== this.state;
     if (changed) {
@@ -448,6 +454,16 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
 
   // ---- The programmer's selection ------------------------------------------
 
+  /** Returns the native active caret for a workspace or current agent cursor file. */
+  programmerCursor(): { file: string; line: number; column: number } | undefined {
+    const editor = vscode.window.activeTextEditor;
+    if (editor === undefined || editor.document.uri.scheme !== 'file') return undefined;
+    const file = editor.document.uri.fsPath;
+    if (!this.inWorkspace(file) && file !== this.cursor?.file) return undefined;
+    const position = editor.selection.active;
+    return { file, line: position.line + 1, column: position.character + 1 };
+  }
+
   /** Returns what the programmer has selected in a workspace file, if anything. */
   programmerSelection(): SharedSelection | undefined {
     const editor = this.lastEditor;
@@ -486,14 +502,16 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
 
   /** Mirrors the text of a workspace file's document: what a change to it is a change from. */
   private track(doc: vscode.TextDocument): void {
-    if (doc.uri.scheme === 'file' && this.inWorkspace(doc.uri.fsPath)) this.mirror.set(doc.uri.fsPath, doc.getText());
+    if (doc.uri.scheme === 'file' && (this.inWorkspace(doc.uri.fsPath) || doc.uri.fsPath === this.cursor?.file)) {
+      this.mirror.set(doc.uri.fsPath, doc.getText());
+    }
   }
 
   private onChange(event: vscode.TextDocumentChangeEvent): void {
     const doc = event.document;
     if (doc.uri.scheme !== 'file' || event.contentChanges.length === 0) return;
     const file = doc.uri.fsPath;
-    // Only the workspace's files are mirrored: a change elsewhere is none of the agent's business.
+    // Only workspace files and the current agent cursor file are mirrored.
     const before = this.mirror.get(file);
     if (before === undefined) return;
     const after = doc.getText();

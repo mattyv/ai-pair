@@ -1083,3 +1083,34 @@ speech-service and output boundaries. This correction restores the documented
 connection rather than changing that architecture. Unit adapter tests and
 composed transport/output tests are separate evidence; they do not establish
 hardware audibility or one complete activation-to-hardware run.
+
+## Navigator observations and programmer messages
+
+Observe workspace documents plus the current Pair cursor file outside the
+workspace. This lets a named temporary example participate in pairing without
+monitoring unrelated outside documents. Retire that outside mirror when the
+Pair cursor changes or clears. Other previously read outside files are not a
+persistent watch list. The editor supplies the native programmer caret; it
+does not move the agent cursor or own navigator readiness.
+
+The controller owns typing-pause generations and report acknowledgement.
+An idle timeout can report edits without consuming a later typing-pause wake.
+Navigator listens use a ten-second default idle limit, bounded by a smaller
+configured maximum; the agent-turn default remains 45 seconds. Reports state
+why the call returned and how long it waited. Numbered edit diffs are separate
+from the agent cursor excerpt, so edits beyond that excerpt remain visible.
+
+Keep immediate programmer messages canceling queued navigator `say` and
+`point` actions. A reply is new intent and can make older observations stale;
+retaining them can delay or contradict the response. Give one observation per
+batch and listen before continuing a review. The explicit deferred-message
+option retains its existing separate semantics. No new commentary queue owner
+is introduced.
+
+The relay accepts the documented delivery cue enum independently of speech
+settings. Its response describes cues as advisory and conditional on enabled
+context and model support. It cannot confirm actual provider application:
+that acknowledgement is absent from the current narration boundary. This fix
+does not add provider or cost plumbing. The matching 0.36.1 relay already
+publishes `speech_mode` in actual MCP `tools/list`; the new conformance test
+checks both fields and real calls rather than client presentation.

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.37.1
+
+-   Observe programmer edits in the current Pair file outside the workspace,
+    including temporary files, without monitoring unrelated outside documents.
+-   Report navigator wake reasons, elapsed wait time, edits and the programmer
+    cursor. Use a shorter navigator idle limit and retain typing-pause evidence
+    across timeout reports.
+-   Align published speech fields with validation and clarify delivery cues as
+    advisory. Guide requested live commentary without retaining stale queued
+    observations after a programmer message.
+
 ## 0.37.0
 
 -   Demonstrate the hand control in the guided demo and clean up verified

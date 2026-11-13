@@ -198,6 +198,16 @@ export const REPORT_SCHEMA = z.object({
   turn: TURN_SCHEMA,
   /** The agent cursor's line, when it isn't where the agent last saw it: in this report's code, or an earlier report. */
   cursor: CODE_SCHEMA.optional(),
+  /** Evidence about why a navigator listen returned and where the programmer is editing. */
+  navigator: z
+    .object({
+      wakeReason: z.enum(['typing_pause', 'idle_timeout', 'turn_change', 'message', 'hand_raised']),
+      elapsedMs: z.number().nonnegative(),
+      /** Identifies a restorable navigator notice within its session. */
+      noticeId: z.number().int().positive().optional(),
+      programmerCursor: z.object({ file: z.string(), ...LINE_COLUMN_SCHEMA.shape }).optional(),
+    })
+    .optional(),
   waiting: z.literal(true).optional(),
   /** Reminds the agent to select speech when it is available. */
   speechReminder: z.literal(true).optional(),

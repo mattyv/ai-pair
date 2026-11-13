@@ -56,6 +56,15 @@ describe('selected narration', () => {
     expect(problems({ delete: true, speech_mode: 'continue' })).not.toEqual([]);
   });
 
+  it('accepts delivery cues only on say', () => {
+    vi.mocked(actionKinds).mockReturnValue(['say']);
+    for (const speech_delivery of ['neutral', 'curious', 'excited', 'whispering']) {
+      expect(problems({ say: 'hello', speech_delivery })).toEqual([]);
+    }
+    expect(problems({ say: 'hello', speech_delivery: 'angry' })).not.toEqual([]);
+    expect(problems({ delete: true, speech_delivery: 'curious' })).not.toEqual([]);
+  });
+
   it('checks flagged text and leaves unflagged narration alone', () => {
     vi.mocked(actionKinds).mockReturnValue(['say']);
     vi.mocked(speechProblem).mockReturnValue('shorten the narration');

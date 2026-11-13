@@ -39,6 +39,9 @@ import { SpeechReminder } from './speech_reminder';
 import { defaultConfig, type Config, type Timeouts } from './config';
 import { defaultTiming, glideDuration, withOverrides } from './timing';
 
+/** Bounds a navigator listen while the programmer is working. */
+const NAVIGATOR_BLOCK_MS = 10_000;
+
 const UNANCHORED =
   'Your previous batch was interrupted, discarded, or failed, so your cursor is where it stopped, not where that batch would have ended. `read` the file, then start this batch with a `move` or `select` that gives both `file` and `line`.';
 const FILE_REQUIRED =
@@ -132,6 +135,7 @@ interface Session {
   /** Its agent disconnected, or the window reloaded: it waits for a `start` from its directory (#25). */
   suspended: boolean;
   navigatorReady: boolean;
+  navigatorGeneration: number;
   navigatorTimer?: ReturnType<typeof setTimeout>;
   /** The cursor's line as the agent last saw it in a report, so reports only show it when it changed. */
   seenCursor?: string;
@@ -148,6 +152,7 @@ interface Call {
   batch?: Batch;
   summary?: string;
   timer: ReturnType<typeof setTimeout>;
+  startedAt: number;
   resolve: (report: Report) => void;
   reject: (error: unknown) => void;
 }
@@ -198,7 +203,7 @@ function callReady(session: Session, call: Call): boolean {
       if (session.queue.length > 0) return false;
       if (session.scene.turn === 'agent') return session.events.some(interrupting);
       // The programmer's edits during their turn wait until they pause typing (specs/Navigator.tla, `Return`).
-      return session.events.some((e) => e.kind !== 'edit') || (session.navigatorReady && session.events.some(interrupting));
+      return session.events.some((e) => e.kind !== 'edit') || session.navigatorReady;
   }
 }
 
@@ -267,6 +272,10 @@ export class Controller {
   private chain: Promise<unknown> = Promise.resolve();
   private nextBatchId = 1;
   private readonly pauseReasons = new Set<PauseReason>();
+  /** An attention grant not yet delivered to a navigator listen. */
+  private attentionNotice = false;
+  private attentionGeneration = 0;
+  private noticeGeneration = 0;
   private attention: 'none' | 'requested' | 'granted' = 'none';
   private attentionRelease: (() => void) | undefined;
   private attentionWait: Promise<void> = Promise.resolve();
@@ -395,6 +404,7 @@ export class Controller {
       ended: false,
       suspended: false,
       navigatorReady: false,
+      navigatorGeneration: ++this.noticeGeneration,
       lines,
       seen: new Map(),
     };
@@ -585,6 +595,14 @@ export class Controller {
       this.session = session;
       this.closed = undefined;
     }
+    const notice = report.navigator;
+    // specs/Navigator.tla and specs/Attention.tla, Restore: do not revive a superseded notice.
+    if (!session.ended && session.scene.turn === 'programmer' && notice?.noticeId !== undefined) {
+      if (notice.wakeReason === 'typing_pause' && notice.noticeId === session.navigatorGeneration) session.navigatorReady = true;
+      if (notice.wakeReason === 'hand_raised' && this.attention === 'granted' && notice.noticeId === this.attentionGeneration) {
+        this.attentionNotice = true;
+      }
+    }
     session.finished.unshift(...report.batches);
     session.events.unshift(...report.events);
     if (mayRepeat) session.mayRepeat = true;
@@ -647,9 +665,11 @@ export class Controller {
       // Interrupting nothing (specs/Controller.tla, `EditQuietly`). Typing again: the pause the timer marked is
       // over, so wait for the next (specs/Navigator.tla, `EditAsProgrammer`).
       session.navigatorReady = false;
+      session.navigatorGeneration = ++this.noticeGeneration;
       clearTimeout(session.navigatorTimer);
       session.navigatorTimer = setTimeout(() => {
         // specs/Navigator.tla, `Fire`.
+        if (this.session !== session || session.scene.turn !== 'programmer') return;
         session.navigatorReady = true;
         this.pump();
       }, this.config.navigatorIdleMs);
@@ -718,6 +738,7 @@ export class Controller {
     const session = this.activeSession();
     if (!session || session.scene.turn === 'programmer') return;
     session.scene.turn = 'programmer';
+    session.navigatorGeneration = ++this.noticeGeneration;
     session.scene.focus = 'cursor';
     this.flushDeferred(session);
     session.events.push({ kind: 'turn', to: 'programmer' });
@@ -731,6 +752,8 @@ export class Controller {
     const session = this.activeSession();
     if (!session || session.scene.turn === 'agent') return;
     session.scene.turn = 'agent';
+    session.navigatorReady = false;
+    session.navigatorGeneration = ++this.noticeGeneration;
     clearTimeout(session.navigatorTimer);
     const event: Event = { kind: 'turn', to: 'agent' };
     if (message !== undefined) event.message = message;
@@ -826,6 +849,9 @@ export class Controller {
         return this.attentionBoundary(session, speech);
       }
       this.attention = 'granted';
+      // specs/Attention.tla, Grant: a navigator may acknowledge this grant once.
+      this.attentionNotice = true;
+      this.attentionGeneration = ++this.noticeGeneration;
       this.reportPause();
       if (this.session !== session) return;
       if (this.attentionState() !== 'granted' || wait !== this.attentionWait) {
@@ -837,6 +863,7 @@ export class Controller {
         return this.attentionBoundary(session, speech);
       }
       this.panel.post({ type: 'say', text: "What's up?" });
+      this.pump();
       if (this.attention === 'granted' && wait === this.attentionWait && this.pauseReasons.size === 0) {
         void this.narration?.attentionCue().catch(() => {});
       }
@@ -858,6 +885,7 @@ export class Controller {
     const granted = this.attention === 'granted';
     const release = this.attentionRelease;
     this.attention = 'none';
+    this.attentionNotice = false;
     this.attentionRelease = undefined;
     const releasedWait = Promise.resolve();
     this.attentionWait = releasedWait;
@@ -1156,12 +1184,18 @@ export class Controller {
         kind,
         session,
         ...opts,
+        startedAt: Date.now(),
         resolve,
         reject,
         // specs/Navigator.tla, `Timeout`, for a listen; specs/Serialize.tla, `Timeout`.
-        timer: setTimeout(() => {
-          this.finishCall(call, /* timedOut= */ true);
-        }, this.config.maxBlockMs),
+        timer: setTimeout(
+          () => {
+            this.finishCall(call, /* timedOut= */ true);
+          },
+          kind === 'listen' && session.scene.turn === 'programmer'
+            ? Math.min(this.config.maxBlockMs, NAVIGATOR_BLOCK_MS)
+            : this.config.maxBlockMs,
+        ),
       };
       this.call = call;
       // specs/Serialize.tla, `Cancel`: the listener releases the call only while it is this.call.
@@ -1181,7 +1215,7 @@ export class Controller {
     if (session.ended) return true;
     // An interrupted batch finishes promptly; wait for it, so the report says what was typed.
     if (session.queue[0]?.state === 'playing' && session.timeline.isInterrupted) return false;
-    return callReady(session, call);
+    return (call.kind === 'listen' && session.scene.turn === 'programmer' && this.attentionNotice) || callReady(session, call);
   }
 
   private pump(): void {
@@ -1197,7 +1231,41 @@ export class Controller {
     clearTimeout(call.timer);
     const session = call.session;
     // `Commit` in specs/Controller.tla. Nothing more to wait for once the session is ending.
+    const events = session.events;
+    const wakeReason = timedOut
+      ? 'idle_timeout'
+      : this.attentionNotice && session.scene.turn === 'programmer'
+        ? 'hand_raised'
+        : events.some((event) => event.kind === 'turn')
+          ? 'turn_change'
+          : events.some((event) => event.kind === 'message')
+            ? 'message'
+            : session.navigatorReady
+              ? 'typing_pause'
+              : undefined;
+    if (call.kind === 'listen' && wakeReason === 'typing_pause') session.navigatorReady = false;
+    if (call.kind === 'listen' && wakeReason === 'hand_raised') {
+      // specs/Attention.tla, Acknowledge.
+      this.attentionNotice = false;
+    }
+    const programmerCursor = this.editor.programmerCursor();
     const report = this.snapshot(session, /* waiting= */ timedOut && !session.ended && call.kind !== 'end', call.batch);
+    if (
+      call.kind === 'listen' &&
+      !session.ended &&
+      wakeReason !== undefined &&
+      (session.scene.turn === 'programmer' || events.some((event) => event.kind === 'turn'))
+    ) {
+      report.navigator = {
+        wakeReason,
+        elapsedMs: Math.max(0, Date.now() - call.startedAt),
+        ...(wakeReason === 'typing_pause' ? { noticeId: session.navigatorGeneration } : {}),
+        ...(wakeReason === 'hand_raised' ? { noticeId: this.attentionGeneration } : {}),
+        ...(programmerCursor === undefined
+          ? {}
+          : { programmerCursor: { ...programmerCursor, file: this.displayPath(session, programmerCursor.file) } }),
+      };
+    }
     // An ended session stays until its held rejections are out, one per report (specs/Controller.tla, `Commit` with DrainHeld).
     const closing = (session.ended && session.held.length === 0) || call.kind === 'end';
     if (closing) {
@@ -1331,7 +1399,6 @@ export class Controller {
     } else if (session.stale) {
       session.staleReported = true;
     }
-    session.navigatorReady = false;
 
     const report: Report = { batches, events, turn: session.scene.turn };
     if (submitted && submitted.state !== 'done') report.submitted = { id: submitted.id, status: submitted.state };

@@ -100,7 +100,11 @@ const fakes = vi.hoisted(() => {
 
   /** A text editor, faked: its document, selection, visible ranges, and what it was asked to draw, edit, and reveal. */
   class FakeEditor {
-    selection = { start: { line: 0, character: 0 }, end: { line: 0, character: 0 }, isEmpty: true };
+    selection: { start: FakePosition; end: FakePosition; active?: FakePosition; isEmpty: boolean } = {
+      start: { line: 0, character: 0 },
+      end: { line: 0, character: 0 },
+      isEmpty: true,
+    };
     visibleRanges: FakeLines[] = [];
     viewColumn: number | undefined = 1;
     /** Whether VS Code applies an edit. */
@@ -1040,6 +1044,32 @@ describe('follow mode: looking away', () => {
 });
 
 describe("the programmer's selection", () => {
+  it('projects the active editor caret, including an empty selection and a reversed selection', () => {
+    const { editor } = made();
+    const view = inView(FILE);
+    fakes.active = view;
+    view.selection.active = { line: 2, character: 4 };
+    expect(editor.programmerCursor()).toEqual({ file: FILE, line: 3, column: 5 });
+    view.selection.active = { line: 1, character: 2 };
+    expect(editor.programmerCursor()).toEqual({ file: FILE, line: 2, column: 3 });
+    fakes.active = undefined;
+    expect(editor.programmerCursor()).toBeUndefined();
+  });
+
+  it('limits the active caret to file documents in the workspace or at the agent cursor', () => {
+    const { editor } = made();
+    const outside = inView(OUTSIDE);
+    outside.selection.active = { line: 0, character: 0 };
+    fakes.active = outside;
+    expect(editor.programmerCursor()).toBeUndefined();
+    editor.renderCursor({ file: OUTSIDE, offset: 0 }, 'navigator', 'cursor');
+    expect(editor.programmerCursor()).toEqual({ file: OUTSIDE, line: 1, column: 1 });
+    editor.renderCursor(undefined, 'thinking', 'cursor');
+    expect(editor.programmerCursor()).toBeUndefined();
+    fakes.active = new fakes.FakeEditor(new fakes.FakeDocument('Untitled-1', '', 'untitled'));
+    expect(editor.programmerCursor()).toBeUndefined();
+  });
+
   it('shares the selection in a workspace file by its lines, and its text cut off at MAX_EXCERPT', () => {
     const { editor } = made();
     const view = inView(FILE);
@@ -1112,6 +1142,46 @@ describe("the programmer's selection", () => {
 });
 
 describe('who made a change', () => {
+  it('reports native edits in the agent cursor file outside the workspace', () => {
+    const doc = new fakes.FakeDocument(OUTSIDE, '');
+    fakes.documents.push(doc);
+    const { editor, controller } = made();
+    editor.renderCursor({ file: OUTSIDE, offset: 0 }, 'navigator', 'cursor');
+    doc.isDirty = true;
+    doc.text = 'hello';
+    changeOf(doc, [{ rangeOffset: 0, rangeLength: 0, text: 'hello' }]);
+    expect(controller.userEdit.mock.calls).toEqual([[OUTSIDE, '', 'hello', [{ offset: 0, deleteLength: 0, text: 'hello' }]]]);
+  });
+
+  it('tracks an outside cursor file opened later and retires it when the cursor moves or clears', () => {
+    const { editor, controller } = made();
+    const doc = new fakes.FakeDocument(OUTSIDE, '');
+    editor.renderCursor({ file: OUTSIDE, offset: 0 }, 'navigator', 'cursor');
+    fire('open', doc);
+    doc.isDirty = true;
+    doc.text = 'a';
+    changeOf(doc, [{ rangeOffset: 0, rangeLength: 0, text: 'a' }]);
+    editor.renderCursor({ file: FILE, offset: 0 }, 'navigator', 'cursor');
+    doc.text = 'ab';
+    changeOf(doc, [{ rangeOffset: 1, rangeLength: 0, text: 'b' }]);
+    expect(controller.userEdit.mock.calls).toHaveLength(1);
+    editor.renderCursor({ file: OUTSIDE, offset: 0 }, 'navigator', 'cursor');
+    editor.renderCursor(undefined, 'thinking', 'cursor');
+    doc.text = 'abc';
+    changeOf(doc, [{ rangeOffset: 2, rangeLength: 0, text: 'c' }]);
+    expect(controller.userEdit.mock.calls).toHaveLength(1);
+  });
+
+  it('does not track unrelated outside documents', () => {
+    const doc = new fakes.FakeDocument(OUTSIDE, '');
+    const { controller } = made();
+    fire('open', doc);
+    doc.isDirty = true;
+    doc.text = 'a';
+    changeOf(doc, [{ rangeOffset: 0, rangeLength: 0, text: 'a' }]);
+    expect(controller.userEdit.mock.calls).toHaveLength(0);
+  });
+
   it("RightAuthor, ChangesHandled: reports a keystroke as the programmer's, its changes from the highest offset down", () => {
     const doc = new fakes.FakeDocument(FILE, 'abc');
     fakes.documents.push(doc);

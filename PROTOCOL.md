@@ -202,8 +202,17 @@ Returns when:
 
 -   all batches have finished and a programmer event arrives (message, turn
     change, ...), or
+-   the programmer pauses typing during their turn, or
 -   a batch finishes with a status other than `completed`, or
--   `MAX_BLOCK` elapses.
+-   the idle limit elapses. The default is 10 seconds during the programmer's
+    turn and 45 seconds during the agent's turn. A smaller configured maximum
+    still applies.
+
+Navigator reports include the return reason and elapsed controller wait time.
+They distinguish a typing pause, idle timeout, turn change, programmer message
+and granted hand request. Programmer edits remain numbered diffs, independent
+of the agent cursor window. The programmer cursor is a separate position fact;
+it does not move the agent cursor or transfer the turn.
 
 `listen` is how the agent "ends its turn" without actually ending it.
 

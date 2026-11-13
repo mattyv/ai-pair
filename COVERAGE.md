@@ -354,6 +354,7 @@ Last updated: css, 2026-11-13.
 | `packages/vscode/test/integration_vscode_coverage_paths.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/integration_workspace_incompatible.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/launcher.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
+| `packages/vscode/test/navigator_editor.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/output.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/outside.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/outside_watch.test.ts` | TypeScript | test | test | test | test | - | test |

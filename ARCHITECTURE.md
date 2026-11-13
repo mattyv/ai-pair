@@ -603,3 +603,27 @@ through the same selected-owner, readiness and cancellation-generation checks
 as ordinary speech. A missing forwarding method is rejected by the internal
 port type. The existing Archi connection and owners remain accurate; this
 adapter correction does not add a new boundary or a second state machine.
+
+## Navigator activity reports
+
+The editor adapter mirrors workspace documents and the current Pair cursor
+file outside the workspace. Cursor changes or session cleanup retire that
+outside-file interest. This fixes temporary-file edits being discarded before
+they reached the controller; it does not add a global outside-file watcher.
+The native caret is a read-only port fact, separate from the agent cursor.
+
+The controller owns typing-pause evidence, timer identity and acknowledgement.
+It snapshots edit facts for a report, leaving later changes for the next call.
+An idle timeout does not consume the only opportunity to report a later pause.
+The relay renders the return reason, elapsed wait, numbered diffs and programmer
+cursor. It does not infer activity from changes to the agent cursor window.
+
+The Archi `Navigator activity reports` view identifies these owners and the
+MCP boundary. The source model and generated export change together. Queued
+navigator commentary still follows immediate-message cancellation; the guide
+adapts the commentary cadence rather than adding a second queue lifecycle.
+
+The navigator diagram source passed the Archi-Techture 1.5.1 validator. Its
+HTML export was regenerated and normalized with the repository helper. Both
+normalizer test suites passed. Chromium rendered the navigator view without
+page errors; owner labels and connections were visually inspected.

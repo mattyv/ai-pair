@@ -134,6 +134,23 @@ describe('scripted agent flows', () => {
     });
   }
 
+  it('reports a typing pause and unsaved programmer edits before the listen timeout', async () => {
+    const h = await setup(590);
+    h.controller.setTimeouts({ navigatorIdleMs: 50, maxBlockMs: 1000 });
+    const client = await h.connect();
+    await h.call(client, 'start');
+    h.controller.takeTurn();
+    await h.call(client, 'listen');
+    const listening = h.call(client, 'listen');
+    await h.waitFor('listen received', () => h.trace.filter((line) => line.startsWith('socket ') && line.endsWith('listen')).length >= 2);
+    h.editor.userEdit('src/a.ts', { offset: 0, deleteLength: 0, text: 'int main() {}' });
+    const result = await deadline(listening, 500, 590, h.trace);
+    expect(result).toContain('typing pause');
+    expect(result).toContain('int main() {}');
+    expect(result).not.toContain('timed out');
+    await h.call(client, 'end');
+  });
+
   it('suspends and resumes after the editor websocket drops', async () => {
     const h = await setup(101);
     const first = await h.connect();

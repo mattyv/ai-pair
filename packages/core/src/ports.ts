@@ -120,6 +120,8 @@ export interface DiagnosticCheck {
 
 /** Files are absolute paths; offsets are into the document text. */
 export interface EditorPort {
+  /** Returns the active programmer caret in an eligible file, using one-based coordinates. */
+  programmerCursor(): { file: string; line: number; column: number } | undefined;
   /** Checks a file after edits; diagnostics are advisory and may be unavailable. */
   diagnostics(file: string): Promise<DiagnosticCheck>;
   /**
@@ -157,7 +159,7 @@ export interface EditorPort {
 /** What a `Player` asks of the editor: the rest of `EditorPort` is the controller's. */
 export type PlayerEditor = Omit<
   EditorPort,
-  'cleanupIdleTerminals' | 'diagnostics' | 'isDirty' | 'renderCursor' | 'reveal' | 'revealCursor'
+  'programmerCursor' | 'cleanupIdleTerminals' | 'diagnostics' | 'isDirty' | 'renderCursor' | 'reveal' | 'revealCursor'
 >;
 
 /** Something the panel shows: a session starting or ending, a status, a word to the programmer, a report. */

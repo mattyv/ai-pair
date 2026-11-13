@@ -1420,6 +1420,139 @@ describe('listen', () => {
     ]);
   });
 
+  it('ignores an already queued navigator timer after handing back or replacing the session', async () => {
+    const h = await started();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    h.controller.userEdit(A, 'a', 'ab', [{ offset: 1, deleteLength: 0, text: 'b' }]);
+    // Simulates a callback already queued when its timer was cleared.
+    const clear = vi.spyOn(globalThis, 'clearTimeout').mockImplementation(() => {});
+    h.controller.handBack();
+    await report(h.controller.listen());
+    await settle(CONFIG.navigatorIdleMs);
+    clear.mockRestore();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    const listening = h.controller.listen();
+    expect(await pending(listening)).toBe(true);
+    h.controller.userMessage('Next.');
+    await report(listening);
+
+    h.controller.userEdit(A, 'ab', 'abc', [{ offset: 2, deleteLength: 0, text: 'c' }]);
+    const clearAgain = vi.spyOn(globalThis, 'clearTimeout').mockImplementation(() => {});
+    h.controller.endSession();
+    await report(h.controller.listen());
+    await h.controller.start('Replacement');
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    await settle(CONFIG.navigatorIdleMs);
+    clearAgain.mockRestore();
+    const next = h.controller.listen();
+    expect(await pending(next)).toBe(true);
+    h.controller.userMessage('Replacement.');
+    expect((await report(next)).navigator?.wakeReason).toBe('message');
+  });
+
+  it('preserves a due typing pause when a queued batch outlasts the timeout', async () => {
+    const h = await started();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    h.controller.setTimeouts({ navigatorIdleMs: 10, maxBlockMs: 20 });
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    const listening = h.controller.listen();
+    h.controller.userEdit(A, 'a', 'ab', [{ offset: 1, deleteLength: 0, text: 'b' }]);
+    await settle(20);
+    expect((await report(listening)).navigator?.wakeReason).toBe('idle_timeout');
+    finish();
+    await settle();
+    expect((await report(h.controller.listen())).navigator?.wakeReason).toBe('typing_pause');
+  });
+
+  it('restores an undelivered typing pause unless a newer edit superseded it', async () => {
+    const h = await started();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    h.controller.userEdit(A, 'a', 'ab', [{ offset: 1, deleteLength: 0, text: 'b' }]);
+    await settle(CONFIG.navigatorIdleMs);
+    const pause = await report(h.controller.listen());
+    h.controller.restore(pause);
+    expect((await report(h.controller.listen())).navigator?.wakeReason).toBe('typing_pause');
+    h.controller.userEdit(A, 'ab', 'abc', [{ offset: 2, deleteLength: 0, text: 'c' }]);
+    h.controller.restore(pause);
+    const next = h.controller.listen();
+    expect(await pending(next)).toBe(true);
+    await settle(CONFIG.navigatorIdleMs);
+    expect((await report(next)).navigator?.wakeReason).toBe('typing_pause');
+  });
+
+  it('restores a granted hand only while the same grant remains active', async () => {
+    const h = await started();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    const listening = h.controller.listen();
+    h.controller.requestAttention();
+    await settle();
+    const grant = await report(listening);
+    h.controller.restore(grant);
+    expect((await report(h.controller.listen())).navigator?.wakeReason).toBe('hand_raised');
+    h.controller.userMessage('Done.');
+    await report(h.controller.listen());
+    h.controller.requestAttention();
+    await settle();
+    expect((await report(h.controller.listen())).navigator?.wakeReason).toBe('hand_raised');
+    h.controller.restore(grant);
+    const next = h.controller.listen();
+    expect(await pending(next)).toBe(true);
+    h.controller.userMessage('Next.');
+    expect((await report(next)).navigator?.wakeReason).toBe('message');
+  });
+
+  it('reports navigator timeout elapsed and the current programmer cursor', async () => {
+    const h = await started();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    vi.spyOn(h.editor, 'programmerCursor').mockReturnValue({ file: A, line: 4, column: 3 });
+    h.controller.setTimeouts({ maxBlockMs: 45_000 });
+    const listening = h.controller.listen();
+    await settle(9999);
+    expect(await pending(listening)).toBe(true);
+    await settle(1);
+    expect((await report(listening)).navigator).toEqual({
+      wakeReason: 'idle_timeout',
+      elapsedMs: 10_000,
+      programmerCursor: { file: 'a.ts', line: 4, column: 3 },
+    });
+  });
+
+  it('reports a granted raised hand once to a waiting navigator', async () => {
+    const h = await started();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    const listening = h.controller.listen();
+    h.controller.requestAttention();
+    await settle();
+    expect((await report(listening)).navigator?.wakeReason).toBe('hand_raised');
+    const next = h.controller.listen();
+    expect(await pending(next)).toBe(true);
+    h.controller.userMessage('Here.');
+    expect((await report(next)).navigator?.wakeReason).toBe('message');
+  });
+
+  it('reports a typing pause after a timeout already delivered the edit', async () => {
+    const h = await started();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    h.controller.setTimeouts({ maxBlockMs: 10, navigatorIdleMs: 20 });
+    const first = h.controller.listen();
+    h.controller.userEdit(A, 'a', 'ab', [{ offset: 1, deleteLength: 0, text: 'b' }]);
+    await settle(10);
+    expect((await report(first)).navigator?.wakeReason).toBe('idle_timeout');
+    const next = h.controller.listen();
+    await settle(10);
+    expect((await report(next)).navigator?.wakeReason).toBe('typing_pause');
+  });
+
   it("returns in the programmer's turn for something other than an edit", async () => {
     const h = await started();
     h.controller.takeTurn();

@@ -41282,6 +41282,88 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
               },
             },
           },
+          {
+            id: "navigator-activity-reports",
+            name: "Navigator activity reports",
+            type: "architecture",
+            origin: "llm",
+            generation: { focus: "Current-file observation, controller pause evidence and truthful MCP reporting" },
+            doc: {
+              type: "architecture",
+              autoLayoutApplied: true,
+              nodes: [
+                {
+                  id: "editor",
+                  label: "VS Code adapter\nEligible files and native caret",
+                  files: ["packages/vscode/src/editor.ts"],
+                  x: 40,
+                  y: 160,
+                },
+                {
+                  id: "controller",
+                  label: "Controller\nTyping pause and report owner",
+                  files: ["packages/core/src/controller.ts", "packages/core/src/config.ts"],
+                  x: 600,
+                  y: 160,
+                },
+                {
+                  id: "relay",
+                  label: "MCP relay\nValidated schema and report",
+                  files: ["packages/relay/src/tools.ts", "packages/relay/src/render.ts", "packages/protocol/src/schemas.ts"],
+                  x: 1160,
+                  y: 160,
+                },
+                { id: "programmer", label: "Programmer\nMy turn, edits and messages", files: [], x: 40, y: 560 },
+                { id: "agent", label: "Agent navigator\nRead, one point, then listen", files: ["AGENT_GUIDE.md"], x: 1160, y: 560 },
+              ],
+              edges: [
+                { from: "editor", to: "controller", label: "eligible edit / caret" },
+                { from: "controller", to: "relay", label: "reason / diff / elapsed" },
+                { from: "programmer", to: "editor", label: "native input", labelPosition: { distance: 0.5, offset: { x: 65, y: 0 } } },
+                { from: "relay", to: "agent", label: "MCP result", labelPosition: { distance: 0.5, offset: { x: -65, y: 0 } } },
+                {
+                  from: "programmer",
+                  to: "controller",
+                  label: "new intent cancels old advice",
+                  vertices: [
+                    { x: 210, y: 420 },
+                    { x: 770, y: 420 },
+                  ],
+                },
+              ],
+              groups: [],
+              comments: {
+                editor: [
+                  {
+                    id: "observed-scope",
+                    text: "Mirror workspace documents plus the current Pair cursor file outside the workspace. Retire outside-file interest when that cursor changes or clears. Ignore unrelated outside documents. Native selection supplies the programmer caret, including an empty selection; it never changes the agent cursor or turn.",
+                    ts: 0,
+                  },
+                ],
+                controller: [
+                  {
+                    id: "navigator-owner",
+                    text: "The controller owns edit generations, the quiet timer, pause acknowledgement and the immutable report snapshot. A timeout can report edits without consuming the later pause acknowledgement. Navigator idle limit defaults to 10 seconds; the agent limit remains 45 seconds. Reason and elapsed wait distinguish timeout from activity. Session changes invalidate stale timers.",
+                    ts: 0,
+                  },
+                ],
+                relay: [
+                  {
+                    id: "schema-report",
+                    text: "Real MCP ListTools and calls validate the same narration mode and delivery enums. Delivery is advisory; no provider application is inferred. Reports identify programmer changes independently from the old agent cursor excerpt, label the human cursor, and invite useful commentary.",
+                    ts: 0,
+                  },
+                ],
+                agent: [
+                  {
+                    id: "commentary-policy",
+                    text: "An explicit request for live commentary overrides the sparse default. Read before remaining quiet, acknowledge the first observed typing pause once, and give one observation per batch. Immediate programmer messages discard queued advice; explicit deferred messages keep their separate behavior.",
+                    ts: 0,
+                  },
+                ],
+              },
+            },
+          },
         ],
         typesPresent: ["overview", "architecture", "flow", "dataflow", "state", "sequence", "class", "er", "concurrency"],
         codeThreads: [

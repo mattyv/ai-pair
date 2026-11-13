@@ -8,6 +8,7 @@
 (* next call, when the programmer acts, or when it expires. With              *)
 (* `ShowAbsent`, once no call has been open for absentMs, the status is       *)
 (* "absent" ("Agent isn't listening") until the agent calls again (#149).     *)
+(* Navigator listens use a shorter bound; this model abstracts both bounds.   *)
 (* A listen that times out with only news that wakes no listen (a batch that  *)
 (* completed without a command, an edit that interrupts nothing) starts no   *)
 (* grace (#200). A completed command wakes a pending listen (#27).            *)

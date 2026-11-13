@@ -28,6 +28,7 @@ Code goes without a spec for one of these reasons:
 | `selectedSpeech` and admission in `step`; pause, resume and cancellation propagation | `Narration` (`Admit`, `Pause`, `Resume`, `Reply`); reminder counting and reporting: `SpeechReminder` |
 | `interrupt`, `discard`, `interrupting`, `userInterrupt`, `userMessage`, `flushDeferred` | `Controller` (`Interrupt`), `Actions` (`Interrupt`); deferred replies: `DeferredMessage` |
 | `userEdit` | `EditorAdapter`, `Navigator` (the programmer's turn), `Player` (`TypeBefore`, `TypeAfter`: the interrupt in the agent's turn) |
+| navigator notice generation, `finishCall` and `restore` | `Navigator`, `Attention`, `ListenGrace`; timeout retention and canceled notice redelivery: controller and scripted MCP regressions |
 | `otherEdit`, `recordEdit` | `Reload`, `Rehearsal`, `EditEvents` |
 | `takeTurn`, `handBack`, `turn` | `Turns` |
 | `pause`, `resume`, `isPaused` | `Timeline`; `resume`'s `reveal`: `Scroll`, a stale point, and the reply's resume without one: `PointFocus` |
@@ -145,6 +146,7 @@ Code goes without a spec for one of these reasons:
 | Functions | Spec |
 |---|---|
 | `edit`, `save`, `onChange`, `byProgrammer`, `track` | `EditorAdapter` |
+| `renderCursor` outside-file interest and `programmerCursor` | `EditorAdapter` host eligibility assumption; actual native event through real adapter and controller: `navigator_editor.e2e.test.ts` |
 | `diagnostics` | `Diagnostics`: advisory observations; stale source and provider availability are checked in the adapter |
 | `getText`, `document`, `openDocument`, `exists`, `show`, `create`, `isDirty` | `FileText` |
 | `show`, `selfNav`, `navigating`, `onActiveEditor` | `FollowMode` |

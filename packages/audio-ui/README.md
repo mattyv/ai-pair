@@ -55,3 +55,7 @@ The guided Pair demo includes the hand control and its fixed voice prompt,
 using your current speech settings. It cleans up verified demo files after
 completion; uncertain files or work you ask to keep are retained. If cleanup
 cannot run, the demo reports the retained paths.
+
+Navigator commentary uses the current speech setting. The main extension
+reports programmer edits and return reasons, including in the current Pair
+temporary file outside the workspace; this does not change audio routing.

@@ -17,6 +17,8 @@ const PAUSE_REASONS: Record<PauseReason, string> = {
 const OTHER_EDITOR = 'A tool, a formatter, or something on disk';
 /** The shortest code fence Markdown allows; a longer one wraps output that has backticks of its own. */
 const MIN_FENCE = 3;
+/** Milliseconds in one second. */
+const MS_PER_SECOND = 1000;
 
 /** The tools whose result is a report, rendered as one. */
 export type ReportingTool = 'start' | 'step' | 'listen' | 'end' | 'calibrate';
@@ -190,15 +192,41 @@ export function renderReport(report: Report, tool: ReportingTool): string {
   }
   if (report.submitted) sections.push(`Batch ${report.submitted.id} is ${report.submitted.status}.`);
   if (report.rejected) sections.push(renderRejected(report.rejected));
-  if (report.cursor) sections.push(`Your cursor, in ${report.cursor.file}:\n${renderCode(report.cursor)}`);
+  if (report.cursor) {
+    const owner = report.turn === 'programmer' ? "Agent's" : 'Your';
+    sections.push(`${owner} cursor, in ${report.cursor.file}:\n${renderCode(report.cursor)}`);
+  }
   if (report.paused) {
     const why = report.paused.map((r) => PAUSE_REASONS[r]).join('; ');
     sections.push(`Playback is paused: ${why}. Your batches wait until the programmer resumes.`);
   }
-  if (report.waiting) {
-    sections.push(tool === 'listen' ? 'Nothing has happened yet. Call `listen` again.' : 'Nothing has finished yet. Carry on as usual.');
-  }
   const ended = report.events.some((e) => e.kind === 'end');
+  if (report.navigator) {
+    const reasons = {
+      typing_pause: 'typing paused',
+      idle_timeout: 'the idle timeout elapsed',
+      turn_change: 'the turn changed',
+      message: 'the programmer sent a message',
+      hand_raised: 'the programmer raised a hand',
+    };
+    const { wakeReason, elapsedMs, programmerCursor } = report.navigator;
+    sections.push(`Listen returned because ${reasons[wakeReason]} after ${elapsedMs / MS_PER_SECOND} seconds.`);
+    if (programmerCursor) {
+      sections.push(`Programmer's cursor: ${programmerCursor.file}, line ${programmerCursor.line}, column ${programmerCursor.column}.`);
+    }
+    if (!ended) sections.push('Comment if useful, then call `listen` again.');
+  } else if (report.waiting) {
+    const activity = report.events.length > 0 || report.batches.length > 0;
+    sections.push(
+      tool === 'listen'
+        ? activity
+          ? 'Call `listen` again.'
+          : 'Nothing has happened yet. Call `listen` again.'
+        : activity
+          ? 'Carry on as usual.'
+          : 'Nothing has finished yet. Carry on as usual.',
+    );
+  }
   if (tool === 'end' && !ended) {
     sections.push('The session has ended.');
   } else if (report.turn === 'programmer' && !ended) {

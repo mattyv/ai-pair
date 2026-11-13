@@ -15,6 +15,12 @@ The guided `/ai-pair-demo` demonstrates the hand control and cleans up verified
 temporary files after you agree to end, unless you ask to keep them. If cleanup
 cannot run, it reports the retained paths.
 
+Navigator mode reports your edits and cursor when you select **My turn**,
+including a current Pair file in a temporary directory outside the workspace.
+Reports identify typing pauses and idle timeouts. Ask the agent to "comment as
+I write" for more active commentary. A reply cancels queued observations, so
+the guide asks for one point per batch.
+
 Pair narration connects relevant choices to earlier verified work; ask for a
 teaching style for more concept explanations without compulsory exercises.
 

@@ -119,6 +119,12 @@ it back. The agent can comment as navigator when useful and should build on
 user edits. At task completion it summarizes in Pair and listens until the
 programmer explicitly ends the session.
 
+Navigator mode reports your edits and cursor when you select **My turn**,
+including a current Pair file in a temporary directory outside the workspace.
+Reports identify typing pauses and idle timeouts. Ask the agent to "comment as
+I write" for more active commentary. A reply cancels queued observations, so
+the guide asks for one point per batch.
+
 In Claude Code, `/pair:demo` runs a guided Pair session and `/pair:diagnose`
 checks connection, command, speech, and audio status. The legacy
 `/mcp__pair__demo` and `/mcp__pair__diagnose` forms also work. The extension

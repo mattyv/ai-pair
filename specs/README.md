@@ -81,7 +81,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `RunBox.cfg` | one `run`, the session ending at any point | holds | 10 |
 | `FileText.cfg` | one file, `MaxChanges = 4` changes | holds | 123 |
 | `Outside.cfg` | one file, `MaxWrites = 5` contents | holds | 614 |
-| `Navigator.cfg` | `MaxEdits = 3` | holds | 44 |
+| `Navigator.cfg` | `MaxEdits = 3` | holds | 136 |
 | `EditEvents.cfg` | one file, 3 texts, `MaxEdits = 4` | holds | 516 |
 | `Scroll.cfg` | `NumLines = 8` lines, a view of `ViewHeight = 4`, `MaxMoves = 2`, `MaxFollowSwitches = 2`, `scrollBeyondLastLine` on and off, the programmer's turn | holds | 14,131 |
 | `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
@@ -564,7 +564,11 @@ Every invariant and property names the test that proves the code obeys it:
 `packages/vscode/src/editor.ts`, which call the controller's `userEdit` or
 `otherEdit`. `FlushBeforeSave` is the fix for #40. VS Code delivers a change
 event before the call that made it resolves, and replies after the events sent
-before them: one channel, in order.
+before them: one channel, in order. The programmer cursor is a read-only
+projection of the active editor selection and is outside this attribution model;
+it does not change any modeled transition. Eligible documents are workspace
+files and the current agent cursor file; the host retires the latter when the
+cursor moves or clears. This eligibility is an assumption of the model.
 
 | Spec | Code |
 |---|---|
@@ -1343,12 +1347,18 @@ returns for their edits only once they pause typing (`navigatorIdleMs` after
 their last edit), so the agent comments on a whole thought. `ResetReady` is the
 fix: an edit takes back `navigatorReady`, which a pause before it set, so a
 `listen` made after the programmer resumes typing waits for their next pause.
+A timeout may report an edit before the pause; the pause remains reportable on
+the next listen. The model abstracts elapsed wall-clock time and the editor.
+Strong fairness of `Return` rules out repeated timeouts starving a ready call;
+in code a ready call is pumped synchronously before its timeout. Restored
+notices carry an edit generation, so later edits invalidate a bounced pause.
 
 | Spec | Code |
 |---|---|
 | `EditAsProgrammer` | `userEdit` in the programmer's turn: `recordEdit`, `navigatorReady = false`, the timer started again |
 | `Lull`, `Fire` | `navigatorIdleMs` without an edit; the timer setting `navigatorReady` and calling `pump()` |
-| `Listen`, `Return`, `Timeout` | `listen`; `navigatorReady` holding, and `snapshot` clearing `navigatorReady`; `maxBlockMs` |
+| `Listen`, `Return`, `Timeout` | `listen`; `finishCall` consumes `navigatorReady` only for a typing-pause report; the navigator timeout preserves it |
+| `Restore` | `restore` re-arms a bounced typing pause only for the current edit generation |
 
 Each invariant and property was proved to bite with a mutation, run in TLC and
 then reverted:
@@ -1358,6 +1368,8 @@ then reverted:
 | `Listen` sets the call to a third state | `TypeOK` |
 | `ResetReady = FALSE`, the code before | `NotWhileTyping` |
 | `Fire` leaves `navigatorReady` unset, so no call returns for the edits | `EditsReported` |
+| Require an unreported edit for `Return`, the former design | `PauseDelivered` |
+| Mark every pause report as wrongly timed | `WakeMatches` |
 
 Every invariant and property names the test that proves the code obeys it:
 
@@ -1365,6 +1377,8 @@ Every invariant and property names the test that proves the code obeys it:
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `NotWhileTyping`, `EditsReported` | `controller.test.ts`: NotWhileTyping, EditsReported, QuietDelivered: waits in the programmer's turn until they pause typing, or hand the turn back |
+| `WakeMatches` | `scripted_agent.e2e.test.ts`: reports a typing pause and unsaved programmer edits before the listen timeout |
+| `PauseDelivered` | `controller.test.ts`: reports a typing pause after a timeout already delivered the edit; preserves a due typing pause when a queued batch outlasts the timeout |
 
 ### `ListenGrace`: "Your move" between two idle listens
 
@@ -3594,10 +3608,15 @@ version is a bit so the state space is finite without constraining progress.
 Weak fairness of `Boundary`, `Drain`, and `Grant` assumes the active action and
 speech eventually finish; cancellation may also end a request. The model does
 not represent session generations, cue caching, or physical audio retirement.
+`Restore` re-arms a notice only for the current grant generation, checked by
+`controller.test.ts`: restores a granted hand only while the same grant remains
+active. Weak fairness of
+`Acknowledge` assumes a navigator listen eventually accepts
+the granted-hand notice; release can also clear it.
 
 | Configuration | Bounds | Result |
 | --- | --- | --- |
-| `Attention.cfg` | Two edit versions; one action and one speech unit | Pass, 136 distinct states |
+| `Attention.cfg` | Two edit versions; two request generations; one action and one speech unit | Pass, 536 distinct states |
 
 | Property | Code evidence | Mutation checked |
 | --- | --- | --- |
@@ -3606,3 +3625,5 @@ not represent session generations, cue caching, or physical audio retirement.
 | `GrantAfterDrain` | `Attention: idle continued speech drains before granting the floor` | Granting with speech active violates `GrantAfterDrain`. |
 | `CueRespectsPause` | `Attention: releasing the floor keeps a separate programmer pause` | Starting a cue while paused violates `CueRespectsPause`. |
 | `RequestedProgress` | `Attention: lowering a pending hand releases the boundary and rejects the late grant` | Disabling grant violates `RequestedProgress`. |
+| `NoticeIsGranted` | `controller.test.ts`: reports a granted raised hand once to a waiting navigator | Retaining the notice on release violates `NoticeIsGranted`. |
+| `NoticeDelivered` | `controller.test.ts`: reports a granted raised hand once to a waiting navigator | Disabling acknowledgement violates `NoticeDelivered`. |

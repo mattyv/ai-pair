@@ -4,7 +4,7 @@
 // from are constants, and real.
 
 import { describe, expect, it, vi } from 'vitest';
-import { ACTION_SCHEMA } from '../src/schemas';
+import { ACTION_SCHEMA, REPORT_SCHEMA } from '../src/schemas';
 import {
   actionKinds,
   CURSOR_MARKER,
@@ -272,5 +272,28 @@ describe('speech delivery', () => {
     expect(ACTION_SCHEMA.safeParse({ say: 'Hello', speech_delivery: 'angry' }).success).toBe(false);
     expect(ACTION_SCHEMA.safeParse({ run: 'pwd', speech_delivery: 'curious' }).success).toBe(false);
     expect(fieldsProblem({ say: 'Hello', speech_delivery: 'angry' })).toBeDefined();
+  });
+});
+
+describe('navigator report schema', () => {
+  it('accepts optional wake evidence and rejects malformed evidence', () => {
+    const base = { batches: [], events: [], turn: 'programmer' };
+    expect(REPORT_SCHEMA.safeParse(base).success).toBe(true);
+    for (const wakeReason of ['typing_pause', 'idle_timeout', 'turn_change', 'message', 'hand_raised']) {
+      const navigator = { wakeReason, elapsedMs: 100, programmerCursor: { file: 'a.ts', line: 1, column: 2 } };
+      expect(REPORT_SCHEMA.parse({ ...base, navigator }).navigator).toEqual(navigator);
+    }
+    expect(REPORT_SCHEMA.parse({ ...base, navigator: { wakeReason: 'typing_pause', elapsedMs: 1, noticeId: 2 } }).navigator?.noticeId).toBe(
+      2,
+    );
+    expect(REPORT_SCHEMA.safeParse({ ...base, navigator: { wakeReason: 'typing_pause', elapsedMs: 1, noticeId: 0 } }).success).toBe(false);
+    expect(REPORT_SCHEMA.safeParse({ ...base, navigator: { wakeReason: 'typing_pause', elapsedMs: 1, noticeId: 1.5 } }).success).toBe(
+      false,
+    );
+    expect(REPORT_SCHEMA.safeParse({ ...base, navigator: { wakeReason: 'other', elapsedMs: 1 } }).success).toBe(false);
+    expect(REPORT_SCHEMA.safeParse({ ...base, navigator: { wakeReason: 'message', elapsedMs: -1 } }).success).toBe(false);
+    expect(
+      REPORT_SCHEMA.safeParse({ ...base, navigator: { wakeReason: 'message', elapsedMs: 1, programmerCursor: { file: 'a' } } }).success,
+    ).toBe(false);
   });
 });
