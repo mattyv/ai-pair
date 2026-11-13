@@ -637,9 +637,13 @@ The preference is not part of local speech readiness or provider settings.
 
 The controller projects the latest preference after asynchronous report work.
 The relay renders its advisory policy for startup and navigator reports. Report
-restoration replays activity facts, never old configuration. Changing the mode
-does not wake a listen, change its deadline or modify turn ownership. The Archi
-Navigator view shows this preference path separately from activity evidence.
+restoration replays activity facts, never old configuration. A changed mode
+adds a session-scoped notice and wakes a waiting `listen` with a settings-only
+response, including during queued speech. If no call is waiting, the next
+`listen` returns the notice. Same-value writes do nothing. Ordinary activity
+snapshots, batch completion, typing-pause acknowledgement and turn ownership
+are untouched. Canceled notices retry only for their matching generation.
+The Archi Navigator view separates this path from activity evidence.
 
 The private workspace-to-companion contract is version 6 for these strict
 commentary action/update messages. Both extensions must be updated together;

@@ -36201,7 +36201,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
             origin: "llm",
             generation: {
               focus:
-                "Interruption and Turn Handling \u2014 Programmer messages, edits, interrupts, pauses, look-away, and turn swaps discard queued batches, mark the session stale, require re-anchoring of the cursor, and wake listen calls with events.",
+                "Interruption and Turn Handling - Messages, agent-turn edits, explicit interrupts, takeover and message-bearing handback discard queued work. Pauses and look-away hold playback; plain handback preserves navigator work.",
             },
             doc: {
               type: "flow",
@@ -38397,7 +38397,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
             origin: "llm",
             generation: {
               focus:
-                "Programmer Interruption and Listen \u2014 Programmer messages, edits, interrupts, pauses and turn changes in the panel or editor discard queued batches and wake the agent's blocked listen call with an event report.",
+                "Programmer Interruption and Listen - New direction and takeover interrupt queued work and wake listen. Pauses hold playback; plain handback preserves navigator work. Settings notices wake listen without draining work.",
             },
             doc: {
               type: "sequence",
@@ -41287,7 +41287,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
             name: "Navigator activity reports",
             type: "architecture",
             origin: "llm",
-            generation: { focus: "Navigator activity evidence and host-owned commentary preference projection" },
+            generation: { focus: "Navigator activity evidence and immediate session-scoped settings notices" },
             doc: {
               type: "architecture",
               autoLayoutApplied: true,
@@ -41329,7 +41329,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
               ],
               edges: [
                 { from: "editor", to: "controller", label: "eligible edit / caret" },
-                { from: "controller", to: "relay", label: "numbered diff + preference" },
+                { from: "controller", to: "relay", label: "activity or settings report" },
                 { from: "programmer", to: "editor", label: "native input", labelPosition: { distance: 0.5, offset: { x: 65, y: 0 } } },
                 { from: "relay", to: "agent", label: "MCP result", labelPosition: { distance: 0.5, offset: { x: -65, y: 0 } } },
                 {
@@ -41377,7 +41377,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 "commentary-settings": [
                   {
                     id: "preference-owner",
-                    text: "The workspace host persists Quiet, Helpful or Coach with the general preferences. The companion forwards typed intent and displays the owner snapshot. Audio enablement remains independent. A setting change does not wake listen or alter turn, edit or timer state.",
+                    text: "The workspace host persists Quiet, Helpful or Coach with the general preferences. The companion forwards typed intent and displays the owner snapshot. Audio enablement remains independent. A changed mode adds a Controller-owned session notice and wakes a waiting listen with a settings-only report; otherwise the next listen returns it. Same-value writes do nothing. Canceled notices retry only in the matching generation. Do not consume edit evidence, complete batches, acknowledge typing pauses or interrupt narration. Notices are delivered at least once: a post-commit change can produce a duplicate newest-policy notice. Do not add a second configuration or turn owner.",
                     ts: 0,
                   },
                 ],

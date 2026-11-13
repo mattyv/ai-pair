@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.38.2
+
+-   Deliver changed navigator commentary preferences immediately through a
+    waiting MCP listen, without interrupting speech or consuming edit and
+    batch reports. Retain updates for the next listen and canceled retries.
+
 ## 0.38.1
 
 -   Recognize visible navigator diff lines under the existing line-staleness

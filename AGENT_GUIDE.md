@@ -459,6 +459,10 @@ the Rainbow Passage for the calibration"):
     and connections to earlier verified work at natural pauses. An explicit
     request such as "comment as I write" overrides this preference for the
     session. Do not narrate each keystroke or invent earlier context.
+    A settings-only `listen` response changes this guidance immediately. It is
+    not a typing pause, new programmer message, or batch-completion report.
+    Keep the current turn and pause rules, then listen again. A repeated notice
+    may carry the same newest preference; do not repeat acknowledgements.
 -   **Before deciding to stay quiet, `read` the file.** The report's excerpt
     may not contain all of the programmer's changes. Use the reported changed
     ranges and programmer cursor to find the relevant code.

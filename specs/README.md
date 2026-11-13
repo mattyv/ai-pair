@@ -83,7 +83,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Outside.cfg` | one file, `MaxWrites = 5` contents | holds | 614 |
 | `Navigator.cfg` | `MaxEdits = 3` | holds | 136 |
 | `NavigatorFollowup.cfg` | two files, two texts, plain handback and visible lines | holds | 864 |
-| `NavigatorCommentary.cfg` | three modes, one pending report, cancellation and replay | holds | 213 |
+| `NavigatorCommentary.cfg` | three modes, up to three changes, pending notice and canceled replay | holds | 1,566 |
 | `EditEvents.cfg` | one file, 3 texts, `MaxEdits = 4` | holds | 843 |
 | `Scroll.cfg` | `NumLines = 8` lines, a view of `ViewHeight = 4`, `MaxMoves = 2`, `MaxFollowSwitches = 2`, `scrollBeyondLastLine` on and off, the programmer's turn | holds | 14,131 |
 | `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
@@ -1342,34 +1342,42 @@ Every invariant and property names the test that proves the code obeys it:
 | `EndedHasAgent` | `controller.test.ts`: WaitsProp: closes a suspended session at once when the programmer ends it; EndedHasAgent: rejects the open call when the agent disconnects, and closes at once a session the programmer ended |
 | `ShownIsState` | `controller.test.ts`: SavedIsCurrent, NotLostProp, ShownIsState: brings back a session the window saved, suspended, after a reload; `webview/panel.test.ts`: ShownIsState: a session revived after a reload shows as suspended; ShownIsState: a revive after a disconnect shows the suspension once; ShownIsState: a replacement session clears an old suspension (live and replay) |
 
-### `NavigatorCommentary`: current preference on report delivery
+### `NavigatorCommentary`: live preference notices
 
-The controller owns the current mode; `serialize` projects it after asynchronous
-report preparation. The model abstracts start, resume and navigator reports as
-one call, including a change between commitment and delivery. A canceled report
-may be restored; its old preference is never restored. Timers, transport and
-actual speech are outside this model. Weak fairness of `Commit` and `Deliver`
-ensures a pending or committed call eventually settles; cancellation also
-leaves it.
+The controller owns the preference and a session-scoped pending notice. A real
+change wakes an open listen, or the next one, with a settings-only report;
+other report evidence stays pending. The latest mode is projected at delivery.
+A canceled notice is restored only if its generation is current. The model's
+`reportGen` retains a canceled notice candidate while a newer notice is taken;
+it abstracts the notice's identity, rather than every concurrent report. It
+bounds changes at three and models session end, but not restart or resume.
+The named controller tests cover those lifecycle boundaries. Transport, actual
+speech and prompt timing are outside the model. Weak fairness of `Notice`,
+`Commit` and `Deliver` ensures a pending or committed call settles.
 
 | Spec | Code |
 |---|---|
 | `SetMode` | `setNavigatorCommentary` |
-| `Start`, `Commit`, `Deliver` | serialized call, report preparation, final projection |
-| `Cancel`, `Restore` | canceled report restoration, without restoring the preference |
+| `Start`, `Notice`, `Commit`, `Deliver` | `listen`, settings-only return, ordinary report, final projection |
+| `Cancel`, `Restore`, `End` | canceled report restoration and session close |
 
 | Mutation | Breaks |
 |---|---|
-| `FreshProjection = FALSE` | `CurrentAtDelivery`: a setting changes between commitment and delivery |
-| `RestoreOldMode = TRUE` | `RestoreKeepsMode`: restoring a canceled report rolls back the preference |
+| `FreshProjection = FALSE` | `CurrentAtDelivery` |
+| `RestoreOldMode = TRUE` | `RestoreKeepsMode` |
+| `WakeOnChange = FALSE` | `ChangedWake` |
+| `PreserveEvidence = FALSE` | `EvidencePreserved` |
+| `GuardRestore = FALSE` | `NoOldRestore` |
 | `Start` sets an invalid call state | `TypeOK` |
-| Remove `Cancel` and delivery fairness | `EventuallySettled` |
+| Remove notice, commit and delivery fairness | `EventuallySettled` |
 
 | Invariant or property | Test |
 |---|---|
-| `TypeOK` | TypeScript; `index.test.ts`: accepts only the three navigator commentary preferences on reports |
-| `CurrentAtDelivery`, `RestoreKeepsMode` | `controller.test.ts`: CurrentAtDelivery, RestoreKeepsMode: projects the current mode on start, pending listen and replay; CurrentAtDelivery: projects after an asynchronous cursor lookup on resume |
-| `EventuallySettled` | `controller.test.ts`: BlockedReturns: returns with `waiting` after MAX_BLOCK; cancellation and fairness are abstracted here. |
+| `TypeOK` | `index.test.ts`: validates the live commentary notice identity |
+| `CurrentAtDelivery`, `RestoreKeepsMode` | `controller.test.ts`: CurrentAtDelivery, RestoreKeepsMode: projects the current mode on start, pending listen and replay |
+| `EvidencePreserved`, `ChangedWake` | `controller.test.ts`: wakes a pending listen without interrupting a playing batch; does not wake on the same mode and preserves a due typing pause |
+| `NoOldRestore` | `controller.test.ts`: delivers changes made while computing and restores only the current notice; does not revive a notice in a replacement or resumed session |
+| `EventuallySettled` | `controller.test.ts`: BlockedReturns: returns with `waiting` after MAX_BLOCK |
 
 ### `NavigatorFollowup`: burst, handback and visible lines
 

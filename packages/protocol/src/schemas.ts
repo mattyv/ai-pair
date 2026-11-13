@@ -201,6 +201,8 @@ export const REPORT_SCHEMA = z.object({
   turn: TURN_SCHEMA,
   /** Current preference, projected when the report is delivered. */
   navigatorCommentary: NAVIGATOR_COMMENTARY_SCHEMA.optional(),
+  /** Identifies a restorable live preference notice. */
+  commentaryChanged: z.object({ noticeId: z.number().int().positive() }).optional(),
   /** The agent cursor's line, when it isn't where the agent last saw it: in this report's code, or an earlier report. */
   cursor: CODE_SCHEMA.optional(),
   /** Evidence about why a navigator listen returned and where the programmer is editing. */

@@ -2598,8 +2598,6 @@ describe('NavigatorCommentary projection', () => {
     const listen = h.controller.listen();
     await settle(0);
     h.controller.setNavigatorCommentary('quiet');
-    expect(await pending(listen)).toBe(true);
-    await settle(CONFIG.maxBlockMs);
     const first = await report(listen);
     expect(first.navigatorCommentary).toBe('quiet');
     h.controller.setNavigatorCommentary('coach');
@@ -2747,4 +2745,156 @@ it('reports a truncated diff without granting sightings for omitted lines', asyn
   await report(h.controller.step(SAY));
   const knows = vi.mocked(rehearse).mock.calls.at(-1)?.[4];
   expect(knows?.(A, 1, 1)).toBe(false);
+});
+
+describe('live navigator commentary notice', () => {
+  it('applies inactive and suspended changes on start without a queued notice', async () => {
+    const h = harness();
+    h.controller.setNavigatorCommentary('quiet');
+    expect((await report(h.controller.start())).navigatorCommentary).toBe('quiet');
+    h.controller.disconnect();
+    h.controller.setNavigatorCommentary('coach');
+    expect((await report(h.controller.start())).navigatorCommentary).toBe('coach');
+    const listening = h.controller.listen();
+    expect(await pending(listening)).toBe(true);
+    h.controller.userMessage('continue');
+    await report(listening);
+  });
+
+  it('wakes ahead of interrupted batch retirement without releasing it', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    h.controller.takeTurn();
+    const listening = h.controller.listen();
+    expect(await pending(listening)).toBe(true);
+    h.controller.setNavigatorCommentary('quiet');
+    expect((await report(listening)).commentaryChanged).toBeDefined();
+    expect(player().play).toHaveBeenCalledTimes(1);
+    finish();
+    await settle();
+  });
+
+  it('updates status when a settings-only listen returns', async () => {
+    const h = await started();
+    const listening = h.controller.listen();
+    await settle(0);
+    expect(statuses(h).at(-1)).toBe('listening');
+    h.controller.setNavigatorCommentary('quiet');
+    await report(listening);
+    expect(statuses(h).at(-1)).toBe('thinking');
+    expect(h.traced.at(-1)).toMatch(/^report to listen:/);
+  });
+
+  it('reports a manual pause without releasing it on a settings notice', async () => {
+    const h = await started();
+    h.controller.pause('programmer');
+    const listening = h.controller.listen();
+    await settle(0);
+    h.controller.setNavigatorCommentary('quiet');
+    const notice = await report(listening);
+    expect(notice.paused).toEqual(['programmer']);
+    expect(h.controller.isPaused).toBe(true);
+  });
+
+  it('reports an active attention grant in a settings notice', async () => {
+    const h = await started();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    h.controller.requestAttention();
+    await settle();
+    await report(h.controller.listen());
+    h.controller.setNavigatorCommentary('quiet');
+    expect((await report(h.controller.listen())).paused).toEqual(['attention']);
+  });
+
+  it('wakes a pending listen without interrupting a playing batch', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    const listening = h.controller.listen();
+    expect(await pending(listening)).toBe(true);
+    h.controller.setNavigatorCommentary('quiet');
+    const notice = await report(listening);
+    expect(notice.commentaryChanged).toBeDefined();
+    expect(notice.navigatorCommentary).toBe('quiet');
+    expect(notice.batches).toEqual([]);
+    expect(timeline().interrupt).not.toHaveBeenCalled();
+    finish();
+    await settle();
+  });
+
+  it('delivers changes made while computing and restores only the current notice', async () => {
+    const h = await started();
+    h.controller.setNavigatorCommentary('quiet');
+    const old = await report(h.controller.listen());
+    expect(old.commentaryChanged).toBeDefined();
+    h.controller.setNavigatorCommentary('coach');
+    const latest = await report(h.controller.listen());
+    expect(latest.navigatorCommentary).toBe('coach');
+    expect(latest.commentaryChanged).toBeDefined();
+    h.controller.restore(old);
+    const noOldNotice = h.controller.listen();
+    expect(await pending(noOldNotice)).toBe(true);
+    h.controller.userMessage('continue');
+    await report(noOldNotice);
+    h.controller.restore(latest);
+    expect((await report(h.controller.listen())).commentaryChanged).toBeDefined();
+  });
+
+  it('coalesces changes before commit and allows a follow-up after commitment', async () => {
+    const h = await started();
+    h.controller.setNavigatorCommentary('quiet');
+    h.controller.setNavigatorCommentary('coach');
+    const first = await report(h.controller.listen());
+    expect(first.navigatorCommentary).toBe('coach');
+    const listening = h.controller.listen();
+    await settle(0);
+    h.controller.setNavigatorCommentary('quiet');
+    h.controller.setNavigatorCommentary('coach');
+    const committed = await report(listening);
+    expect(committed.navigatorCommentary).toBe('coach');
+    expect((await report(h.controller.listen())).navigatorCommentary).toBe('coach');
+    const next = h.controller.listen();
+    expect(await pending(next)).toBe(true);
+    h.controller.userMessage('continue');
+    await report(next);
+  });
+
+  it('does not revive a notice in a replacement or resumed session', async () => {
+    const h = await started();
+    h.controller.setNavigatorCommentary('quiet');
+    const old = await report(h.controller.listen());
+    h.controller.disconnect();
+    await report(h.controller.start());
+    h.controller.restore(old);
+    const listening = h.controller.listen();
+    expect(await pending(listening)).toBe(true);
+    h.controller.userMessage('continue');
+    await report(listening);
+    h.controller.endSession();
+    await report(h.controller.listen());
+    await report(h.controller.start());
+    h.controller.restore(old);
+    const next = h.controller.listen();
+    expect(await pending(next)).toBe(true);
+    h.controller.userMessage('new session');
+    await report(next);
+  });
+
+  it('does not wake on the same mode and preserves a due typing pause', async () => {
+    const h = await started();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    const listening = h.controller.listen();
+    h.controller.setNavigatorCommentary('helpful');
+    expect(await pending(listening)).toBe(true);
+    h.controller.userEdit(A, 'a', 'ab', [{ offset: 1, deleteLength: 0, text: 'b' }]);
+    h.controller.setNavigatorCommentary('coach');
+    expect((await report(listening)).commentaryChanged).toBeDefined();
+    await settle(CONFIG.navigatorIdleMs);
+    const pause = await report(h.controller.listen());
+    expect(pause.navigator?.wakeReason).toBe('typing_pause');
+    expect(pause.events).toContainEqual(expect.objectContaining({ kind: 'edit' }));
+  });
 });

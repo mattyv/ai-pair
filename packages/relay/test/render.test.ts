@@ -495,3 +495,10 @@ it('renders quiet guidance on a programmer-turn step', () => {
   expect(text).toContain('only on important issues or direct answers');
   expect(text).toContain('skip routine first-pause reassurance unless asked');
 });
+
+it('explains a live commentary change during the agent turn', () => {
+  const text = renderReport(report({ commentaryChanged: { noticeId: 1 }, navigatorCommentary: 'quiet' }), 'listen');
+  expect(text).toContain('commentary preference changed');
+  expect(text).toContain('Quiet');
+  expect(text).toContain('listen');
+});

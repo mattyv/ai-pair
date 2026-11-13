@@ -1128,9 +1128,21 @@ The workspace extension owns persistence alongside other general preferences;
 the local companion forwards intent and renders the owner's current snapshot.
 The controller projects the current preference into reports after asynchronous
 cursor lookup. Restoring canceled activity evidence cannot restore an old
-preference. Configuration changes do not wake a pending listen or alter edit
-evidence, turn ownership, pause timing or queued narration. The active agent
-receives a change on the next returned report, not an unsolicited MCP push.
+preference. Changing the mode wakes a pending `listen` with a settings-only
+report; if none is waiting, retain the latest notice for the next `listen`.
+This replaces the initial deferred-until-another-event policy at the user's
+request. Same-value assignments do not wake. Preserve edit evidence, turn
+ownership, pauses, queued actions and current narration. A settings response
+does not claim that playing batches have completed or acknowledge a typing
+pause. Session-scoped notice identity makes canceled reports retryable without
+restoring old configuration or consuming a newer change. No unsolicited MCP
+push reaches a model that is still computing.
+
+Delivery is at least once. Pending changes coalesce to the latest mode before
+a notice commits. A change after commitment but before final projection can
+produce the latest policy followed by another notice with that same policy.
+Allow this narrow duplicate rather than add finalization state that could
+acknowledge a successor session's update. No old preference is restored.
 
 ## Navigator follow-up: sightings, handback and net-zero activity
 

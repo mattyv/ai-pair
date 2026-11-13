@@ -193,6 +193,19 @@ describe('scripted agent flows', () => {
     await h.call(client, 'end');
   });
 
+  it('delivers a changed commentary preference through a pending MCP listen', async () => {
+    const h = await setup(601);
+    const client = await h.connect();
+    await h.call(client, 'start');
+    const listening = h.call(client, 'listen');
+    await h.waitFor('listen received', () => h.trace.some((line) => line.startsWith('socket ') && line.endsWith('listen')));
+    h.controller.setNavigatorCommentary('coach');
+    const result = await deadline(listening, 500, 601, h.trace);
+    expect(result).toContain('commentary preference changed');
+    expect(result).toContain('Coach');
+    await h.call(client, 'end');
+  });
+
   it('suspends and resumes after the editor websocket drops', async () => {
     const h = await setup(101);
     const first = await h.connect();
@@ -328,6 +341,41 @@ describe('scripted agent flows', () => {
     await expect(deadline(listen, 30, 505, h.trace)).rejects.toThrow('timed out');
     h.controller.userMessage('wake');
     expect(await listen).toContain('wake');
+    await h.call(client, 'end');
+  });
+
+  it('wakes a settings notice while narration is still playing', async () => {
+    let release: () => void = noop;
+    let entered = false;
+    let cancels = 0;
+    const narration: NarrationPort = {
+      speak: () =>
+        new Promise<void>((resolve) => {
+          entered = true;
+          release = resolve;
+        }),
+      attentionCue: () => Promise.resolve(),
+      pause: noop,
+      resume: noop,
+      cancel: () => {
+        cancels++;
+        release();
+      },
+    };
+    const h = await setup(607, narration);
+    const client = await h.connect();
+    await h.call(client, 'start');
+    await h.call(client, 'step', { actions: [{ say: 'still playing' }] });
+    await h.waitFor('speech entered', () => entered);
+    const listening = h.call(client, 'listen');
+    await h.waitFor('listen received', () => h.trace.some((line) => line.startsWith('socket ') && line.endsWith('listen')));
+    h.controller.setNavigatorCommentary('quiet');
+    const result = await deadline(listening, 500, 607, h.trace);
+    expect(result).toContain('commentary preference changed');
+    expect(result).toContain('queued work and speech are unchanged');
+    expect(cancels).toBe(0);
+    release();
+    expect(await h.call(client, 'step', { actions: [] })).toContain('Batch 1 completed');
     await h.call(client, 'end');
   });
 

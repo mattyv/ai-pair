@@ -35,8 +35,10 @@ In Pair Settings, **Navigator commentary** controls how much the agent comments
 while you take a turn: **Quiet** for important issues and direct answers,
 **Helpful** (default) for a first-pause acknowledgement and useful observations,
 or **Coach** for more explanation and connections to earlier work. The choice
-persists and reaches an active agent on its next returned report. Explicit
-requests in the conversation take precedence for that session. This guides
+persists. Changing it wakes a waiting MCP `listen` immediately; if the agent
+is busy, its next `listen` returns with the update. Current speech and queued
+actions keep playing. Explicit conversation requests take precedence for that
+session. This guides
 both text and spoken comments; the speaker control independently enables or
 mutes audio. The model still decides whether an observation is useful.
 

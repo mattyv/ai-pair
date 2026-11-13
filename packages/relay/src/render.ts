@@ -174,7 +174,10 @@ export function renderReport(report: Report, tool: ReportingTool): string {
       'The calibration is under way in the Pair panel: playback is held while the programmer reads the passage. Call `listen`; their next message comes once it ends.',
     );
   }
-  if (report.navigatorCommentary !== undefined && (tool === 'start' || report.turn === 'programmer' || report.navigator !== undefined)) {
+  if (
+    report.navigatorCommentary !== undefined &&
+    (tool === 'start' || report.turn === 'programmer' || report.navigator !== undefined || report.commentaryChanged !== undefined)
+  ) {
     const guidance = {
       quiet: 'Quiet: comment only on important issues or direct answers; skip routine first-pause reassurance unless asked.',
       helpful: 'Helpful: acknowledge the first typing pause once, then offer useful observations at natural pauses.',
@@ -183,6 +186,11 @@ export function renderReport(report: Report, tool: ReportingTool): string {
     };
     sections.push(
       `Navigator commentary: ${guidance[report.navigatorCommentary]} Follow explicit session requests in every mode; voice is separate.`,
+    );
+  }
+  if (report.commentaryChanged !== undefined) {
+    sections.push(
+      'The navigator commentary preference changed. This report only updates settings; queued work and speech are unchanged. Continue the current turn and call `listen` again.',
     );
   }
   if (report.repeated) {

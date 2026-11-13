@@ -222,9 +222,19 @@ The optional top-level `navigatorCommentary` report field is `quiet`, `helpful`
 or `coach`. The controller supplies the current preference after asynchronous
 report preparation, including startup and resumed sessions. The relay renders
 it as guidance on startup and during the programmer's turn. Helpful is the
-default; explicit conversation requests take precedence. A preference change
-arrives on the next report and does not wake a listen or change its deadline.
-Canceled-report restoration restores activity evidence, not old preferences.
+default; explicit conversation requests take precedence. A changed preference
+wakes a pending `listen` immediately with a settings-only report, without
+consuming queued work, edits or typing-pause evidence. If no `listen` is
+waiting, its next invocation returns the pending notice. Same-value writes do
+not wake. Canceled reports can retry the current notice, never restore an old
+preference. This is response delivery, not an unsolicited push while the model
+is computing.
+
+A settings-only report carries `commentaryChanged: { noticeId }`, empty batch
+and event arrays, the current turn and current commentary preference. It does
+not mean queued batches finished or the programmer stopped typing. Delivery
+is at least once: a post-commit change can cause a follow-up notice repeating
+the newest policy. Keep listening under the current turn and pause rules.
 
 `listen` is how the agent "ends its turn" without actually ending it.
 

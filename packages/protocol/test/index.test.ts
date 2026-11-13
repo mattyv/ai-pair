@@ -305,3 +305,10 @@ it('accepts only the three navigator commentary preferences on reports', () => {
   }
   expect(REPORT_SCHEMA.safeParse({ ...base, navigatorCommentary: 'loud' }).success).toBe(false);
 });
+
+it('validates the live commentary notice identity', () => {
+  const base = { batches: [], events: [], turn: 'agent' };
+  expect(REPORT_SCHEMA.parse({ ...base, commentaryChanged: { noticeId: 1 } }).commentaryChanged).toEqual({ noticeId: 1 });
+  expect(REPORT_SCHEMA.safeParse({ ...base, commentaryChanged: { noticeId: 0 } }).success).toBe(false);
+  expect(REPORT_SCHEMA.safeParse({ ...base, commentaryChanged: { noticeId: 1.5 } }).success).toBe(false);
+});

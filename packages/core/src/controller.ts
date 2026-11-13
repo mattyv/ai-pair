@@ -134,6 +134,8 @@ interface Session {
   ended: boolean;
   /** Its agent disconnected, or the window reloaded: it waits for a `start` from its directory (#25). */
   suspended: boolean;
+  commentaryPending: boolean;
+  commentaryGeneration: number;
   navigatorReady: boolean;
   navigatorObserved: boolean;
   navigatorGeneration: number;
@@ -307,7 +309,14 @@ export class Controller {
 
   /** Sets the preference projected on subsequent reports (specs/NavigatorCommentary.tla, SetMode). */
   setNavigatorCommentary(mode: NavigatorCommentary): void {
+    if (this.navigatorCommentary === mode) return;
     this.navigatorCommentary = mode;
+    const session = this.activeSession();
+    if (session === undefined || session.suspended) return;
+    // specs/NavigatorCommentary.tla, SetMode: retain the newest notice.
+    session.commentaryPending = true;
+    session.commentaryGeneration = ++this.noticeGeneration;
+    this.pump();
   }
 
   // ---- Tools -------------------------------------------------------------
@@ -354,6 +363,8 @@ export class Controller {
    */
   private resumeSession(session: Session, rules?: string[]): Promise<Report> {
     session.suspended = false;
+    session.commentaryPending = false;
+    session.commentaryGeneration = ++this.noticeGeneration;
     this.diagnostic({ kind: 'session', state: 'active' });
     this.trace?.('session resumed');
     session.seen = new Map();
@@ -410,6 +421,8 @@ export class Controller {
       running: false,
       ended: false,
       suspended: false,
+      commentaryPending: false,
+      commentaryGeneration: ++this.noticeGeneration,
       navigatorReady: false,
       navigatorObserved: false,
       navigatorGeneration: ++this.noticeGeneration,
@@ -603,6 +616,9 @@ export class Controller {
       this.session = session;
       this.closed = undefined;
     }
+    const commentary = report.commentaryChanged;
+    // specs/NavigatorCommentary.tla, Restore: never revive an older notice.
+    if (!session.ended && commentary?.noticeId === session.commentaryGeneration) session.commentaryPending = true;
     const notice = report.navigator;
     // specs/Navigator.tla and specs/Attention.tla, Restore: do not revive a superseded notice.
     if (!session.ended && session.scene.turn === 'programmer' && notice?.noticeId !== undefined) {
@@ -1232,6 +1248,7 @@ export class Controller {
 
   private ready(call: Call, session: Session): boolean {
     if (session.ended) return true;
+    if (call.kind === 'listen' && session.commentaryPending) return true;
     // An interrupted batch finishes promptly; wait for it, so the report says what was typed.
     if (session.queue[0]?.state === 'playing' && session.timeline.isInterrupted) return false;
     return (call.kind === 'listen' && session.scene.turn === 'programmer' && this.attentionNotice) || callReady(session, call);
@@ -1249,6 +1266,23 @@ export class Controller {
     this.call = undefined;
     clearTimeout(call.timer);
     const session = call.session;
+    if (call.kind === 'listen' && !session.ended && session.commentaryPending) {
+      // specs/NavigatorCommentary.tla, Notice: leave other report evidence intact.
+      session.commentaryPending = false;
+      const report: Report = {
+        batches: [],
+        events: [],
+        turn: session.scene.turn,
+        commentaryChanged: { noticeId: session.commentaryGeneration },
+      };
+      if (this.pauseReasons.size > 0 || this.attention === 'granted') {
+        report.paused = [...this.pauseReasons, ...(this.attention === 'granted' ? ['attention' as const] : [])];
+      }
+      this.render();
+      this.trace?.(`report to listen: ${describeReport(report)}`);
+      call.resolve(report);
+      return;
+    }
     // `Commit` in specs/Controller.tla. Nothing more to wait for once the session is ending.
     const events = session.events;
     const wakeReason = timedOut
