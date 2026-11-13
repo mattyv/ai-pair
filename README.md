@@ -1,6 +1,6 @@
 # AI Pair Programmer
 
-Use the hand button beside Reply to request a chance to interject. The agent
+Use the hand button to the left of Reply to request a chance to interject. The agent
 finishes the current speech and safe action before handing you the floor. Press
 it again while waiting to lower your hand; once the floor is yours, press it
 to focus Reply. The panel shows "What's up?" and, when speech is available,

@@ -838,7 +838,7 @@ export class Controller {
       }
       this.panel.post({ type: 'say', text: "What's up?" });
       if (this.attention === 'granted' && wait === this.attentionWait && this.pauseReasons.size === 0) {
-        void this.narration?.attentionCue?.().catch(() => {});
+        void this.narration?.attentionCue().catch(() => {});
       }
     }
     await wait;

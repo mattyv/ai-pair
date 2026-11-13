@@ -5,7 +5,7 @@ import { CompanionNarration } from '../src/companion_narration';
 
 const base = { version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, connectionEpoch: 'connection', jobId: '1', pageEpoch: 4 };
 
-function fixture(initialSequence = 0, withCue = true) {
+function fixture(initialSequence = 0) {
   let sequence = initialSequence;
   const pending = Promise.withResolvers<void>();
   const speak = vi.fn<NarrationPort['speak']>(() => pending.promise);
@@ -21,7 +21,7 @@ function fixture(initialSequence = 0, withCue = true) {
     .mockReturnValue({ id: 1, state: 'idle', started: true, terminal: 'ended' });
   const narration = new CompanionNarration({
     epoch: 'connection',
-    speech: { speak, ...(withCue ? { attentionCue } : {}), pause, resume, cancel },
+    speech: { speak, attentionCue, pause, resume, cancel },
     page: () => 4,
     send,
     stopOutput,
@@ -32,12 +32,6 @@ function fixture(initialSequence = 0, withCue = true) {
 }
 
 describe('companion narration receiver', () => {
-  it('reports a missing optional cue capability as failed', () => {
-    const { narration, send } = fixture(0, false);
-    expect(narration.receive({ ...base, type: 'attentionCue', sequence: 1 })).toBe(true);
-    expect(send.mock.calls[0]?.[0]).toMatchObject({ type: 'terminal', outcome: 'failed' });
-  });
-
   it('keeps ownership when a canceled, rejected cue cannot retire', async () => {
     const { narration, pending, stopOutput, send } = fixture();
     stopOutput.mockRejectedValue(new Error('output could not stop'));

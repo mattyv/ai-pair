@@ -300,6 +300,7 @@ Last updated: css, 2026-11-13.
 | `packages/vscode/src/workspace_panel_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 84.4% B 46.1% F 100.0% | - | - | - | - |
 | `packages/vscode/src/workspace_session.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.8% B 94.1% F 73.3% | - | - | - | - |
 | `packages/vscode/test/agents.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/vscode/test/attention_audio_composed.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/attention_composed.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/calibration.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/command_approval_composed.e2e.test.ts` | TypeScript | test | - | - | - | - | test |

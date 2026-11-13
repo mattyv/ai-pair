@@ -125,7 +125,13 @@ describe('where the controller and the player meet', () => {
 
   it('Attention: a renewed request at a waiting boundary blocks the next edit', async () => {
     const { promise, resolve } = Promise.withResolvers<void>();
-    const narration = { speak: vi.fn(() => promise), pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() };
+    const narration = {
+      speak: vi.fn(() => promise),
+      attentionCue: vi.fn().mockResolvedValue(undefined),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn(),
+    };
     const { editor, controller, panel } = setup({ 'a.ts': '' }, {}, narration);
     await controller.start();
     await controller.step([
@@ -174,7 +180,14 @@ describe('where the controller and the player meet', () => {
 
   it('reminds after three accepted unspoken batches only while speech is ready', async () => {
     const ready = vi.fn().mockResolvedValue(false);
-    const narration = { ready, speak: vi.fn().mockResolvedValue(undefined), pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() };
+    const narration = {
+      ready,
+      speak: vi.fn().mockResolvedValue(undefined),
+      attentionCue: vi.fn().mockResolvedValue(undefined),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn(),
+    };
     const { controller } = setup({}, {}, narration);
     await controller.start();
     expect((await until(controller.step([{ say: 'One.', speak: false }]))).speechReminder).toBeUndefined();
@@ -191,6 +204,7 @@ describe('where the controller and the player meet', () => {
     const { promise, resolve } = Promise.withResolvers<void>();
     const narration = {
       speak: vi.fn(() => promise),
+      attentionCue: vi.fn().mockResolvedValue(undefined),
       pause: vi.fn(),
       resume: vi.fn(),
       cancel: vi.fn(() => {
@@ -214,7 +228,13 @@ describe('where the controller and the player meet', () => {
   });
 
   it('keeps a held reading clock after speech fails and resumes code only on release', async () => {
-    const narration = { speak: vi.fn(() => Promise.reject(new Error('unavailable'))), pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() };
+    const narration = {
+      speak: vi.fn(() => Promise.reject(new Error('unavailable'))),
+      attentionCue: vi.fn().mockResolvedValue(undefined),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn(),
+    };
     const { editor, controller, panel } = setup({ 'a.ts': '' }, {}, narration);
     await controller.start();
     await controller.step([
@@ -234,7 +254,13 @@ describe('where the controller and the player meet', () => {
 
   it('keeps code paused when speech finishes after the reading timer', async () => {
     const { promise, resolve } = Promise.withResolvers<void>();
-    const narration = { speak: vi.fn(() => promise), pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() };
+    const narration = {
+      speak: vi.fn(() => promise),
+      attentionCue: vi.fn().mockResolvedValue(undefined),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn(),
+    };
     const { editor, controller } = setup({ 'a.ts': '' }, {}, narration);
     await controller.start();
     await controller.step([
@@ -256,6 +282,7 @@ describe('where the controller and the player meet', () => {
     const { promise, resolve } = Promise.withResolvers<void>();
     const narration = {
       speak: vi.fn(() => promise),
+      attentionCue: vi.fn().mockResolvedValue(undefined),
       pause: vi.fn(),
       resume: vi.fn(),
       cancel: vi.fn(() => {

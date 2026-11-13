@@ -173,6 +173,7 @@ Code goes without a spec for one of these reasons:
 | | the `reply` message while a calibration runs, `showCalibration`, cancel on dispose and session end | `Calibration` |
 | | `askStart`, the `start` message, posting `startEnded` | `Start` |
 | `extension.ts` | effective speech preferences, queued writes and key reset | `ProviderChoice` (`Select`, `Success`, `Failure`, `External`, `KeyChange`) |
+| `extension.ts` | required narration cue forwarding and owner-ready generation gate | `RemoteCue` abstracts dispatch and retirement; actual activation adapter unit tests and `attention_audio_composed.e2e.test.ts` cover separate wiring and transport/output seams |
 | `speech_setup.ts` | model status check | `ModelStatus` |
 | `speech_credentials.ts` | key prompt, storage and invalidation | `SpeechSettings` |
 | `speech_catalog.ts` | explicit catalog requests and invalidation | `SpeechSettings` |

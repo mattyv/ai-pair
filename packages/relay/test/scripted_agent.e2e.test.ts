@@ -192,6 +192,7 @@ describe('scripted agent flows', () => {
           };
         });
       },
+      attentionCue: () => Promise.resolve(),
       pause: () => {},
       resume: () => {},
       cancel: () => {
@@ -244,6 +245,7 @@ describe('scripted agent flows', () => {
           entered = true;
           release = resolve;
         }),
+      attentionCue: () => Promise.resolve(),
       pause: noop,
       resume: noop,
       cancel: () => {
@@ -281,6 +283,7 @@ describe('scripted agent flows', () => {
           releaseOld = resolve;
         });
       },
+      attentionCue: () => Promise.resolve(),
       pause: noop,
       resume: noop,
       cancel: noop,

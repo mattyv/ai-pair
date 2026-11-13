@@ -9,7 +9,7 @@ export interface NarrationPort {
   /** Speaks one displayed unit and resolves on completion, cancellation, or text-only fallback. */
   speak: (text: string, delivery?: SpeechDelivery) => Promise<void>;
   /** Plays the fixed attention cue using the current voice. */
-  attentionCue?: () => Promise<void>;
+  attentionCue: () => Promise<void>;
   /** Waits boundedly for any previous physical owner; false leaves narration unavailable. */
   waitForRetirement?: (signal: AbortSignal) => Promise<boolean>;
   /** Pauses audio or prevents a prepared waveform from starting. */

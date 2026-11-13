@@ -892,6 +892,11 @@ export function activate(context: vscode.ExtensionContext): Api {
       await ownerReady;
       if (!shuttingDown && generation === narrationGeneration) await selectedNarration?.speak(text, delivery);
     },
+    attentionCue: async () => {
+      const generation = narrationGeneration;
+      await ownerReady;
+      if (!shuttingDown && generation === narrationGeneration) await selectedNarration?.attentionCue();
+    },
     waitForRetirement: async (signal) => {
       const generation = narrationGeneration;
       await ownerReady;

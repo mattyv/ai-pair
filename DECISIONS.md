@@ -1046,7 +1046,33 @@ bypass them. Stopping, disconnecting, or replacing the session invalidates the
 request. A continued speech unit remains owned by the player after its batch
 ends and must drain before an idle request is granted.
 
-The cue is optional and failures leave the text and floor available. Attention
+Audio playback is optional and failures leave the text and floor available. Attention
 is not restored as live state after reload; the controller publishes a fresh
 snapshot after restoration. The bounded model abstracts the audio owner's
 physical retirement, settings, and cue cache; those require separate checks.
+
+## Cursor reveal follows the current agent position
+
+The cursor button opens an existing document and centers the latest agent cursor,
+including a file or offset change while VS Code is opening it. A newer request
+supersedes an older request; a stale completion or failure has no further
+effect. Navigation never creates a missing file, and reports an open failure.
+VS Code can already have accepted a show before a request is superseded, so
+that focus change cannot be retracted. Reveal leaves turn and playback alone.
+
+## Required narration cue forwarding
+
+`NarrationPort.attentionCue` is required on every narration adapter. The
+narration port itself remains optional when audio is absent, and each owner
+still honors disabled or unavailable speech. Making the method optional let
+the production extension omit it while the independently tested service and
+remote implementations appeared correct. The activation regression invokes
+the actual adapter supplied to its controller, and the required type makes a
+future omission a compile error. Cue forwarding uses the existing owner-ready,
+cancellation-generation and shutdown gates; it adds no lifecycle owner.
+
+The architecture source and export retain their existing controller, local
+speech-service and output boundaries. This correction restores the documented
+connection rather than changing that architecture. Unit adapter tests and
+composed transport/output tests are separate evidence; they do not establish
+hardware audibility or one complete activation-to-hardware run.

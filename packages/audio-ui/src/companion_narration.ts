@@ -50,12 +50,7 @@ export class CompanionNarration {
         if (frame.type === 'speak') {
           playback = this.options.speech.speak(frame.text, frame.delivery);
         } else {
-          const cue = this.options.speech.attentionCue;
-          if (cue === undefined) {
-            this.finish(job, 'failed');
-            return true;
-          }
-          playback = cue.call(this.options.speech);
+          playback = this.options.speech.attentionCue();
         }
         void playback.then(
           () => {

@@ -209,6 +209,7 @@ const fakes = vi.hoisted(() => {
     readonly setNarrationSession = vi.fn();
     readonly prepare = vi.fn();
     readonly speak = vi.fn<() => Promise<void>>().mockResolvedValue();
+    readonly attentionCue = vi.fn<() => Promise<void>>().mockResolvedValue();
     readonly pause = vi.fn<() => void>();
     readonly resume = vi.fn<() => void>();
     readonly cancel = vi.fn<() => void>();
@@ -482,6 +483,7 @@ const fakes = vi.hoisted(() => {
       | {
           narration: {
             speak: ReturnType<typeof vi.fn>;
+            attentionCue: ReturnType<typeof vi.fn>;
             waitForRetirement: ReturnType<typeof vi.fn>;
             pause: ReturnType<typeof vi.fn>;
             resume: ReturnType<typeof vi.fn>;
@@ -651,6 +653,7 @@ vi.mock('../src/workspace_session', () => ({
   WorkspaceSession: class {
     narration = {
       speak: vi.fn(() => Promise.resolve()),
+      attentionCue: vi.fn(() => Promise.resolve()),
       waitForRetirement: vi.fn<(_: AbortSignal) => Promise<boolean>>().mockResolvedValue(true),
       pause: vi.fn(),
       resume: vi.fn(),
@@ -2081,6 +2084,7 @@ it('holds narration and secret changes while placement is pending, then selects 
   const h = activated();
   const ready = h.controller.narration.ready?.();
   const pending = h.controller.narration.speak('pending');
+  const pendingCue = h.controller.narration.attentionCue?.();
   h.controller.narration.pause();
   h.controller.narration.resume();
   h.controller.narration.cancel();
@@ -2090,9 +2094,11 @@ it('holds narration and secret changes while placement is pending, then selects 
   choice.resolve('legacy');
   await h.api.ready;
   await pending;
+  await pendingCue;
   expect(await ready).toBe(false);
   const speech = last(fakes.made.speech);
   expect(speech.speak).not.toHaveBeenCalledWith('pending');
+  expect(speech.attentionCue).not.toHaveBeenCalled();
   expect(await h.controller.narration.ready?.()).toBe(false);
   expect(speechReady).toHaveBeenCalledTimes(2);
   const facts = vi.mocked(speechReady).mock.lastCall?.[0];
@@ -2104,6 +2110,8 @@ it('holds narration and secret changes while placement is pending, then selects 
   await expect(facts.model()).resolves.toBe(false);
   await expect(facts.key('elevenlabs')).resolves.toBe(false);
   await h.controller.narration.speak('legacy');
+  await h.controller.narration.attentionCue?.();
+  expect(speech.attentionCue).toHaveBeenCalledOnce();
   h.controller.narration.pause();
   h.controller.narration.resume();
   h.controller.narration.cancel();
@@ -2112,6 +2120,30 @@ it('holds narration and secret changes while placement is pending, then selects 
   expect(speech.resume).toHaveBeenCalled();
   expect(speech.cancel).toHaveBeenCalled();
   expect(fakes.providerRegistered).toHaveBeenCalledOnce();
+});
+
+it('dispatches a cue queued while the owner is being selected', async () => {
+  const choice = Promise.withResolvers<'legacy'>();
+  fakes.placementChoice = choice.promise;
+  const h = activated();
+  const service = last(fakes.made.speech);
+  const cue = h.controller.narration.attentionCue?.();
+  expect(service.attentionCue).not.toHaveBeenCalled();
+  choice.resolve('legacy');
+  await cue;
+  expect(service.attentionCue).toHaveBeenCalledOnce();
+});
+
+it('forwards attention cues to the selected companion owner', async () => {
+  fakes.companionAvailable = true;
+  const h = activated();
+  await h.api.ready;
+  const session = fakes.session;
+  if (session === undefined) throw new Error('No session');
+  const cue = h.controller.narration.attentionCue;
+  expect(cue).toBeDefined();
+  await cue?.();
+  expect(session.narration.attentionCue).toHaveBeenCalledOnce();
 });
 
 it('rejects stale retirement admission and reports a current refusal', async () => {
@@ -2639,10 +2671,13 @@ it('does not dispatch narration after shutdown during placement', async () => {
   const h = activated();
   const service = last(fakes.made.speech);
   const queued = h.controller.narration.speak('pending');
+  const queuedCue = h.controller.narration.attentionCue?.();
   const ready = h.controller.narration.ready?.();
   await deactivate();
   choice.resolve('legacy');
   await queued;
+  await queuedCue;
+  expect(service.attentionCue).not.toHaveBeenCalled();
   expect(await ready).toBe(false);
   expect(service.speak).not.toHaveBeenCalled();
 });

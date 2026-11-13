@@ -424,6 +424,8 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
         >x</button>
       </div>
       <div class="compose-row">
+        <button type="button" data-ui="attention" class="quiet" aria-label="Raise hand" data-tip="Raise hand"
+          aria-pressed="false" disabled>${ICONS.attention}</button>
         <textarea
           data-ui="reply"
           class="reply"
@@ -431,8 +433,6 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
           aria-label="Reply to the agent"
           placeholder="Reply to the agent${ELLIPSIS}"
         ></textarea>
-        <button type="button" data-ui="attention" class="quiet" aria-label="Raise hand" data-tip="Raise hand"
-          aria-pressed="false" disabled>${ICONS.attention}</button>
         <button type="button" data-ui="send" class="quiet" aria-label="Send" data-tip="Send (Enter)">${ICONS.send}</button>
       </div>
     </div>

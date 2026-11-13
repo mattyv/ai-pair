@@ -8,7 +8,7 @@ import { randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import type { Window } from 'happy-dom';
+import type { HTMLElement, Window } from 'happy-dom';
 import { SPEED_SUFFIX } from '@ai-pair/core/constants';
 import { panelHtml, settingSpeed, SPEEDS } from '../src/panel_html';
 
@@ -68,6 +68,14 @@ it('loads its styles from the file it is given, and allows no inline style', () 
   const links = [...page.querySelectorAll('link[rel="stylesheet"]')];
   expect(links.map((l) => l.getAttribute('href'))).toEqual(['https://file.vscode-resource/dist/panel.css']);
   expect(page.querySelectorAll('style')).toHaveLength(0);
+});
+
+it('places the hand before the reply and send controls in keyboard order', () => {
+  const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js');
+  const page = new window.DOMParser().parseFromString(html, 'text/html');
+  const controls = [...page.querySelectorAll<HTMLElement>('.compose-row > [data-ui]')];
+  expect(controls.map((control) => control.dataset.ui)).toEqual(['attention', 'reply', 'send']);
+  expect(controls.every((control) => !control.hasAttribute('tabindex'))).toBe(true);
 });
 
 it('offers the speeds with one decimal, so they line up', () => {

@@ -597,3 +597,9 @@ source; its HTML export was regenerated and normalized. Both normalizer suites
 passed, and headless Chromium rendered the new diagram without page errors.
 Its labels and connections were visually inspected. This establishes diagram
 validity and rendering, not hardware audibility.
+
+The production extension forwards the required `attentionCue` narration method
+through the same selected-owner, readiness and cancellation-generation checks
+as ordinary speech. A missing forwarding method is rejected by the internal
+port type. The existing Archi connection and owners remain accurate; this
+adapter correction does not add a new boundary or a second state machine.

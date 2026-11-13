@@ -3546,14 +3546,18 @@ respectively violated `ValidHistory`, `ValidHistory`, `Bounded`, and
 The finite model starts with or without a cursor, each turn and either pause
 state. `Request` and `Show` preserve turn and pause; weak fairness for both
 models an accepted request and a responsive editor. `RevealCursor.cfg` passes
-with 24 distinct states. It abstracts editor failures and cannot revoke a
-navigation already accepted by VS Code.
+with 100 distinct states, two file locations, two offsets, and at most two
+requests. It models a file or offset change while a request is pending and
+supersession or disposal before completion. It abstracts editor failures and
+cannot revoke a navigation already accepted by VS Code.
 
 | Property | Implementation evidence |
 | --- | --- |
 | `TypeOK` | Model type check. |
 | `ShowsCursor` | `editor.test.ts`: ShowsCursor; `panel.test.ts`: ShowsCursor; `controller.test.ts`: ShowsCursor. |
 | `NoCursorNoNavigation` | `editor.test.ts`: NoCursorNoNavigation. |
+| `LatestPosition` | `editor.test.ts`: LatestPosition and file changes during open and show. |
+| `CurrentRequest` | `editor.test.ts`: CurrentRequest. |
 | `EventuallyHandled` | `webview/panel.test.ts`: ShowsCursor; editor responsiveness is an environment assumption. |
 | `PreservesPlayback` | `controller.test.ts`: ShowsCursor; `panel.test.ts`: ShowsCursor. |
 
@@ -3561,7 +3565,8 @@ Mutations to an invalid visible value, always show the wrong file, and show a
 file without a cursor violate `TypeOK`, `ShowsCursor`, and
 `NoCursorNoNavigation`, respectively. A `Show` that never sets `shown`
 violates `EventuallyHandled`. Toggling pause during `Show` violates
-`PreservesPlayback`.
+`PreservesPlayback`. Revealing offset 0 after a move violates `LatestPosition`;
+accepting a superseded request violates `CurrentRequest`.
 
 ### `RemoteCue`: cue retirement across hosts
 

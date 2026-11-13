@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.36.1
+
+-   Forward the fixed interjection voice prompt through the production narration
+    adapter, with the same ownership and cancellation checks as speech.
+-   Reveal the agent's current cursor while it moves during editor navigation.
+-   Move the hand control to the left of Reply; a pending second click cancels
+    the interjection request.
+
 ## 0.36.0
 
 -   Add a raise-hand control beside Reply to request a pause after the current

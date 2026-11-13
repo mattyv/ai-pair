@@ -153,6 +153,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   private selfNavUntil = 0;
   /** Our shows in progress: view changes meanwhile are ours, however long VS Code takes (#56). */
   private showing = 0;
+  private revealGeneration = 0;
   /**
    * How many lines each editor group's viewport shows, as last seen without a document's end in view,
    * or measured. A zoom or a resize since, with a document's end in view, goes unnoticed.
@@ -382,27 +383,32 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
 
   /** Focuses and centers the agent cursor without changing the follow target. */
   revealCursor(): void {
-    const cursor = this.cursor;
-    if (cursor === undefined) return;
+    const generation = ++this.revealGeneration;
+    if (this.cursor === undefined) return;
     // specs/RevealCursor.tla, `Show`: navigation preserves playback and turn.
     this.showing++;
-    const current = (): boolean => this.cursor?.file === cursor.file && this.cursor.offset === cursor.offset;
-    void this.create(cursor.file)
-      .then(async () => {
-        if (!current()) return;
-        const document = await vscode.workspace.openTextDocument(vscode.Uri.file(cursor.file));
-        if (!current()) return;
+    void (async () => {
+      while (this.cursor !== undefined) {
+        const file = this.cursor.file;
+        const document = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
+        if (generation !== this.revealGeneration || this.cursor === undefined) return;
+        if (this.cursor.file !== file) continue;
         const editor = await vscode.window.showTextDocument(document, {
           preview: false,
           preserveFocus: false,
-          viewColumn: this.visibleEditor(cursor.file)?.viewColumn ?? vscode.window.activeTextEditor?.viewColumn,
+          viewColumn: this.visibleEditor(file)?.viewColumn ?? vscode.window.activeTextEditor?.viewColumn,
         });
-        if (!current()) return;
-        const position = document.positionAt(cursor.offset);
+        if (generation !== this.revealGeneration || this.cursor === undefined) return;
+        if (this.cursor.file !== file) continue;
+        const position = document.positionAt(this.cursor.offset);
         editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
-      })
+        return;
+      }
+    })()
       .catch(() => {
-        void vscode.window.showErrorMessage('Could not reveal the agent cursor.');
+        if (generation === this.revealGeneration) {
+          void vscode.window.showErrorMessage('Could not reveal the agent cursor.');
+        }
       })
       .finally(() => {
         this.showing--;
@@ -815,6 +821,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   }
 
   dispose(): void {
+    // specs/RevealCursor.tla, `Dispose`: invalidate pending navigation.
+    this.revealGeneration++;
     clearInterval(this.pulse);
     for (const d of this.disposables) {
       d.dispose();

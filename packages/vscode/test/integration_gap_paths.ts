@@ -899,6 +899,7 @@ export async function synchronousNarrationFailure(api: Api): Promise<void> {
         attempts++;
         throw new Error('injected synchronous speech failure');
       },
+      attentionCue: () => Promise.resolve(),
       pause: () => {},
       resume: () => {},
       cancel: () => {},

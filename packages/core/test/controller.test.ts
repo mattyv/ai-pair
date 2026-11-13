@@ -1758,7 +1758,7 @@ describe('the cursor in a report', () => {
 describe('pause and resume', () => {
   it('Attention: grants idle floor, publishes paused state and releases only its hold', async () => {
     const narration = mock<NarrationPort>();
-    narration.attentionCue = vi.fn().mockResolvedValue(undefined);
+    narration.attentionCue.mockResolvedValue(undefined);
     const h = harness({}, {}, narration);
     await h.controller.start();
     h.controller.requestAttention();
@@ -1820,7 +1820,7 @@ describe('pause and resume', () => {
 
   it('Attention: diagnostic release prevents stale grant publication', async () => {
     const narration = mock<NarrationPort>();
-    narration.attentionCue = vi.fn().mockResolvedValue(undefined);
+    narration.attentionCue.mockResolvedValue(undefined);
     const h = harness({}, {}, narration);
     await h.controller.start();
     h.controller.onDiagnostic = (event) => {
@@ -1916,7 +1916,7 @@ describe('pause and resume', () => {
 
   it('Attention: an observer may release on text before audio starts', async () => {
     const narration = mock<NarrationPort>();
-    narration.attentionCue = vi.fn().mockRejectedValue(new Error('unavailable'));
+    narration.attentionCue.mockRejectedValue(new Error('unavailable'));
     const h = harness({}, {}, narration);
     await h.controller.start();
     h.panel.post.mockImplementation((event) => {
@@ -1929,7 +1929,7 @@ describe('pause and resume', () => {
 
   it('Attention: unavailable audio does not prevent releasing the floor', async () => {
     const narration = mock<NarrationPort>();
-    narration.attentionCue = vi.fn().mockRejectedValue(new Error('unavailable'));
+    narration.attentionCue.mockRejectedValue(new Error('unavailable'));
     const h = harness({}, {}, narration);
     await h.controller.start();
     h.controller.requestAttention();

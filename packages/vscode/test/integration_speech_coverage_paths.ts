@@ -59,6 +59,7 @@ export async function speechCoveragePaths(api: Api): Promise<void> {
           finish = resolve;
         });
       },
+      attentionCue: () => Promise.resolve(),
       pause: () => {},
       resume: () => {},
       cancel: () => {

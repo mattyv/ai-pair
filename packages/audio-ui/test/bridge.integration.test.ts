@@ -21,6 +21,7 @@ describe('local audio command integration', () => {
       page: () => 1,
       speech: {
         speak: () => pending.promise,
+        attentionCue: () => Promise.resolve(),
         pause: () => {},
         resume: () => {},
         cancel: () => {
@@ -94,7 +95,7 @@ describe('local audio command integration', () => {
     const companion = new CompanionNarration({
       epoch: 'epoch',
       page: () => 1,
-      speech: { speak, pause: () => {}, resume: () => {}, cancel: () => {} },
+      speech: { speak, attentionCue: () => Promise.resolve(), pause: () => {}, resume: () => {}, cancel: () => {} },
       stopOutput: () => retirement.promise,
       observation: () => undefined,
       nextSequence: () => ++outbound,
