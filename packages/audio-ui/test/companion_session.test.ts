@@ -259,6 +259,15 @@ it('forwards panel controls only after local retirement and clears pause reasons
   void current.dispose();
 });
 
+it('forwards navigator commentary to the workspace', () => {
+  const current = session();
+  routing().forward({ type: 'navigatorCommentary', value: 'coach' }, 7);
+  expect(fake.send).toHaveBeenCalledWith(
+    expect.objectContaining({ type: 'panelAction', pageEpoch: 7, action: { type: 'navigatorCommentary', value: 'coach' } }),
+  );
+  void current.dispose();
+});
+
 it('forwards a reply behavior change to the workspace', () => {
   const current = session();
   routing().forward({ type: 'replyBehavior', value: 'finishAction' }, 7);
@@ -405,6 +414,8 @@ it('provides safe local-only panel settings and refuses workspace operations', a
   expect(invoke(field(args[13], 'get'))).toBe(false);
   invoke(field(args[13], 'set'), true);
   expect(invoke(field(args[13], 'get'))).toBe(false);
+  expect(() => invoke(field(args[14], 'get'))).toThrow('Workspace operation is unavailable');
+  expect(() => invoke(field(args[14], 'set'), 'coach')).toThrow('Workspace operation is unavailable');
   void current.dispose();
 });
 

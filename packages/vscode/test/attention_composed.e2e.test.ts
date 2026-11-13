@@ -34,6 +34,7 @@ it('delivers a draft reply at the granted floor before releasing queued editing'
     { get: () => 'typing', set: vi.fn<(value: 'typing' | 'lines' | 'blocks') => void>() },
     { get: () => 'interrupt', set: vi.fn<(value: 'interrupt' | 'finishAction') => void>() },
     booleanSetting,
+    { get: () => 'helpful', set: () => {} },
   );
   panel.attachRemote(1, () => {});
   await controller.step([{ say: 'Reading.' }, { move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `x${CURSOR_MARKER}` }]);

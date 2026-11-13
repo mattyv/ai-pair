@@ -84,6 +84,7 @@ const ui = {
   settingsDialog: $('settings-dialog', HTMLDialogElement),
   settingsClose: $('settings-close', HTMLButtonElement),
   chatOrder: $('chat-order', HTMLSelectElement),
+  navigatorCommentary: $('navigator-commentary', HTMLSelectElement),
   settingsCodePlayback: $('settings-code-playback', HTMLSelectElement),
   copyDiagnostics: $('copy-diagnostics', HTMLButtonElement),
   speechEnabled: $('speech-enabled', HTMLInputElement),
@@ -1359,6 +1360,11 @@ ui.replyBehavior.addEventListener('change', () => {
   vscode.postMessage({ type: 'replyBehavior', value });
 });
 
+ui.navigatorCommentary.addEventListener('change', () => {
+  const value = ui.navigatorCommentary.value;
+  if (value === 'quiet' || value === 'helpful' || value === 'coach') vscode.postMessage({ type: 'navigatorCommentary', value });
+});
+
 ui.chatOrder.addEventListener('change', () => {
   const value = ui.chatOrder.value === 'oldestFirst' ? 'oldestFirst' : 'newestFirst';
   setChatOrder(value);
@@ -1751,6 +1757,9 @@ function handle(message: ToPanel): void {
     case 'replyBehavior':
       ui.replyBehavior.value = message.value;
       return;
+    case 'navigatorCommentary':
+      ui.navigatorCommentary.value = message.value;
+      break;
     case 'chatOrder':
       setChatOrder(message.value);
       return;

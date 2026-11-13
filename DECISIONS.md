@@ -1114,3 +1114,20 @@ that acknowledgement is absent from the current narration boundary. This fix
 does not add provider or cost plumbing. The matching 0.36.1 relay already
 publishes `speech_mode` in actual MCP `tools/list`; the new conformance test
 checks both fields and real calls rather than client presentation.
+
+## Navigator commentary preference
+
+Keep one saved Quiet / Helpful / Coach preference for navigator text and voice.
+Helpful is the default. Quiet omits routine first-pause reassurance; Coach adds
+useful explanations and connections to available, verified conversation
+history. Explicit programmer requests override the saved preference for the
+session. This is guidance to the agent, not an exact comment quota. Audio
+remains independently enabled or muted.
+
+The workspace extension owns persistence alongside other general preferences;
+the local companion forwards intent and renders the owner's current snapshot.
+The controller projects the current preference into reports after asynchronous
+cursor lookup. Restoring canceled activity evidence cannot restore an old
+preference. Configuration changes do not wake a pending listen or alter edit
+evidence, turn ownership, pause timing or queued narration. The active agent
+receives a change on the next returned report, not an unsolicited MCP push.

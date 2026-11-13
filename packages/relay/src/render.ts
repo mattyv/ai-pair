@@ -174,6 +174,17 @@ export function renderReport(report: Report, tool: ReportingTool): string {
       'The calibration is under way in the Pair panel: playback is held while the programmer reads the passage. Call `listen`; their next message comes once it ends.',
     );
   }
+  if (report.navigatorCommentary !== undefined && (tool === 'start' || report.turn === 'programmer' || report.navigator !== undefined)) {
+    const guidance = {
+      quiet: 'Quiet: comment only on important issues or direct answers; skip routine first-pause reassurance unless asked.',
+      helpful: 'Helpful: acknowledge the first typing pause once, then offer useful observations at natural pauses.',
+      coach:
+        'Coach: acknowledge the first typing pause once, then offer useful observations, explanations, and connections to verified prior work.',
+    };
+    sections.push(
+      `Navigator commentary: ${guidance[report.navigatorCommentary]} Follow explicit session requests in every mode; voice is separate.`,
+    );
+  }
   if (report.repeated) {
     sections.push(
       "Part of this report may repeat an earlier one: a call you canceled had already returned. Skip what you've already seen.",

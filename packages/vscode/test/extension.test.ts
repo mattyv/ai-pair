@@ -291,6 +291,7 @@ const fakes = vi.hoisted(() => {
     readonly setSpeed = vi.fn();
     readonly setReadingSpeed = vi.fn();
     readonly setCodePlayback = vi.fn();
+    readonly setNavigatorCommentary = vi.fn();
     readonly setTiming = vi.fn();
     readonly setConfirmCommands = vi.fn();
     readonly pause = vi.fn();
@@ -364,6 +365,7 @@ const fakes = vi.hoisted(() => {
     readonly showSpeed = vi.fn();
     readonly showReadingSpeed = vi.fn();
     readonly showChatOrder = vi.fn();
+    readonly showNavigatorCommentary = vi.fn();
     readonly showReplyBehavior = vi.fn();
     readonly showCommandApprovalSound = vi.fn();
     readonly showCommandApprovals = vi.fn();
@@ -414,6 +416,7 @@ const fakes = vi.hoisted(() => {
       readonly codePlayback: { get: () => string; set: (value: string) => void },
       readonly replyBehavior: { get: () => string; set: (value: string) => void },
       readonly commandApprovalSound: { get: () => boolean; set: (value: boolean) => void },
+      readonly navigatorCommentary: { get: () => string; set: (value: string) => void },
     ) {
       made.panels.push(this);
     }
@@ -471,6 +474,7 @@ const fakes = vi.hoisted(() => {
     delaySettings: false,
     providerGate: undefined as Promise<void> | undefined,
     computeGate: undefined as Promise<void> | undefined,
+    commentaryGate: undefined as Promise<void> | undefined,
     updated: [] as Array<[string, unknown, unknown]>,
     commands: new Map<string, (value?: unknown) => unknown>(),
     providerRegistered: vi.fn(),
@@ -532,6 +536,7 @@ vi.mock('vscode', () => ({
       inspect: (key: string) => ({ globalValue: fakes.settings.get(key) }),
       update: (key: string, value: unknown, target: unknown) => {
         fakes.updated.push([key, value, target]);
+        if (key === 'navigatorCommentary' && fakes.commentaryGate !== undefined) return fakes.commentaryGate;
         if (key === 'speech.computeMode' && fakes.computeGate !== undefined) {
           const gate = fakes.computeGate;
           fakes.computeGate = undefined;
@@ -809,6 +814,7 @@ afterEach(() => {
   fakes.remoteName = undefined;
   fakes.settings.clear();
   fakes.delaySettings = false;
+  fakes.commentaryGate = undefined;
   fakes.providerGate = undefined;
   fakes.commands.clear();
   for (const list of [fakes.made.controllers, fakes.made.bridges, fakes.made.editors, fakes.made.panels, fakes.made.calibrations]) {
@@ -894,6 +900,40 @@ describe('activate', () => {
     changed('codePlayback');
     expect(h.controller.setCodePlayback).toHaveBeenLastCalledWith('typing');
     expect(h.panel.showCodePlayback).toHaveBeenLastCalledWith('typing');
+  });
+
+  it('persists navigator commentary and applies the workspace snapshot on changes', () => {
+    const h = activated();
+    expect(h.controller.setNavigatorCommentary).toHaveBeenCalledWith('helpful');
+    expect(h.panel.navigatorCommentary.get()).toBe('helpful');
+    h.panel.navigatorCommentary.set('coach');
+    expect(fakes.updated).toContainEqual(['navigatorCommentary', 'coach', 1]);
+    fakes.settings.set('navigatorCommentary', 'quiet');
+    changed('navigatorCommentary');
+    expect(h.controller.setNavigatorCommentary).toHaveBeenLastCalledWith('quiet');
+    expect(h.panel.showNavigatorCommentary).toHaveBeenLastCalledWith('quiet');
+    fakes.settings.set('navigatorCommentary', 'invalid');
+    changed('navigatorCommentary');
+    expect(h.controller.setNavigatorCommentary).toHaveBeenLastCalledWith('helpful');
+    expect(h.panel.showNavigatorCommentary).toHaveBeenLastCalledWith('helpful');
+  });
+
+  it('restores the effective preference if saving fails', async () => {
+    const gate = Promise.withResolvers<void>();
+    fakes.commentaryGate = gate.promise;
+    const h = activated();
+    h.panel.navigatorCommentary.set('coach');
+    gate.reject(new Error('save failed'));
+    await Promise.resolve();
+    expect(h.panel.showNavigatorCommentary).toHaveBeenCalledWith('helpful');
+    expect(fakes.errors).toContain('Could not save navigator commentary.');
+  });
+
+  it('restores saved navigator commentary on activation', () => {
+    fakes.settings.set('navigatorCommentary', 'coach');
+    const h = activated();
+    expect(h.controller.setNavigatorCommentary).toHaveBeenCalledWith('coach');
+    expect(h.panel.navigatorCommentary.get()).toBe('coach');
   });
 
   it('persists reply behavior and defaults invalid values to interrupt', () => {

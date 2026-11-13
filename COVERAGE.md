@@ -609,6 +609,8 @@ Last updated: css, 2026-11-13.
 | `specs/Narration.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/Navigator.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Navigator.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
+| `specs/NavigatorCommentary.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/NavigatorCommentary.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/OpenRouterBoot.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/OpenRouterBoot.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/OpenRouterCatalog.cfg` | TLC config | - | - | - | - | - | - |

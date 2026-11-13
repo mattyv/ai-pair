@@ -184,6 +184,9 @@ export const EVENT_SCHEMA = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('end') }),
 ]);
 
+/** Checks the navigator commentary preference. */
+export const NAVIGATOR_COMMENTARY_SCHEMA = z.enum(['quiet', 'helpful', 'coach']);
+
 /** Checks a {@link Report}. */
 export const REPORT_SCHEMA = z.object({
   batches: z.array(BATCH_RESULT_SCHEMA),
@@ -196,6 +199,8 @@ export const REPORT_SCHEMA = z.object({
   rejected: z.object({ index: z.number(), action: ACTION_SCHEMA, error: BATCH_ERROR_SCHEMA, code: CODE_SCHEMA.optional() }).optional(),
   events: z.array(EVENT_SCHEMA),
   turn: TURN_SCHEMA,
+  /** Current preference, projected when the report is delivered. */
+  navigatorCommentary: NAVIGATOR_COMMENTARY_SCHEMA.optional(),
   /** The agent cursor's line, when it isn't where the agent last saw it: in this report's code, or an earlier report. */
   cursor: CODE_SCHEMA.optional(),
   /** Evidence about why a navigator listen returned and where the programmer is editing. */
@@ -338,6 +343,9 @@ export type Passage = z.infer<typeof PASSAGE_SCHEMA>;
 
 /** Something that happened in the editor since the last report: a message, an edit, an interrupt, a turn, the end. */
 export type Event = z.infer<typeof EVENT_SCHEMA>;
+
+/** The programmer's preference for navigator commentary. */
+export type NavigatorCommentary = z.infer<typeof NAVIGATOR_COMMENTARY_SCHEMA>;
 
 /** The editor's answer to a tool call: the batches that finished, the events since the last report, and where the cursor is. */
 export type Report = z.infer<typeof REPORT_SCHEMA>;

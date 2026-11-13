@@ -297,3 +297,11 @@ describe('navigator report schema', () => {
     ).toBe(false);
   });
 });
+
+it('accepts only the three navigator commentary preferences on reports', () => {
+  const base = { batches: [], events: [], turn: 'agent' };
+  for (const navigatorCommentary of ['quiet', 'helpful', 'coach']) {
+    expect(REPORT_SCHEMA.parse({ ...base, navigatorCommentary }).navigatorCommentary).toBe(navigatorCommentary);
+  }
+  expect(REPORT_SCHEMA.safeParse({ ...base, navigatorCommentary: 'loud' }).success).toBe(false);
+});

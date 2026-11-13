@@ -10,6 +10,9 @@ describe('cross-host panel updates', () => {
       { type: 'replay', events: [{ type: 'session', active: true, task: 'Pair' }] },
       { type: 'selection', ref: { file: 'a.ts', line: 1, endLine: 2 } },
       { type: 'focusReply' },
+      { type: 'navigatorCommentary', value: 'quiet' },
+      { type: 'navigatorCommentary', value: 'helpful' },
+      { type: 'navigatorCommentary', value: 'coach' },
       { type: 'replyBehavior', value: 'interrupt' },
       { type: 'replyBehavior', value: 'finishAction' },
       { type: 'commandApprovalSound', value: true },
@@ -27,6 +30,8 @@ describe('cross-host panel updates', () => {
     for (const update of [
       { type: 'attention', state: 'invalid' },
       { type: 'state', state: 'paused', turn: 'agent', paused: true, speechPaused: 'false' },
+      { type: 'navigatorCommentary', value: 'invalid' },
+      { type: 'navigatorCommentary', value: 'coach', extra: true },
       { type: 'replyBehavior', value: 'invalid' },
       { type: 'replyBehavior', value: 'finishAction', extra: true },
       { type: 'commandApprovalSound', value: 'true' },

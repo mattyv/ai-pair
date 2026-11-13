@@ -479,3 +479,19 @@ it('renders a single-line diagnostic without a provider name', () => {
   );
   expect(text).toContain('a.py:3: Invalid syntax');
 });
+
+it.each([
+  ['quiet', 'Quiet'],
+  ['helpful', 'Helpful'],
+  ['coach', 'Coach'],
+] as const)('renders %s navigator commentary guidance', (navigatorCommentary, label) => {
+  const text = renderReport(report({ navigatorCommentary }), 'start');
+  expect(text).toContain(label);
+  expect(text).toContain('explicit');
+});
+
+it('renders quiet guidance on a programmer-turn step', () => {
+  const text = renderReport(report({ turn: 'programmer', navigatorCommentary: 'quiet' }), 'step');
+  expect(text).toContain('only on important issues or direct answers');
+  expect(text).toContain('skip routine first-pause reassurance unless asked');
+});

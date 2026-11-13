@@ -1372,6 +1372,20 @@ describe('chat order', () => {
 });
 
 describe('panel settings', () => {
+  it('projects navigator commentary and sends changes', () => {
+    const select = element('navigator-commentary');
+    if (!(select instanceof window.HTMLSelectElement)) throw new TypeError('Expected a select');
+    send({ type: 'navigatorCommentary', value: 'quiet' });
+    expect(select.value).toBe('quiet');
+    select.value = 'coach';
+    select.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect(posted()).toContainEqual({ type: 'navigatorCommentary', value: 'coach' });
+    const count = posted().length;
+    select.value = 'invalid';
+    select.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect(posted()).toHaveLength(count);
+  });
+
   it('opens a named settings dialog, sends a changed order, and restores focus on close', () => {
     const button = element('settings');
     button.focus();

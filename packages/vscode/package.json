@@ -2,7 +2,7 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.37.1",
+  "version": "0.38.0",
   "publisher": "mattyv",
   "author": {
     "name": "mattyv"
@@ -326,6 +326,22 @@
           ],
           "default": "interrupt",
           "description": "Choose whether replies interrupt immediately or wait for the current action to finish. Stop always interrupts immediately.",
+          "scope": "application"
+        },
+        "aiPair.navigatorCommentary": {
+          "type": "string",
+          "enum": [
+            "quiet",
+            "helpful",
+            "coach"
+          ],
+          "enumDescriptions": [
+            "Important issues.",
+            "Useful observations.",
+            "Explanations and connections."
+          ],
+          "default": "helpful",
+          "description": "How much the navigator comments in writing and speech.",
           "scope": "application"
         },
         "aiPair.chatOrder": {

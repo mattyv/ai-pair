@@ -6,6 +6,8 @@ import * as vscode from 'vscode';
 import type { CodePlayback, Controller, PanelEvent, PanelPort, Ref, SharedSelection } from '@ai-pair/core';
 import {
   AUDIO_DIAGNOSTICS_SCHEMA,
+  NAVIGATOR_COMMENTARY_SCHEMA,
+  type NavigatorCommentary,
   speechDecodeFromPage,
   localPanelAction,
   localPanelUpdate,
@@ -190,6 +192,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     private readonly codePlayback: { get: () => CodePlayback; set: (value: CodePlayback) => void },
     private readonly replyBehavior: { get: () => 'interrupt' | 'finishAction'; set: (value: 'interrupt' | 'finishAction') => void },
     private readonly commandApprovalSound: { get: () => boolean; set: (value: boolean) => void },
+    private readonly navigatorCommentary: { get: () => NavigatorCommentary; set: (value: NavigatorCommentary) => void },
   ) {}
 
   /** Posts to the page, if there is one. */
@@ -287,6 +290,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   /** Shows the speed setting, which changed. Not logged: only the current value matters. */
   showSpeed(value: number): void {
     this.send({ type: 'speed', value });
+  }
+
+  /** Shows the workspace's current navigator commentary preference. */
+  showNavigatorCommentary(value: NavigatorCommentary): void {
+    this.send({ type: 'navigatorCommentary', value });
   }
 
   /** Shows the saved history order, including changes made in VS Code settings. */
@@ -835,6 +843,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         if (this.remote === undefined) this.readySpeech(pageId);
         // A new page has an empty draft (#69): specs/Draft.tla, `LoadPage`.
         controller().resume('reply');
+        this.showNavigatorCommentary(this.navigatorCommentary.get());
         this.showChatOrder(this.chatOrder.get());
         this.showReplyBehavior(this.replyBehavior.get());
         this.showCommandApprovalSound(this.commandApprovalSound.get());
@@ -858,6 +867,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       case 'replyBehavior':
         if (message.value === 'interrupt' || message.value === 'finishAction') this.replyBehavior.set(message.value);
         return;
+      case 'navigatorCommentary': {
+        const parsed = NAVIGATOR_COMMENTARY_SCHEMA.safeParse(message.value);
+        if (parsed.success) this.navigatorCommentary.set(parsed.data);
+        return;
+      }
       case 'chatOrder':
         if (message.value === 'newestFirst' || message.value === 'oldestFirst') this.chatOrder.set(message.value);
         return;

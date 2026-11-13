@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.38.0
+
+-   Add persistent Quiet, Helpful and Coach navigator commentary preferences.
+    Apply changes on the next report in active sessions and synchronize the
+    local companion. Keep speech enablement independent.
+
 ## 0.37.1
 
 -   Observe programmer edits in the current Pair file outside the workspace,

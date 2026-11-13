@@ -4,6 +4,7 @@ import { mock } from 'vitest-mock-extended';
 import { setup, throughStorage, advance, until } from '../../core/test/fake';
 import { NarrationPanel, type PanelWiring, type Starter } from '../src/panel';
 import { WorkspacePanelBridge } from '../src/workspace_panel_bridge';
+import { WorkspaceSession } from '../src/workspace_session';
 
 vi.mock('vscode', () => ({ window: { showErrorMessage: vi.fn() } }));
 
@@ -39,6 +40,7 @@ it('Revoke: a current companion page clears grants, stale pages cannot revoke, a
     { get: () => 'typing', set: vi.fn<(value: 'typing' | 'lines' | 'blocks') => void>() },
     { get: () => 'interrupt', set: vi.fn<(value: 'interrupt' | 'finishAction') => void>() },
     booleanSetting,
+    { get: () => 'helpful', set: () => {} },
   );
   const bridge = new WorkspacePanelBridge({
     epoch: 'epoch',
@@ -95,4 +97,67 @@ it('Revoke: a current companion page clears grants, stale pages cannot revoke, a
   restored.controller.userInterrupt();
   await until(restored.controller.listen());
   bridge.dispose();
+});
+
+it('routes commentary through the production workspace session and projects its snapshot', async () => {
+  const { controller } = setup();
+  const wiring = mock<PanelWiring>();
+  wiring.controller.mockReturnValue(controller);
+  wiring.calibration.mockReturnValue(mock());
+  const starter = mock<Starter>();
+  starter.available.mockResolvedValue(true);
+  wiring.starter = starter;
+  const numberSetting = { get: () => 1, set: () => {} };
+  const booleanSetting = { get: () => false, set: () => {} };
+  let preference: 'quiet' | 'helpful' | 'coach' = 'helpful';
+  const panel = new NarrationPanel(
+    (file) => file,
+    numberSetting,
+    numberSetting,
+    { current: () => undefined, ref: () => undefined },
+    () => {},
+    mock(),
+    wiring,
+    { get: () => 'newestFirst', set: () => {} },
+    { version: 'test', build: 'test' },
+    booleanSetting,
+    () => false,
+    { get: () => 'typing', set: () => {} },
+    { get: () => 'interrupt', set: () => {} },
+    booleanSetting,
+    {
+      get: () => preference,
+      set: (value) => {
+        preference = value;
+        controller.setNavigatorCommentary(value);
+        panel.showNavigatorCommentary(value);
+      },
+    },
+  );
+  const frames: unknown[] = [];
+  const session = new WorkspaceSession({
+    epoch: 'epoch',
+    panel,
+    send: (frame) => {
+      frames.push(frame);
+      return Promise.resolve();
+    },
+    lost: () => {},
+  });
+  function send(sequence: number, action: unknown): boolean {
+    return session.accept({ version: LOCAL_AUDIO_VERSION, connectionEpoch: 'epoch', sequence, type: 'panelAction', pageEpoch: 1, action });
+  }
+  try {
+    expect(send(1, { type: 'ready' })).toBe(true);
+    expect(send(2, { type: 'navigatorCommentary', value: 'coach' })).toBe(true);
+    expect(preference).toBe('coach');
+    expect(await controller.start()).toMatchObject({ navigatorCommentary: 'coach' });
+    await vi.waitFor(() => {
+      expect(frames).toContainEqual(
+        expect.objectContaining({ type: 'panelChunk', data: JSON.stringify({ type: 'navigatorCommentary', value: 'coach' }) }),
+      );
+    });
+  } finally {
+    session.dispose();
+  }
 });

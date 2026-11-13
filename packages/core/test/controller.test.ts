@@ -452,6 +452,7 @@ describe('start', () => {
       batches: [],
       events: [],
       turn: 'agent',
+      navigatorCommentary: 'helpful',
     });
     expect(scene()).toMatchObject({ root: path.join(ROOT, 'sub'), turn: 'agent', focus: 'cursor', pointFar: false });
     expect(posted(h)[0]).toEqual({ type: 'session', active: true, task: 'Fix it.', rules: ['GUIDE.md'] });
@@ -497,7 +498,7 @@ describe('a session the agent leaves, and comes back to', () => {
     expect(h.controller.isSuspended).toBe(true);
     expect(posted(h).at(-1)).toEqual({ type: 'session', active: true, task: 'Kept.', suspended: true });
     const resumed = REPORT_SCHEMA.parse(await h.controller.start(undefined, ROOT, ['GUIDE.md']));
-    expect(resumed).toEqual({ batches: [], events: [], turn: 'agent', resumed: true });
+    expect(resumed).toEqual({ batches: [], events: [], turn: 'agent', resumed: true, navigatorCommentary: 'helpful' });
     expect(posted(h).at(-1)).toEqual({ type: 'session', active: true, task: 'Kept.', resumed: true, rules: ['GUIDE.md'] });
     expect(fakes.players).toHaveLength(1);
     h.controller.disconnect();
@@ -711,7 +712,7 @@ describe('steps and their batches', () => {
 
   it('an empty step waits for the queued batches, and returns at once with none', async () => {
     const h = await started();
-    expect(await report(h.controller.step([]))).toEqual({ batches: [], events: [], turn: 'agent' });
+    expect(await report(h.controller.step([]))).toEqual({ batches: [], events: [], turn: 'agent', navigatorCommentary: 'helpful' });
     const finish = holdPlay();
     await report(h.controller.step(SAY));
     const waiting = h.controller.step([]);
@@ -1395,7 +1396,7 @@ describe('listen', () => {
     const h = await started();
     const listen = h.controller.listen();
     await settle(CONFIG.maxBlockMs);
-    expect(await report(listen)).toEqual({ batches: [], events: [], turn: 'agent', waiting: true });
+    expect(await report(listen)).toEqual({ batches: [], events: [], turn: 'agent', waiting: true, navigatorCommentary: 'helpful' });
     expect(h.traced.at(-1)).toMatch(/^report to listen: batches \[\], events \[\], waiting, \d+ chars$/);
   });
 
@@ -2564,3 +2565,45 @@ it.each(['programmer', 'suspended', 'ended'] as const)(
     expect(clock.release).toHaveBeenCalledOnce();
   },
 );
+
+describe('NavigatorCommentary projection', () => {
+  it('CurrentAtDelivery: projects after an asynchronous cursor lookup on resume', async () => {
+    const h = await started();
+    h.controller.disconnect();
+    scene().cursor = { file: A, offset: 1 };
+    let release = vi.fn<(value: unknown) => void>();
+    player().codeAt.mockReturnValue(
+      new Promise((resolve) => {
+        release = vi.fn(resolve);
+      }),
+    );
+    const resumed = h.controller.start();
+    await settle(0);
+    h.controller.setNavigatorCommentary('coach');
+    release({
+      code: { file: A, lines: [{ number: 1, text: 'x' }] },
+      sighting: { file: A, text: 'x', lines: [1] },
+      cursorLine: { number: 1, text: 'x' },
+    });
+    expect((await report(resumed)).navigatorCommentary).toBe('coach');
+  });
+
+  it('CurrentAtDelivery, RestoreKeepsMode: projects the current mode on start, pending listen and replay', async () => {
+    const h = harness();
+    expect((await report(h.controller.start())).navigatorCommentary).toBe('helpful');
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    const listen = h.controller.listen();
+    await settle(0);
+    h.controller.setNavigatorCommentary('quiet');
+    expect(await pending(listen)).toBe(true);
+    await settle(CONFIG.maxBlockMs);
+    const first = await report(listen);
+    expect(first.navigatorCommentary).toBe('quiet');
+    h.controller.setNavigatorCommentary('coach');
+    h.controller.restore(first);
+    const replay = h.controller.listen();
+    await settle(CONFIG.maxBlockMs);
+    expect((await report(replay)).navigatorCommentary).toBe('coach');
+  });
+});

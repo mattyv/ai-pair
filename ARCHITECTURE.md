@@ -627,3 +627,25 @@ The navigator diagram source passed the Archi-Techture 1.5.1 validator. Its
 HTML export was regenerated and normalized with the repository helper. Both
 normalizer test suites passed. Chromium rendered the navigator view without
 page errors; owner labels and connections were visually inspected.
+
+## Navigator commentary configuration
+
+The workspace extension owns the saved commentary preference and updates the
+controller through its existing configuration boundary. The companion forwards
+settings intent over typed panel messages and displays the owner's snapshot.
+The preference is not part of local speech readiness or provider settings.
+
+The controller projects the latest preference after asynchronous report work.
+The relay renders its advisory policy for startup and navigator reports. Report
+restoration replays activity facts, never old configuration. Changing the mode
+does not wake a listen, change its deadline or modify turn ownership. The Archi
+Navigator view shows this preference path separately from activity evidence.
+
+The private workspace-to-companion contract is version 6 for these strict
+commentary action/update messages. Both extensions must be updated together;
+incompatible peers are rejected rather than silently ignoring the setting.
+This does not change the editor-relay protocol version.
+
+Archi-Techture 1.5.1 validated the updated source. Its generated HTML export
+was normalized and rendered in Chromium without page errors; preference owner,
+activity owner and their connections were visually inspected.

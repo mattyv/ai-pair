@@ -82,6 +82,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `FileText.cfg` | one file, `MaxChanges = 4` changes | holds | 123 |
 | `Outside.cfg` | one file, `MaxWrites = 5` contents | holds | 614 |
 | `Navigator.cfg` | `MaxEdits = 3` | holds | 136 |
+| `NavigatorCommentary.cfg` | three modes, one pending report, cancellation and replay | holds | 213 |
 | `EditEvents.cfg` | one file, 3 texts, `MaxEdits = 4` | holds | 516 |
 | `Scroll.cfg` | `NumLines = 8` lines, a view of `ViewHeight = 4`, `MaxMoves = 2`, `MaxFollowSwitches = 2`, `scrollBeyondLastLine` on and off, the programmer's turn | holds | 14,131 |
 | `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
@@ -1338,6 +1339,35 @@ Every invariant and property names the test that proves the code obeys it:
 | `WaitsProp` | `controller.test.ts`: WaitsProp: starts a new session from another directory, ending the suspended one; WaitsProp: closes a suspended session at once when the programmer ends it |
 | `EndedHasAgent` | `controller.test.ts`: WaitsProp: closes a suspended session at once when the programmer ends it; EndedHasAgent: rejects the open call when the agent disconnects, and closes at once a session the programmer ended |
 | `ShownIsState` | `controller.test.ts`: SavedIsCurrent, NotLostProp, ShownIsState: brings back a session the window saved, suspended, after a reload; `webview/panel.test.ts`: ShownIsState: a session revived after a reload shows as suspended; ShownIsState: a revive after a disconnect shows the suspension once; ShownIsState: a replacement session clears an old suspension (live and replay) |
+
+### `NavigatorCommentary`: current preference on report delivery
+
+The controller owns the current mode; `serialize` projects it after asynchronous
+report preparation. The model abstracts start, resume and navigator reports as
+one call, including a change between commitment and delivery. A canceled report
+may be restored; its old preference is never restored. Timers, transport and
+actual speech are outside this model. Weak fairness of `Commit` and `Deliver`
+ensures a pending or committed call eventually settles; cancellation also
+leaves it.
+
+| Spec | Code |
+|---|---|
+| `SetMode` | `setNavigatorCommentary` |
+| `Start`, `Commit`, `Deliver` | serialized call, report preparation, final projection |
+| `Cancel`, `Restore` | canceled report restoration, without restoring the preference |
+
+| Mutation | Breaks |
+|---|---|
+| `FreshProjection = FALSE` | `CurrentAtDelivery`: a setting changes between commitment and delivery |
+| `RestoreOldMode = TRUE` | `RestoreKeepsMode`: restoring a canceled report rolls back the preference |
+| `Start` sets an invalid call state | `TypeOK` |
+| Remove `Cancel` and delivery fairness | `EventuallySettled` |
+
+| Invariant or property | Test |
+|---|---|
+| `TypeOK` | TypeScript; `index.test.ts`: accepts only the three navigator commentary preferences on reports |
+| `CurrentAtDelivery`, `RestoreKeepsMode` | `controller.test.ts`: CurrentAtDelivery, RestoreKeepsMode: projects the current mode on start, pending listen and replay; CurrentAtDelivery: projects after an asynchronous cursor lookup on resume |
+| `EventuallySettled` | `controller.test.ts`: BlockedReturns: returns with `waiting` after MAX_BLOCK; cancellation and fairness are abstracted here. |
 
 ### `Navigator`: the programmer's edits, reported when they pause
 
@@ -2646,7 +2676,7 @@ Per-event messages preserve replay order without truncating the whole history.
 | `NoAudioOrSecrets` | `protocol/test/panel_update.test.ts`: rejects audio, speech settings, arbitrary commands, and unexpected properties. |
 | `DisconnectClears` | `protocol/test/panel_chunks.test.ts`: never combines fragments across page replacement or a duplicate fragment; `protocol/test/command_channel.test.ts`: settles active and queued sends on disposal and ignores a late rejection. Direct disconnect-to-assembler integration coverage remains pending. |
 | `CanStart`, `CanComplete`, `CanAbort` | `protocol/test/panel_chunks.test.ts`: reassembles a complete ordered update only for the current page; discards partial, reordered, stale-page, malformed and oversized updates. |
-| `PendingSettles`, `EventuallyDelivered` | `protocol/test/command_channel.test.ts`: closes on a lost acknowledgement without accepting late completion; sends one frame at a time and preserves enqueue order. |
+| `PendingSettles`, `EventuallySettled` | `protocol/test/command_channel.test.ts`: closes on a lost acknowledgement without accepting late completion; sends one frame at a time and preserves enqueue order. |
 | Replay ordering and oversize | `vscode/test/panel_update_sender.integration.test.ts`: sends replay as ordered bounded per-event updates using the shared sequence; reports an oversized replay event and still sends later complete events. |
 
 TLC checked `LocalPanelReplay.cfg` with 51,992 generated and 138 distinct states;

@@ -88,6 +88,15 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
         </select>
       </label>
       <p>Long commands can delay a reply until they finish. Stop always interrupts immediately.</p>
+      <label class="settings-field">Navigator commentary
+        <select data-ui="navigator-commentary">
+          <option value="quiet">Quiet - important issues</option>
+          <option value="helpful" selected>Helpful - useful observations</option>
+          <option value="coach">Coach - explanations and connections</option>
+        </select>
+      </label>
+      <p>During your turn, this sets written and spoken commentary on the next returned report; direct requests override it.
+        Audio is controlled separately.</p>
       <label class="settings-field">Chat order
         <select data-ui="chat-order">
           <option value="newestFirst">Newest first</option>

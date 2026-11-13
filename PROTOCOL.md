@@ -214,6 +214,14 @@ and granted hand request. Programmer edits remain numbered diffs, independent
 of the agent cursor window. The programmer cursor is a separate position fact;
 it does not move the agent cursor or transfer the turn.
 
+The optional top-level `navigatorCommentary` report field is `quiet`, `helpful`
+or `coach`. The controller supplies the current preference after asynchronous
+report preparation, including startup and resumed sessions. The relay renders
+it as guidance on startup and during the programmer's turn. Helpful is the
+default; explicit conversation requests take precedence. A preference change
+arrives on the next report and does not wake a listen or change its deadline.
+Canceled-report restoration restores activity evidence, not old preferences.
+
 `listen` is how the agent "ends its turn" without actually ending it.
 
 ### `read(file: string, from_line?: number, to_line?: number) -> text`

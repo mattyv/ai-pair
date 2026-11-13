@@ -96,6 +96,7 @@ function harness(): { panel: NarrationPanel; wiring: ReturnType<typeof mockDeep<
     { get: () => 'typing', set: vi.fn<(value: 'typing' | 'lines' | 'blocks') => void>() },
     { get: () => 'interrupt', set: vi.fn<(value: 'interrupt' | 'finishAction') => void>() },
     { get: () => false, set: vi.fn<(value: boolean) => void>() },
+    { get: () => 'helpful', set: () => {} },
   );
   return { panel, wiring };
 }

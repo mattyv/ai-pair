@@ -21,6 +21,15 @@ Reports identify typing pauses and idle timeouts. Ask the agent to "comment as
 I write" for more active commentary. A reply cancels queued observations, so
 the guide asks for one point per batch.
 
+In Pair Settings, **Navigator commentary** controls how much the agent comments
+while you take a turn: **Quiet** for important issues and direct answers,
+**Helpful** (default) for a first-pause acknowledgement and useful observations,
+or **Coach** for more explanation and connections to earlier work. The choice
+persists and reaches an active agent on its next returned report. Explicit
+requests in the conversation take precedence for that session. This guides
+both text and spoken comments; the speaker control independently enables or
+mutes audio. The model still decides whether an observation is useful.
+
 Pair narration connects relevant choices to earlier verified work; ask for a
 teaching style for more concept explanations without compulsory exercises.
 

@@ -13,6 +13,7 @@ import {
   type Passage,
   type PauseReason,
   type Report,
+  type NavigatorCommentary,
   type Turn,
 } from '@ai-pair/protocol';
 import { DIAGNOSTIC_SNAPSHOT_WARNING } from './constants';
@@ -279,6 +280,7 @@ export class Controller {
   private attention: 'none' | 'requested' | 'granted' = 'none';
   private attentionRelease: (() => void) | undefined;
   private attentionWait: Promise<void> = Promise.resolve();
+  private navigatorCommentary: NavigatorCommentary = 'helpful';
   private speed = 1;
   private readingSpeed = 1;
   private codePlayback: import('./typing').CodePlayback = 'typing';
@@ -302,6 +304,11 @@ export class Controller {
     private config: Config = defaultConfig,
     private readonly narration?: NarrationPort,
   ) {}
+
+  /** Sets the preference projected on subsequent reports (specs/NavigatorCommentary.tla, SetMode). */
+  setNavigatorCommentary(mode: NavigatorCommentary): void {
+    this.navigatorCommentary = mode;
+  }
 
   // ---- Tools -------------------------------------------------------------
 
@@ -1104,16 +1111,17 @@ export class Controller {
   // ---- Calls and reports -------------------------------------------------
 
   /** Runs tool calls one at a time. A call cancelled while waiting its turn never runs. */
-  private serialize<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  private serialize(fn: () => Promise<Report>, signal?: AbortSignal): Promise<Report> {
     // `Call` in specs/ListenGrace.tla: the agent is calling, so it's listening; any call ends the grace (#194).
     this.openCalls++;
     this.endQuiet();
     this.endGrace();
     // specs/Serialize.tla, `Guard`: a call runs once the one before it has settled, unless it was aborted.
-    function guarded(): Promise<T> {
+    function guarded(): Promise<Report> {
       return signal?.aborted === true ? Promise.reject(cancelled()) : fn();
     }
-    const run = this.chain.then(guarded, guarded);
+    // specs/NavigatorCommentary.tla, Deliver: project after asynchronous report preparation.
+    const run = this.chain.then(guarded, guarded).then((report) => ({ ...report, navigatorCommentary: this.navigatorCommentary }));
     // The chain carries on past a call that failed; its caller got the rejection.
     this.chain = run.catch(() => {});
     // `GoAbsent` in specs/ListenGrace.tla: once the last open call settles, no call is open until the agent makes the next.

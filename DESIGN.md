@@ -142,6 +142,10 @@ Behavior:
     editor; bind it to a key of your choice.
 -   During the programmer's turn the band's header says *Your turn*, and the
     agent navigates: its comments appear as the current message as usual.
+    Settings offers **Navigator commentary**: Quiet, Helpful (default), or
+    Coach. This sets the requested cadence for text and voice together; the
+    audio control stays independent. Conversation requests override the saved
+    preference for the session.
 
 ### Optional spoken narration
 

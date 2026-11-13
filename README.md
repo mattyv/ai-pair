@@ -125,6 +125,15 @@ Reports identify typing pauses and idle timeouts. Ask the agent to "comment as
 I write" for more active commentary. A reply cancels queued observations, so
 the guide asks for one point per batch.
 
+In Pair Settings, **Navigator commentary** controls how much the agent comments
+while you take a turn: **Quiet** for important issues and direct answers,
+**Helpful** (default) for a first-pause acknowledgement and useful observations,
+or **Coach** for more explanation and connections to earlier work. The choice
+persists and reaches an active agent on its next returned report. Explicit
+requests in the conversation take precedence for that session. This guides
+both text and spoken comments; the speaker control independently enables or
+mutes audio. The model still decides whether an observation is useful.
+
 In Claude Code, `/pair:demo` runs a guided Pair session and `/pair:diagnose`
 checks connection, command, speech, and audio status. The legacy
 `/mcp__pair__demo` and `/mcp__pair__diagnose` forms also work. The extension

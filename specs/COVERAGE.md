@@ -20,7 +20,8 @@ Code goes without a spec for one of these reasons:
 
 | Functions | Spec |
 |---|---|
-| `step`, `listen`, `block`, `finishCall`, `callReady`, `ready`, `pump`, `update`, `serialize` | `Serialize`, `Controller` |
+| `step`, `listen`, `block`, `finishCall`, `callReady`, `ready`, `pump`, `update`, `serialize` | `Serialize`, `Controller`, `NavigatorCommentary` (final projection) |
+| `setNavigatorCommentary` | `NavigatorCommentary` |
 | `snapshot`, `restore`, `withCursor`, `end`, `endSession`, `close` | `Controller`; `close` terminal cleanup: `QuietTerminals`; `snapshot`'s edit events: `EditEvents`; a held rejection in `restore` and `snapshot`: `Anchor` (`Restore`, `TakeHeld`) |
 | `rehearse`, `rejectBatch`, `planned`, `saw`, `read` | `Rehearsal` |
 | `cursorAnchor`, `rejectUnanchored`, `anchorNeeded` in `step` and `snapshot` | `Anchor` |

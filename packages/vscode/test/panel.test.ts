@@ -139,6 +139,10 @@ interface Harness {
     get: ReturnType<typeof vi.fn<() => 'newestFirst' | 'oldestFirst'>>;
     set: ReturnType<typeof vi.fn<(value: 'newestFirst' | 'oldestFirst') => void>>;
   };
+  navigatorCommentary: {
+    get: ReturnType<typeof vi.fn<() => 'quiet' | 'helpful' | 'coach'>>;
+    set: ReturnType<typeof vi.fn<(value: 'quiet' | 'helpful' | 'coach') => void>>;
+  };
   replyBehavior: {
     get: ReturnType<typeof vi.fn<() => 'interrupt' | 'finishAction'>>;
     set: ReturnType<typeof vi.fn<(value: 'interrupt' | 'finishAction') => void>>;
@@ -217,6 +221,10 @@ function harness(
   const chatOrder = {
     get: vi.fn<() => 'newestFirst' | 'oldestFirst'>(() => 'newestFirst'),
     set: vi.fn<(value: 'newestFirst' | 'oldestFirst') => void>(),
+  };
+  const navigatorCommentary = {
+    get: vi.fn<() => 'quiet' | 'helpful' | 'coach'>(() => 'helpful'),
+    set: vi.fn<(value: 'quiet' | 'helpful' | 'coach') => void>(),
   };
   const replyBehavior = {
     get: vi.fn<() => 'interrupt' | 'finishAction'>(() => 'interrupt'),
@@ -313,6 +321,7 @@ function harness(
     codePlayback,
     replyBehavior,
     commandApprovalSound,
+    navigatorCommentary,
   );
   const onPost = vi.fn<() => void>();
   panel.onPost = onPost;
@@ -327,6 +336,7 @@ function harness(
     readingSpeed,
     chatOrder,
     replyBehavior,
+    navigatorCommentary,
     terminalSettings,
     commandApprovalSound,
     showTerminal,
@@ -801,6 +811,18 @@ describe('receive', () => {
     expect(traced).toEqual(['panel reply "hi"', 'panel draft empty', 'panel draft typed', 'panel pause']);
   });
 
+  it('projects and validates navigator commentary', () => {
+    const { panel, navigatorCommentary } = harness();
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(view.posted).toContainEqual({ type: 'navigatorCommentary', value: 'helpful' });
+    view.send({ type: 'navigatorCommentary', value: 'coach' });
+    panel.receiveFromPage({ type: 'navigatorCommentary', value: 'invalid' });
+    expect(navigatorCommentary.set.mock.calls).toEqual([['coach']]);
+    panel.showNavigatorCommentary('quiet');
+    expect(view.posted).toContainEqual({ type: 'navigatorCommentary', value: 'quiet' });
+  });
+
   it('ready: ends the draft pause, and sends the log, speeds, selection, and whether it can start', async () => {
     const { panel, controller } = harness();
     panel.post({ type: 'say', text: 'hi' });
@@ -819,6 +841,7 @@ describe('receive', () => {
       { type: 'speechOutputCatalog', value: { supported: false, devices: [], selected: { kind: 'default' } } },
       { type: 'speechCloudSupport', supported: true },
       { type: 'speechSupport', supported: true },
+      { type: 'navigatorCommentary', value: 'helpful' },
       { type: 'chatOrder', value: 'newestFirst' },
       { type: 'replyBehavior', value: 'interrupt' },
       { type: 'commandApprovalSound', value: false },
@@ -876,7 +899,7 @@ describe('receive', () => {
     chatOrder.get.mockReturnValue('oldestFirst');
     const view = open(panel);
     view.send({ type: 'ready' });
-    expect(view.posted.slice(7, 12)).toEqual([
+    expect(view.posted.slice(8, 13)).toEqual([
       { type: 'chatOrder', value: 'oldestFirst' },
       { type: 'replyBehavior', value: 'interrupt' },
       { type: 'commandApprovalSound', value: false },

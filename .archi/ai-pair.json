@@ -2,9 +2,9 @@
   "version": 1,
   "bundleId": "277c3415-7b74-4008-8be4-8c14ae6d41dd",
   "revision": {
-    "number": 30,
+    "number": 31,
     "updatedAt": "2026-11-13T00:00:00.000Z",
-    "summary": "Record navigator edit scope, native cursor and listen report ownership"
+    "summary": "Record host-owned Navigator commentary preference and report projection"
   },
   "diagrams": [
     {
@@ -10918,7 +10918,7 @@
       "type": "architecture",
       "origin": "llm",
       "generation": {
-        "focus": "Current-file observation, controller pause evidence and truthful MCP reporting"
+        "focus": "Navigator activity evidence and host-owned commentary preference projection"
       },
       "doc": {
         "type": "architecture",
@@ -10958,6 +10958,13 @@
             "files": ["AGENT_GUIDE.md"],
             "x": 1160,
             "y": 560
+          },
+          {
+            "id": "commentary-settings",
+            "label": "Workspace host\nSaved commentary preference",
+            "files": ["packages/vscode/src/extension.ts", "packages/protocol/src/panel_action.ts", "packages/protocol/src/panel_update.ts"],
+            "x": 600,
+            "y": 560
           }
         ],
         "edges": [
@@ -10969,7 +10976,7 @@
           {
             "from": "controller",
             "to": "relay",
-            "label": "reason / diff / elapsed"
+            "label": "activity + preference"
           },
           {
             "from": "programmer",
@@ -11009,6 +11016,16 @@
                 "y": 420
               }
             ]
+          },
+          {
+            "to": "commentary-settings",
+            "label": "local / companion choice",
+            "from": "programmer"
+          },
+          {
+            "to": "controller",
+            "label": "current configuration",
+            "from": "commentary-settings"
           }
         ],
         "groups": [],
@@ -11023,7 +11040,7 @@
           "controller": [
             {
               "id": "navigator-owner",
-              "text": "The controller owns edit generations, the quiet timer, pause acknowledgement and the immutable report snapshot. A timeout can report edits without consuming the later pause acknowledgement. Navigator idle limit defaults to 10 seconds; the agent limit remains 45 seconds. Reason and elapsed wait distinguish timeout from activity. Session changes invalidate stale timers.",
+              "text": "The controller owns edit generations, the quiet timer, pause acknowledgement and the immutable report snapshot. A timeout can report edits without consuming the later pause acknowledgement. Navigator idle limit defaults to 10 seconds; the agent limit remains 45 seconds. Reason and elapsed wait distinguish timeout from activity. Session changes invalidate stale timers. Project current commentary configuration after asynchronous cursor lookup. Replay restores activity facts, never an old preference.",
               "ts": 0
             }
           ],
@@ -11037,7 +11054,14 @@
           "agent": [
             {
               "id": "commentary-policy",
-              "text": "An explicit request for live commentary overrides the sparse default. Read before remaining quiet, acknowledge the first observed typing pause once, and give one observation per batch. Immediate programmer messages discard queued advice; explicit deferred messages keep their separate behavior.",
+              "text": "Follow the reported Quiet, Helpful or Coach preference. Helpful is the default; Quiet skips routine reassurance, and Coach adds useful explanation grounded in verified history. Explicit conversation requests override saved guidance. Read before remaining quiet and give one observation per batch. Immediate messages discard queued advice.",
+              "ts": 0
+            }
+          ],
+          "commentary-settings": [
+            {
+              "id": "preference-owner",
+              "text": "The workspace host persists Quiet, Helpful or Coach with the general preferences. The companion forwards typed intent and displays the owner snapshot. Audio enablement remains independent. A setting change does not wake listen or alter turn, edit or timer state.",
               "ts": 0
             }
           ]

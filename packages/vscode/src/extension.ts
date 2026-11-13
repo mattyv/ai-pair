@@ -11,7 +11,7 @@ import {
   type SavedSession,
   type NarrationPort,
 } from '@ai-pair/core';
-import { discoveryDir, LOCAL_AUDIO_VERSION } from '@ai-pair/protocol';
+import { discoveryDir, LOCAL_AUDIO_VERSION, NAVIGATOR_COMMENTARY_SCHEMA, type NavigatorCommentary } from '@ai-pair/protocol';
 import { playDemo } from './demo';
 import { VsCodeEditor } from './editor';
 import { Diagnostics } from './diagnostics';
@@ -505,6 +505,20 @@ export function activate(context: vscode.ExtensionContext): Api {
       void config().update('replyBehavior', value, vscode.ConfigurationTarget.Global);
     },
   };
+  const navigatorCommentary = {
+    get: (): NavigatorCommentary => {
+      const parsed = NAVIGATOR_COMMENTARY_SCHEMA.safeParse(config().get<unknown>('navigatorCommentary'));
+      return parsed.success ? parsed.data : 'helpful';
+    },
+    set: (value: NavigatorCommentary) => {
+      void config()
+        .update('navigatorCommentary', value, vscode.ConfigurationTarget.Global)
+        .then(undefined, () => {
+          panel.showNavigatorCommentary(navigatorCommentary.get());
+          void vscode.window.showErrorMessage('Could not save navigator commentary.');
+        });
+    },
+  };
   const chatOrder = {
     get: () => (config().get<unknown>('chatOrder') === 'oldestFirst' ? ('oldestFirst' as const) : ('newestFirst' as const)),
     set: (value: 'newestFirst' | 'oldestFirst') => {
@@ -747,6 +761,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     codePlayback,
     replyBehavior,
     commandApprovalSound,
+    navigatorCommentary,
   );
   outputPreferences = new SpeechOutputPreferences({
     initial: context.globalState.get<unknown>('speechOutput'),
@@ -930,6 +945,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   controller.setSpeed(speed.get());
   controller.setReadingSpeed(readingSpeed.get());
   controller.setCodePlayback(codePlayback.get());
+  controller.setNavigatorCommentary(navigatorCommentary.get());
   controller.setTiming(config().get(TIMING));
   controller.setConfirmCommands(config().get(CONFIRM_COMMANDS, true));
   // The passage the programmer or the agent chose, from the settings, or the built-in one (#109).
@@ -1120,6 +1136,11 @@ export function activate(context: vscode.ExtensionContext): Api {
         publishReadiness();
       }
       if (e.affectsConfiguration('aiPair.replyBehavior')) panel.showReplyBehavior(replyBehavior.get());
+      if (e.affectsConfiguration('aiPair.navigatorCommentary')) {
+        const value = navigatorCommentary.get();
+        controller.setNavigatorCommentary(value);
+        panel.showNavigatorCommentary(value);
+      }
       if (e.affectsConfiguration('aiPair.chatOrder')) panel.showChatOrder(chatOrder.get());
       if (e.affectsConfiguration('aiPair.showTerminalsAutomatically')) panel.showTerminalPreference(terminalSettings.get());
       if (e.affectsConfiguration('aiPair.commandApprovalSound')) panel.showCommandApprovalSound(commandApprovalSound.get());
