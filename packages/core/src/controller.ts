@@ -864,7 +864,7 @@ export class Controller {
       this.attentionRelease = resolve;
     });
     this.panel.post({ type: 'attention', state: 'requested' });
-    if (!session.running) void this.attentionBoundary(session, session.player.currentSpeech ?? Promise.resolve());
+    if (!session.running) void this.attentionBoundary(session, session.player.currentSpeech);
   }
 
   /** Grants only at a safe boundary, after existing speech drains. */
@@ -1600,7 +1600,7 @@ export class Controller {
     } finally {
       session.running = false;
       if (this.session === session && this.attention === 'requested') {
-        void this.attentionBoundary(session, session.player.currentSpeech ?? Promise.resolve());
+        void this.attentionBoundary(session, session.player.currentSpeech);
       }
     }
   }
