@@ -10,6 +10,7 @@ import {
   spanProblem,
   speechProblem,
   SPAN_SCHEMA,
+  SPEECH_DELIVERY_SCHEMA,
   SPAN_TARGET_SCHEMA,
   typeProblem,
   type Action,
@@ -106,6 +107,9 @@ const actionSchema = z.union(
         .describe(
           'Use continue to proceed after the reading pause while speech plays; wait is the default and waits for speech too. Use wait for questions and closing remarks.',
         ),
+      speech_delivery: SPEECH_DELIVERY_SCHEMA.optional().describe(
+        'Optional delivery cue. Providers that do not support it accept and ignore it.',
+      ),
       speak: z
         .boolean()
         .optional()

@@ -11,7 +11,7 @@ import {
   type SavedSession,
   type NarrationPort,
 } from '@ai-pair/core';
-import { discoveryDir, LOCAL_AUDIO_VERSION } from '@ai-pair/protocol';
+import { discoveryDir, LOCAL_AUDIO_VERSION, NAVIGATOR_COMMENTARY_SCHEMA, type NavigatorCommentary } from '@ai-pair/protocol';
 import { playDemo } from './demo';
 import { VsCodeEditor } from './editor';
 import { Diagnostics } from './diagnostics';
@@ -307,6 +307,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     const openRouterFormat: unknown = config().get('speech.openRouterFormat');
     return {
       enabled: enabled === true,
+      contextEnabled: config().get('speech.contextEnabled') === true,
       listeningSpeed: speechListeningRate(config().get('speech.listeningSpeed')),
       voice,
       speed: speechRate,
@@ -352,6 +353,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       const restoresVoice = cloudVoiceInvalidated && value.elevenLabsVoice !== '' && catalog.contains(value.elevenLabsVoice);
       const generation = ++speechSaveGeneration;
       pendingSpeechSettings = { ...value, listeningSpeed: speechListeningRate(value.listeningSpeed) };
+      speech.configureNarrationContext();
       if (owner === 'legacy') speech.prepare();
       lastSpeechProvider = value.provider;
       lastSpeechEnabled = value.enabled;
@@ -361,6 +363,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       const saveOperation = speechSaveTail.then(async () => {
         const updates: Array<[string, unknown]> = [
           ['speech.enabled', value.enabled],
+          ['speech.contextEnabled', value.contextEnabled === true],
           ['speech.listeningSpeed', speechListeningRate(value.listeningSpeed)],
           ['speech.voice', value.voice],
           ['speech.speed', value.speed],
@@ -382,6 +385,7 @@ export function activate(context: vscode.ExtensionContext): Api {
           // specs/ProviderChoice.tla, Success: an older write cannot replace a newer choice.
           if (generation !== speechSaveGeneration) return;
           pendingSpeechSettings = undefined;
+          speech.configureNarrationContext();
           if (restoresVoice) cloudVoiceInvalidated = false;
           panel.showSpeechSettings(storedSpeechSettings());
           publishReadiness();
@@ -390,6 +394,7 @@ export function activate(context: vscode.ExtensionContext): Api {
           // specs/ProviderChoice.tla, Failure: only the latest failed write rolls back.
           if (generation !== speechSaveGeneration) return;
           pendingSpeechSettings = undefined;
+          speech.configureNarrationContext();
           speech.cancel();
           if (owner === 'legacy') speech.prepare();
           catalog.invalidate();
@@ -500,6 +505,20 @@ export function activate(context: vscode.ExtensionContext): Api {
       void config().update('replyBehavior', value, vscode.ConfigurationTarget.Global);
     },
   };
+  const navigatorCommentary = {
+    get: (): NavigatorCommentary => {
+      const parsed = NAVIGATOR_COMMENTARY_SCHEMA.safeParse(config().get<unknown>('navigatorCommentary'));
+      return parsed.success ? parsed.data : 'helpful';
+    },
+    set: (value: NavigatorCommentary) => {
+      void config()
+        .update('navigatorCommentary', value, vscode.ConfigurationTarget.Global)
+        .then(undefined, () => {
+          panel.showNavigatorCommentary(navigatorCommentary.get());
+          void vscode.window.showErrorMessage('Could not save navigator commentary.');
+        });
+    },
+  };
   const chatOrder = {
     get: () => (config().get<unknown>('chatOrder') === 'oldestFirst' ? ('oldestFirst' as const) : ('newestFirst' as const)),
     set: (value: 'newestFirst' | 'oldestFirst') => {
@@ -607,6 +626,9 @@ export function activate(context: vscode.ExtensionContext): Api {
       requireCommandApproval: () => Promise.resolve(config().update(CONFIRM_COMMANDS, true, vscode.ConfigurationTarget.Global)),
       speech: {
         sessionCost,
+        narrationSession: (id, ongoing) => {
+          speech.setNarrationSession(id, ongoing);
+        },
         readiness: audioReadiness,
         computeState: () => speech.computeState(),
         computeMode: (value) => {
@@ -739,6 +761,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     codePlayback,
     replyBehavior,
     commandApprovalSound,
+    navigatorCommentary,
   );
   outputPreferences = new SpeechOutputPreferences({
     initial: context.globalState.get<unknown>('speechOutput'),
@@ -879,10 +902,15 @@ export function activate(context: vscode.ExtensionContext): Api {
         openRouterAllowed: (model, voice) => openRouterCatalog.allows(model, voice),
       });
     },
-    speak: async (text) => {
+    speak: async (text, delivery) => {
       const generation = narrationGeneration;
       await ownerReady;
-      if (!shuttingDown && generation === narrationGeneration) await selectedNarration?.speak(text);
+      if (!shuttingDown && generation === narrationGeneration) await selectedNarration?.speak(text, delivery);
+    },
+    attentionCue: async () => {
+      const generation = narrationGeneration;
+      await ownerReady;
+      if (!shuttingDown && generation === narrationGeneration) await selectedNarration?.attentionCue();
     },
     waitForRetirement: async (signal) => {
       const generation = narrationGeneration;
@@ -917,6 +945,7 @@ export function activate(context: vscode.ExtensionContext): Api {
   controller.setSpeed(speed.get());
   controller.setReadingSpeed(readingSpeed.get());
   controller.setCodePlayback(codePlayback.get());
+  controller.setNavigatorCommentary(navigatorCommentary.get());
   controller.setTiming(config().get(TIMING));
   controller.setConfirmCommands(config().get(CONFIRM_COMMANDS, true));
   // The passage the programmer or the agent chose, from the settings, or the built-in one (#109).
@@ -1079,6 +1108,7 @@ export function activate(context: vscode.ExtensionContext): Api {
           }
         }
         const current = speechSettings.get();
+        speech.configureNarrationContext();
         // specs/ProviderChoice.tla, External: persistence echoes cannot undo a pending choice.
         if (pendingSpeechSettings === undefined) {
           if ((lastSpeechEnabled && !current.enabled) || current.provider !== lastSpeechProvider) speech.cancel();
@@ -1106,6 +1136,11 @@ export function activate(context: vscode.ExtensionContext): Api {
         publishReadiness();
       }
       if (e.affectsConfiguration('aiPair.replyBehavior')) panel.showReplyBehavior(replyBehavior.get());
+      if (e.affectsConfiguration('aiPair.navigatorCommentary')) {
+        const value = navigatorCommentary.get();
+        controller.setNavigatorCommentary(value);
+        panel.showNavigatorCommentary(value);
+      }
       if (e.affectsConfiguration('aiPair.chatOrder')) panel.showChatOrder(chatOrder.get());
       if (e.affectsConfiguration('aiPair.showTerminalsAutomatically')) panel.showTerminalPreference(terminalSettings.get());
       if (e.affectsConfiguration('aiPair.commandApprovalSound')) panel.showCommandApprovalSound(commandApprovalSound.get());

@@ -9,7 +9,9 @@ describe('cross-host panel actions', () => {
       { type: 'reply', text: 'Hello.', attach: true },
       { type: 'reply', text: 'Wait.', defer: true },
       { type: 'draft', empty: false },
+      { type: 'attention' },
       { type: 'pause' },
+      { type: 'revealCursor' },
       { type: 'resume' },
       { type: 'interrupt' },
       { type: 'turn', message: 'Done.' },
@@ -23,6 +25,9 @@ describe('cross-host panel actions', () => {
       { type: 'command', command: 'aiPair.playDemo' },
       { type: 'start' },
       { type: 'copyDiagnostics' },
+      { type: 'navigatorCommentary', value: 'quiet' },
+      { type: 'navigatorCommentary', value: 'helpful' },
+      { type: 'navigatorCommentary', value: 'coach' },
       { type: 'replyBehavior', value: 'interrupt' },
       { type: 'replyBehavior', value: 'finishAction' },
       { type: 'chatOrder', value: 'newestFirst' },
@@ -46,9 +51,12 @@ describe('cross-host panel actions', () => {
 
   it('rejects speech settings, arbitrary commands, unknown keys, and oversized text', () => {
     for (const action of [
+      { type: 'navigatorCommentary', value: 'invalid' },
+      { type: 'navigatorCommentary', value: 'coach', extra: true },
       { type: 'replyBehavior', value: 'invalid' },
       { type: 'replyBehavior', value: 'interrupt', extra: true },
       { type: 'commandApprovalSound', value: 'true' },
+      { type: 'attention', extra: true },
       { type: 'speechKeySet' },
       { type: 'command', command: 'arbitrary.exec' },
       { type: 'reply', text: 'Hello', secret: 'key' },

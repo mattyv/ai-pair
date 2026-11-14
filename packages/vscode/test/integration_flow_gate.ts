@@ -56,6 +56,7 @@ export async function flowGatePaths(api: Api, root: string): Promise<void> {
         finish = resolve;
       });
     },
+    attentionCue: () => Promise.resolve(),
     pause: () => {},
     resume: () => {},
     cancel: () => {

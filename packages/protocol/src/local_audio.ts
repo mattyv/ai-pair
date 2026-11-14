@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import { speechProblem } from './index';
 import { localPanelAction } from './panel_action';
+import { SPEECH_DELIVERY_SCHEMA } from './schemas';
 import { localPanelChunk } from './panel_chunks';
 
 /** The supported workspace-to-companion protocol version. */
-export const LOCAL_AUDIO_VERSION = 3;
+export const LOCAL_AUDIO_VERSION = 6;
 
 /** Lists the `<platform>-<arch>` hosts the bundled Kokoro runtime is built for (#39). */
 export const KOKORO_HOSTS: readonly string[] = ['linux-x64', 'darwin-x64', 'darwin-arm64'];
@@ -28,8 +29,10 @@ export const localAudioFrame = z.discriminatedUnion('type', [
     ...envelope,
     ...owner,
     type: z.literal('speak'),
+    delivery: SPEECH_DELIVERY_SCHEMA.optional(),
     text: z.string().refine((text) => speechProblem(text) === undefined),
   }),
+  z.strictObject({ ...envelope, ...owner, type: z.literal('attentionCue') }),
   z.strictObject({ ...envelope, ...owner, type: z.literal('pause') }),
   z.strictObject({ ...envelope, ...owner, type: z.literal('resume') }),
   z.strictObject({ ...envelope, ...owner, type: z.literal('cancel') }),

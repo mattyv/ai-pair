@@ -1,3 +1,4 @@
+import { speechContextCapabilities } from '../speech_context_capabilities';
 import { voiceIndicator } from '../voice_indicator';
 import type { AudioDiagnostics } from '@ai-pair/protocol';
 import type { SpeechComputeState } from '../speech_compute_types';
@@ -83,6 +84,7 @@ const ui = {
   settingsDialog: $('settings-dialog', HTMLDialogElement),
   settingsClose: $('settings-close', HTMLButtonElement),
   chatOrder: $('chat-order', HTMLSelectElement),
+  navigatorCommentary: $('navigator-commentary', HTMLSelectElement),
   settingsCodePlayback: $('settings-code-playback', HTMLSelectElement),
   copyDiagnostics: $('copy-diagnostics', HTMLButtonElement),
   speechEnabled: $('speech-enabled', HTMLInputElement),
@@ -101,6 +103,8 @@ const ui = {
   openRouterModel: $('openrouter-model', HTMLSelectElement),
   openRouterVoice: $('openrouter-voice', HTMLSelectElement),
   openRouterFormat: $('openrouter-format', HTMLSelectElement),
+  speechContext: $('speech-context', HTMLSelectElement),
+  speechContextCapability: $('speech-context-capability', HTMLElement),
   openRouterZdr: $('openrouter-zdr', HTMLButtonElement),
   openRouterStatus: $('openrouter-status', HTMLElement),
   speechKeyStatus: $('speech-key-status', HTMLElement),
@@ -139,6 +143,8 @@ const ui = {
   skipReading: $('skip-reading', HTMLButtonElement),
   status: $('status-text', HTMLElement),
   pause: $('pause', HTMLButtonElement),
+  revealCursor: $('reveal-cursor', HTMLButtonElement),
+  attention: $('attention', HTMLButtonElement),
   interrupt: $('interrupt', HTMLButtonElement),
   turn: $('turn', HTMLButtonElement),
   turnLabel: $('turn-label', HTMLElement),
@@ -272,6 +278,8 @@ let active = false;
 let calibrating = false;
 let turn = 'agent';
 let paused = false;
+let speechPaused = false;
+let attention: 'none' | 'requested' | 'granted' = 'none';
 let replaying = false;
 /** The session's agent is gone, and the session waits for it to come back (#25). */
 let suspended = false;
@@ -707,6 +715,7 @@ function setState(e: Extract<PanelEvent, { type: 'state' }>): void {
   ready = e.ready ?? 0;
   turn = e.turn;
   paused = e.paused;
+  speechPaused = e.speechPaused ?? e.paused;
   document.body.classList.toggle('paused', paused);
   document.body.classList.toggle('programmer-turn', turn === 'programmer');
   ui.pause.classList.toggle('on', paused);
@@ -840,6 +849,7 @@ function setActive(on: boolean): void {
   active = on;
   document.body.classList.toggle('active', on);
   ui.reply.disabled = !on && !calibrating;
+  ui.attention.disabled = !on;
   if (!on) {
     ready = 0;
     suspended = false;
@@ -1077,6 +1087,7 @@ function saveSpeechSettings(): void {
     type: 'speechSettings',
     value: {
       enabled: speechEnabled,
+      contextEnabled: ui.speechContext.value === 'on',
       voice,
       speed,
       listeningSpeed,
@@ -1122,6 +1133,15 @@ function catalogFailure(reason: string | undefined): string {
 }
 let outputReady = true;
 function syncSpeechProvider(): void {
+  const capabilities = speechContextCapabilities(speechProvider, openRouterModel);
+  ui.speechContextCapability.textContent =
+    capabilities.previousText && !openRouterZdr
+      ? 'Previous context requires Zero Data Retention. Delivery cues and ordinary narration remain available.'
+      : capabilities.previousText
+        ? 'Previous context and delivery cues supported.'
+        : capabilities.tags
+          ? 'Delivery cues only; previous context is not supported.'
+          : 'Unsupported by this model; ordinary speech only.';
   const cloud = speechProvider === 'elevenlabs';
   ui.speechLocal.hidden = speechProvider !== 'kokoro';
   ui.speechLocalModel.hidden = speechProvider !== 'kokoro';
@@ -1279,6 +1299,7 @@ ui.speechVoicesMore.addEventListener('click', () => {
   vscode.postMessage({ type: 'speechVoicesMore' });
 });
 ui.speechEnabled.addEventListener('change', saveSpeechSettings);
+ui.speechContext.addEventListener('change', saveSpeechSettings);
 ui.voiceStatus.addEventListener('click', () => {
   ui.speechEnabled.checked = !speechEnabled;
   saveSpeechSettings();
@@ -1337,6 +1358,11 @@ ui.settingsCodePlayback.addEventListener('change', () => {
 ui.replyBehavior.addEventListener('change', () => {
   const value = ui.replyBehavior.value === 'finishAction' ? 'finishAction' : 'interrupt';
   vscode.postMessage({ type: 'replyBehavior', value });
+});
+
+ui.navigatorCommentary.addEventListener('change', () => {
+  const value = ui.navigatorCommentary.value;
+  if (value === 'quiet' || value === 'helpful' || value === 'coach') vscode.postMessage({ type: 'navigatorCommentary', value });
 });
 
 ui.chatOrder.addEventListener('change', () => {
@@ -1512,6 +1538,7 @@ function handle(message: ToPanel): void {
       selectCloudVoice();
       syncSpeechProvider();
       ui.speechEnabled.checked = message.value.enabled;
+      ui.speechContext.value = message.value.contextEnabled === true ? 'on' : 'off';
       ui.voiceStatus.disabled = false;
       syncVoiceStatus();
       ui.speechVoice.value = message.value.voice;
@@ -1670,7 +1697,7 @@ function handle(message: ToPanel): void {
       return;
     case 'speechAudio':
       if (message.pageId === speechPage && message.id === speechId && !speechCanceled) {
-        speechAudio.audio(message.id, message.pageId, message.wavBase64, paused);
+        speechAudio.audio(message.id, message.pageId, message.wavBase64, speechPaused);
       }
       return;
     case 'speechControl':
@@ -1730,6 +1757,9 @@ function handle(message: ToPanel): void {
     case 'replyBehavior':
       ui.replyBehavior.value = message.value;
       return;
+    case 'navigatorCommentary':
+      ui.navigatorCommentary.value = message.value;
+      break;
     case 'chatOrder':
       setChatOrder(message.value);
       return;
@@ -1866,6 +1896,16 @@ function handle(message: ToPanel): void {
       selectionDismissed = false;
       syncAttach();
       return;
+    case 'attention': {
+      attention = message.state;
+      const label = attention === 'none' ? 'Raise hand' : attention === 'requested' ? 'Lower hand' : 'Focus reply';
+      ui.attention.setAttribute('aria-label', label);
+      ui.attention.setAttribute('aria-pressed', String(attention !== 'none'));
+      ui.attention.classList.toggle('on', attention !== 'none');
+      setTip(ui.attention, label);
+      if (attention === 'granted' && !replaying) ui.reply.focus();
+      return;
+    }
     case 'focusReply':
       ui.reply.focus();
       return;
@@ -1978,6 +2018,14 @@ ui.reply.addEventListener('keydown', (e) => {
   }
 });
 ui.send.addEventListener('click', sendReply);
+ui.attention.addEventListener('click', () => {
+  if (attention === 'granted') ui.reply.focus();
+  else vscode.postMessage({ type: 'attention' });
+});
+ui.revealCursor.addEventListener('click', () => {
+  vscode.postMessage({ type: 'revealCursor' });
+});
+
 ui.pause.addEventListener('click', () => {
   vscode.postMessage({ type: paused ? 'resume' : 'pause' });
 });
@@ -1986,10 +2034,10 @@ ui.interrupt.addEventListener('click', () => {
   vscode.postMessage({ type: 'interrupt' });
 });
 ui.turn.addEventListener('click', () => {
-  stopSpeechLocally();
   const handingBack = turn === 'programmer';
   const message = handingBack ? takeDraft() : '';
   const attach = handingBack && takeAttach();
+  if (message !== '' || attach) stopSpeechLocally();
   vscode.postMessage({ type: 'turn', ...(message ? { message } : {}), ...(attach ? { attach } : {}) });
 });
 ui.attachX.addEventListener('click', () => {

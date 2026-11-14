@@ -202,8 +202,39 @@ Returns when:
 
 -   all batches have finished and a programmer event arrives (message, turn
     change, ...), or
+-   the programmer pauses typing during their turn, or
 -   a batch finishes with a status other than `completed`, or
--   `MAX_BLOCK` elapses.
+-   the idle limit elapses. The default is 10 seconds during the programmer's
+    turn and 45 seconds during the agent's turn. A smaller configured maximum
+    still applies.
+
+Navigator reports include the return reason and elapsed controller wait time.
+They distinguish a typing pause, idle timeout, turn change, programmer message
+and granted hand request. Programmer edits remain numbered diffs, independent
+of the agent cursor window. Full visible new-side/context lines authorize
+their snapshot line identities; deletions and omitted content do not. The
+numbered display preserves hunk boundaries and change signs, but is not a
+directly applicable unified patch. Replaying an old diff cannot authorize
+newer line identities. The programmer cursor is a separate position fact;
+it does not move the agent cursor or transfer the turn.
+
+The optional top-level `navigatorCommentary` report field is `quiet`, `helpful`
+or `coach`. The controller supplies the current preference after asynchronous
+report preparation, including startup and resumed sessions. The relay renders
+it as guidance on startup and during the programmer's turn. Helpful is the
+default; explicit conversation requests take precedence. A changed preference
+wakes a pending `listen` immediately with a settings-only report, without
+consuming queued work, edits or typing-pause evidence. If no `listen` is
+waiting, its next invocation returns the pending notice. Same-value writes do
+not wake. Canceled reports can retry the current notice, never restore an old
+preference. This is response delivery, not an unsolicited push while the model
+is computing.
+
+A settings-only report carries `commentaryChanged: { noticeId }`, empty batch
+and event arrays, the current turn and current commentary preference. It does
+not mean queued batches finished or the programmer stopped typing. Delivery
+is at least once: a post-commit change can cause a follow-up notice repeating
+the newest policy. Keep listening under the current turn and pause rules.
 
 `listen` is how the agent "ends its turn" without actually ending it.
 
@@ -658,6 +689,13 @@ agent receives `{ kind: "turn", to: "programmer" }`.
 message). The agent receives the programmer's edits since the last report and
 `{ kind: "turn", to: "agent", message? }`.
 
+A plain handback with no message or attached selection preserves eligible
+queued navigator `say`/`point` actions. New direction still interrupts them.
+The driver can continue from the actual current text and turn; stale rehearsal
+state must not restore old code or revive interrupted editing work.
+A plain turn change preserves manual Pause until Resume; it does not discard
+that paused work. Message/selection handback retains cancel-before-resume.
+
 ## Files, saving, and native tools
 
 -   Files the agent edits via the protocol are **saved automatically** when a
@@ -775,9 +813,11 @@ Programmer presses "My turn".
 ... programmer writes a loop, pauses typing ...
 <- Editor text changed in src/server.ts:
   @@ -20,2 +20,4 @@
-  ...
--> read src/server.ts, from line 20: the loop is on line 21
--> step
+   20: const todos = loadTodos();
+  +21: for (let i = 0; i <= todos.length; i++) {
+  +22:   send(todos[i]);
+   23: }
+-> step: use the displayed new-side line, without counting or another read
 [{ "point": { "line": 21, "text": "for (let i = 0; i <= todos.length; i++)" } },
  { "say": "Careful: `<=` will go one past the end." }]
 -> listen

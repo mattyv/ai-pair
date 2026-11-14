@@ -1,13 +1,15 @@
 // What the core needs from the editor and the narration panel.
 
-import type { Excerpt, PauseReason, Turn } from '@ai-pair/protocol';
+import type { Excerpt, PauseReason, SpeechDelivery, Turn } from '@ai-pair/protocol';
 
 /** Controls one optional live narration without owning reading or command decisions. */
 export interface NarrationPort {
   /** Reports whether enabled narration is currently available. */
   ready?: () => Promise<boolean>;
   /** Speaks one displayed unit and resolves on completion, cancellation, or text-only fallback. */
-  speak: (text: string) => Promise<void>;
+  speak: (text: string, delivery?: SpeechDelivery) => Promise<void>;
+  /** Plays the fixed attention cue using the current voice. */
+  attentionCue: () => Promise<void>;
   /** Waits boundedly for any previous physical owner; false leaves narration unavailable. */
   waitForRetirement?: (signal: AbortSignal) => Promise<boolean>;
   /** Pauses audio or prevents a prepared waveform from starting. */
@@ -118,6 +120,8 @@ export interface DiagnosticCheck {
 
 /** Files are absolute paths; offsets are into the document text. */
 export interface EditorPort {
+  /** Returns the active programmer caret in an eligible file, using one-based coordinates. */
+  programmerCursor(): { file: string; line: number; column: number } | undefined;
   /** Checks a file after edits; diagnostics are advisory and may be unavailable. */
   diagnostics(file: string): Promise<DiagnosticCheck>;
   /**
@@ -140,6 +144,8 @@ export interface EditorPort {
   renderPoint(point?: { file: string; start: number; end: number }): void;
   /** Highlights a newly inserted code group while it is read. */
   renderCodeReading?(range?: { file: string; start: number; end: number }): void;
+  /** Focuses the actual agent cursor, independently of the follow target. */
+  revealCursor(): void;
   /** Brings the programmer's view back to what it follows. */
   reveal(): void;
   /** Keeps what the view follows in view, after a keystroke, move, selection or point of the agent changed it. */
@@ -151,7 +157,10 @@ export interface EditorPort {
 }
 
 /** What a `Player` asks of the editor: the rest of `EditorPort` is the controller's. */
-export type PlayerEditor = Omit<EditorPort, 'cleanupIdleTerminals' | 'diagnostics' | 'isDirty' | 'renderCursor' | 'reveal'>;
+export type PlayerEditor = Omit<
+  EditorPort,
+  'programmerCursor' | 'cleanupIdleTerminals' | 'diagnostics' | 'isDirty' | 'renderCursor' | 'reveal' | 'revealCursor'
+>;
 
 /** Something the panel shows: a session starting or ending, a status, a word to the programmer, a report. */
 export type PanelEvent =
@@ -159,8 +168,9 @@ export type PanelEvent =
   | { type: 'session'; active: true; task?: string; rules?: string[]; suspended?: true; resumed?: true; costSessionGeneration?: number }
   | { type: 'session'; active: false; reason: 'agent' | 'programmer' | 'disconnected'; summary?: string; costSessionGeneration?: number }
   | { type: 'say'; text: string }
+  | { type: 'attention'; state: 'none' | 'requested' | 'granted' }
   | { type: 'reading'; ms: number; id?: number; owner?: 'code' }
-  | { type: 'state'; state: AgentState; turn: Turn; paused: boolean; ready?: number }
+  | { type: 'state'; state: AgentState; turn: Turn; paused: boolean; ready?: number; speechPaused?: boolean }
   | { type: 'programmer'; text: string; ref?: Ref }
   | { type: 'turn'; to: Turn; message?: string; ref?: Ref }
   | { type: 'interrupt' }

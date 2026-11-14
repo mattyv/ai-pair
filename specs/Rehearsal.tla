@@ -154,9 +154,8 @@ LastTracks == (queue # <<>>) /\ queue[Len(queue)].hasOwnIds
 \* it has its own copy of the file's ids, else the editor.
 Origin == IF LastTracks THEN queue[Len(queue)] ELSE EditorLines
 
-\* The turn the next batch is rehearsed in: the scene the last queued batch
-\* leaves, or the editor's (`rehearse`, from `from.scene`).
-RehearsalTurn == IF queue = <<>> THEN turn ELSE queue[Len(queue)].turn
+\* The current turn controls the next rehearsal, even behind queued talk.
+RehearsalTurn == turn
 
 \* The batch an interrupt left playing leaves the queue, which is then empty
 \* (ReportedWhilePlaying): an interrupt already reported is over
@@ -326,7 +325,9 @@ EditAsProgrammer(o) ==
        THEN /\ queue' \in QueuesAfterInterrupt
             /\ stale' = TRUE
             /\ staleReported' = FALSE
-       ELSE UNCHANGED <<queue, stale, staleReported>>
+       ELSE /\ queue' = IF stale THEN queue
+                        ELSE [k \in 1..Len(queue) |-> Followed(k, o)]
+            /\ UNCHANGED <<stale, staleReported>>
     /\ programmerEdits' = programmerEdits + 1
     /\ nextId' = nextId + 2
     /\ justRead' = FALSE
@@ -336,9 +337,11 @@ EditAsProgrammer(o) ==
 \* the queue is interrupted.
 ChangeTurn ==
     /\ turn' = IF turn = "agent" THEN "programmer" ELSE "agent"
-    /\ queue' \in QueuesAfterInterrupt
-    /\ stale' = TRUE
-    /\ staleReported' = FALSE
+    /\ IF turn = "agent"
+       THEN /\ queue' \in QueuesAfterInterrupt
+            /\ stale' = TRUE
+            /\ staleReported' = FALSE
+       ELSE UNCHANGED <<queue, stale, staleReported>>
     /\ justRead' = FALSE
     /\ UNCHANGED <<ghosts, ids, shownLines, wrongLine, otherChanges,
                    programmerEdits, batches, nextId>>

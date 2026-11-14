@@ -1,13 +1,15 @@
+import { LOCAL_AUDIO_VERSION } from '@ai-pair/protocol';
 import { describe, expect, it, vi } from 'vitest';
 import type { NarrationPort } from '@ai-pair/core';
 import { CompanionNarration } from '../src/companion_narration';
 
-const base = { version: 3 as const, connectionEpoch: 'connection', jobId: '1', pageEpoch: 4 };
+const base = { version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, connectionEpoch: 'connection', jobId: '1', pageEpoch: 4 };
 
 function fixture(initialSequence = 0) {
   let sequence = initialSequence;
   const pending = Promise.withResolvers<void>();
   const speak = vi.fn<NarrationPort['speak']>(() => pending.promise);
+  const attentionCue = vi.fn<() => Promise<void>>(() => pending.promise);
   const pause = vi.fn<NarrationPort['pause']>();
   const resume = vi.fn<NarrationPort['resume']>();
   const cancel = vi.fn<NarrationPort['cancel']>();
@@ -19,21 +21,67 @@ function fixture(initialSequence = 0) {
     .mockReturnValue({ id: 1, state: 'idle', started: true, terminal: 'ended' });
   const narration = new CompanionNarration({
     epoch: 'connection',
-    speech: { speak, pause, resume, cancel },
+    speech: { speak, attentionCue, pause, resume, cancel },
     page: () => 4,
     send,
     stopOutput,
     observation,
     nextSequence: () => ++sequence,
   });
-  return { narration, speak, pause, resume, cancel, send, pending, stopOutput, observation };
+  return { narration, speak, attentionCue, pause, resume, cancel, send, pending, stopOutput, observation };
 }
 
 describe('companion narration receiver', () => {
+  it('keeps ownership when a canceled, rejected cue cannot retire', async () => {
+    const { narration, pending, stopOutput, send } = fixture();
+    stopOutput.mockRejectedValue(new Error('output could not stop'));
+    narration.receive({ ...base, type: 'attentionCue', sequence: 1 });
+    narration.stopLocally();
+    pending.reject(new Error('cue canceled'));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(send).not.toHaveBeenCalled();
+    expect(narration.receive({ ...base, jobId: '2', type: 'attentionCue', sequence: 2 })).toBe(false);
+    expect(send.mock.calls[0]?.[0]).toMatchObject({ jobId: '2', outcome: 'failed' });
+  });
+
+  it('AckMatches: plays a scoped cue and acknowledges its settlement', async () => {
+    const { narration, attentionCue, pending, send } = fixture();
+    expect(narration.receive({ ...base, type: 'attentionCue', sequence: 1 })).toBe(true);
+    expect(attentionCue).toHaveBeenCalledOnce();
+    pending.resolve();
+    await Promise.resolve();
+    expect(send.mock.calls[0]?.[0]).toMatchObject({ type: 'terminal', jobId: '1', outcome: 'ended' });
+  });
+
+  it('reports a cue without completed output as failed', async () => {
+    const { narration, pending, observation, send } = fixture();
+    observation.mockReset().mockReturnValue(undefined);
+    narration.receive({ ...base, type: 'attentionCue', sequence: 1 });
+    pending.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(send.mock.calls[0]?.[0]).toMatchObject({ type: 'terminal', outcome: 'failed' });
+  });
+
+  it('NoEarlyReuse: holds the cue acknowledgement until canceled output retires', async () => {
+    const { narration, pending, stopOutput, send } = fixture();
+    const retirement = Promise.withResolvers<void>();
+    stopOutput.mockReturnValue(retirement.promise);
+    narration.receive({ ...base, type: 'attentionCue', sequence: 1 });
+    narration.stopLocally();
+    pending.resolve();
+    await Promise.resolve();
+    expect(send).not.toHaveBeenCalled();
+    retirement.resolve();
+    await Promise.resolve();
+    expect(send.mock.calls[0]?.[0]).toMatchObject({ type: 'terminal', outcome: 'canceled' });
+  });
+
   it('plays one current page unit and acknowledges its actual settlement', async () => {
     const { narration, speak, send, pending } = fixture();
     expect(narration.receive({ ...base, type: 'speak', sequence: 1, text: 'Hello.' })).toBe(true);
-    expect(speak).toHaveBeenCalledWith('Hello.');
+    expect(speak).toHaveBeenCalledWith('Hello.', undefined);
     expect(narration.receive({ ...base, type: 'speak', sequence: 2, jobId: '2', text: 'Second.' })).toBe(false);
     expect(send.mock.calls[0]?.[0]).toMatchObject({ jobId: '2', outcome: 'failed' });
     pending.resolve();
@@ -183,4 +231,11 @@ describe('companion narration receiver', () => {
     expect(send).not.toHaveBeenCalled();
     expect(narration.receive({ ...base, pageEpoch: 3, type: 'pause', sequence: 3 })).toBe(false);
   });
+});
+
+it('forwards a delivery cue to the local speech owner', () => {
+  const { narration, speak } = fixture();
+  expect(narration.receive({ ...base, type: 'speak', sequence: 1, text: 'Hello.', delivery: 'curious' })).toBe(true);
+  expect(speak).toHaveBeenCalledWith('Hello.', 'curious');
+  narration.dispose();
 });

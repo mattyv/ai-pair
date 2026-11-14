@@ -106,6 +106,7 @@ describe('continued speech flow', () => {
     let canceled = false;
     const narration: NarrationPort = {
       speak: () => speech.promise,
+      attentionCue: () => Promise.resolve(),
       pause: noop,
       resume: noop,
       cancel: () => {
@@ -130,6 +131,7 @@ describe('continued speech flow', () => {
         spoken.push(text);
         return spoken.length === 1 ? first.promise : question.promise;
       },
+      attentionCue: () => Promise.resolve(),
       pause: noop,
       resume: noop,
       cancel: () => {

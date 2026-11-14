@@ -932,6 +932,11 @@ describe('the controls', () => {
     expect(posted()).toEqual([{ type: 'pause' }, { type: 'resume' }, { type: 'interrupt' }, { type: 'end' }]);
   });
 
+  it('ShowsCursor: requests cursor navigation without changing playback', () => {
+    click(element('reveal-cursor'));
+    expect(posted()).toEqual([{ type: 'revealCursor' }]);
+  });
+
   it('takes the turn bare, and hands it back with the reply and the selection', () => {
     click(element('turn'));
     send({ type: 'state', state: 'navigator', turn: 'programmer', paused: false });
@@ -1367,6 +1372,20 @@ describe('chat order', () => {
 });
 
 describe('panel settings', () => {
+  it('projects navigator commentary and sends changes', () => {
+    const select = element('navigator-commentary');
+    if (!(select instanceof window.HTMLSelectElement)) throw new TypeError('Expected a select');
+    send({ type: 'navigatorCommentary', value: 'quiet' });
+    expect(select.value).toBe('quiet');
+    select.value = 'coach';
+    select.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect(posted()).toContainEqual({ type: 'navigatorCommentary', value: 'coach' });
+    const count = posted().length;
+    select.value = 'invalid';
+    select.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect(posted()).toHaveLength(count);
+  });
+
   it('opens a named settings dialog, sends a changed order, and restores focus on close', () => {
     const button = element('settings');
     button.focus();
@@ -1982,7 +2001,15 @@ it('sends explicit setup, preview, stop and validated speech preferences', () =>
   send({ type: 'speechSupport', supported: true });
   send({
     type: 'speechSettings',
-    value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    value: {
+      contextEnabled: false,
+      enabled: true,
+      provider: 'kokoro',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+    },
   });
   const voice = element('speech-voice');
   if (!(voice instanceof window.HTMLSelectElement)) throw new TypeError('Missing voice selector');
@@ -1990,7 +2017,16 @@ it('sends explicit setup, preview, stop and validated speech preferences', () =>
   voice.dispatchEvent(new window.Event('change', { bubbles: true }));
   expect(posted()).toContainEqual({
     type: 'speechSettings',
-    value: { enabled: true, provider: 'kokoro', voice: 'bf_emma', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1, listeningSpeed: 1 },
+    value: {
+      contextEnabled: false,
+      enabled: true,
+      provider: 'kokoro',
+      voice: 'bf_emma',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+      listeningSpeed: 1,
+    },
   });
   click(element('speech-setup'));
   click(element('speech-preview'));
@@ -2026,6 +2062,34 @@ it('restores reply timing and applies a change to a drafted reply', () => {
   expect(posted()).toContainEqual({ type: 'reply', text: 'Now', attach: false });
 });
 
+it('leaves speech playing for a bare turn even with stale displayed turn', async () => {
+  const pause = vi.fn<() => void>();
+  const play = vi.fn<() => Promise<void>>().mockResolvedValue();
+  class FakeAudio {
+    pause = pause;
+    play = play;
+    addEventListener(): void {}
+  }
+  vi.stubGlobal('Audio', FakeAudio);
+  vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:test');
+  vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+  start();
+  send({ type: 'speechPage', pageId: 1 });
+  send({ type: 'speechStatus', id: 7, pageId: 1, state: 'preparing' });
+  send({ type: 'speechAudio', id: 7, pageId: 1, wavBase64: 'AQI=', durationMs: 100 });
+  await Promise.resolve();
+  expect(play).toHaveBeenCalledOnce();
+  pause.mockClear();
+  click(element('turn'));
+  expect(pause).not.toHaveBeenCalled();
+  expect(posted()).toContainEqual({ type: 'turn' });
+  send({ type: 'state', state: 'navigator', turn: 'programmer', paused: false });
+  typeReply('Change direction');
+  click(element('turn'));
+  expect(pause).toHaveBeenCalledOnce();
+  expect(posted()).toContainEqual({ type: 'turn', message: 'Change direction' });
+});
+
 it('silences the current audio synchronously before posting a reply and ignores late audio', async () => {
   const pause = vi.fn<() => void>();
   const play = vi.fn<() => Promise<void>>().mockResolvedValue();
@@ -2041,7 +2105,15 @@ it('silences the current audio synchronously before posting a reply and ignores 
   send({ type: 'speechPage', pageId: 1 });
   send({
     type: 'speechSettings',
-    value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    value: {
+      contextEnabled: false,
+      enabled: true,
+      provider: 'kokoro',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+    },
   });
   send({ type: 'speechStatus', id: 7, pageId: 1, state: 'preparing' });
   send({ type: 'speechAudio', id: 7, pageId: 1, wavBase64: 'AQI=', durationMs: 100 });
@@ -2141,14 +2213,30 @@ it('does not stop a preview when voice changes while automatic speech is off', a
   send({ type: 'speechPage', pageId: 1 });
   send({
     type: 'speechSettings',
-    value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    value: {
+      contextEnabled: false,
+      enabled: false,
+      provider: 'kokoro',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+    },
   });
   send({ type: 'speechStatus', id: 1, pageId: 1, state: 'preparing' });
   send({ type: 'speechAudio', id: 1, pageId: 1, wavBase64: 'AQI=', durationMs: 100 });
   await Promise.resolve();
   send({
     type: 'speechSettings',
-    value: { enabled: false, provider: 'kokoro', voice: 'bf_emma', speed: 1.25, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    value: {
+      contextEnabled: false,
+      enabled: false,
+      provider: 'kokoro',
+      voice: 'bf_emma',
+      speed: 1.25,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+    },
   });
   expect(play).toHaveBeenCalledOnce();
   expect(pause).not.toHaveBeenCalled();
@@ -2229,7 +2317,15 @@ it('reports page visibility and ignores stale speech status while controlling th
   send({ type: 'speechPage', pageId: 1 });
   send({
     type: 'speechSettings',
-    value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    value: {
+      contextEnabled: false,
+      enabled: true,
+      provider: 'kokoro',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+    },
   });
   send({ type: 'speechStatus', pageId: 1, id: 2, state: 'preparing' });
   send({ type: 'speechAudio', pageId: 1, id: 2, wavBase64: 'AQI=', durationMs: 100 });
@@ -2246,7 +2342,15 @@ it('reports page visibility and ignores stale speech status while controlling th
   expect(posted()).toContainEqual({ type: 'speechPageHidden', pageId: 1 });
   send({
     type: 'speechSettings',
-    value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    value: {
+      contextEnabled: false,
+      enabled: false,
+      provider: 'kokoro',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+    },
   });
   send({ type: 'speechStatus', pageId: 1, id: 2, state: 'speaking' });
   expect(text('speech-live-status')).not.toBe('Speaking');
@@ -2278,13 +2382,30 @@ it('validates selection controls and stops live speech when disabled', () => {
   speed.value = '1';
   send({
     type: 'speechSettings',
-    value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    value: {
+      contextEnabled: false,
+      enabled: true,
+      provider: 'kokoro',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+    },
   });
   enabled.checked = false;
   enabled.dispatchEvent(new window.Event('change'));
   expect(posted()).toContainEqual({
     type: 'speechSettings',
-    value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1, listeningSpeed: 1 },
+    value: {
+      contextEnabled: false,
+      enabled: false,
+      provider: 'kokoro',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+      listeningSpeed: 1,
+    },
   });
   mode.value = 'lines';
   mode.dispatchEvent(new window.Event('change'));
@@ -2322,7 +2443,15 @@ it('switches providers explicitly and loads cloud voices only when requested', (
 it('shows the saved account voice after reload without fetching a catalog', () => {
   send({
     type: 'speechSettings',
-    value: { enabled: true, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: 'saved-voice', elevenLabsSpeed: 1 },
+    value: {
+      contextEnabled: false,
+      enabled: true,
+      provider: 'elevenlabs',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: 'saved-voice',
+      elevenLabsSpeed: 1,
+    },
   });
   send({ type: 'speechCloudSupport', supported: true });
   send({ type: 'speechKeyStatus', hasKey: true });
@@ -2338,7 +2467,15 @@ it('chooses a cloud voice and speed, loads more, and keeps provider errors sanit
   send({ type: 'speechKeyStatus', hasKey: true });
   send({
     type: 'speechSettings',
-    value: { enabled: true, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    value: {
+      contextEnabled: false,
+      enabled: true,
+      provider: 'elevenlabs',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+    },
   });
   send({ type: 'speechCatalog', value: { voices: [{ id: 'id1', name: '<b>Voice</b>' }], more: true, loading: false, error: false } });
   const voice = element('speech-cloud-voice');
@@ -2356,6 +2493,7 @@ it('chooses a cloud voice and speed, loads more, and keeps provider errors sanit
   expect(posted()).toContainEqual({
     type: 'speechSettings',
     value: {
+      contextEnabled: false,
       enabled: true,
       provider: 'elevenlabs',
       voice: 'af_heart',
@@ -2378,7 +2516,15 @@ it('keeps cloud actions disabled without a key and while setup is pending', () =
   send({ type: 'speechKeyStatus', hasKey: false });
   send({
     type: 'speechSettings',
-    value: { enabled: false, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    value: {
+      contextEnabled: false,
+      enabled: false,
+      provider: 'elevenlabs',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+    },
   });
   expect(element('speech-key-remove')).toHaveProperty('disabled', true);
   expect(element('speech-voices-load')).toHaveProperty('disabled', true);
@@ -2396,7 +2542,15 @@ it('keeps cloud actions disabled without a key and while setup is pending', () =
 it('switches to cloud even when old local voice settings are invalid', () => {
   send({
     type: 'speechSettings',
-    value: { enabled: true, provider: 'kokoro', voice: 'removed_voice', speed: 9, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    value: {
+      contextEnabled: false,
+      enabled: true,
+      provider: 'kokoro',
+      voice: 'removed_voice',
+      speed: 9,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+    },
   });
   send({ type: 'speechCloudSupport', supported: true });
   const provider = element('speech-provider');
@@ -2406,6 +2560,7 @@ it('switches to cloud even when old local voice settings are invalid', () => {
   expect(posted()).toContainEqual({
     type: 'speechSettings',
     value: {
+      contextEnabled: false,
       enabled: true,
       provider: 'elevenlabs',
       voice: 'af_heart',
@@ -2420,7 +2575,15 @@ it('switches to cloud even when old local voice settings are invalid', () => {
 it('switches to cloud with the default rate when a saved cloud rate is invalid', () => {
   send({
     type: 'speechSettings',
-    value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 9 },
+    value: {
+      contextEnabled: false,
+      enabled: false,
+      provider: 'kokoro',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 9,
+    },
   });
   const provider = element('speech-provider');
   if (!(provider instanceof window.HTMLSelectElement)) throw new TypeError('Missing provider');
@@ -2429,6 +2592,7 @@ it('switches to cloud with the default rate when a saved cloud rate is invalid',
   expect(posted()).toContainEqual({
     type: 'speechSettings',
     value: {
+      contextEnabled: false,
       enabled: false,
       provider: 'elevenlabs',
       voice: 'af_heart',
@@ -2443,7 +2607,15 @@ it('switches to cloud with the default rate when a saved cloud rate is invalid',
 it('switches back to Kokoro when saved inactive cloud settings are invalid', () => {
   send({
     type: 'speechSettings',
-    value: { enabled: false, provider: 'elevenlabs', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 9 },
+    value: {
+      contextEnabled: false,
+      enabled: false,
+      provider: 'elevenlabs',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 9,
+    },
   });
   const provider = element('speech-provider');
   if (!(provider instanceof window.HTMLSelectElement)) throw new TypeError('Missing provider');
@@ -2451,7 +2623,16 @@ it('switches back to Kokoro when saved inactive cloud settings are invalid', () 
   provider.dispatchEvent(new window.Event('change'));
   expect(posted()).toContainEqual({
     type: 'speechSettings',
-    value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1, listeningSpeed: 1 },
+    value: {
+      contextEnabled: false,
+      enabled: false,
+      provider: 'kokoro',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+      listeningSpeed: 1,
+    },
   });
 });
 
@@ -2598,6 +2779,7 @@ it('saves fine listening speed independently of synthesis speeds and retains it 
   send({
     type: 'speechSettings',
     value: {
+      contextEnabled: false,
       enabled: true,
       provider: 'elevenlabs',
       voice: 'af_heart',
@@ -2616,6 +2798,7 @@ it('saves fine listening speed independently of synthesis speeds and retains it 
   expect(posted()).toContainEqual({
     type: 'speechSettings',
     value: {
+      contextEnabled: false,
       enabled: true,
       provider: 'elevenlabs',
       voice: 'af_heart',
@@ -2796,7 +2979,15 @@ it('mutes active narration from the toolbar without pausing the session and togg
   send({ type: 'speechPage', pageId: 1 });
   send({
     type: 'speechSettings',
-    value: { enabled: true, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    value: {
+      contextEnabled: false,
+      enabled: true,
+      provider: 'kokoro',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+    },
   });
   expect(button.disabled).toBe(false);
   expect(button.getAttribute('aria-pressed')).toBe('true');
@@ -2809,7 +3000,16 @@ it('mutes active narration from the toolbar without pausing the session and togg
   expect(element('speech-enabled')).toHaveProperty('checked', false);
   expect(posted()).toContainEqual({
     type: 'speechSettings',
-    value: { enabled: false, provider: 'kokoro', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1, listeningSpeed: 1 },
+    value: {
+      contextEnabled: false,
+      enabled: false,
+      provider: 'kokoro',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+      listeningSpeed: 1,
+    },
   });
   expect(posted().filter((message) => message.type === 'pause' || message.type === 'interrupt')).toEqual([]);
   click(button);
@@ -2841,6 +3041,7 @@ it('shows OpenRouter provider-default voice as ready only with current allowed-v
     send({
       type: 'speechSettings',
       value: {
+        contextEnabled: false,
         enabled: true,
         provider: 'openrouter',
         voice: 'af_heart',
@@ -2984,6 +3185,7 @@ it('reports OpenRouter catalog states and restores saved settings', () => {
   send({
     type: 'speechSettings',
     value: {
+      contextEnabled: false,
       enabled: true,
       provider: 'openrouter',
       voice: 'af_heart',
@@ -3018,6 +3220,7 @@ it('reports OpenRouter catalog states and restores saved settings', () => {
   send({
     type: 'speechSettings',
     value: {
+      contextEnabled: false,
       enabled: true,
       provider: 'openrouter',
       voice: 'af_heart',
@@ -3029,7 +3232,15 @@ it('reports OpenRouter catalog states and restores saved settings', () => {
   });
   send({
     type: 'speechSettings',
-    value: { enabled: true, provider: 'openrouter', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    value: {
+      contextEnabled: false,
+      enabled: true,
+      provider: 'openrouter',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+    },
   });
 });
 
@@ -3039,6 +3250,7 @@ it('marks a remembered OpenRouter selection unavailable when a current catalog e
   send({
     type: 'speechSettings',
     value: {
+      contextEnabled: false,
       enabled: true,
       provider: 'openrouter',
       voice: 'af_heart',
@@ -3072,6 +3284,7 @@ it('retains authoritative exclusion during a refresh and its failure', () => {
   send({
     type: 'speechSettings',
     value: {
+      contextEnabled: false,
       enabled: true,
       provider: 'openrouter',
       voice: 'af_heart',
@@ -3098,7 +3311,15 @@ it('saves the ZDR choice before refreshing compatible account models', () => {
   send({ type: 'openRouterKeyStatus', hasKey: true });
   send({
     type: 'speechSettings',
-    value: { enabled: false, provider: 'openrouter', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    value: {
+      contextEnabled: false,
+      enabled: false,
+      provider: 'openrouter',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+    },
   });
   send({
     type: 'openRouterCatalog',
@@ -3121,7 +3342,15 @@ it('saves ZDR without requesting a catalog when no key is saved', () => {
   send({ type: 'openRouterKeyStatus', hasKey: false });
   send({
     type: 'speechSettings',
-    value: { enabled: false, provider: 'openrouter', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    value: {
+      contextEnabled: false,
+      enabled: false,
+      provider: 'openrouter',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+    },
   });
   const prior = posted().length;
   click(element('openrouter-zdr'));
@@ -3138,7 +3367,15 @@ it('saves ZDR without requesting a catalog when cloud speech is unsupported', ()
   send({ type: 'openRouterKeyStatus', hasKey: true });
   send({
     type: 'speechSettings',
-    value: { enabled: false, provider: 'openrouter', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 },
+    value: {
+      contextEnabled: false,
+      enabled: false,
+      provider: 'openrouter',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+    },
   });
   const prior = posted().length;
   click(element('openrouter-zdr'));
@@ -3148,4 +3385,132 @@ it('saves ZDR without requesting a catalog when cloud speech is unsupported', ()
       .map((message) => message.type),
   ).toEqual(['speechSettings']);
   expect(element('openrouter-status').textContent).toContain('unavailable');
+});
+
+it('shows model capability and saves context without enabling speech', () => {
+  send({
+    type: 'speechSettings',
+    value: {
+      enabled: false,
+      contextEnabled: false,
+      provider: 'openrouter',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+      openRouterModel: 'elevenlabs/eleven-v4',
+      openRouterVoice: '',
+      openRouterZdr: false,
+    },
+  });
+  expect(text('speech-context-capability')).toContain('Previous context requires Zero Data Retention');
+  const select = element('speech-context');
+  if (!(select instanceof window.HTMLSelectElement)) throw new TypeError('Missing speech context selector');
+  select.value = 'on';
+  select.dispatchEvent(new window.Event('change'));
+  expect(posted().at(-1)).toMatchObject({
+    type: 'speechSettings',
+    value: { enabled: false, contextEnabled: true, provider: 'openrouter' },
+  });
+});
+
+it('shows context capabilities for supported and unsupported models', () => {
+  const base = {
+    enabled: false,
+    provider: 'openrouter' as const,
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: '',
+    elevenLabsSpeed: 1,
+    openRouterVoice: '',
+    contextEnabled: true,
+    openRouterZdr: true,
+  };
+  send({ type: 'speechSettings', value: { ...base, openRouterModel: 'elevenlabs/eleven-v4' } });
+  expect(text('speech-context-capability')).toContain('Previous context and delivery cues');
+  expect(element('speech-context')).toHaveProperty('value', 'on');
+  send({ type: 'speechSettings', value: { ...base, openRouterModel: 'elevenlabs/eleven-v3' } });
+  expect(text('speech-context-capability')).toContain('Delivery cues only');
+  send({ type: 'speechSettings', value: { ...base, openRouterModel: 'other/model' } });
+  expect(text('speech-context-capability')).toContain('ordinary speech only');
+});
+
+it('requests and cancels attention from the hand button using the owner snapshot', () => {
+  start();
+  const hand = element('attention');
+  click(hand);
+  expect(post).toHaveBeenLastCalledWith({ type: 'attention' });
+  send({ type: 'attention', state: 'requested' });
+  expect(hand.getAttribute('aria-label')).toBe('Lower hand');
+  expect(hand.classList.contains('on')).toBe(true);
+  click(hand);
+  expect(post).toHaveBeenLastCalledWith({ type: 'attention' });
+  send({ type: 'attention', state: 'granted' });
+  expect(hand.getAttribute('aria-label')).toBe('Focus reply');
+  expect(document.activeElement).toBe(element('reply'));
+  click(hand);
+  expect(document.activeElement).toBe(element('reply'));
+  send({ type: 'attention', state: 'none' });
+  expect(hand.getAttribute('aria-label')).toBe('Raise hand');
+  expect(hand.classList.contains('on')).toBe(false);
+});
+
+it('plays the cue under the attention hold but respects an independent speech pause', async () => {
+  const play = vi.fn<() => Promise<void>>().mockResolvedValue();
+  class FakeAudio {
+    pause(): void {}
+    play = play;
+    addEventListener(): void {}
+  }
+  vi.stubGlobal('Audio', FakeAudio);
+  vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:test');
+  vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => {});
+  start();
+  send({ type: 'speechPage', pageId: 1 });
+  send({ type: 'state', state: 'paused', turn: 'agent', paused: true, speechPaused: false });
+  send({ type: 'speechStatus', id: 1, pageId: 1, state: 'preparing' });
+  send({ type: 'speechAudio', id: 1, pageId: 1, wavBase64: 'AQI=', durationMs: 100 });
+  await Promise.resolve();
+  expect(play).toHaveBeenCalledOnce();
+  send({ type: 'speechControl', id: 1, pageId: 1, action: 'stop' });
+  send({ type: 'state', state: 'paused', turn: 'agent', paused: true, speechPaused: true });
+  send({ type: 'speechStatus', id: 2, pageId: 1, state: 'preparing' });
+  send({ type: 'speechAudio', id: 2, pageId: 1, wavBase64: 'AQI=', durationMs: 100 });
+  await Promise.resolve();
+  expect(play).toHaveBeenCalledOnce();
+});
+
+it('disables the hand outside a session and restores its state without focusing on replay', () => {
+  const hand = element('attention');
+  if (!(hand instanceof window.HTMLButtonElement)) throw new TypeError('Missing hand button');
+  expect(hand.disabled).toBe(true);
+  send({
+    type: 'replay',
+    events: [
+      { type: 'session', active: true },
+      { type: 'attention', state: 'granted' },
+    ],
+  });
+  expect(hand.disabled).toBe(false);
+  expect(hand.getAttribute('aria-label')).toBe('Focus reply');
+  expect(document.activeElement).not.toBe(element('reply'));
+  send({ type: 'attention', state: 'none' });
+  send({ type: 'session', active: false, reason: 'agent' });
+  expect(hand.disabled).toBe(true);
+});
+
+it.each(['requested', 'granted'] as const)('clears a replayed %s hand when the revived owner resets attention', (state) => {
+  send({
+    type: 'replay',
+    events: [
+      { type: 'session', active: true },
+      { type: 'attention', state },
+    ],
+  });
+  send({ type: 'session', active: true, suspended: true });
+  send({ type: 'attention', state: 'none' });
+  post.mockClear();
+  click(element('attention'));
+  expect(posted()).toEqual([{ type: 'attention' }]);
+  expect(element('attention').getAttribute('aria-label')).toBe('Raise hand');
 });

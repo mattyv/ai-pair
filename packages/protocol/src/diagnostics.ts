@@ -2,11 +2,11 @@ import { z } from 'zod';
 import { localSpeechDiagnostics, localSpeechReport } from './local_diagnostics';
 import { gpuDiagnostics } from './gpu_diagnostics';
 
-const MAX_PAUSE_REASONS = 4;
+const MAX_PAUSE_REASONS = 5;
 const MAX_EVENTS = 100;
 const id = z.int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const metadata = { seq: id, time: z.number().nonnegative() };
-const reasons = z.array(z.enum(['programmer', 'reply', 'away', 'calibrate'])).max(MAX_PAUSE_REASONS);
+const reasons = z.array(z.enum(['programmer', 'reply', 'away', 'calibrate', 'attention'])).max(MAX_PAUSE_REASONS);
 const events = z.union([
   z.strictObject({ kind: z.literal('session'), state: z.enum(['active', 'suspended', 'ended']), ...metadata }),
   z.strictObject({ kind: z.literal('connection'), state: z.enum(['connected', 'disconnected']), connectionId: id, ...metadata }),

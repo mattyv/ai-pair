@@ -193,6 +193,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     const openRouterFormat: unknown = config().get('speech.openRouterFormat');
     return {
       enabled: enabled === true,
+      contextEnabled: config().get('speech.contextEnabled') === true,
       listeningSpeed: speechListeningRate(config().get('speech.listeningSpeed')),
       voice: typeof voice === 'string' ? voice : 'af_heart',
       speed: typeof speed === 'number' ? speed : 1,
@@ -236,6 +237,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
       // specs/ProviderChoice.tla, Select: the latest local choice takes effect before persistence.
       const current = ++generation;
       pending = { ...value, listeningSpeed: speechListeningRate(value.listeningSpeed) };
+      speech.configureNarrationContext();
       speech.prepare();
       if (
         prior.enabled !== value.enabled ||
@@ -251,6 +253,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
       const save = tail.then(async () => {
         const updates: Array<[string, unknown]> = [
           ['speech.enabled', value.enabled],
+          ['speech.contextEnabled', value.contextEnabled === true],
           ['speech.listeningSpeed', speechListeningRate(value.listeningSpeed)],
           ['speech.voice', value.voice],
           ['speech.speed', value.speed],
@@ -270,6 +273,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
           // specs/ProviderChoice.tla, Success: older writes cannot replace a newer choice.
           if (current !== generation || disposed) return;
           pending = undefined;
+          speech.configureNarrationContext();
           if (restoresVoice) invalidVoice = false;
           options.panel()?.showSpeechSettings(stored());
           publishReadiness();
@@ -277,6 +281,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
         () => {
           if (current !== generation || disposed) return;
           pending = undefined;
+          speech.configureNarrationContext();
           speech.cancel();
           speech.prepare();
           catalog.invalidate();
@@ -568,6 +573,9 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
   }
   const panelSpeech: PanelWiring['speech'] = {
     sessionCost,
+    narrationSession: (id, ongoing) => {
+      speech.setNarrationSession(id, ongoing);
+    },
     readiness: audioDiagnostics,
     computeState: () => compute.state(),
     computeMode: (value) => {
@@ -711,6 +719,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
         }
       }
       const current = settings.get();
+      speech.configureNarrationContext();
       // specs/ProviderChoice.tla, External: persistence echoes cannot override a pending choice.
       if (pending === undefined) {
         if ((last.enabled && !current.enabled) || current.provider !== last.provider) speech.cancel();

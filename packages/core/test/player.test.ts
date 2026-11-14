@@ -610,6 +610,17 @@ describe('selected speech', () => {
     expect(speak).toHaveBeenCalledTimes(2);
   });
 
+  it('forwards delivery only for spoken say actions', async () => {
+    const h = harness();
+    const speak = vi.fn(() => Promise.resolve());
+    Object.assign(h.stage, { narration: { speak, pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() } });
+    await h.player.play(1, [
+      { say: 'Hello.', speech_delivery: 'curious' },
+      { say: 'Silent.', speak: false, speech_delivery: 'whispering' },
+    ]);
+    expect(speak).toHaveBeenCalledExactlyOnceWith('Hello.', 'curious');
+  });
+
   it('displays selected text before requesting speech and waits for both gates', async () => {
     const h = harness();
     const readingGate = Promise.withResolvers<boolean>();

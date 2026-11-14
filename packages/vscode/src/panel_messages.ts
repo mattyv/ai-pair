@@ -8,7 +8,7 @@ import type { SpeechModelStatus } from './speech_setup';
 import type { CatalogView } from './speech_catalog';
 import type { OpenRouterCatalogView } from './speech_openrouter_catalog';
 import type { OutputChoice } from './speech_output_types';
-import type { AudioDiagnostics, SpeechDecodeFromPage } from '@ai-pair/protocol';
+import type { AudioDiagnostics, SpeechDecodeFromPage, NavigatorCommentary } from '@ai-pair/protocol';
 import type { OutputPreferenceView } from './speech_output_preferences';
 import type { SessionSpeechCostView } from './session_speech_cost';
 
@@ -47,6 +47,8 @@ export type FromPanel =
   | { type: 'reply'; text: string; attach?: boolean; defer?: boolean }
   | { type: 'draft'; empty: boolean }
   | { type: 'pause' }
+  | { type: 'revealCursor' }
+  | { type: 'attention' }
   | { type: 'resume' }
   | { type: 'interrupt' }
   | { type: 'turn'; message?: string; attach?: boolean }
@@ -62,6 +64,7 @@ export type FromPanel =
   /** The Start a session button: Claude Code's CLI starts with the prompt in a hidden terminal (#107, #115). */
   | { type: 'start' }
   | { type: 'replyBehavior'; value: 'interrupt' | 'finishAction' }
+  | { type: 'navigatorCommentary'; value: NavigatorCommentary }
   | { type: 'chatOrder'; value: ChatOrder }
   | { type: 'showTerminals'; value: boolean }
   | { type: 'commandApprovalSound'; value: boolean }
@@ -100,6 +103,7 @@ export type ToPanel =
   | { type: 'speechStatus'; id: number; pageId: number; state: SpeechState; message?: string }
   | { type: 'focusReply' }
   | { type: 'replyBehavior'; value: 'interrupt' | 'finishAction' }
+  | { type: 'navigatorCommentary'; value: NavigatorCommentary }
   | { type: 'chatOrder'; value: ChatOrder }
   | { type: 'showTerminals'; value: boolean }
   | { type: 'commandApprovalSound'; value: boolean }

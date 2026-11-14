@@ -1,7 +1,7 @@
+import { LOCAL_AUDIO_VERSION, type LocalAudioFrame, type LocalPanelAction } from '@ai-pair/protocol';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { mock } from 'vitest-mock-extended';
 import type * as vscode from 'vscode';
-import type { LocalAudioFrame, LocalPanelAction } from '@ai-pair/protocol';
 import { createCompanionSession } from '../src/companion_session';
 
 interface Routing {
@@ -198,7 +198,7 @@ function routing(): Routing {
 it('registers one provider and forwards local commands and diagnostics', async () => {
   const current = session();
   expect(fake.register).toHaveBeenCalledOnce();
-  expect(fake.attach).toHaveBeenCalledWith({ version: 3, connectionEpoch: 'epoch', sequence: 1, type: 'attach' });
+  expect(fake.attach).toHaveBeenCalledWith({ version: LOCAL_AUDIO_VERSION, connectionEpoch: 'epoch', sequence: 1, type: 'attach' });
   fake.accept.mockReturnValue(true);
   expect(current.accept({ frame: 'test' })).toBe(true);
   await current.keySet();
@@ -223,7 +223,7 @@ it('registers one provider and forwards local commands and diagnostics', async (
   expect(fake.narrationOptions?.page()).toBe(7);
   expect(fake.narrationOptions?.observation()).toMatchObject({ id: 1 });
   expect(fake.narrationOptions?.nextSequence()).toBe(1);
-  await fake.channelOptions?.send({ version: 3, connectionEpoch: 'epoch', sequence: 2, type: 'heartbeat' });
+  await fake.channelOptions?.send({ version: LOCAL_AUDIO_VERSION, connectionEpoch: 'epoch', sequence: 2, type: 'heartbeat' });
   expect(fake.execute).toHaveBeenCalledOnce();
   void current.dispose();
   expect(await current.ready('epoch')).toBe(false);
@@ -259,6 +259,36 @@ it('forwards panel controls only after local retirement and clears pause reasons
   void current.dispose();
 });
 
+it('forwards a plain turn without interrupting or clearing local pause reasons', () => {
+  const current = session();
+  routing().forward({ type: 'turn' }, 7);
+  expect(fake.interrupt).not.toHaveBeenCalled();
+  expect(fake.send).toHaveBeenCalledWith(expect.objectContaining({ action: { type: 'turn' }, pageEpoch: 7 }));
+  expect(fake.setPause).not.toHaveBeenCalled();
+  void current.dispose();
+});
+
+it.each([{ message: 'Change direction' }, { attach: true }])('retires local speech before forwarding a turn with content', (content) => {
+  const current = session();
+  routing().forward({ type: 'turn', ...content }, 7);
+  expect(fake.interrupt).toHaveBeenCalledOnce();
+  expect(fake.send).toHaveBeenCalledWith(expect.objectContaining({ action: { type: 'turn', ...content }, pageEpoch: 7 }));
+  expect(fake.setPause.mock.calls).toEqual([
+    [false, 'draft'],
+    [false, 'manual'],
+  ]);
+  void current.dispose();
+});
+
+it('forwards navigator commentary to the workspace', () => {
+  const current = session();
+  routing().forward({ type: 'navigatorCommentary', value: 'coach' }, 7);
+  expect(fake.send).toHaveBeenCalledWith(
+    expect.objectContaining({ type: 'panelAction', pageEpoch: 7, action: { type: 'navigatorCommentary', value: 'coach' } }),
+  );
+  void current.dispose();
+});
+
 it('forwards a reply behavior change to the workspace', () => {
   const current = session();
   routing().forward({ type: 'replyBehavior', value: 'finishAction' }, 7);
@@ -291,7 +321,7 @@ it('forwards a deferred reply without canceling local narration', () => {
 
 it('delivers complete panel updates and ignores heartbeats', () => {
   const current = session();
-  const common = { version: 3 as const, connectionEpoch: 'epoch', sequence: 2 };
+  const common = { version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, connectionEpoch: 'epoch', sequence: 2 };
   fake.connectionOptions?.receive({ ...common, type: 'heartbeat' });
   expect(fake.receiveNarration).not.toHaveBeenCalled();
   const speak = { ...common, type: 'pause' as const, jobId: 'one', pageEpoch: 7 };
@@ -405,6 +435,8 @@ it('provides safe local-only panel settings and refuses workspace operations', a
   expect(invoke(field(args[13], 'get'))).toBe(false);
   invoke(field(args[13], 'set'), true);
   expect(invoke(field(args[13], 'get'))).toBe(false);
+  expect(() => invoke(field(args[14], 'get'))).toThrow('Workspace operation is unavailable');
+  expect(() => invoke(field(args[14], 'set'), 'coach')).toThrow('Workspace operation is unavailable');
   void current.dispose();
 });
 

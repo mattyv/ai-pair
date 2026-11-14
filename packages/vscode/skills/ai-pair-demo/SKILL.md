@@ -17,8 +17,10 @@ platform-built-in command to create an exclusively new child directory directly
 inside it. Do not reuse an existing directory or follow an existing named parent
 symlink. Reserve an empty
 file inside that directory with an exclusive-create command that fails if it
-exists. Never overwrite an existing file or automatically delete the scratch
-directory. Narrate and write a short example of dependency-free code in that
+exists. Record the created directory and file identities for cleanup. Never
+overwrite an existing file. Explain upfront that the temporary
+example will be cleaned up after the demo unless the programmer asks to keep it.
+Narrate and write a short example of dependency-free code in that
 file through Pair, read it through Pair, and save it. Drain only the demo's own
 queued batches and check their reports. Run a
 platform-built-in command through Pair that reads the saved on-disk file and
@@ -30,6 +32,13 @@ While writing the example, demonstrate overlap: use a useful plain-text `say`
 of at most 45 words and 280 Unicode characters with `speak: true` and
 `speech_mode: "continue"`, followed by meaningful code in a `type` action in the
 same batch. The typing can proceed after the reading pause while speech plays.
+Invite the programmer to click the hand while a brief spoken `continue`
+explanation and a readable block of typing are playing. On the attention hold,
+the panel supplies its cached "What's up?" prompt; do not duplicate it with a
+`say`. Listen for the interjection and resume as directed. A second click while
+the request is pending cancels it; demonstrating that is optional. Do not pause
+or end automatically, or claim the prompt was heard without confirmation.
+
 Then use a short spoken question with `speak: true` and `speech_mode: "wait"`,
 for example asking whether the programmer wants a different example. Call
 `listen`; do not continue until they reply, skip or defer, or the session ends.
@@ -54,8 +63,28 @@ every line. You may select that `say` with `speak: true` under the existing
 speech setting.
 
 If the programmer has taken over, do not ask them to hand back or resume their
-turn. Follow the guide for the programmer's turn and call `listen` while
-waiting. After draining and verifying the demo, ask for permission to end the
-session you created, and call `listen` for their answer. End it only when they
-agree; otherwise keep listening or follow their instructions. Never end a
-session you did not create. Report the observed result and scratch file location.
+turn just to continue the demo or comment. Follow the guide for the
+programmer's turn and call `listen` while waiting. After draining and verifying
+the demo, ask for permission to end the session you created, and call `listen`
+for their answer. When they agree, and
+after their work has been reviewed, perform cleanup visibly through Pair `run`
+before ending. If the programmer holds the turn, explain that cleanup requires
+the agent turn and offer a cleanup-only handback or retaining the files and
+ending. Do not force a handback or wait indefinitely: if declined or unavailable,
+retain the files and report their paths. Honor a request to keep the file.
+Record the reviewed final content, then verify each demo-owned file's identity
+and content through Pair immediately before
+deletion. Remove only matching files and then the verified owned directory only
+if empty. Preserve unknown
+additions, unexpectedly changed or unreviewed user content, reused paths, and
+anything whose ownership or current state cannot be established. Do not traverse
+symlinks or recursively delete. If the session stops or disconnects before
+cleanup, leave the files and report the retained path; do not delete out of band.
+End only when they agree; otherwise keep listening or follow their instructions.
+Never end a session you did not create. Report the observed result and whether
+the scratch file was removed or retained.
+
+When appropriate, an optional `speech_delivery` cue (`neutral`, `curious`,
+`excited`, or `whispering`) can color supported speech. It is independent of
+`wait` and `continue`; choose it from the conversation already available.
+Speech context is an opt-in setting and does not enable audio.

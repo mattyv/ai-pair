@@ -95,6 +95,11 @@ export class LineIds {
     return this.version(file, text).ids;
   }
 
+  /** Checks tracked text without replacing its identities (specs/NavigatorFollowup.tla, Show). */
+  matches(file: string, text: string): boolean {
+    return this.versions.get(file)?.text === text;
+  }
+
   /** Follows a change to a file, if it tracks the file. Call `of` with the text before it first. */
   apply(file: string, change: Change): void {
     const v = this.versions.get(file);

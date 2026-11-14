@@ -1,5 +1,5 @@
+import { LOCAL_AUDIO_VERSION, type LocalAudioFrame } from '@ai-pair/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { LocalAudioFrame } from '@ai-pair/protocol';
 import { WorkspaceSession } from '../src/workspace_session';
 import { SPEECH_TEMPO_TIMEOUT_MS } from '../src/speech_tempo_client';
 
@@ -68,7 +68,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-const frame: LocalAudioFrame = { version: 3, connectionEpoch: 'epoch', sequence: 2, type: 'heartbeat' };
+const frame: LocalAudioFrame = { version: LOCAL_AUDIO_VERSION, connectionEpoch: 'epoch', sequence: 2, type: 'heartbeat' };
 
 describe('workspace session wiring', () => {
   it('wires callbacks and preserves ordered heartbeat and panel actions', async () => {
@@ -97,7 +97,7 @@ describe('workspace session wiring', () => {
     fake.bridgeOptions?.action({ type: 'pause' });
     expect(receiveRemote).toHaveBeenCalledTimes(2);
     fake.bridgeOptions?.terminal({
-      version: 3,
+      version: LOCAL_AUDIO_VERSION,
       connectionEpoch: 'epoch',
       sequence: 1,
       type: 'terminal',

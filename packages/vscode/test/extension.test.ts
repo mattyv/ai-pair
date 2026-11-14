@@ -58,7 +58,7 @@ import * as vscode from 'vscode';
 import { isSavedSession } from '@ai-pair/core';
 import { playDemo } from '../src/demo';
 import { collectDiagnostics } from '../src/diagnostics_collector';
-import { AUDIO_DIAGNOSTICS_SCHEMA, DIAGNOSTIC_SNAPSHOT_SCHEMA } from '@ai-pair/protocol';
+import { LOCAL_AUDIO_VERSION, AUDIO_DIAGNOSTICS_SCHEMA, DIAGNOSTIC_SNAPSHOT_SCHEMA } from '@ai-pair/protocol';
 import { activate, deactivate } from '../src/extension';
 import { setTimings } from '../src/timings';
 import { watchOutside } from '../src/outside_watch';
@@ -205,8 +205,11 @@ const fakes = vi.hoisted(() => {
   }
 
   class FakeSpeech {
+    readonly configureNarrationContext = vi.fn();
+    readonly setNarrationSession = vi.fn();
     readonly prepare = vi.fn();
     readonly speak = vi.fn<() => Promise<void>>().mockResolvedValue();
+    readonly attentionCue = vi.fn<() => Promise<void>>().mockResolvedValue();
     readonly pause = vi.fn<() => void>();
     readonly resume = vi.fn<() => void>();
     readonly cancel = vi.fn<() => void>();
@@ -288,6 +291,7 @@ const fakes = vi.hoisted(() => {
     readonly setSpeed = vi.fn();
     readonly setReadingSpeed = vi.fn();
     readonly setCodePlayback = vi.fn();
+    readonly setNavigatorCommentary = vi.fn();
     readonly setTiming = vi.fn();
     readonly setConfirmCommands = vi.fn();
     readonly pause = vi.fn();
@@ -361,6 +365,7 @@ const fakes = vi.hoisted(() => {
     readonly showSpeed = vi.fn();
     readonly showReadingSpeed = vi.fn();
     readonly showChatOrder = vi.fn();
+    readonly showNavigatorCommentary = vi.fn();
     readonly showReplyBehavior = vi.fn();
     readonly showCommandApprovalSound = vi.fn();
     readonly showCommandApprovals = vi.fn();
@@ -411,6 +416,7 @@ const fakes = vi.hoisted(() => {
       readonly codePlayback: { get: () => string; set: (value: string) => void },
       readonly replyBehavior: { get: () => string; set: (value: string) => void },
       readonly commandApprovalSound: { get: () => boolean; set: (value: boolean) => void },
+      readonly navigatorCommentary: { get: () => string; set: (value: string) => void },
     ) {
       made.panels.push(this);
     }
@@ -468,6 +474,7 @@ const fakes = vi.hoisted(() => {
     delaySettings: false,
     providerGate: undefined as Promise<void> | undefined,
     computeGate: undefined as Promise<void> | undefined,
+    commentaryGate: undefined as Promise<void> | undefined,
     updated: [] as Array<[string, unknown, unknown]>,
     commands: new Map<string, (value?: unknown) => unknown>(),
     providerRegistered: vi.fn(),
@@ -480,6 +487,7 @@ const fakes = vi.hoisted(() => {
       | {
           narration: {
             speak: ReturnType<typeof vi.fn>;
+            attentionCue: ReturnType<typeof vi.fn>;
             waitForRetirement: ReturnType<typeof vi.fn>;
             pause: ReturnType<typeof vi.fn>;
             resume: ReturnType<typeof vi.fn>;
@@ -528,6 +536,7 @@ vi.mock('vscode', () => ({
       inspect: (key: string) => ({ globalValue: fakes.settings.get(key) }),
       update: (key: string, value: unknown, target: unknown) => {
         fakes.updated.push([key, value, target]);
+        if (key === 'navigatorCommentary' && fakes.commentaryGate !== undefined) return fakes.commentaryGate;
         if (key === 'speech.computeMode' && fakes.computeGate !== undefined) {
           const gate = fakes.computeGate;
           fakes.computeGate = undefined;
@@ -593,7 +602,7 @@ vi.mock('vscode', () => ({
         value !== null &&
         'epoch' in value
       ) {
-        return Promise.resolve({ version: 3, epoch: value.epoch, token: 'token' });
+        return Promise.resolve({ version: LOCAL_AUDIO_VERSION, epoch: value.epoch, token: 'token' });
       }
       if (name === 'aiPair.localAudio.activate') return Promise.resolve(true);
       if (name === 'aiPair.localAudio.gpuDiagnostics' && fakes.companionAvailable) return Promise.resolve(fakes.gpuSnapshot);
@@ -649,6 +658,7 @@ vi.mock('../src/workspace_session', () => ({
   WorkspaceSession: class {
     narration = {
       speak: vi.fn(() => Promise.resolve()),
+      attentionCue: vi.fn(() => Promise.resolve()),
       waitForRetirement: vi.fn<(_: AbortSignal) => Promise<boolean>>().mockResolvedValue(true),
       pause: vi.fn(),
       resume: vi.fn(),
@@ -804,6 +814,7 @@ afterEach(() => {
   fakes.remoteName = undefined;
   fakes.settings.clear();
   fakes.delaySettings = false;
+  fakes.commentaryGate = undefined;
   fakes.providerGate = undefined;
   fakes.commands.clear();
   for (const list of [fakes.made.controllers, fakes.made.bridges, fakes.made.editors, fakes.made.panels, fakes.made.calibrations]) {
@@ -889,6 +900,40 @@ describe('activate', () => {
     changed('codePlayback');
     expect(h.controller.setCodePlayback).toHaveBeenLastCalledWith('typing');
     expect(h.panel.showCodePlayback).toHaveBeenLastCalledWith('typing');
+  });
+
+  it('persists navigator commentary and applies the workspace snapshot on changes', () => {
+    const h = activated();
+    expect(h.controller.setNavigatorCommentary).toHaveBeenCalledWith('helpful');
+    expect(h.panel.navigatorCommentary.get()).toBe('helpful');
+    h.panel.navigatorCommentary.set('coach');
+    expect(fakes.updated).toContainEqual(['navigatorCommentary', 'coach', 1]);
+    fakes.settings.set('navigatorCommentary', 'quiet');
+    changed('navigatorCommentary');
+    expect(h.controller.setNavigatorCommentary).toHaveBeenLastCalledWith('quiet');
+    expect(h.panel.showNavigatorCommentary).toHaveBeenLastCalledWith('quiet');
+    fakes.settings.set('navigatorCommentary', 'invalid');
+    changed('navigatorCommentary');
+    expect(h.controller.setNavigatorCommentary).toHaveBeenLastCalledWith('helpful');
+    expect(h.panel.showNavigatorCommentary).toHaveBeenLastCalledWith('helpful');
+  });
+
+  it('restores the effective preference if saving fails', async () => {
+    const gate = Promise.withResolvers<void>();
+    fakes.commentaryGate = gate.promise;
+    const h = activated();
+    h.panel.navigatorCommentary.set('coach');
+    gate.reject(new Error('save failed'));
+    await Promise.resolve();
+    expect(h.panel.showNavigatorCommentary).toHaveBeenCalledWith('helpful');
+    expect(fakes.errors).toContain('Could not save navigator commentary.');
+  });
+
+  it('restores saved navigator commentary on activation', () => {
+    fakes.settings.set('navigatorCommentary', 'coach');
+    const h = activated();
+    expect(h.controller.setNavigatorCommentary).toHaveBeenCalledWith('coach');
+    expect(h.panel.navigatorCommentary.get()).toBe('coach');
   });
 
   it('persists reply behavior and defaults invalid values to interrupt', () => {
@@ -1183,6 +1228,7 @@ describe('activate', () => {
     if (!speech) throw new Error('Missing speech service');
     expect(h.controller.narration).toBeDefined();
     expect(speech.options.settings()).toEqual({
+      contextEnabled: false,
       enabled: false,
       provider: 'kokoro',
       voice: 'af_heart',
@@ -1197,6 +1243,7 @@ describe('activate', () => {
     fakes.settings.set('speech.voice', 'bf_emma');
     fakes.settings.set('speech.speed', 1.25);
     expect(speech.options.settings()).toEqual({
+      contextEnabled: false,
       enabled: true,
       provider: 'kokoro',
       voice: 'bf_emma',
@@ -1208,6 +1255,7 @@ describe('activate', () => {
     fakes.settings.set('speech.voice', 'invalid');
     fakes.settings.set('speech.speed', 9);
     expect(speech.options.settings()).toEqual({
+      contextEnabled: false,
       enabled: true,
       provider: 'kokoro',
       voice: 'invalid',
@@ -2076,6 +2124,7 @@ it('holds narration and secret changes while placement is pending, then selects 
   const h = activated();
   const ready = h.controller.narration.ready?.();
   const pending = h.controller.narration.speak('pending');
+  const pendingCue = h.controller.narration.attentionCue?.();
   h.controller.narration.pause();
   h.controller.narration.resume();
   h.controller.narration.cancel();
@@ -2085,9 +2134,11 @@ it('holds narration and secret changes while placement is pending, then selects 
   choice.resolve('legacy');
   await h.api.ready;
   await pending;
+  await pendingCue;
   expect(await ready).toBe(false);
   const speech = last(fakes.made.speech);
   expect(speech.speak).not.toHaveBeenCalledWith('pending');
+  expect(speech.attentionCue).not.toHaveBeenCalled();
   expect(await h.controller.narration.ready?.()).toBe(false);
   expect(speechReady).toHaveBeenCalledTimes(2);
   const facts = vi.mocked(speechReady).mock.lastCall?.[0];
@@ -2099,14 +2150,40 @@ it('holds narration and secret changes while placement is pending, then selects 
   await expect(facts.model()).resolves.toBe(false);
   await expect(facts.key('elevenlabs')).resolves.toBe(false);
   await h.controller.narration.speak('legacy');
+  await h.controller.narration.attentionCue?.();
+  expect(speech.attentionCue).toHaveBeenCalledOnce();
   h.controller.narration.pause();
   h.controller.narration.resume();
   h.controller.narration.cancel();
-  expect(speech.speak).toHaveBeenCalledWith('legacy');
+  expect(speech.speak).toHaveBeenCalledWith('legacy', undefined);
   expect(speech.pause).toHaveBeenCalled();
   expect(speech.resume).toHaveBeenCalled();
   expect(speech.cancel).toHaveBeenCalled();
   expect(fakes.providerRegistered).toHaveBeenCalledOnce();
+});
+
+it('dispatches a cue queued while the owner is being selected', async () => {
+  const choice = Promise.withResolvers<'legacy'>();
+  fakes.placementChoice = choice.promise;
+  const h = activated();
+  const service = last(fakes.made.speech);
+  const cue = h.controller.narration.attentionCue?.();
+  expect(service.attentionCue).not.toHaveBeenCalled();
+  choice.resolve('legacy');
+  await cue;
+  expect(service.attentionCue).toHaveBeenCalledOnce();
+});
+
+it('forwards attention cues to the selected companion owner', async () => {
+  fakes.companionAvailable = true;
+  const h = activated();
+  await h.api.ready;
+  const session = fakes.session;
+  if (session === undefined) throw new Error('No session');
+  const cue = h.controller.narration.attentionCue;
+  expect(cue).toBeDefined();
+  await cue?.();
+  expect(session.narration.attentionCue).toHaveBeenCalledOnce();
 });
 
 it('rejects stale retirement admission and reports a current refusal', async () => {
@@ -2161,7 +2238,7 @@ it('routes companion controls, keys, frame acknowledgements and connection notic
   h.controller.narration.pause();
   h.controller.narration.resume();
   h.controller.narration.cancel();
-  expect(session.narration.speak).toHaveBeenCalledWith('hello');
+  expect(session.narration.speak).toHaveBeenCalledWith('hello', undefined);
   expect(session.narration.pause).toHaveBeenCalledOnce();
   expect(session.narration.resume).toHaveBeenCalledOnce();
   expect(session.narration.cancel).toHaveBeenCalledOnce();
@@ -2171,7 +2248,12 @@ it('routes companion controls, keys, frame acknowledgements and connection notic
   await command('aiPair.removeElevenLabsKey');
   expect(fakes.commandCalls.map(([name]) => name)).toContain('aiPair.localAudio.keySet');
   expect(fakes.commandCalls.map(([name]) => name)).toContain('aiPair.localAudio.keyRemove');
-  const frame = { version: 3 as const, connectionEpoch: 'test-epoch', sequence: 1, type: 'heartbeat' as const };
+  const frame = {
+    version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+    connectionEpoch: 'test-epoch',
+    sequence: 1,
+    type: 'heartbeat' as const,
+  };
   await expect(options.send(frame)).resolves.toBeUndefined();
   fakes.frameAccepted = false;
   await expect(options.send(frame)).rejects.toThrow('not accepted');
@@ -2187,7 +2269,7 @@ it('exposes fixed prepare and commit commands and merges only valid local diagno
   await h.api.ready;
   const placement = fakes.placementOptions;
   if (placement === undefined) throw new Error('No placement');
-  const prepared = { version: 3 as const, epoch: 'test-epoch', token: 'token' };
+  const prepared = { version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'test-epoch', token: 'token' };
   await expect(placement.prepare()).resolves.toEqual(prepared);
   await expect(placement.commit(prepared)).resolves.toBe(true);
   await h.panel.wiring.copyDiagnostics();
@@ -2224,7 +2306,7 @@ it('keeps companion command failures private and does not change panel ownership
   await h.api.ready;
   const placement = fakes.placementOptions;
   if (placement === undefined) throw new Error('No placement');
-  const prepared = { version: 3 as const, epoch: 'test-epoch', token: 'token' };
+  const prepared = { version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'test-epoch', token: 'token' };
   fakes.failedCommands.add('aiPair.localAudio.prepare');
   fakes.failedCommands.add('aiPair.localAudio.commit');
   fakes.failedCommands.add('aiPair.localAudio.keySet');
@@ -2599,7 +2681,7 @@ it('waits for the previous speech service to retire before activating a replacem
   retired.resolve();
   await next.api.ready;
   await pendingSpeech;
-  expect(nextSpeech.speak).toHaveBeenCalledWith('first request');
+  expect(nextSpeech.speak).toHaveBeenCalledWith('first request', undefined);
   expect(fakes.providerRegistered).toHaveBeenCalled();
 });
 
@@ -2629,10 +2711,13 @@ it('does not dispatch narration after shutdown during placement', async () => {
   const h = activated();
   const service = last(fakes.made.speech);
   const queued = h.controller.narration.speak('pending');
+  const queuedCue = h.controller.narration.attentionCue?.();
   const ready = h.controller.narration.ready?.();
   await deactivate();
   choice.resolve('legacy');
   await queued;
+  await queuedCue;
+  expect(service.attentionCue).not.toHaveBeenCalled();
   expect(await ready).toBe(false);
   expect(service.speak).not.toHaveBeenCalled();
 });
@@ -2895,6 +2980,23 @@ it('ignores OpenRouter secret changes after legacy shutdown starts', async () =>
   await deactivate();
   fire('secrets', { key: 'aiPair.openRouter.apiKey' });
   expect(credential.invalidate).not.toHaveBeenCalled();
+});
+
+it('applies pending and external context changes immediately and forwards session identity', () => {
+  const h = activated();
+  const speech = last(fakes.made.speech);
+  const seen: boolean[] = [];
+  speech.configureNarrationContext.mockImplementation(() => {
+    seen.push(h.panel.wiring.speech.settings.get().contextEnabled === true);
+  });
+  const initial = h.panel.wiring.speech.settings.get();
+  h.panel.wiring.speech.settings.set({ ...initial, contextEnabled: true });
+  h.panel.wiring.speech.settings.set({ ...initial, contextEnabled: false });
+  expect(seen).toEqual([true, false]);
+  h.panel.wiring.speech.narrationSession?.(9, true);
+  expect(speech.setNarrationSession).toHaveBeenCalledWith(9, true);
+  changed('speech');
+  expect(seen).toEqual([true, false, false]);
 });
 
 it('handles context disposal rejection and reports it to deactivate', async () => {

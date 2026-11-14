@@ -20,7 +20,8 @@ Code goes without a spec for one of these reasons:
 
 | Functions | Spec |
 |---|---|
-| `step`, `listen`, `block`, `finishCall`, `callReady`, `ready`, `pump`, `update`, `serialize` | `Serialize`, `Controller` |
+| `step`, `listen`, `block`, `finishCall`, `callReady`, `ready`, `pump`, `update`, `serialize` | `Serialize`, `Controller`, `NavigatorCommentary` (final projection), `NavigatorFollowup` |
+| `setNavigatorCommentary` | `NavigatorCommentary` |
 | `snapshot`, `restore`, `withCursor`, `end`, `endSession`, `close` | `Controller`; `close` terminal cleanup: `QuietTerminals`; `snapshot`'s edit events: `EditEvents`; a held rejection in `restore` and `snapshot`: `Anchor` (`Restore`, `TakeHeld`) |
 | `rehearse`, `rejectBatch`, `planned`, `saw`, `read` | `Rehearsal` |
 | `cursorAnchor`, `rejectUnanchored`, `anchorNeeded` in `step` and `snapshot` | `Anchor` |
@@ -28,9 +29,12 @@ Code goes without a spec for one of these reasons:
 | `selectedSpeech` and admission in `step`; pause, resume and cancellation propagation | `Narration` (`Admit`, `Pause`, `Resume`, `Reply`); reminder counting and reporting: `SpeechReminder` |
 | `interrupt`, `discard`, `interrupting`, `userInterrupt`, `userMessage`, `flushDeferred` | `Controller` (`Interrupt`), `Actions` (`Interrupt`); deferred replies: `DeferredMessage` |
 | `userEdit` | `EditorAdapter`, `Navigator` (the programmer's turn), `Player` (`TypeBefore`, `TypeAfter`: the interrupt in the agent's turn) |
+| navigator notice generation, `finishCall` and `restore` | `Navigator`, `Attention`, `ListenGrace`; timeout retention and canceled notice redelivery: controller and scripted MCP regressions |
 | `otherEdit`, `recordEdit` | `Reload`, `Rehearsal`, `EditEvents` |
 | `takeTurn`, `handBack`, `turn` | `Turns` |
 | `pause`, `resume`, `isPaused` | `Timeline`; `resume`'s `reveal`: `Scroll`, a stale point, and the reply's resume without one: `PointFocus` |
+| `requestAttention`, `attentionBoundary`, `releaseAttention`; derived work and speech pause projections | `Attention`; renewal, reply, replay and session identity: solitary and composed tests |
+| `revealCursor` | `RevealCursor`; editor navigation is delegated without changing turn or playback |
 | `kick`, `run`, `startHead` | `Controller` (`Play`), `Turns` (`StartHead`); diagnostics after playback: `Diagnostics` (`Finish`) |
 | `confirm`, `decideRun` | `RunBox` (`Go`, `Decline`) |
 | `start`, `disconnect` | `Bridge`, `Resume` |
@@ -48,6 +52,7 @@ Code goes without a spec for one of these reasons:
 | Functions | Spec |
 |---|---|
 | `play`, `actions`, `perform`, `stopped`, `failed`, `fail` | `Actions`, `Turns`; selected say gates: `Narration`; action boundary: `DeferredMessage` |
+| `currentSpeech`, attention checkpoints in `actions` and grouped `type` | `Attention`; logical voice drain and safe work admission, with composed overlap tests |
 | `names`, `fileOf` | `BatchFile` |
 | `type`, `delay` | `Actions`, `Turns`; atomic chunks: `Typing`; grouped chunks and reading: `CodePlayback`; final marker: `PlaybackAnchor` |
 | `edit`, `transform`, `transformScene`, `mapThrough`, `touch` | `Player`, `Reload` |
@@ -142,10 +147,12 @@ Code goes without a spec for one of these reasons:
 | Functions | Spec |
 |---|---|
 | `edit`, `save`, `onChange`, `byProgrammer`, `track` | `EditorAdapter` |
+| `renderCursor` outside-file interest and `programmerCursor` | `EditorAdapter` host eligibility assumption; actual native event through real adapter and controller: `navigator_editor.e2e.test.ts` |
 | `diagnostics` | `Diagnostics`: advisory observations; stale source and provider availability are checked in the adapter |
 | `getText`, `document`, `openDocument`, `exists`, `show`, `create`, `isDirty` | `FileText` |
 | `show`, `selfNav`, `navigating`, `onActiveEditor` | `FollowMode` |
 | `renderCursor`, `reveal`, `follow`, `keepInView`, `scroll`, `glide`, `onScroll` | `Scroll`; `onScroll`'s pause: `Timeline` |
+| `revealCursor` | `RevealCursor`; asynchronous cursor identity and VS Code rejection: solitary adapter tests |
 | `landing`, `viewport`, `visibleEditor`, `scrollsBeyondEnd`, `revealLine`, `revealTop`, `target` | Pure, Glue: VS Code calls `Scroll` abstracts as a view's top line |
 | `runCommand`, `showTerminal`, `cleanupIdleTerminals` | Glue: pass to `terminal.ts`; `QuietTerminals`, `TerminalReuse` |
 | `onSelectionChange`, `programmerSelection`, `selectionRef` | Look: what the programmer can attach to a message |
@@ -169,6 +176,7 @@ Code goes without a spec for one of these reasons:
 | | the `reply` message while a calibration runs, `showCalibration`, cancel on dispose and session end | `Calibration` |
 | | `askStart`, the `start` message, posting `startEnded` | `Start` |
 | `extension.ts` | effective speech preferences, queued writes and key reset | `ProviderChoice` (`Select`, `Success`, `Failure`, `External`, `KeyChange`) |
+| `extension.ts` | required narration cue forwarding and owner-ready generation gate | `RemoteCue` abstracts dispatch and retirement; actual activation adapter unit tests and `attention_audio_composed.e2e.test.ts` cover separate wiring and transport/output seams |
 | `speech_setup.ts` | model status check | `ModelStatus` |
 | `speech_credentials.ts` | key prompt, storage and invalidation | `SpeechSettings` |
 | `speech_catalog.ts` | explicit catalog requests and invalidation | `SpeechSettings` |
@@ -190,6 +198,8 @@ Code goes without a spec for one of these reasons:
 | `speech_elevenlabs.ts` | cloud transport | `CloudNarration` |
 | `speech_pcm.ts` | bounded PCM conversion and thinking interval | Pure; unit and integration tests |
 | `speech_service.ts` | worker, audio and page lifecycle; pause, cancel, timeouts | `Narration`, `SpeechWorker`, `WarmSynthesisWorker`, `SpeechTempo`, `SentencePipeline`, `CloudNarration`, `OutputAdmission`, `OutputHandoff`; timer bounds and local platform checks: unit and integration tests |
+| `speech_service.ts` | `attentionCue` and fixed waveform cache admission, invalidation and completion | `AttentionCache`; concrete settings, context exclusion, route and tempo reuse: solitary service tests |
+| `remote_narration.ts`, companion `companion_narration.ts` | attention cue job and terminal acknowledgement | `RemoteCue`; connection, job and page identity: transport and companion tests; physical output leases retain their existing models |
 | `speech_readiness.ts` | provider, settings and output readiness checks | `SpeechReminder` abstracts readiness; concrete checks: unit and integration tests |
 | `speech_native_output.ts` | discovery and native process lifecycle | `AudioOutput`; isolated PipeWire integration and unit tests |
 | `speech_output_router.ts` | route reservation and playback ownership | `AudioOutput`, `OutputAdmission`, `OutputHandoff`, `OutputReplacement` |

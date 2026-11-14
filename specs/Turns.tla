@@ -2,8 +2,9 @@
 (******************************************************************************)
 (* Turns in packages/core/src/player.ts and controller.ts: during the         *)
 (* programmer's turn only `say` and `point` take effect. `perform` checks the *)
-(* turn as each action starts; taking or handing back the turn interrupts     *)
-(* (`takeTurn`, `handBack`), and an action that edits checks for an interrupt *)
+(* turn as each action starts; taking the turn interrupts. Plain handback    *)
+(* preserves navigator work. Message handback interrupts outside this model. *)
+(* An action that edits checks for an interrupt                              *)
 (* after its awaits, before its effect: `type` in its delay before each       *)
 (* chunk, `delete` after `show` and `getText` (#49), and `run` in the         *)
 (* terminal after `shellIntegration` (`notStarted`). A batch starts at any    *)
@@ -103,10 +104,10 @@ TakeEffect ==
                        (wrongTurn \/ (k \in EditKinds /\ turn = "programmer"))
                 /\ UNCHANGED <<turn, interrupted, turnChanges>>
 
-\* takeTurn or handBack: the turn changes, and playback is interrupted.
+\* Taking the turn interrupts; plain handback preserves the interruption state.
 ChangeTurn ==
     /\ turn' = IF turn = "agent" THEN "programmer" ELSE "agent"
-    /\ interrupted' = TRUE
+    /\ interrupted' = IF turn = "agent" THEN TRUE ELSE interrupted
     /\ turnChanges' = turnChanges + 1
     /\ UNCHANGED <<batch, phase, wrongTurn>>
 

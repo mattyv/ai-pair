@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.38.2
+
+-   Deliver changed navigator commentary preferences immediately through a
+    waiting MCP listen, without interrupting speech or consuming edit and
+    batch reports. Retain updates for the next listen and canceled retries.
+
+## 0.38.1
+
+-   Recognize visible navigator diff lines under the existing line-staleness
+    rules. Preserve queued observations on a plain handback without a message.
+-   Suppress net-zero navigator change reports and typing-pause wakes while
+    retaining meaningful activity already reported by a timeout.
+
+## 0.38.0
+
+-   Add persistent Quiet, Helpful and Coach navigator commentary preferences.
+    Apply changes on the next report in active sessions and synchronize the
+    local companion. Keep speech enablement independent.
+
+## 0.35.0
+
+-   Add optional bounded narration context and model-supported delivery cues.
+
+-   Keep the companion version aligned with the main extension.
+
 ## 0.34.0
 
 -   Share the compact OpenRouter cost subtotal, detailed cost explanations,

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CommandChannel, type LocalAudioFrame } from '@ai-pair/protocol';
+import { LOCAL_AUDIO_VERSION, CommandChannel, type LocalAudioFrame } from '@ai-pair/protocol';
 import { RemoteNarration } from '../../vscode/src/remote_narration';
 import { CompanionNarration } from '../src/companion_narration';
 import { LocalConnection } from '../src/local_connection';
@@ -21,6 +21,7 @@ describe('local audio command integration', () => {
       page: () => 1,
       speech: {
         speak: () => pending.promise,
+        attentionCue: () => Promise.resolve(),
         pause: () => {},
         resume: () => {},
         cancel: () => {
@@ -41,7 +42,14 @@ describe('local audio command integration', () => {
       },
       lost,
     });
-    expect(connection.attach({ version: 3, connectionEpoch: 'epoch', sequence: 1, type: 'attach' })).toBe(true);
+    expect(
+      connection.attach({
+        version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+        connectionEpoch: 'epoch',
+        sequence: 1,
+        type: 'attach',
+      }),
+    ).toBe(true);
     const channel = new CommandChannel<LocalAudioFrame>({
       timeoutMs: 50,
       maxPending: 4,
@@ -67,7 +75,9 @@ describe('local audio command integration', () => {
     await Promise.resolve();
     for (let index = 0; index < 3; index++) {
       await vi.advanceTimersByTimeAsync(70);
-      expect(await channel.send({ version: 3, connectionEpoch: 'epoch', sequence: nextSequence(), type: 'heartbeat' })).toBe(true);
+      expect(
+        await channel.send({ version: LOCAL_AUDIO_VERSION, connectionEpoch: 'epoch', sequence: nextSequence(), type: 'heartbeat' }),
+      ).toBe(true);
       expect(lost).not.toHaveBeenCalled();
     }
     pending.resolve();
@@ -85,7 +95,7 @@ describe('local audio command integration', () => {
     const companion = new CompanionNarration({
       epoch: 'epoch',
       page: () => 1,
-      speech: { speak, pause: () => {}, resume: () => {}, cancel: () => {} },
+      speech: { speak, attentionCue: () => Promise.resolve(), pause: () => {}, resume: () => {}, cancel: () => {} },
       stopOutput: () => retirement.promise,
       observation: () => undefined,
       nextSequence: () => ++outbound,
@@ -100,7 +110,14 @@ describe('local audio command integration', () => {
       },
       lost: () => {},
     });
-    expect(connection.attach({ version: 3, connectionEpoch: 'epoch', sequence: 1, type: 'attach' })).toBe(true);
+    expect(
+      connection.attach({
+        version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+        connectionEpoch: 'epoch',
+        sequence: 1,
+        type: 'attach',
+      }),
+    ).toBe(true);
     workspace = new RemoteNarration({
       epoch: 'epoch',
       page: () => 1,

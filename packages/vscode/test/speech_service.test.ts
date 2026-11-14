@@ -10,6 +10,15 @@ import type { ElevenLabsSpeechPort, LocalSpeechFailureReason, SpeechSettings } f
 import { decodeSpeechWav, encodeTempoWav } from '../src/speech_tempo_pcm';
 import type { SpeechLifecycle, SpeechLifecycleOptions, SpeechLifecycleResult, SpeechLifecycleSnapshot } from '../src/speech_lifecycle';
 
+const contextDouble = vi.hoisted(() => ({ session: vi.fn(), configure: vi.fn(), disconnect: vi.fn(), capture: vi.fn() }));
+vi.mock('@ai-pair/core', () => ({
+  // A constructor mock must be constructable.
+  // oxlint-disable-next-line eslint/prefer-arrow-callback
+  SpeechContext: vi.fn(function () {
+    return contextDouble;
+  }),
+}));
+
 const fake = vi.hoisted(() => {
   const Worker = vi.fn();
   const makeLifecycle = vi.fn<(options: SpeechLifecycleOptions) => SpeechLifecycle>();
@@ -2488,4 +2497,291 @@ it('CatalogEligibility: cancels an in-flight OpenRouter request when new evidenc
   pending.resolve({ wav: new Uint8Array(44), durationMs: 1000 });
   await settle();
   expect(output.play).not.toHaveBeenCalled();
+});
+
+it('SpeechContext: completes only accepted playback and cancels other captures', async () => {
+  const complete = vi.fn();
+  const cancel = vi.fn();
+  contextDouble.capture.mockReturnValue({ previousText: 'Earlier', complete, cancel });
+  const openRouter = { synthesize: vi.fn().mockResolvedValue({ wav: new Uint8Array(44), durationMs: 1000 }), models: vi.fn() };
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  output.play.mockReturnValue(7);
+  const service = new SpeechService({
+    runtimeDirectory: '',
+    storageDirectory: '',
+    localDesktop: true,
+    output,
+    openRouter,
+    settings: () => ({
+      enabled: true,
+      contextEnabled: true,
+      provider: 'openrouter',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+      openRouterModel: 'elevenlabs/eleven-v4',
+      openRouterVoice: 'voice',
+      openRouterZdr: true,
+    }),
+  });
+  service.setNarrationSession('session', true);
+  service.configureNarrationContext();
+  const done = service.speak('Hello', 'curious');
+  await settle();
+  expect(openRouter.synthesize).toHaveBeenCalledWith(
+    expect.objectContaining({ text: '[curious] Hello', previousText: 'Earlier' }),
+    expect.any(AbortSignal),
+  );
+  service.audioEvent({ id: 1, pageId: 8, event: 'ended' });
+  expect(complete).not.toHaveBeenCalled();
+  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+  await done;
+  expect(complete).toHaveBeenCalledOnce();
+  const canceled = service.speak('Cancel');
+  service.cancel();
+  await canceled;
+  expect(complete).toHaveBeenCalledOnce();
+  expect(cancel).toHaveBeenCalledTimes(2);
+  contextDouble.capture.mockReset();
+  await service.dispose();
+  expect(contextDouble.disconnect).toHaveBeenCalled();
+});
+
+it('SpeechContext: configures an empty OpenRouter voice when none is selected', async () => {
+  const service = new SpeechService({
+    runtimeDirectory: '',
+    storageDirectory: '',
+    localDesktop: true,
+    output: mock<SpeechOutput>(),
+    settings: () => ({ enabled: true, provider: 'openrouter', voice: 'af_heart', speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+  });
+  service.configureNarrationContext();
+  expect(contextDouble.configure).toHaveBeenLastCalledWith({ enabled: false, provider: 'openrouter', model: '', voice: '' });
+  await service.dispose();
+});
+
+it('replays the fixed attention cue without another synthesis or narration context', async () => {
+  const { service, output, local: engine } = harness();
+  contextDouble.capture.mockClear();
+  const first = service.attentionCue();
+  await settle();
+  await engine.ready();
+  expect(engine.calls[0]?.request.text).toBe("What's up?");
+  await engine.audio(1);
+  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+  await first;
+  const second = service.attentionCue();
+  await settle();
+  expect(engine.calls).toHaveLength(1);
+  expect(output.play).toHaveBeenLastCalledWith(2, new Uint8Array(44), 1000);
+  expect(contextDouble.capture).not.toHaveBeenCalled();
+  service.audioEvent({ id: 2, pageId: 7, event: 'ended' });
+  await second;
+});
+
+it('does not cache a canceled attention cue', async () => {
+  const { service, output, local: engine } = harness();
+  const first = service.attentionCue();
+  await settle();
+  await engine.ready();
+  service.cancel();
+  await first;
+  await engine.audio(1);
+  expect(output.play).not.toHaveBeenCalled();
+  const second = service.attentionCue();
+  await settle();
+  await engine.ready();
+  expect(engine.calls).toHaveLength(2);
+  service.cancel();
+  await second;
+});
+
+it('does not synthesize attention audio while disabled', async () => {
+  const { service, output, local: engine } = harness(false);
+  await service.attentionCue();
+  expect(engine.manager.acquire).not.toHaveBeenCalled();
+  expect(output.play).not.toHaveBeenCalled();
+});
+
+it('invalidates attention audio eagerly when settings change away and back', async () => {
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  output.play.mockReturnValue(7);
+  const engine = newLocal();
+  let voice = 'af_heart';
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output,
+    settings: () => ({ enabled: true, provider: 'kokoro', voice, speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+  });
+  const first = service.attentionCue();
+  await settle();
+  await engine.ready();
+  await engine.audio(1);
+  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+  await first;
+  voice = 'am_michael';
+  service.configureNarrationContext();
+  voice = 'af_heart';
+  service.configureNarrationContext();
+  const second = service.attentionCue();
+  await settle();
+  await engine.ready();
+  expect(engine.calls).toHaveLength(2);
+  service.cancel();
+  await second;
+});
+
+it('rejects a late attention result after a settings change', async () => {
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  output.play.mockReturnValue(7);
+  const engine = newLocal();
+  let voice = 'af_heart';
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output,
+    settings: () => ({ enabled: true, provider: 'kokoro', voice, speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+  });
+  const first = service.attentionCue();
+  await settle();
+  await engine.ready();
+  voice = 'am_michael';
+  service.configureNarrationContext();
+  await first;
+  await engine.audio(1);
+  expect(output.play).not.toHaveBeenCalled();
+  const second = service.attentionCue();
+  await settle();
+  await engine.ready();
+  expect(engine.calls).toHaveLength(2);
+  service.cancel();
+  await second;
+});
+
+it('reserves the current route again when replaying attention audio', async () => {
+  const { service, output, local: engine } = harness();
+  output.prepare = vi.fn().mockResolvedValue(true);
+  const first = service.attentionCue();
+  await settle();
+  await engine.ready();
+  await engine.audio(1);
+  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+  await first;
+  const second = service.attentionCue();
+  await settle();
+  expect(output.prepare).toHaveBeenCalledWith(2);
+  expect(engine.calls).toHaveLength(1);
+  service.audioEvent({ id: 2, pageId: 7, event: 'ended' });
+  await second;
+});
+
+it('rejects attention synthesis when settings change before notification', async () => {
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  output.play.mockReturnValue(7);
+  const engine = newLocal();
+  let voice = 'af_heart';
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output,
+    settings: () => ({ enabled: true, provider: 'kokoro', voice, speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+  });
+  const cue = service.attentionCue();
+  await settle();
+  await engine.ready();
+  voice = 'am_michael';
+  await engine.audio(1);
+  await cue;
+  expect(output.play).not.toHaveBeenCalled();
+});
+
+it('retries attention synthesis after a failed result', async () => {
+  const { service, output, local: engine } = harness();
+  const first = service.attentionCue();
+  await settle();
+  await engine.ready();
+  await engine.failure(1);
+  await first;
+  expect(output.play).not.toHaveBeenCalled();
+  const second = service.attentionCue();
+  await settle();
+  await engine.ready();
+  expect(engine.calls).toHaveLength(2);
+  service.cancel();
+  await second;
+});
+
+it('rejects cached attention when settings change during output admission', async () => {
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  output.play.mockReturnValue(7);
+  const engine = newLocal();
+  let voice = 'af_heart';
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output,
+    settings: () => ({ enabled: true, provider: 'kokoro', voice, speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+  });
+  const first = service.attentionCue();
+  await settle();
+  await engine.ready();
+  await engine.audio(1);
+  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+  await first;
+  const admission = Promise.withResolvers<boolean>();
+  output.prepare = vi.fn().mockReturnValue(admission.promise);
+  const second = service.attentionCue();
+  voice = 'am_michael';
+  admission.resolve(true);
+  await second;
+  expect(output.play).toHaveBeenCalledOnce();
+});
+
+it('rejects attention completion after a settings change during playback', async () => {
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  output.play.mockReturnValue(7);
+  const engine = newLocal();
+  let voice = 'af_heart';
+  const service = new SpeechService({
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    localDesktop: true,
+    output,
+    settings: () => ({ enabled: true, provider: 'kokoro', voice, speed: 1, elevenLabsVoice: '', elevenLabsSpeed: 1 }),
+  });
+  const first = service.attentionCue();
+  await settle();
+  await engine.ready();
+  await engine.audio(1);
+  voice = 'am_michael';
+  expect(service.audioEvent({ id: 1, pageId: 7, event: 'ended' })).toBeUndefined();
+  await first;
+  const second = service.attentionCue();
+  await settle();
+  await engine.ready();
+  expect(engine.calls).toHaveLength(2);
+  service.cancel();
+  await second;
 });

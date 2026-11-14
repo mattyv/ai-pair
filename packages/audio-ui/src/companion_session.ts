@@ -151,6 +151,7 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
     { get: () => 'typing', set: () => {} },
     { get: () => 'interrupt', set: () => {} },
     { get: () => false, set: () => {} },
+    { get: workspaceOnly, set: workspaceOnly },
   );
   function sendAction(action: LocalPanelAction, page: number): void {
     void channel.send({
@@ -181,6 +182,8 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
       if (action.type === 'reply' && action.defer === true) {
         narration.setLocalPause(false, 'draft');
         narration.setLocalPause(false, 'manual');
+        sendAction(action, page);
+      } else if (action.type === 'turn' && action.message === undefined && action.attach !== true) {
         sendAction(action, page);
       } else if (action.type === 'reply' || action.type === 'interrupt' || action.type === 'turn' || action.type === 'end') {
         const stopped = narration.interruptThen(() => {

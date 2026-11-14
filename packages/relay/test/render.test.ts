@@ -23,6 +23,72 @@ function fieldCode(file: string, n: number) {
 }
 
 describe('reports', () => {
+  it('reports navigator wakeups and edits without claiming nothing happened', () => {
+    const text = renderReport(
+      report({
+        turn: 'programmer',
+        waiting: true,
+        events: [{ kind: 'edit', file: 'other.ts', diff: '@@ -2 +2 @@\n-old\n+new', by: 'programmer' }],
+        navigator: { wakeReason: 'typing_pause', elapsedMs: 1500, programmerCursor: { file: 'other.ts', line: 2, column: 3 } },
+      }),
+      'listen',
+    );
+    expect(text).toContain('@@ -2 +2 @@');
+    expect(text).toContain("Programmer's cursor: other.ts, line 2, column 3");
+    expect(text).toContain('typing paused');
+    expect(text).toContain('1.5 seconds');
+    expect(text).toContain('Comment if useful, then call `listen` again');
+    expect(text).not.toContain('Nothing has happened');
+  });
+
+  it.each([
+    ['typing_pause', 'typing paused'],
+    ['idle_timeout', 'the idle timeout elapsed'],
+    ['turn_change', 'the turn changed'],
+    ['message', 'the programmer sent a message'],
+    ['hand_raised', 'the programmer raised a hand'],
+  ] as const)('explains the %s navigator wakeup', (wakeReason, reason) => {
+    const text = renderReport(report({ navigator: { wakeReason, elapsedMs: 2000 } }), 'listen');
+    expect(text).toContain(`${reason} after 2 seconds`);
+    expect(text).not.toContain("Programmer's cursor");
+  });
+
+  it('distinguishes the agent and programmer cursors during the programmer turn', () => {
+    const cursor = fieldCode('agent.ts', 3);
+    const text = renderReport(
+      report({
+        turn: 'programmer',
+        cursor,
+        navigator: { wakeReason: 'typing_pause', elapsedMs: 50, programmerCursor: { file: 'human.ts', line: 4, column: 2 } },
+      }),
+      'listen',
+    );
+    expect(text).toContain("Agent's cursor, in agent.ts");
+    expect(text).toContain("Programmer's cursor: human.ts");
+    expect(text).not.toContain('Your cursor');
+    expect(renderReport(report({ cursor }), 'step')).toContain('Your cursor, in agent.ts');
+  });
+
+  it('does not direct another listen after the session ended', () => {
+    const text = renderReport(
+      report({
+        events: [{ kind: 'end' }],
+        navigator: { wakeReason: 'turn_change', elapsedMs: 5 },
+      }),
+      'listen',
+    );
+    expect(text).toContain('final report');
+    expect(text).not.toContain('Comment if useful');
+  });
+
+  it('never says nothing happened when a waiting report has activity', () => {
+    const activity = { waiting: true, events: [{ kind: 'edit', file: 'a', diff: '@@ -1 +1 @@', by: 'programmer' }] } as const;
+    for (const tool of ['listen', 'step'] as const) {
+      const text = renderReport(report({ ...activity, events: [...activity.events] }), tool);
+      expect(text).not.toContain('Nothing has');
+    }
+  });
+
   it("shows a batch's code as numbered lines, with the cursor", () => {
     const text = renderReport(
       report({
@@ -412,4 +478,27 @@ it('renders a single-line diagnostic without a provider name', () => {
     'step',
   );
   expect(text).toContain('a.py:3: Invalid syntax');
+});
+
+it.each([
+  ['quiet', 'Quiet'],
+  ['helpful', 'Helpful'],
+  ['coach', 'Coach'],
+] as const)('renders %s navigator commentary guidance', (navigatorCommentary, label) => {
+  const text = renderReport(report({ navigatorCommentary }), 'start');
+  expect(text).toContain(label);
+  expect(text).toContain('explicit');
+});
+
+it('renders quiet guidance on a programmer-turn step', () => {
+  const text = renderReport(report({ turn: 'programmer', navigatorCommentary: 'quiet' }), 'step');
+  expect(text).toContain('only on important issues or direct answers');
+  expect(text).toContain('skip routine first-pause reassurance unless asked');
+});
+
+it('explains a live commentary change during the agent turn', () => {
+  const text = renderReport(report({ commentaryChanged: { noticeId: 1 }, navigatorCommentary: 'quiet' }), 'listen');
+  expect(text).toContain('commentary preference changed');
+  expect(text).toContain('Quiet');
+  expect(text).toContain('listen');
 });

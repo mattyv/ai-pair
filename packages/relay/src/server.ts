@@ -83,6 +83,7 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
     args: Record<string, unknown>,
     { signal, requestId }: { signal: AbortSignal; requestId: RequestId },
     before?: () => Promise<Record<string, unknown>>,
+    deliveryCue = false,
   ): Promise<CallToolResult> {
     try {
       if (before) args = { ...args, ...(await before()) };
@@ -97,7 +98,10 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
       // The editor answers `read` with a FileContent and the other tools with a Report (`dispatch` in bridge.ts); an answer
       // that doesn't fit its schema throws, and reaches the agent as an internal error.
       const text = tool === 'read' ? renderFile(FILE_CONTENT_SCHEMA.parse(result)) : renderReport(REPORT_SCHEMA.parse(result), tool);
-      const content: CallToolResult['content'] = [{ type: 'text', text }];
+      const advisory = deliveryCue
+        ? '\n\nDelivery cues are advisory: they apply only when context is enabled and the selected model supports them.'
+        : '';
+      const content: CallToolResult['content'] = [{ type: 'text', text: text + advisory }];
       if (tool === 'start' && link.activeRuntime !== undefined) {
         content.push({
           type: 'text',
@@ -132,7 +136,15 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
       return { cwd: located, rules: guides.map((g) => shownPath(g.file)) };
     }),
   );
-  server.registerTool('step', TOOLS.step, (args, extra) => run('step', args, extra));
+  server.registerTool('step', TOOLS.step, (args, extra) =>
+    run(
+      'step',
+      args,
+      extra,
+      undefined,
+      args.actions.some((action) => 'speech_delivery' in action && action.speech_delivery !== undefined),
+    ),
+  );
   server.registerTool('listen', TOOLS.listen, (args, extra) => run('listen', args, extra));
   server.registerTool('end', TOOLS.end, (args, extra) => run('end', args, extra));
   server.registerTool('read', TOOLS.read, (args, extra) => run('read', args, extra));

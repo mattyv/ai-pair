@@ -1,5 +1,63 @@
 # Changelog
 
+## 0.38.2
+
+-   Deliver changed navigator commentary preferences immediately through a
+    waiting MCP listen, without interrupting speech or consuming edit and
+    batch reports. Retain updates for the next listen and canceled retries.
+
+## 0.38.1
+
+-   Recognize visible navigator diff lines under the existing line-staleness
+    rules. Preserve queued observations on a plain handback without a message.
+-   Suppress net-zero navigator change reports and typing-pause wakes while
+    retaining meaningful activity already reported by a timeout.
+
+## 0.38.0
+
+-   Add persistent Quiet, Helpful and Coach navigator commentary preferences.
+    Apply changes on the next report in active sessions and synchronize the
+    local companion. Keep speech enablement independent.
+
+## 0.37.1
+
+-   Observe programmer edits in the current Pair file outside the workspace,
+    including temporary files, without monitoring unrelated outside documents.
+-   Report navigator wake reasons, elapsed wait time, edits and the programmer
+    cursor. Use a shorter navigator idle limit and retain typing-pause evidence
+    across timeout reports.
+-   Align published speech fields with validation and clarify delivery cues as
+    advisory. Guide requested live commentary without retaining stale queued
+    observations after a programmer message.
+
+## 0.37.0
+
+-   Demonstrate the hand control in the guided demo and clean up verified
+    temporary files after the programmer agrees to end.
+
+## 0.36.1
+
+-   Forward the fixed interjection voice prompt through the production narration
+    adapter, with the same ownership and cancellation checks as speech.
+-   Reveal the agent's current cursor while it moves during editor navigation.
+-   Move the hand control to the left of Reply; a pending second click cancels
+    the interjection request.
+
+## 0.36.0
+
+-   Add a raise-hand control beside Reply to request a pause after the current
+    explanation, with a locally cached voice acknowledgement.
+-   Add a control beside Pause to reveal the agent cursor in the editor.
+-   Connect narration to verified earlier work and support a requested teaching
+    style without requiring exercises or changing agent configuration.
+
+## 0.35.0
+
+-   Add optional bounded narration context and model-supported delivery cues.
+
+-   Report word and Unicode character counts when selected spoken narration is
+    rejected, so agents can shorten it.
+
 ## 0.34.0
 
 -   Show provider-confirmed OpenRouter speech costs as a compact toolbar

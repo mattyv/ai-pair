@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { NAVIGATOR_COMMENTARY_SCHEMA } from './schemas';
 
 /** The panel retains up to 400 recent events and one preceding session event. */
 const MAX_REPLAY_EVENTS = 401;
@@ -24,12 +25,14 @@ const panelEvent = z.union([
     costSessionGeneration: z.int().positive().optional(),
   }),
   z.strictObject({ type: z.literal('say'), text }),
+  z.strictObject({ type: z.literal('attention'), state: z.enum(['none', 'requested', 'granted']) }),
   z.strictObject({ type: z.literal('reading'), ms: number, id: number.optional(), owner: z.literal('code').optional() }),
   z.strictObject({
     type: z.literal('state'),
     state: z.enum(['typing', 'read', 'running', 'thinking', 'absent', 'paused', 'listening', 'navigator']),
     turn,
     paused: z.boolean(),
+    speechPaused: z.boolean().optional(),
     ready: z.number().int().nonnegative().optional(),
   }),
   z.strictObject({ type: z.literal('programmer'), text, ref: reference.optional() }),
@@ -66,6 +69,7 @@ export const localPanelUpdate = z.union([
   z.strictObject({ type: z.literal('selection'), ref: reference.optional() }),
   z.strictObject({ type: z.literal('focusReply') }),
   z.strictObject({ type: z.literal('replyBehavior'), value: z.enum(['interrupt', 'finishAction']) }),
+  z.strictObject({ type: z.literal('navigatorCommentary'), value: NAVIGATOR_COMMENTARY_SCHEMA }),
   z.strictObject({ type: z.literal('chatOrder'), value: z.enum(['newestFirst', 'oldestFirst']) }),
   z.strictObject({ type: z.literal('showTerminals'), value: z.boolean() }),
   z.strictObject({ type: z.literal('commandApprovalSound'), value: z.boolean() }),

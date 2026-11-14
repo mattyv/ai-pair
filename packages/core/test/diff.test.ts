@@ -3,7 +3,7 @@
 // which is pure, and imports only a type of ours, so the test needs no mocks.
 
 import { describe, expect, it } from 'vitest';
-import { boundedDiff, lineChanges, MAX_DIFF_LINES } from '../src/diff';
+import { boundedDiff, lineChanges, MAX_DIFF_LINES, numberedDiff } from '../src/diff';
 import type { Change } from '../src/ports';
 
 /** Every case, on CI's slower runners alongside the other test files. */
@@ -109,4 +109,22 @@ describe('lineChanges, over every small text', () => {
       changes.reduce((result, c) => apply(result, c), before),
     );
   });
+});
+
+it('numbers only visible new-side lines in a bounded diff', () => {
+  const result = numberedDiff('a.ts', 'old\nkeep\n', 'new\nkeep\n');
+  expect(result.lines).toEqual([1, 2]);
+  expect(result.diff).toContain('+1: new');
+  expect(result.diff).toContain(' 2: keep');
+  const long = Array.from({ length: MAX_DIFF_LINES }, (_, i) => `line ${i}\n`).join('');
+  expect(numberedDiff('a.ts', '', long).lines).toEqual([]);
+});
+
+it('numbers additions and context but not removals or missing-newline markers', () => {
+  const shown = numberedDiff('a', 'old\nkeep', 'new\nkeep');
+  expect(shown.lines).toEqual([1, 2]);
+  expect(shown.diff).toContain('-old');
+  expect(shown.diff).toContain('+1: new');
+  expect(shown.diff).toContain(' 2: keep');
+  expect(numberedDiff('a', '', '@@ text\n\n').lines).toEqual([1, 2]);
 });

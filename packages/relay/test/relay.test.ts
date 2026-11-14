@@ -10,6 +10,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { ListRootsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
+import { z } from 'zod';
 import { Bridge, Controller, type BridgeOptions } from '@ai-pair/core';
 import { LEFT_ARROW, RIGHT_ARROW } from '@ai-pair/core/constants';
 import { CURSOR_MARKER, DISCOVERY_SCHEMA, PROTOCOL_VERSION } from '@ai-pair/protocol';
@@ -159,6 +160,47 @@ describe('relay', () => {
     expect(JSON.stringify((await client.getPrompt({ name: 'diagnose' })).messages)).toContain('# Diagnose AI Pair');
   });
 
+  it('publishes and accepts narration fields through MCP without speech setup', async () => {
+    const client = await connect();
+    const listed = await client.listTools();
+    const step = listed.tools.find((tool) => tool.name === 'step');
+    expect(step).toBeDefined();
+    const published = z
+      .object({
+        properties: z.object({
+          actions: z.object({
+            items: z.object({
+              anyOf: z.array(
+                z.object({
+                  properties: z.record(z.string(), z.unknown()),
+                }),
+              ),
+            }),
+          }),
+        }),
+      })
+      .parse(step?.inputSchema);
+    const say = published.properties.actions.items.anyOf.find((variant) => 'say' in variant.properties);
+    expect(say).toBeDefined();
+    expect(z.object({ enum: z.array(z.string()) }).parse(say?.properties.speech_mode).enum).toEqual(['wait', 'continue']);
+    expect(z.object({ enum: z.array(z.string()) }).parse(say?.properties.speech_delivery).enum).toEqual([
+      'neutral',
+      'curious',
+      'excited',
+      'whispering',
+    ]);
+    expect((await call(client, 'start')).error).toBe(false);
+    for (const speech_mode of ['wait', 'continue']) {
+      for (const speech_delivery of ['neutral', 'curious', 'excited', 'whispering']) {
+        const result = await call(client, 'step', { actions: [{ say: 'Hello.', speech_mode, speech_delivery }] });
+        expect(result.error).toBe(false);
+        expect(result.text).toContain('Delivery cues are advisory');
+      }
+    }
+    expect((await call(client, 'step', { actions: [{ say: 'Hello.', speech_delivery: 'angry' }] })).error).toBe(true);
+    expect((await call(client, 'step', { actions: [{ say: 'Hello.', speech_mode: 'later' }] })).error).toBe(true);
+  });
+
   it('DiagnosticsRequest isolation: a second client observes while the owner drains its queue', async () => {
     bridge.dispose();
     const snapshot = {
@@ -267,6 +309,11 @@ describe('relay', () => {
   it('rejects malformed actions before they reach the editor', async () => {
     const client = await connect();
     await call(client, 'start');
+    const speech = await call(client, 'step', { actions: [{ say: Array.from({ length: 46 }, () => 'a').join(' '), speak: true }] });
+    expect(speech.error).toBe(true);
+    expect(speech.text).toContain('actions[0]');
+    expect(speech.text).toContain('46/45 words, 91/280 Unicode characters');
+    expect(panel.says()).toEqual([]);
     const bad = await call(client, 'step', { actions: [{ typo: 'x' }] });
     expect(bad.text).toMatch(/Not an action/);
     // Two actions in one object: zod would otherwise strip one of them silently.

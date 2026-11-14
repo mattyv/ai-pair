@@ -11,7 +11,14 @@ page, [viewable on GitHub Pages][pages] and kept in
 
 [pages]: https://mattyv.github.io/ai-pair/ai-pair.html
 
-Status: describes the 0.33.0 release candidate.
+Status: describes the 0.35.0 release candidate.
+
+The core `SpeechContext` owns the bounded session-scoped completed narration
+buffer and invalidates it when session identity or configuration changes.
+The panel supplies accepted identity from its existing replay mechanism. The
+local `SpeechService` coordinates playback completion and sends previous text
+only to a compatible provider. Delivery
+cues travel with narration across the validated local audio boundary.
 
 The source is `.archi/ai-pair.json`. To regenerate the page with
 Archi-Techture 1.5.1, set `ARCHI_TO_HTML` to its `out/tools/archi-to-html.js`
@@ -94,7 +101,11 @@ diagram was inspected in headless Chromium without page errors.
 -   **Spoken narration** is an optional port on the session controller. With the
     local companion installed, the workspace port forwards bounded requests to
     the UI host. One local service owns playback, cancellation and page
-    generations for both providers.
+    generations for both providers. The same service owns one in-memory,
+    context-free attention cue: it reserves the current output route on each
+    playback and caches only completed audio. Speech-setting or credential
+    changes invalidate it; output-device changes use the new route. The cue is
+    excluded from narration context.
     Kokoro uses a local CPU worker after explicit model setup. The optional
     ElevenLabs client sends only spoken narration or an explicit voice preview
     to its fixed HTTPS API. Its API key stays in the local companion's VS Code
@@ -564,3 +575,104 @@ waits for a matching terminal acknowledgement with a separate three-second
 retirement bound and abort/disposal cleanup. Unavailable admission leaves the
 text visible and reports unavailable speech. Session end and interruption stop
 remaining asynchronous speech; they do not add a new session-end drain phase.
+
+## Raise-hand interjection
+
+The controller owns the session-scoped attention request and hold. The player
+reaches a safe edit or reading boundary and drains its current logical
+speech before granting the floor. The hold blocks subsequent work without
+pausing the fixed acknowledgement cue. A separate derived `speechPaused`
+projection preserves ordinary audio pauses while the panel shows work held.
+The page renders this state; it does not schedule the transition itself.
+
+The local speech service owns one in-memory, context-free acknowledgement
+waveform and uses the existing synthesis, tempo, output-admission and retirement
+paths. Relevant settings or credential changes invalidate it. A cache miss is
+synthesized only on use; a hit selects the current output without another
+provider request. Failed or canceled playback cannot populate the cache.
+
+The Archi source includes the `Raise-hand interjection` ownership diagram and
+updates the speech-service responsibility. Archi-Techture 1.5.1 validated the
+source; its HTML export was regenerated and normalized. Both normalizer suites
+passed, and headless Chromium rendered the new diagram without page errors.
+Its labels and connections were visually inspected. This establishes diagram
+validity and rendering, not hardware audibility.
+
+The production extension forwards the required `attentionCue` narration method
+through the same selected-owner, readiness and cancellation-generation checks
+as ordinary speech. A missing forwarding method is rejected by the internal
+port type. The existing Archi connection and owners remain accurate; this
+adapter correction does not add a new boundary or a second state machine.
+
+## Navigator activity reports
+
+The editor adapter mirrors workspace documents and the current Pair cursor
+file outside the workspace. Cursor changes or session cleanup retire that
+outside-file interest. This fixes temporary-file edits being discarded before
+they reached the controller; it does not add a global outside-file watcher.
+The native caret is a read-only port fact, separate from the agent cursor.
+
+The controller owns typing-pause evidence, timer identity and acknowledgement.
+It snapshots edit facts for a report, leaving later changes for the next call.
+An idle timeout does not consume the only opportunity to report a later pause.
+The relay renders the return reason, elapsed wait, numbered diffs and programmer
+cursor. It does not infer activity from changes to the agent cursor window.
+
+The Archi `Navigator activity reports` view identifies these owners and the
+MCP boundary. The source model and generated export change together. Queued
+navigator commentary still follows immediate-message cancellation; the guide
+adapts the commentary cadence rather than adding a second queue lifecycle.
+
+The navigator diagram source passed the Archi-Techture 1.5.1 validator. Its
+HTML export was regenerated and normalized with the repository helper. Both
+normalizer test suites passed. Chromium rendered the navigator view without
+page errors; owner labels and connections were visually inspected.
+
+## Navigator commentary configuration
+
+The workspace extension owns the saved commentary preference and updates the
+controller through its existing configuration boundary. The companion forwards
+settings intent over typed panel messages and displays the owner's snapshot.
+The preference is not part of local speech readiness or provider settings.
+
+The controller projects the latest preference after asynchronous report work.
+The relay renders its advisory policy for startup and navigator reports. Report
+restoration replays activity facts, never old configuration. A changed mode
+adds a session-scoped notice and wakes a waiting `listen` with a settings-only
+response, including during queued speech. If no call is waiting, the next
+`listen` returns the notice. Same-value writes do nothing. Ordinary activity
+snapshots, batch completion, typing-pause acknowledgement and turn ownership
+are untouched. Canceled notices retry only for their matching generation.
+The Archi Navigator view separates this path from activity evidence.
+
+The private workspace-to-companion contract is version 6 for these strict
+commentary action/update messages. Both extensions must be updated together;
+incompatible peers are rejected rather than silently ignoring the setting.
+This does not change the editor-relay protocol version.
+
+Archi-Techture 1.5.1 validated the updated source. Its generated HTML export
+was normalized and rendered in Chromium without page errors; preference owner,
+activity owner and their connections were visually inspected.
+
+## Navigator follow-up boundaries
+
+The controller records visible diff-line identities at the report snapshot;
+replayed historical diffs cannot authorize successor identities. A non-mutating
+tracked-text guard also withholds sightings from an older pending edit report
+after a newer agent edit; it cannot reset the live line tracker. Edit
+interruption provenance is independent of programmer authorship. Navigator
+wake admission considers pending meaningful changes and meaningful activity
+already reported during the current unacknowledged typing burst, preserving
+timeout-before-pause behavior while suppressing unreported type-and-undo noise.
+
+Plain handback preserves eligible talk-only work. Its rehearsal basis follows
+programmer edits and the authoritative new turn. Browser, panel and companion
+forward no-message turn intent to the workspace instead of eagerly canceling
+from replicated turn state. Explicit new direction still cancels. Existing
+local/remote narration owners retain retirement; this adds no audio lifecycle.
+
+Plain turn changes preserve manual Pause rather than clear local pause reasons
+before the workspace decision arrives. Draft-empty events retain their own
+pause semantics. This avoids a paused-audio restart without another pending
+intent owner; explicit Resume releases manual Pause. Message/selection handback
+retains cancellation before resume.

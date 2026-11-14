@@ -1,5 +1,7 @@
 ---- MODULE EditorAdapter ------------------------------------------------------
 (******************************************************************************)
+(* Only workspace documents and the current agent cursor file are eligible;   *)
+(* tracking and cursor scope are host-side assumptions of this model.         *)
 (* Who a change to a document is attributed to: `edit`, `save`, `onChange`    *)
 (* and `byProgrammer` in packages/vscode/src/editor.ts, which call the        *)
 (* controller's userEdit (the programmer's: it interrupts) or otherEdit (a    *)

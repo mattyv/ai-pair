@@ -280,3 +280,273 @@ it('does not fetch or play when catalog denial arrives while the secret read is 
   expect(play).not.toHaveBeenCalled();
   await speech.dispose();
 });
+
+it('SpeechContext: carries only completed narration across turns and never previews', async () => {
+  const requests: Array<{ text: string; previousText?: string }> = [];
+  const openRouter = {
+    models: vi.fn().mockResolvedValue([]),
+    synthesize: vi.fn((request: { text: string; previousText?: string }) => {
+      requests.push(request);
+      return Promise.resolve({ wav: new Uint8Array(44), durationMs: 1000 });
+    }),
+  };
+  const speech = new SpeechService({
+    runtimeDirectory: '',
+    storageDirectory: '',
+    localDesktop: true,
+    openRouter,
+    settings: () => ({
+      enabled: true,
+      contextEnabled: true,
+      provider: 'openrouter',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+      openRouterModel: 'elevenlabs/eleven-v4',
+      openRouterVoice: 'voice',
+      openRouterZdr: true,
+    }),
+    output: { play: () => 1, control: () => {}, status: () => {} },
+  });
+  speech.setNarrationSession('session', true);
+  speech.configureNarrationContext();
+  const first = speech.speak('First.', 'curious');
+  await vi.waitFor(() => {
+    expect(requests).toHaveLength(1);
+  });
+  speech.audioEvent({ id: 1, pageId: 1, event: 'ended' });
+  await first;
+  speech.cancel();
+  const preview = speech.preview();
+  await vi.waitFor(() => {
+    expect(requests).toHaveLength(2);
+  });
+  speech.audioEvent({ id: 2, pageId: 1, event: 'ended' });
+  await preview;
+  const second = speech.speak('Second.', 'excited');
+  await vi.waitFor(() => {
+    expect(requests).toHaveLength(3);
+  });
+  expect(requests[0]).toMatchObject({ text: '[curious] First.' });
+  expect(requests[1]?.previousText).toBeUndefined();
+  expect(requests[2]).toMatchObject({ text: '[excited] Second.', previousText: 'First.' });
+  speech.audioEvent({ id: 3, pageId: 1, event: 'ended' });
+  await second;
+  await speech.dispose();
+});
+
+it('SpeechContext: selection changes during admission invalidate the captured history and stale completion', async () => {
+  const requests: Array<{ previousText?: string }> = [];
+  const admission = Promise.withResolvers<boolean>();
+  let preparing = false;
+  const settings = {
+    enabled: true,
+    contextEnabled: true,
+    provider: 'openrouter' as const,
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: '',
+    elevenLabsSpeed: 1,
+    openRouterModel: 'elevenlabs/eleven-v4',
+    openRouterVoice: 'voice',
+    openRouterZdr: true,
+  };
+  const speech = new SpeechService({
+    runtimeDirectory: '',
+    storageDirectory: '',
+    localDesktop: true,
+    settings: () => settings,
+    openRouter: {
+      models: vi.fn(),
+      synthesize: vi.fn((request: { previousText?: string }) => {
+        requests.push(request);
+        return Promise.resolve({ wav: new Uint8Array(44), durationMs: 1000 });
+      }),
+    },
+    output: { prepare: () => (preparing ? admission.promise : Promise.resolve(true)), play: () => 1, control: () => {}, status: () => {} },
+  });
+  speech.setNarrationSession('session', true);
+  const first = speech.speak('First');
+  await vi.waitFor(() => {
+    expect(requests).toHaveLength(1);
+  });
+  speech.audioEvent({ id: 1, pageId: 1, event: 'ended' });
+  await first;
+  preparing = true;
+  const pending = speech.speak('Pending');
+  settings.openRouterVoice = 'other';
+  speech.configureNarrationContext();
+  settings.openRouterVoice = 'voice';
+  speech.configureNarrationContext();
+  admission.resolve(true);
+  await vi.waitFor(() => {
+    expect(requests).toHaveLength(2);
+  });
+  expect(requests[1]?.previousText).toBe('First');
+  speech.audioEvent({ id: 2, pageId: 1, event: 'ended' });
+  await pending;
+  preparing = false;
+  const next = speech.speak('Next');
+  await vi.waitFor(() => {
+    expect(requests).toHaveLength(3);
+  });
+  expect(requests[2]?.previousText).toBeUndefined();
+  speech.audioEvent({ id: 3, pageId: 1, event: 'ended' });
+  await next;
+  await speech.dispose();
+});
+
+it('SpeechContext: omits cues and history for disabled and unverified models', async () => {
+  const requests: Array<{ text: string; previousText?: string }> = [];
+  const settings = {
+    enabled: true,
+    contextEnabled: false,
+    provider: 'openrouter' as const,
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: '',
+    elevenLabsSpeed: 1,
+    openRouterModel: 'elevenlabs/eleven-v4',
+    openRouterVoice: 'voice',
+    openRouterZdr: true,
+  };
+  const speech = new SpeechService({
+    runtimeDirectory: '',
+    storageDirectory: '',
+    localDesktop: true,
+    settings: () => settings,
+    openRouter: {
+      models: vi.fn(),
+      synthesize: vi.fn((request: { text: string; previousText?: string }) => {
+        requests.push(request);
+        return Promise.resolve({ wav: new Uint8Array(44), durationMs: 1000 });
+      }),
+    },
+    output: { play: () => 1, control: () => {}, status: () => {} },
+  });
+  speech.setNarrationSession('session', true);
+  const disabled = speech.speak('Disabled', 'excited');
+  await vi.waitFor(() => {
+    expect(requests).toHaveLength(1);
+  });
+  speech.audioEvent({ id: 1, pageId: 1, event: 'ended' });
+  await disabled;
+  settings.contextEnabled = true;
+  settings.openRouterModel = 'unknown';
+  speech.configureNarrationContext();
+  const unknown = speech.speak('Unknown', 'curious');
+  await vi.waitFor(() => {
+    expect(requests).toHaveLength(2);
+  });
+  expect(requests.map(({ text, previousText }) => ({ text, previousText }))).toEqual([
+    { text: 'Disabled', previousText: undefined },
+    { text: 'Unknown', previousText: undefined },
+  ]);
+  speech.audioEvent({ id: 2, pageId: 1, event: 'ended' });
+  await unknown;
+  await speech.dispose();
+});
+
+it('SpeechContext: ZDR off continues successive speech and cues without collecting history', async () => {
+  const requests: Array<{ text: string; previousText?: string }> = [];
+  const speech = new SpeechService({
+    runtimeDirectory: '',
+    storageDirectory: '',
+    localDesktop: true,
+    settings: () => ({
+      enabled: true,
+      contextEnabled: true,
+      provider: 'openrouter',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+      openRouterModel: 'elevenlabs/eleven-v4',
+      openRouterVoice: 'voice',
+      openRouterZdr: false,
+    }),
+    openRouter: {
+      models: vi.fn(),
+      synthesize: vi.fn((request: { text: string; previousText?: string }) => {
+        requests.push(request);
+        return Promise.resolve({ wav: new Uint8Array(44), durationMs: 1000 });
+      }),
+    },
+    output: { play: () => 1, control: () => {}, status: () => {} },
+  });
+  speech.setNarrationSession('session', true);
+  const first = speech.speak('First', 'curious');
+  await vi.waitFor(() => {
+    expect(requests).toHaveLength(1);
+  });
+  speech.audioEvent({ id: 1, pageId: 1, event: 'ended' });
+  await first;
+  const second = speech.speak('Second', 'excited');
+  await vi.waitFor(() => {
+    expect(requests).toHaveLength(2);
+  });
+  expect(requests.map(({ text, previousText }) => ({ text, previousText }))).toEqual([
+    { text: '[curious] First', previousText: undefined },
+    { text: '[excited] Second', previousText: undefined },
+  ]);
+  speech.audioEvent({ id: 2, pageId: 1, event: 'ended' });
+  await second;
+  await speech.dispose();
+});
+
+it('SpeechContext: toggling ZDR invalidates pending completion and old history', async () => {
+  const requests: Array<{ previousText?: string }> = [];
+  const settings = {
+    enabled: true,
+    contextEnabled: true,
+    provider: 'openrouter' as const,
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: '',
+    elevenLabsSpeed: 1,
+    openRouterModel: 'elevenlabs/eleven-v4',
+    openRouterVoice: 'voice',
+    openRouterZdr: true,
+  };
+  const speech = new SpeechService({
+    runtimeDirectory: '',
+    storageDirectory: '',
+    localDesktop: true,
+    settings: () => settings,
+    openRouter: {
+      models: vi.fn(),
+      synthesize: vi.fn((request: { previousText?: string }) => {
+        requests.push(request);
+        return Promise.resolve({ wav: new Uint8Array(44), durationMs: 1000 });
+      }),
+    },
+    output: { play: () => 1, control: () => {}, status: () => {} },
+  });
+  speech.setNarrationSession('session', true);
+  const first = speech.speak('First');
+  await vi.waitFor(() => {
+    expect(requests).toHaveLength(1);
+  });
+  speech.audioEvent({ id: 1, pageId: 1, event: 'ended' });
+  await first;
+  const pending = speech.speak('Pending');
+  await vi.waitFor(() => {
+    expect(requests).toHaveLength(2);
+  });
+  expect(requests[1]?.previousText).toBe('First');
+  settings.openRouterZdr = false;
+  speech.configureNarrationContext();
+  settings.openRouterZdr = true;
+  speech.configureNarrationContext();
+  speech.audioEvent({ id: 2, pageId: 1, event: 'ended' });
+  await pending;
+  const next = speech.speak('Next');
+  await vi.waitFor(() => {
+    expect(requests).toHaveLength(3);
+  });
+  expect(requests[2]?.previousText).toBeUndefined();
+  speech.audioEvent({ id: 3, pageId: 1, event: 'ended' });
+  await next;
+  await speech.dispose();
+});

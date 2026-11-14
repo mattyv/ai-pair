@@ -36,7 +36,7 @@ export class CompanionNarration {
     if (!parsed.success || this.closed) return false;
     const frame = parsed.data;
     if (frame.connectionEpoch !== this.options.epoch || !('jobId' in frame)) return false;
-    if (frame.type === 'speak') {
+    if (frame.type === 'speak' || frame.type === 'attentionCue') {
       if (frame.pageEpoch !== this.options.page() || this.current !== undefined || this.localActions > 0) {
         if (this.current?.id !== frame.jobId || this.current.page !== frame.pageEpoch) {
           this.sendTerminal({ id: frame.jobId, page: frame.pageEpoch, canceled: false }, 'failed');
@@ -46,18 +46,24 @@ export class CompanionNarration {
       const job: Job = { id: frame.jobId, page: frame.pageEpoch, canceled: false, previousId: this.options.observation()?.id };
       this.current = job;
       try {
-        void this.options.speech.speak(frame.text).then(
+        let playback: Promise<void>;
+        if (frame.type === 'speak') {
+          playback = this.options.speech.speak(frame.text, frame.delivery);
+        } else {
+          playback = this.options.speech.attentionCue();
+        }
+        void playback.then(
           () => {
             const observed = this.options.observation();
             const ended = observed !== undefined && observed.id !== job.previousId && observed.started && observed.terminal === 'ended';
-            this.finish(job, job.canceled ? 'canceled' : ended ? 'ended' : 'failed');
+            this.finishPlayback(job, job.canceled ? 'canceled' : ended ? 'ended' : 'failed', frame.type === 'attentionCue');
           },
           () => {
-            this.finish(job, 'failed');
+            this.finishPlayback(job, job.canceled ? 'canceled' : 'failed', frame.type === 'attentionCue');
           },
         );
       } catch {
-        this.finish(job, 'failed');
+        this.finishPlayback(job, 'failed', frame.type === 'attentionCue');
       }
       return true;
     }
@@ -119,6 +125,23 @@ export class CompanionNarration {
   dispose(): void {
     this.stopLocally();
     this.closed = true;
+  }
+
+  /** Waits for physical retirement when a cue did not end naturally. */
+  private finishPlayback(job: Job, outcome: 'ended' | 'canceled' | 'failed', cue: boolean): void {
+    if (!cue || outcome === 'ended') {
+      this.finish(job, outcome);
+      return;
+    }
+    // specs/RemoteCue.tla, `Retire`: settlement is not physical retirement.
+    void this.options.stopOutput().then(
+      () => {
+        this.finish(job, outcome);
+      },
+      () => {
+        /* Keep ownership when physical retirement is unknown. */
+      },
+    );
   }
 
   /** Sends one acknowledgement in the outbound sequence space. */

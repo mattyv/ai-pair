@@ -139,6 +139,10 @@ interface Harness {
     get: ReturnType<typeof vi.fn<() => 'newestFirst' | 'oldestFirst'>>;
     set: ReturnType<typeof vi.fn<(value: 'newestFirst' | 'oldestFirst') => void>>;
   };
+  navigatorCommentary: {
+    get: ReturnType<typeof vi.fn<() => 'quiet' | 'helpful' | 'coach'>>;
+    set: ReturnType<typeof vi.fn<(value: 'quiet' | 'helpful' | 'coach') => void>>;
+  };
   replyBehavior: {
     get: ReturnType<typeof vi.fn<() => 'interrupt' | 'finishAction'>>;
     set: ReturnType<typeof vi.fn<(value: 'interrupt' | 'finishAction') => void>>;
@@ -209,6 +213,7 @@ function harness(
   buildInfo = { version: '0.10.0', build: 'test-build' },
   readiness?: () => import('@ai-pair/protocol').AudioDiagnostics,
   sessionCost?: PanelWiring['speech']['sessionCost'],
+  narrationSession?: PanelWiring['speech']['narrationSession'],
 ): Harness {
   const traced: string[] = [];
   const speed = { get: vi.fn(() => SPEEDS[1] ?? 0), set: vi.fn<(value: number) => void>() };
@@ -216,6 +221,10 @@ function harness(
   const chatOrder = {
     get: vi.fn<() => 'newestFirst' | 'oldestFirst'>(() => 'newestFirst'),
     set: vi.fn<(value: 'newestFirst' | 'oldestFirst') => void>(),
+  };
+  const navigatorCommentary = {
+    get: vi.fn<() => 'quiet' | 'helpful' | 'coach'>(() => 'helpful'),
+    set: vi.fn<(value: 'quiet' | 'helpful' | 'coach') => void>(),
   };
   const replyBehavior = {
     get: vi.fn<() => 'interrupt' | 'finishAction'>(() => 'interrupt'),
@@ -233,6 +242,7 @@ function harness(
   const speech = {
     ...(readiness === undefined ? {} : { readiness }),
     ...(sessionCost === undefined ? {} : { sessionCost }),
+    ...(narrationSession === undefined ? {} : { narrationSession }),
     settings: {
       get: vi.fn<() => import('../src/speech_types').SpeechSettings>(() => ({
         enabled: false,
@@ -311,6 +321,7 @@ function harness(
     codePlayback,
     replyBehavior,
     commandApprovalSound,
+    navigatorCommentary,
   );
   const onPost = vi.fn<() => void>();
   panel.onPost = onPost;
@@ -325,6 +336,7 @@ function harness(
     readingSpeed,
     chatOrder,
     replyBehavior,
+    navigatorCommentary,
     terminalSettings,
     commandApprovalSound,
     showTerminal,
@@ -589,6 +601,24 @@ describe('resolveWebviewView', () => {
   });
 });
 
+describe('attention', () => {
+  it('forwards a hand press to the controller', () => {
+    const { panel, controller } = harness();
+    panel.receiveFromPage({ type: 'attention' });
+    expect(controller.requestAttention.mock.calls).toHaveLength(1);
+  });
+});
+
+describe('cursor navigation', () => {
+  it('ShowsCursor: forwards the action without changing playback', () => {
+    const { panel, controller } = harness();
+    panel.receiveFromPage({ type: 'revealCursor' });
+    expect(controller.revealCursor.mock.calls).toHaveLength(1);
+    expect(controller.pause.mock.calls).toHaveLength(0);
+    expect(controller.resume.mock.calls).toHaveLength(0);
+  });
+});
+
 describe('post', () => {
   it('LogsPosts: a posted event is on the log a new view replays', () => {
     const panel = harness().panel;
@@ -781,6 +811,18 @@ describe('receive', () => {
     expect(traced).toEqual(['panel reply "hi"', 'panel draft empty', 'panel draft typed', 'panel pause']);
   });
 
+  it('projects and validates navigator commentary', () => {
+    const { panel, navigatorCommentary } = harness();
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(view.posted).toContainEqual({ type: 'navigatorCommentary', value: 'helpful' });
+    view.send({ type: 'navigatorCommentary', value: 'coach' });
+    panel.receiveFromPage({ type: 'navigatorCommentary', value: 'invalid' });
+    expect(navigatorCommentary.set.mock.calls).toEqual([['coach']]);
+    panel.showNavigatorCommentary('quiet');
+    expect(view.posted).toContainEqual({ type: 'navigatorCommentary', value: 'quiet' });
+  });
+
   it('ready: ends the draft pause, and sends the log, speeds, selection, and whether it can start', async () => {
     const { panel, controller } = harness();
     panel.post({ type: 'say', text: 'hi' });
@@ -799,6 +841,7 @@ describe('receive', () => {
       { type: 'speechOutputCatalog', value: { supported: false, devices: [], selected: { kind: 'default' } } },
       { type: 'speechCloudSupport', supported: true },
       { type: 'speechSupport', supported: true },
+      { type: 'navigatorCommentary', value: 'helpful' },
       { type: 'chatOrder', value: 'newestFirst' },
       { type: 'replyBehavior', value: 'interrupt' },
       { type: 'commandApprovalSound', value: false },
@@ -856,7 +899,7 @@ describe('receive', () => {
     chatOrder.get.mockReturnValue('oldestFirst');
     const view = open(panel);
     view.send({ type: 'ready' });
-    expect(view.posted.slice(7, 12)).toEqual([
+    expect(view.posted.slice(8, 13)).toEqual([
       { type: 'chatOrder', value: 'oldestFirst' },
       { type: 'replyBehavior', value: 'interrupt' },
       { type: 'commandApprovalSound', value: false },
@@ -995,6 +1038,15 @@ describe('receive', () => {
     expect(readingSpeed.set.mock.calls).toEqual([[SPEEDS[3]]]);
   });
 
+  it('delivers a held reply before resuming so the owner can release attention safely', () => {
+    const { panel, controller } = harness();
+    const view = open(panel);
+    view.send({ type: 'draft', empty: false });
+    view.send({ type: 'reply', text: 'Hello' });
+    expect(controller.userMessage.mock.invocationCallOrder[0]).toBeLessThan(controller.resume.mock.invocationCallOrder[0] ?? 0);
+    expect(controller.resume.mock.calls).toEqual([[undefined, { reveal: false }]]);
+  });
+
   it("ReplyMeansDraft: a reply the calibration takes ends the draft's pause; any other resumes without revealing and is sent on", () => {
     const { panel, controller, calibration } = harness();
     const view = open(panel);
@@ -1059,7 +1111,7 @@ describe('receive', () => {
     const view = open(panel);
     view.send({ type: 'turn', message: 'yours', attach: true });
     view.send({ type: 'turn' });
-    expect(controller.resume.mock.calls).toEqual([[], []]);
+    expect(controller.resume.mock.calls).toEqual([[]]);
     expect(controller.handBack.mock.calls).toEqual([
       ['yours', SELECTION],
       [undefined, undefined],
@@ -1067,9 +1119,20 @@ describe('receive', () => {
     expect(controller.takeTurn.mock.calls).toEqual([]);
   });
 
+  it('preserves local speech on a plain handback and stops it for a message', () => {
+    const { panel, speech } = harness('programmer');
+    const view = open(panel);
+    view.send({ type: 'turn' });
+    expect(speech.stop).not.toHaveBeenCalled();
+    view.send({ type: 'turn', message: 'Please change it' });
+    expect(speech.stop).toHaveBeenCalledOnce();
+  });
+
   it("turn: takes the turn on the agent's turn", () => {
-    const { panel, controller } = harness('agent');
+    const { panel, controller, speech } = harness('agent');
     open(panel).send({ type: 'turn' });
+    expect(speech.stop.mock.calls).toHaveLength(1);
+    expect(controller.resume.mock.calls).toHaveLength(0);
     expect(controller.takeTurn.mock.calls).toEqual([[]]);
     expect(controller.handBack.mock.calls).toEqual([]);
   });
@@ -1911,7 +1974,7 @@ it('scopes OpenRouter catalog and reports key failure without leaking errors', a
   await flush();
   expect(view.posted).toContainEqual({ type: 'speechSetupState', pending: false, message: 'Could not update the API key.' });
   expect(JSON.stringify(view.posted)).not.toContain('private');
-  for (const bad of [{ openRouterZdr: 'yes' }, { openRouterModel: 1 }, { openRouterVoice: 1 }]) {
+  for (const bad of [{ contextEnabled: 'yes' }, { openRouterZdr: 'yes' }, { openRouterModel: 1 }, { openRouterVoice: 1 }]) {
     view.receive({ type: 'speechSettings', value: { ...settings, ...bad } });
   }
   expect(speech.settings.set).not.toHaveBeenCalled();
@@ -1919,4 +1982,42 @@ it('scopes OpenRouter catalog and reports key failure without leaking errors', a
   speech.settings.get.mockReturnValue(saved);
   view.send({ type: 'speechSettings', value: saved });
   expect(speech.settings.set).toHaveBeenCalledWith(saved);
+});
+
+it('tracks narration session identity independently of cost ownership', () => {
+  const narrationSession = vi.fn<(id: number, ongoing: boolean) => void>();
+  const { panel } = harness('agent', undefined, undefined, undefined, narrationSession);
+  panel.post({ type: 'session', active: true, task: 'one' });
+  panel.post({ type: 'session', active: true, suspended: true });
+  panel.post({ type: 'session', active: true, resumed: true });
+  panel.post({ type: 'session', active: false, reason: 'programmer' });
+  panel.post({ type: 'session', active: true, task: 'two' });
+  expect(narrationSession.mock.calls).toEqual([
+    [1, true],
+    [1, true],
+    [1, true],
+    [1, false],
+    [2, true],
+  ]);
+});
+
+it('reconciles companion narration identity on replay and rejects stale sessions', () => {
+  const narrationSession = vi.fn<(id: number, ongoing: boolean) => void>();
+  const { panel } = harness('agent', undefined, undefined, undefined, narrationSession);
+  panel.useCompanion({
+    forward: vi.fn<import('../src/panel').CompanionPanelRouting['forward']>(),
+    closed: vi.fn<(page: number) => void>(),
+  });
+  open(panel);
+  panel.showRemoteUpdate({ type: 'session', active: true, costSessionGeneration: 1 });
+  panel.showRemoteUpdate({ type: 'replay', events: [], costSessionGeneration: 1, costSessionActive: true });
+  panel.showRemoteUpdate({ type: 'replay', events: [], costSessionGeneration: 2, costSessionActive: true });
+  panel.showRemoteUpdate({ type: 'session', active: false, reason: 'agent', costSessionGeneration: 1 });
+  panel.showRemoteUpdate({ type: 'session', active: false, reason: 'agent', costSessionGeneration: 2 });
+  expect(narrationSession.mock.calls).toEqual([
+    [1, true],
+    [1, true],
+    [2, true],
+    [2, false],
+  ]);
 });

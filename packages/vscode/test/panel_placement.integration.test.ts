@@ -31,7 +31,7 @@ it('attaches matching workspace and companion versions once', async () => {
     remote: false,
     companionInstalled: true,
     timeoutMs: 100,
-    prepare: () => Promise.resolve(gate.prepare({ version: LOCAL_AUDIO_VERSION, epoch: 'epoch' })),
+    prepare: () => Promise.resolve(gate.prepare({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'epoch' })),
     commit,
   });
   expect(await placement.choose()).toBe('companion');
@@ -55,7 +55,7 @@ it('waits for delayed activation before preparing and committing the gate', asyn
       timeoutMs: 100,
       activationTimeoutMs: 500,
       activate: () => activation.promise,
-      prepare: () => Promise.resolve(gate.prepare({ version: LOCAL_AUDIO_VERSION, epoch: 'epoch' })),
+      prepare: () => Promise.resolve(gate.prepare({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'epoch' })),
       commit: (value) => Promise.resolve(gate.commit(value)),
     });
     const result = placement.choose();

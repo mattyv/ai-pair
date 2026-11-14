@@ -38,11 +38,16 @@ function svg(paths: string, cls = ''): string {
 }
 
 const ICONS = {
+  cursor: svg('<path d="M5 3l12 9-6 1-3 6z"/>'),
   pause: svg('<path d="M9 5v14M15 5v14"/>', 'pause'),
   resume: svg('<path d="M8 5l11 7-11 7z"/>', 'resume'),
   stop: svg('<rect x="6" y="6" width="12" height="12" rx="2"/>'),
   swap: svg('<path d="M7 7h11l-3-3M17 17H6l3 3"/>'),
   exit: svg('<path d="M14 4h5v16h-5M10 8l-4 4 4 4M6 12h11"/>'),
+  attention: svg(
+    '<path d="M8 11V5a1 1 0 0 1 2 0v5-7a1 1 0 0 1 2 0v7-6a1 1 0 0 1 2 0v6-4' +
+      'a1 1 0 0 1 2 0v7c0 4-2 7-6 7-3 0-4-2-6-5l-1-2a1 1 0 0 1 2-1l3 3"/>',
+  ),
   send: svg('<path d="M4 12l16-8-6 16-2.5-6.5z"/>'),
   voice: svg('<path d="M4 9v6h4l5 4V5L8 9H4zM17 9a5 5 0 010 6"/>', 'voice-on'),
   voiceMuted: svg('<path d="M4 9v6h4l5 4V5L8 9H4zM3 3l18 18"/>', 'voice-muted'),
@@ -83,6 +88,15 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
         </select>
       </label>
       <p>Long commands can delay a reply until they finish. Stop always interrupts immediately.</p>
+      <label class="settings-field">Navigator commentary
+        <select data-ui="navigator-commentary">
+          <option value="quiet">Quiet - important issues</option>
+          <option value="helpful" selected>Helpful - useful observations</option>
+          <option value="coach">Coach - explanations and connections</option>
+        </select>
+      </label>
+      <p>During your turn, this sets written and spoken commentary on the next returned report; direct requests override it.
+        Audio is controlled separately.</p>
       <label class="settings-field">Chat order
         <select data-ui="chat-order">
           <option value="newestFirst">Newest first</option>
@@ -129,6 +143,10 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
       <div class="settings-actions"><button type="button" data-ui="speech-output-refresh" class="soft">Refresh outputs</button></div>
       <p data-ui="speech-output-status" role="status"></p>
       <label class="settings-check"><input type="checkbox" data-ui="speech-enabled"> Speak selected narration automatically</label>
+      <label class="settings-field">Speech context and delivery cues
+        <select data-ui="speech-context"><option value="off">Off</option><option value="on">On</option></select>
+      </label>
+      <p data-ui="speech-context-capability"></p>
       <label class="settings-field">Listening speed (experimental)
         <input type="range" data-ui="speech-listening-speed" min="0.75" max="1.5" step="0.05" value="1" aria-valuetext="1.00x">
         <span data-ui="speech-listening-speed-value" aria-hidden="true">1.00x</span>
@@ -272,6 +290,8 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
             data-tip="Pause (Space)"
             aria-keyshortcuts="Space"
           >${ICONS.pause}${ICONS.resume}</button>
+          <button type="button" data-ui="reveal-cursor" class="quiet" aria-label="Reveal agent cursor"
+            data-tip="Reveal agent cursor">${ICONS.cursor}</button>
           <button
             type="button"
             data-ui="interrupt"
@@ -413,6 +433,8 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
         >x</button>
       </div>
       <div class="compose-row">
+        <button type="button" data-ui="attention" class="quiet" aria-label="Raise hand" data-tip="Raise hand"
+          aria-pressed="false" disabled>${ICONS.attention}</button>
         <textarea
           data-ui="reply"
           class="reply"

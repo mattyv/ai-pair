@@ -26,6 +26,9 @@ export const MOVE_TO_A: Action = { move: { file: 'a.ts', line: 1, to: 'line_end'
 
 /** An editor in memory: files as strings, a cursor, and a record of what the controller asked. */
 export class FakeEditor implements EditorPort {
+  programmerCursor(): { file: string; line: number; column: number } | undefined {
+    return undefined;
+  }
   readonly diagnostics = vi.fn(() => Promise.resolve({ diagnostics: [], warnings: [] }));
   files = new Map<string, string>();
   dirty = new Set<string>();
@@ -92,6 +95,7 @@ export class FakeEditor implements EditorPort {
   renderPoint(point: { file: string; start: number; end: number } | undefined): void {
     this.point = point;
   }
+  revealCursor(): void {}
   reveal(): void {
     this.reveals++;
     this.revealedFocus = this.focus;

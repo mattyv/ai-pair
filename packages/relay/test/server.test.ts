@@ -265,6 +265,19 @@ describe('createServer', () => {
     expect(tool).toBe('listen');
   });
 
+  it('adds a capability advisory for a submitted delivery cue', async () => {
+    const { sdk, link } = build();
+    link.call.mockResolvedValue(EMPTY_REPORT);
+    expect(texts(await call(sdk, 'step', { actions: [{ say: 'Hello', speech_delivery: 'curious' }] }))[0]).toContain(
+      'Delivery cues are advisory',
+    );
+    expect(texts(await call(sdk, 'step', { actions: [{ say: 'Hello' }] }))).toEqual(['the report']);
+    link.call.mockRejectedValueOnce(new RelayError('disconnected', 'Disconnected'));
+    expect(texts(await call(sdk, 'step', { actions: [{ say: 'Hello', speech_delivery: 'curious' }] }))).toEqual([
+      'disconnected: Disconnected',
+    ]);
+  });
+
   it("renders `read`'s file, and answers an answer that fits no schema as an internal error", async () => {
     const { sdk, link } = build();
     vi.mocked(link.call).mockResolvedValueOnce(FILE);
@@ -292,8 +305,9 @@ describe('createServer', () => {
     link.call.mockResolvedValue(EMPTY_REPORT);
     for (const name of ['step', 'end', 'calibrate']) {
       const signal = new AbortController().signal;
-      expect(texts(await call(sdk, name, { given: name }, { signal }))).toEqual(['the report']);
-      expect(link.call).toHaveBeenLastCalledWith(name, { given: name }, signal);
+      const args = name === 'step' ? { actions: [] } : { given: name };
+      expect(texts(await call(sdk, name, args, { signal }))).toEqual(['the report']);
+      expect(link.call).toHaveBeenLastCalledWith(name, args, signal);
     }
   });
 

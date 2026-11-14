@@ -13,6 +13,8 @@ export const SPEECH_PREVIEW_TEXT = 'Here is a short example of the voice for our
 /** Preferences sampled when a new narration unit starts. */
 export interface SpeechSettings {
   enabled: boolean;
+  /** Enables supported narration continuity and delivery cues. */
+  contextEnabled?: boolean;
   /** Independent listening speed; absent older settings mean normal speed. */
   listeningSpeed?: number;
   provider: SpeechProvider;
@@ -79,6 +81,7 @@ export interface OpenRouterSpeechPort {
       zdr: boolean;
       format: OpenRouterAudioFormat;
       purpose?: 'narration' | 'preview';
+      previousText?: string;
     },
     signal: AbortSignal,
   ): Promise<SpeechAudioResult>;

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { NAVIGATOR_COMMENTARY_SCHEMA } from './schemas';
 
 /** Largest text carried by one cross-host panel action. */
 const MAX_PANEL_TEXT = 65_536;
@@ -19,7 +20,9 @@ export const localPanelAction = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('copyDiagnostics') }),
   z.strictObject({ type: z.literal('reply'), text, attach: z.boolean().optional(), defer: z.boolean().optional() }),
   z.strictObject({ type: z.literal('draft'), empty: z.boolean() }),
+  z.strictObject({ type: z.literal('attention') }),
   z.strictObject({ type: z.literal('pause') }),
+  z.strictObject({ type: z.literal('revealCursor') }),
   z.strictObject({ type: z.literal('resume') }),
   z.strictObject({ type: z.literal('interrupt') }),
   z.strictObject({ type: z.literal('turn'), message: text.optional(), attach: z.boolean().optional() }),
@@ -33,6 +36,7 @@ export const localPanelAction = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('command'), command: z.enum(['aiPair.playDemo', 'aiPair.setUpAgent']) }),
   z.strictObject({ type: z.literal('start') }),
   z.strictObject({ type: z.literal('replyBehavior'), value: z.enum(['interrupt', 'finishAction']) }),
+  z.strictObject({ type: z.literal('navigatorCommentary'), value: NAVIGATOR_COMMENTARY_SCHEMA }),
   z.strictObject({ type: z.literal('chatOrder'), value: z.enum(['newestFirst', 'oldestFirst']) }),
   z.strictObject({ type: z.literal('showTerminals'), value: z.boolean() }),
   z.strictObject({ type: z.literal('commandApprovalSound'), value: z.boolean() }),

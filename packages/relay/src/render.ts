@@ -10,12 +10,15 @@ const PAUSE_REASONS: Record<PauseReason, string> = {
   reply: 'the programmer is typing a reply',
   away: 'the programmer is looking at another file, or scrolled away from your cursor',
   calibrate: 'the programmer is calibrating their reading speed',
+  attention: 'the programmer requested the floor',
 };
 
 /** Who made an edit the programmer didn't make. */
 const OTHER_EDITOR = 'A tool, a formatter, or something on disk';
 /** The shortest code fence Markdown allows; a longer one wraps output that has backticks of its own. */
 const MIN_FENCE = 3;
+/** Milliseconds in one second. */
+const MS_PER_SECOND = 1000;
 
 /** The tools whose result is a report, rendered as one. */
 export type ReportingTool = 'start' | 'step' | 'listen' | 'end' | 'calibrate';
@@ -171,6 +174,25 @@ export function renderReport(report: Report, tool: ReportingTool): string {
       'The calibration is under way in the Pair panel: playback is held while the programmer reads the passage. Call `listen`; their next message comes once it ends.',
     );
   }
+  if (
+    report.navigatorCommentary !== undefined &&
+    (tool === 'start' || report.turn === 'programmer' || report.navigator !== undefined || report.commentaryChanged !== undefined)
+  ) {
+    const guidance = {
+      quiet: 'Quiet: comment only on important issues or direct answers; skip routine first-pause reassurance unless asked.',
+      helpful: 'Helpful: acknowledge the first typing pause once, then offer useful observations at natural pauses.',
+      coach:
+        'Coach: acknowledge the first typing pause once, then offer useful observations, explanations, and connections to verified prior work.',
+    };
+    sections.push(
+      `Navigator commentary: ${guidance[report.navigatorCommentary]} Follow explicit session requests in every mode; voice is separate.`,
+    );
+  }
+  if (report.commentaryChanged !== undefined) {
+    sections.push(
+      'The navigator commentary preference changed. This report only updates settings; queued work and speech are unchanged. Continue the current turn and call `listen` again.',
+    );
+  }
   if (report.repeated) {
     sections.push(
       "Part of this report may repeat an earlier one: a call you canceled had already returned. Skip what you've already seen.",
@@ -189,15 +211,41 @@ export function renderReport(report: Report, tool: ReportingTool): string {
   }
   if (report.submitted) sections.push(`Batch ${report.submitted.id} is ${report.submitted.status}.`);
   if (report.rejected) sections.push(renderRejected(report.rejected));
-  if (report.cursor) sections.push(`Your cursor, in ${report.cursor.file}:\n${renderCode(report.cursor)}`);
+  if (report.cursor) {
+    const owner = report.turn === 'programmer' ? "Agent's" : 'Your';
+    sections.push(`${owner} cursor, in ${report.cursor.file}:\n${renderCode(report.cursor)}`);
+  }
   if (report.paused) {
     const why = report.paused.map((r) => PAUSE_REASONS[r]).join('; ');
     sections.push(`Playback is paused: ${why}. Your batches wait until the programmer resumes.`);
   }
-  if (report.waiting) {
-    sections.push(tool === 'listen' ? 'Nothing has happened yet. Call `listen` again.' : 'Nothing has finished yet. Carry on as usual.');
-  }
   const ended = report.events.some((e) => e.kind === 'end');
+  if (report.navigator) {
+    const reasons = {
+      typing_pause: 'typing paused',
+      idle_timeout: 'the idle timeout elapsed',
+      turn_change: 'the turn changed',
+      message: 'the programmer sent a message',
+      hand_raised: 'the programmer raised a hand',
+    };
+    const { wakeReason, elapsedMs, programmerCursor } = report.navigator;
+    sections.push(`Listen returned because ${reasons[wakeReason]} after ${elapsedMs / MS_PER_SECOND} seconds.`);
+    if (programmerCursor) {
+      sections.push(`Programmer's cursor: ${programmerCursor.file}, line ${programmerCursor.line}, column ${programmerCursor.column}.`);
+    }
+    if (!ended) sections.push('Comment if useful, then call `listen` again.');
+  } else if (report.waiting) {
+    const activity = report.events.length > 0 || report.batches.length > 0;
+    sections.push(
+      tool === 'listen'
+        ? activity
+          ? 'Call `listen` again.'
+          : 'Nothing has happened yet. Call `listen` again.'
+        : activity
+          ? 'Carry on as usual.'
+          : 'Nothing has finished yet. Carry on as usual.',
+    );
+  }
   if (tool === 'end' && !ended) {
     sections.push('The session has ended.');
   } else if (report.turn === 'programmer' && !ended) {

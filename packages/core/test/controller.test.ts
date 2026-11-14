@@ -12,7 +12,7 @@ import { mock } from 'vitest-mock-extended';
 import { CURSOR_MARKER, REPORT_SCHEMA, type Action, type BatchResult, type Report } from '@ai-pair/protocol';
 import { defaultConfig, type Config } from '../src/config';
 import { Controller, isSavedSession, type SavedSession } from '../src/controller';
-import { boundedDiff, lineChanges } from '../src/diff';
+import { numberedDiff, lineChanges } from '../src/diff';
 import { followChange, rehearse } from '../src/rehearsal';
 import type { LineIds, Sighting } from '../src/lines';
 import type { Failure, Scene, Stage } from '../src/player';
@@ -24,6 +24,7 @@ const fakes = vi.hoisted(() => {
   /** A LineIds, faked: the methods the controller calls. */
   interface FakeLines {
     of: ReturnType<typeof vi.fn<(file: string, text: string) => number[]>>;
+    matches: ReturnType<typeof vi.fn<(file: string, text: string) => boolean>>;
     apply: ReturnType<typeof vi.fn>;
     adopt: ReturnType<typeof vi.fn>;
     fork: ReturnType<typeof vi.fn>;
@@ -101,6 +102,7 @@ const fakes = vi.hoisted(() => {
     /** Returns a LineIds, faked: each line's identity is its number, unless a test says otherwise. */
     fakeLines: (): FakeLines => ({
       of: vi.fn((...[, text]: [string, string]) => [...text.split('\n').keys()].map((i) => i + 1)),
+      matches: vi.fn(() => true),
       apply: vi.fn(),
       adopt: vi.fn(),
       fork: vi.fn(),
@@ -184,7 +186,7 @@ vi.mock('../src/rehearsal', () => ({
   followChange: vi.fn(),
 }));
 vi.mock('../src/diff', () => ({
-  boundedDiff: vi.fn((...[file, before, after]: [string, string, string]) => ({ diff: `${file}: ${before} -> ${after}` })),
+  numberedDiff: vi.fn((...[file, before, after]: [string, string, string]) => ({ diff: `${file}: ${before} -> ${after}`, lines: [] })),
   lineChanges: vi.fn((...[, changes]: [string, unknown]) => changes),
 }));
 vi.mock('../src/text', () => ({
@@ -452,6 +454,7 @@ describe('start', () => {
       batches: [],
       events: [],
       turn: 'agent',
+      navigatorCommentary: 'helpful',
     });
     expect(scene()).toMatchObject({ root: path.join(ROOT, 'sub'), turn: 'agent', focus: 'cursor', pointFar: false });
     expect(posted(h)[0]).toEqual({ type: 'session', active: true, task: 'Fix it.', rules: ['GUIDE.md'] });
@@ -497,7 +500,7 @@ describe('a session the agent leaves, and comes back to', () => {
     expect(h.controller.isSuspended).toBe(true);
     expect(posted(h).at(-1)).toEqual({ type: 'session', active: true, task: 'Kept.', suspended: true });
     const resumed = REPORT_SCHEMA.parse(await h.controller.start(undefined, ROOT, ['GUIDE.md']));
-    expect(resumed).toEqual({ batches: [], events: [], turn: 'agent', resumed: true });
+    expect(resumed).toEqual({ batches: [], events: [], turn: 'agent', resumed: true, navigatorCommentary: 'helpful' });
     expect(posted(h).at(-1)).toEqual({ type: 'session', active: true, task: 'Kept.', resumed: true, rules: ['GUIDE.md'] });
     expect(fakes.players).toHaveLength(1);
     h.controller.disconnect();
@@ -711,7 +714,7 @@ describe('steps and their batches', () => {
 
   it('an empty step waits for the queued batches, and returns at once with none', async () => {
     const h = await started();
-    expect(await report(h.controller.step([]))).toEqual({ batches: [], events: [], turn: 'agent' });
+    expect(await report(h.controller.step([]))).toEqual({ batches: [], events: [], turn: 'agent', navigatorCommentary: 'helpful' });
     const finish = holdPlay();
     await report(h.controller.step(SAY));
     const waiting = h.controller.step([]);
@@ -1395,7 +1398,7 @@ describe('listen', () => {
     const h = await started();
     const listen = h.controller.listen();
     await settle(CONFIG.maxBlockMs);
-    expect(await report(listen)).toEqual({ batches: [], events: [], turn: 'agent', waiting: true });
+    expect(await report(listen)).toEqual({ batches: [], events: [], turn: 'agent', waiting: true, navigatorCommentary: 'helpful' });
     expect(h.traced.at(-1)).toMatch(/^report to listen: batches \[\], events \[\], waiting, \d+ chars$/);
   });
 
@@ -1418,6 +1421,139 @@ describe('listen', () => {
       { kind: 'edit', file: 'a.ts', diff: 'a.ts: abc -> abcd', by: 'programmer' },
       { kind: 'turn', to: 'agent', message: 'Your turn.', selection: { ...selection(), file: 'a.ts' } },
     ]);
+  });
+
+  it('ignores an already queued navigator timer after handing back or replacing the session', async () => {
+    const h = await started();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    h.controller.userEdit(A, 'a', 'ab', [{ offset: 1, deleteLength: 0, text: 'b' }]);
+    // Simulates a callback already queued when its timer was cleared.
+    const clear = vi.spyOn(globalThis, 'clearTimeout').mockImplementation(() => {});
+    h.controller.handBack();
+    await report(h.controller.listen());
+    await settle(CONFIG.navigatorIdleMs);
+    clear.mockRestore();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    const listening = h.controller.listen();
+    expect(await pending(listening)).toBe(true);
+    h.controller.userMessage('Next.');
+    await report(listening);
+
+    h.controller.userEdit(A, 'ab', 'abc', [{ offset: 2, deleteLength: 0, text: 'c' }]);
+    const clearAgain = vi.spyOn(globalThis, 'clearTimeout').mockImplementation(() => {});
+    h.controller.endSession();
+    await report(h.controller.listen());
+    await h.controller.start('Replacement');
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    await settle(CONFIG.navigatorIdleMs);
+    clearAgain.mockRestore();
+    const next = h.controller.listen();
+    expect(await pending(next)).toBe(true);
+    h.controller.userMessage('Replacement.');
+    expect((await report(next)).navigator?.wakeReason).toBe('message');
+  });
+
+  it('preserves a due typing pause when a queued batch outlasts the timeout', async () => {
+    const h = await started();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    h.controller.setTimeouts({ navigatorIdleMs: 10, maxBlockMs: 20 });
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    const listening = h.controller.listen();
+    h.controller.userEdit(A, 'a', 'ab', [{ offset: 1, deleteLength: 0, text: 'b' }]);
+    await settle(20);
+    expect((await report(listening)).navigator?.wakeReason).toBe('idle_timeout');
+    finish();
+    await settle();
+    expect((await report(h.controller.listen())).navigator?.wakeReason).toBe('typing_pause');
+  });
+
+  it('restores an undelivered typing pause unless a newer edit superseded it', async () => {
+    const h = await started();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    h.controller.userEdit(A, 'a', 'ab', [{ offset: 1, deleteLength: 0, text: 'b' }]);
+    await settle(CONFIG.navigatorIdleMs);
+    const pause = await report(h.controller.listen());
+    h.controller.restore(pause);
+    expect((await report(h.controller.listen())).navigator?.wakeReason).toBe('typing_pause');
+    h.controller.userEdit(A, 'ab', 'abc', [{ offset: 2, deleteLength: 0, text: 'c' }]);
+    h.controller.restore(pause);
+    const next = h.controller.listen();
+    expect(await pending(next)).toBe(true);
+    await settle(CONFIG.navigatorIdleMs);
+    expect((await report(next)).navigator?.wakeReason).toBe('typing_pause');
+  });
+
+  it('restores a granted hand only while the same grant remains active', async () => {
+    const h = await started();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    const listening = h.controller.listen();
+    h.controller.requestAttention();
+    await settle();
+    const grant = await report(listening);
+    h.controller.restore(grant);
+    expect((await report(h.controller.listen())).navigator?.wakeReason).toBe('hand_raised');
+    h.controller.userMessage('Done.');
+    await report(h.controller.listen());
+    h.controller.requestAttention();
+    await settle();
+    expect((await report(h.controller.listen())).navigator?.wakeReason).toBe('hand_raised');
+    h.controller.restore(grant);
+    const next = h.controller.listen();
+    expect(await pending(next)).toBe(true);
+    h.controller.userMessage('Next.');
+    expect((await report(next)).navigator?.wakeReason).toBe('message');
+  });
+
+  it('reports navigator timeout elapsed and the current programmer cursor', async () => {
+    const h = await started();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    vi.spyOn(h.editor, 'programmerCursor').mockReturnValue({ file: A, line: 4, column: 3 });
+    h.controller.setTimeouts({ maxBlockMs: 45_000 });
+    const listening = h.controller.listen();
+    await settle(9999);
+    expect(await pending(listening)).toBe(true);
+    await settle(1);
+    expect((await report(listening)).navigator).toEqual({
+      wakeReason: 'idle_timeout',
+      elapsedMs: 10_000,
+      programmerCursor: { file: 'a.ts', line: 4, column: 3 },
+    });
+  });
+
+  it('reports a granted raised hand once to a waiting navigator', async () => {
+    const h = await started();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    const listening = h.controller.listen();
+    h.controller.requestAttention();
+    await settle();
+    expect((await report(listening)).navigator?.wakeReason).toBe('hand_raised');
+    const next = h.controller.listen();
+    expect(await pending(next)).toBe(true);
+    h.controller.userMessage('Here.');
+    expect((await report(next)).navigator?.wakeReason).toBe('message');
+  });
+
+  it('reports a typing pause after a timeout already delivered the edit', async () => {
+    const h = await started();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    h.controller.setTimeouts({ maxBlockMs: 10, navigatorIdleMs: 20 });
+    const first = h.controller.listen();
+    h.controller.userEdit(A, 'a', 'ab', [{ offset: 1, deleteLength: 0, text: 'b' }]);
+    await settle(10);
+    expect((await report(first)).navigator?.wakeReason).toBe('idle_timeout');
+    const next = h.controller.listen();
+    await settle(10);
+    expect((await report(next)).navigator?.wakeReason).toBe('typing_pause');
   });
 
   it("returns in the programmer's turn for something other than an edit", async () => {
@@ -1756,6 +1892,198 @@ describe('the cursor in a report', () => {
 });
 
 describe('pause and resume', () => {
+  it('Attention: grants idle floor, publishes paused state and releases only its hold', async () => {
+    const narration = mock<NarrationPort>();
+    narration.attentionCue.mockResolvedValue(undefined);
+    const h = harness({}, {}, narration);
+    await h.controller.start();
+    h.controller.requestAttention();
+    await settle();
+    expect(posted(h)).toContainEqual({ type: 'attention', state: 'granted' });
+    expect(h.controller.isPaused).toBe(true);
+    expect(narration.attentionCue).toHaveBeenCalledOnce();
+    h.controller.resume();
+    expect(h.controller.isPaused).toBe(false);
+    expect(narration.cancel).toHaveBeenCalled();
+  });
+
+  it('Attention: cancel and disconnect fence a pending speech completion', async () => {
+    const h = await started();
+    const { promise, resolve } = Promise.withResolvers<void>();
+    h.controller.requestAttention();
+    h.controller.requestAttention();
+    h.controller.requestAttention();
+    const currentStage = stage();
+    if (currentStage.attentionBoundary === undefined) throw new Error('Missing boundary');
+    const waiting = currentStage.attentionBoundary(promise);
+    h.controller.disconnect();
+    h.controller.endSession();
+    resolve();
+    await waiting;
+    expect(posted(h)).not.toContainEqual({ type: 'attention', state: 'granted' });
+  });
+
+  it('Attention: an ordinary action boundary does not wait', async () => {
+    await started();
+    const currentStage = stage();
+    if (currentStage.attentionBoundary === undefined) throw new Error('Missing boundary');
+    await currentStage.attentionBoundary(Promise.resolve());
+  });
+
+  it('Attention: reports a granted hold and tolerates repeated or inactive clicks', async () => {
+    const h = harness();
+    h.controller.requestAttention();
+    expect(posted(h)).toEqual([]);
+    await h.controller.start();
+    h.controller.requestAttention();
+    await settle();
+    h.controller.requestAttention();
+    expect((await report(h.controller.listen())).paused).toEqual(['attention']);
+    h.controller.resume();
+  });
+
+  it('Attention: waits for a running player to finish before granting at idle', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    void h.controller.step([{ say: 'Working.' }]);
+    await settle();
+    h.controller.requestAttention();
+    finish();
+    await settle();
+    expect(posted(h)).toContainEqual({ type: 'attention', state: 'granted' });
+    h.controller.resume();
+  });
+
+  it('Attention: diagnostic release prevents stale grant publication', async () => {
+    const narration = mock<NarrationPort>();
+    narration.attentionCue.mockResolvedValue(undefined);
+    const h = harness({}, {}, narration);
+    await h.controller.start();
+    h.controller.onDiagnostic = (event) => {
+      if (event.kind === 'pause' && event.reasons.includes('attention')) h.controller.resume();
+    };
+    h.controller.requestAttention();
+    await settle();
+    expect(h.controller.isPaused).toBe(false);
+    expect(posted(h)).not.toContainEqual({ type: 'attention', state: 'granted' });
+    expect(narration.attentionCue).not.toHaveBeenCalled();
+  });
+
+  it('Attention: diagnostic observer closing the session fences grant publication', async () => {
+    const h = await started();
+    h.controller.onDiagnostic = (event) => {
+      if (event.kind === 'pause' && event.reasons.includes('attention')) {
+        h.controller.disconnect();
+        h.controller.endSession();
+      }
+    };
+    h.controller.requestAttention();
+    await settle();
+    expect(posted(h)).not.toContainEqual({ type: 'attention', state: 'granted' });
+  });
+
+  it('Attention: a diagnostic observer can request a successor during release', async () => {
+    const h = await started();
+    h.controller.requestAttention();
+    await settle();
+    const currentStage = stage();
+    if (currentStage.attentionBoundary === undefined) throw new Error('Missing boundary');
+    let finished = false;
+    const waiting = currentStage.attentionBoundary(Promise.resolve()).then(() => {
+      finished = true;
+    });
+    h.controller.onDiagnostic = (event) => {
+      if (event.kind === 'pause' && !event.paused) {
+        h.controller.onDiagnostic = undefined;
+        h.controller.requestAttention();
+      }
+    };
+    h.controller.resume();
+    expect(posted(h).at(-1)).not.toEqual({ type: 'attention', state: 'none' });
+    await settle();
+    expect(h.controller.isPaused).toBe(true);
+    expect(finished).toBe(false);
+    h.controller.resume();
+    await waiting;
+    expect(finished).toBe(true);
+  });
+
+  it('Attention: a reentrant observer can release before the cue is posted', async () => {
+    const h = await started();
+    h.panel.post.mockImplementation((event) => {
+      if (event.type === 'attention' && event.state === 'granted') h.controller.resume();
+    });
+    h.controller.requestAttention();
+    await settle();
+    expect(posted(h)).not.toContainEqual({ type: 'say', text: "What's up?" });
+  });
+
+  it('Attention: an observer may replace a grant before its cue', async () => {
+    const h = await started();
+    let replaced = false;
+    h.panel.post.mockImplementation((event) => {
+      if (event.type === 'attention' && event.state === 'granted' && !replaced) {
+        replaced = true;
+        h.controller.resume();
+        h.controller.requestAttention();
+      }
+    });
+    h.controller.requestAttention();
+    await settle();
+    expect(posted(h).filter((event) => event.type === 'attention' && event.state === 'granted')).toHaveLength(2);
+    expect(posted(h).filter((event) => event.type === 'say' && event.text === "What's up?")).toHaveLength(1);
+    h.controller.resume();
+  });
+
+  it('Attention: a second boundary waits for the same granted hold and its successor', async () => {
+    const h = await started();
+    h.controller.requestAttention();
+    await settle();
+    const currentStage = stage();
+    if (currentStage.attentionBoundary === undefined) throw new Error('Missing boundary');
+    const waiting = currentStage.attentionBoundary(Promise.resolve());
+    h.controller.resume();
+    h.controller.requestAttention();
+    await settle();
+    expect(h.controller.isPaused).toBe(true);
+    h.controller.resume();
+    await waiting;
+  });
+
+  it('Attention: an observer may release on text before audio starts', async () => {
+    const narration = mock<NarrationPort>();
+    narration.attentionCue.mockRejectedValue(new Error('unavailable'));
+    const h = harness({}, {}, narration);
+    await h.controller.start();
+    h.panel.post.mockImplementation((event) => {
+      if (event.type === 'say' && event.text === "What's up?") h.controller.resume();
+    });
+    h.controller.requestAttention();
+    await settle();
+    expect(narration.attentionCue).not.toHaveBeenCalled();
+  });
+
+  it('Attention: unavailable audio does not prevent releasing the floor', async () => {
+    const narration = mock<NarrationPort>();
+    narration.attentionCue.mockRejectedValue(new Error('unavailable'));
+    const h = harness({}, {}, narration);
+    await h.controller.start();
+    h.controller.requestAttention();
+    await settle();
+    expect(h.controller.isPaused).toBe(true);
+    h.controller.resume();
+  });
+
+  it('ShowsCursor: requests cursor navigation without changing pause or turn', async () => {
+    const h = await started();
+    h.controller.pause();
+    const turn = h.controller.turn;
+    h.controller.revealCursor();
+    expect(h.editor.revealCursor.mock.calls).toHaveLength(1);
+    expect(h.controller.isPaused).toBe(true);
+    expect(h.controller.turn).toBe(turn);
+  });
+
   it('pauses speech until all pause reasons clear and cancels it on a reply', async () => {
     const narration = mock<NarrationPort>();
     const h = harness({}, {}, narration);
@@ -2152,7 +2480,7 @@ describe('reports', () => {
     await h.controller.start(undefined, '/work');
     h.controller.userEdit('/work/src/a.ts', 'a', 'b', []);
     await report(h.controller.listen());
-    expect(boundedDiff).toHaveBeenCalledWith('src/a.ts', 'a', 'b');
+    expect(numberedDiff).toHaveBeenCalledWith('src/a.ts', 'a', 'b');
   });
 });
 
@@ -2239,3 +2567,334 @@ it.each(['programmer', 'suspended', 'ended'] as const)(
     expect(clock.release).toHaveBeenCalledOnce();
   },
 );
+
+describe('NavigatorCommentary projection', () => {
+  it('CurrentAtDelivery: projects after an asynchronous cursor lookup on resume', async () => {
+    const h = await started();
+    h.controller.disconnect();
+    scene().cursor = { file: A, offset: 1 };
+    let release = vi.fn<(value: unknown) => void>();
+    player().codeAt.mockReturnValue(
+      new Promise((resolve) => {
+        release = vi.fn(resolve);
+      }),
+    );
+    const resumed = h.controller.start();
+    await settle(0);
+    h.controller.setNavigatorCommentary('coach');
+    release({
+      code: { file: A, lines: [{ number: 1, text: 'x' }] },
+      sighting: { file: A, text: 'x', lines: [1] },
+      cursorLine: { number: 1, text: 'x' },
+    });
+    expect((await report(resumed)).navigatorCommentary).toBe('coach');
+  });
+
+  it('CurrentAtDelivery, RestoreKeepsMode: projects the current mode on start, pending listen and replay', async () => {
+    const h = harness();
+    expect((await report(h.controller.start())).navigatorCommentary).toBe('helpful');
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    const listen = h.controller.listen();
+    await settle(0);
+    h.controller.setNavigatorCommentary('quiet');
+    const first = await report(listen);
+    expect(first.navigatorCommentary).toBe('quiet');
+    h.controller.setNavigatorCommentary('coach');
+    h.controller.restore(first);
+    const replay = h.controller.listen();
+    await settle(CONFIG.maxBlockMs);
+    expect((await report(replay)).navigatorCommentary).toBe('coach');
+  });
+});
+
+it('NoEmptyWake: undo before a report does not wake navigator listen', async () => {
+  const h = await started();
+  h.controller.takeTurn();
+  await report(h.controller.listen());
+  const listening = h.controller.listen();
+  h.controller.userEdit(A, 'a', 'ab', [{ offset: 1, deleteLength: 0, text: 'b' }]);
+  h.controller.userEdit(A, 'ab', 'a', [{ offset: 1, deleteLength: 1, text: '' }]);
+  await settle(CONFIG.navigatorIdleMs);
+  expect(await pending(listening)).toBe(true);
+  h.controller.userMessage('done');
+  expect((await report(listening)).events).not.toContainEqual(expect.objectContaining({ kind: 'edit' }));
+});
+
+it('PlainHandback: keeps queued navigator speech', async () => {
+  const h = await started();
+  h.controller.takeTurn();
+  await report(h.controller.listen());
+  const finish = holdPlay();
+  await report(h.controller.step(SAY));
+  const queued = h.controller.step(SAY);
+  await settle();
+  h.controller.handBack();
+  finish();
+  expect((await report(queued)).batches).not.toContainEqual(expect.objectContaining({ status: 'discarded' }));
+});
+
+it('NoEmptyWake: a later undone burst stays quiet after an observed pause', async () => {
+  const h = await started();
+  h.controller.takeTurn();
+  await report(h.controller.listen());
+  h.controller.userEdit(A, 'a', 'ab', [{ offset: 1, deleteLength: 0, text: 'b' }]);
+  await settle(CONFIG.navigatorIdleMs);
+  expect((await report(h.controller.listen())).navigator?.wakeReason).toBe('typing_pause');
+  const listening = h.controller.listen();
+  h.controller.userEdit(A, 'ab', 'abc', [{ offset: 2, deleteLength: 0, text: 'c' }]);
+  h.controller.userEdit(A, 'abc', 'ab', [{ offset: 2, deleteLength: 1, text: '' }]);
+  await settle(CONFIG.navigatorIdleMs);
+  expect(await pending(listening)).toBe(true);
+  h.controller.userMessage('done');
+  await report(listening);
+});
+
+it('ObservedBurst: a timeout followed by undo still reports the reversal at a pause', async () => {
+  const h = await started();
+  h.controller.takeTurn();
+  await report(h.controller.listen());
+  h.controller.setTimeouts({ navigatorIdleMs: 20, maxBlockMs: 10 });
+  const listening = h.controller.listen();
+  h.controller.userEdit(A, 'a', 'ab', [{ offset: 1, deleteLength: 0, text: 'b' }]);
+  await settle(10);
+  expect((await report(listening)).events).toContainEqual(expect.objectContaining({ kind: 'edit' }));
+  h.controller.userEdit(A, 'ab', 'a', [{ offset: 1, deleteLength: 1, text: '' }]);
+  await settle(20);
+  const pause = await report(h.controller.listen());
+  expect(pause.navigator?.wakeReason).toBe('typing_pause');
+  expect(pause.events).toContainEqual(expect.objectContaining({ kind: 'edit' }));
+});
+
+it('PlainHandback: queued navigator rehearsal follows edits and uses the current driver turn', async () => {
+  const h = await started();
+  h.controller.takeTurn();
+  await report(h.controller.listen());
+  const finish = holdPlay();
+  await report(h.controller.step(SAY));
+  const changes = [{ offset: 1, deleteLength: 0, text: 'b' }];
+  h.controller.userEdit(A, 'a', 'ab', changes);
+  expect(followChange).toHaveBeenCalledWith(expect.anything(), A, 'ab', changes);
+  h.controller.handBack();
+  const next = h.controller.step(SAY);
+  await settle();
+  expect(vi.mocked(rehearse).mock.calls.at(-1)?.[2].scene.turn).toBe('agent');
+  finish();
+  await report(next);
+});
+
+it('VisibleLinesOnly: restored diff cannot authorize current shifted line IDs', async () => {
+  const h = await started();
+  h.controller.takeTurn();
+  await report(h.controller.listen());
+  vi.mocked(numberedDiff).mockReturnValueOnce({ diff: '@@ -1 +1 @@\n+2: shown', lines: [2] });
+  sessionLines().of.mockReturnValueOnce([10, 20]).mockReturnValueOnce([10, 20]);
+  h.controller.userEdit(A, 'a', 'a\nb', [{ offset: 1, deleteLength: 0, text: '\nb' }]);
+  await settle(CONFIG.navigatorIdleMs);
+  const first = await report(h.controller.listen());
+  h.controller.restore(first);
+  await report(h.controller.listen());
+  await report(h.controller.step(SAY));
+  const knows = vi.mocked(rehearse).mock.calls.at(-1)?.[4];
+  expect(knows?.(A, 2, 20)).toBe(true);
+  expect(knows?.(A, 2, 30)).toBe(false);
+  expect(knows?.(A, 1, 10)).toBe(false);
+});
+
+it('VisibleLinesOnly: stale event text does not replace the live line tracker', async () => {
+  const h = await started();
+  h.controller.takeTurn();
+  await report(h.controller.listen());
+  vi.mocked(numberedDiff).mockReturnValueOnce({ diff: '+1: old', lines: [1] });
+  h.controller.userEdit(A, 'a', 'old', [{ offset: 0, deleteLength: 1, text: 'old' }]);
+  sessionLines().matches.mockReturnValueOnce(false);
+  sessionLines().of.mockClear();
+  await settle(CONFIG.navigatorIdleMs);
+  await report(h.controller.listen());
+  expect(sessionLines().matches).toHaveBeenCalledWith(A, 'old');
+  expect(sessionLines().of).not.toHaveBeenCalled();
+});
+
+it('does not follow a programmer edit into an interrupted stale rehearsal', async () => {
+  const h = await started();
+  const finish = holdPlay();
+  await report(h.controller.step(SAY));
+  h.controller.takeTurn();
+  const changes = [{ offset: 1, deleteLength: 0, text: 'b' }];
+  h.controller.userEdit(A, 'a', 'ab', changes);
+  expect(followChange).not.toHaveBeenCalled();
+  finish();
+  await settle();
+});
+
+it('reports a truncated diff without granting sightings for omitted lines', async () => {
+  const h = await started();
+  h.controller.takeTurn();
+  await report(h.controller.listen());
+  vi.mocked(numberedDiff).mockReturnValueOnce({ diff: '@@ -1,1 +1,201 @@', omitted: 201, lines: [] });
+  h.controller.userEdit(A, 'a', 'b', [{ offset: 0, deleteLength: 1, text: 'b' }]);
+  await settle(CONFIG.navigatorIdleMs);
+  const observed = await report(h.controller.listen());
+  expect(observed.events).toContainEqual({
+    kind: 'edit',
+    file: 'a.ts',
+    by: 'programmer',
+    diff: '@@ -1,1 +1,201 @@',
+    omitted: 201,
+  });
+  await report(h.controller.step(SAY));
+  const knows = vi.mocked(rehearse).mock.calls.at(-1)?.[4];
+  expect(knows?.(A, 1, 1)).toBe(false);
+});
+
+describe('live navigator commentary notice', () => {
+  it('applies inactive and suspended changes on start without a queued notice', async () => {
+    const h = harness();
+    h.controller.setNavigatorCommentary('quiet');
+    expect((await report(h.controller.start())).navigatorCommentary).toBe('quiet');
+    h.controller.disconnect();
+    h.controller.setNavigatorCommentary('coach');
+    expect((await report(h.controller.start())).navigatorCommentary).toBe('coach');
+    const listening = h.controller.listen();
+    expect(await pending(listening)).toBe(true);
+    h.controller.userMessage('continue');
+    await report(listening);
+  });
+
+  it('wakes ahead of interrupted batch retirement without releasing it', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    h.controller.takeTurn();
+    const listening = h.controller.listen();
+    expect(await pending(listening)).toBe(true);
+    h.controller.setNavigatorCommentary('quiet');
+    expect((await report(listening)).commentaryChanged).toBeDefined();
+    expect(player().play).toHaveBeenCalledTimes(1);
+    finish();
+    await settle();
+  });
+
+  it('updates status when a settings-only listen returns', async () => {
+    const h = await started();
+    const listening = h.controller.listen();
+    await settle(0);
+    expect(statuses(h).at(-1)).toBe('listening');
+    h.controller.setNavigatorCommentary('quiet');
+    await report(listening);
+    expect(statuses(h).at(-1)).toBe('thinking');
+    expect(h.traced.at(-1)).toMatch(/^report to listen:/);
+  });
+
+  it('reports a manual pause without releasing it on a settings notice', async () => {
+    const h = await started();
+    h.controller.pause('programmer');
+    const listening = h.controller.listen();
+    await settle(0);
+    h.controller.setNavigatorCommentary('quiet');
+    const notice = await report(listening);
+    expect(notice.paused).toEqual(['programmer']);
+    expect(h.controller.isPaused).toBe(true);
+  });
+
+  it('reports an active attention grant in a settings notice', async () => {
+    const h = await started();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    h.controller.requestAttention();
+    await settle();
+    await report(h.controller.listen());
+    h.controller.setNavigatorCommentary('quiet');
+    expect((await report(h.controller.listen())).paused).toEqual(['attention']);
+  });
+
+  it('wakes a pending listen without interrupting a playing batch', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    const listening = h.controller.listen();
+    expect(await pending(listening)).toBe(true);
+    h.controller.setNavigatorCommentary('quiet');
+    const notice = await report(listening);
+    expect(notice.commentaryChanged).toBeDefined();
+    expect(notice.navigatorCommentary).toBe('quiet');
+    expect(notice.batches).toEqual([]);
+    expect(timeline().interrupt).not.toHaveBeenCalled();
+    finish();
+    await settle();
+  });
+
+  it('delivers changes made while computing and restores only the current notice', async () => {
+    const h = await started();
+    h.controller.setNavigatorCommentary('quiet');
+    const old = await report(h.controller.listen());
+    expect(old.commentaryChanged).toBeDefined();
+    h.controller.setNavigatorCommentary('coach');
+    const latest = await report(h.controller.listen());
+    expect(latest.navigatorCommentary).toBe('coach');
+    expect(latest.commentaryChanged).toBeDefined();
+    h.controller.restore(old);
+    const noOldNotice = h.controller.listen();
+    expect(await pending(noOldNotice)).toBe(true);
+    h.controller.userMessage('continue');
+    await report(noOldNotice);
+    h.controller.restore(latest);
+    expect((await report(h.controller.listen())).commentaryChanged).toBeDefined();
+  });
+
+  it('coalesces changes before commit and allows a follow-up after commitment', async () => {
+    const h = await started();
+    h.controller.setNavigatorCommentary('quiet');
+    h.controller.setNavigatorCommentary('coach');
+    const first = await report(h.controller.listen());
+    expect(first.navigatorCommentary).toBe('coach');
+    const listening = h.controller.listen();
+    await settle(0);
+    h.controller.setNavigatorCommentary('quiet');
+    h.controller.setNavigatorCommentary('coach');
+    const committed = await report(listening);
+    expect(committed.navigatorCommentary).toBe('coach');
+    expect((await report(h.controller.listen())).navigatorCommentary).toBe('coach');
+    const next = h.controller.listen();
+    expect(await pending(next)).toBe(true);
+    h.controller.userMessage('continue');
+    await report(next);
+  });
+
+  it('does not revive a notice in a replacement or resumed session', async () => {
+    const h = await started();
+    h.controller.setNavigatorCommentary('quiet');
+    const old = await report(h.controller.listen());
+    h.controller.disconnect();
+    await report(h.controller.start());
+    h.controller.restore(old);
+    const listening = h.controller.listen();
+    expect(await pending(listening)).toBe(true);
+    h.controller.userMessage('continue');
+    await report(listening);
+    h.controller.endSession();
+    await report(h.controller.listen());
+    await report(h.controller.start());
+    h.controller.restore(old);
+    const next = h.controller.listen();
+    expect(await pending(next)).toBe(true);
+    h.controller.userMessage('new session');
+    await report(next);
+  });
+
+  it('does not wake on the same mode and preserves a due typing pause', async () => {
+    const h = await started();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    const listening = h.controller.listen();
+    h.controller.setNavigatorCommentary('helpful');
+    expect(await pending(listening)).toBe(true);
+    h.controller.userEdit(A, 'a', 'ab', [{ offset: 1, deleteLength: 0, text: 'b' }]);
+    h.controller.setNavigatorCommentary('coach');
+    expect((await report(listening)).commentaryChanged).toBeDefined();
+    await settle(CONFIG.navigatorIdleMs);
+    const pause = await report(h.controller.listen());
+    expect(pause.navigator?.wakeReason).toBe('typing_pause');
+    expect(pause.events).toContainEqual(expect.objectContaining({ kind: 'edit' }));
+  });
+});

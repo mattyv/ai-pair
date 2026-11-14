@@ -10,6 +10,20 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   GPT-6.1 Terra agents write code and tests; GPT-6 Astra agents review them.
     Resolve findings and verify the resulting changes before reporting completion.
 
+## Speech continuity and delivery
+
+-   Context is opt-in and session-local: retain at most three completed agent
+    utterances and 500 Unicode code points. Exclude previews, interrupted or
+    failed speech, and text that was never spoken. Ordinary cancellation and
+    suspension preserve completed history; ending or replacing the session
+    clears it. Configuration changes invalidate old completions.
+-   Only OpenRouter ElevenLabs v4 receives previous text and delivery cues;
+    v3, v3 conversational, and v4 turbo receive cues only. Other models use
+    ordinary speech. This limits provider disclosure and avoids claiming
+    support for unverified context behavior. Previous text requires OpenRouter
+    Zero Data Retention; when it is off, supported cues and ordinary speech
+    remain available.
+
 ## Speech backend handoff
 
 -   Retire the previous local worker and wait for its matching exit before
@@ -25,6 +39,13 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   Invite a real programmer edit in the scratch file and comment on the
     observed report as navigator. The edit is optional; the agent waits for the
     programmer and does not take back their turn or end without permission.
+-   Demonstrate the hand request during overlapping narration and typing; the
+    panel supplies the cached acknowledgement. After the programmer agrees to
+    end, clean up only verified, unchanged demo-owned files and an empty demo
+    directory through Pair. If the programmer holds the turn, offer a handback
+    for cleanup or retaining the files; `run` cannot execute on their turn.
+    Preserve uncertain or user-retained work. A lost session leaves the files
+    in place; the skill cannot guarantee cleanup.
 -   Run diagnostics on a bounded temporary connection, independent of session
     ownership. Return only schema-validated metadata and fixed errors; audio
     readiness cannot establish that the programmer heard playback. A preview
@@ -972,3 +993,187 @@ editing and a `wait` question followed by listening. It uses the programmer's
 existing speech setting and does not infer audibility from readiness. The
 scripted demo remains separate; this instruction change does not alter session
 ownership or the runtime architecture.
+
+## Spoken narration rejection counts
+
+Spoken narration errors report both whitespace-delimited word and Unicode code
+point counts for string inputs. This helps agents shorten rejected text without
+echoing potentially sensitive narration. Non-string inputs have no counts, and
+the existing eligibility rules and display-only fallback remain unchanged.
+
+## Portable teaching narration
+
+Deliver brief teaching guidance through the existing MCP pairing guide rather
+than changing a user's Claude or Codex configuration. Claude offers an
+Explanatory output style; Codex supports reusable skills, but no shared
+harness control was verified. The programmer successfully tried Anthropic's
+explanatory approach in chat before requesting this integration.
+
+The guide uses original, concise instructions informed by that assessment;
+no upstream plugin code or hook is imported. Connections to earlier work must
+be supported by conversation or verified session history. Similar repository
+code is not evidence of shared experience, and completed narration is not
+proof of learning. Teaching adapts to the programmer's request without forced
+exercises, extra model calls, or a new learner-history store. Existing speech
+limits and pacing apply. This instruction-only change does not alter runtime
+ownership or the architecture model; live session quality remains a human
+assessment rather than a unit-test claim.
+
+## Attention cue cache
+
+The local `SpeechService` owns a single in-memory, context-free waveform for
+the fixed attention cue. It reuses existing synthesis, tempo and output leases,
+and reserves the selected output afresh for every playback. Only a completed
+playback populates the cache. Synthesis-affecting settings and credential changes
+invalidate it eagerly; the next request synthesizes lazily. It never enters the
+session narration context. This saves repeat provider requests while retaining
+text-only operation if speech is unavailable. The cache is not persisted.
+
+## Explicit cursor navigation
+
+The toolbar can focus the editor at the agent's actual cursor without changing
+turn or playback. It uses the editor's authoritative cursor rather than the
+current follow target, which may be a pointed or narrated range. With no cursor
+it does nothing. Cursor identity is checked after asynchronous preparation; a
+navigation already accepted by VS Code cannot be recalled.
+
+Remote attention cues use the existing narration job lease and a versioned,
+text-free command. A terminal acknowledgement requires observed output or a
+failure; cancellation retains the lease until output retirement is confirmed.
+
+## Raising a hand during playback
+
+The controller owns a transient attention state: none, requested, or granted.
+A request waits at the next action boundary, or the next completed code-reading
+chunk, and lets the current speech unit drain before granting the floor. The
+hold stops further playback but does not pause the voice being drained. A second
+click cancels a pending request; a reply or Resume releases a granted hold.
+Ordinary pause reasons remain separate, so the fixed attention cue cannot
+bypass them. Stopping, disconnecting, or replacing the session invalidates the
+request. A continued speech unit remains owned by the player after its batch
+ends and must drain before an idle request is granted.
+
+Audio playback is optional and failures leave the text and floor available. Attention
+is not restored as live state after reload; the controller publishes a fresh
+snapshot after restoration. The bounded model abstracts the audio owner's
+physical retirement, settings, and cue cache; those require separate checks.
+
+## Cursor reveal follows the current agent position
+
+The cursor button opens an existing document and centers the latest agent cursor,
+including a file or offset change while VS Code is opening it. A newer request
+supersedes an older request; a stale completion or failure has no further
+effect. Navigation never creates a missing file, and reports an open failure.
+VS Code can already have accepted a show before a request is superseded, so
+that focus change cannot be retracted. Reveal leaves turn and playback alone.
+
+## Required narration cue forwarding
+
+`NarrationPort.attentionCue` is required on every narration adapter. The
+narration port itself remains optional when audio is absent, and each owner
+still honors disabled or unavailable speech. Making the method optional let
+the production extension omit it while the independently tested service and
+remote implementations appeared correct. The activation regression invokes
+the actual adapter supplied to its controller, and the required type makes a
+future omission a compile error. Cue forwarding uses the existing owner-ready,
+cancellation-generation and shutdown gates; it adds no lifecycle owner.
+
+The architecture source and export retain their existing controller, local
+speech-service and output boundaries. This correction restores the documented
+connection rather than changing that architecture. Unit adapter tests and
+composed transport/output tests are separate evidence; they do not establish
+hardware audibility or one complete activation-to-hardware run.
+
+## Navigator observations and programmer messages
+
+Observe workspace documents plus the current Pair cursor file outside the
+workspace. This lets a named temporary example participate in pairing without
+monitoring unrelated outside documents. Retire that outside mirror when the
+Pair cursor changes or clears. Other previously read outside files are not a
+persistent watch list. The editor supplies the native programmer caret; it
+does not move the agent cursor or own navigator readiness.
+
+The controller owns typing-pause generations and report acknowledgement.
+An idle timeout can report edits without consuming a later typing-pause wake.
+Navigator listens use a ten-second default idle limit, bounded by a smaller
+configured maximum; the agent-turn default remains 45 seconds. Reports state
+why the call returned and how long it waited. Numbered edit diffs are separate
+from the agent cursor excerpt, so edits beyond that excerpt remain visible.
+
+Keep immediate programmer messages canceling queued navigator `say` and
+`point` actions. A reply is new intent and can make older observations stale;
+retaining them can delay or contradict the response. Give one observation per
+batch and listen before continuing a review. The explicit deferred-message
+option retains its existing separate semantics. No new commentary queue owner
+is introduced.
+
+The relay accepts the documented delivery cue enum independently of speech
+settings. Its response describes cues as advisory and conditional on enabled
+context and model support. It cannot confirm actual provider application:
+that acknowledgement is absent from the current narration boundary. This fix
+does not add provider or cost plumbing. The matching 0.36.1 relay already
+publishes `speech_mode` in actual MCP `tools/list`; the new conformance test
+checks both fields and real calls rather than client presentation.
+
+## Navigator commentary preference
+
+Keep one saved Quiet / Helpful / Coach preference for navigator text and voice.
+Helpful is the default. Quiet omits routine first-pause reassurance; Coach adds
+useful explanations and connections to available, verified conversation
+history. Explicit programmer requests override the saved preference for the
+session. This is guidance to the agent, not an exact comment quota. Audio
+remains independently enabled or muted.
+
+The workspace extension owns persistence alongside other general preferences;
+the local companion forwards intent and renders the owner's current snapshot.
+The controller projects the current preference into reports after asynchronous
+cursor lookup. Restoring canceled activity evidence cannot restore an old
+preference. Changing the mode wakes a pending `listen` with a settings-only
+report; if none is waiting, retain the latest notice for the next `listen`.
+This replaces the initial deferred-until-another-event policy at the user's
+request. Same-value assignments do not wake. Preserve edit evidence, turn
+ownership, pauses, queued actions and current narration. A settings response
+does not claim that playing batches have completed or acknowledge a typing
+pause. Session-scoped notice identity makes canceled reports retryable without
+restoring old configuration or consuming a newer change. No unsolicited MCP
+push reaches a model that is still computing.
+
+Delivery is at least once. Pending changes coalesce to the latest mode before
+a notice commits. A change after commitment but before final projection can
+produce the latest policy followed by another notice with that same policy.
+Allow this narrow duplicate rather than add finalization state that could
+acknowledge a successor session's update. No old preference is restored.
+
+## Navigator follow-up: sightings, handback and net-zero activity
+
+Count only full, visible new-side and context lines in navigator diffs as
+line sightings. Bind them to the snapshot's line identities. Deleted lines,
+hunk headers without content and omitted content confer no new sighting.
+Replay cannot bind an old diff to successor text. Keep the existing line-shift
+staleness and exact substring checks: a still-present prefix can be pointed
+at while typing continues on the same line, without fuzzy matching.
+Before granting sightings, compare the event's after-text to the current
+tracked text without mutating the tracker. A pending historical edit can be
+reported after an agent edit; it confers no new sighting if the texts differ.
+Use `read` for those historical reports rather than replace live identities.
+
+A plain no-message handback preserves eligible queued navigator observations.
+A message or attached selection still introduces new intent and cancels stale
+advice. Taking the turn and hand requests retain interruption behavior. Core
+turn state is authoritative; browser and companion do not infer a handback
+from potentially stale displayed state. Plain takeover and handback preserve
+manual Pause until explicit Resume. Draft-empty events release only the draft
+pause through its existing owner. Message/selection handback retains its
+cancel-before-resume behavior. This replaces the old blanket turn auto-resume,
+avoiding a paused-audio blip without pending-intent state or a turn replica.
+For a no-message takeover, cancellation can wait for the workspace round trip.
+Existing narration owners retain physical retirement responsibility; successor
+speech cannot bypass it.
+Refresh retained talk-only rehearsal state against real programmer edits and
+the new driver turn, so the next driver batch uses current text and identities.
+
+Separate edit authorship from actual interruption. Net-zero navigator edits
+should not produce empty change reports or a typing-pause wake. Preserve the
+later pause acknowledgement when a timeout already reported meaningful work;
+an undo after such a report is itself a reportable reversal. Keep generation
+checks when restoring canceled reports and consider all edited files.

@@ -36201,7 +36201,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
             origin: "llm",
             generation: {
               focus:
-                "Interruption and Turn Handling \u2014 Programmer messages, edits, interrupts, pauses, look-away, and turn swaps discard queued batches, mark the session stale, require re-anchoring of the cursor, and wake listen calls with events.",
+                "Interruption and Turn Handling - Messages, agent-turn edits, explicit interrupts, takeover and message-bearing handback discard queued work. Pauses and look-away hold playback; plain handback preserves navigator work.",
             },
             doc: {
               type: "flow",
@@ -38397,7 +38397,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
             origin: "llm",
             generation: {
               focus:
-                "Programmer Interruption and Listen \u2014 Programmer messages, edits, interrupts, pauses and turn changes in the panel or editor discard queued batches and wake the agent's blocked listen call with an event report.",
+                "Programmer Interruption and Listen - New direction and takeover interrupt queued work and wake listen. Pauses hold playback; plain handback preserves navigator work. Settings notices wake listen without draining work.",
             },
             doc: {
               type: "sequence",
@@ -40741,8 +40741,8 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
               nodes: [
                 {
                   id: "service",
-                  label: "Speech service\nNarration, chunks and playback",
-                  files: ["packages/vscode/src/speech_service.ts"],
+                  label: "Speech service + core context\nPlayback and bounded history",
+                  files: ["packages/vscode/src/speech_service.ts", "packages/core/src/speech_context.ts"],
                   x: 40,
                   y: 80,
                 },
@@ -40820,7 +40820,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 service: [
                   {
                     id: "service-scope",
-                    text: "The service owns narration, chunking, tempo and playback while the manager owns backend resources. A current unit waits for cleanup; stale work cannot synthesize or play.",
+                    text: "The service owns narration, chunking, tempo and playback while the manager owns backend resources. A current unit waits for cleanup; stale work cannot synthesize or play. The same service owns one in-memory fixed attention-cue waveform, committed only after accepted playback completes. Relevant settings invalidate the cache; cue synthesis has no narration context and reuses existing backend and output leases.",
                     ts: 0,
                   },
                 ],
@@ -41169,6 +41169,222 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                   {
                     id: "restart-ownership",
                     text: "New host/session creation waits for prior retirement, and workspace transport starts only after a successful commit acknowledgement. Restart restores preferences, not workers, capability, proof, or output reservation. A fresh GPU acquisition requires fresh proof.",
+                    ts: 0,
+                  },
+                ],
+              },
+            },
+          },
+          {
+            id: "attention-interjection",
+            name: "Raise-hand interjection",
+            type: "architecture",
+            origin: "llm",
+            generation: { focus: "Controller-owned safe interjection and bounded context-free voice acknowledgement" },
+            doc: {
+              type: "architecture",
+              autoLayoutApplied: true,
+              nodes: [
+                {
+                  id: "panel",
+                  label: "Pair panel\nHand and state projection",
+                  files: ["packages/vscode/src/webview/panel.ts", "packages/vscode/src/panel_html.ts"],
+                  x: 40,
+                  y: 160,
+                },
+                {
+                  id: "controller",
+                  label: "Controller\nAttention state owner",
+                  files: ["packages/core/src/controller.ts"],
+                  x: 580,
+                  y: 160,
+                },
+                { id: "player", label: "Player\nSafe work and voice boundary", files: ["packages/core/src/player.ts"], x: 1120, y: 160 },
+                {
+                  id: "speech",
+                  label: "Speech service\nFixed cue cache owner",
+                  files: ["packages/vscode/src/speech_service.ts"],
+                  x: 580,
+                  y: 560,
+                },
+                {
+                  id: "route",
+                  label: "Output router\nDevice and retirement",
+                  files: ["packages/vscode/src/speech_output_router.ts"],
+                  x: 1120,
+                  y: 560,
+                },
+              ],
+              edges: [
+                {
+                  from: "panel",
+                  to: "controller",
+                  label: "request / lower hand",
+                  labelPosition: { distance: 0.5, offset: { x: 0, y: -25 } },
+                },
+                {
+                  from: "controller",
+                  to: "player",
+                  label: "boundary rendezvous",
+                  labelPosition: { distance: 0.5, offset: { x: 0, y: -25 } },
+                },
+                {
+                  from: "player",
+                  to: "controller",
+                  label: "boundary and voice settled",
+                  vertices: [
+                    { x: 1290, y: 400 },
+                    { x: 750, y: 400 },
+                  ],
+                  labelPosition: { distance: 0.5, offset: { x: 0, y: -25 } },
+                },
+                {
+                  from: "controller",
+                  to: "speech",
+                  label: "held: play fixed cue",
+                  labelPosition: { distance: 0.5, offset: { x: -65, y: 0 } },
+                },
+                { from: "speech", to: "route", label: "fresh route admission", labelPosition: { distance: 0.5, offset: { x: 0, y: -25 } } },
+                {
+                  from: "controller",
+                  to: "panel",
+                  label: "authoritative state",
+                  vertices: [
+                    { x: 750, y: 350 },
+                    { x: 210, y: 350 },
+                  ],
+                  labelPosition: { distance: 0.5, offset: { x: 0, y: 25 } },
+                },
+              ],
+              groups: [],
+              comments: {
+                controller: [
+                  {
+                    id: "attention-owner",
+                    text: "The controller owns idle, requested and granted attention state scoped to the current session. The player supplies a safe work boundary and drains existing narration before granting. The attention hold prevents subsequent work; it must not pause the acknowledgement cue. Other pause reasons remain effective. Reply or explicit cancellation invalidates the request; stale completion cannot grant a successor session.",
+                    ts: 0,
+                  },
+                ],
+                speech: [
+                  {
+                    id: "attention-cache",
+                    text: "One fixed context-free cue is synthesized lazily and remembered in process memory after successful playback. Relevant synthesis, privacy or credential changes invalidate it; stale or canceled results cannot populate it. No prior narration is sent or appended. Cache replay makes no provider request and routes through the current selected output. Disabled or failed audio leaves the text cue and work hold usable.",
+                    ts: 0,
+                  },
+                ],
+                panel: [
+                  {
+                    id: "attention-view",
+                    text: "The hand button sits beside Reply. Pending click lowers the hand; granted click focuses Reply. The page projects controller state rather than owning a second lifecycle. Reveal agent cursor beside Pause is navigation only and does not alter turn or playback.",
+                    ts: 0,
+                  },
+                ],
+              },
+            },
+          },
+          {
+            id: "navigator-activity-reports",
+            name: "Navigator activity reports",
+            type: "architecture",
+            origin: "llm",
+            generation: { focus: "Navigator activity evidence and immediate session-scoped settings notices" },
+            doc: {
+              type: "architecture",
+              autoLayoutApplied: true,
+              nodes: [
+                {
+                  id: "editor",
+                  label: "VS Code adapter\nEligible files and native caret",
+                  files: ["packages/vscode/src/editor.ts"],
+                  x: 40,
+                  y: 160,
+                },
+                {
+                  id: "controller",
+                  label: "Controller\nTyping pause and report owner",
+                  files: ["packages/core/src/controller.ts", "packages/core/src/config.ts"],
+                  x: 600,
+                  y: 160,
+                },
+                {
+                  id: "relay",
+                  label: "MCP relay\nValidated schema and report",
+                  files: ["packages/relay/src/tools.ts", "packages/relay/src/render.ts", "packages/protocol/src/schemas.ts"],
+                  x: 1160,
+                  y: 160,
+                },
+                { id: "programmer", label: "Programmer\nMy turn, edits and messages", files: [], x: 40, y: 560 },
+                { id: "agent", label: "Agent navigator\nRead, one point, then listen", files: ["AGENT_GUIDE.md"], x: 1160, y: 560 },
+                {
+                  id: "commentary-settings",
+                  label: "Workspace host\nSaved commentary preference",
+                  files: [
+                    "packages/vscode/src/extension.ts",
+                    "packages/protocol/src/panel_action.ts",
+                    "packages/protocol/src/panel_update.ts",
+                  ],
+                  x: 600,
+                  y: 560,
+                },
+              ],
+              edges: [
+                { from: "editor", to: "controller", label: "eligible edit / caret" },
+                { from: "controller", to: "relay", label: "activity or settings report" },
+                { from: "programmer", to: "editor", label: "native input", labelPosition: { distance: 0.5, offset: { x: 65, y: 0 } } },
+                { from: "relay", to: "agent", label: "MCP result", labelPosition: { distance: 0.5, offset: { x: -65, y: 0 } } },
+                {
+                  from: "programmer",
+                  to: "controller",
+                  label: "new intent cancels old advice",
+                  vertices: [
+                    { x: 210, y: 420 },
+                    { x: 770, y: 420 },
+                  ],
+                },
+                { to: "commentary-settings", label: "local / companion choice", from: "programmer" },
+                { to: "controller", label: "current configuration", from: "commentary-settings" },
+              ],
+              groups: [],
+              comments: {
+                editor: [
+                  {
+                    id: "observed-scope",
+                    text: "Mirror workspace documents plus the current Pair cursor file outside the workspace. Retire outside-file interest when that cursor changes or clears. Ignore unrelated outside documents. Native selection supplies the programmer caret, including an empty selection; it never changes the agent cursor or turn.",
+                    ts: 0,
+                  },
+                ],
+                controller: [
+                  {
+                    id: "navigator-owner",
+                    text: "The controller owns edit generations, the quiet timer, pause acknowledgement and the immutable report snapshot. A timeout can report edits without consuming the later pause acknowledgement. Navigator idle limit defaults to 10 seconds; the agent limit remains 45 seconds. Reason and elapsed wait distinguish timeout from activity. Session changes invalidate stale timers. Project current commentary configuration after asynchronous cursor lookup. Replay restores activity facts, never an old preference. Record snapshot identities only for full visible new-side/context diff lines. Net-zero edits without an actual interruption are suppressed. Preserve later pause acknowledgement for meaningful work already reported by timeout. Plain handback keeps eligible navigator work with current rehearsal text/turn; new intent still interrupts.",
+                    ts: 0,
+                  },
+                ],
+                relay: [
+                  {
+                    id: "schema-report",
+                    text: "Real MCP ListTools and calls validate the same narration mode and delivery enums. Delivery is advisory; no provider application is inferred. Reports identify programmer changes independently from the old agent cursor excerpt, label the human cursor, and invite useful commentary. Numbered diff lines preserve change signs and hunk boundaries but are review displays, not directly applicable patches. Deleted or omitted lines do not confer sightings.",
+                    ts: 0,
+                  },
+                ],
+                agent: [
+                  {
+                    id: "commentary-policy",
+                    text: "Follow the reported Quiet, Helpful or Coach preference. Helpful is the default; Quiet skips routine reassurance, and Coach adds useful explanation grounded in verified history. Explicit conversation requests override saved guidance. Read before remaining quiet and give one observation per batch. Immediate messages discard queued advice. Copy explicitly numbered new-side lines rather than counting hunks; existing staleness and exact-text rules remain.",
+                    ts: 0,
+                  },
+                ],
+                "commentary-settings": [
+                  {
+                    id: "preference-owner",
+                    text: "The workspace host persists Quiet, Helpful or Coach with the general preferences. The companion forwards typed intent and displays the owner snapshot. Audio enablement remains independent. A changed mode adds a Controller-owned session notice and wakes a waiting listen with a settings-only report; otherwise the next listen returns it. Same-value writes do nothing. Canceled notices retry only in the matching generation. Do not consume edit evidence, complete batches, acknowledge typing pauses or interrupt narration. Notices are delivered at least once: a post-commit change can produce a duplicate newest-policy notice. Do not add a second configuration or turn owner.",
+                    ts: 0,
+                  },
+                ],
+                programmer: [
+                  {
+                    id: "turn-authority",
+                    text: "Browser and companion forward no-message turn intent to the authoritative workspace controller instead of eagerly canceling from stale displayed turn state. A plain handback preserves talk-only work; takeover and explicit new direction interrupt. Existing narration owners retain cancellation retirement. Plain turn changes retain manual Pause until explicit Resume. Draft pause follows its existing draft-empty event. No pending intent state is added.",
                     ts: 0,
                   },
                 ],

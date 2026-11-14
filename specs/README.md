@@ -61,6 +61,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 
 | Config | Bounds | Result | Distinct states |
 |---|---|---|---|
+| `AttentionCache.cfg` | two settings changes, one pending completion and cancellation | holds | 52 |
 | `Serialize.cfg` | `NumCalls = 2` calls, each empty or not, the session ending, an interrupt, and the socket closing at any point | holds | 3,646 |
 | `Wire.cfg` | `NumSockets = 2` sockets, `NumCalls = 2` calls | holds | 43,426 |
 | `StructuralTyping.cfg` | both operations, closed and opaque field categories, selection and one or two closes | holds | 288 |
@@ -80,8 +81,10 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `RunBox.cfg` | one `run`, the session ending at any point | holds | 10 |
 | `FileText.cfg` | one file, `MaxChanges = 4` changes | holds | 123 |
 | `Outside.cfg` | one file, `MaxWrites = 5` contents | holds | 614 |
-| `Navigator.cfg` | `MaxEdits = 3` | holds | 44 |
-| `EditEvents.cfg` | one file, 3 texts, `MaxEdits = 4` | holds | 516 |
+| `Navigator.cfg` | `MaxEdits = 3` | holds | 136 |
+| `NavigatorFollowup.cfg` | two files, two texts, plain handback and visible lines | holds | 864 |
+| `NavigatorCommentary.cfg` | three modes, up to three changes, pending notice and canceled replay | holds | 1,566 |
+| `EditEvents.cfg` | one file, 3 texts, `MaxEdits = 4` | holds | 843 |
 | `Scroll.cfg` | `NumLines = 8` lines, a view of `ViewHeight = 4`, `MaxMoves = 2`, `MaxFollowSwitches = 2`, `scrollBeyondLastLine` on and off, the programmer's turn | holds | 14,131 |
 | `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
 | `Resume.cfg` | 2 directories, `MaxSessions = 3`, revive and replacement updates enabled | holds | 56 |
@@ -143,9 +146,10 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `QuietTerminals.cfg` | quiet default, fallback and guarded cleanup | holds | 9 |
 | `QuietTerminals_Visible.cfg` | automatic show, fallback and guarded cleanup | holds | 11 |
 | `TerminalReuse.cfg` | shell state, exposure, pending drain and foreign starts | holds | 48 |
-| `Turns.cfg` | batches of up to 2 actions, `MaxTurns = 2` turn changes | holds | 1,530 |
+| `Turns.cfg` | batches of up to 2 actions, `MaxTurns = 2` turn changes | holds | 1,419 |
 | `Reload.cfg` | `NumLines = 5` lines, any of them changed on disk, a selection at a line's start or not | holds | 320 |
-| `Rehearsal.cfg` | `MaxLines = 3` lines, `MaxOthers = 2` changes by others, `MaxProgrammerEdits = 1`, `MaxBatches = 2` batches, `MaxQueued = 2` queued, either turn, `ReportWaitsForQueue = TRUE` | holds, in about 200 seconds | 6,721,044 |
+| `Rehearsal.cfg` | full configured bounds | not completed for this change | |
+| `Rehearsal.cfg` (reduced) | `MaxLines = 2`, `MaxOthers = 1`, `MaxProgrammerEdits = 1`, `MaxBatches = 1`, `MaxQueued = 2` | holds | 11,712 |
 | `BatchFile.cfg` | files `sourceFile`, `destinationFile`, and `otherFile`, `MaxActions = 4` actions a batch, `FallBackToNamed = TRUE`, `CursorInNamed = TRUE`, a selection or none | holds | 330 |
 | `Diagnostics.cfg` | `MaxBatches = 3`, provider available or not, completed, interrupted, and failed batches | holds | 168 |
 | `Actions.cfg` | every batch of up to 2 actions, an interrupt at any await, including a rejected typing edit | holds | 3,115 |
@@ -438,6 +442,7 @@ Every invariant names the test that proves the code obeys it:
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `ReplayShowsSession` | `panel.test.ts`: ReplayShowsSession and Bounded: keeps the session's start in the log however many events follow it; ReplayShowsSession: replays the session's end when that is the last session event |
+| `TypeOK` | `captures only completed speech and preserves it across cancellation and replay` |
 | `Bounded` | `panel.test.ts`: ReplayShowsSession and Bounded: keeps the session's start in the log however many events follow it |
 | `LogsPosts` | `panel.test.ts`: LogsPosts: a posted event is on the log a new view replays |
 
@@ -562,7 +567,11 @@ Every invariant and property names the test that proves the code obeys it:
 `packages/vscode/src/editor.ts`, which call the controller's `userEdit` or
 `otherEdit`. `FlushBeforeSave` is the fix for #40. VS Code delivers a change
 event before the call that made it resolves, and replies after the events sent
-before them: one channel, in order.
+before them: one channel, in order. The programmer cursor is a read-only
+projection of the active editor selection and is outside this attribution model;
+it does not change any modeled transition. Eligible documents are workspace
+files and the current agent cursor file; the host retires the latter when the
+cursor moves or clears. This eligibility is an assumption of the model.
 
 | Spec | Code |
 |---|---|
@@ -1333,6 +1342,80 @@ Every invariant and property names the test that proves the code obeys it:
 | `EndedHasAgent` | `controller.test.ts`: WaitsProp: closes a suspended session at once when the programmer ends it; EndedHasAgent: rejects the open call when the agent disconnects, and closes at once a session the programmer ended |
 | `ShownIsState` | `controller.test.ts`: SavedIsCurrent, NotLostProp, ShownIsState: brings back a session the window saved, suspended, after a reload; `webview/panel.test.ts`: ShownIsState: a session revived after a reload shows as suspended; ShownIsState: a revive after a disconnect shows the suspension once; ShownIsState: a replacement session clears an old suspension (live and replay) |
 
+### `NavigatorCommentary`: live preference notices
+
+The controller owns the preference and a session-scoped pending notice. A real
+change wakes an open listen, or the next one, with a settings-only report;
+other report evidence stays pending. The latest mode is projected at delivery.
+A canceled notice is restored only if its generation is current. The model's
+`reportGen` retains a canceled notice candidate while a newer notice is taken;
+it abstracts the notice's identity, rather than every concurrent report. It
+bounds changes at three and models session end, but not restart or resume.
+The named controller tests cover those lifecycle boundaries. Transport, actual
+speech and prompt timing are outside the model. Weak fairness of `Notice`,
+`Commit` and `Deliver` ensures a pending or committed call settles.
+
+| Spec | Code |
+|---|---|
+| `SetMode` | `setNavigatorCommentary` |
+| `Start`, `Notice`, `Commit`, `Deliver` | `listen`, settings-only return, ordinary report, final projection |
+| `Cancel`, `Restore`, `End` | canceled report restoration and session close |
+
+| Mutation | Breaks |
+|---|---|
+| `FreshProjection = FALSE` | `CurrentAtDelivery` |
+| `RestoreOldMode = TRUE` | `RestoreKeepsMode` |
+| `WakeOnChange = FALSE` | `ChangedWake` |
+| `PreserveEvidence = FALSE` | `EvidencePreserved` |
+| `GuardRestore = FALSE` | `NoOldRestore` |
+| `Start` sets an invalid call state | `TypeOK` |
+| Remove notice, commit and delivery fairness | `EventuallySettled` |
+
+| Invariant or property | Test |
+|---|---|
+| `TypeOK` | `index.test.ts`: validates the live commentary notice identity |
+| `CurrentAtDelivery`, `RestoreKeepsMode` | `controller.test.ts`: CurrentAtDelivery, RestoreKeepsMode: projects the current mode on start, pending listen and replay |
+| `EvidencePreserved`, `ChangedWake` | `controller.test.ts`: wakes a pending listen without interrupting a playing batch; does not wake on the same mode and preserves a due typing pause |
+| `NoOldRestore` | `controller.test.ts`: delivers changes made while computing and restores only the current notice; does not revive a notice in a replacement or resumed session |
+| `EventuallySettled` | `controller.test.ts`: BlockedReturns: returns with `waiting` after MAX_BLOCK |
+
+### `NavigatorFollowup`: burst, handback and visible lines
+
+This bounded model abstracts two files and two texts. A timeout records whether
+it delivered a meaningful change; a subsequent timer evaluation wakes only for
+that activity or a pending net change. `ready` means the timer was evaluated,
+including the no-wake case. `ConsumePause` resets burst evidence. The handback
+transition models only plain handback; taking the turn interrupts in `Turns`
+and `Rehearsal`. Message handback interruption is outside this model. `Show`
+abstracts visible versus omitted lines; line identity through subsequent edits
+is modeled separately by `LineIdentity` and
+`Rehearsal`. It does not model diff parsing or speech. Historical diffs whose
+text no longer matches the tracked current text grant no line sightings, so a
+current read may be needed.
+
+| Spec | Code |
+|---|---|
+| `Edit`, `Timeout`, `Fire`, `ConsumePause` | `userEdit`, `snapshot`, navigator timer and `finishCall` |
+| `HandBack` | `handBack` without message or selection |
+| `Show`, `Accept` | numbered diff sightings, `saw`, and rehearsal line checks |
+
+| Mutation | Property violated |
+|---|---|
+| `PreserveQueue = FALSE` | `QueuePreserved` |
+| `PreserveBaseline = FALSE` | `WakeMatches` |
+| `VisibleOnly = FALSE` or `CheckCurrent = FALSE` | `VisibleLinesOnly` |
+| Initialize `pending` with an outside-domain file | `TypeOK` |
+| Remove fairness for `Fire` | `EventuallyReady` |
+| Always wake in `Fire`, or retain observed activity in `ConsumePause` | `WakeMatches` |
+
+| Property | Test |
+|---|---|
+| `TypeOK` | TypeScript and protocol schemas |
+| `QueuePreserved` | `controller.test.ts`: PlainHandback: keeps queued navigator speech |
+| `WakeMatches` | `controller.test.ts`: NoEmptyWake: undo before a report does not wake navigator listen; ObservedBurst: a timeout followed by undo still reports the reversal at a pause |
+| `VisibleLinesOnly` | `diff.test.ts`: numbers only visible new-side lines in a bounded diff; `controller.test.ts`: VisibleLinesOnly: restored diff cannot authorize current shifted line IDs; VisibleLinesOnly: stale event text does not replace the live line tracker |
+| `EventuallyReady` | `controller.test.ts`: ObservedBurst: a timeout followed by undo still reports the reversal at a pause |
+
 ### `Navigator`: the programmer's edits, reported when they pause
 
 `userEdit`, the navigator timer, `navigatorReady` for `listen`, and `snapshot` in
@@ -1341,12 +1424,20 @@ returns for their edits only once they pause typing (`navigatorIdleMs` after
 their last edit), so the agent comments on a whole thought. `ResetReady` is the
 fix: an edit takes back `navigatorReady`, which a pause before it set, so a
 `listen` made after the programmer resumes typing waits for their next pause.
+A timeout may report an edit before the pause; the pause remains reportable on
+the next listen. The model abstracts elapsed wall-clock time and the editor.
+The timer model over-approximates ready after any edit; `NavigatorFollowup`
+refines that choice for net-zero bursts and timeout-observed activity. Strong
+fairness of `Return` rules out repeated timeouts starving a ready call;
+in code a ready call is pumped synchronously before its timeout. Restored
+notices carry an edit generation, so later edits invalidate a bounced pause.
 
 | Spec | Code |
 |---|---|
 | `EditAsProgrammer` | `userEdit` in the programmer's turn: `recordEdit`, `navigatorReady = false`, the timer started again |
 | `Lull`, `Fire` | `navigatorIdleMs` without an edit; the timer setting `navigatorReady` and calling `pump()` |
-| `Listen`, `Return`, `Timeout` | `listen`; `navigatorReady` holding, and `snapshot` clearing `navigatorReady`; `maxBlockMs` |
+| `Listen`, `Return`, `Timeout` | `listen`; `finishCall` consumes `navigatorReady` only for a typing-pause report; the navigator timeout preserves it |
+| `Restore` | `restore` re-arms a bounced typing pause only for the current edit generation |
 
 Each invariant and property was proved to bite with a mutation, run in TLC and
 then reverted:
@@ -1356,6 +1447,8 @@ then reverted:
 | `Listen` sets the call to a third state | `TypeOK` |
 | `ResetReady = FALSE`, the code before | `NotWhileTyping` |
 | `Fire` leaves `navigatorReady` unset, so no call returns for the edits | `EditsReported` |
+| Require an unreported edit for `Return`, the former design | `PauseDelivered` |
+| Mark every pause report as wrongly timed | `WakeMatches` |
 
 Every invariant and property names the test that proves the code obeys it:
 
@@ -1363,6 +1456,8 @@ Every invariant and property names the test that proves the code obeys it:
 |---|---|
 | `TypeOK` | Nothing: the TypeScript compiler checks these types |
 | `NotWhileTyping`, `EditsReported` | `controller.test.ts`: NotWhileTyping, EditsReported, QuietDelivered: waits in the programmer's turn until they pause typing, or hand the turn back |
+| `WakeMatches` | `scripted_agent.e2e.test.ts`: reports a typing pause and unsaved programmer edits before the listen timeout |
+| `PauseDelivered` | `controller.test.ts`: reports a typing pause after a timeout already delivered the edit; preserves a due typing pause when a queued batch outlasts the timeout |
 
 ### `ListenGrace`: "Your move" between two idle listens
 
@@ -1886,6 +1981,7 @@ Each names the test that proves the code obeys it:
 | `SpanExactly` | `protocol/test/index.test.ts`: SpanExactly, NeverThrows: gives no problem exactly for a valid span, and a message for every other; `integration.ts`, in VS Code: MoveExactly, SpanExactly, NeverThrows: 27 malformed actions refused by name in the editor; frames that aren't messages dropped |
 | `NeverThrows` | both tests |
 | `SpokenByDefault` | `protocol/test/index.test.ts`: Spoken: speaks a say by default, unless it opts out or its text cannot be spoken |
+| `SpeechExactly` | `protocol/test/index.test.ts`: accepts only bounded plain speech units and allows unflagged narration; reports counts for rejected strings. The count feedback changes only error formatting, which the model does not represent. |
 
 ### Contracts checked by tests: `ActionValidation`, `Render`, `AgentSetup`
 
@@ -1899,6 +1995,25 @@ above (#163); this contract holds the relay's schema and the player to them.
 | The relay's schema and the player's checks accept the same actions (#45) | `relay/test/validation.test.ts`: every action in its table through both, malformed ones above all |
 | Every field of a `Report` appears in its rendered text | `relay/test/render.test.ts`: renders every field of a report |
 | Setting up an agent changes only its `pair` entry, and twice equals once | `vscode/test/agents.test.ts`: AgentSetup, for the TOML and JSON configs |
+
+### Attention cue cache
+
+`AttentionCache.tla` models a single pending synthesis and cache generation,
+including a late completion after cancellation or a settings change. The model
+abstracts the existing worker and output lease lifecycles; it does not prove
+physical retirement. `JobRetires` assumes weak fairness of completion.
+
+| Property | Code evidence |
+|---|---|
+| `TypeOK` | Bounded model state; no direct test |
+| `CurrentCache` | `rejects a late attention result after a settings change`; `does not cache a canceled attention cue` |
+| `CurrentPlayback` | `invalidates attention audio eagerly when settings change away and back`; `reserves the current route again when replaying attention audio` |
+| `JobRetires` | Existing speech lifecycle retirement tests; completion fairness is an environmental assumption |
+
+Removing the completion identity guard produces a `CurrentCache`
+counterexample after a settings change and late completion. Removing the replay
+admission guard violates `CurrentPlayback`. The model does not
+prove waveform correctness or physical playback retirement.
 
 ## Keeping specs and code in step
 
@@ -2191,6 +2306,7 @@ bounds, speech-only events and independent snapshots.
 | Property | Test |
 |---|---|
 | `TypeOK`, `OnlyAllowed` | `diagnostics.test.ts`: TypeOK, OnlyAllowed: rejects unrecognized speech enums and records capability without a reason; copies only allowlisted fields and rejects malformed input and unsafe identity strings |
+| `TypeOK` | `captures only completed speech and preserves it across cancellation and replay` |
 | `Bounded` | `diagnostics.test.ts`: bounds its history while retaining the latest state and returns independent snapshots |
 | `CopiedExactly` | `diagnostics.test.ts`: starts with unavailable states and records typed events in order |
 | `Recorded`, `RecordsEventually` | `diagnostics.test.ts`: OnlyAllowed, Recorded: records speech lifecycle without secret extras even when no session exists; retains valid request, integration and completion events |
@@ -2609,7 +2725,7 @@ Per-event messages preserve replay order without truncating the whole history.
 | `NoAudioOrSecrets` | `protocol/test/panel_update.test.ts`: rejects audio, speech settings, arbitrary commands, and unexpected properties. |
 | `DisconnectClears` | `protocol/test/panel_chunks.test.ts`: never combines fragments across page replacement or a duplicate fragment; `protocol/test/command_channel.test.ts`: settles active and queued sends on disposal and ignores a late rejection. Direct disconnect-to-assembler integration coverage remains pending. |
 | `CanStart`, `CanComplete`, `CanAbort` | `protocol/test/panel_chunks.test.ts`: reassembles a complete ordered update only for the current page; discards partial, reordered, stale-page, malformed and oversized updates. |
-| `PendingSettles`, `EventuallyDelivered` | `protocol/test/command_channel.test.ts`: closes on a lost acknowledgement without accepting late completion; sends one frame at a time and preserves enqueue order. |
+| `PendingSettles`, `EventuallySettled` | `protocol/test/command_channel.test.ts`: closes on a lost acknowledgement without accepting late completion; sends one frame at a time and preserves enqueue order. |
 | Replay ordering and oversize | `vscode/test/panel_update_sender.integration.test.ts`: sends replay as ordered bounded per-event updates using the shared sequence; reports an oversized replay event and still sends later complete events. |
 
 TLC checked `LocalPanelReplay.cfg` with 51,992 generated and 138 distinct states;
@@ -3494,3 +3610,99 @@ TLC checked 19 distinct states to depth 6. Temporary mutations violated
 `TypeOK`, `CurrentLedger`, `SamePreserved` and `ReopenProgress`. The regression
 in `vscode/test/panel.test.ts` checks same-session replay and a new session
 missed while the page was absent.
+
+## Speech context
+
+`SpeechContext.tla` models logical completed narration history, session and
+setting resets, capture snapshots, cancellation and stale completion. It does
+not model physical playback ownership or Unicode strings; the implementation
+bounds those strings separately. The finite model has four utterances and three
+reset generations, with weak fairness for capture.
+
+| Check | Implementation test |
+| --- | --- |
+| `TypeOK` | `captures only completed speech and preserves it across cancellation and replay` |
+| `Bounded` | `bounds history to three utterances and 500 Unicode code points including separators` |
+| `ValidHistory` | `captures only completed speech and preserves it across cancellation and replay`; `invalidates stale completion on reset and superseding capture`; `resets on setting changes, session end and disconnect` |
+| `PriorSnapshot` | `captures only completed speech and preserves it across cancellation and replay` |
+| `EventualCapture` | `captures only completed speech and preserves it across cancellation and replay` |
+
+TLC checked `SpeechContext.cfg`: 2,450 distinct states, pass. Disabling the
+generation guard, clearing history on cancel, trimming, or append-on-complete
+respectively violated `ValidHistory`, `ValidHistory`, `Bounded`, and
+`ValidHistory`. Capturing the current utterance in its own snapshot violates
+`PriorSnapshot`; disabling capture violates `EventualCapture`. Initializing
+`pending` outside its declared range violates `TypeOK`.
+
+### `RevealCursor`: explicit cursor navigation
+
+The finite model starts with or without a cursor, each turn and either pause
+state. `Request` and `Show` preserve turn and pause; weak fairness for both
+models an accepted request and a responsive editor. `RevealCursor.cfg` passes
+with 100 distinct states, two file locations, two offsets, and at most two
+requests. It models a file or offset change while a request is pending and
+supersession or disposal before completion. It abstracts editor failures and
+cannot revoke a navigation already accepted by VS Code.
+
+| Property | Implementation evidence |
+| --- | --- |
+| `TypeOK` | Model type check. |
+| `ShowsCursor` | `editor.test.ts`: ShowsCursor; `panel.test.ts`: ShowsCursor; `controller.test.ts`: ShowsCursor. |
+| `NoCursorNoNavigation` | `editor.test.ts`: NoCursorNoNavigation. |
+| `LatestPosition` | `editor.test.ts`: LatestPosition and file changes during open and show. |
+| `CurrentRequest` | `editor.test.ts`: CurrentRequest. |
+| `EventuallyHandled` | `webview/panel.test.ts`: ShowsCursor; editor responsiveness is an environment assumption. |
+| `PreservesPlayback` | `controller.test.ts`: ShowsCursor; `panel.test.ts`: ShowsCursor. |
+
+Mutations to an invalid visible value, always show the wrong file, and show a
+file without a cursor violate `TypeOK`, `ShowsCursor`, and
+`NoCursorNoNavigation`, respectively. A `Show` that never sets `shown`
+violates `EventuallyHandled`. Toggling pause during `Show` violates
+`PreservesPlayback`. Revealing offset 0 after a move violates `LatestPosition`;
+accepting a superseded request violates `CurrentRequest`.
+
+### `RemoteCue`: cue retirement across hosts
+
+The model bounds one cue job and its acknowledgement, with weak fairness for
+send, physical retirement, and acceptance. `RemoteCue.cfg` passes with six
+distinct states. It abstracts transport loss and timeout; the existing
+`LocalAudioOwnership` model covers leases and connection epochs.
+
+| Property | Implementation evidence |
+| --- | --- |
+| `TypeOK` | Model type check. |
+| `NoEarlyReuse` | `companion_narration.test.ts`: NoEarlyReuse; `remote_narration.test.ts`: NoEarlyReuse. |
+| `AckMatches` | `companion_narration.test.ts`: AckMatches; `remote_narration.test.ts`: NoEarlyReuse. |
+| `EventuallyResolved` | `remote_narration.test.ts`: NoEarlyReuse; retirement fairness is an environment assumption. |
+
+Mutating the acknowledged ID, releasing the owner on cancel, or using an
+out-of-range acknowledgement violates `AckMatches`, `NoEarlyReuse`, and
+`TypeOK`, respectively. Never resolving violates `EventuallyResolved`.
+
+## Attention
+
+`Attention.tla` models a single playback action and speech unit, an independent
+pause, a cancelable attention request, and a granted hold. The action's edit
+version is a bit so the state space is finite without constraining progress.
+Weak fairness of `Boundary`, `Drain`, and `Grant` assumes the active action and
+speech eventually finish; cancellation may also end a request. The model does
+not represent session generations, cue caching, or physical audio retirement.
+`Restore` re-arms a notice only for the current grant generation, checked by
+`controller.test.ts`: restores a granted hand only while the same grant remains
+active. Weak fairness of
+`Acknowledge` assumes a navigator listen eventually accepts
+the granted-hand notice; release can also clear it.
+
+| Configuration | Bounds | Result |
+| --- | --- | --- |
+| `Attention.cfg` | Two edit versions; two request generations; one action and one speech unit | Pass, 536 distinct states |
+
+| Property | Code evidence | Mutation checked |
+| --- | --- | --- |
+| `TypeOK` | Attention composed tests in `session.e2e.test.ts` | Setting an edit version to 2 violates `TypeOK`. |
+| `HeldStopsEdits` | `Attention: holds later edits until the requested floor is released after speech drains` | Allowing a boundary while idle violates `HeldStopsEdits`. |
+| `GrantAfterDrain` | `Attention: idle continued speech drains before granting the floor` | Granting with speech active violates `GrantAfterDrain`. |
+| `CueRespectsPause` | `Attention: releasing the floor keeps a separate programmer pause` | Starting a cue while paused violates `CueRespectsPause`. |
+| `RequestedProgress` | `Attention: lowering a pending hand releases the boundary and rejects the late grant` | Disabling grant violates `RequestedProgress`. |
+| `NoticeIsGranted` | `controller.test.ts`: reports a granted raised hand once to a waiting navigator | Retaining the notice on release violates `NoticeIsGranted`. |
+| `NoticeDelivered` | `controller.test.ts`: reports a granted raised hand once to a waiting navigator | Disabling acknowledgement violates `NoticeDelivered`. |

@@ -59,6 +59,7 @@ export async function speechCoveragePaths(api: Api): Promise<void> {
           finish = resolve;
         });
       },
+      attentionCue: () => Promise.resolve(),
       pause: () => {},
       resume: () => {},
       cancel: () => {
@@ -90,7 +91,7 @@ export async function speechCoveragePaths(api: Api): Promise<void> {
     await within(controller.start('interrupt previous speech'), 'speech session did not start');
     await within(
       controller.step([
-        { say: 'First pending speech.', speak: true, speech_mode: 'continue' },
+        { say: 'First pending speech.', speak: true, speech_mode: 'continue', speech_delivery: 'curious' },
         { say: 'Do not display this.', speak: true },
       ]),
       'speech batch was not accepted',

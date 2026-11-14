@@ -214,7 +214,7 @@
     },
     "integration": {
       "lines": 94,
-      "branches": 81,
+      "branches": 95,
       "functions": 100
     }
   },
@@ -482,8 +482,8 @@
       "functions": 100
     },
     "integration": {
-      "lines": 85,
-      "branches": 76,
+      "lines": 87,
+      "branches": 77,
       "functions": 100
     }
   },
@@ -596,7 +596,7 @@
     "integration": {
       "lines": 98,
       "branches": 88,
-      "functions": 97
+      "functions": 100
     }
   },
   "packages/vscode/src/extension.ts": {
@@ -606,9 +606,9 @@
       "functions": 100
     },
     "integration": {
-      "lines": 92,
+      "lines": 96,
       "branches": 92,
-      "functions": 88
+      "functions": 94
     }
   },
   "packages/vscode/src/output.ts": {
@@ -654,7 +654,7 @@
       "functions": 100
     },
     "integration": {
-      "lines": 83,
+      "lines": 88,
       "branches": 84,
       "functions": 82
     }

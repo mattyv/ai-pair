@@ -153,6 +153,7 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   private selfNavUntil = 0;
   /** Our shows in progress: view changes meanwhile are ours, however long VS Code takes (#56). */
   private showing = 0;
+  private revealGeneration = 0;
   /**
    * How many lines each editor group's viewport shows, as last seen without a document's end in view,
    * or measured. A zoom or a resize since, with a document's end in view, goes unnoticed.
@@ -349,7 +350,13 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   }
 
   renderCursor(cursor: CursorView | undefined, state: AgentState, focus: Focus): void {
+    const previous = this.cursor?.file;
+    if (previous !== undefined && previous !== cursor?.file && !this.inWorkspace(previous)) this.mirror.delete(previous);
     this.cursor = cursor;
+    if (cursor !== undefined && previous !== cursor.file) {
+      const doc = this.openDocument(cursor.file);
+      if (doc !== undefined) this.track(doc);
+    }
     this.focus = focus;
     const changed = state !== this.state;
     if (changed) {
@@ -378,6 +385,41 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   renderCodeReading(range: { file: string; start: number; end: number } | undefined): void {
     this.codeReading = range;
     this.redraw();
+  }
+
+  /** Focuses and centers the agent cursor without changing the follow target. */
+  revealCursor(): void {
+    const generation = ++this.revealGeneration;
+    if (this.cursor === undefined) return;
+    // specs/RevealCursor.tla, `Show`: navigation preserves playback and turn.
+    this.showing++;
+    void (async () => {
+      while (this.cursor !== undefined) {
+        const file = this.cursor.file;
+        const document = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
+        if (generation !== this.revealGeneration || this.cursor === undefined) return;
+        if (this.cursor.file !== file) continue;
+        const editor = await vscode.window.showTextDocument(document, {
+          preview: false,
+          preserveFocus: false,
+          viewColumn: this.visibleEditor(file)?.viewColumn ?? vscode.window.activeTextEditor?.viewColumn,
+        });
+        if (generation !== this.revealGeneration || this.cursor === undefined) return;
+        if (this.cursor.file !== file) continue;
+        const position = document.positionAt(this.cursor.offset);
+        editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+        return;
+      }
+    })()
+      .catch(() => {
+        if (generation === this.revealGeneration) {
+          void vscode.window.showErrorMessage('Could not reveal the agent cursor.');
+        }
+      })
+      .finally(() => {
+        this.showing--;
+        this.selfNav();
+      });
   }
 
   reveal(): void {
@@ -411,6 +453,16 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   }
 
   // ---- The programmer's selection ------------------------------------------
+
+  /** Returns the native active caret for a workspace or current agent cursor file. */
+  programmerCursor(): { file: string; line: number; column: number } | undefined {
+    const editor = vscode.window.activeTextEditor;
+    if (editor === undefined || editor.document.uri.scheme !== 'file') return undefined;
+    const file = editor.document.uri.fsPath;
+    if (!this.inWorkspace(file) && file !== this.cursor?.file) return undefined;
+    const position = editor.selection.active;
+    return { file, line: position.line + 1, column: position.character + 1 };
+  }
 
   /** Returns what the programmer has selected in a workspace file, if anything. */
   programmerSelection(): SharedSelection | undefined {
@@ -450,14 +502,16 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
 
   /** Mirrors the text of a workspace file's document: what a change to it is a change from. */
   private track(doc: vscode.TextDocument): void {
-    if (doc.uri.scheme === 'file' && this.inWorkspace(doc.uri.fsPath)) this.mirror.set(doc.uri.fsPath, doc.getText());
+    if (doc.uri.scheme === 'file' && (this.inWorkspace(doc.uri.fsPath) || doc.uri.fsPath === this.cursor?.file)) {
+      this.mirror.set(doc.uri.fsPath, doc.getText());
+    }
   }
 
   private onChange(event: vscode.TextDocumentChangeEvent): void {
     const doc = event.document;
     if (doc.uri.scheme !== 'file' || event.contentChanges.length === 0) return;
     const file = doc.uri.fsPath;
-    // Only the workspace's files are mirrored: a change elsewhere is none of the agent's business.
+    // Only workspace files and the current agent cursor file are mirrored.
     const before = this.mirror.get(file);
     if (before === undefined) return;
     const after = doc.getText();
@@ -785,6 +839,8 @@ export class VsCodeEditor implements EditorPort, vscode.Disposable {
   }
 
   dispose(): void {
+    // specs/RevealCursor.tla, `Dispose`: invalidate pending navigation.
+    this.revealGeneration++;
     clearInterval(this.pulse);
     for (const d of this.disposables) {
       d.dispose();

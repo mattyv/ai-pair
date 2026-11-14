@@ -49,7 +49,15 @@ async function load(page: Page): Promise<(event: object) => Promise<void>> {
     return route.fulfill({ body: fs.readFileSync(path.join(DIST, file)), contentType: type });
   });
   await page.addInitScript(() => {
-    Object.assign(globalThis, { acquireVsCodeApi: () => ({ postMessage: () => {} }) });
+    const messages: unknown[] = [];
+    Object.assign(globalThis, {
+      messages,
+      acquireVsCodeApi: () => ({
+        postMessage: (message: unknown) => {
+          messages.push(message);
+        },
+      }),
+    });
   });
   await page.goto(`${ORIGIN}/`);
   return async (event) => {
@@ -86,6 +94,23 @@ const STATES: Array<{ name: string; events: object[] }> = [
     events: [
       { type: 'session', active: true, task: 'Add tests' },
       { type: 'state', state: 'typing', turn: 'agent', paused: true },
+    ],
+  },
+  {
+    name: 'attention-requested',
+    events: [
+      { type: 'session', active: true, task: 'Add tests' },
+      { type: 'state', state: 'typing', turn: 'agent', paused: false, speechPaused: false },
+      { type: 'attention', state: 'requested' },
+    ],
+  },
+  {
+    name: 'attention-granted',
+    events: [
+      { type: 'session', active: true, task: 'Add tests' },
+      { type: 'state', state: 'paused', turn: 'agent', paused: true, speechPaused: false },
+      { type: 'say', text: "What's up?" },
+      { type: 'attention', state: 'granted' },
     ],
   },
   {
@@ -262,3 +287,21 @@ for (const width of [320, 240]) {
     await testInfo.attach('settings', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' });
   });
 }
+
+test('navigator commentary shows the workspace value and sends a selection', async ({ page }) => {
+  const send = await load(page);
+  await page.locator('[data-ui="settings"]').click();
+  const select = page.locator('[data-ui="navigator-commentary"]');
+  await expect(select).toHaveValue('helpful');
+  await send({ type: 'navigatorCommentary', value: 'quiet' });
+  await expect(select).toHaveValue('quiet');
+  await select.selectOption('coach');
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return (globalThis as unknown as { messages: unknown[] }).messages;
+      }),
+    )
+    .toContainEqual({ type: 'navigatorCommentary', value: 'coach' });
+});

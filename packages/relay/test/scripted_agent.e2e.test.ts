@@ -134,6 +134,78 @@ describe('scripted agent flows', () => {
     });
   }
 
+  it('reports a typing pause and unsaved programmer edits before the listen timeout', async () => {
+    const h = await setup(590);
+    h.controller.setTimeouts({ navigatorIdleMs: 50, maxBlockMs: 1000 });
+    const client = await h.connect();
+    await h.call(client, 'start');
+    h.controller.takeTurn();
+    await h.call(client, 'listen');
+    const listening = h.call(client, 'listen');
+    await h.waitFor('listen received', () => h.trace.filter((line) => line.startsWith('socket ') && line.endsWith('listen')).length >= 2);
+    h.editor.userEdit('src/a.ts', { offset: 0, deleteLength: 0, text: 'int main() {}' });
+    const result = await deadline(listening, 500, 590, h.trace);
+    expect(result).toContain('typing pause');
+    expect(result).toContain('int main() {}');
+    expect(result).not.toContain('timed out');
+    await h.call(client, 'end');
+  });
+
+  it('allows pointing to lines delivered in a navigator diff', async () => {
+    const h = await setup(591);
+    h.controller.setTimeouts({ navigatorIdleMs: 30, maxBlockMs: 500 });
+    const client = await h.connect();
+    await h.call(client, 'start');
+    h.controller.takeTurn();
+    await h.call(client, 'listen');
+    const listening = h.call(client, 'listen');
+    await h.waitFor('listen received', () => h.trace.filter((line) => line.startsWith('socket ') && line.endsWith('listen')).length >= 2);
+    h.editor.userEdit('src/a.ts', { offset: 0, deleteLength: 0, text: 'observed line' });
+    expect(await listening).toContain('observed line');
+    const result = await h.call(client, 'step', { actions: [{ point: { file: 'a.ts', line: 1, text: 'observed line' } }] });
+    expect(result).toContain('Batch 1 is playing');
+    await h.call(client, 'step', { actions: [] });
+    expect(h.panel.events).toContainEqual(expect.objectContaining({ type: 'point', line: 1 }));
+    h.editor.userEdit('src/a.ts', { offset: 13, deleteLength: 0, text: ' suffix' });
+    const sameLine = await h.call(client, 'step', { actions: [{ point: { file: 'a.ts', line: 1, text: 'observed line' } }] });
+    expect(sameLine).toContain('Batch 2 is playing');
+    await h.call(client, 'step', { actions: [] });
+    h.editor.userEdit('src/a.ts', { offset: 0, deleteLength: 0, text: 'new line\n' });
+    const shifted = await h.call(client, 'step', { actions: [{ point: { file: 'a.ts', line: 2, text: 'observed line' } }] });
+    expect(shifted).toContain("haven't seen line 2");
+    await h.call(client, 'end');
+  });
+
+  it('does not report a typing pause for an edit undone before the quiet interval', async () => {
+    const h = await setup(592);
+    h.controller.setTimeouts({ navigatorIdleMs: 40, maxBlockMs: 180 });
+    const client = await h.connect();
+    await h.call(client, 'start');
+    h.controller.takeTurn();
+    await h.call(client, 'listen');
+    const listening = h.call(client, 'listen');
+    await h.waitFor('listen received', () => h.trace.filter((line) => line.startsWith('socket ') && line.endsWith('listen')).length >= 2);
+    h.editor.userEdit('src/a.ts', { offset: 0, deleteLength: 0, text: 'temporary' });
+    h.editor.userEdit('src/a.ts', { offset: 0, deleteLength: 9, text: '' });
+    const result = await listening;
+    expect(result).not.toContain('Listen returned because typing paused');
+    expect(result).toContain('idle timeout elapsed');
+    await h.call(client, 'end');
+  });
+
+  it('delivers a changed commentary preference through a pending MCP listen', async () => {
+    const h = await setup(601);
+    const client = await h.connect();
+    await h.call(client, 'start');
+    const listening = h.call(client, 'listen');
+    await h.waitFor('listen received', () => h.trace.some((line) => line.startsWith('socket ') && line.endsWith('listen')));
+    h.controller.setNavigatorCommentary('coach');
+    const result = await deadline(listening, 500, 601, h.trace);
+    expect(result).toContain('commentary preference changed');
+    expect(result).toContain('Coach');
+    await h.call(client, 'end');
+  });
+
   it('suspends and resumes after the editor websocket drops', async () => {
     const h = await setup(101);
     const first = await h.connect();
@@ -192,6 +264,7 @@ describe('scripted agent flows', () => {
           };
         });
       },
+      attentionCue: () => Promise.resolve(),
       pause: () => {},
       resume: () => {},
       cancel: () => {
@@ -244,6 +317,7 @@ describe('scripted agent flows', () => {
           entered = true;
           release = resolve;
         }),
+      attentionCue: () => Promise.resolve(),
       pause: noop,
       resume: noop,
       cancel: () => {
@@ -270,6 +344,41 @@ describe('scripted agent flows', () => {
     await h.call(client, 'end');
   });
 
+  it('wakes a settings notice while narration is still playing', async () => {
+    let release: () => void = noop;
+    let entered = false;
+    let cancels = 0;
+    const narration: NarrationPort = {
+      speak: () =>
+        new Promise<void>((resolve) => {
+          entered = true;
+          release = resolve;
+        }),
+      attentionCue: () => Promise.resolve(),
+      pause: noop,
+      resume: noop,
+      cancel: () => {
+        cancels++;
+        release();
+      },
+    };
+    const h = await setup(607, narration);
+    const client = await h.connect();
+    await h.call(client, 'start');
+    await h.call(client, 'step', { actions: [{ say: 'still playing' }] });
+    await h.waitFor('speech entered', () => entered);
+    const listening = h.call(client, 'listen');
+    await h.waitFor('listen received', () => h.trace.some((line) => line.startsWith('socket ') && line.endsWith('listen')));
+    h.controller.setNavigatorCommentary('quiet');
+    const result = await deadline(listening, 500, 607, h.trace);
+    expect(result).toContain('commentary preference changed');
+    expect(result).toContain('queued work and speech are unchanged');
+    expect(cancels).toBe(0);
+    release();
+    expect(await h.call(client, 'step', { actions: [] })).toContain('Batch 1 completed');
+    await h.call(client, 'end');
+  });
+
   it('ignores a late narration completion from the previous session', async () => {
     let releaseOld: () => void = noop;
     let calls = 0;
@@ -281,6 +390,7 @@ describe('scripted agent flows', () => {
           releaseOld = resolve;
         });
       },
+      attentionCue: () => Promise.resolve(),
       pause: noop,
       resume: noop,
       cancel: noop,

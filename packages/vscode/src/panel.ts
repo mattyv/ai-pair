@@ -6,6 +6,8 @@ import * as vscode from 'vscode';
 import type { CodePlayback, Controller, PanelEvent, PanelPort, Ref, SharedSelection } from '@ai-pair/core';
 import {
   AUDIO_DIAGNOSTICS_SCHEMA,
+  NAVIGATOR_COMMENTARY_SCHEMA,
+  type NavigatorCommentary,
   speechDecodeFromPage,
   localPanelAction,
   localPanelUpdate,
@@ -78,6 +80,7 @@ export interface PanelWiring {
   requireCommandApproval: () => Promise<void>;
   speech: {
     sessionCost?: Pick<SessionSpeechCost, 'start' | 'restore' | 'end' | 'view'>;
+    narrationSession?: (id: number, ongoing: boolean) => void;
     readiness?: () => AudioDiagnostics;
     computeState: () => SpeechComputeState;
     computeMode: (value: SpeechComputeMode) => void;
@@ -189,6 +192,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     private readonly codePlayback: { get: () => CodePlayback; set: (value: CodePlayback) => void },
     private readonly replyBehavior: { get: () => 'interrupt' | 'finishAction'; set: (value: 'interrupt' | 'finishAction') => void },
     private readonly commandApprovalSound: { get: () => boolean; set: (value: boolean) => void },
+    private readonly navigatorCommentary: { get: () => NavigatorCommentary; set: (value: NavigatorCommentary) => void },
   ) {}
 
   /** Posts to the page, if there is one. */
@@ -288,6 +292,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     this.send({ type: 'speed', value });
   }
 
+  /** Shows the workspace's current navigator commentary preference. */
+  showNavigatorCommentary(value: NavigatorCommentary): void {
+    this.send({ type: 'navigatorCommentary', value });
+  }
+
   /** Shows the saved history order, including changes made in VS Code settings. */
   showChatOrder(value: ChatOrder): void {
     this.send({ type: 'chatOrder', value });
@@ -333,6 +342,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       const fresh = event.active && event.suspended !== true && event.resumed !== true;
       if (fresh || (event.active && this.workspaceCostGeneration === 0)) this.workspaceCostGeneration++;
       this.workspaceCostActive = event.active;
+      if (this.remote === undefined) {
+        this.wiring.speech.narrationSession?.(this.workspaceCostGeneration, event.active);
+      }
       if (this.remote === undefined) this.costSession(event);
     }
     this.log.push(event);
@@ -502,6 +514,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   /** Reconciles cost ownership to a workspace session update or replay snapshot. */
   private syncCompanionCost(generation: number, active: boolean, fresh: boolean): void {
     if (this.companionCostGeneration !== undefined && generation < this.companionCostGeneration) return;
+    this.wiring.speech.narrationSession?.(generation, active);
     if (this.companionCostGeneration !== generation) {
       // specs/CostReplay.tla, Fresh and Reopen: preserve same-session costs, never another session's.
       if (this.companionCostGeneration !== undefined) this.wiring.speech.sessionCost?.end();
@@ -701,6 +714,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       case 'speechSettings':
         if (
           typeof message.value?.enabled === 'boolean' &&
+          (message.value.contextEnabled === undefined || typeof message.value.contextEnabled === 'boolean') &&
           SPEECH_VOICES.some((voice) => voice === message.value.voice) &&
           SPEECH_SPEEDS.some((speed) => speed === message.value.speed) &&
           (message.value.listeningSpeed === undefined || SPEECH_LISTENING_RATES.some((rate) => rate === message.value.listeningSpeed)) &&
@@ -829,6 +843,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         if (this.remote === undefined) this.readySpeech(pageId);
         // A new page has an empty draft (#69): specs/Draft.tla, `LoadPage`.
         controller().resume('reply');
+        this.showNavigatorCommentary(this.navigatorCommentary.get());
         this.showChatOrder(this.chatOrder.get());
         this.showReplyBehavior(this.replyBehavior.get());
         this.showCommandApprovalSound(this.commandApprovalSound.get());
@@ -852,6 +867,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       case 'replyBehavior':
         if (message.value === 'interrupt' || message.value === 'finishAction') this.replyBehavior.set(message.value);
         return;
+      case 'navigatorCommentary': {
+        const parsed = NAVIGATOR_COMMENTARY_SCHEMA.safeParse(message.value);
+        if (parsed.success) this.navigatorCommentary.set(parsed.data);
+        return;
+      }
       case 'chatOrder':
         if (message.value === 'newestFirst' || message.value === 'oldestFirst') this.chatOrder.set(message.value);
         return;
@@ -898,8 +918,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
           controller().resume('reply');
           return;
         }
-        controller().resume(undefined, { reveal: false });
+        // The owner sees the held reply before resume releases attention.
         controller().userMessage(message.text, message.attach === true ? this.selection.current() : undefined, message.defer === true);
+        controller().resume(undefined, { reveal: false });
         return;
       case 'draft':
         // Typing a reply pauses playback, the way a pair stops when you start talking (specs/Draft.tla, `TypeDraft`, `Clear`).
@@ -908,6 +929,12 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         } else {
           controller().pause('reply');
         }
+        return;
+      case 'attention':
+        controller().requestAttention();
+        break;
+      case 'revealCursor':
+        controller().revealCursor();
         return;
       case 'pause':
         controller().pause();
@@ -920,15 +947,19 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         if (this.remote === undefined) this.wiring.speech.stop();
         controller().userInterrupt();
         return;
-      case 'turn':
-        if (this.remote === undefined) this.wiring.speech.stop();
-        controller().resume();
+      case 'turn': {
+        const selection = message.attach === true ? this.selection.current() : undefined;
+        if (this.remote === undefined && (controller().turn !== 'programmer' || message.message !== undefined || selection !== undefined)) {
+          this.wiring.speech.stop();
+        }
         if (controller().turn === 'programmer') {
-          controller().handBack(message.message, message.attach === true ? this.selection.current() : undefined);
+          controller().handBack(message.message, selection);
         } else {
           controller().takeTurn();
         }
+        if (message.message !== undefined || selection !== undefined) controller().resume();
         return;
+      }
       case 'end':
         if (this.remote === undefined) this.wiring.speech.stop();
         controller().endSession();

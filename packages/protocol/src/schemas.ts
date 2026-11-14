@@ -33,12 +33,23 @@ export const SPAN_SCHEMA = z.union([
   SPAN_TARGET_SCHEMA.pick({ file: true, line: true }).extend({ from: z.string(), through: z.string() }),
 ]);
 
+/** Validates the optional expressive delivery cue. */
+export const SPEECH_DELIVERY_SCHEMA = z.enum(['neutral', 'curious', 'excited', 'whispering']);
+
+/** An expressive delivery cue for speech. */
+export type SpeechDelivery = z.infer<typeof SPEECH_DELIVERY_SCHEMA>;
+
 /** Other action kinds cannot take the narration modifier. */
-const NO_SPEAK = { speak: z.never().optional(), speech_mode: z.never().optional() };
+const NO_SPEAK = { speak: z.never().optional(), speech_mode: z.never().optional(), speech_delivery: z.never().optional() };
 
 /** Checks an {@link Action}. */
 export const ACTION_SCHEMA = z.union([
-  z.object({ say: z.string(), speak: z.boolean().optional(), speech_mode: z.enum(['wait', 'continue']).optional() }),
+  z.object({
+    say: z.string(),
+    speak: z.boolean().optional(),
+    speech_mode: z.enum(['wait', 'continue']).optional(),
+    speech_delivery: SPEECH_DELIVERY_SCHEMA.optional(),
+  }),
   z.object({ move: MOVE_TARGET_SCHEMA, ...NO_SPEAK }),
   z.object({ select: SPAN_SCHEMA, ...NO_SPEAK }),
   z.object({ type: z.string(), ...NO_SPEAK }),
@@ -53,7 +64,7 @@ export const ACTION_SCHEMA = z.union([
 export const TURN_SCHEMA = z.enum(['agent', 'programmer']);
 
 /** Checks a {@link PauseReason}. */
-export const PAUSE_REASON_SCHEMA = z.enum(['programmer', 'reply', 'away', 'calibrate']);
+export const PAUSE_REASON_SCHEMA = z.enum(['programmer', 'reply', 'away', 'calibrate', 'attention']);
 
 /** Checks a {@link BatchStatus}. */
 export const BATCH_STATUS_SCHEMA = z.enum(['completed', 'interrupted', 'failed', 'discarded']);
@@ -173,6 +184,9 @@ export const EVENT_SCHEMA = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('end') }),
 ]);
 
+/** Checks the navigator commentary preference. */
+export const NAVIGATOR_COMMENTARY_SCHEMA = z.enum(['quiet', 'helpful', 'coach']);
+
 /** Checks a {@link Report}. */
 export const REPORT_SCHEMA = z.object({
   batches: z.array(BATCH_RESULT_SCHEMA),
@@ -185,8 +199,22 @@ export const REPORT_SCHEMA = z.object({
   rejected: z.object({ index: z.number(), action: ACTION_SCHEMA, error: BATCH_ERROR_SCHEMA, code: CODE_SCHEMA.optional() }).optional(),
   events: z.array(EVENT_SCHEMA),
   turn: TURN_SCHEMA,
+  /** Current preference, projected when the report is delivered. */
+  navigatorCommentary: NAVIGATOR_COMMENTARY_SCHEMA.optional(),
+  /** Identifies a restorable live preference notice. */
+  commentaryChanged: z.object({ noticeId: z.number().int().positive() }).optional(),
   /** The agent cursor's line, when it isn't where the agent last saw it: in this report's code, or an earlier report. */
   cursor: CODE_SCHEMA.optional(),
+  /** Evidence about why a navigator listen returned and where the programmer is editing. */
+  navigator: z
+    .object({
+      wakeReason: z.enum(['typing_pause', 'idle_timeout', 'turn_change', 'message', 'hand_raised']),
+      elapsedMs: z.number().nonnegative(),
+      /** Identifies a restorable navigator notice within its session. */
+      noticeId: z.number().int().positive().optional(),
+      programmerCursor: z.object({ file: z.string(), ...LINE_COLUMN_SCHEMA.shape }).optional(),
+    })
+    .optional(),
   waiting: z.literal(true).optional(),
   /** Reminds the agent to select speech when it is available. */
   speechReminder: z.literal(true).optional(),
@@ -317,6 +345,9 @@ export type Passage = z.infer<typeof PASSAGE_SCHEMA>;
 
 /** Something that happened in the editor since the last report: a message, an edit, an interrupt, a turn, the end. */
 export type Event = z.infer<typeof EVENT_SCHEMA>;
+
+/** The programmer's preference for navigator commentary. */
+export type NavigatorCommentary = z.infer<typeof NAVIGATOR_COMMENTARY_SCHEMA>;
 
 /** The editor's answer to a tool call: the batches that finished, the events since the last report, and where the cursor is. */
 export type Report = z.infer<typeof REPORT_SCHEMA>;

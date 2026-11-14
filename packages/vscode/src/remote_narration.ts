@@ -35,9 +35,22 @@ export class RemoteNarration implements NarrationPort {
   constructor(private readonly options: RemoteNarrationOptions) {}
 
   /** Sends one bounded narration and waits for its matching terminal acknowledgement. */
-  speak(text: string): Promise<void> {
+  speak(text: string, delivery?: import('@ai-pair/protocol').SpeechDelivery): Promise<void> {
+    if (speechProblem(text) !== undefined) return Promise.resolve();
+    return this.start({ type: 'speak', text, ...(delivery === undefined ? {} : { delivery }) });
+  }
+
+  /** Sends an attention cue through the same owned remote job. */
+  attentionCue(): Promise<void> {
+    return this.start({ type: 'attentionCue' });
+  }
+
+  /** Reserves the remote output until the matching acknowledgement. */
+  private start(
+    action: { type: 'speak'; text: string; delivery?: import('@ai-pair/protocol').SpeechDelivery } | { type: 'attentionCue' },
+  ): Promise<void> {
     const page = this.options.page();
-    if (this.closed || this.current !== undefined || page === undefined || speechProblem(text) !== undefined) return Promise.resolve();
+    if (this.closed || this.current !== undefined || page === undefined) return Promise.resolve();
     const { promise, resolve } = Promise.withResolvers<void>();
     const job: Job = {
       id: String(++this.nextJob),
@@ -51,7 +64,8 @@ export class RemoteNarration implements NarrationPort {
     };
     this.current = job;
     this.arm(job);
-    this.send({ ...this.envelope(), type: 'speak', jobId: job.id, pageEpoch: page, text });
+    // specs/RemoteCue.tla, `Send`: keep the slot until its terminal acknowledgement.
+    this.send({ ...this.envelope(), ...action, jobId: job.id, pageEpoch: page });
     return promise;
   }
 

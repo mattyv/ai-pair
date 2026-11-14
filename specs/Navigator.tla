@@ -26,10 +26,13 @@ VARIABLES
     call,                \* the agent's open call: one of Calls, or NoCall
     returnedWhileTyping, \* a listen returned for edits while the programmer was
                          \* typing
-    edits                \* edits made so far
+    edits,               \* edits made so far
+    wakeReason,          \* reason attached to the last listen report
+    wrongWake,           \* a typing pause was reported while typing
+    reportEdits          \* edit generation carried by the last pause report
 
 vars == <<typing, timerArmed, navigatorReady, unreported, call,
-          returnedWhileTyping, edits>>
+          returnedWhileTyping, edits, wakeReason, wrongWake, reportEdits>>
 
 --------------------------------------------------------------------------------
 
@@ -42,6 +45,9 @@ TypeOK ==
     /\ call \in Calls \cup {NoCall}
     /\ returnedWhileTyping \in BOOLEAN
     /\ edits \in Nat
+    /\ wakeReason \in {"none", "typing_pause", "idle_timeout"}
+    /\ wrongWake \in BOOLEAN
+    /\ reportEdits \in Nat
 
 --------------------------------------------------------------------------------
 
@@ -53,6 +59,9 @@ Init ==
     /\ call = NoCall
     /\ returnedWhileTyping = FALSE
     /\ edits = 0
+    /\ wakeReason = "none"
+    /\ wrongWake = FALSE
+    /\ reportEdits = 0
 
 \* userEdit in the programmer's turn: recordEdit, then the timer starts again.
 EditAsProgrammer ==
@@ -61,14 +70,16 @@ EditAsProgrammer ==
     /\ navigatorReady' = IF ResetReady THEN FALSE ELSE navigatorReady
     /\ unreported' = TRUE
     /\ edits' = edits + 1
-    /\ UNCHANGED <<call, returnedWhileTyping>>
+    /\ UNCHANGED <<call, returnedWhileTyping, wakeReason, wrongWake,
+                        reportEdits>>
 
 \* navigatorIdleMs pass without an edit.
 Lull ==
     /\ typing
     /\ typing' = FALSE
     /\ UNCHANGED <<timerArmed, navigatorReady, unreported, call,
-                   returnedWhileTyping, edits>>
+                        returnedWhileTyping, edits, wakeReason, wrongWake,
+                        reportEdits>>
 
 \* The timer fires, after the pause: navigatorReady, and pump().
 Fire ==
@@ -76,36 +87,51 @@ Fire ==
     /\ ~typing
     /\ timerArmed' = FALSE
     /\ navigatorReady' = TRUE
-    /\ UNCHANGED <<typing, unreported, call, returnedWhileTyping, edits>>
+    /\ UNCHANGED <<typing, unreported, call, returnedWhileTyping, edits,
+                        wakeReason, wrongWake, reportEdits>>
 
 \* The agent calls `listen`.
 Listen ==
     /\ call = NoCall
     /\ call' = "listen"
     /\ UNCHANGED <<typing, timerArmed, navigatorReady, unreported,
-                   returnedWhileTyping, edits>>
+                        returnedWhileTyping, edits, wakeReason, wrongWake,
+                        reportEdits>>
 
-\* `navigatorReady` holds: the call returns with the edits, and snapshot clears
+\* `navigatorReady` holds: the call returns even if a timeout already reported
+\* the edits; the pause itself is actionable. Snapshot clears
 \* navigatorReady.
 Return ==
     /\ call = "listen"
     /\ navigatorReady
-    /\ unreported
     /\ navigatorReady' = FALSE
     /\ unreported' = FALSE
     /\ call' = NoCall
     /\ returnedWhileTyping' = (returnedWhileTyping \/ typing)
+    /\ wakeReason' = "typing_pause"
+    /\ wrongWake' = (wrongWake \/ typing)
+    /\ reportEdits' = edits
     /\ UNCHANGED <<typing, timerArmed, edits>>
 
 \* maxBlockMs: the call ends anyway, with whatever is unreported.
 Timeout ==
     /\ call = "listen"
-    /\ navigatorReady' = FALSE
     /\ unreported' = FALSE
     /\ call' = NoCall
-    /\ UNCHANGED <<typing, timerArmed, returnedWhileTyping, edits>>
+    /\ wakeReason' = "idle_timeout"
+    /\ UNCHANGED <<typing, timerArmed, navigatorReady, returnedWhileTyping,
+                        edits, wrongWake, reportEdits>>
+
+\* A bounced report is restored only if no later edit superseded it.
+Restore ==
+    /\ wakeReason = "typing_pause"
+    /\ reportEdits = edits
+    /\ navigatorReady' = TRUE
+    /\ UNCHANGED <<typing, timerArmed, unreported, call, returnedWhileTyping,
+                        edits, wakeReason, wrongWake, reportEdits>>
 
 Next ==
+    \/ Restore
     \/ EditAsProgrammer
     \/ Lull
     \/ Fire
@@ -119,7 +145,7 @@ Fairness ==
     /\ WF_vars(Lull)
     /\ WF_vars(Fire)
     /\ WF_vars(Listen)
-    /\ WF_vars(Return)
+    /\ SF_vars(Return)
 
 Spec == Init /\ [][Next]_vars /\ Fairness
 
@@ -128,8 +154,14 @@ Spec == Init /\ [][Next]_vars /\ Fairness
 \* A listen returns for the programmer's edits only once they pause typing.
 NotWhileTyping == ~returnedWhileTyping
 
+\* A pause reason must be evidence of a pause.
+WakeMatches == ~wrongWake
+
 \* Edits the programmer stopped making reach the agent: something must happen.
 EditsReported == unreported ~> ~unreported
+
+\* A pause remains reportable even when a timeout already took the edit.
+PauseDelivered == navigatorReady ~> ~navigatorReady
 
 \* Edits run out only so that the model is finite (6.8). It prunes exactly the
 \* states a guard `edits < MaxEdits` on EditAsProgrammer never reached, so the

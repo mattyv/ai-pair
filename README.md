@@ -1,5 +1,19 @@
 # AI Pair Programmer
 
+Use the hand button to the left of Reply to request a chance to interject. The agent
+finishes the current speech and safe action before handing you the floor. Press
+it again while waiting to lower your hand; once the floor is yours, press it
+to focus Reply. The panel shows "What's up?" and, when speech is available,
+plays the same cue. Other pauses still apply.
+
+The fixed voice prompt is generated on first use and cached in memory, without
+conversation history. Relevant voice, synthesis, privacy or credential changes
+invalidate it; the next use creates a new clip. Replays make no new synthesis
+request. Generating a cloud clip may use account credits.
+
+Pair narration connects relevant choices to earlier verified work; ask for a
+teaching style for more concept explanations without compulsory exercises.
+
 AI Pair lets a coding agent work in your editor at a pace you can follow,
 while you interrupt, ask questions, or take over the keyboard. This fork adds
 speech, local audio routing, and additional controls to the original project.
@@ -21,6 +35,17 @@ start the agent in that folder, and ask it to pair. See [Connect your
 agent](#connect-your-agent) for supported agents and configuration details.
 
 ## Speech and audio
+
+Optional **Speech context and delivery cues** can be enabled in Pair Settings.
+For supported models, the provider receives up to three previously completed
+agent utterances, bounded to 500 Unicode code points, to improve continuity.
+Previous context requires OpenRouter Zero Data Retention; ordinary narration
+and supported delivery cues remain available without it.
+This is plain previous agent narration, not chat history; it is held only for
+the current session. OpenRouter ElevenLabs v4 supports previous text and
+delivery cues; v3, v3 conversational and v4 turbo support delivery cues only.
+Other models use ordinary speech. This does not enable speech, change the
+provider, add a microphone, or create a voice chat.
 
 Speech is off by default. Enable narration in Pair Settings or with the toolbar
 speaker button. The speaker status shows off, unchecked, starting, ready, or
@@ -94,13 +119,42 @@ it back. The agent can comment as navigator when useful and should build on
 user edits. At task completion it summarizes in Pair and listens until the
 programmer explicitly ends the session.
 
+Navigator mode reports your edits and cursor when you select **My turn**,
+including a current Pair file in a temporary directory outside the workspace.
+Reports identify typing pauses and idle timeouts. Ask the agent to "comment as
+I write" for more active commentary. A reply cancels queued observations, so
+the guide asks for one point per batch.
+
+A plain **Hand back** without a reply or attached selection preserves queued
+navigator observations. A reply, attached selection, takeover or hand request
+keeps its interruption behavior. A plain turn change keeps manual **Pause**
+active until **Resume**. Typing then undoing to the last reported text
+does not create a new typing-pause report; meaningful edits already reported
+by an idle timeout still receive their later pause acknowledgement.
+Visible new-side lines in the numbered diff can be pointed at without another
+read, subject to the existing line-staleness and exact-text checks. Deleted
+and omitted lines do not count as seen.
+
+In Pair Settings, **Navigator commentary** controls how much the agent comments
+while you take a turn: **Quiet** for important issues and direct answers,
+**Helpful** (default) for a first-pause acknowledgement and useful observations,
+or **Coach** for more explanation and connections to earlier work. The choice
+persists. Changing it wakes a waiting MCP `listen` immediately; if the agent
+is busy, its next `listen` returns with the update. Current speech and queued
+actions keep playing. Explicit conversation requests take precedence for that
+session. This guides
+both text and spoken comments; the speaker control independently enables or
+mutes audio. The model still decides whether an observation is useful.
+
 In Claude Code, `/pair:demo` runs a guided Pair session and `/pair:diagnose`
 checks connection, command, speech, and audio status. The legacy
 `/mcp__pair__demo` and `/mcp__pair__diagnose` forms also work. The extension
 includes `skills/ai-pair-demo/SKILL.md` and `skills/ai-pair-diagnose/SKILL.md`;
 copy their directories to your Claude `.claude/skills` directory to use
 `/ai-pair-demo` and `/ai-pair-diagnose`. No skill is installed automatically.
-The demo follows your speech setting; diagnostics do not run a paid preview.
+The demo follows your speech setting, demonstrates raising a hand, and cleans up
+verified temporary files when it ends unless you ask to keep them. If cleanup
+cannot run, it reports the retained paths. Diagnostics do not run a paid preview.
 
 ## Original project README
 
