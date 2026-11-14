@@ -51,6 +51,7 @@ import { flowGatePaths } from './integration_flow_gate';
 import { speechCoveragePaths } from './integration_speech_coverage_paths';
 import { vscodeCoveragePaths } from './integration_vscode_coverage_paths';
 import { diagnosticCoveragePaths } from './integration_diagnostic_coverage_paths';
+import { attentionPaths } from './integration_attention_paths';
 
 const EXPECTED_TODOS = `export interface Todo {
   id: number;
@@ -530,6 +531,9 @@ export async function run(): Promise<void> {
     { point: 5 },
     { say: 'x', loud: true },
     { say: 'x', speech_mode: 'invalid' },
+    { say: 'x', speech_delivery: 'loud' },
+    { say: 'x', speech_delivery: 5 },
+    { say: 5, speak: true },
     { delete: false },
     { run: 'true', wait: '2' },
     { type: ['x'] },
@@ -843,6 +847,9 @@ export async function run(): Promise<void> {
   assert.deepEqual(discardedReport.events, [{ kind: 'edit', file: 'undone.txt', diff: '', by: 'programmer' }]);
   await controller.end();
   console.log('an edit the programmer undid is reported with the batches it discarded');
+
+  // Raising a hand, revealing the agent cursor, and the navigator commentary preference (#60).
+  await attentionPaths(api, root);
 
   // A scroll a command cut short goes on once the command is done (specs/Scroll.tla). The moves
   // there and back first measure the view, so the last one glides from the top: the timing makes a
