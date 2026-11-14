@@ -340,6 +340,22 @@ test('reading ring finishes the current countdown by click or keyboard', async (
     ]);
 });
 
+/** Waits until the page has posted that the reading `id` is held: the hold starts on a timer, which a slow runner delays. */
+async function untilHeld(page: Page, id: number): Promise<void> {
+  await expect
+    .poll(async () =>
+      page.evaluate(
+        (held) =>
+          // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+          (globalThis as unknown as { messages: Array<{ type: string; id?: number; held?: boolean }> }).messages.some(
+            (message) => message.type === 'holdReading' && message.id === held && message.held === true,
+          ),
+        id,
+      ),
+    )
+    .toBe(true);
+}
+
 test('holding the reading ring pauses and releases without finishing it', async ({ page }) => {
   const post = await load(page);
   await post({ type: 'session', active: true });
@@ -349,7 +365,7 @@ test('holding the reading ring pauses and releases without finishing it', async 
   await expect(control).toBeEnabled();
   await control.hover();
   await page.mouse.down();
-  await page.waitForTimeout(500);
+  await untilHeld(page, 301);
   await page.mouse.up();
   await expect
     .poll(async () =>
@@ -368,7 +384,7 @@ test('holding the reading ring pauses and releases without finishing it', async 
   await expect(control).toBeEnabled();
   await control.focus();
   await page.keyboard.down('Space');
-  await page.waitForTimeout(500);
+  await untilHeld(page, 302);
   await page.keyboard.up('Space');
   await expect
     .poll(async () =>
