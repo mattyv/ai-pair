@@ -1,5 +1,19 @@
 # AI Pair Programmer
 
+Command reports distinguish approval from waiting for completion, and retain
+commands left in the background after the wait limit. A later observed finish
+reports the original run ID, exit status and bounded output tail. A timeout
+means completion was not observed; it does not prove the command is still
+alive or succeeded. **Show terminal** opens that run's owned terminal.
+
+For terminals identified as Bash, multi-line commands use a one-line encoded
+submission to avoid a reproduced VS Code shell-integration failure with
+heredocs and pipes. Approval and reports show your original command. Other
+shells keep their original submission behavior. If the shell is not yet known,
+a multi-line command waits up to 500 ms for identification. If it remains
+unknown, Pair submits the original command. Bash trap/debug context and
+error line numbers can differ; normal shell state and exit status are kept.
+
 Use the hand button to the left of Reply to request a chance to interject. The agent
 finishes the current speech and safe action before handing you the floor. Press
 it again while waiting to lower your hand; once the floor is yours, press it
@@ -418,6 +432,13 @@ npm run coverage          # all of them; each rewrites its column of COVERAGE.md
 npm run package           # production build -> ai-pair-<version>.vsix
 ```
 
+For a packaged functional check, unpack the VSIX to a writable temporary
+directory and set `EXTENSION_PATH` to its `extension` directory. The harness
+puts each fixture under its owning extension so VS Code supplies the correct
+API facade, and removes the generated fixture directory afterward. Use the
+development build for source-mapped integration coverage; production VSIX files
+do not include the main bundle's source map.
+
 To run your working copy, open the repository in VS Code and press F5, or:
 
 ```sh
@@ -427,8 +448,11 @@ code --extensionDevelopmentPath="$PWD/packages/vscode" <a project folder>
 ### Releasing
 
 Follow the [release checklist](RELEASE.md), including the README and
-architecture review, paired artifacts, and verification evidence. The current
-`npm run release` script publishes the main extension; the companion and
+architecture review, paired artifacts, and verification evidence. Each change
+bumps the version in its pull request. On `main`, `npm run release` tags that
+version and pushes the tag; the
+[Publish workflow](.github/workflows/publish.yml) then publishes both
+extensions to the VS Code Marketplace and makes the GitHub release. The
 platform assets need separate checks.
 
 ## License
