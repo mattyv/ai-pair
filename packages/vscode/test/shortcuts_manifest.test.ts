@@ -13,8 +13,8 @@ it('contributes the requested active-session shortcuts through VS Code', () => {
     })
     .parse(manifest);
   expect(parsed.contributes.keybindings).toEqual([
-    { command: 'aiPair.togglePause', key: 'ctrl+alt+`', when: 'aiPair.active' },
-    { command: 'aiPair.toggleAttention', key: 'ctrl+alt+shift+`', when: 'aiPair.active' },
+    { command: 'aiPair.togglePause', key: 'alt+q', when: 'aiPair.active' },
+    { command: 'aiPair.toggleAttention', key: 'alt+w', when: 'aiPair.active' },
     { command: 'aiPair.focusReply', key: 'ctrl+alt+space', when: 'aiPair.active' },
   ]);
 });

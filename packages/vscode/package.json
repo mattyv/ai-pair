@@ -154,12 +154,12 @@
     "keybindings": [
       {
         "command": "aiPair.togglePause",
-        "key": "ctrl+alt+`",
+        "key": "alt+q",
         "when": "aiPair.active"
       },
       {
         "command": "aiPair.toggleAttention",
-        "key": "ctrl+alt+shift+`",
+        "key": "alt+w",
         "when": "aiPair.active"
       },
       {

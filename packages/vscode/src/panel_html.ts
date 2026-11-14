@@ -117,7 +117,7 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
     </section>
     <section class="settings-section">
       <h2>Keyboard shortcuts</h2>
-      <p>Defaults: Ctrl+Alt+&#96; pauses or resumes, Ctrl+Alt+Shift+&#96; raises or lowers the hand,
+      <p>Defaults: Alt+Q pauses or resumes, Alt+W raises or lowers the hand,
         and Ctrl+Alt+Space focuses reply. Your shortcuts may differ.</p>
       <p>Change shortcuts in VS Code. Your keyboard, system, or terminal may reserve a key.</p>
       <button type="button" data-ui="configure-shortcuts">Configure shortcuts</button>
