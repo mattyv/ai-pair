@@ -116,6 +116,16 @@
         "category": "AI Pair"
       },
       {
+        "command": "aiPair.toggleAttention",
+        "title": "Raise / Lower Hand",
+        "category": "AI Pair"
+      },
+      {
+        "command": "aiPair.configureShortcuts",
+        "title": "Configure Keyboard Shortcuts",
+        "category": "AI Pair"
+      },
+      {
         "command": "aiPair.interrupt",
         "title": "Interrupt",
         "category": "AI Pair"
@@ -141,6 +151,23 @@
         "category": "AI Pair"
       }
     ],
+    "keybindings": [
+      {
+        "command": "aiPair.togglePause",
+        "key": "ctrl+alt+`",
+        "when": "aiPair.active"
+      },
+      {
+        "command": "aiPair.toggleAttention",
+        "key": "ctrl+alt+shift+`",
+        "when": "aiPair.active"
+      },
+      {
+        "command": "aiPair.focusReply",
+        "key": "ctrl+alt+space",
+        "when": "aiPair.active"
+      }
+    ],
     "menus": {
       "editor/context": [
         {
@@ -156,6 +183,10 @@
         },
         {
           "command": "aiPair.togglePause",
+          "when": "aiPair.active"
+        },
+        {
+          "command": "aiPair.toggleAttention",
           "when": "aiPair.active"
         },
         {
