@@ -2,7 +2,7 @@
 // shortcut_labels.ts is pure, and uses only @ai-pair/protocol's constants and zod schemas, which are real.
 
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_KEYBINDINGS, SHORTCUT_LABELS_SCHEMA } from '@ai-pair/protocol';
+import { DEFAULT_KEYBINDINGS, MAC_MODIFIERS, SHORTCUT_LABELS_SCHEMA } from '@ai-pair/protocol';
 import { shortcutLabels, shortcutPlatform } from '../src/shortcut_labels';
 
 /** Returns the labels for keybindings.json's `entries` on `platform`, held to the schema the page's message uses. */
@@ -21,7 +21,11 @@ describe('shortcutPlatform', () => {
 
 describe('shortcutLabels', () => {
   it('Label: names the defaults, as each platform shows them, when there is no file', () => {
-    expect(labels(undefined, 'mac')).toEqual({ pause: '⌃⇧Q', attention: '⌃⇧W', reply: '⌃⇧Space' });
+    expect(labels(undefined, 'mac')).toEqual({
+      pause: `${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}Q`,
+      attention: `${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}W`,
+      reply: `${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}Space`,
+    });
     expect(labels(undefined, 'linux')).toEqual({ pause: 'Alt+Q', attention: 'Alt+W', reply: 'Ctrl+Alt+Space' });
     expect(labels({ not: 'an array' }, 'win')).toEqual({ pause: 'Alt+Q', attention: 'Alt+W', reply: 'Ctrl+Alt+Space' });
   });
@@ -55,8 +59,8 @@ describe('shortcutLabels', () => {
       ]),
     ).toEqual({});
     expect(labels([{ key: 'shift+ctrl+q', command: `-${DEFAULT_KEYBINDINGS.pause.command}` }], 'mac')).toEqual({
-      attention: '⌃⇧W',
-      reply: '⌃⇧Space',
+      attention: `${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}W`,
+      reply: `${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}Space`,
     });
   });
 
@@ -81,7 +85,11 @@ describe('shortcutLabels', () => {
       { key: 'ctrl+k   ctrl+f5', command: DEFAULT_KEYBINDINGS.attention.command },
       { key: 'win+meta+escape', command: DEFAULT_KEYBINDINGS.reply.command },
     ];
-    expect(labels(entries, 'mac')).toEqual({ pause: '⌃⌥⇧⌘K', attention: '⌃K ⌃F5', reply: '⌘Escape' });
+    expect(labels(entries, 'mac')).toEqual({
+      pause: `${MAC_MODIFIERS.control}${MAC_MODIFIERS.option}${MAC_MODIFIERS.shift}${MAC_MODIFIERS.command}K`,
+      attention: `${MAC_MODIFIERS.control}K ${MAC_MODIFIERS.control}F5`,
+      reply: `${MAC_MODIFIERS.command}Escape`,
+    });
     expect(labels(entries, 'linux')).toEqual({ pause: 'Ctrl+Shift+Alt+Super+K', attention: 'Ctrl+K Ctrl+F5', reply: 'Super+Escape' });
     expect(labels(entries, 'win')).toEqual({
       pause: 'Ctrl+Shift+Alt+Windows+K',

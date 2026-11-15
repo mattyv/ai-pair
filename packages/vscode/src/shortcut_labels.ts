@@ -1,7 +1,14 @@
 // What the panel's tooltips name for each of the extension's shortcuts (#94): VS Code's rule for the binding a
 // command's menus show, applied to the extension's defaults and the programmer's keybindings.json.
 
-import { DEFAULT_KEYBINDINGS, KEYBINDING_SCHEMA, type DefaultKeybinding, type Keybinding, type ShortcutLabels } from '@ai-pair/protocol';
+import {
+  DEFAULT_KEYBINDINGS,
+  KEYBINDING_SCHEMA,
+  MAC_MODIFIERS,
+  type DefaultKeybinding,
+  type Keybinding,
+  type ShortcutLabels,
+} from '@ai-pair/protocol';
 
 /** The platforms whose keybindings differ: the fields of a contributed keybinding VS Code reads on each. */
 export type ShortcutPlatform = 'mac' | 'linux' | 'win';
@@ -12,14 +19,14 @@ interface KeyStyle {
   separator: string;
 }
 
-/** Each platform's style: ⌃⇧Q on macOS, Ctrl+Shift+Q elsewhere, as VS Code's menus show them. */
+/** Each platform's style: Control and Shift symbols then Q on macOS, Ctrl+Shift+Q elsewhere, as VS Code's menus show them. */
 const STYLES: Readonly<Record<ShortcutPlatform, KeyStyle>> = {
   mac: {
     modifiers: [
-      ['ctrl', '⌃'],
-      ['alt', '⌥'],
-      ['shift', '⇧'],
-      ['meta', '⌘'],
+      ['ctrl', MAC_MODIFIERS.control],
+      ['alt', MAC_MODIFIERS.option],
+      ['shift', MAC_MODIFIERS.shift],
+      ['meta', MAC_MODIFIERS.command],
     ],
     separator: '',
   },

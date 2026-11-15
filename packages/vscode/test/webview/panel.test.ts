@@ -8,6 +8,7 @@ import { ok } from 'node:assert/strict';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest';
 import type { Element, HTMLElement, Window } from 'happy-dom';
 import type { PanelEvent } from '@ai-pair/core';
+import { MAC_MODIFIERS } from '@ai-pair/protocol';
 import { ELLIPSIS, LABEL_SEPARATOR, RANGE_DASH, RIGHT_ARROW, SPEED_SUFFIX } from '@ai-pair/core/constants';
 import type { ToPanel } from '../../src/panel_messages';
 import { loadPage, ui } from '../page';
@@ -3593,16 +3594,23 @@ it('OfferedOnlyWhereCapable: disables GPU and Auto and explains why on a host wi
 describe('shortcuts', () => {
   it('Converges: names the bound keys in the tooltips and the reply box, as the host sends them', () => {
     start();
-    send({ type: 'shortcuts', value: { pause: '⌃⇧Q', attention: '⌃⇧W', reply: '⌃⇧Space' } });
-    expect(element('pause').dataset.tip).toBe('Pause (Space, ⌃⇧Q)');
-    expect(element('attention').dataset.tip).toBe('Raise hand (⌃⇧W)');
-    expect(replyBox().placeholder).toBe(`Reply to the agent${ELLIPSIS} (⌃⇧Space)`);
+    send({
+      type: 'shortcuts',
+      value: {
+        pause: `${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}Q`,
+        attention: `${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}W`,
+        reply: `${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}Space`,
+      },
+    });
+    expect(element('pause').dataset.tip).toBe(`Pause (Space, ${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}Q)`);
+    expect(element('attention').dataset.tip).toBe(`Raise hand (${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}W)`);
+    expect(replyBox().placeholder).toBe(`Reply to the agent${ELLIPSIS} (${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}Space)`);
     send({ type: 'state', state: 'typing', turn: 'agent', paused: true });
-    expect(element('pause').dataset.tip).toBe('Resume (Space, ⌃⇧Q)');
+    expect(element('pause').dataset.tip).toBe(`Resume (Space, ${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}Q)`);
     send({ type: 'attention', state: 'requested' });
-    expect(element('attention').dataset.tip).toBe('Lower hand (⌃⇧W)');
+    expect(element('attention').dataset.tip).toBe(`Lower hand (${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}W)`);
     send({ type: 'turn', to: 'programmer' });
-    expect(replyBox().placeholder).toBe(`Ask the agent${ELLIPSIS} (⌃⇧Space)`);
+    expect(replyBox().placeholder).toBe(`Ask the agent${ELLIPSIS} (${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}Space)`);
   });
 
   it('Converges: names no key for a command left unbound, and keeps what each control does', () => {

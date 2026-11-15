@@ -25,6 +25,12 @@ export const SHORTCUT_LABELS_SCHEMA = z.strictObject({
 /** The label of each control's shortcut. */
 export type ShortcutLabels = z.infer<typeof SHORTCUT_LABELS_SCHEMA>;
 
+/**
+ * The symbols macOS shows for its modifier keys, as its menus and VS Code's show them: Control, Option, Shift, and
+ * Command. Written as escapes, since the repository's files stay ASCII (scripts/check_ascii.ts).
+ */
+export const MAC_MODIFIERS = { control: '\u2303', option: '\u2325', shift: '\u21E7', command: '\u2318' } as const;
+
 /** A keybinding the extension contributes: its key everywhere but macOS, and on macOS. */
 export interface DefaultKeybinding {
   command: string;

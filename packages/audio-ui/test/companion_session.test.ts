@@ -1,4 +1,4 @@
-import { LOCAL_AUDIO_VERSION, type LocalAudioFrame, type LocalPanelAction } from '@ai-pair/protocol';
+import { LOCAL_AUDIO_VERSION, MAC_MODIFIERS, type LocalAudioFrame, type LocalPanelAction } from '@ai-pair/protocol';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { mock } from 'vitest-mock-extended';
 import type * as vscode from 'vscode';
@@ -513,8 +513,8 @@ it("Converges: reads this machine's keybindings.json for the page it owns, and s
   expect(directory).toEqual({ path: '/user/globalStorage/mattyv.ai-pair-local-audio/../..' });
   expect(vi.mocked(shortcutPlatform)).toHaveBeenCalledWith(process.platform);
   expect(platform).toBe('mac');
-  show({ pause: '⌃⇧Q' });
-  expect(fake.showShortcuts).toHaveBeenCalledWith({ pause: '⌃⇧Q' });
+  show({ pause: `${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}Q` });
+  expect(fake.showShortcuts).toHaveBeenCalledWith({ pause: `${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}Q` });
   void current.dispose();
   expect(fake.watcherDispose).toHaveBeenCalledOnce();
 });

@@ -2,7 +2,7 @@
 import * as assert from 'node:assert/strict';
 import { isDeepStrictEqual } from 'node:util';
 import * as vscode from 'vscode';
-import type { ShortcutLabels } from '@ai-pair/protocol';
+import { MAC_MODIFIERS, type ShortcutLabels } from '@ai-pair/protocol';
 import type { Api } from '../src/extension';
 
 /** Checks the command routes with a live session and after it ends. */
@@ -61,7 +61,11 @@ async function labelsBecome(api: Api, expected: ShortcutLabels, what: string): P
 export async function shortcutLabelPaths(api: Api): Promise<void> {
   const mac = process.platform === 'darwin';
   const defaults = mac
-    ? { pause: '⌃⇧Q', attention: '⌃⇧W', reply: '⌃⇧Space' }
+    ? {
+        pause: `${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}Q`,
+        attention: `${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}W`,
+        reply: `${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}Space`,
+      }
     : { pause: 'Alt+Q', attention: 'Alt+W', reply: 'Ctrl+Alt+Space' };
   await labelsBecome(api, defaults, 'the defaults, with no keybindings.json');
   const file = [
@@ -80,7 +84,11 @@ export async function shortcutLabelPaths(api: Api): Promise<void> {
     await labelsBecome(
       api,
       mac
-        ? { pause: '⌃⌥P', attention: undefined, reply: '⌘K ⌘R' }
+        ? {
+            pause: `${MAC_MODIFIERS.control}${MAC_MODIFIERS.option}P`,
+            attention: undefined,
+            reply: `${MAC_MODIFIERS.command}K ${MAC_MODIFIERS.command}R`,
+          }
         : { pause: 'Ctrl+Alt+P', attention: undefined, reply: 'Super+K Super+R' },
       'the keys keybindings.json binds',
     );

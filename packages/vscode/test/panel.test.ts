@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mock, type MockProxy } from 'vitest-mock-extended';
 import * as vscode from 'vscode';
 import type { Controller, PanelEvent, Ref } from '@ai-pair/core';
-import { EXCERPT_SCHEMA, SHORTCUT_LABELS_SCHEMA, speechDecodeToPage, type Turn } from '@ai-pair/protocol';
+import { EXCERPT_SCHEMA, MAC_MODIFIERS, SHORTCUT_LABELS_SCHEMA, speechDecodeToPage, type Turn } from '@ai-pair/protocol';
 import type { Calibration } from '../src/calibration';
 import { NarrationPanel, type PanelWiring, type Starter } from '../src/panel';
 import { panelHtml, SPEEDS } from '../src/panel_html';
@@ -2086,7 +2086,10 @@ it('OfferedOnlyWhereCapable: tells the page GPU is possible only on a supported 
 });
 
 describe('showShortcuts', () => {
-  const labels = SHORTCUT_LABELS_SCHEMA.parse({ pause: '⌃⇧Q', attention: '⌃⇧W' });
+  const labels = SHORTCUT_LABELS_SCHEMA.parse({
+    pause: `${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}Q`,
+    attention: `${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}W`,
+  });
 
   it('ShowsCache: posts the labels of the latest read to the page', () => {
     const { panel } = harness();

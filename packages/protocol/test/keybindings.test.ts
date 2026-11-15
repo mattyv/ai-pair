@@ -1,7 +1,7 @@
 // The schemas of the extension's keyboard shortcuts (#94). Solitary: keybindings.ts is constants and zod schemas.
 
 import { describe, expect, it } from 'vitest';
-import { KEYBINDING_SCHEMA, SHORTCUT_LABELS_SCHEMA } from '../src/keybindings';
+import { KEYBINDING_SCHEMA, MAC_MODIFIERS, SHORTCUT_LABELS_SCHEMA } from '../src/keybindings';
 
 describe('KEYBINDING_SCHEMA', () => {
   it("takes an entry of keybindings.json, dropping the fields a tooltip doesn't need", () => {
@@ -21,8 +21,14 @@ describe('KEYBINDING_SCHEMA', () => {
 
 describe('SHORTCUT_LABELS_SCHEMA', () => {
   it('takes a label for each control, any of them left out', () => {
-    expect(SHORTCUT_LABELS_SCHEMA.parse({ pause: '⌃⇧Q', attention: 'Alt+W', reply: 'Ctrl+Alt+Space' })).toEqual({
-      pause: '⌃⇧Q',
+    expect(
+      SHORTCUT_LABELS_SCHEMA.parse({
+        pause: `${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}Q`,
+        attention: 'Alt+W',
+        reply: 'Ctrl+Alt+Space',
+      }),
+    ).toEqual({
+      pause: `${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}Q`,
       attention: 'Alt+W',
       reply: 'Ctrl+Alt+Space',
     });

@@ -1,4 +1,4 @@
----- MODULE Shortcuts -----------------------------------------------------------
+---- MODULE Shortcuts ----------------------------------------------------------
 (******************************************************************************)
 (* The keyboard shortcuts the panel's tooltips name (#94):                    *)
 (* packages/vscode/src/shortcuts.ts (`shortcutLabels`, ShortcutWatcher),      *)
