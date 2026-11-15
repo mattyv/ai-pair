@@ -13,6 +13,7 @@ import {
   localPanelUpdate,
   type AudioDiagnostics,
   type LocalPanelAction,
+  type ShortcutLabels,
 } from '@ai-pair/protocol';
 import { panelHtml, SPEEDS } from './panel_html';
 import { timings } from './timings';
@@ -155,6 +156,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   private workspaceCostGeneration = 0;
   private workspaceCostActive = false;
   private companionCostGeneration?: number;
+  /** The labels of the extension's shortcuts, from the latest read of keybindings.json; none before one lands. */
+  private shortcuts?: ShortcutLabels;
   /** Everything posted so far, replayed when the view is (re)created. */
   private readonly log: PanelEvent[] = [];
   /** After each post: the window saves the history with a session, for a reload (#25). */
@@ -227,6 +230,21 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   showSpeechTransport(available: boolean): void {
     this.speechTransportAvailable = available;
     this.send({ type: 'speechTransport', available });
+  }
+
+  /** Returns the labels of the extension's shortcuts the panel holds, for the integration test; none before a read lands. */
+  shortcutLabels(): ShortcutLabels | undefined {
+    return this.shortcuts;
+  }
+
+  /**
+   * Keeps the labels of the extension's shortcuts, and posts them to the page this host owns
+   * (specs/Shortcuts.tla, `Land`). A workspace panel whose page is the companion's posts nothing:
+   * the companion reads its own keybindings.json, on the machine where the page runs.
+   */
+  showShortcuts(labels: ShortcutLabels): void {
+    this.shortcuts = labels;
+    if (this.remote === undefined) this.send({ type: 'shortcuts', value: labels });
   }
 
   /** Sends the local compute state to the current page. */
@@ -633,6 +651,13 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     }
   }
 
+  /** Initializes the controls the host that owns the local page keeps: its shortcuts, and speech. */
+  private readyLocal(pageId: number): void {
+    // specs/Shortcuts.tla, `LoadPage`: a new page gets the labels the host holds.
+    if (this.shortcuts !== undefined) this.send({ type: 'shortcuts', value: this.shortcuts });
+    this.readySpeech(pageId);
+  }
+
   /** Initializes speech controls only in the host that owns the local page. */
   private readySpeech(pageId: number): void {
     this.speechPageReady = true;
@@ -675,7 +700,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     if (this.companion !== undefined) {
       const action = localPanelAction.safeParse(message);
       if (action.success) {
-        if (action.data.type === 'ready') this.readySpeech(pageId);
+        if (action.data.type === 'ready') this.readyLocal(pageId);
         this.companion.forward(action.data, pageId);
         return;
       }
@@ -853,7 +878,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         return;
       case 'ready':
         this.replyPageReady = true;
-        if (this.remote === undefined) this.readySpeech(pageId);
+        if (this.remote === undefined) this.readyLocal(pageId);
         // A new page has an empty draft (#69): specs/Draft.tla, `LoadPage`.
         controller().resume('reply');
         this.showNavigatorCommentary(this.navigatorCommentary.get());

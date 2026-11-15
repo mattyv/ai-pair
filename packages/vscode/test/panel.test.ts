@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mock, type MockProxy } from 'vitest-mock-extended';
 import * as vscode from 'vscode';
 import type { Controller, PanelEvent, Ref } from '@ai-pair/core';
-import { EXCERPT_SCHEMA, speechDecodeToPage, type Turn } from '@ai-pair/protocol';
+import { EXCERPT_SCHEMA, MAC_MODIFIERS, SHORTCUT_LABELS_SCHEMA, speechDecodeToPage, type Turn } from '@ai-pair/protocol';
 import type { Calibration } from '../src/calibration';
 import { NarrationPanel, type PanelWiring, type Starter } from '../src/panel';
 import { panelHtml, SPEEDS } from '../src/panel_html';
@@ -2083,4 +2083,54 @@ it('OfferedOnlyWhereCapable: tells the page GPU is possible only on a supported 
   speech.supported.mockReturnValue(false);
   panel.refreshSpeechSupport();
   expect(view.posted).toContainEqual({ type: 'speechSupport', supported: false, gpu: false });
+});
+
+describe('showShortcuts', () => {
+  const labels = SHORTCUT_LABELS_SCHEMA.parse({
+    pause: `${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}Q`,
+    attention: `${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}W`,
+  });
+
+  it('ShowsCache: posts the labels of the latest read to the page', () => {
+    const { panel } = harness();
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(panel.shortcutLabels()).toBeUndefined();
+    panel.showShortcuts(labels);
+    expect(postedOf(view, 'shortcuts')).toEqual([{ type: 'shortcuts', value: labels }]);
+    expect(panel.shortcutLabels()).toEqual(labels);
+  });
+
+  it('Converges: sends a page that loads the labels the host holds, and none before a read lands', () => {
+    const { panel } = harness();
+    const first = open(panel);
+    first.send({ type: 'ready' });
+    expect(postedOf(first, 'shortcuts')).toEqual([]);
+    panel.showShortcuts(labels);
+    first.dispose();
+    const second = open(panel);
+    second.send({ type: 'ready' });
+    expect(postedOf(second, 'shortcuts')).toEqual([{ type: 'shortcuts', value: labels }]);
+  });
+
+  it("Converges: sends a companion's page the labels its own host read", () => {
+    const { panel } = harness();
+    panel.useCompanion({
+      forward: vi.fn<import('../src/panel').CompanionPanelRouting['forward']>(),
+      closed: vi.fn<import('../src/panel').CompanionPanelRouting['closed']>(),
+    });
+    panel.showShortcuts(labels);
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(postedOf(view, 'shortcuts')).toEqual([{ type: 'shortcuts', value: labels }]);
+  });
+
+  it("posts nothing to a companion's page from the workspace, which reads another machine's keybindings", () => {
+    const { panel } = harness();
+    const send = vi.fn<(message: ToPanel) => void>();
+    panel.attachRemote(1, send);
+    panel.showShortcuts(labels);
+    panel.receiveRemote(1, { type: 'ready' });
+    expect(send.mock.calls.map(([message]) => message.type)).not.toContain('shortcuts');
+  });
 });

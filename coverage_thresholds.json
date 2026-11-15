@@ -359,6 +359,13 @@
       "functions": 100
     }
   },
+  "packages/protocol/src/keybindings.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/protocol/src/local_audio.ts": {
     "unit": {
       "lines": 100,
@@ -740,6 +747,20 @@
       "lines": 82,
       "branches": 76,
       "functions": 66
+    }
+  },
+  "packages/vscode/src/shortcut_labels.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/shortcut_watcher.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "packages/vscode/src/speech_catalog.ts": {

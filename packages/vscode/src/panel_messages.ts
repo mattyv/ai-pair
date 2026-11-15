@@ -8,7 +8,7 @@ import type { SpeechModelStatus } from './speech_setup';
 import type { CatalogView } from './speech_catalog';
 import type { OpenRouterCatalogView } from './speech_openrouter_catalog';
 import type { OutputChoice } from './speech_output_types';
-import type { AudioDiagnostics, SpeechDecodeFromPage, NavigatorCommentary } from '@ai-pair/protocol';
+import type { AudioDiagnostics, SpeechDecodeFromPage, NavigatorCommentary, ShortcutLabels } from '@ai-pair/protocol';
 import type { OutputPreferenceView } from './speech_output_preferences';
 import type { SessionSpeechCostView } from './session_speech_cost';
 
@@ -102,6 +102,8 @@ export type ToPanel =
   | { type: 'speechControl'; id: number; pageId: number; action: SpeechAction }
   | { type: 'speechStatus'; id: number; pageId: number; state: SpeechState; message?: string }
   | { type: 'focusReply' }
+  /** The labels of the extension's shortcuts, as the programmer's keybindings bind them (#94). */
+  | { type: 'shortcuts'; value: ShortcutLabels }
   | { type: 'replyBehavior'; value: 'interrupt' | 'finishAction' }
   | { type: 'navigatorCommentary'; value: NavigatorCommentary }
   | { type: 'chatOrder'; value: ChatOrder }

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.43.0
+
+-   Name each Pair shortcut in the panel as your `keybindings.json` binds it:
+    the pause and hand buttons' tooltips, and the empty Reply box. A shortcut
+    you rebind shows its new key, one you remove shows none, and a change to
+    the file shows without a reload. A profile with its own keybindings is not
+    followed, and `when` clauses are not checked (#94).
+
 ## 0.42.0
 
 -   Play speech on a Linux desktop through PipeWire's default sink from the

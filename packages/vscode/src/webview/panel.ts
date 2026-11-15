@@ -1,6 +1,6 @@
 import { speechContextCapabilities } from '../speech_context_capabilities';
 import { voiceIndicator } from '../voice_indicator';
-import type { AudioDiagnostics } from '@ai-pair/protocol';
+import type { AudioDiagnostics, ShortcutLabels } from '@ai-pair/protocol';
 import type { SpeechComputeState } from '../speech_compute_types';
 import { SPEECH_LISTENING_RATES } from '../speech_tempo';
 // The narration panel's page script, bundled for the webview as dist/panel.js (#6). The markup and
@@ -293,6 +293,12 @@ let turn = 'agent';
 let paused = false;
 let speechPaused = false;
 let attention: 'none' | 'requested' | 'granted' = 'none';
+/** What the reply box asks for while empty, without its shortcut: a reply, or a question on the programmer's turn. */
+let replyPrompt = `Reply to the agent${ELLIPSIS}`;
+/** What the hand button does now: Raise hand, Lower hand, or Focus reply. */
+let attentionLabel = 'Raise hand';
+/** The labels of the extension's shortcuts, as the programmer's keybindings bind them; none until the host sends them (#94). */
+let shortcuts: ShortcutLabels = {};
 let replaying = false;
 /** The session's agent is gone, and the session waits for it to come back (#25). */
 let suspended = false;
@@ -570,6 +576,17 @@ function placeTip(target: HTMLElement): void {
   ui.tip.style.top = `${Math.max(TIP_MARGIN, top)}px`;
 }
 
+/** Returns a control's tooltip: what it does, then the keys that do the same, if any are bound (#94). */
+function withKeys(text: string, keys: ReadonlyArray<string | undefined>): string {
+  const bound = keys.filter((key) => key !== undefined);
+  return bound.length === 0 ? text : `${text} (${bound.join(', ')})`;
+}
+
+/** Returns the pause button's tooltip: Pause or Resume, with Space and the pause shortcut. */
+function pauseTip(): string {
+  return withKeys(paused ? 'Resume' : 'Pause', ['Space', shortcuts.pause]);
+}
+
 function setTip(el: HTMLElement, text: string): void {
   el.dataset.tip = text;
   if (el === tipTarget) {
@@ -733,7 +750,7 @@ function setState(e: Extract<PanelEvent, { type: 'state' }>): void {
   document.body.classList.toggle('programmer-turn', turn === 'programmer');
   ui.pause.classList.toggle('on', paused);
   ui.pause.setAttribute('aria-label', paused ? 'Resume' : 'Pause');
-  setTip(ui.pause, paused ? 'Resume (Space)' : 'Pause (Space)');
+  setTip(ui.pause, pauseTip());
   ui.turnLabel.textContent = turn === 'programmer' ? 'Hand back' : 'My turn';
   ui.turn.setAttribute('aria-label', ui.turnLabel.textContent);
   setTip(
@@ -1890,7 +1907,8 @@ function handle(message: ToPanel): void {
     case 'turn':
       addDivider(message.to === 'programmer' ? 'You took the turn' : 'You handed the turn back');
       if (message.message !== undefined || message.ref !== undefined) addYou(message.message, message.ref);
-      ui.reply.placeholder = message.to === 'programmer' ? `Ask the agent${ELLIPSIS}` : `Reply to the agent${ELLIPSIS}`;
+      replyPrompt = message.to === 'programmer' ? `Ask the agent${ELLIPSIS}` : `Reply to the agent${ELLIPSIS}`;
+      ui.reply.placeholder = withKeys(replyPrompt, [shortcuts.reply]);
       return;
     case 'point':
       pointed = codeLink(`${RIGHT_ARROW} ${message.file}:${message.line}`, message.file, message.line);
@@ -1942,11 +1960,11 @@ function handle(message: ToPanel): void {
       return;
     case 'attention': {
       attention = message.state;
-      const label = attention === 'none' ? 'Raise hand' : attention === 'requested' ? 'Lower hand' : 'Focus reply';
-      ui.attention.setAttribute('aria-label', label);
+      attentionLabel = attention === 'none' ? 'Raise hand' : attention === 'requested' ? 'Lower hand' : 'Focus reply';
+      ui.attention.setAttribute('aria-label', attentionLabel);
       ui.attention.setAttribute('aria-pressed', String(attention !== 'none'));
       ui.attention.classList.toggle('on', attention !== 'none');
-      setTip(ui.attention, label);
+      setTip(ui.attention, withKeys(attentionLabel, [shortcuts.attention]));
       if (attention === 'granted' && !replaying) focusReplyBox();
       return;
     }
@@ -1964,6 +1982,13 @@ function handle(message: ToPanel): void {
       return;
     case 'calibration':
       showCalibration(message.view);
+      return;
+    case 'shortcuts':
+      // specs/Shortcuts.tla, `Land` and `LoadPage`: the page names the keys the host read.
+      shortcuts = message.value;
+      setTip(ui.pause, pauseTip());
+      setTip(ui.attention, withKeys(attentionLabel, [shortcuts.attention]));
+      ui.reply.placeholder = withKeys(replyPrompt, [shortcuts.reply]);
       return;
     case 'timings':
       tipDelayMs = message.tipDelayMs;

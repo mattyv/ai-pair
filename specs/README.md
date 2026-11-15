@@ -67,6 +67,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `StructuralTyping.cfg` | both operations, closed and opaque field categories, selection and one or two closes | holds | 288 |
 | `LineEndGuard.cfg` | rehearsal and live suffix danger, with or without acknowledgment | holds | 22 |
 | `BuildIdentity.cfg` | two builds, installing and reloading | holds | 4 |
+| `Shortcuts.cfg` | three edits of a keybindings.json of up to one entry, three pages | holds | 76,830 |
 | `PanelMenus.cfg` | three menus, at most two clicks | holds | 12 |
 | `Panel.cfg` | `MaxEvents = 5`, both display orders and the settings dialog | holds | 84 |
 | `PanelScroll.cfg` | `MaxEvents = 5`, `ScrollOn = "you"`, both display orders | holds | 108 |
@@ -188,7 +189,7 @@ comment names them.
 
 | Spec | Actions | What they stand for |
 |---|---|---|
-| `Actions`, `Bridge`, `FollowMode`, `Player`, `Reload`, `RunBox`, `Serialize`, `Wire` | `Finished` | the model's end: nothing left to do |
+| `Actions`, `Bridge`, `FollowMode`, `Player`, `Reload`, `RunBox`, `Serialize`, `Shortcuts`, `Wire` | `Finished` | the model's end: nothing left to do |
 | `EditorAdapter` | `EditAsProgrammer`, `Reload` | the programmer typing; VS Code reloading a clean document from disk |
 | `FileText` | `OpenDocument`, `CloseDocument`, `Write`, `Delete`, `Edit`, `Save`, `Reload` | VS Code and the disk |
 | `Navigator` | `Lull` | the programmer pausing their typing for `navigatorIdleMs` |
@@ -3996,3 +3997,54 @@ mutants for
 `GuardActive`, `PreserveGrant`, `PreserveDraft`, and `DeliverFocus` each
 violate their corresponding property; an invalid initial attention state violates
 `TypeOK`.
+
+## `Shortcuts`: the keys the panel's tooltips name
+
+`packages/vscode/src/shortcut_watcher.ts` (ShortcutWatcher),
+`shortcut_labels.ts` (`shortcutLabels`), `panel.ts` (`showShortcuts`,
+`readyLocal`), and `webview/panel.ts` (the `shortcuts` message). Issue #94.
+VS Code has no API that reports a command's keybinding, so the host that owns
+the page reads the programmer's `keybindings.json` itself: once at activation,
+and again on each change. Reads are asynchronous, so a later one can land
+first. The host keeps the labels of the latest read and posts them when a read
+lands and when a page loads. `Label` is VS Code's resolver cut down to a
+tooltip: a removal takes only the default, the file's last addition wins, and
+`when` clauses are not modeled. `MaxLength = 1` keeps the model small; the
+resolver's cases with more entries are `shortcut_labels.test.ts`'s. Three
+constants switch the fixes the model was written with. `DropStale`: with
+`FALSE`, TLC violates `MonotoneProp` and `Converges`: `Edit` starts a second
+read, it lands, then the first lands over it. `ReadOnChange`: with `FALSE`,
+TLC violates `Converges`: `Edit`, and the page keeps the old key.
+`SendOnReady`: with `FALSE`, TLC violates `Converges`: `LoadPage` after the
+read landed, and the new page names no key.
+
+| Spec | Code |
+|---|---|
+| `Init` | `ShortcutWatcher`'s constructor: it watches the file and starts the first read |
+| `Edit` | the programmer saving `keybindings.json`; the watcher's change, create, or delete event starts a read, numbered |
+| `Land(r)` | `readFile` settling; a read that is not the latest is dropped; else `shortcutLabels`, then `showShortcuts` keeps the labels and posts them to a page the host owns; the page sets the tooltips and the placeholder |
+| `Dispose` | `onDidDispose`; the next page starts from `panel_html.ts`'s tooltips, which name no key |
+| `LoadPage` | `ready`: `readyLocal` posts the labels the host holds, if a read has landed |
+
+Checked one property at a time, each mutation failed on the properties named
+and no others. Each invariant was proved to bite with a mutation of a copy of
+the model, run in TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| `Edit` writes a file longer than `MaxLength` | `TypeOK` |
+| `DropStale = FALSE` | `MonotoneProp` and `Converges` |
+| `ReadOnChange = FALSE` | `Converges` |
+| `SendOnReady = FALSE` | `Converges` |
+| `Land` keeps the labels but posts nothing to the page | `ShowsCache` and `Converges` |
+| `LoadPage` sends the page the file's labels, not the host's | `ShowsCache` |
+| No fairness on `Land`: a read never lands | `Converges` |
+
+Every invariant and property names the test that proves the code obeys it:
+
+| Invariant | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types, in `ShortcutLabels` and `ToPanel`; `SHORTCUT_LABELS_SCHEMA` holds the tests' labels to them |
+| `ShowsCache` | `panel.test.ts`: ShowsCache: posts the labels of the latest read to the page |
+| `MonotoneProp` | `shortcut_watcher.test.ts`: MonotoneProp: drops a read that a later one overtook |
+| `Converges` | `shortcut_watcher.test.ts`: Converges: reads keybindings.json as it starts, and on each change, creation, and deletion; `panel.test.ts`: Converges: sends a page that loads the labels the host holds; `webview/panel.test.ts`: Converges: names the bound keys in the tooltips and the reply box; `shortcut_labels.test.ts`: the Label cases; `integration_shortcuts.ts`: the tooltips name a key rebound in keybindings.json |

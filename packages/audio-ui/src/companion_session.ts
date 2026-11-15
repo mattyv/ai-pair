@@ -10,6 +10,8 @@ import {
 } from '@ai-pair/protocol';
 import { createLocalAudioAdapter } from '../../audio-native/src/factory';
 import { NarrationPanel } from '../../vscode/src/panel';
+import { ShortcutWatcher } from '../../vscode/src/shortcut_watcher';
+import { shortcutPlatform } from '../../vscode/src/shortcut_labels';
 import { Diagnostics } from '../../vscode/src/diagnostics';
 import { createGpuProofRunner } from '../../vscode/src/speech_gpu_proof_runner';
 import { CompanionNarration } from './companion_narration';
@@ -219,6 +221,15 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
   const provider = vscode.window.registerWebviewViewProvider(NarrationPanel.viewId, panel, {
     webviewOptions: { retainContextWhenHidden: true },
   });
+  // The page runs here, so its tooltips name this machine's shortcuts (#94). VS Code's User folder holds globalStorage.
+  const shortcutPanel = panel;
+  const shortcuts = new ShortcutWatcher(
+    vscode.Uri.joinPath(context.globalStorageUri, '..', '..'),
+    shortcutPlatform(process.platform),
+    (labels) => {
+      shortcutPanel.showShortcuts(labels);
+    },
+  );
   return {
     accept: (value) => connection.accept(value),
     keySet: () => host.panelSpeech.keySet(),
@@ -235,6 +246,7 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
     },
     dispose: () => {
       provider.dispose();
+      shortcuts.dispose();
       return shutdown(false);
     },
   };
