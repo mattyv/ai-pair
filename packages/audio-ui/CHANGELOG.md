@@ -5,6 +5,18 @@
 -   Tell the Pair panel whether this computer has a GPU path, so it offers GPU
     and Auto only where they can work (#42).
 
+## 0.39.2
+
+-   Warn when the old AI Pair (`michalstrba.ai-pair`) is still installed: it
+    runs beside this one and leaves the agent's relay on the old version. The
+    warning uninstalls it, and says to add speech API keys again, which VS Code
+    keeps per extension and cannot carry over.
+
+## 0.39.1
+
+-   Keep the first narration after a window reload until the first click or
+    keypress in the Pair panel, instead of dropping it (#77).
+
 ## 0.39.0
 
 -   Add configurable session shortcuts for pause, the hand control and reply

@@ -236,8 +236,6 @@ function unlockAudio(): void {
   unlockPlayer();
   if (ui.commandApprovalSound.checked) approvalSound.unlock();
 }
-document.addEventListener('pointerdown', unlockAudio, /* useCapture= */ true);
-document.addEventListener('keydown', unlockAudio, /* useCapture= */ true);
 window.addEventListener('unload', () => {
   approvalSound.dispose();
 });
@@ -275,6 +273,16 @@ const speechAudio = new SpeechAudio(
     vscode.postMessage({ type: 'speechEvent', ...event });
   },
 );
+/**
+ * Starts narration the browser held for a gesture, then unlocks the shared
+ * player; a clip that just started leaves the player alone (#77).
+ */
+function onGesture(): void {
+  speechAudio.gesture();
+  unlockAudio();
+}
+document.addEventListener('pointerdown', onGesture, /* useCapture= */ true);
+document.addEventListener('keydown', onGesture, /* useCapture= */ true);
 
 let followingLatest = true;
 let historyHeight = 0;
