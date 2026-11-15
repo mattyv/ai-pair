@@ -41,7 +41,15 @@ function port(): { worker: LocalSynthesisPort; listener: () => LocalListener; cr
 
 /** The host inputs of macOS arm64 with local speech supported. */
 function macHost(overrides: Partial<Parameters<typeof coreMlCompute>[0]> = {}): Parameters<typeof coreMlCompute>[0] {
-  return { supported: true, platform: 'darwin', arch: 'arm64', runtimeDirectory: '/runtime', model: vi.fn(), ...overrides };
+  return {
+    supported: true,
+    platform: 'darwin',
+    arch: 'arm64',
+    runtimeDirectory: '/runtime',
+    storageDirectory: '/storage',
+    installedModel: vi.fn(),
+    ...overrides,
+  };
 }
 
 it.each([
@@ -58,7 +66,7 @@ it.each([
 
 it('starts the speech worker with the CoreML device, a long load timeout, and the model it is given', async () => {
   const model = vi.fn(() => Promise.resolve(undefined));
-  const compute = coreMlCompute(macHost({ model }));
+  const compute = coreMlCompute(macHost({ installedModel: model }));
   expect(compute.gpu).toBe(true);
   const listener = mock<LocalListener>();
   compute.speechOptions.createCoreMl?.(listener);
@@ -69,7 +77,7 @@ it('starts the speech worker with the CoreML device, a long load timeout, and th
   options.spawn('/model');
   expect(Worker).toHaveBeenCalledWith('/runtime/worker.mjs', { workerData: { modelPath: '/model', device: 'coreml' } });
   expect(await compute.check(new AbortController().signal)).toEqual({ phase: 'unavailable', reason: 'model_missing' });
-  expect(model).toHaveBeenCalledOnce();
+  expect(model).toHaveBeenCalledExactlyOnceWith('/storage');
 });
 
 it('GpuOnlyIfLoaded: reports ready only after a CoreML session loads, and waits for the worker to exit', async () => {

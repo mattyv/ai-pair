@@ -78,7 +78,10 @@ export interface CoreMlHost {
   platform: string;
   arch: string;
   runtimeDirectory: string;
-  model: () => Promise<string | undefined>;
+  /** The extension's global storage, where the verified CPU model lives. */
+  storageDirectory: string;
+  /** Returns the verified model directory under a storage directory, if installed. */
+  installedModel: (storageDirectory: string) => Promise<string | undefined>;
 }
 
 /** Wires CoreML GPU speech on macOS arm64 (#42), and no GPU anywhere else. */
@@ -90,5 +93,9 @@ export function coreMlCompute(host: CoreMlHost): CoreMlCompute {
   function create(listener: LocalListener): LocalSynthesisPort {
     return createCoreMlWorker(host.runtimeDirectory, listener);
   }
-  return { gpu: true, speechOptions: { createCoreMl: create }, check: (signal) => proveCoreMl({ model: host.model, create }, signal) };
+  return {
+    gpu: true,
+    speechOptions: { createCoreMl: create },
+    check: (signal) => proveCoreMl({ model: () => host.installedModel(host.storageDirectory), create }, signal),
+  };
 }

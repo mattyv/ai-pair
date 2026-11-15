@@ -183,7 +183,8 @@ export function activate(context: vscode.ExtensionContext): Api {
     platform: process.platform,
     arch: process.arch,
     runtimeDirectory: path.join(context.extensionPath, 'dist', 'speech'),
-    model: () => installedSpeechModel(context.globalStorageUri.fsPath),
+    storageDirectory: context.globalStorageUri.fsPath,
+    installedModel: installedSpeechModel,
   });
   let runtimeSpeechSupported = false;
   let runtimeSpeechChecked = false;

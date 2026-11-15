@@ -2671,9 +2671,8 @@ it('CoreMlCompute: wires the host GPU offer, the CoreML worker and the explicit 
   const host = vi.mocked(coreMlCompute).mock.calls.at(-1)?.[0];
   if (host === undefined) throw new Error('No CoreML host');
   expect(host).toMatchObject({ supported: true, platform: process.platform, arch: process.arch, runtimeDirectory: '/ext/dist/speech' });
-  vi.mocked(installedSpeechModel).mockResolvedValueOnce('/storage/model');
-  expect(await host.model()).toBe('/storage/model');
-  expect(installedSpeechModel).toHaveBeenLastCalledWith('/storage');
+  expect(host.installedModel).toBe(installedSpeechModel);
+  expect(host.storageDirectory).toBe('/storage');
   expect(service.options.createCoreMl).toBe(createCoreMl);
   expect(h.panel.wiring.speech.gpuSupported()).toBe(true);
   h.panel.wiring.speech.checkGpuSetup();
