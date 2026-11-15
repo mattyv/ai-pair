@@ -57,7 +57,8 @@ Replace == /\ page' = IF page = 1 THEN 2 ELSE 1
 Finish == /\ current # 0 /\ playing # 0 /\ current' = 0 /\ playing' = 0
           /\ copied' = FALSE /\ expected' = FALSE /\ blocked' = FALSE
              /\ UNCHANGED <<page, nextId, paused>>
-Next == Begin \/ (\E id \in 1..MaxId, p \in 1..2, a \in BOOLEAN : Audio(id, p, a))
+Next == Begin
+        \/ (\E id \in 1..MaxId, p \in 1..2, a \in BOOLEAN : Audio(id, p, a))
         \/ Gesture \/ Pause \/ Resume \/ Interrupt \/ Replace \/ Finish
 Spec == Init /\ [][Next]_vars /\ WF_vars(Interrupt)
 PlayingIsCurrent == playing # 0 => playing = current /\ ~paused
