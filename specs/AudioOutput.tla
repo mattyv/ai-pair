@@ -75,7 +75,8 @@ Start(job) ==
     /\ phase' = "playing" /\ actualJob' = job
     /\ UNCHANGED <<generation, epoch, page, selected, requestEpoch,
                    requestPage, target, valid, owned, paused, outcome,
-                   reading, approval, canceledEnd, live, badExit, defaultBusy, helper, defaultHelper, sysHelper>>
+                   reading, approval, canceledEnd, live, badExit, defaultBusy,
+                   helper, defaultHelper, sysHelper>>
 
 Pause ==
     /\ ~paused /\ paused' = TRUE
@@ -108,14 +109,16 @@ Change ==
     /\ valid' = FALSE /\ phase' = IF owned THEN "retiring" ELSE "idle"
     /\ UNCHANGED <<generation, page, requestEpoch, requestPage, target,
                    actual, owned, paused, outcome, reading, approval,
-                   canceledEnd, live, actualJob, badExit, defaultBusy, helper, defaultHelper, sysHelper>>
+                   canceledEnd, live, actualJob, badExit, defaultBusy, helper,
+                   defaultHelper, sysHelper>>
 
 Page ==
     /\ page < 2 /\ page' = page + 1 /\ valid' = FALSE
     /\ phase' = IF owned THEN "retiring" ELSE "idle"
     /\ UNCHANGED <<generation, epoch, selected, requestEpoch, requestPage,
                    target, actual, owned, paused, outcome, reading, approval,
-                   canceledEnd, live, actualJob, badExit, defaultBusy, helper, defaultHelper, sysHelper>>
+                   canceledEnd, live, actualJob, badExit, defaultBusy, helper,
+                   defaultHelper, sysHelper>>
 
 Exit(job) ==
     /\ job \in 1..2 /\ (~GuardCurrent \/ job = generation)
@@ -157,7 +160,8 @@ HelperChange ==
                    reading, approval, canceledEnd, live, actualJob, badExit,
                    defaultBusy, defaultHelper, sysHelper>>
 
-Next == (\E route \in Routes: Reserve(route)) \/ (\E job \in 1..2: Start(job)) \/ Pause \/ Resume
+Next == (\E route \in Routes: Reserve(route))
+        \/ (\E job \in 1..2: Start(job)) \/ Pause \/ Resume
         \/ Cancel \/ Change \/ Page \/ (\E job \in 1..2: Exit(job))
         \/ DefaultStart \/ DefaultEnd \/ HelperChange
 Spec == Init /\ [][Next]_vars /\ WF_vars(\E job \in 1..2: Start(job)) /\
