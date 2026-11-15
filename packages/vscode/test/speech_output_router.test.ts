@@ -421,6 +421,20 @@ describe('the system default through a verified helper (#82)', () => {
     expect(h.system.play).not.toHaveBeenCalled();
   });
 
+  it('HelperRoute and NativeDefault: decides each line at admission, so a lost PipeWire default sink sends the next line to the browser (#84)', async () => {
+    const h = systemHarness(true);
+    expect(await h.router.prepare(1)).toBe(true);
+    expect(h.router.play(1, new Uint8Array(44), 1000)).toBe(7);
+    h.system.play.mock.calls[0]?.[2]('ended');
+    await Promise.resolve();
+    h.system.supported.mockResolvedValue(false);
+    expect(await h.router.prepare(2)).toBe(true);
+    expect(h.router.play(2, new Uint8Array(44), 1000)).toBe(3);
+    expect(h.system.play).toHaveBeenCalledOnce();
+    expect(h.browser.play).toHaveBeenCalledOnce();
+    expect(h.system.supported).toHaveBeenCalledTimes(2);
+  });
+
   it('NoOverlap: refuses any route while the helper still owns a job', async () => {
     const h = systemHarness(true);
     h.system.available.mockReturnValue(false);

@@ -837,8 +837,9 @@ export function activate(context: vscode.ExtensionContext): Api {
     },
   };
   const nativeOutput = new NativeOutputDriver();
-  // On macOS the packaged CoreAudio helper plays the default output (#82).
-  const systemOutput = systemOutputDriver(context.extensionPath);
+  // The default output plays natively on a local desktop: the packaged
+  // CoreAudio helper on macOS (#82), PipeWire's default sink on Linux (#84).
+  const systemOutput = systemOutputDriver(context.extensionPath, cloudSupported);
   outputRouter = new SpeechOutputRouter({
     driver: nativeOutput,
     system: systemOutput,

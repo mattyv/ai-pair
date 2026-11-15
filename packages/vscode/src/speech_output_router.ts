@@ -13,7 +13,7 @@ export interface NativeDriver {
   control(action: 'pause' | 'resume' | 'stop'): void;
 }
 
-/** A native driver for the system default output (macOS, #82). */
+/** A native driver for the system default output (macOS #82, Linux #84). */
 export interface SystemDriver extends NativeDriver {
   supported(): Promise<boolean>;
 }

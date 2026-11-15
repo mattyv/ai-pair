@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.42.0
+
+-   Version aligned with the main extension, whose Linux builds now play speech
+    on PipeWire's default sink (#84). The companion is unchanged.
+
 ## 0.41.0
 
 -   Version aligned with the main extension, whose Mac builds now play speech

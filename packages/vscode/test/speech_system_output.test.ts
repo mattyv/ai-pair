@@ -172,11 +172,17 @@ describe('SystemOutputDriver', () => {
   });
 });
 
-it('creates a driver over the packaged helper only on macOS', () => {
+it('creates a driver on a local macOS or Linux desktop only (#84)', () => {
   const h = fakeAdapter();
   vi.mocked(createLocalAudioAdapter).mockReturnValue(h.adapter);
-  expect(systemOutputDriver('/ext', 'darwin')).toBeInstanceOf(SystemOutputDriver);
+  expect(systemOutputDriver('/ext', /* localDesktop= */ true, 'darwin')).toBeInstanceOf(SystemOutputDriver);
   expect(createLocalAudioAdapter).toHaveBeenCalledWith('/ext');
-  expect(systemOutputDriver('/ext', 'linux')).toBeUndefined();
-  expect(systemOutputDriver('/ext')).toEqual(process.platform === 'darwin' ? expect.any(SystemOutputDriver) : undefined);
+  expect(systemOutputDriver('/ext', /* localDesktop= */ true, 'linux')).toBeInstanceOf(SystemOutputDriver);
+  expect(systemOutputDriver('/ext', /* localDesktop= */ true, 'win32')).toBeUndefined();
+  vi.mocked(createLocalAudioAdapter).mockClear();
+  expect(systemOutputDriver('/ext', /* localDesktop= */ false, 'linux')).toBeUndefined();
+  expect(systemOutputDriver('/ext', /* localDesktop= */ false, 'darwin')).toBeUndefined();
+  expect(createLocalAudioAdapter).not.toHaveBeenCalled();
+  const local = systemOutputDriver('/ext', /* localDesktop= */ true);
+  expect(local).toEqual(['darwin', 'linux'].includes(process.platform) ? expect.any(SystemOutputDriver) : undefined);
 });

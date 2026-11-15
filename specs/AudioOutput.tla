@@ -5,22 +5,24 @@
 (* ownership until process close. Only a natural close reports ended.     *)
 (* When a verified native helper exists (macOS, #82), the system default  *)
 (* plays through it as target "sys"; the browser default is the fallback  *)
-(* used only when no helper can run.                                      *)
+(* used only when no helper can run. On Linux (#84) the "helper" is       *)
+(* PipeWire with a known default sink, which can appear or disappear at   *)
+(* any time (`HelperChange`), so each route is decided when it is admitted.*)
 (***************************************************************************)
 EXTENDS Naturals
 
 CONSTANTS
     GuardCurrent, GuardTarget, GuardRetire, GuardPaused, GuardNatural,
-    GuardDefault, GuardHelper
+    GuardDefault, GuardHelper, GuardAdmit
 
 VARIABLES phase, generation, epoch, page, selected, requestEpoch,
           requestPage, target, actual, valid, owned, paused, outcome,
           reading, approval, canceledEnd, live, actualJob, badExit, defaultBusy,
-          helper
+          helper, defaultHelper, sysHelper
 vars == <<phase, generation, epoch, page, selected, requestEpoch,
           requestPage, target, actual, valid, owned, paused, outcome,
           reading, approval, canceledEnd, live, actualJob,
-          badExit, defaultBusy, helper>>
+          badExit, defaultBusy, helper, defaultHelper, sysHelper>>
 Routes == {"a", "b", "sys"}
 
 TypeOK ==
@@ -34,6 +36,7 @@ TypeOK ==
     /\ canceledEnd \in BOOLEAN /\ live \in 0..1
     /\ actualJob \in 0..2 /\ badExit \in BOOLEAN
     /\ defaultBusy \in BOOLEAN /\ helper \in BOOLEAN
+    /\ defaultHelper \in BOOLEAN /\ sysHelper \in BOOLEAN
 
 Init ==
     /\ phase = "idle" /\ generation = 0 /\ epoch = 0 /\ page = 0
@@ -44,19 +47,23 @@ Init ==
     /\ live = 0 /\ actualJob = 0 /\ badExit = FALSE /\ defaultBusy = FALSE
     \* The packaged helper either verifies at startup or it does not.
     /\ helper \in BOOLEAN
+    \* Whether a helper was usable when the browser default or the "sys"
+    \* route was admitted.
+    /\ defaultHelper = FALSE /\ sysHelper = FALSE
 
 \* `route` is the selected device, or "sys", the system default through a
 \* verified helper.
 Reserve(route) ==
     /\ phase = "idle" /\ ~owned /\ ~paused /\ ~defaultBusy
     /\ generation < 2
-    /\ route \in {selected, "sys"} /\ (route = "sys" => helper)
+    /\ route \in {selected, "sys"} /\ (~GuardAdmit \/ (route = "sys" => helper))
     /\ generation' = generation + 1 /\ requestEpoch' = epoch
     /\ requestPage' = page /\ target' = route /\ valid' = TRUE
     /\ owned' = TRUE /\ phase' = "starting" /\ outcome' = "none"
     /\ actual' = "none" /\ live' = 1 /\ actualJob' = 0
+    /\ sysHelper' = (route = "sys" /\ helper)
     /\ UNCHANGED <<epoch, page, selected, paused, reading, approval,
-                   canceledEnd, badExit, defaultBusy, helper>>
+                   canceledEnd, badExit, defaultBusy, helper, defaultHelper>>
 
 Start(job) ==
     /\ job \in 1..2
@@ -68,7 +75,7 @@ Start(job) ==
     /\ phase' = "playing" /\ actualJob' = job
     /\ UNCHANGED <<generation, epoch, page, selected, requestEpoch,
                    requestPage, target, valid, owned, paused, outcome,
-                   reading, approval, canceledEnd, live, badExit, defaultBusy, helper>>
+                   reading, approval, canceledEnd, live, badExit, defaultBusy, helper, defaultHelper, sysHelper>>
 
 Pause ==
     /\ ~paused /\ paused' = TRUE
@@ -76,7 +83,7 @@ Pause ==
     /\ UNCHANGED <<generation, epoch, page, selected, requestEpoch,
                    requestPage, target, actual, valid, owned, outcome,
                    reading, approval, canceledEnd, live, actualJob,
-          badExit, defaultBusy, helper>>
+          badExit, defaultBusy, helper, defaultHelper, sysHelper>>
 
 Resume ==
     /\ paused /\ paused' = FALSE
@@ -84,7 +91,7 @@ Resume ==
     /\ UNCHANGED <<generation, epoch, page, selected, requestEpoch,
                    requestPage, target, actual, valid, owned, outcome,
                    reading, approval, canceledEnd, live, actualJob,
-          badExit, defaultBusy, helper>>
+          badExit, defaultBusy, helper, defaultHelper, sysHelper>>
 
 Cancel ==
     /\ owned /\ phase # "retiring" /\ valid' = FALSE
@@ -94,21 +101,21 @@ Cancel ==
     /\ UNCHANGED <<generation, epoch, page, selected, requestEpoch,
                    requestPage, target, actual, paused, reading,
                    approval, canceledEnd, live, actualJob, badExit,
-                   defaultBusy, helper>>
+                   defaultBusy, helper, defaultHelper, sysHelper>>
 
 Change ==
     /\ epoch < 2 /\ epoch' = epoch + 1 /\ selected' \in {"a", "b"}
     /\ valid' = FALSE /\ phase' = IF owned THEN "retiring" ELSE "idle"
     /\ UNCHANGED <<generation, page, requestEpoch, requestPage, target,
                    actual, owned, paused, outcome, reading, approval,
-                   canceledEnd, live, actualJob, badExit, defaultBusy, helper>>
+                   canceledEnd, live, actualJob, badExit, defaultBusy, helper, defaultHelper, sysHelper>>
 
 Page ==
     /\ page < 2 /\ page' = page + 1 /\ valid' = FALSE
     /\ phase' = IF owned THEN "retiring" ELSE "idle"
     /\ UNCHANGED <<generation, epoch, selected, requestEpoch, requestPage,
                    target, actual, owned, paused, outcome, reading, approval,
-                   canceledEnd, live, actualJob, badExit, defaultBusy, helper>>
+                   canceledEnd, live, actualJob, badExit, defaultBusy, helper, defaultHelper, sysHelper>>
 
 Exit(job) ==
     /\ job \in 1..2 /\ (~GuardCurrent \/ job = generation)
@@ -122,28 +129,37 @@ Exit(job) ==
     /\ actual' = "none"
     /\ UNCHANGED <<generation, epoch, page, selected, requestEpoch,
                    requestPage, target, paused, reading, approval, actualJob,
-                   defaultBusy, helper>>
+                   defaultBusy, helper, defaultHelper, sysHelper>>
 
 \* The browser default: only a fallback when no verified helper can run.
 DefaultStart ==
     /\ ~defaultBusy /\ (~GuardDefault \/ live = 0)
     /\ (~GuardHelper \/ ~helper)
-    /\ defaultBusy' = TRUE
+    /\ defaultBusy' = TRUE /\ defaultHelper' = helper
     /\ UNCHANGED <<phase, generation, epoch, page, selected, requestEpoch,
                    requestPage, target, actual, valid, owned, paused, outcome,
                    reading, approval, canceledEnd, live, actualJob, badExit,
-                   helper>>
+                   helper, sysHelper>>
 
 DefaultEnd ==
     /\ defaultBusy /\ defaultBusy' = FALSE
     /\ UNCHANGED <<phase, generation, epoch, page, selected, requestEpoch,
                    requestPage, target, actual, valid, owned, paused, outcome,
                    reading, approval, canceledEnd, live, actualJob, badExit,
-                   helper>>
+                   helper, defaultHelper, sysHelper>>
+
+\* PipeWire, or its default sink, appears or disappears (Linux, #84). A job
+\* already admitted keeps its route; the next admission sees the new state.
+HelperChange ==
+    /\ helper' = ~helper
+    /\ UNCHANGED <<phase, generation, epoch, page, selected, requestEpoch,
+                   requestPage, target, actual, valid, owned, paused, outcome,
+                   reading, approval, canceledEnd, live, actualJob, badExit,
+                   defaultBusy, defaultHelper, sysHelper>>
 
 Next == (\E route \in Routes: Reserve(route)) \/ (\E job \in 1..2: Start(job)) \/ Pause \/ Resume
         \/ Cancel \/ Change \/ Page \/ (\E job \in 1..2: Exit(job))
-        \/ DefaultStart \/ DefaultEnd
+        \/ DefaultStart \/ DefaultEnd \/ HelperChange
 Spec == Init /\ [][Next]_vars /\ WF_vars(\E job \in 1..2: Start(job)) /\
         WF_vars(\E job \in 1..2: Exit(job))
 NoRevival == phase = "playing" =>
@@ -155,10 +171,11 @@ NoCrossRouteOverlap == ~(live = 1 /\ defaultBusy)
 NoStartPaused == phase = "playing" => ~paused
 NoCanceledEnd == ~canceledEnd /\ ~badExit
 IndependentGates == reading /\ approval
-\* With a verified helper, default speech never needs the browser page (#82).
-NativeDefault == defaultBusy => ~helper
-\* The system-default native route exists only when a verified helper does.
-HelperRoute == (owned /\ target = "sys") => helper
+\* With a usable helper at admission, default speech never uses the browser
+\* page (#82, #84).
+NativeDefault == defaultBusy => ~defaultHelper
+\* The system-default native route is admitted only while a helper is usable.
+HelperRoute == (owned /\ target = "sys") => sysHelper
 RetirementCompletes == (phase = "retiring") ~> ~owned
 StartProgress == (phase = "starting" /\ ~paused /\ valid) ~>
                  (phase # "starting" \/ paused \/ ~valid)

@@ -11,9 +11,10 @@ interface Job {
 }
 
 /**
- * Plays the system default output through the packaged native helper, so speech
- * needs no gesture in the panel page (#82). One job stays owned until the
- * helper has stopped, including after a stop or a failure.
+ * Plays the system default output natively, so speech needs no gesture in the
+ * panel page: the packaged CoreAudio helper on macOS (#82), PipeWire's default
+ * sink on Linux (#84). One job stays owned until the helper has stopped,
+ * including after a stop or a failure.
  */
 export class SystemOutputDriver implements NativeDriver {
   private job?: Job;
@@ -25,7 +26,10 @@ export class SystemOutputDriver implements NativeDriver {
     });
   }
 
-  /** Resolves true only when the verified helper reports a default output. */
+  /**
+   * Resolves true only when the helper reports a default output now. The router
+   * asks before each line, since a PipeWire default sink can come and go.
+   */
   async supported(): Promise<boolean> {
     try {
       return (await this.adapter.capabilities()).defaultOutput;
@@ -100,7 +104,18 @@ export class SystemOutputDriver implements NativeDriver {
   }
 }
 
-/** Returns the system-output driver on macOS, where a helper is packaged; elsewhere none. */
-export function systemOutputDriver(extensionRoot: string, platform = process.platform): SystemOutputDriver | undefined {
-  return platform === 'darwin' ? new SystemOutputDriver(createLocalAudioAdapter(extensionRoot)) : undefined;
+/** Platforms whose default output can play natively: a packaged helper, or PipeWire. */
+const SYSTEM_PLATFORMS: ReadonlySet<string> = new Set(['darwin', 'linux']);
+
+/**
+ * Returns the system-output driver on a local macOS or Linux desktop; elsewhere
+ * none. Over a remote connection the extension runs on the remote host, whose
+ * speakers are not the programmer's (#84).
+ */
+export function systemOutputDriver(
+  extensionRoot: string,
+  localDesktop: boolean,
+  platform: string = process.platform,
+): SystemOutputDriver | undefined {
+  return localDesktop && SYSTEM_PLATFORMS.has(platform) ? new SystemOutputDriver(createLocalAudioAdapter(extensionRoot)) : undefined;
 }
