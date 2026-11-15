@@ -68,7 +68,8 @@ Start(job) ==
     /\ phase' = "playing" /\ actualJob' = job
     /\ UNCHANGED <<generation, epoch, page, selected, requestEpoch,
                    requestPage, target, valid, owned, paused, outcome,
-                   reading, approval, canceledEnd, live, badExit, defaultBusy, helper>>
+                   reading, approval, canceledEnd, live, badExit, defaultBusy,
+                   helper>>
 
 Pause ==
     /\ ~paused /\ paused' = TRUE
@@ -141,7 +142,8 @@ DefaultEnd ==
                    reading, approval, canceledEnd, live, actualJob, badExit,
                    helper>>
 
-Next == (\E route \in Routes: Reserve(route)) \/ (\E job \in 1..2: Start(job)) \/ Pause \/ Resume
+Next == (\E route \in Routes: Reserve(route))
+        \/ (\E job \in 1..2: Start(job)) \/ Pause \/ Resume
         \/ Cancel \/ Change \/ Page \/ (\E job \in 1..2: Exit(job))
         \/ DefaultStart \/ DefaultEnd
 Spec == Init /\ [][Next]_vars /\ WF_vars(\E job \in 1..2: Start(job)) /\
