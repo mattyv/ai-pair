@@ -511,6 +511,13 @@
       "functions": 100
     }
   },
+  "packages/vscode/scripts/audio_helper.mts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/vscode/scripts/build.mts": {
     "unit": {
       "lines": 100,
@@ -609,6 +616,18 @@
       "lines": 96,
       "branches": 92,
       "functions": 94
+    }
+  },
+  "packages/vscode/src/old_extension.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    },
+    "integration": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "packages/vscode/src/output.ts": {
@@ -724,6 +743,13 @@
     }
   },
   "packages/vscode/src/speech_catalog.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/speech_coreml.ts": {
     "unit": {
       "lines": 100,
       "branches": 100,
@@ -920,6 +946,13 @@
     }
   },
   "packages/vscode/src/speech_service.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/speech_system_output.ts": {
     "unit": {
       "lines": 100,
       "branches": 100,

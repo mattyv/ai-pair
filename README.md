@@ -54,6 +54,12 @@ computer with your speakers. In an SSH or container window, install the
 companion on the local side. Reload the VS Code window after installing or
 updating both extensions.
 
+AI Pair was published as `michalstrba.ai-pair` before. VS Code treats that as a
+different extension, so uninstall it when you install `mattyv.ai-pair`; AI Pair
+warns while both are installed and offers to uninstall the old one. Speech API
+keys stay with the extension that saved them, so add your ElevenLabs or
+OpenRouter key again afterwards.
+
 Run **AI Pair: Set Up Agent** in the command palette, select your agent, then
 restart it so it reloads its MCP configuration. Open a project in VS Code,
 start the agent in that folder, and ask it to pair. See [Connect your
@@ -86,14 +92,22 @@ Choose a provider in Settings:
     The local companion's Kokoro requires a Linux x64 desktop with glibc.
     On a Mac, use the main extension without the companion for local Kokoro;
     remote speech requires the companion. Mac main-extension builds support
-    Intel and Apple silicon.
+    Intel and Apple silicon, and play speech on the system default output
+    through a bundled CoreAudio helper, so no click in the Pair panel is needed
+    first. On a Linux desktop the main extension plays the system default
+    output through PipeWire the same way, when `pw-play`, `pw-dump` and
+    `setpriv` are installed. If neither can run, speech plays in the panel
+    instead, which waits for a first click there.
     Enabled Kokoro prepares at extension load without downloading, speaking,
     or making a cloud request.
--   **Kokoro GPU** is experimental on supported Linux x64 systems. Select
-    **Auto** or **GPU**, then **Set up GPU**. Setup requires the CPU model and
-    can download a pinned GPU model (about 326 MB). Auto may fall back to CPU;
-    GPU mode fails closed. One AMD system has been tested; wider hardware and
-    listening validation remain open.
+-   **Kokoro GPU** is experimental on supported Linux x64 systems with the
+    companion, and on Apple silicon Macs with the main extension. Select
+    **Auto** or **GPU**, then **Set up GPU**. On Linux, setup requires the CPU
+    model and can download a pinned GPU model (about 326 MB); one AMD system has
+    been tested. On an Apple silicon Mac, GPU runs the same CPU model on Core ML
+    with no extra download. Its first load takes 15 to 35 seconds and it is not
+    faster than the CPU. Auto may fall back to CPU; GPU mode fails closed. Other
+    computers, including Intel Macs and Windows, offer only CPU.
 -   **ElevenLabs** uses a key saved through the secure VS Code prompt. Load
     account voices, select one, and preview it. Available voices depend on the
     account. Narration and previews use account credits.

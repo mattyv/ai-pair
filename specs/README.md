@@ -99,11 +99,12 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `ModelStatus.cfg` | installed and missing model, verification | holds | 4 |
 | `SpeechSetup.cfg` | two files; install, cancellation and rollback outcomes | holds | 42 |
 | `SpeechPage.cfg` | two page identities and two narration units | holds | 28 |
+| `CoreMlCompute.cfg` | every host capability, model and Core ML outcome, three modes | holds | 82 |
 | `CloudNarration.cfg` | two generations, provider and credential epochs | holds | 264 |
 | `CloudNarration_Healthy.cfg` | two generations with a healthy key read | holds | 251 |
 | `SpeechSettings.cfg` | two credential reads and catalog requests | holds | 50,968 |
 | `ProviderChoice.cfg` | two ordered settings writes and credential change | holds | 122 |
-| `AudioOutput.cfg` | native jobs, route changes and retirement | holds | 3,180 |
+| `AudioOutput.cfg` | native jobs, route changes, retirement, and the system-default route (macOS helper, Linux PipeWire) | holds | 11,640 |
 | `OutputAdmission.cfg` | overlapping output checks and stale completion | holds | 140 |
 | `OutputHandoff.cfg` | worker admission and acknowledged browser retirement | holds | 270 |
 | `OutputReplacement.cfg` | view replacement and old-page disposal | holds | 22 |
@@ -2689,6 +2690,35 @@ discoveries, selected-route epochs, per-request reservation and timeout. The
 `pw-dump` catalog parser is outside both models; discovery changes do not alter
 the modeled admission or process ownership mechanics.
 
+On macOS the main extension also packages the CoreAudio helper (#82). The
+model's `helper` records whether that helper verified at startup; when it did,
+`Reserve("sys")` plays the system default through it, and the browser default
+(`DefaultStart`) is only the fallback when no helper can run. `NativeDefault`
+says the browser default is never used while a verified helper exists, and
+`HelperRoute` that the system route exists only with one.
+
+On a local Linux desktop the same route plays PipeWire's default sink through
+`pw-play` (#84). There the "helper" is PipeWire with a known default sink,
+which can appear or disappear while the extension runs, so `HelperChange`
+flips `helper` at any time, and the router asks before every line. Each route
+is therefore decided when it is admitted: `defaultHelper` and `sysHelper`
+record the helper's state at `DefaultStart` and at `Reserve("sys")`, and
+`NativeDefault` and `HelperRoute` are stated over those, not over the current
+state. A line already playing keeps its route. `GuardAdmit` controls the
+`Reserve("sys")` guard. TLC checked 11,640 distinct states, up from 7,242
+before #84, and every action fires.
+
+| Mutation | Result |
+|---|---|
+| `GuardHelper = FALSE`: the browser default runs beside a verified helper | `NativeDefault` violated |
+| `Reserve` takes `"sys"` without a verified helper | `HelperRoute` violated |
+| `GuardAdmit = FALSE`: `Reserve("sys")` while PipeWire has no default sink (#84) | `HelperRoute` violated |
+| `HelperRoute` judged by the current `helper` instead of `sysHelper`, the #82 form (#84) | `HelperRoute` violated: a sink that disappears mid-line would make a correct line look wrong, so the invariant has to be about admission |
+| `NativeDefault` judged by the current `helper` instead of `defaultHelper`, the #82 form (#84) | `NativeDefault` violated, for the same reason |
+| `HelperChange` moves a playing `"sys"` line to the browser when the sink disappears (#84) | `NoCrossRouteOverlap` violated |
+| `GuardTarget = FALSE`: a job opens another route than its target, including `"sys"` | `NoFallback` violated |
+| `GuardDefault = FALSE`: the browser default starts while a native job lives | `NoCrossRouteOverlap` violated |
+
 The `GuardDefault`, `GuardRetire`, callback, admission and play-ID negative
 controls violate their respective safety invariants. Disabled admission or
 completion controls violate enabledness checks. Each pending discovery can
@@ -2696,7 +2726,10 @@ settle through an independently fair timeout.
 
 | Property | Test |
 |---|---|
-| `NoOverlap`, `NoCrossRouteOverlap` | `speech_native_output.test.ts`: does not allow another route until the stopped process actually closes; `speech_output_router.test.ts`: blocks default synthesis and playback while a canceled native child is retiring. |
+| `NoOverlap`, `NoCrossRouteOverlap` | `speech_native_output.test.ts`: does not allow another route until the stopped process actually closes; `speech_output_router.test.ts`: blocks default synthesis and playback while a canceled native child is retiring; NoOverlap: refuses any route while the helper still owns a job. |
+| `NativeDefault` | `speech_output_router.test.ts`: NativeDefault: plays the default through the helper, never the browser, and controls only that job; `speech_system_output.test.ts`: NativeDefault: admits the default, plays, reports start and end, and releases only after the helper stops. |
+| `HelperRoute` | `speech_output_router.test.ts`: HelperRoute: falls back to the browser only when the helper is not supported; HelperRoute and NativeDefault: decides each line at admission, so a lost PipeWire default sink sends the next line to the browser; `speech_system_output.test.ts`: creates a driver on a local macOS or Linux desktop only; `extension.test.ts`: plays the default output natively only on a local desktop, never on a remote host. |
+| `RetirementCompletes` (system helper) | `speech_system_output.test.ts`: RetirementCompletes: pauses and resumes the job, and a stop keeps ownership until retirement with no late events. |
 | `NoRevival`, `NoCanceledEnd` | `speech_native_output.test.ts`: ignores callbacks retained from a retired process; keeps a timed-out child owned until close and ignores its late readiness. |
 | `NoFallback` | `speech_output_router.test.ts`: refuses an unavailable saved device before synthesis without falling back; isolated PipeWire target-loss test. |
 | `NoStartPaused` | `speech_native_output.test.ts`: freezes the startup deadline while paused; defers a readiness notification observed during pause until resume. |
@@ -3255,6 +3288,39 @@ violates `MixedWarns` or `MatchingDelivers`. `panel_placement.test.ts`,
 `attachment_gate.test.ts`, `extension.test.ts` and `local_audio.test.ts`
 exercise rejection and guidance. An already-installed old workspace may still
 select legacy fallback, which the new companion cannot prevent.
+
+### `CoreMlCompute`: GPU speech on Core ML
+
+On macOS arm64 the GPU path is ONNX Runtime's Core ML execution provider, with
+the shipped q8 model and no extra download (#42). The model covers whether the
+host has that path (`capable`), whether the model is installed, whether Core ML
+can create the session (`loads`), the three modes, and what the panel offers.
+A saved GPU setting can exist on any host. `Check` is the light check before a
+launch: Auto falls back to the CPU there, and only there; a Core ML session
+that then fails to load fails the unit in either mode. TLC checked 82 distinct
+states, with `GpuSpeaks` and `Settles`. `NoGpuWithoutPath` is implied by
+`GpuOnlyIfLoaded`, which catches its mutation first. Speed is not modelled:
+measured on one Apple silicon Mac, a Core ML load took 13 to 34 seconds and a
+sentence of 6.5 seconds of audio took 3.2 to 4.9 seconds, against 3.2 to 3.5 on
+the CPU.
+
+| Mutation | Result |
+|---|---|
+| Explicit GPU falls back to the CPU when Core ML fails | `ExplicitNoFallback` violated |
+| GPU reported without a Core ML session | `GpuOnlyIfLoaded` violated |
+| GPU offered on every host | `OfferedOnlyWhereCapable` violated |
+| GPU selected without checking the offer | `NoGpuSelectWithoutPath` violated |
+| Core ML run on a host without the path | `GpuOnlyIfLoaded` violated |
+| The check never settles without a model | `Settles` violated |
+| The GPU check always fails, as code that does nothing would | `GpuSpeaks` violated |
+
+| Property | Test |
+|---|---|
+| `TypeOK`, `GpuOnlyIfLoaded` | `speech_coreml.test.ts`: GpuOnlyIfLoaded: reports ready only after a CoreML session loads, and waits for the worker to exit; a CoreML session that fails to load fails the check; `speech_engine.test.ts`: CoreMlCompute Load: loads the q8 model on the CoreML execution provider, never the CPU path. |
+| `ExplicitNoFallback`, `NoGpuWithoutPath` | `speech_service.test.ts`: refuses explicit GPU when GPU collaborators are missing; CoreMlCompute Check and Load: launches a CoreML worker only after the runtime and model check. |
+| `OfferedOnlyWhereCapable`, `NoGpuSelectWithoutPath` | `speech_coreml.test.ts`: OfferedOnlyWhereCapable: offers no GPU and checks nothing without the CoreML path; `panel.test.ts`: OfferedOnlyWhereCapable: tells the page GPU is possible only on a supported host with a GPU path; `webview/panel.test.ts`: OfferedOnlyWhereCapable: disables GPU and Auto and explains why on a host without a GPU path. |
+| `GpuSpeaks` | `speech_worker.test.ts`: CoreMlCompute Load: loads on CoreML only when the host asked for it; `extension.test.ts`: CoreMlCompute: wires the host GPU offer, the CoreML worker and the explicit check into speech. Real Core ML synthesis was run once by hand on an Apple silicon Mac; no automated test runs Core ML. |
+| `Settles` | `speech_coreml.test.ts`: Settles: reports a missing model, and an abort before or during the load; `speech_local_client.test.ts`: HealthyProgress: bounds a slow CoreML load by its own load timeout. |
 
 ### `GpuSetup`: preflight, download and hardware proof
 

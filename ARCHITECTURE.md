@@ -116,7 +116,16 @@ diagram was inspected in headless Chromium without page errors.
     local endpoint before synthesis. Linux uses PipeWire; macOS and Windows use
     bundled CoreAudio and WASAPI helpers. Each physical playback rechecks the
     captured endpoint and never substitutes another. The legacy local path
-    without a companion retains webview default audio and the PipeWire override.
+    without a companion retains webview default audio and the PipeWire override,
+    except on a local macOS or Linux desktop. There `SpeechOutputRouter` plays
+    the default output from the extension host: through the bundled CoreAudio
+    helper on macOS (#82), and through PipeWire's default sink with `pw-play`
+    on Linux (#84). The router decides each line's route when it admits the
+    line, because a PipeWire default sink can appear or disappear at any time;
+    a line already playing keeps its route. Webview audio is the fallback only
+    when the macOS helper does not verify against its packaged digest manifest,
+    or Linux has no usable PipeWire default sink. Over a remote connection the
+    extension host is the remote machine, so this route is never used there.
     The legacy router waits for matching
     browser retirement or actual page disposal, and retains native process
     ownership until close. Page replacement and interruption invalidate the
@@ -436,6 +445,18 @@ exit event. The current request waits for cleanup, then resolves CPU resources
 or requests fresh GPU proof and loads the selected worker. Explicit GPU fails
 closed; Auto can fall back only after failed proof has been reaped. The Archi
 `Proof cancellation and CPU acquisition` sequence shows this path.
+
+On macOS arm64 the main extension's GPU path is Core ML (#42,
+`specs/CoreMlCompute.tla`). `speech_coreml.ts` gives `SpeechService` a
+`createCoreMl` factory: the GPU proof is a light check of the runtime and the
+installed q8 model, and the launch starts the CPU worker with
+`device: 'coreml'`, which builds the Kokoro model with
+`executionProviders: ['coreml']`. A session Core ML cannot create fails the
+load, so the backend is reported as GPU only by a loaded worker. Core ML
+compiles the model on every load (13 to 34 seconds measured), so that worker's
+load timeout is 120 seconds. **Set up GPU** loads the model in such a worker
+and retires it. The panel offers GPU and Auto only where `gpuSupported()` says
+a GPU path exists.
 
 Generation and unit identity fence discovery, progress, ready, result and exit
 callbacks. Cancellation, timeout, disposal or a later selection prevents stale
