@@ -125,6 +125,7 @@ const fakes = vi.hoisted(() => {
     readonly browserRetired = vi.fn<(id: number, pageId: number) => void>();
     readonly pageClosed = vi.fn<(pageId: number) => void>();
     readonly prepare = vi.fn(() => Promise.resolve(true));
+    readonly idle = vi.fn(() => true);
     readonly play: SpeechOutput['play'];
     readonly control: SpeechOutput['control'];
     readonly status: SpeechOutput['status'];
@@ -692,6 +693,7 @@ vi.mock('../src/speech_native_output', () => ({
   discoverOutputs: vi.fn(() => Promise.resolve({ supported: false, devices: [], reason: 'unsupported' })),
 }));
 vi.mock('../src/speech_output_router', () => ({ SpeechOutputRouter: fakes.FakeOutputRouter }));
+vi.mock('../src/speech_system_output', () => ({ systemOutputDriver: vi.fn(() => undefined) }));
 vi.mock('../src/speech_setup', () => ({
   installedSpeechModel: vi.fn(() => Promise.resolve(undefined)),
   speechModelStatus: vi.fn(() =>

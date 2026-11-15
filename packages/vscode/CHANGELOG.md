@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.41.0
+
+-   Play speech on a Mac through a bundled CoreAudio helper on the system
+    default output, from the extension host instead of the Pair panel. Speech
+    no longer waits for a click in the panel after a reload, and keeps playing
+    while the panel page is rebuilt. If the helper cannot run, speech plays in
+    the panel as before (#82).
+
 ## 0.39.0
 
 -   Add configurable session shortcuts for pause, the hand control and reply

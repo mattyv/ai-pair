@@ -21,6 +21,7 @@ import { speechReady } from './speech_readiness';
 import { SpeechTempoClient } from './speech_tempo_client';
 import { NativeOutputDriver, discoverOutputs } from './speech_native_output';
 import { SpeechOutputRouter, type OutputDiscovery } from './speech_output_router';
+import { systemOutputDriver } from './speech_system_output';
 import { SpeechCredentials } from './speech_credentials';
 import { SpeechCatalog } from './speech_catalog';
 import { SpeechOutputPreferences } from './speech_output_preferences';
@@ -836,8 +837,11 @@ export function activate(context: vscode.ExtensionContext): Api {
     },
   };
   const nativeOutput = new NativeOutputDriver();
+  // On macOS the packaged CoreAudio helper plays the default output (#82).
+  const systemOutput = systemOutputDriver(context.extensionPath);
   outputRouter = new SpeechOutputRouter({
     driver: nativeOutput,
+    system: systemOutput,
     discover: discoverSpeechOutputs,
     choice: () => outputPreferences.choice(),
     defaultOutput,
@@ -896,7 +900,7 @@ export function activate(context: vscode.ExtensionContext): Api {
         settings: speechSettings.get,
         desktop: () => cloudSupported && owner === 'legacy',
         local: () => localSpeechSupported && runtimeSpeechSupported,
-        output: () => panel.speechPageIsReady() && nativeOutput.available() && outputPreferences.ready(),
+        output: () => panel.speechPageIsReady() && outputRouter.idle() && outputPreferences.ready(),
         model: checkedModel,
         key: (provider) => (provider === 'openrouter' ? openRouterCredentials.hasKey() : credentials.hasKey()),
         openRouterAllowed: (model, voice) => openRouterCatalog.allows(model, voice),

@@ -84,7 +84,10 @@ Choose a provider in Settings:
     The local companion's Kokoro requires a Linux x64 desktop with glibc.
     On a Mac, use the main extension without the companion for local Kokoro;
     remote speech requires the companion. Mac main-extension builds support
-    Intel and Apple silicon.
+    Intel and Apple silicon, and play speech on the system default output
+    through a bundled CoreAudio helper, so no click in the Pair panel is needed
+    first. If the helper cannot run, speech plays in the panel instead, which
+    waits for a first click there.
     Enabled Kokoro prepares at extension load without downloading, speaking,
     or making a cloud request.
 -   **Kokoro GPU** is experimental on supported Linux x64 systems. Select

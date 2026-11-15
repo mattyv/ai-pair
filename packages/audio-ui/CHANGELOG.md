@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.41.0
+
+-   Version aligned with the main extension, whose Mac builds now play speech
+    through the bundled CoreAudio helper (#82). The companion is unchanged.
+
 ## 0.39.0
 
 -   Add configurable session shortcuts for pause, the hand control and reply
