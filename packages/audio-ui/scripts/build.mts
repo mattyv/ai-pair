@@ -77,6 +77,8 @@ const extensionOptions: esbuild.BuildOptions = {
   minify: production,
   sourcemap: !production,
   logLevel: 'warning',
+  // jsonc-parser's `main` is a UMD build whose requires esbuild can't follow; its ES module build bundles (#94).
+  mainFields: ['module', 'main'],
   external: ['vscode'],
   entryPoints: ['src/extension.ts'],
   outfile: 'dist/extension.js',
