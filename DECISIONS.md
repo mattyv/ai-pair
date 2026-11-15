@@ -51,6 +51,10 @@ Issue discussions and working notes hold the detailed evidence and history.
     existing consent opt-ins remain independent. Calibrated gaze and native
     screen-layout access require a platform and permissions spike before any
     implementation or claim of accurate region tracking.
+    Qualitative and numeric emotion estimates remain a proposed feature behind
+    per-user calibration and evaluated thresholds, without assuming calibrated
+    probabilities. Camera retirement, report replay and model-use rights are
+    explicit gates; bringing a noncommercial model does not grant commercial use.
 
 ## Speech continuity and delivery
 

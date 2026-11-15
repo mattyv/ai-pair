@@ -82,22 +82,23 @@ not expose wall-clock timestamps to the agent.
 
 ## What reaches the agent
 
-Each batch gets one entry in the `listen` or `step` result: a qualitative line
-first, then the model's numbers. It is a report field, not an event, because
-events interrupt during the agent's turn.
+Each eligible batch or programmer-turn phase can produce an entry in the
+`listen` or `step` result: a qualitative line first, then available numbers.
+It is a report field, not an interrupting event.
 
 ```text
-Nonverbal (camera; possible, uncalibrated; never an answer or approval):
-- Batch 14, while Pair typed code in server.ts; watching the editor.
-  Facing the screen, possible head shake, furrowed brow, possible contempt.
-  [face .98 | pitch -8..+4 yaw -3..+2 | shake 1 (p .71) | AU04 1.8 AU07 1.2 |
-  neutral .52 contempt .25 anger .06 | valence -.1 arousal .3 | good]
+Nonverbal (camera; calibrated estimate; never an answer or approval):
+- Batch 14, while Pair typed code in server.ts; editor focused, estimated task-facing gaze.
+  Facing the screen, possible head shake, furrowed brow, possible anger.
+  [face .98 | pitch -8..+4 yaw -3..+2 | shake score .71 |
+  anger score .52, neutral score .25 | good]
 ```
 
 -   **Context, in words:** the batch; what Pair was doing (typing code, a
     message to read, speaking, running a command, waiting, paused, the
     programmer's turn, after a question); and what the programmer was doing
-    (watching the editor, typing in a file, typing a reply, in another file,
+    (editor focused, estimated task-facing gaze, typing in a file, typing a reply,
+    in another file,
     scrolled away, VS Code not focused).
 -   **Qualitative line:** face toward the screen, away, or not in view; a
     possible nod or shake; notable expressions; and the leading emotion as
@@ -146,11 +147,12 @@ Aff-Wild2, and Gaze360.
 
 Emotions come from OpenFace, because MediaPipe gives none and every emotion
 model with permissive weights checked so far is research-restricted. A command,
-*AI Pair: Set up OpenFace (optional)*, shows CMU's licence, records the user's
-agreement, and downloads OpenFace and its weights from CMU's official sources
-with pinned checksums into a local cache. It runs in its own process behind the
-same adapter as the MediaPipe helper. AI Pair never bundles or re-hosts it, so
-the project stays MIT. Without it, the default models are used and the emotion
+*AI Pair: Set up OpenFace (optional)*, shows CMU's licence and proposed
+intended-use gate before any download of OpenFace and its weights. Separate
+installation does not grant commercial-use rights.
+Any optional backend must retain frames within its complete local helper
+boundary; redistribution and use require independent licence verification.
+Without it, the default models are used and the emotion
 and action unit fields are absent. A request to CMU for a redistribution
 exception is still open.
 
@@ -202,3 +204,75 @@ more; a Flatpak VS Code needs device access.
 1. Is local-only acceptable for the first version?
 1. Can the activity context ship first on its own?
 1. Is Linux arm64 required from the start?
+
+## Proposed architecture and implementation gates
+
+This section and the Archi view are a proposal, not a description of shipped
+behavior. The two independently controlled, consent-based inputs are speech
+and camera. A local camera lifecycle owner alone starts and retires the helper;
+voice mute remains with the existing narration owner. Camera disable, mute,
+session end, mode change, reload or crash invalidates the current generation.
+No replacement may open the camera until physical retirement is confirmed;
+crash or lost contact is unavailable, not proof that the device has closed.
+Recovery must establish retirement before reuse. The panel displays each owner's
+snapshot and actual camera use without owning either lifecycle.
+
+The local helper owns camera capture and inference. Raw frames remain local and
+never enter the editor relay, agent report or cloud provider. An optional
+calibration/training store is local, bounded, separately opted in and revocable;
+its retention and deletion controls must be established before use. Consent
+must describe which derived cues can reach a cloud model. A local adapter may
+supply known display geometry and editor focus separately from estimated gaze;
+access, permissions, multi-monitor mapping and accuracy require platform spikes.
+No gaze result implies exact gaze or proves what a person understood.
+
+Core owns session generation, internal capture intervals and activity phases.
+It associates a bounded observation with a batch when one exists, or with the
+programmer-turn phase when no batch exists. Narration context is optional:
+text-only and programmer-turn observations do not depend on speech. Internal
+time supports association and expiry; agent-facing reports contain no wall-clock
+timestamps. The report path is noninterrupting and must define wake behavior,
+expiry, canceled-delivery replay and rate-limited check-ins before shipping.
+It must not steal turn ownership, approve actions or change playback speed.
+
+The proposed bounded wire schema includes signal name, units and ranges where
+applicable, sample/quality information, model identity and version, calibration
+state and bounded qualitative and numeric estimates. Numbers called scores or
+probabilities must not be represented as calibrated probabilities without
+measured evidence. Emotion descriptions are tentative, and qualitative plus
+numeric emotion estimates remain a desired feature: enable them only after
+per-user calibration, trials and evaluation establish acceptable behavior.
+The user can disable or recalibrate them. Testing informs thresholds and
+uncertainty rather than asserting that emotion inference is already reliable.
+
+Licence and feasibility checks are release gates, not solved by local install:
+OpenFace's noncommercial terms do not grant commercial use merely because the
+user brings it. Before choosing or distributing any model, verify code, weights,
+training-data and intended-use rights. Independently validate capture,
+permissions, retirement and packaging for `darwin-arm64`, `darwin-x64`,
+`linux-x64` and `linux-arm64`; support is a goal, not a verified claim.
+
+Before implementation, specify and model camera lifecycle and physical
+retirement; independent mute/consent transitions; session, phase and report
+replay/expiry; and calibration and feature gates. Validate the model against
+meaningful failure mutations, then use real-device tests for platform claims.
+
+A device lease must cover competing local VS Code windows: the proposed local
+owner requests exclusive use for one active window and session generation.
+Another window receives busy/unavailable, never another session's observations.
+A handoff waits for confirmed retirement; the cross-window arbitration and
+failure behavior require a platform design and lifecycle model before coding.
+Changing camera, model or display layout invalidates the relevant calibration;
+reaction labels for per-user training require their own explicit opt-in.
+
+The schema identifies a signal's capability and representation: raw logits,
+blendshapes, action units and probabilities are distinct, with applicable units,
+ranges and model version. A nonverbal report field is not an automatic core
+interrupt. A bounded cue may wake a pending listen under the specified delivery
+policy; the agent decides whether to check in, subject to rate limits.
+
+Each cue has a session-scoped identity. A canceled delivery may replay that
+identity within the same session, but replay does not authorize a second
+check-in. Camera mute or consent revocation discards queued unsent camera cues;
+new sessions cannot receive old cues. Exact expiry and wake bounds remain
+prospective specification work.

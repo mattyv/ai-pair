@@ -6,7 +6,7 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; img-src  data:; style-src  'unsafe-inline'; script-src 'nonce-archi-standalone';"
     />
-    <title>AI Pair architecture</title>
+    <title>Archi-Techture &#x2014; ai-pair</title>
     <style>
       :root {
         --bg: #012624;
@@ -1052,7 +1052,7 @@
     <div id="app" class="side-collapsed viewer-mode">
       <div id="main">
         <div id="toolbar">
-          <span id="diagram-name" title="Open diagram">AI Pair architecture</span>
+          <span id="diagram-name" title="Open diagram">Archi-Techture &#x2014; ai-pair</span>
           <button class="type-tab" data-type="overview" style="">Overview</button>
           <button class="type-tab" data-type="architecture" style="">Architecture</button>
           <button class="type-tab" data-type="flow" style="">Flow</button>
@@ -41478,6 +41478,112 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                   {
                     id: "command-status-render",
                     text: "Distinguish approval from completion not yet observed. Never infer success or a live process from timeout. Correlate final exit/closed status and bounded tail with original run ID. Use editor-relay wire version 6 for command news and report-origin checks; local panel protocol stays unchanged.",
+                    ts: 0,
+                  },
+                ],
+              },
+            },
+          },
+          {
+            id: "proposed-nonverbal-feedback",
+            name: "PROPOSED: Nonverbal feedback ownership",
+            type: "architecture",
+            origin: "llm",
+            generation: {
+              focus: "Proposed consent, local device ownership, calibration and session-scoped noninterrupting reports; not implemented",
+            },
+            doc: {
+              type: "architecture",
+              autoLayoutApplied: true,
+              nodes: [
+                { id: "nv-user", label: "Programmer\nConsent and independent controls", files: [], x: 40, y: 40 },
+                { id: "nv-panel", label: "PROPOSED: Panel\nVoice / camera snapshots", files: [], x: 850, y: 200 },
+                { id: "nv-voice", label: "Existing narration owner\nIndependent voice mute", files: [], x: 1660, y: 40 },
+                {
+                  id: "nv-lease",
+                  label: "PROPOSED: Local camera lifecycle\nExclusive device lease / retirement",
+                  files: [],
+                  x: 40,
+                  y: 380,
+                },
+                { id: "nv-helper", label: "PROPOSED: Native helper\nLocal frames and inference", files: [], x: 850, y: 380 },
+                { id: "nv-cal", label: "PROPOSED: Calibration store\nOptional, local and revocable", files: [], x: 1660, y: 380 },
+                { id: "nv-layout", label: "PROPOSED: Local activity adapter\nKnown layout and focus", files: [], x: 40, y: 720 },
+                { id: "nv-core", label: "PROPOSED: Core session owner\nPhase, expiry and replay", files: [], x: 850, y: 720 },
+                { id: "nv-relay", label: "PROPOSED: Relay / agent\nConsented bounded report", files: [], x: 1660, y: 720 },
+              ],
+              edges: [
+                { from: "nv-user", to: "nv-panel", label: "independent controls / consent" },
+                { from: "nv-panel", to: "nv-voice", label: "voice intent / snapshot" },
+                { from: "nv-panel", to: "nv-lease", label: "camera intent / snapshot" },
+                { from: "nv-lease", to: "nv-helper", label: "exclusive lease / retire" },
+                { from: "nv-helper", to: "nv-cal", label: "opt-in calibration" },
+                { from: "nv-helper", to: "nv-core", label: "bounded local observations" },
+                { from: "nv-layout", to: "nv-core", label: "known facts / estimated region" },
+                { from: "nv-core", to: "nv-relay", label: "consented report / replay" },
+              ],
+              groups: [],
+              comments: {
+                "nv-user": [
+                  {
+                    id: "nv-user-notes",
+                    text: "Independent opt-ins and mute controls. Explicit consent describes derived cues sent to the agent and potentially its cloud model. Training and reaction labels require separate opt-in.",
+                    ts: 0,
+                  },
+                ],
+                "nv-panel": [
+                  {
+                    id: "nv-panel-notes",
+                    text: "Render each authoritative owner snapshot and actual device-use indicator. It owns no camera, speech or session state.",
+                    ts: 0,
+                  },
+                ],
+                "nv-voice": [
+                  {
+                    id: "nv-voice-notes",
+                    text: "Voice enablement and mute remain independent from camera consent and mute. Text-only operation and programmer-turn observations do not require speech.",
+                    ts: 0,
+                  },
+                ],
+                "nv-lease": [
+                  {
+                    id: "nv-lease-notes",
+                    text: "One proposed local lease arbitrates competing VS Code windows and binds ownership to the active window and session generation. Busy is unavailable. End, mute, disable, reload, mode changes, crash or lost contact invalidate callbacks. Confirm physical retirement before reopening or handoff; loss of contact alone is not proof of closure. Cross-window arbitration requires a platform spike and model.",
+                    ts: 0,
+                  },
+                ],
+                "nv-helper": [
+                  {
+                    id: "nv-helper-notes",
+                    text: "Frames never leave this local capture and inference boundary. Emit bounded signals with model/version, representation, units, quality and calibration status. Do not assume scores are calibrated probabilities. Target support and model rights require verification.",
+                    ts: 0,
+                  },
+                ],
+                "nv-cal": [
+                  {
+                    id: "nv-cal-notes",
+                    text: "Optional bounded local calibration/training data requires separate opt-in, retention and deletion controls. Camera, model or display-layout changes invalidate relevant calibration. Per-user trials gate tentative qualitative and numeric emotion cues; this is not a claim of established accuracy.",
+                    ts: 0,
+                  },
+                ],
+                "nv-layout": [
+                  {
+                    id: "nv-layout-notes",
+                    text: "Known window focus and available display/layout facts are separate from estimated gaze. Native capabilities, calibration, permissions and multi-monitor mapping need a spike. Region estimates are uncertain and can be unavailable.",
+                    ts: 0,
+                  },
+                ],
+                "nv-core": [
+                  {
+                    id: "nv-core-notes",
+                    text: "Own session generation, capture interval and activity phase association, including programmer turn without a batch. Optional narration context. Noninterrupting bounded report delivery must specify limited pending-listen wake, expiry and canceled replay; rate-limit check-ins. Never change turn, playback or approvals. Agent reports omit wall-clock times.",
+                    ts: 0,
+                  },
+                ],
+                "nv-relay": [
+                  {
+                    id: "nv-relay-notes",
+                    text: "Only consented derived cues cross the report boundary and can reach an agent or cloud model. No frames or identity. Fixed tentative language and explicit numerical representation; the agent chooses whether to check in.",
                     ts: 0,
                   },
                 ],
