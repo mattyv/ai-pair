@@ -1972,7 +1972,7 @@ it('shows the local model status, path and pinned source', () => {
 });
 
 it('keeps model diagnostics collapsed and labels actions for the reported state', () => {
-  send({ type: 'speechSupport', supported: true });
+  send({ type: 'speechSupport', supported: true, gpu: true });
   const details = element('speech-details');
   expect(details.tagName).toBe('DETAILS');
   expect(details.hasAttribute('open')).toBe(false);
@@ -2011,7 +2011,7 @@ it('distinguishes missing, unverified and unknown model status', () => {
 
 it('sends explicit setup, preview, stop and validated speech preferences', () => {
   send({ type: 'speechPage', pageId: 1 });
-  send({ type: 'speechSupport', supported: true });
+  send({ type: 'speechSupport', supported: true, gpu: true });
   send({
     type: 'speechSettings',
     value: {
@@ -2308,7 +2308,7 @@ it('starts a paused unit prepared after the page opens', async () => {
 });
 
 it('keeps setup disabled on an unsupported host after a setup state update', () => {
-  send({ type: 'speechSupport', supported: false });
+  send({ type: 'speechSupport', supported: false, gpu: false });
   send({ type: 'speechSetupState', pending: false, message: 'Unavailable.' });
   expect(element('speech-setup')).toHaveProperty('disabled', true);
 });
@@ -2726,7 +2726,7 @@ it('renders a known selected output and blocks unavailable devices and malformed
   if (!(output instanceof window.HTMLSelectElement)) throw new TypeError('Missing output selector');
   const choice = { kind: 'native' as const, backend: 'pipewire' as const, name: 'saved' };
   const other = { kind: 'native' as const, backend: 'pipewire' as const, name: 'other' };
-  send({ type: 'speechSupport', supported: true });
+  send({ type: 'speechSupport', supported: true, gpu: true });
   send({
     type: 'speechOutputCatalog',
     value: {
@@ -2834,6 +2834,7 @@ it('saves fine listening speed independently of synthesis speeds and retains it 
 });
 
 it('shows the requested and actual Kokoro compute backend and starts an explicit check', () => {
+  send({ type: 'speechSupport', supported: true, gpu: true });
   send({
     type: 'speechComputeState',
     value: { requestedMode: 'auto', actualBackend: 'cpu', gpuCheck: { phase: 'unavailable', reason: 'no_hardware' } },
@@ -2846,6 +2847,7 @@ it('shows the requested and actual Kokoro compute backend and starts an explicit
 });
 
 it('renders GPU checks and allows only the supported compute choices', () => {
+  send({ type: 'speechSupport', supported: true, gpu: true });
   const select = ui('speech-compute');
   if (!(select instanceof window.HTMLSelectElement)) throw new TypeError('Missing compute select');
   for (const value of ['cpu', 'auto', 'gpu']) {
@@ -2868,6 +2870,7 @@ it('renders GPU checks and allows only the supported compute choices', () => {
 });
 
 it('shows a fixed explanation for every GPU check failure and reports setup progress', () => {
+  send({ type: 'speechSupport', supported: true, gpu: true });
   const reasons = {
     busy: 'still finishing',
     unsupported: 'unsupported',
@@ -3526,4 +3529,22 @@ it.each(['requested', 'granted'] as const)('clears a replayed %s hand when the r
   click(element('attention'));
   expect(posted()).toEqual([{ type: 'attention' }]);
   expect(element('attention').getAttribute('aria-label')).toBe('Raise hand');
+});
+
+it('OfferedOnlyWhereCapable: disables GPU and Auto and explains why on a host without a GPU path (#42)', () => {
+  send({ type: 'speechSupport', supported: true, gpu: false });
+  const select = ui('speech-compute');
+  if (!(select instanceof window.HTMLSelectElement)) throw new TypeError('Missing compute select');
+  expect([...select.options].map((option) => [option.value, option.disabled])).toEqual([
+    ['cpu', false],
+    ['auto', true],
+    ['gpu', true],
+  ]);
+  expect(element('gpu-check')).toHaveProperty('hidden', true);
+  expect(text('gpu-status')).toBe('GPU speech is unavailable on this computer. Choose CPU.');
+  send({ type: 'speechComputeState', value: { requestedMode: 'gpu', actualBackend: 'none', gpuCheck: { phase: 'idle' } } });
+  expect(text('gpu-status')).toBe('GPU speech is unavailable on this computer. Choose CPU.');
+  send({ type: 'speechSupport', supported: true, gpu: true });
+  expect([...select.options].every((option) => !option.disabled)).toBe(true);
+  expect(element('gpu-check')).toHaveProperty('hidden', false);
 });

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.40.0
+
+-   Tell the Pair panel whether this computer has a GPU path, so it offers GPU
+    and Auto only where they can work (#42).
+
 ## 0.39.0
 
 -   Add configurable session shortcuts for pause, the hand control and reply
