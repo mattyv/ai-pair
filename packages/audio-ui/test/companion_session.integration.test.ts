@@ -16,9 +16,15 @@ const fake = vi.hoisted(() => ({
   diagnostic: undefined as ((event: import('../../vscode/src/diagnostics').SpeechDiagnosticEvent) => void) | undefined,
 }));
 vi.mock('vscode', () => ({
-  Uri: { file: (value: string) => ({ fsPath: value }) },
+  Uri: { file: (value: string) => ({ fsPath: value }), joinPath: (base: unknown) => base },
   commands: { executeCommand: fake.execute },
   window: { registerWebviewViewProvider: fake.register, showWarningMessage: fake.warning },
+}));
+// The shortcut labels have their own tests; here the companion only needs a watcher to make and dispose.
+vi.mock('../../vscode/src/shortcut_watcher', () => ({
+  ShortcutWatcher: class {
+    dispose = vi.fn();
+  },
 }));
 vi.mock('../../audio-native/src/factory', () => ({ createLocalAudioAdapter: vi.fn(() => ({})) }));
 vi.mock('../src/speech_host', () => ({

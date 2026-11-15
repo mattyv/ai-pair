@@ -19,7 +19,9 @@ On Windows and Linux, the defaults are **Alt+Q** to pause or resume,
 focus Reply. A granted hand shortcut focuses Reply. On macOS, the defaults
 are **Ctrl+Shift+Q**, **Ctrl+Shift+W**,
 and **Ctrl+Shift+Space**, respectively. Pair Settings opens VS
-Code's Keyboard Shortcuts editor to customize these bindings. Desktop and
+Code's Keyboard Shortcuts editor to customize these bindings. The pause and
+hand buttons' tooltips and the empty Reply box name each shortcut as your
+`keybindings.json` binds it. Desktop and
 keyboard-layout shortcuts can intercept them; a focused terminal may need the
 Pair commands in `terminal.integrated.commandsToSkipShell`.
 

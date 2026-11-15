@@ -25,7 +25,9 @@ resume, **Alt+W** to raise or lower your hand, and
 **Ctrl+Alt+Space** to focus Reply. Once your hand is granted, its shortcut
 focuses Reply. On macOS, the defaults are **Ctrl+Shift+Q**, **Ctrl+Shift+W**,
 and **Ctrl+Shift+Space**, respectively. Pair Settings opens VS Code's
-Keyboard Shortcuts editor to customize these bindings. Desktop shortcuts and
+Keyboard Shortcuts editor to customize these bindings. The pause button, the
+hand button, and the empty Reply box name the shortcut as your
+`keybindings.json` binds it, and update when you change it. Desktop shortcuts and
 keyboard layouts can reserve these combinations. In a focused terminal, VS Code
 may send them to the shell;
 its `terminal.integrated.commandsToSkipShell` setting can route the Pair

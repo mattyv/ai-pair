@@ -82,6 +82,7 @@ import { systemOutputDriver } from '../src/speech_system_output';
 import { builtInPassage } from '../src/passage';
 import { claudeStarter, setUpAgent, writeLauncher } from '../src/setup';
 import { warnOldExtension } from '../src/old_extension';
+import { shortcutPlatform } from '../src/shortcut_labels';
 
 /** What the mocked modules share with the tests, made before the `vi.mock` factories run. */
 const fakes = vi.hoisted(() => {
@@ -401,6 +402,8 @@ const fakes = vi.hoisted(() => {
     readonly restoreHistory = vi.fn();
     readonly focusReply = vi.fn();
     readonly askStart = vi.fn();
+    readonly showShortcuts = vi.fn();
+    readonly shortcutLabels = vi.fn(() => ({ pause: 'Alt+Q' }));
 
     constructor(
       readonly resolvePath: (file: string) => string,
@@ -448,8 +451,29 @@ const fakes = vi.hoisted(() => {
     }
   }
 
+  /** Each ShortcutWatcher made, in order. */
+  const shortcutWatchers: Array<{
+    userDirectory: { fsPath: string };
+    platform: string;
+    show: (labels: unknown) => void;
+  }> = [];
+
+  /** shortcut_watcher.ts's ShortcutWatcher, faked: it keeps what it was made with. */
+  class FakeShortcutWatcher {
+    readonly dispose = vi.fn();
+    constructor(
+      readonly userDirectory: { fsPath: string },
+      readonly platform: string,
+      readonly show: (labels: unknown) => void,
+    ) {
+      shortcutWatchers.push(this);
+    }
+  }
+
   return {
     listeners,
+    FakeShortcutWatcher,
+    shortcutWatchers,
     collect: vi.fn<typeof import('../src/diagnostics_collector').collectDiagnostics>().mockResolvedValue({
       version: 'test',
       build: 'test',
@@ -527,6 +551,7 @@ const fakes = vi.hoisted(() => {
 });
 
 vi.mock('vscode', () => ({
+  Uri: { joinPath: (base: { fsPath: string }, ...parts: string[]) => ({ fsPath: [base.fsPath, ...parts].join('/') }) },
   extensions: { getExtension: () => (fakes.companionInstalled ? {} : undefined) },
   ConfigurationTarget: { Global: 1 },
   UIKind: { Desktop: 1 },
@@ -709,6 +734,8 @@ vi.mock('../src/speech_setup', () => ({
 }));
 vi.mock('../src/outside_watch', () => ({ watchOutside: vi.fn(() => ({ outside: 'outside', disposable: { dispose: () => {} } })) }));
 vi.mock('../src/panel', () => ({ NarrationPanel: fakes.FakePanel }));
+vi.mock('../src/shortcut_watcher', () => ({ ShortcutWatcher: fakes.FakeShortcutWatcher }));
+vi.mock('../src/shortcut_labels', () => ({ shortcutPlatform: vi.fn(() => 'linux') }));
 vi.mock('../src/panel_html', () => ({ settingSpeed: vi.fn((value: unknown) => (typeof value === 'number' ? value : 1)) }));
 vi.mock('../src/setup', () => ({
   claudeStarter: vi.fn(() => ({ dispose: () => {} })),
@@ -1799,6 +1826,25 @@ describe('the session across a reload', () => {
     const h = activated();
     h.api.panelMessage({ type: 'pause' });
     expect(h.panel.receiveFromPage).toHaveBeenCalledWith({ type: 'pause' });
+  });
+
+  it("shortcuts: names the User folder's keybindings.json and the labels the panel holds", () => {
+    const h = activated();
+    expect(h.api.shortcuts.file).toEqual({ fsPath: '/storage/../../keybindings.json' });
+    expect(h.api.shortcuts.labels()).toEqual({ pause: 'Alt+Q' });
+  });
+});
+
+describe('the shortcut labels', () => {
+  it("Converges: watches the User folder's keybindings.json for this platform, and hands the panel what it reads", () => {
+    const h = activated();
+    const watcher = last(fakes.shortcutWatchers);
+    expect(vi.mocked(shortcutPlatform)).toHaveBeenCalledWith(process.platform);
+    expect(watcher.userDirectory).toEqual({ fsPath: '/storage/../..' });
+    expect(watcher.platform).toBe('linux');
+    expect(h.context.subscriptions).toContain(watcher);
+    watcher.show({ pause: 'Alt+P' });
+    expect(h.panel.showShortcuts).toHaveBeenCalledWith({ pause: 'Alt+P' });
   });
 });
 

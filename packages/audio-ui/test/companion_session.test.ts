@@ -3,6 +3,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { mock } from 'vitest-mock-extended';
 import type * as vscode from 'vscode';
 import { createCompanionSession } from '../src/companion_session';
+import { shortcutPlatform } from '../../vscode/src/shortcut_labels';
 
 interface Routing {
   forward(action: LocalPanelAction, page: number): void;
@@ -40,6 +41,9 @@ const fake = vi.hoisted(() => ({
   hostOptions: undefined as HostOptions | undefined,
   narrationOptions: undefined as NarrationOptions | undefined,
   panelArgs: vi.fn<(...args: unknown[]) => void>(),
+  showShortcuts: vi.fn<(labels: unknown) => void>(),
+  watcherArgs: vi.fn<(directory: unknown, platform: unknown, show: (labels: unknown) => void) => void>(),
+  watcherDispose: vi.fn<() => void>(),
   send: vi.fn(),
   execute: vi.fn(),
   warning: vi.fn(),
@@ -70,6 +74,7 @@ const fake = vi.hoisted(() => ({
   earlyNarrationPage: undefined as number | undefined,
 }));
 vi.mock('vscode', () => ({
+  Uri: { joinPath: (base: { path: string }, ...parts: string[]) => ({ path: [base.path, ...parts].join('/') }) },
   commands: { executeCommand: fake.execute },
   window: { registerWebviewViewProvider: fake.register, showWarningMessage: fake.warning },
 }));
@@ -108,8 +113,18 @@ vi.mock('../../vscode/src/panel', () => ({
     }
     showRemoteUpdate = fake.showUpdate;
     showSpeechTransport = fake.showSpeechTransport;
+    showShortcuts = fake.showShortcuts;
   },
 }));
+vi.mock('../../vscode/src/shortcut_watcher', () => ({
+  ShortcutWatcher: class {
+    constructor(directory: unknown, platform: unknown, show: (labels: unknown) => void) {
+      fake.watcherArgs(directory, platform, show);
+    }
+    dispose = fake.watcherDispose;
+  },
+}));
+vi.mock('../../vscode/src/shortcut_labels', () => ({ shortcutPlatform: vi.fn(() => 'mac') }));
 vi.mock('../../vscode/src/speech_gpu_proof_runner', () => ({
   createGpuProofRunner: (capability: import('../../vscode/src/speech_gpu_client').GpuLaunchCapability) => {
     fake.proofCapability = capability;
@@ -188,7 +203,14 @@ beforeEach(() => {
 });
 
 function session() {
-  return createCompanionSession(mock<vscode.ExtensionContext>({ extensionPath: '/trusted', subscriptions: [] }), 'epoch');
+  return createCompanionSession(
+    mock<vscode.ExtensionContext>({
+      extensionPath: '/trusted',
+      subscriptions: [],
+      globalStorageUri: mock<vscode.Uri>({ path: '/user/globalStorage/mattyv.ai-pair-local-audio' }),
+    }),
+    'epoch',
+  );
 }
 function routing(): Routing {
   if (!fake.routing) throw new Error('No routing');
@@ -481,4 +503,18 @@ it('waits for the speech host to reap resources during shutdown', async () => {
   finished.resolve();
   await pending;
   expect(disposed).toBe(true);
+});
+
+it("Converges: reads this machine's keybindings.json for the page it owns, and stops on dispose", () => {
+  const current = session();
+  const call = fake.watcherArgs.mock.calls[0];
+  if (call === undefined) throw new Error('No watcher');
+  const [directory, platform, show] = call;
+  expect(directory).toEqual({ path: '/user/globalStorage/mattyv.ai-pair-local-audio/../..' });
+  expect(vi.mocked(shortcutPlatform)).toHaveBeenCalledWith(process.platform);
+  expect(platform).toBe('mac');
+  show({ pause: '⌃⇧Q' });
+  expect(fake.showShortcuts).toHaveBeenCalledWith({ pause: '⌃⇧Q' });
+  void current.dispose();
+  expect(fake.watcherDispose).toHaveBeenCalledOnce();
 });

@@ -11,7 +11,13 @@ import {
   type SavedSession,
   type NarrationPort,
 } from '@ai-pair/core';
-import { discoveryDir, LOCAL_AUDIO_VERSION, NAVIGATOR_COMMENTARY_SCHEMA, type NavigatorCommentary } from '@ai-pair/protocol';
+import {
+  discoveryDir,
+  LOCAL_AUDIO_VERSION,
+  NAVIGATOR_COMMENTARY_SCHEMA,
+  type NavigatorCommentary,
+  type ShortcutLabels,
+} from '@ai-pair/protocol';
 import { playDemo } from './demo';
 import { VsCodeEditor } from './editor';
 import { Diagnostics } from './diagnostics';
@@ -38,6 +44,8 @@ import { speechListeningRate, type SpeechSettings } from './speech_types';
 import type { SpeechState } from './panel_messages';
 import type { OutsideChanges } from './outside';
 import { watchOutside } from './outside_watch';
+import { ShortcutWatcher } from './shortcut_watcher';
+import { shortcutPlatform } from './shortcut_labels';
 import { NarrationPanel } from './panel';
 import { settingSpeed } from './panel_html';
 import { claudeStarter, setUpAgent, writeLauncher } from './setup';
@@ -104,6 +112,8 @@ export interface Api {
   setTimings: (overrides: Partial<Timings>) => void;
   /** Hands the panel a message as its page would post it: the webview's own handler, which checks each message. */
   panelMessage: (message: unknown) => void;
+  /** The keybindings.json the panel's tooltips follow, and the labels the panel holds from it (#94). */
+  shortcuts: { file: vscode.Uri; labels: () => ShortcutLabels | undefined };
 }
 
 function config(): vscode.WorkspaceConfiguration {
@@ -777,6 +787,13 @@ export function activate(context: vscode.ExtensionContext): Api {
     commandApprovalSound,
     navigatorCommentary,
   );
+  // The panel's tooltips name the programmer's shortcuts (#94). VS Code's User folder holds globalStorage.
+  const userDirectory = vscode.Uri.joinPath(context.globalStorageUri, '..', '..');
+  context.subscriptions.push(
+    new ShortcutWatcher(userDirectory, shortcutPlatform(process.platform), (labels) => {
+      panel.showShortcuts(labels);
+    }),
+  );
   outputPreferences = new SpeechOutputPreferences({
     initial: context.globalState.get<unknown>('speechOutput'),
     write: async (choice) => {
@@ -1389,6 +1406,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     panelMessage: (message) => {
       panel.receiveFromPage(message);
     },
+    shortcuts: { file: vscode.Uri.joinPath(userDirectory, 'keybindings.json'), labels: () => panel.shortcutLabels() },
   };
 }
 

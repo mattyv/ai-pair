@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.43.0
+
+-   In a remote window, the Pair panel's tooltips name the shortcuts your
+    local `keybindings.json` binds, read on this machine (#94).
+
 ## 0.42.0
 
 -   Version aligned with the main extension, whose Linux builds now play speech

@@ -106,8 +106,11 @@ theme's too: icon buttons hover like its toolbar icons, and Run and Allow for
 session are its primary and secondary buttons, with their hover colors and
 borders. Their tooltips are the panel's own, in the theme's hover colors, shown
 after a moment's hover or on keyboard focus, since native tooltips show
-unreliably in a webview. The agent's colors are theme colors too (see Agent
-cursor).
+unreliably in a webview. A control with a keyboard shortcut names it in its
+tooltip, as the programmer's keybindings bind it: Pause (Space, ⌃⇧Q), Raise
+hand (⌃⇧W); the empty reply box names its shortcut in its placeholder. A
+command left unbound shows no key. The agent's colors are theme colors too (see
+Agent cursor).
 
 Behavior:
 

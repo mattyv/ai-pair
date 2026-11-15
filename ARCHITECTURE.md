@@ -738,6 +738,18 @@ commands delegate to the existing session and attention owners; the panel
 retains only a pending focus request until its page is ready. The companion
 forwards the Settings action over the existing validated panel boundary.
 
+VS Code has no API that reports a command's keybinding, so the panel's
+tooltips name the shortcuts from the programmer's `keybindings.json`
+(`shortcut_watcher.ts`, `shortcut_labels.ts`; specs/Shortcuts.tla). The host
+that owns the page reads the file in its VS Code `User` folder, found from
+`globalStorageUri`, once at activation and on each change; a read that a
+later one overtook is dropped. Removals apply only to the extension's
+defaults, and the file's last addition wins, as in VS Code's resolver; `when`
+clauses are not evaluated. In a remote window the companion owns the page and
+reads its own machine's file; the workspace panel sends nothing. A profile with
+its own keybindings is not followed: the extension API does not name the
+active profile.
+
 ## Proposed nonverbal feedback architecture
 
 The proposed `PROPOSED: Nonverbal feedback ownership` Archi view is a design,

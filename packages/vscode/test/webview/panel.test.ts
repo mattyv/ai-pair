@@ -3589,3 +3589,32 @@ it('OfferedOnlyWhereCapable: disables GPU and Auto and explains why on a host wi
   expect([...select.options].every((option) => !option.disabled)).toBe(true);
   expect(element('gpu-check')).toHaveProperty('hidden', false);
 });
+
+describe('shortcuts', () => {
+  it('Converges: names the bound keys in the tooltips and the reply box, as the host sends them', () => {
+    start();
+    send({ type: 'shortcuts', value: { pause: '⌃⇧Q', attention: '⌃⇧W', reply: '⌃⇧Space' } });
+    expect(element('pause').dataset.tip).toBe('Pause (Space, ⌃⇧Q)');
+    expect(element('attention').dataset.tip).toBe('Raise hand (⌃⇧W)');
+    expect(replyBox().placeholder).toBe(`Reply to the agent${ELLIPSIS} (⌃⇧Space)`);
+    send({ type: 'state', state: 'typing', turn: 'agent', paused: true });
+    expect(element('pause').dataset.tip).toBe('Resume (Space, ⌃⇧Q)');
+    send({ type: 'attention', state: 'requested' });
+    expect(element('attention').dataset.tip).toBe('Lower hand (⌃⇧W)');
+    send({ type: 'turn', to: 'programmer' });
+    expect(replyBox().placeholder).toBe(`Ask the agent${ELLIPSIS} (⌃⇧Space)`);
+  });
+
+  it('Converges: names no key for a command left unbound, and keeps what each control does', () => {
+    start();
+    send({ type: 'state', state: 'typing', turn: 'agent', paused: true });
+    send({ type: 'attention', state: 'requested' });
+    send({ type: 'shortcuts', value: { pause: 'Alt+Q', attention: 'Alt+W', reply: 'Ctrl+Alt+Space' } });
+    expect(element('pause').dataset.tip).toBe('Resume (Space, Alt+Q)');
+    expect(element('attention').dataset.tip).toBe('Lower hand (Alt+W)');
+    send({ type: 'shortcuts', value: {} });
+    expect(element('pause').dataset.tip).toBe('Resume (Space)');
+    expect(element('attention').dataset.tip).toBe('Lower hand');
+    expect(replyBox().placeholder).toBe(`Reply to the agent${ELLIPSIS}`);
+  });
+});
