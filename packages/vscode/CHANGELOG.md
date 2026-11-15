@@ -20,6 +20,30 @@
     while the panel page is rebuilt. If the helper cannot run, speech plays in
     the panel as before (#82).
 
+## 0.40.0
+
+-   Run Kokoro GPU speech on Apple silicon Macs through Core ML, with the CPU
+    model and no extra download. The first load takes 15 to 35 seconds and it is
+    not faster than the CPU; explicit GPU still never falls back to the CPU
+    (#42).
+-   Offer GPU and Auto only on a computer with a GPU path. Elsewhere, including
+    Intel Macs and Windows, they are disabled and Settings says to choose CPU;
+    a saved GPU setting there now says so instead of "Check GPU setup".
+
+## 0.39.2
+
+-   Warn when the old AI Pair (`michalstrba.ai-pair`) is still installed: it
+    runs beside this one and leaves the agent's relay on the old version. The
+    warning uninstalls it, and says to add speech API keys again, which VS Code
+    keeps per extension and cannot carry over.
+
+## 0.39.1
+
+-   Keep the first narration after a window reload instead of dropping it. The
+    browser refuses to play sound before a click or keypress in the Pair panel;
+    the line now starts on that first gesture, or is given up after the usual
+    20 second start timeout (#77).
+
 ## 0.39.0
 
 -   Add configurable session shortcuts for pause, the hand control and reply

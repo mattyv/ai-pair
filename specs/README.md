@@ -99,6 +99,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `ModelStatus.cfg` | installed and missing model, verification | holds | 4 |
 | `SpeechSetup.cfg` | two files; install, cancellation and rollback outcomes | holds | 42 |
 | `SpeechPage.cfg` | two page identities and two narration units | holds | 28 |
+| `CoreMlCompute.cfg` | every host capability, model and Core ML outcome, three modes | holds | 82 |
 | `CloudNarration.cfg` | two generations, provider and credential epochs | holds | 264 |
 | `CloudNarration_Healthy.cfg` | two generations with a healthy key read | holds | 251 |
 | `SpeechSettings.cfg` | two credential reads and catalog requests | holds | 50,968 |
@@ -2545,16 +2546,32 @@ current narration ID. A delivery attempt records its eligibility independently
 of whether playback started. TLC checked 28 states. Mutating the initial page
 outside its range violates `TypeOK`; accepting a stale ID violates
 `PlayingIsCurrent`; refusing an eligible delivery violates `AcceptedStarts`.
-The model takes the browser's permission to play as given. The page earns it
-by playing every clip through one shared element that any click or keypress
-in the panel unlocks, because a browser that wants a user gesture unlocks an
-element, not the page (#39). The model is unchanged.
+The page plays every clip through one shared element that any click or
+keypress in the panel unlocks, because a browser that wants a user gesture
+unlocks an element, not the page (#39). Before the first gesture the browser
+can still refuse an eligible clip: `Audio` takes the browser's answer as a
+parameter, a refused clip is held as `blocked`, and `Gesture` starts it on the
+next click or keypress (#77). `Interrupt` also stands for the host's 20 second
+start timeout, which gives up a clip no gesture starts; it is weakly fair, so
+`BlockedResolves` says a refused clip either plays or is given up, never waits
+silently forever. TLC checked 28 distinct states.
+
+| Mutation | Result |
+|---|---|
+| A refused clip is dropped, as before #77 (`blocked' = FALSE`) | `AcceptedStarts` violated |
+| `Gesture` leaves the clip silent | `AcceptedStarts` violated |
+| `Interrupt` keeps the clip blocked | `BlockedIsCurrent` violated |
+| `Pause` keeps the clip blocked | `BlockedIsCurrent` violated |
+| No start timeout (fairness on `Interrupt` removed) | `BlockedResolves` violated |
+| `Gesture` without its `~paused` guard | passes: `Pause` already clears `blocked`, so the guard is defensive |
 
 | Property | Test |
 |---|---|
 | `TypeOK` | `speech_audio.test.ts`: rejects invalid page and unit IDs and ignores duplicate audio. |
 | `PlayingIsCurrent` | `speech_audio.test.ts`: interrupts synchronously and never resurrects the old unit; ignores stale callbacks when a page or unit changes. |
-| `AcceptedStarts` | `speech_audio.test.ts`: plays only the current page and unit, then acknowledges and releases it.; `panel.test.ts`: unlocks one shared player on a gesture so later narration can start without one. |
+| `AcceptedStarts` | `speech_audio.test.ts`: plays only the current page and unit, then acknowledges and releases it.; keeps the refused clip and starts it from the next gesture; `panel.test.ts`: unlocks one shared player on a gesture so later narration can start without one. |
+| `BlockedIsCurrent` | `speech_audio.test.ts`: BlockedIsCurrent: a gesture after a pause or stop starts nothing. |
+| `BlockedResolves` | `panel.test.ts`: BlockedResolves: starts narration the browser refused from the next gesture in the panel; the timeout half is the host's start timeout, covered by `speech_service.test.ts`. |
 
 ### `SpeechSetup`: verified model installation
 
@@ -3271,6 +3288,39 @@ violates `MixedWarns` or `MatchingDelivers`. `panel_placement.test.ts`,
 `attachment_gate.test.ts`, `extension.test.ts` and `local_audio.test.ts`
 exercise rejection and guidance. An already-installed old workspace may still
 select legacy fallback, which the new companion cannot prevent.
+
+### `CoreMlCompute`: GPU speech on Core ML
+
+On macOS arm64 the GPU path is ONNX Runtime's Core ML execution provider, with
+the shipped q8 model and no extra download (#42). The model covers whether the
+host has that path (`capable`), whether the model is installed, whether Core ML
+can create the session (`loads`), the three modes, and what the panel offers.
+A saved GPU setting can exist on any host. `Check` is the light check before a
+launch: Auto falls back to the CPU there, and only there; a Core ML session
+that then fails to load fails the unit in either mode. TLC checked 82 distinct
+states, with `GpuSpeaks` and `Settles`. `NoGpuWithoutPath` is implied by
+`GpuOnlyIfLoaded`, which catches its mutation first. Speed is not modelled:
+measured on one Apple silicon Mac, a Core ML load took 13 to 34 seconds and a
+sentence of 6.5 seconds of audio took 3.2 to 4.9 seconds, against 3.2 to 3.5 on
+the CPU.
+
+| Mutation | Result |
+|---|---|
+| Explicit GPU falls back to the CPU when Core ML fails | `ExplicitNoFallback` violated |
+| GPU reported without a Core ML session | `GpuOnlyIfLoaded` violated |
+| GPU offered on every host | `OfferedOnlyWhereCapable` violated |
+| GPU selected without checking the offer | `NoGpuSelectWithoutPath` violated |
+| Core ML run on a host without the path | `GpuOnlyIfLoaded` violated |
+| The check never settles without a model | `Settles` violated |
+| The GPU check always fails, as code that does nothing would | `GpuSpeaks` violated |
+
+| Property | Test |
+|---|---|
+| `TypeOK`, `GpuOnlyIfLoaded` | `speech_coreml.test.ts`: GpuOnlyIfLoaded: reports ready only after a CoreML session loads, and waits for the worker to exit; a CoreML session that fails to load fails the check; `speech_engine.test.ts`: CoreMlCompute Load: loads the q8 model on the CoreML execution provider, never the CPU path. |
+| `ExplicitNoFallback`, `NoGpuWithoutPath` | `speech_service.test.ts`: refuses explicit GPU when GPU collaborators are missing; CoreMlCompute Check and Load: launches a CoreML worker only after the runtime and model check. |
+| `OfferedOnlyWhereCapable`, `NoGpuSelectWithoutPath` | `speech_coreml.test.ts`: OfferedOnlyWhereCapable: offers no GPU and checks nothing without the CoreML path; `panel.test.ts`: OfferedOnlyWhereCapable: tells the page GPU is possible only on a supported host with a GPU path; `webview/panel.test.ts`: OfferedOnlyWhereCapable: disables GPU and Auto and explains why on a host without a GPU path. |
+| `GpuSpeaks` | `speech_worker.test.ts`: CoreMlCompute Load: loads on CoreML only when the host asked for it; `extension.test.ts`: CoreMlCompute: wires the host GPU offer, the CoreML worker and the explicit check into speech. Real Core ML synthesis was run once by hand on an Apple silicon Mac; no automated test runs Core ML. |
+| `Settles` | `speech_coreml.test.ts`: Settles: reports a missing model, and an abort before or during the load; `speech_local_client.test.ts`: HealthyProgress: bounds a slow CoreML load by its own load timeout. |
 
 ### `GpuSetup`: preflight, download and hardware proof
 

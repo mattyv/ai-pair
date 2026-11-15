@@ -31,6 +31,7 @@ import { SessionSpeechCost } from './session_speech_cost';
 import { createOpenRouterAudioDecoder } from './speech_decode_bridge';
 import { OpenRouterCatalog } from './speech_openrouter_catalog';
 import { installedSpeechModel, setupSpeech, speechModelStatus } from './speech_setup';
+import { coreMlCompute } from './speech_coreml';
 import { speechRuntimeAvailable } from './speech_runtime_status';
 import { localSpeechPlatform } from './speech_platform';
 import { speechListeningRate, type SpeechSettings } from './speech_types';
@@ -45,6 +46,7 @@ import { Calibration } from './calibration';
 import { builtInPassage, type Passage } from './passage';
 import { PanelPlacement, type PanelOwner, type PanelPrepareFailure } from './panel_placement';
 import { WorkspaceSession } from './workspace_session';
+import { warnOldExtension } from './old_extension';
 
 /** Values compiled into this running bundle, not the extension currently on disk. */
 declare const AI_PAIR_VERSION: string;
@@ -159,6 +161,7 @@ let stopSpeech: (() => Promise<void>) | undefined;
 /** Starts the extension: the controller, the editor, the panel, the bridge, and the commands; returns the API the integration test drives. */
 export function activate(context: vscode.ExtensionContext): Api {
   const previousRetirement = stopSpeech?.() ?? Promise.resolve();
+  void warnOldExtension();
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.homedir();
 
   // Activation is a cycle: the editor and the panel call the controller, which drives them through
@@ -175,6 +178,15 @@ export function activate(context: vscode.ExtensionContext): Api {
   let previewProvider: SpeechSettings['provider'] = 'kokoro';
   let catalogRequestActive = false;
   const localSpeechSupported = speechSupported();
+  // specs/CoreMlCompute.tla, Init: the CoreML GPU path exists only on macOS arm64 (#42).
+  const coreMl = coreMlCompute({
+    supported: localSpeechSupported,
+    platform: process.platform,
+    arch: process.arch,
+    runtimeDirectory: path.join(context.extensionPath, 'dist', 'speech'),
+    storageDirectory: context.globalStorageUri.fsPath,
+    installedModel: installedSpeechModel,
+  });
   let runtimeSpeechSupported = false;
   let runtimeSpeechChecked = false;
   const cloudSupported = vscode.env.remoteName === undefined && vscode.env.uiKind === vscode.UIKind.Desktop;
@@ -653,7 +665,7 @@ export function activate(context: vscode.ExtensionContext): Api {
           );
         },
         checkGpuSetup: () => {
-          void speech.checkGpu(() => Promise.resolve({ phase: 'unavailable', reason: 'runtime_missing' }), setupAbort.signal);
+          void speech.checkGpu(coreMl.check, setupAbort.signal);
         },
         outputView: () => outputPreferences.view(),
         outputReady: () => outputPreferences.ready(),
@@ -701,6 +713,7 @@ export function activate(context: vscode.ExtensionContext): Api {
         },
         validCloudVoice: (id) => catalog.contains(id),
         supported: () => localSpeechSupported && runtimeSpeechSupported,
+        gpuSupported: () => coreMl.gpu,
         installed: async () => {
           const available = await checkedModel();
           diagnostics.record({
@@ -872,6 +885,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     computeChanged: (value) => {
       if (!shuttingDown) panel.showSpeechComputeState(value);
     },
+    ...coreMl.speechOptions,
     output: outputRouter,
   });
   let speechRetirement: Promise<void> | undefined;
