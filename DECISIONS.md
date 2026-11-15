@@ -41,6 +41,8 @@ Issue discussions and working notes hold the detailed evidence and history.
     granted hand focuses Reply rather than changing the turn. Pending focus
     waits for the panel page and is discarded when the session ends. Desktop
     bindings, keyboard layouts and terminal shell routing can intercept keys.
+    macOS uses Control+Shift defaults; Settings lists both platform mappings
+    because the workspace and local companion may run on different systems.
 
 ## Speech continuity and delivery
 
