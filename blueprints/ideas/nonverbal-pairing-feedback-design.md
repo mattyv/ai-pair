@@ -83,7 +83,7 @@ Nonverbal (camera; possible, uncalibrated; never an answer or approval):
     scrolled away, VS Code not focused).
 -   **Qualitative line:** face toward the screen, away, or not in view; a
     possible nod or shake; notable expressions; and the leading emotion as
-    "possible <emotion>" when it clearly leads. A label appears only when its
+    `possible <emotion>` when it clearly leads. A label appears only when its
     number crosses a threshold tuned in the evaluation, so words and numbers
     cannot disagree, and the wording never claims what the person feels.
 -   **Numbers:** the share of frames with a face, head pose and gaze ranges,
