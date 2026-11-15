@@ -44,6 +44,14 @@ Issue discussions and working notes hold the detailed evidence and history.
     macOS uses Control+Shift defaults; Settings lists both platform mappings
     because the workspace and local companion may run on different systems.
 
+## Proposed nonverbal feedback controls
+
+-   The #83 design proposes independent voice and camera mute controls, each
+    with its own owner. This replaces the earlier combined mute proposal; the
+    existing consent opt-ins remain independent. Calibrated gaze and native
+    screen-layout access require a platform and permissions spike before any
+    implementation or claim of accurate region tracking.
+
 ## Speech continuity and delivery
 
 -   Context is opt-in and session-local: retain at most three completed agent

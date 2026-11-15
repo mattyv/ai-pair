@@ -15,8 +15,8 @@ design only; nothing is built, and the spec-first process still applies.
     cannot correlate wall-clock times.
 -   The camera stays on for the whole session while enabled, so the camera
     light does not blink on and off.
--   One mute: the narration mute button (`voice-status`) also mutes the camera.
-    There is no separate camera button.
+-   Two independent mute controls: one for narration and one for the camera.
+    Each has its own owner and snapshot; muting either does not mute the other.
 -   Each batch carries both a qualitative line and the model's numbers,
     including emotion estimates.
 -   Pacing is advisory. Cues help the agent recap, check in once, or suggest
@@ -48,19 +48,37 @@ apart), the active file, selection and scrolling, and typing a reply. It cannot
 report the mouse position outside the panel or which other app has focus. It
 knows about another VS Code window only when that window runs AI Pair.
 
-## Camera and mute
+## Camera and independent mute controls
 
 The camera opens when it is opted in, not muted, and a session is active. It
 stays on through pauses, the programmer's turn, and window blur. It closes on
-`end`, suspend, disable, mute, or reload, and a reopen waits for the helper to
-confirm it has exited.
+`end`, suspend, disable, camera mute, or reload. A reopen waits for the
+helper to confirm it has exited.
 
-The mute button stops writing `speech.enabled`. There are two persisted
-opt-ins, `speech.enabled` and a new `camera.enabled` (off by default, set in
-Settings with consent text), and one `muted` state owned by the extension host.
-The panel sends a toggle and draws the host's snapshot. A "camera in use" icon
+There are two persisted opt-ins, `speech.enabled` and a new `camera.enabled`
+(off by default, set in Settings with consent text). Voice and camera each
+have an independent mute state and owner; the panel sends each owner its own
+toggle and draws the resulting snapshot. Muting voice does not close the
+camera, and muting the camera does not mute voice. A "camera in use" icon
 shows in the panel and the status bar, driven by the device actually being
 open, not by the setting.
+
+## Proposed gaze and screen-layout calibration
+
+With explicit camera consent, investigate calibration that maps eye features to
+an estimated screen region. [WebGazer](https://webgazer.cs.brown.edu/)
+documents calibrated webcam estimates in viewport coordinates; it demonstrates
+the approach, not reliable multi-monitor accuracy. WebGazer is GPLv3 and is
+not a chosen dependency.
+
+Keep estimated gaze separate from known layout and focus facts. A native adapter
+spike must establish what screen geometry, window locations and focus facts are
+available on each platform, what permissions they require, and whether a
+calibrated estimate can be mapped to a useful broad region. Multiple displays,
+layout changes, calibration drift and occlusion can make the estimate uncertain
+or unavailable; never claim exact gaze. Capture timing and phase association
+may be retained internally to match observations to activity, but reports do
+not expose wall-clock timestamps to the agent.
 
 ## What reaches the agent
 
@@ -154,11 +172,12 @@ more; a Flatpak VS Code needs device access.
 ## First version, in order
 
 1.  Spikes: a Python MediaPipe and Nodding Pigeon trace recorder on macOS and
-    Linux, and the macOS camera prompt from a child of VS Code.
+    Linux, the macOS camera prompt from a child of VS Code, and calibrated
+    gaze against screen layout, native adapter access and permissions.
 1.  Activity context without a camera: the tracker, the context labels, the
     report field, and the guide rule.
-1.  A TLA+ spec for the perception lifecycle and the mute, before any code.
-1.  The mute split and the indicators.
+1.  A TLA+ spec for the perception lifecycle and independent mutes, before any code.
+1.  The independent mute controls and the indicators.
 1.  The native helper for the four targets.
 1.  The detector, tested on recorded traces, with panel chips and Right and
     Wrong buttons; display only.
