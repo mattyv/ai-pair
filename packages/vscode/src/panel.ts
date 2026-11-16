@@ -753,6 +753,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         if (
           typeof message.value?.enabled === 'boolean' &&
           (message.value.contextEnabled === undefined || typeof message.value.contextEnabled === 'boolean') &&
+          (message.value.speechLookahead === undefined || typeof message.value.speechLookahead === 'boolean') &&
           SPEECH_VOICES.some((voice) => voice === message.value.voice) &&
           SPEECH_SPEEDS.some((speed) => speed === message.value.speed) &&
           (message.value.listeningSpeed === undefined || SPEECH_LISTENING_RATES.some((rate) => rate === message.value.listeningSpeed)) &&

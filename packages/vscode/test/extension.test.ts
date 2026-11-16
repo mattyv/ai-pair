@@ -1286,6 +1286,7 @@ describe('activate', () => {
     expect(h.controller.narration).toBeDefined();
     expect(speech.options.settings()).toEqual({
       contextEnabled: false,
+      speechLookahead: true,
       enabled: false,
       provider: 'kokoro',
       voice: 'af_heart',
@@ -1301,6 +1302,7 @@ describe('activate', () => {
     fakes.settings.set('speech.speed', 1.25);
     expect(speech.options.settings()).toEqual({
       contextEnabled: false,
+      speechLookahead: true,
       enabled: true,
       provider: 'kokoro',
       voice: 'bf_emma',
@@ -1313,6 +1315,7 @@ describe('activate', () => {
     fakes.settings.set('speech.speed', 9);
     expect(speech.options.settings()).toEqual({
       contextEnabled: false,
+      speechLookahead: true,
       enabled: true,
       provider: 'kokoro',
       voice: 'invalid',
@@ -2917,6 +2920,19 @@ it('suppresses failed commit notifications after shutdown', async () => {
   commit.resolve(false);
   await h.api.ready;
   expect(fakes.infos).toEqual([]);
+});
+
+it('OffNothingAhead: reads look-ahead as on unless turned off, and saves it (#108)', async () => {
+  const h = activated();
+  await h.api.ready;
+  const wiring = h.panel.wiring.speech;
+  expect(wiring.settings.get()).toMatchObject({ speechLookahead: true });
+  wiring.settings.set({ ...wiring.settings.get(), speechLookahead: false });
+  await vi.waitFor(() => {
+    expect(fakes.updated).toContainEqual(['speech.lookahead', false, 1]);
+  });
+  fakes.settings.set('speech.lookahead', false);
+  expect(activated().panel.wiring.speech.settings.get()).toMatchObject({ speechLookahead: false });
 });
 
 it('restores and saves the accent, and reads a stored one not offered as none (#101)', async () => {

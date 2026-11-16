@@ -110,6 +110,7 @@ const ui = {
   openRouterAccent: $('openrouter-accent', HTMLSelectElement),
   openRouterAccentStatus: $('openrouter-accent-status', HTMLElement),
   speechContext: $('speech-context', HTMLSelectElement),
+  speechLookahead: $('speech-lookahead', HTMLInputElement),
   speechContextCapability: $('speech-context-capability', HTMLElement),
   openRouterZdr: $('openrouter-zdr', HTMLButtonElement),
   openRouterStatus: $('openrouter-status', HTMLElement),
@@ -1156,6 +1157,7 @@ function saveSpeechSettings(): void {
     value: {
       enabled: speechEnabled,
       contextEnabled: ui.speechContext.value === 'on',
+      speechLookahead: ui.speechLookahead.checked,
       voice,
       speed,
       listeningSpeed,
@@ -1380,6 +1382,7 @@ ui.speechVoicesMore.addEventListener('click', () => {
 });
 ui.speechEnabled.addEventListener('change', saveSpeechSettings);
 ui.speechContext.addEventListener('change', saveSpeechSettings);
+ui.speechLookahead.addEventListener('change', saveSpeechSettings);
 ui.voiceStatus.addEventListener('click', () => {
   ui.speechEnabled.checked = !speechEnabled;
   saveSpeechSettings();
@@ -1637,6 +1640,7 @@ function handle(message: ToPanel): void {
       syncSpeechProvider();
       ui.speechEnabled.checked = message.value.enabled;
       ui.speechContext.value = message.value.contextEnabled === true ? 'on' : 'off';
+      ui.speechLookahead.checked = message.value.speechLookahead !== false;
       ui.voiceStatus.disabled = false;
       syncVoiceStatus();
       ui.speechVoice.value = message.value.voice;

@@ -2006,6 +2006,12 @@ it('routes OpenRouter key and catalog actions and validates the selected pair', 
   speech.settings.set.mockClear();
   view.receive({ type: 'speechSettings', value: { ...choice, openRouterAccent: '[Australian accent]' } });
   expect(speech.settings.set).not.toHaveBeenCalled();
+  // #108: look-ahead is on or off, nothing else.
+  view.send({ type: 'speechSettings', value: { ...choice, speechLookahead: false } });
+  expect(speech.settings.set).toHaveBeenCalledWith({ ...choice, speechLookahead: false });
+  speech.settings.set.mockClear();
+  view.receive({ type: 'speechSettings', value: { ...choice, speechLookahead: 'off' } });
+  expect(speech.settings.set).not.toHaveBeenCalled();
   panel.showOpenRouterKeyStatus(true);
   panel.showOpenRouterCatalog({ state: 'ready', verified: true, models: [] });
   expect(view.posted).toContainEqual({ type: 'openRouterKeyStatus', hasKey: true });

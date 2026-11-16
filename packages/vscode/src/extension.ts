@@ -335,6 +335,8 @@ export function activate(context: vscode.ExtensionContext): Api {
     return {
       enabled: enabled === true,
       contextEnabled: config().get('speech.contextEnabled') === true,
+      // #108: on unless turned off.
+      speechLookahead: config().get('speech.lookahead') !== false,
       listeningSpeed: speechListeningRate(config().get('speech.listeningSpeed')),
       voice,
       speed: speechRate,
@@ -393,6 +395,7 @@ export function activate(context: vscode.ExtensionContext): Api {
         const updates: Array<[string, unknown]> = [
           ['speech.enabled', value.enabled],
           ['speech.contextEnabled', value.contextEnabled === true],
+          ['speech.lookahead', value.speechLookahead !== false],
           ['speech.listeningSpeed', speechListeningRate(value.listeningSpeed)],
           ['speech.voice', value.voice],
           ['speech.speed', value.speed],
