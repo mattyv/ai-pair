@@ -2617,6 +2617,92 @@ it('SpeechContext: completes only accepted playback and cancels other captures',
   expect(contextDouble.disconnect).toHaveBeenCalled();
 });
 
+/** Returns a service speaking through OpenRouter `model` with `accent`, and its synthesize mock. */
+function accentService(model: string, accent: SpeechSettings['openRouterAccent'], contextEnabled: boolean) {
+  const openRouter = { synthesize: vi.fn().mockResolvedValue({ wav: new Uint8Array(44), durationMs: 1000 }), models: vi.fn() };
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  output.play.mockReturnValue(1);
+  const service = new SpeechService({
+    runtimeDirectory: '',
+    storageDirectory: '',
+    localDesktop: true,
+    output,
+    openRouter,
+    settings: () => ({
+      enabled: true,
+      contextEnabled,
+      provider: 'openrouter',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+      openRouterModel: model,
+      openRouterVoice: 'charlie',
+      openRouterZdr: false,
+      ...(accent === undefined ? {} : { openRouterAccent: accent }),
+    }),
+  });
+  return { service, openRouter };
+}
+
+/** Returns the text the latest synthesis sent. */
+function sentText(openRouter: { synthesize: ReturnType<typeof vi.fn> }): unknown {
+  const request: unknown = openRouter.synthesize.mock.calls.at(-1)?.[0];
+  return typeof request === 'object' && request !== null && 'text' in request ? request.text : undefined;
+}
+
+describe('the accent tag (#101, specs/SpeechCue.tla)', () => {
+  it('AccentSent, TextLast: sends the accent before the delivery cue and the line, to a model that takes tags', async () => {
+    const { service, openRouter } = accentService('elevenlabs/eleven-v3-conversational', 'Australian', true);
+    void service.speak('Hello', 'excited');
+    await settle();
+    expect(sentText(openRouter)).toBe('[Australian accent] [excited] Hello');
+    service.cancel();
+    await service.dispose();
+  });
+
+  it('AccentSent, DeliveryKept: sends the accent in a preview and with context off, where no delivery cue goes', async () => {
+    const off = accentService('elevenlabs/eleven-v4', 'New Zealand', false);
+    void off.service.speak('Hello', 'excited');
+    await settle();
+    expect(sentText(off.openRouter)).toBe('[New Zealand accent] Hello');
+    off.service.cancel();
+    void off.service.preview();
+    await settle();
+    expect(sentText(off.openRouter)).toMatch(/^\[New Zealand accent\] [^[]/);
+    off.service.cancel();
+    await off.service.dispose();
+  });
+
+  it('OnlyTagged: sends no tag to a model that would read it aloud, nor without an accent', async () => {
+    for (const [model, accent] of [
+      ['elevenlabs/eleven-multilingual-v2', 'Australian'],
+      ['elevenlabs/eleven-v3', ''],
+      ['elevenlabs/eleven-v3', undefined],
+    ] as const) {
+      const { service, openRouter } = accentService(model, accent, false);
+      void service.speak('Hello');
+      await settle();
+      expect(sentText(openRouter)).toBe('Hello');
+      service.cancel();
+      await service.dispose();
+    }
+  });
+
+  it('NeverShown: keeps the tag out of the narration context', async () => {
+    contextDouble.capture.mockClear();
+    const { service } = accentService('elevenlabs/eleven-v3', 'British', true);
+    service.setNarrationSession('session', true);
+    service.configureNarrationContext();
+    void service.speak('Hello');
+    await settle();
+    expect(contextDouble.capture).toHaveBeenCalledWith('Hello');
+    service.cancel();
+    await service.dispose();
+  });
+});
+
 it('SpeechContext: configures an empty OpenRouter voice when none is selected', async () => {
   const service = new SpeechService({
     runtimeDirectory: '',
@@ -2704,6 +2790,48 @@ it('invalidates attention audio eagerly when settings change away and back', asy
   expect(engine.calls).toHaveLength(2);
   service.cancel();
   await second;
+});
+
+it('AccentSent: speaks the attention cue with the accent, and again with a new one (#101)', async () => {
+  let accent: SpeechSettings['openRouterAccent'] = 'Australian';
+  const openRouter = { synthesize: vi.fn().mockResolvedValue({ wav: new Uint8Array(44), durationMs: 1000 }), models: vi.fn() };
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  output.play.mockReturnValue(7);
+  const service = new SpeechService({
+    runtimeDirectory: '',
+    storageDirectory: '',
+    localDesktop: true,
+    output,
+    openRouter,
+    settings: () => ({
+      enabled: true,
+      provider: 'openrouter',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+      openRouterModel: 'elevenlabs/eleven-v3-conversational',
+      openRouterVoice: 'charlie',
+      openRouterZdr: false,
+      openRouterAccent: accent,
+    }),
+  });
+  service.configureNarrationContext();
+  const first = service.attentionCue();
+  await settle();
+  expect(sentText(openRouter)).toBe("[Australian accent] What's up?");
+  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+  await first;
+  accent = 'British';
+  service.configureNarrationContext();
+  const second = service.attentionCue();
+  await settle();
+  expect(openRouter.synthesize).toHaveBeenCalledTimes(2);
+  expect(sentText(openRouter)).toBe("[British accent] What's up?");
+  service.cancel();
+  await second;
+  await service.dispose();
 });
 
 it('rejects a late attention result after a settings change', async () => {

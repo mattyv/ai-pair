@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.45.0
+
+-   Set an accent for OpenRouter's ElevenLabs v3, v3 Conversational, v4, and
+    v4 Turbo voices in Pair Settings. It is sent as an audio tag, such as
+    `[Australian accent]`, before each line and preview; the panel and the
+    agent never see it. Other models get no tag, since they would read it
+    aloud. Accent tags are experimental, so a voice may not follow one (#101).
+-   Speak the raised-hand "What's up?" with the accent too, made again when the
+    accent changes (#101).
+-   Hide audio tags the agent writes in its narration, such as
+    `[Australian accent]` or `[whispers]`, from the panel, now and in the
+    history; the speech model still gets them. Brackets in code spans, or with
+    digits or symbols, as in `items[0]`, are kept (#101).
+
 ## 0.44.0
 
 -   Name the language or accent of an OpenRouter voice in Pair Settings where

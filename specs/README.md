@@ -89,6 +89,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Scroll.cfg` | `NumLines = 8` lines, a view of `ViewHeight = 4`, `MaxMoves = 2`, `MaxFollowSwitches = 2`, `scrollBeyondLastLine` on and off, the programmer's turn | holds | 14,131 |
 | `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
 | `VoiceLanguage.cfg` | every voice of five providers, four documented, with five forms of ID and two keys | holds (`ASSUME`s) | |
+| `SpeechCue.cfg` | every line of three providers, a model with tags and one without, an accent or none, three cues, preview, context | holds (`ASSUME`s) | |
 | `Resume.cfg` | 2 directories, `MaxSessions = 3`, revive and replacement updates enabled | holds | 56 |
 | `TerminalPanel.cfg` | two command IDs and automatic visibility | holds | 61 |
 | `DiagnosticsCopy.cfg` | explicit request with clipboard success or failure | holds | 3 |
@@ -2129,7 +2130,7 @@ physical retirement. `JobRetires` assumes weak fairness of completion.
 | Property | Code evidence |
 |---|---|
 | `TypeOK` | Bounded model state; no direct test |
-| `CurrentCache` | `rejects a late attention result after a settings change`; `does not cache a canceled attention cue` |
+| `CurrentCache` | `rejects a late attention result after a settings change`; `does not cache a canceled attention cue`; `AccentSent: speaks the attention cue with the accent, and again with a new one (#101)`, where the accent joins the settings whose change is `Change` |
 | `CurrentPlayback` | `invalidates attention audio eagerly when settings change away and back`; `reserves the current route again when replaying attention audio` |
 | `JobRetires` | Existing speech lifecycle retirement tests; completion fairness is an environmental assumption |
 
@@ -4086,3 +4087,51 @@ Each names the test that proves the code obeys it:
 | `NoGuess` | `voice_language.test.ts`: the cases NoGuess: names no language for a model's voice (ElevenLabs's `charlie`, and IDs outside each documented scheme or table); NoGuess: reads a voice only by its own provider's scheme; `integration_catalog_paths.ts`: VoiceLanguage, for `voice_478` and `charlie` |
 | `Named` | `voice_language.test.ts`: the cases Named: names the language a model documents for a voice; Named: names an English Aura-2 voice Deepgram has not listed as English alone, its documented suffix; `integration_catalog_paths.ts`: VoiceLanguage: OpenRouter voices are labelled with the language their provider documents |
 | `KeepsId` | `voice_language.test.ts`: KeepsId: shows the ID, then the language in words; KeepsId: leaves a voice with no documented language as its bare ID |
+
+## `SpeechCue`: the text a line sends to its speech model
+
+The feature of #101, specified before its code: the `providerText` that
+`SpeechService.speak` builds in `packages/vscode/src/speech_service.ts`, with
+the accent setting. A model that takes audio tags (`speechContextCapabilities`'
+`tags`: ElevenLabs v3, v3 Conversational, v4, and v4 Turbo through OpenRouter)
+gets the accent as a tag before every line, preview included, and the line's
+delivery cue as before. It is `ASSUME`s alone, with a config of constants,
+checked over every line of three providers, a model with tags and one without,
+an accent or none, a delivery cue, `neutral`, or none, a preview or not, speech
+context on or off, and every text of up to three words, audio tags the agent
+wrote, and code spans. The model sends the agent's text as written, since a
+model that takes tags follows them; the panel hides the agent's tags.
+
+| Spec | Code |
+|---|---|
+| `Tags` | `speechContextCapabilities(provider, model).tags` |
+| `AccentTag` | `accentTag` in `SpeechService.speak`, from `openRouterAccent` |
+| `DeliveryTag` | `cue` in `SpeechService.speak`, unchanged |
+| `ProviderText` | `providerText: accentTag + cue + text`, which `synthesize` sends; `text` as the agent wrote it |
+| `Shown` | `narration` in `webview/panel.ts`: the text without `AUDIO_TAG` matches outside code spans, now and in the history |
+| `Remembered` | the unit's `text`, which `context.capture` keeps |
+
+Each `ASSUME` was proved to bite with a mutation, run in TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| the accent goes to every model | `OnlyTagged` |
+| no accent in a preview | `AccentSent` |
+| the accent only with speech context on | `AccentSent` |
+| the accent is never sent | `AccentSent` |
+| a delivery cue in a preview | `DeliveryKept` |
+| the accent after the line's text | `TextLast` |
+| the agent's tags taken out of what is sent | `TextLast` |
+| the panel shows the agent's tags | `NeverShown` |
+| the panel drops code spans with the tags | `NeverShown` |
+| the context remembers the shown text | `NeverShown` |
+
+Each names the test that proves the code obeys it:
+
+| Assumption | Proved by |
+|---|---|
+| `OnlyTagged` | `speech_service.test.ts`: OnlyTagged: sends no tag to a model that would read it aloud, nor without an accent; `webview/panel.test.ts`: Tags: offers the accent only for a model that takes audio tags, and says so; `integration_catalog_paths.ts`: SpeechCue, the preview to Microsoft MAI with the accent set |
+| `AccentSent` | `speech_service.test.ts`: AccentSent, TextLast; AccentSent, DeliveryKept; AccentSent: speaks the attention cue with the accent, and again with a new one; `webview/panel.test.ts`: AccentSent: saves the accent chosen, and none; `integration_catalog_paths.ts`: SpeechCue: the accent goes as a tag to a model that takes tags, and to no other |
+| `DeliveryKept` | `speech_service.test.ts`: AccentSent, DeliveryKept: sends the accent in a preview and with context off, where no delivery cue goes; the existing SpeechContext test, `[curious] Hello` |
+| `TextLast` | `speech_service.test.ts`: AccentSent, TextLast: sends the accent before the delivery cue and the line, to a model that takes tags |
+| `NeverShown` | `speech_service.test.ts`: NeverShown: keeps the tag out of the narration context; `webview/panel.test.ts`: NeverShown: hides the audio tags the agent writes, now and in the history, and keeps every word and code span |

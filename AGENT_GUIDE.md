@@ -135,6 +135,12 @@ Delivery cues are advisory. They are ignored when speech context is disabled
 or the selected model does not support them. A batch advisory does not confirm
 that the provider applied a cue.
 
+Don't write audio tags such as `[excited]` or `[Australian accent]` into a
+`say`'s text, even when asked for a voice or an accent: the panel shows the text
+as written, and a model that does not take tags reads them aloud. Use
+`speech_delivery` for delivery. An accent is the programmer's **Accent** speech
+setting, which sends its tag only to a model that takes one; point them to it.
+
 -   **Cover what, why, and how.** *What* you're about to do; *why*: the intent,
     how it connects to the rest, the tradeoffs; and *how* the code does it: the
     approach, the constructs you're using, the choices in the code itself. The

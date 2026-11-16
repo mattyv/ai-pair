@@ -4,8 +4,11 @@
 
 import { randomBytes } from 'node:crypto';
 import { ELLIPSIS, SPEED_SUFFIX } from '@ai-pair/core/constants';
+import { SPEECH_ACCENTS } from '@ai-pair/protocol/speech_accents';
 import { SPEECH_PREVIEW_TEXT } from './speech_types';
 
+/** The accent setting's choices after None, for a model that takes audio tags (#101). */
+const ACCENT_OPTIONS = SPEECH_ACCENTS.map((accent) => `<option value="${accent}">${accent}</option>`).join('');
 /** The range `aiPair.speed` declares in package.json. */
 const MIN_SPEED = 0.25;
 const MAX_SPEED = 4;
@@ -184,6 +187,10 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
         <label class="settings-field">Voice
           <select data-ui="openrouter-voice"><option value="">Use provider default (if supported)</option></select>
         </label>
+        <label class="settings-field">Accent
+          <select data-ui="openrouter-accent"><option value="">None</option>${ACCENT_OPTIONS}</select>
+        </label>
+        <p data-ui="openrouter-accent-status"></p>
         <label class="settings-field">Response format
           <select data-ui="openrouter-format"><option value="mp3">MP3</option><option value="pcm">PCM</option></select>
         </label>

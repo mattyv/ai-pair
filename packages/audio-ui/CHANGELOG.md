@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.45.0
+
+-   Keep the OpenRouter accent setting with the other speech settings in a
+    remote window, where this companion owns them (#101).
+
 ## 0.44.0
 
 -   Version aligned with the main extension, whose OpenRouter voices now name

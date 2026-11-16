@@ -142,6 +142,7 @@ Last updated: css, 2026-11-16.
 | `packages/protocol/src/panel_update.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/paths.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 84.6% F 100.0% | - | - | - | - |
 | `packages/protocol/src/schemas.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/protocol/src/speech_accents.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/protocol/src/speech_decode.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/wire.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/test/command_channel.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -156,6 +157,7 @@ Last updated: css, 2026-11-16.
 | `packages/protocol/test/panel_chunks.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/panel_update.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/paths.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/protocol/test/speech_accents.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/protocol/test/speech_decode.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/wire.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/src/guide.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.6% B 88.9% F 100.0% | - | - | - | - |
@@ -390,6 +392,7 @@ Last updated: css, 2026-11-16.
 | `packages/vscode/test/shortcut_watcher.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/shortcuts_manifest.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/smoke_integration.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/speech_accent_manifest.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/speech_audio.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_cached_assets.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_catalog.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -747,6 +750,8 @@ Last updated: css, 2026-11-16.
 | `specs/SpeechBackendHandoff.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/SpeechContext.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechContext.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
+| `specs/SpeechCue.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/SpeechCue.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/SpeechLifecycle.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechLifecycle.tla` | TLA+ | - | - | 5 of 6 actions (never: StaleCallback) | - | - | - |
 | `specs/SpeechOverlap.cfg` | TLC config | - | - | - | - | - | - |

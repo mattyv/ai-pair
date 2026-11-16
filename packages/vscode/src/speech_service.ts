@@ -336,6 +336,8 @@ export class SpeechService implements NarrationPort {
       settings.openRouterVoice,
       settings.openRouterZdr,
       settings.openRouterFormat,
+      // #101: "What's up?" is spoken with the accent, so a new accent makes it again (specs/AttentionCache.tla, Change).
+      settings.openRouterAccent ?? '',
       speechListeningRate(settings.listeningSpeed),
     ]);
     if (this.cueKey !== key) {
@@ -449,12 +451,16 @@ export class SpeechService implements NarrationPort {
       !preview && settings.contextEnabled === true && capabilities.tags && delivery !== undefined && delivery !== 'neutral'
         ? `[${delivery}] `
         : '';
+    // specs/SpeechCue.tla, `AccentTag`: the accent goes to a model that takes tags, preview included, before the cue;
+    // the panel and the context keep the line's `text` alone.
+    const accent = settings.openRouterAccent ?? '';
+    const accentTag = capabilities.tags && accent !== '' ? `[${accent} accent] ` : '';
     const { promise, resolve } = Promise.withResolvers<void>();
     const current: ActiveSpeech = {
       id,
       text,
       context,
-      providerText: cue + text,
+      providerText: accentTag + cue + text,
       parts: provider === 'kokoro' && this.options.output.parts === true ? speechSegments(text) : [text],
       multipart: false,
       nextPart: 0,

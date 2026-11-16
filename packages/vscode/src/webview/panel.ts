@@ -1,6 +1,7 @@
 import { speechContextCapabilities } from '../speech_context_capabilities';
 import { voiceIndicator } from '../voice_indicator';
 import type { AudioDiagnostics, ShortcutLabels } from '@ai-pair/protocol';
+import { speechAccent, type SpeechAccent } from '@ai-pair/protocol/speech_accents';
 import type { SpeechComputeState } from '../speech_compute_types';
 import { SPEECH_LISTENING_RATES } from '../speech_tempo';
 // The narration panel's page script, bundled for the webview as dist/panel.js (#6). The markup and
@@ -106,6 +107,8 @@ const ui = {
   openRouterModel: $('openrouter-model', HTMLSelectElement),
   openRouterVoice: $('openrouter-voice', HTMLSelectElement),
   openRouterFormat: $('openrouter-format', HTMLSelectElement),
+  openRouterAccent: $('openrouter-accent', HTMLSelectElement),
+  openRouterAccentStatus: $('openrouter-accent-status', HTMLElement),
   speechContext: $('speech-context', HTMLSelectElement),
   speechContextCapability: $('speech-context-capability', HTMLElement),
   openRouterZdr: $('openrouter-zdr', HTMLButtonElement),
@@ -200,6 +203,8 @@ let openRouterModel = '';
 let openRouterVoice = '';
 let openRouterZdr = false;
 let openRouterFormat: 'pcm' | 'mp3' = 'mp3';
+/** The accent sent as an audio tag to a model that takes them, or empty for none (#101). */
+let openRouterAccent: SpeechAccent = '';
 let openRouterHasKey = false;
 let openRouterCatalogVerified = false;
 let openRouterModels: OpenRouterModel[] = [];
@@ -373,10 +378,28 @@ function insertHistory(el: HTMLElement): void {
   }
 }
 
+/**
+ * An audio tag the agent wrote, such as `[Australian accent]` or `[whispers]`: a short run of letters in brackets,
+ * with the space after it. Brackets with digits or symbols, as in `items[0]`, are not tags.
+ */
+const AUDIO_TAG = /\[[A-Za-z][A-Za-z ,'-]{1,39}\]\s*/g;
+
+/**
+ * Returns the agent's narration as rich text, without the audio tags it wrote (#101; specs/SpeechCue.tla, `Shown`):
+ * the speech model takes them as written, and the panel hides them. A code span keeps its brackets.
+ */
+function narration(s: string): string {
+  const prose = s
+    .split(/(`[^`]+`)/)
+    .map((part, i) => (i % 2 === 1 ? part : part.replaceAll(AUDIO_TAG, '')))
+    .join('');
+  return rich(prose.trim());
+}
+
 /** Files the current message once before the next entry (specs/Panel.tla, `WithMessageFiled`). */
 function fileCurrent(): void {
   if (current !== undefined && !filed) {
-    const message = entry('agent', rich(current));
+    const message = entry('agent', narration(current));
     message.append(...ui.ref.childNodes);
     insertHistory(message);
     ui.now.textContent = '';
@@ -507,7 +530,7 @@ function setNow(text: string): void {
   current = text;
   filed = false;
   ui.now.classList.remove('empty');
-  ui.now.innerHTML = rich(text);
+  ui.now.innerHTML = narration(text);
   // The agent points first, then says what's there.
   ui.ref.replaceChildren(...(pointed ? [pointed] : []));
   pointed = undefined;
@@ -1140,7 +1163,7 @@ function saveSpeechSettings(): void {
       elevenLabsVoice: cloudVoice,
       elevenLabsSpeed: cloudSpeed,
       ...(speechProvider === 'openrouter' || openRouterModel !== '' || openRouterVoice !== '' || openRouterZdr
-        ? { openRouterModel, openRouterVoice, openRouterZdr, openRouterFormat }
+        ? { openRouterModel, openRouterVoice, openRouterZdr, openRouterFormat, openRouterAccent }
         : {}),
     },
   });
@@ -1187,6 +1210,11 @@ function syncSpeechProvider(): void {
         : capabilities.tags
           ? 'Delivery cues only; previous context is not supported.'
           : 'Unsupported by this model; ordinary speech only.';
+  // specs/SpeechCue.tla, `Tags`: an accent goes only to a model that takes audio tags; another would read it aloud.
+  ui.openRouterAccent.disabled = !capabilities.tags;
+  ui.openRouterAccentStatus.textContent = capabilities.tags
+    ? 'Sent as an audio tag, such as [Australian accent], before each line. Accent tags are experimental; a voice may not follow one.'
+    : 'This model does not take audio tags, so no accent is sent. Eleven v3 and v4 models do.';
   const cloud = speechProvider === 'elevenlabs';
   ui.speechLocal.hidden = speechProvider !== 'kokoro';
   ui.speechLocalModel.hidden = speechProvider !== 'kokoro';
@@ -1285,6 +1313,13 @@ ui.openRouterModel.addEventListener('change', () => {
 ui.openRouterVoice.addEventListener('change', () => {
   openRouterVoice = ui.openRouterVoice.value;
   syncSpeechProvider();
+  saveSpeechSettings();
+});
+ui.openRouterAccent.addEventListener('change', () => {
+  // #101: only an offered accent, or none, is saved.
+  const parsed = speechAccent.safeParse(ui.openRouterAccent.value);
+  if (!parsed.success) return;
+  openRouterAccent = parsed.data;
   saveSpeechSettings();
 });
 ui.openRouterFormat.addEventListener('change', () => {
@@ -1582,6 +1617,7 @@ function handle(message: ToPanel): void {
       openRouterVoice = message.value.openRouterVoice ?? '';
       openRouterZdr = message.value.openRouterZdr ?? false;
       openRouterFormat = message.value.openRouterFormat === 'pcm' ? 'pcm' : 'mp3';
+      openRouterAccent = message.value.openRouterAccent ?? '';
       if (
         !openRouterCatalogVerified &&
         openRouterModel !== '' &&
@@ -1594,6 +1630,7 @@ function handle(message: ToPanel): void {
       }
       ui.openRouterModel.value = openRouterModel;
       ui.openRouterFormat.value = openRouterFormat;
+      ui.openRouterAccent.value = openRouterAccent;
       renderOpenRouterVoices();
       ui.speechCloudSpeed.value = String(cloudSpeed);
       selectCloudVoice();

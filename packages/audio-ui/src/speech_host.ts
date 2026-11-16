@@ -17,7 +17,7 @@ import { speechRuntimeAvailable } from '../../vscode/src/speech_runtime_status';
 import { localSpeechPlatform } from '../../vscode/src/speech_platform';
 import { SpeechService } from '../../vscode/src/speech_service';
 import { createGpuHostBinding } from '../../vscode/src/speech_gpu_host_binding';
-import { MAX_GPU_WORKER_DETAILS, type AudioDiagnostics } from '@ai-pair/protocol';
+import { MAX_GPU_WORKER_DETAILS, speechAccent, type AudioDiagnostics } from '@ai-pair/protocol';
 import { createGpuSynthesisClient } from '../../vscode/src/speech_gpu_client';
 import { installedGpuModel, setupGpuModel } from '../../vscode/src/speech_gpu_model';
 import { setupGpuFlow } from '../../vscode/src/speech_gpu_setup_flow';
@@ -191,6 +191,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
     const openRouterVoice: unknown = config().get('speech.openRouterVoice');
     const openRouterZdr: unknown = config().get('speech.openRouterZdr');
     const openRouterFormat: unknown = config().get('speech.openRouterFormat');
+    const openRouterAccent: unknown = config().get('speech.openRouterAccent');
     return {
       enabled: enabled === true,
       contextEnabled: config().get('speech.contextEnabled') === true,
@@ -206,6 +207,8 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
             openRouterVoice: typeof openRouterVoice === 'string' ? openRouterVoice : '',
             openRouterZdr: openRouterZdr === true,
             openRouterFormat: openRouterFormat === 'pcm' ? 'pcm' : 'mp3',
+            // #101: an accent the setting does not offer is none.
+            openRouterAccent: speechAccent.catch('').parse(openRouterAccent),
           }
         : {}),
     };
@@ -264,6 +267,7 @@ export function createSpeechHost(options: SpeechHostOptions): SpeechHost {
           ...(value.openRouterVoice === undefined ? [] : [['speech.openRouterVoice', value.openRouterVoice] as [string, unknown]]),
           ...(value.openRouterZdr === undefined ? [] : [['speech.openRouterZdr', value.openRouterZdr] as [string, unknown]]),
           ...(value.openRouterFormat === undefined ? [] : [['speech.openRouterFormat', value.openRouterFormat] as [string, unknown]]),
+          ...(value.openRouterAccent === undefined ? [] : [['speech.openRouterAccent', value.openRouterAccent] as [string, unknown]]),
         ];
         for (const [key, setting] of updates) await config().update(key, setting, vscode.ConfigurationTarget.Global);
       });

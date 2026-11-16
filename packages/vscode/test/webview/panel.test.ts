@@ -11,6 +11,7 @@ import type { PanelEvent } from '@ai-pair/core';
 import { MAC_MODIFIERS } from '@ai-pair/protocol';
 import { ELLIPSIS, LABEL_SEPARATOR, RANGE_DASH, RIGHT_ARROW, SPEED_SUFFIX } from '@ai-pair/core/constants';
 import type { ToPanel } from '../../src/panel_messages';
+import type { SpeechSettings } from '../../src/speech_types';
 import { loadPage, ui } from '../page';
 import { voiceIndicator } from '../../src/voice_indicator';
 import { formatOpenRouterPricing } from '../../src/speech_pricing';
@@ -3232,6 +3233,85 @@ it('saves only supported OpenRouter response formats', () => {
   format.value = '';
   format.dispatchEvent(new window.Event('change'));
   expect(posted().filter((message) => message.type === 'speechSettings')).toHaveLength(beforeInvalid);
+});
+
+/** The OpenRouter settings the host sends, for `model`, with `accent` when given. */
+function settings(model: string, accent?: SpeechSettings['openRouterAccent']): SpeechSettings {
+  return {
+    enabled: true,
+    contextEnabled: false,
+    provider: 'openrouter',
+    voice: 'af_heart',
+    speed: 1,
+    elevenLabsVoice: '',
+    elevenLabsSpeed: 1,
+    openRouterModel: model,
+    openRouterVoice: 'charlie',
+    openRouterZdr: false,
+    openRouterFormat: 'mp3',
+    ...(accent === undefined ? {} : { openRouterAccent: accent }),
+  };
+}
+
+/** Returns the accent select, failing if the page has none. */
+function accentSelect(): InstanceType<typeof window.HTMLSelectElement> {
+  const select = element('openrouter-accent');
+  if (!(select instanceof window.HTMLSelectElement)) throw new TypeError('Missing accent select');
+  return select;
+}
+
+describe('the accent (#101, specs/SpeechCue.tla)', () => {
+  it('NeverShown: hides the audio tags the agent writes, now and in the history, and keeps every word and code span', () => {
+    start();
+    send({ type: 'say', text: "[Australian accent] G'day. Use `items[0]` and `[keep this]`, [whispers] then items[0]." });
+    expect(element('now-text').textContent).toBe("G'day. Use items[0] and [keep this], then items[0].");
+    send({ type: 'say', text: '[strong French accent]' });
+    expect(element('now-text').textContent).toBe('');
+    send({ type: 'programmer', text: '[Australian accent] please' });
+    expect(history()).toContain("G'day. Use items[0] and [keep this], then items[0].");
+    expect(history().some((entry) => entry.includes('[Australian accent] please'))).toBe(true);
+    expect(history().some((entry) => entry.includes('[Australian accent] G'))).toBe(false);
+  });
+
+  it('Tags: offers the accent only for a model that takes audio tags, and says so', () => {
+    send({ type: 'speechSettings', value: settings('elevenlabs/eleven-v3-conversational') });
+    expect(accentSelect().disabled).toBe(false);
+    expect(element('openrouter-accent-status').textContent).toMatch(/audio tag, such as \[Australian accent\]/);
+    send({ type: 'speechSettings', value: settings('elevenlabs/eleven-multilingual-v2') });
+    expect(accentSelect().disabled).toBe(true);
+    expect(element('openrouter-accent-status').textContent).toMatch(/does not take audio tags/);
+  });
+
+  it('AccentSent: saves the accent chosen, and none', () => {
+    send({ type: 'speechSettings', value: settings('elevenlabs/eleven-v3') });
+    for (const accent of ['Australian', '']) {
+      accentSelect().value = accent;
+      accentSelect().dispatchEvent(new window.Event('change'));
+      expect(posted().at(-1)).toEqual({
+        type: 'speechSettings',
+        // oxlint-disable-next-line typescript/no-unsafe-assignment -- Vitest's asymmetric matcher validates this value.
+        value: expect.objectContaining({ openRouterModel: 'elevenlabs/eleven-v3', openRouterAccent: accent }),
+      });
+    }
+  });
+
+  it('restores a saved accent, and none', () => {
+    send({ type: 'speechSettings', value: settings('elevenlabs/eleven-v3', 'Irish') });
+    expect(accentSelect().value).toBe('Irish');
+    send({ type: 'speechSettings', value: settings('elevenlabs/eleven-v3') });
+    expect(accentSelect().value).toBe('');
+  });
+
+  it('saves nothing for a choice that is not an offered accent', () => {
+    send({ type: 'speechSettings', value: settings('elevenlabs/eleven-v3') });
+    const foreign = document.createElement('option');
+    foreign.value = 'Klingon';
+    accentSelect().append(foreign);
+    const before = posted().length;
+    accentSelect().value = 'Klingon';
+    accentSelect().dispatchEvent(new window.Event('change'));
+    expect(posted()).toHaveLength(before);
+  });
 });
 
 it('sends decoder frames from the local page handler through the VS Code API', () => {

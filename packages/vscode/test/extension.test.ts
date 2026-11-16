@@ -2911,6 +2911,21 @@ it('suppresses failed commit notifications after shutdown', async () => {
   expect(fakes.infos).toEqual([]);
 });
 
+it('restores and saves the accent, and reads a stored one not offered as none (#101)', async () => {
+  fakes.settings.set('speech.provider', 'openrouter');
+  fakes.settings.set('speech.openRouterAccent', 'Australian');
+  const h = activated();
+  await h.api.ready;
+  const wiring = h.panel.wiring.speech;
+  expect(wiring.settings.get()).toMatchObject({ openRouterAccent: 'Australian' });
+  wiring.settings.set({ ...wiring.settings.get(), openRouterAccent: 'Irish' });
+  await vi.waitFor(() => {
+    expect(fakes.updated).toContainEqual(['speech.openRouterAccent', 'Irish', 1]);
+  });
+  fakes.settings.set('speech.openRouterAccent', 'Klingon');
+  expect(activated().panel.wiring.speech.settings.get()).toMatchObject({ openRouterAccent: '' });
+});
+
 it('restores OpenRouter preferences and clears the selected pair when its credential changes', async () => {
   fakes.settings.set('speech.provider', 'openrouter');
   fakes.settings.set('speech.openRouterModel', 'model');

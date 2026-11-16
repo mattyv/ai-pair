@@ -95,7 +95,8 @@ installation, setup, controls, and limitations.
 Speech is optional and off by default. Kokoro uses a pinned local model;
 ElevenLabs and OpenRouter use separately saved keys and account credits.
 OpenRouter discovers eligible models and voices from the account, each voice
-named with its language or accent where its provider documents it; its ZDR
+named with its language or accent where its provider documents it, and an
+accent can be set for ElevenLabs v3 and v4 models, sent as an audio tag; its ZDR
 filter requests the ZDR routing policy, subject to account Safety Retention
 settings. A listed model can reject a format, voice, or text input. The
 companion's Kokoro requires a Linux x64 desktop with glibc; Mac users can use
