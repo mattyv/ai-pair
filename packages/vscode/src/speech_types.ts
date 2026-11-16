@@ -27,6 +27,8 @@ export interface SpeechSettings {
   openRouterFormat?: OpenRouterAudioFormat;
   /** The accent sent as an audio tag to a model that takes them, or empty for none (#101). */
   openRouterAccent?: SpeechAccent;
+  /** Prepares the next cloud line while one plays (#108); absent means on. */
+  speechLookahead?: boolean;
   voice: string;
   speed: number;
 }

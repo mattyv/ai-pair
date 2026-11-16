@@ -17,6 +17,7 @@ import {
   type OpenRouterAudioFormat,
   type OpenRouterSpeechPort,
   type LocalSpeechFailureReason,
+  type SpeechAudioResult,
   type SpeechProvider,
   type SpeechSettings,
   type SpeechVoice,
@@ -171,6 +172,83 @@ interface ActiveSpeech {
   timer?: ReturnType<typeof setTimeout>;
   deadline?: number;
   remaining: number;
+  /** A cloud line whose request waits for a discarded prepared request to give the slot back (#108). */
+  awaitingSlot?: boolean;
+}
+
+/** What a cloud line's request is made of: the fields `sendCloud` sends. */
+interface CloudFields {
+  provider: SpeechProvider;
+  text: string;
+  providerText: string;
+  previousText?: string;
+  cloudVoice: string;
+  openRouterModel: string;
+  openRouterZdr: boolean;
+  openRouterFormat: OpenRouterAudioFormat;
+  speed: number;
+}
+
+/**
+ * Returns what identifies a cloud line's request (#108; specs/SpeechLookahead.tla, `Key`): a prepared line stands in
+ * for a line only when their keys are equal, so what plays is what the line itself would have requested.
+ */
+function cloudKey(line: CloudFields): string {
+  return line.provider === 'openrouter'
+    ? JSON.stringify([
+        line.provider,
+        line.openRouterModel,
+        line.cloudVoice,
+        line.openRouterZdr,
+        line.openRouterFormat,
+        line.providerText,
+        line.previousText ?? '',
+      ])
+    : JSON.stringify([line.provider, line.cloudVoice, line.speed, line.text]);
+}
+
+/** A line synthesized ahead while the current one plays (#108). */
+interface PreparedLine {
+  key: string;
+  controller: AbortController;
+  /** Its audio, once the request settles with it. */
+  audio?: SpeechAudioResult;
+  /** The line that took it over while its request was still in flight. */
+  owner?: ActiveSpeech;
+  /** The request slot it holds while in flight. */
+  slot: CloudSlot;
+}
+
+/** The one cloud request in flight: whose it is, how to abort it, and its deadline. */
+interface CloudSlot {
+  id: number;
+  controller: AbortController;
+  timer?: ReturnType<typeof setTimeout>;
+  /** Held by a prepared line no line has taken over yet. */
+  prepared: boolean;
+}
+
+/**
+ * Returns the text a line sends its speech model (specs/SpeechCue.tla, `ProviderText`): the accent's tag and the
+ * delivery cue for a model that takes tags, then the line. The accent goes in a preview too; a delivery cue does not,
+ * and needs speech context on. The panel and the narration context keep the line alone.
+ */
+function providerText(
+  settings: SpeechSettings,
+  provider: SpeechProvider,
+  model: string,
+  text: string,
+  delivery: SpeechDelivery | undefined,
+  preview: boolean,
+): string {
+  const capabilities = speechContextCapabilities(provider, model);
+  const cue =
+    !preview && settings.contextEnabled === true && capabilities.tags && delivery !== undefined && delivery !== 'neutral'
+      ? `[${delivery}] `
+      : '';
+  const accent = settings.openRouterAccent ?? '';
+  const accentTag = capabilities.tags && accent !== '' ? `[${accent} accent] ` : '';
+  return accentTag + cue + text;
 }
 
 /** Maximum time for a worker or page to acknowledge its work. */
@@ -192,7 +270,11 @@ export class SpeechService implements NarrationPort {
   private current?: ActiveSpeech;
   private paused = false;
   private readonly lifecycle: SpeechLifecycle;
-  private cloudBusy?: { id: number; controller: AbortController; timer: ReturnType<typeof setTimeout> };
+  private cloudBusy?: CloudSlot;
+  /** The next line core announced while one plays, until that line begins (#108). */
+  private hint?: { text: string; delivery?: SpeechDelivery };
+  /** The one line prepared ahead, if any (specs/SpeechLookahead.tla, `prepared`). */
+  private prepared?: PreparedLine;
   private disposed = false;
   private cueKey?: string;
   private cueGeneration = 0;
@@ -344,7 +426,14 @@ export class SpeechService implements NarrationPort {
       this.cueKey = key;
       this.cueGeneration++;
       this.cueCache = undefined;
+      // specs/SpeechLookahead.tla, Configure: a prepared line was made for the old settings.
+      this.discardPrepared();
       if (this.current?.attention === true) this.cancel();
+    }
+    // specs/SpeechLookahead.tla, OffNothingAhead: turning look-ahead off drops what was prepared.
+    if (settings.speechLookahead === false) {
+      this.hint = undefined;
+      this.discardPrepared();
     }
     const model = settings.openRouterModel ?? '';
     const voice = settings.provider === 'openrouter' ? (settings.openRouterVoice ?? '') : settings.elevenLabsVoice;
@@ -440,27 +529,22 @@ export class SpeechService implements NarrationPort {
     }
     // specs/SpeechTempo.tla, Admit: a transformed unit waits for the previous transform worker to retire.
     const listeningRate = speechListeningRate(settings.listeningSpeed);
-    if (this.cloudBusy !== undefined || (listeningRate !== 1 && this.options.tempo?.busy() === true)) {
+    // specs/SpeechLookahead.tla, Speak: a slot held by a prepared request is the line's to take over or wait for.
+    if (this.cloudBusy?.prepared === false || (listeningRate !== 1 && this.options.tempo?.busy() === true)) {
       this.options.output.status(id, 'unavailable', 'Speech is still finishing; try again shortly.');
       return Promise.resolve();
     }
     this.configureNarrationContext();
-    const capabilities = speechContextCapabilities(provider, openRouterModel);
+    // specs/SpeechLookahead.tla, Speak: the announced line is now being spoken.
+    if (!preview && !attention) this.hint = undefined;
+    else this.discardPrepared();
     const context = preview || attention ? undefined : this.context.capture(text);
-    const cue =
-      !preview && settings.contextEnabled === true && capabilities.tags && delivery !== undefined && delivery !== 'neutral'
-        ? `[${delivery}] `
-        : '';
-    // specs/SpeechCue.tla, `AccentTag`: the accent goes to a model that takes tags, preview included, before the cue;
-    // the panel and the context keep the line's `text` alone.
-    const accent = settings.openRouterAccent ?? '';
-    const accentTag = capabilities.tags && accent !== '' ? `[${accent} accent] ` : '';
     const { promise, resolve } = Promise.withResolvers<void>();
     const current: ActiveSpeech = {
       id,
       text,
       context,
-      providerText: accentTag + cue + text,
+      providerText: providerText(settings, provider, openRouterModel, text, delivery, preview),
       parts: provider === 'kokoro' && this.options.output.parts === true ? speechSegments(text) : [text],
       multipart: false,
       nextPart: 0,
@@ -509,6 +593,7 @@ export class SpeechService implements NarrationPort {
       this.acceptAudio(current, 0, this.cueCache);
       return;
     }
+    if (current.provider !== 'kokoro' && !current.preview && !current.attention && this.promote(current)) return;
     current.phase = 'loading';
     if (current.provider !== 'kokoro') this.startCloud(current);
     else {
@@ -532,11 +617,220 @@ export class SpeechService implements NarrationPort {
     }
   }
 
+  /**
+   * Takes the next line's hint from core, and prepares it if it can (#108; specs/SpeechLookahead.tla, `Hint`).
+   * A hint for another line than the one prepared discards it.
+   */
+  prepareNext(text: string, delivery?: SpeechDelivery): void {
+    if (this.disposed) return;
+    if (this.hint !== undefined && (this.hint.text !== text || this.hint.delivery !== delivery)) this.discardPrepared();
+    this.hint = delivery === undefined ? { text } : { text, delivery };
+    this.lookaheadLine();
+  }
+
+  /**
+   * Starts the prepared line's request when it can (specs/SpeechLookahead.tla, `StartPrepare`): a hint, nothing
+   * prepared, a cloud narration line audible and not paused, a free slot, and look-ahead on. Its previous text is what
+   * the context will hold once the playing line completes.
+   */
+  private lookaheadLine(): void {
+    const current = this.current;
+    const hint = this.hint;
+    const settings = this.options.settings();
+    if (
+      hint === undefined ||
+      this.prepared !== undefined ||
+      current === undefined ||
+      !current.started ||
+      current.preview ||
+      current.attention ||
+      current.provider === 'kokoro' ||
+      this.paused ||
+      this.cloudBusy !== undefined ||
+      !settings.enabled ||
+      settings.speechLookahead === false
+    ) {
+      return;
+    }
+    const fields = this.cloudFields(settings, hint.text, hint.delivery, this.context.anticipate(current.text));
+    if (fields === undefined) return;
+    const controller = new AbortController();
+    const id = this.nextId++;
+    const settle = (): void => {
+      if (this.cloudBusy?.controller !== controller) return;
+      clearTimeout(this.cloudBusy.timer);
+      this.cloudBusy = undefined;
+      this.wakeCloud();
+    };
+    const prepared: PreparedLine = { key: cloudKey(fields), controller, slot: { id, controller, prepared: true } };
+    // A settled request clears this timer, so when it fires the request still holds the slot.
+    prepared.slot.timer = setTimeout(() => {
+      this.expirePrepared(prepared);
+    }, START_TIMEOUT_MS);
+    this.cloudBusy = prepared.slot;
+    this.prepared = prepared;
+    const request = this.sendCloud(fields, id, /* preview= */ false, controller.signal);
+    void request?.then(
+      (audio) => {
+        settle();
+        // specs/SpeechLookahead.tla, PrepareSettles: kept for its line, or handed to the line that took it over.
+        // A line that took it over and was canceled, or a discard, aborted it.
+        if (controller.signal.aborted) return;
+        if (prepared.owner === undefined) prepared.audio = audio;
+        else this.receiveAudio(prepared.owner, 0, audio, true);
+      },
+      (error: unknown) => {
+        settle();
+        // specs/SpeechLookahead.tla, PrepareFails: silent, and not tried again; the line will make its own request.
+        if (this.prepared === prepared) {
+          this.prepared = undefined;
+          this.hint = undefined;
+        }
+        // A request this service aborted is not a failure.
+        const reason = controller.signal.aborted ? 'canceled' : cloudFailureReason(error);
+        if (prepared.owner !== undefined) {
+          if (this.current === prepared.owner) this.failCloud(prepared.owner, reason);
+        } else if (reason !== 'canceled') this.cloudDiagnosticFor(fields.provider, reason);
+      },
+    );
+  }
+
+  /** Gives up on a prepared request past its deadline, failing a line that took it over. */
+  private expirePrepared(prepared: PreparedLine): void {
+    prepared.controller.abort();
+    this.cloudBusy = undefined;
+    if (this.prepared === prepared) this.prepared = undefined;
+    if (prepared.owner !== undefined && this.current === prepared.owner) this.failCloud(prepared.owner, 'timeout');
+    this.wakeCloud();
+  }
+
+  /**
+   * Gives a line the prepared request when its own would be the same (specs/SpeechLookahead.tla, `Speak`): its audio
+   * if ready, else the request in flight. A prepared line for anything else is discarded. Returns whether it was used.
+   */
+  private promote(current: ActiveSpeech): boolean {
+    const prepared = this.prepared;
+    if (prepared === undefined) return false;
+    this.prepared = undefined;
+    if (prepared.key !== cloudKey(SpeechService.fields(current))) {
+      if (prepared.audio === undefined) prepared.controller.abort();
+      return false;
+    }
+    current.phase = 'synthesizing';
+    if (prepared.audio !== undefined) {
+      this.receiveAudio(current, 0, prepared.audio, true);
+      return true;
+    }
+    // The line owns the request now: a cancel of the line aborts it, as for its own.
+    prepared.owner = current;
+    // While its request is in flight, the slot is its own.
+    this.cloudBusy = { ...prepared.slot, id: current.id, prepared: false };
+    return true;
+  }
+
+  /** Discards the prepared line, aborting its request if still in flight (specs/SpeechLookahead.tla, `Cancel`). */
+  private discardPrepared(): void {
+    const prepared = this.prepared;
+    this.prepared = undefined;
+    if (prepared !== undefined && prepared.audio === undefined) prepared.controller.abort();
+  }
+
+  /** Starts a line's own request that waited for the slot (specs/SpeechLookahead.tla, `StartOwn`). */
+  private wakeCloud(): void {
+    const current = this.current;
+    if (current?.awaitingSlot !== true) return;
+    current.awaitingSlot = false;
+    this.startCloud(current);
+  }
+
+  /**
+   * Returns a cloud line's request fields for `text` under `settings`, as `begin` makes them, or undefined when the
+   * provider's selection would not admit the line.
+   */
+  private cloudFields(
+    settings: SpeechSettings,
+    text: string,
+    delivery: SpeechDelivery | undefined,
+    previousText: string | undefined,
+  ): CloudFields | undefined {
+    const provider = settings.provider;
+    const openRouterModel = settings.openRouterModel ?? '';
+    const openRouterVoice = settings.openRouterVoice ?? '';
+    if (provider === 'openrouter') {
+      if (this.options.openRouter === undefined || openRouterModel === '') return undefined;
+      if (this.options.openRouterAllowed?.(openRouterModel, openRouterVoice) === false) return undefined;
+    } else if (
+      provider !== 'elevenlabs' ||
+      this.options.cloud === undefined ||
+      settings.elevenLabsVoice.length === 0 ||
+      !ELEVENLABS_SPEEDS.some((speed) => speed === settings.elevenLabsSpeed)
+    ) {
+      return undefined;
+    }
+    return {
+      provider,
+      text,
+      providerText: providerText(settings, provider, openRouterModel, text, delivery, /* preview= */ false),
+      ...(previousText === undefined ? {} : { previousText }),
+      cloudVoice: provider === 'openrouter' ? openRouterVoice : settings.elevenLabsVoice,
+      openRouterModel,
+      openRouterZdr: settings.openRouterZdr === true,
+      openRouterFormat: settings.openRouterFormat ?? 'pcm',
+      speed: provider === 'elevenlabs' ? settings.elevenLabsSpeed : settings.speed,
+    };
+  }
+
+  /** Records a cloud failure diagnostic for `provider`. */
+  private cloudDiagnosticFor(provider: SpeechProvider, reason: CloudSpeechFailureReason): void {
+    try {
+      if (provider === 'openrouter') this.options.openRouterDiagnostic?.(reason);
+      else this.options.cloudDiagnostic?.(reason);
+    } catch {
+      /* Observability must not change speech behavior. */
+    }
+  }
+
+  /** Returns a cloud line's request fields, with the previous text its context captured. */
+  private static fields(current: ActiveSpeech): CloudFields {
+    return {
+      provider: current.provider,
+      text: current.text,
+      providerText: current.providerText,
+      ...(current.context?.previousText === undefined ? {} : { previousText: current.context.previousText }),
+      cloudVoice: current.cloudVoice,
+      openRouterModel: current.openRouterModel,
+      openRouterZdr: current.openRouterZdr,
+      openRouterFormat: current.openRouterFormat,
+      speed: current.speed,
+    };
+  }
+
+  /** Sends a cloud request: the one place its payload is made, so a prepared line and its own request match. */
+  private sendCloud(fields: CloudFields, id: number, preview: boolean, signal: AbortSignal): Promise<SpeechAudioResult> | undefined {
+    const cloud = fields.provider === 'openrouter' ? this.options.openRouter : this.options.cloud;
+    if (cloud === undefined) return undefined;
+    return 'models' in cloud
+      ? cloud.synthesize(
+          {
+            id,
+            text: fields.providerText,
+            ...(fields.previousText === undefined ? {} : { previousText: fields.previousText }),
+            modelId: fields.openRouterModel,
+            voiceId: fields.cloudVoice,
+            zdr: fields.openRouterZdr,
+            format: fields.openRouterFormat,
+            purpose: preview ? 'preview' : 'narration',
+          },
+          signal,
+        )
+      : cloud.synthesize({ text: fields.text, voiceId: fields.cloudVoice, speed: fields.speed }, signal);
+  }
+
   /** CloudNarration: one request owns its slot until settlement or watchdog. */
   private startCloud(current: ActiveSpeech): void {
-    const cloud = current.provider === 'openrouter' ? this.options.openRouter : this.options.cloud;
-    if (cloud === undefined) {
-      this.failCloud(current, 'unknown');
+    // specs/SpeechLookahead.tla, StartOwn: a discarded prepared request gives the slot back first.
+    if (this.cloudBusy !== undefined) {
+      current.awaitingSlot = true;
       return;
     }
     const controller = new AbortController();
@@ -546,7 +840,7 @@ export class SpeechService implements NarrationPort {
       this.cloudBusy = undefined;
       if (this.current === current) this.failCloud(current, 'timeout');
     }, START_TIMEOUT_MS);
-    this.cloudBusy = { id: current.id, controller, timer };
+    this.cloudBusy = { id: current.id, controller, timer, prepared: false };
     current.phase = 'synthesizing';
     const release = (): void => {
       if (this.cloudBusy?.id !== current.id) return;
@@ -554,22 +848,12 @@ export class SpeechService implements NarrationPort {
       this.cloudBusy = undefined;
     };
     try {
-      const request =
-        'models' in cloud
-          ? cloud.synthesize(
-              {
-                id: current.id,
-                text: current.providerText,
-                ...(current.context?.previousText === undefined ? {} : { previousText: current.context.previousText }),
-                modelId: current.openRouterModel,
-                voiceId: current.cloudVoice,
-                zdr: current.openRouterZdr,
-                format: current.openRouterFormat,
-                purpose: current.preview ? 'preview' : 'narration',
-              },
-              controller.signal,
-            )
-          : cloud.synthesize({ text: current.text, voiceId: current.cloudVoice, speed: current.speed }, controller.signal);
+      const request = this.sendCloud(SpeechService.fields(current), current.id, current.preview, controller.signal);
+      if (request === undefined) {
+        release();
+        this.failCloud(current, 'unknown');
+        return;
+      }
       void request.then(
         (audio) => {
           release();
@@ -589,18 +873,18 @@ export class SpeechService implements NarrationPort {
 
   private failCloud(current: ActiveSpeech, reason: CloudSpeechFailureReason): void {
     if (this.current !== current) return;
-    try {
-      if (current.provider === 'openrouter') this.options.openRouterDiagnostic?.(reason);
-      else this.options.cloudDiagnostic?.(reason);
-    } catch {
-      /* Observability must not change speech behavior. */
-    }
+    this.cloudDiagnosticFor(current.provider, reason);
     if (reason === 'canceled') this.finish(current);
     else this.fail(current, cloudFailureMessage(reason, current.provider));
   }
 
   /** Cancels a current selection when new catalog evidence excludes it. */
   openRouterCatalogChanged(): void {
+    // specs/SpeechLookahead.tla, Configure: a selection the catalog no longer admits cannot be played ahead either.
+    const settings = this.options.settings();
+    if (this.options.openRouterAllowed?.(settings.openRouterModel ?? '', settings.openRouterVoice ?? '') === false) {
+      this.discardPrepared();
+    }
     const current = this.current;
     if (current?.provider === 'openrouter' && this.options.openRouterAllowed?.(current.openRouterModel, current.cloudVoice) === false) {
       this.cancel();
@@ -611,6 +895,7 @@ export class SpeechService implements NarrationPort {
   invalidateCloud(): void {
     this.cueGeneration++;
     this.cueCache = undefined;
+    this.discardPrepared();
     this.cloudBusy?.controller.abort();
     if (this.current !== undefined && this.current.provider !== 'kokoro') this.cancel();
   }
@@ -869,6 +1154,8 @@ export class SpeechService implements NarrationPort {
       this.options.output.status(current.id, this.paused ? 'paused' : 'speaking');
       current.lookaheadAllowed = true;
       this.lookahead(current);
+      // specs/SpeechLookahead.tla, StartPrepare: once this line is audible, the next can be prepared.
+      this.lookaheadLine();
       return undefined;
     }
   }
@@ -906,16 +1193,22 @@ export class SpeechService implements NarrationPort {
       }
       this.options.output.status(current.id, 'preparing');
     }
+    // specs/SpeechLookahead.tla, StartPrepare: nothing is prepared while paused, so resuming may start it.
+    this.lookaheadLine();
   }
 
   /** Stops audio and invalidates pending synthesis without waiting for CPU inference. */
   cancel(): void {
+    // specs/SpeechLookahead.tla, Cancel: an interrupt or stop discards the next line too.
+    this.hint = undefined;
+    this.discardPrepared();
     const current = this.current;
     if (current !== undefined) this.finish(current);
   }
 
   /** Cancels audio if its owning page disappears. */
   pageClosed(pageId: number): void {
+    this.discardPrepared();
     const current = this.current;
     if (current !== undefined && (current.pageId === pageId || current.pageId === undefined)) this.cancel();
   }
