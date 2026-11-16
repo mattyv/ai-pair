@@ -1,5 +1,5 @@
-# Publishes AI Pair and AI Pair Local Audio to the VS Code Marketplace, and makes the GitHub
-# release, when a version tag is pushed (#68). `npm run release` pushes that tag.
+# Makes the GitHub release with AI Pair and AI Pair Local Audio, then publishes both to the VS Code
+# Marketplace, when a version tag is pushed (#68, #75). `npm run release` pushes that tag.
 #
 # The Marketplace trusts this workflow by name: the publisher mattyv has a Trusted Publishing
 # policy for mattyv/ai-pair and publish.yml, so vsce trades the job's OIDC token for a
@@ -109,6 +109,21 @@ jobs:
           version="${{ steps.version.outputs.version }}"
           sha256sum "ai-pair-${version}.vsix" "ai-pair-local-audio-${version}.vsix" > SHA256SUMS
           cat SHA256SUMS
+      # The GitHub release comes before the Marketplace, so a refused upload (#75) cannot keep the
+      # installers built above from the release. A re-run finds the release made and goes on.
+      - name: Make the GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            echo "The release for $GITHUB_REF_NAME is already made."
+            exit 0
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            "ai-pair-${version}.vsix" "ai-pair-local-audio-${version}.vsix" SHA256SUMS \
+            --verify-tag --title "AI Pair $version" --notes-file "$RUNNER_TEMP/notes.md"
       # --skip-duplicate lets a run that failed after its first publish be run again.
       - name: Publish AI Pair to the Marketplace
         run: >-
@@ -118,12 +133,3 @@ jobs:
         run: >-
           npx vsce publish --oidc --skip-duplicate
           --packagePath "ai-pair-local-audio-${{ steps.version.outputs.version }}.vsix"
-      - name: Make the GitHub release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          version="${{ steps.version.outputs.version }}"
-          gh release create "$GITHUB_REF_NAME" \
-            "ai-pair-${version}.vsix" "ai-pair-local-audio-${version}.vsix" SHA256SUMS \
-            --verify-tag --title "$version" --notes-file "$RUNNER_TEMP/notes.md"
