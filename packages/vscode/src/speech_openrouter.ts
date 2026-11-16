@@ -1,6 +1,7 @@
 import type { SpeechCostResult } from './session_speech_cost';
 import { openRouterCatalog, openRouterSpeechModel, openRouterSpeechRequest } from '@ai-pair/protocol';
 import { OpenRouterUsage } from './speech_openrouter_usage';
+import { voiceLabel } from './voice_language';
 import type {
   OpenRouterAudioDecoder,
   OpenRouterAudioFormat,
@@ -169,7 +170,8 @@ export class OpenRouterClient implements OpenRouterSpeechPort {
         const parsed = openRouterSpeechModel.safeParse(item);
         if (!parsed.success) continue;
         const model = parsed.data;
-        const voices = (model.supported_voices ?? []).map((voice) => ({ id: voice, name: voice }));
+        // #100: a voice's label names the language its provider documents; its ID stays what is stored and sent.
+        const voices = (model.supported_voices ?? []).map((voice) => ({ id: voice, name: voiceLabel(model.id, voice) }));
         const pricing = model.pricing;
         const hasAdvertisedRate = pricing?.prompt !== undefined || pricing?.completion !== undefined;
         models.push({ id: model.id, name: model.name, voices, ...(hasAdvertisedRate ? { pricing } : {}) });

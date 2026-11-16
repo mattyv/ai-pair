@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.44.0
+
+-   Version aligned with the main extension, whose OpenRouter voices now name
+    their documented language or accent (#100). The companion is unchanged.
+
 ## 0.43.0
 
 -   In a remote window, the Pair panel's tooltips name the shortcuts your

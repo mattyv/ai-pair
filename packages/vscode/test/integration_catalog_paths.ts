@@ -12,6 +12,29 @@ import { gpuProcessPaths } from './integration_gpu_process';
 
 const report = z.object({ events: z.array(z.looseObject({ kind: z.string(), seq: z.number() })) });
 
+/**
+ * More speech models the fake catalog lists, one per voice-naming scheme, and the labels the panel is sent for their
+ * voices (#100, specs/VoiceLanguage.tla): the language where the provider documents it, the bare ID where not.
+ */
+const LABELLED_MODELS = [
+  { id: 'hexgrad/kokoro-82m', name: 'Kokoro', supported_voices: ['af_heart', 'bf_emma'] },
+  { id: 'mistralai/voxtral-mini-tts-3-0', name: 'Voxtral', supported_voices: ['gb_jane_neutral', 'voice_478'] },
+  { id: 'deepgram/aura-2', name: 'Aura', supported_voices: ['aura-2-theia-en', 'aura-2-newcomer-en', 'aura-2-agathe-fr'] },
+  { id: 'elevenlabs/eleven-v3', name: 'Eleven', supported_voices: ['charlie'] },
+];
+const EXPECTED_LABELS = [
+  'en-US-Harper:MAI-Voice-2.1 (American English)',
+  'en-AU-Isla:MAI-Voice-2.1 (Australian English)',
+  'af_heart (American English)',
+  'bf_emma (British English)',
+  'gb_jane_neutral (British English)',
+  'voice_478',
+  'aura-2-theia-en (Australian English)',
+  'aura-2-newcomer-en (English)',
+  'aura-2-agathe-fr (French)',
+  'charlie',
+];
+
 /** Reads the extension's sanitized diagnostic events. */
 async function events(api: Api): Promise<Array<z.infer<typeof report>['events'][number]>> {
   await vscode.env.clipboard.writeText('');
@@ -98,9 +121,13 @@ export async function run(): Promise<void> {
             return Promise.resolve(new Response('private provider response', { status: 429 }));
           }
           if (url.pathname === '/api/v1/models/user' || url.pathname === '/api/v1/models') {
-            const model = { id: 'microsoft/mai-voice-2.1', name: 'MAI', supported_voices: ['en-US-Harper:MAI-Voice-2.1'] };
+            const model = {
+              id: 'microsoft/mai-voice-2.1',
+              name: 'MAI',
+              supported_voices: ['en-US-Harper:MAI-Voice-2.1', 'en-AU-Isla:MAI-Voice-2.1'],
+            };
             return Promise.resolve(
-              new Response(JSON.stringify({ data: routerDenied ? [] : [model] }), {
+              new Response(JSON.stringify({ data: routerDenied ? [] : [model, ...LABELLED_MODELS] }), {
                 headers: { 'content-type': 'application/json' },
               }),
             );
@@ -330,6 +357,17 @@ export async function run(): Promise<void> {
     }
     assert.equal(routerRequests[0]?.url.pathname, '/api/v1/models/user');
     assert.equal(routerRequests[1]?.url.searchParams.get('zdr'), 'true');
+    // #100: each voice the panel is sent is labelled with the language its provider documents, and only that.
+    for (let attempt = 0; attempt < 100 && api.openRouterCatalog()?.state !== 'ready'; attempt++) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 50);
+      });
+    }
+    assert.deepEqual(
+      api.openRouterCatalog()?.models.flatMap((model) => model.voices.map((voice) => voice.name)),
+      EXPECTED_LABELS,
+    );
+    console.log('VoiceLanguage: OpenRouter voices are labelled with the language their provider documents');
     const routerModel = 'microsoft/mai-voice-2.1';
     const routerVoice = 'en-US-Harper:MAI-Voice-2.1';
     const selectedRouter = { ...routerValue, openRouterModel: routerModel, openRouterVoice: routerVoice };

@@ -4,6 +4,12 @@ import { openRouterCatalog, openRouterSpeechModel, openRouterSpeechRequest } fro
 import { afterEach, expect, it, vi } from 'vitest';
 import { OpenRouterClient, OpenRouterError } from '../src/speech_openrouter';
 import type { OpenRouterAudioDecodeLease, OpenRouterAudioDecoder } from '../src/speech_types';
+import { voiceLabel } from '../src/voice_language';
+
+// voice_language.ts has its own tests; here a label says what it was made from.
+vi.mock('../src/voice_language', () => ({
+  voiceLabel: vi.fn((model: string, voice: string) => `${voice} [${model}]`),
+}));
 
 const sharedLease = {
   signal: new AbortController().signal,
@@ -228,8 +234,9 @@ it('marks rejected synthesis and rejected cost lookups as unavailable without ch
 it('AccountOnly uses the authenticated account catalog and maps advertised voices', async () => {
   const fetcher = vi.fn<typeof fetch>(async () => json(catalog));
   expect(await new OpenRouterClient(async () => 'secret', fetcher, sharedDecoder).models(false, signal())).toEqual([
-    { id: model, name: 'MAI', voices: [{ id: voice, name: voice }] },
+    { id: model, name: 'MAI', voices: [{ id: voice, name: `${voice} [${model}]` }] },
   ]);
+  expect(vi.mocked(voiceLabel)).toHaveBeenCalledWith(model, voice);
   expect(fetcher.mock.calls[0]?.[0]).toContain('/models/user?output_modalities=speech');
   expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ headers: { authorization: 'Bearer secret' }, redirect: 'error' });
 });
@@ -268,7 +275,7 @@ it('ZdrSelection reads model IDs even when the public catalog has no voice metad
   const zdr = { data: [{ id: 'vendor/new-speech-model', name: 'New', supported_voices: null }] };
   const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(json(account)).mockResolvedValueOnce(json(zdr));
   expect(await new OpenRouterClient(async () => 'secret', fetcher, sharedDecoder).models(true, signal())).toEqual([
-    { id: 'vendor/new-speech-model', name: 'New', voices: [{ id: voice, name: voice }] },
+    { id: 'vendor/new-speech-model', name: 'New', voices: [{ id: voice, name: `${voice} [vendor/new-speech-model]` }] },
   ]);
 });
 it('rejects a malformed ZDR model-ID catalog', async () => {
@@ -380,9 +387,9 @@ it('includes arbitrary advertised models and voices while preserving the account
     .mockResolvedValueOnce(json(data))
     .mockResolvedValueOnce(json({ data: [extra, ...catalog.data] }));
   expect(await new OpenRouterClient(async () => 'key', fetcher, sharedDecoder).models(true, signal())).toEqual([
-    { id: extra.id, name: extra.name, voices: [{ id: 'speaker/42 + natural', name: 'speaker/42 + natural' }] },
+    { id: extra.id, name: extra.name, voices: [{ id: 'speaker/42 + natural', name: 'speaker/42 + natural [vendor/new-speech-model]' }] },
     { id: model, name: 'empty', voices: [] },
-    { id: model, name: 'MAI', voices: [{ id: voice, name: voice }] },
+    { id: model, name: 'MAI', voices: [{ id: voice, name: `${voice} [${model}]` }] },
   ]);
 });
 it('includes an account model without advertised voices instead of rejecting the catalog', async () => {

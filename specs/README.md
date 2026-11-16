@@ -88,6 +88,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `EditEvents.cfg` | one file, 3 texts, `MaxEdits = 4` | holds | 843 |
 | `Scroll.cfg` | `NumLines = 8` lines, a view of `ViewHeight = 4`, `MaxMoves = 2`, `MaxFollowSwitches = 2`, `scrollBeyondLastLine` on and off, the programmer's turn | holds | 14,131 |
 | `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
+| `VoiceLanguage.cfg` | every voice of five providers, four documented, with five forms of ID and two keys | holds (`ASSUME`s) | |
 | `Resume.cfg` | 2 directories, `MaxSessions = 3`, revive and replacement updates enabled | holds | 56 |
 | `TerminalPanel.cfg` | two command IDs and automatic visibility | holds | 61 |
 | `DiagnosticsCopy.cfg` | explicit request with clipboard success or failure | holds | 3 |
@@ -4048,3 +4049,40 @@ Every invariant and property names the test that proves the code obeys it:
 | `ShowsCache` | `panel.test.ts`: ShowsCache: posts the labels of the latest read to the page |
 | `MonotoneProp` | `shortcut_watcher.test.ts`: MonotoneProp: drops a read that a later one overtook |
 | `Converges` | `shortcut_watcher.test.ts`: Converges: reads keybindings.json as it starts, and on each change, creation, and deletion; `panel.test.ts`: Converges: sends a page that loads the labels the host holds; `webview/panel.test.ts`: Converges: names the bound keys in the tooltips and the reply box; `shortcut_labels.test.ts`: the Label cases; `integration_shortcuts.ts`: the tooltips name a key rebound in keybindings.json |
+
+## `VoiceLanguage`: the language a voice's label names
+
+The feature of #100, specified before its code: `voiceLanguage` and
+`voiceLabel` in `packages/vscode/src/voice_language.ts`, which the OpenRouter
+client calls for each voice of the catalog. OpenRouter lists voices as bare
+IDs; a few providers document what their IDs mean. Like `ProjectGuide` and the
+pure functions, it is `ASSUME`s alone, with a config of constants, checked over
+every voice of five providers, four of them documented, with every form of ID
+and two keys: a label names a language only where the voice's own provider
+documents its form and key, and then the documented one; every documented voice
+is named; and the ID is always the label's first part.
+
+| Spec | Code |
+|---|---|
+| `Scheme` | `SCHEMES`: Microsoft MAI's locale, Kokoro's first letter, Voxtral's speaker, Deepgram Aura-2's name and suffix, each for its own provider's models |
+| `Documented`, `Table` | `KOKORO_LANGUAGES`, `VOXTRAL_LANGUAGES`, `DEEPGRAM_AMERICAN`, `DEEPGRAM_ACCENTS`; MAI's locale is its own table |
+| `Language` | `voiceLanguage` |
+| `Label` | `voiceLabel`, which names the tag in words with `Intl.DisplayNames` |
+
+Each `ASSUME` was proved to bite with a mutation, run in TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| a voice is read by any documented provider's scheme, not its own | `NoGuess` |
+| a plain ID is given a language | `NoGuess` |
+| every documented voice is given one language, not its own | `NoGuess` |
+| no voice is given a language | `Named` |
+| the label shows another ID than the voice's | `KeepsId` |
+
+Each names the test that proves the code obeys it:
+
+| Assumption | Proved by |
+|---|---|
+| `NoGuess` | `voice_language.test.ts`: the cases NoGuess: names no language for a model's voice (ElevenLabs's `charlie`, and IDs outside each documented scheme or table); NoGuess: reads a voice only by its own provider's scheme; `integration_catalog_paths.ts`: VoiceLanguage, for `voice_478` and `charlie` |
+| `Named` | `voice_language.test.ts`: the cases Named: names the language a model documents for a voice; Named: names an English Aura-2 voice Deepgram has not listed as English alone, its documented suffix; `integration_catalog_paths.ts`: VoiceLanguage: OpenRouter voices are labelled with the language their provider documents |
+| `KeepsId` | `voice_language.test.ts`: KeepsId: shows the ID, then the language in words; KeepsId: leaves a voice with no documented language as its bare ID |

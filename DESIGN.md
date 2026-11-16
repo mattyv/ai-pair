@@ -178,6 +178,11 @@ automatically. The key stays in SecretStorage; the panel sees only whether a key
 exists. Voice availability depends on the account and Preview may report an
 access or credit limit. Opening Settings never synthesizes audio.
 
+For OpenRouter, each voice in the list shows its ID, then the language or accent
+its provider documents, such as `bf_emma (British English)`; a voice whose
+provider documents none, ElevenLabs's included, shows its bare ID. The ID is
+what is stored and sent (#100).
+
 Immediate replies, Stop, provider changes and key changes invalidate current
 cloud audio. A deferred reply waits until the current action ends.
 An aborted request may already have consumed credits. Cloud failures leave the

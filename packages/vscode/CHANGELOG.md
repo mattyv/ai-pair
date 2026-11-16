@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.44.0
+
+-   Name the language or accent of an OpenRouter voice in Pair Settings where
+    its provider documents it, as in `en-AU-Isla:MAI-Voice-2.1 (Australian
+    English)`: Microsoft MAI voices by their locale, Kokoro by its language
+    letter, Voxtral by its speaker, and Deepgram Aura-2 by its documented
+    accent. Other voices, ElevenLabs's included, keep their bare ID, since
+    their providers do not document it (#100).
+
 ## 0.43.0
 
 -   Name each Pair shortcut in the panel as your `keybindings.json` binds it:

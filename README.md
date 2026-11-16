@@ -115,6 +115,10 @@ Choose a provider in Settings:
     account. Narration and previews use account credits.
 -   **OpenRouter** uses its own securely saved key. Load the account's eligible
     speech models and advertised voices dynamically, then choose PCM or MP3.
+    A voice whose provider documents its language or accent names it, as in
+    `en-AU-Isla:MAI-Voice-2.1 (Australian English)`: Microsoft MAI, Kokoro,
+    Voxtral, and Deepgram Aura-2 voices. Others, ElevenLabs's included, show
+    their bare ID; how a model renders a voice can still differ.
     The **ZDR** filter narrows the eligible models and requests OpenRouter's
     ZDR routing policy; account Safety Retention settings still apply. The
     catalog does not establish format, voice, or standard text-input

@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: css, 2026-11-15.
+Last updated: css, 2026-11-16.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -301,6 +301,7 @@ Last updated: css, 2026-11-15.
 | `packages/vscode/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/view.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 88.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/voice_indicator.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/voice_language.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/approval_sound.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 166 of 166 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -505,6 +506,7 @@ Last updated: css, 2026-11-15.
 | `packages/vscode/test/visual/chat_order.spec.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/visual/panel.spec.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/voice_indicator.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/voice_language.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/webview/approval_sound.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/webview/panel.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/workspace_panel_bridge.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -793,6 +795,8 @@ Last updated: css, 2026-11-15.
 | `specs/TypingEol.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/VoiceIndicator.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/VoiceIndicator.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
+| `specs/VoiceLanguage.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/VoiceLanguage.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/WarmSynthesisWorker.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/WarmSynthesisWorker.tla` | TLA+ | - | - | 16 of 16 actions | - | - | - |
 | `specs/WarmSynthesisWorker_Cancellation.cfg` | TLC config | - | - | - | - | - | - |
