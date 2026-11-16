@@ -8,6 +8,84 @@ function settings() {
   return { enabled: true, provider: 'elevenlabs' as const, voice: 'af_heart', speed: 1, elevenLabsVoice: 'voice', elevenLabsSpeed: 1 };
 }
 
+/** How long each synthetic cloud request takes in the look-ahead case: the gap look-ahead removes. */
+const CLOUD_DELAY_MS = 300;
+
+/** Waits `ms` of real time. */
+async function sleep(ms: number): Promise<void> {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/**
+ * Plays two lines through the real service with a cloud that takes CLOUD_DELAY_MS a request, and returns how many
+ * requests were made, how many were made while the first line played, and how long the second line took to start
+ * after the first ended (#108; specs/SpeechLookahead.tla, AheadUsed).
+ */
+async function twoLines(lookahead: boolean): Promise<{ requests: number; duringFirst: number; gapMs: number }> {
+  let requests = 0;
+  const cloud: ElevenLabsSpeechPort = {
+    synthesize: async () => {
+      requests++;
+      await sleep(CLOUD_DELAY_MS);
+      return { wav: new Uint8Array(44), durationMs: 1000 };
+    },
+    voices: () => Promise.resolve({ voices: [] }),
+  };
+  const played: number[] = [];
+  const output: SpeechOutput = {
+    play: (id) => {
+      played.push(id);
+      return 1;
+    },
+    control: () => {},
+    status: () => {},
+  };
+  const service = new SpeechService({
+    runtimeDirectory: '',
+    storageDirectory: '',
+    localDesktop: true,
+    cloud,
+    output,
+    settings: () => ({ ...settings(), speechLookahead: lookahead }),
+  });
+  try {
+    const first = service.speak('One.');
+    for (let attempt = 0; attempt < 500 && played.length < 1; attempt++) await sleep(10);
+    assert.equal(played.length, 1, 'the first line did not play');
+    const firstId = played[0] ?? 0;
+    service.audioEvent({ id: firstId, pageId: 1, event: 'started' });
+    service.prepareNext('Two.');
+    // The first line plays for longer than a request takes.
+    await sleep(CLOUD_DELAY_MS * 2);
+    const duringFirst = requests - 1;
+    service.audioEvent({ id: firstId, pageId: 1, event: 'ended' });
+    await first;
+    const ended = Date.now();
+    void service.speak('Two.');
+    for (let attempt = 0; attempt < 1000 && played.length < 2; attempt++) await sleep(5);
+    assert.equal(played.length, 2, 'the second line did not play');
+    const gapMs = Date.now() - ended;
+    service.cancel();
+    return { requests, duringFirst, gapMs };
+  } finally {
+    await service.dispose();
+  }
+}
+
+/** Checks that look-ahead removes the cloud gap between lines, and that turning it off brings it back (#108). */
+async function lookaheadPaths(): Promise<void> {
+  const ahead = await twoLines(/* lookahead= */ true);
+  assert.equal(ahead.duringFirst, 1, 'the next line was not requested while the first played');
+  assert.equal(ahead.requests, 2, 'the second line made a request of its own');
+  assert.ok(ahead.gapMs < CLOUD_DELAY_MS / 2, `the second line waited ${ahead.gapMs} ms with look-ahead`);
+  const off = await twoLines(/* lookahead= */ false);
+  assert.equal(off.duringFirst, 0);
+  assert.ok(off.gapMs >= CLOUD_DELAY_MS * 0.9, `the second line waited only ${off.gapMs} ms without look-ahead`);
+  console.log(`SpeechLookahead: the gap between cloud lines was ${ahead.gapMs} ms with look-ahead, ${off.gapMs} ms without`);
+}
+
 /** Checks every bounded cloud error and the current-unit cancellation races. */
 export async function cloudServicePaths(): Promise<void> {
   let failure: unknown;
@@ -174,4 +252,5 @@ export async function cloudServicePaths(): Promise<void> {
   } finally {
     await service.dispose();
   }
+  await lookaheadPaths();
 }
