@@ -123,7 +123,7 @@ jobs:
           fi
           gh release create "$GITHUB_REF_NAME" \
             "ai-pair-${version}.vsix" "ai-pair-local-audio-${version}.vsix" SHA256SUMS \
-            --verify-tag --title "$version" --notes-file "$RUNNER_TEMP/notes.md"
+            --verify-tag --title "AI Pair $version" --notes-file "$RUNNER_TEMP/notes.md"
       # --skip-duplicate lets a run that failed after its first publish be run again.
       - name: Publish AI Pair to the Marketplace
         run: >-
