@@ -19,16 +19,16 @@ setup() {
 @test "tests, packages, and installs the extension at its version, in that order" {
   version="$(node -p "require('${ROOT}/packages/vscode/package.json').version")"
   run --separate-stderr bash "${ROOT}/.claude/skills/reload-extension/scripts/reload.sh"
-  [[ "${status}" -eq 0 ]]
-  [[ "$(sed -n 1p "${CALLS}")" == 'npm test' ]]
-  [[ "$(sed -n 2p "${CALLS}")" == 'npm run package' ]]
-  [[ "$(sed -n 3p "${CALLS}")" == "code --install-extension ${ROOT}/ai-pair-${version}.vsix --force" ]]
-  [[ "${output}" == *'Developer: Reload Window'* ]]
+  [[ "${status}" -eq 0 ]] || false
+  [[ "$(sed -n 1p "${CALLS}")" == 'npm test' ]] || false
+  [[ "$(sed -n 2p "${CALLS}")" == 'npm run package' ]] || false
+  [[ "$(sed -n 3p "${CALLS}")" == "code --install-extension ${ROOT}/ai-pair-${version}.vsix --force" ]] || false
+  [[ "${output}" == *'Developer: Reload Window'* ]] || false
 }
 
 @test "stops when the tests fail" {
   printf '#!/bin/bash\nexit 1\n' >"${FAKE}/npm"
   run --separate-stderr bash "${ROOT}/.claude/skills/reload-extension/scripts/reload.sh"
-  [[ "${status}" -eq 1 ]]
-  [[ "${output}" != *'npm run package'* ]]
+  [[ "${status}" -eq 1 ]] || false
+  [[ "${output}" != *'npm run package'* ]] || false
 }

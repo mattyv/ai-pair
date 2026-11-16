@@ -42,33 +42,33 @@ TLC
 
 @test "names every config, and fails on a violation or an error" {
   run --separate-stderr bash "${ROOT}/specs/check.sh"
-  [[ "${status}" -eq 1 ]]
-  [[ "${output}" == *'Wire.cfg               violation FAILED'* ]]
-  [[ "${output}" == *'Reload.cfg             error     FAILED'* ]]
-  [[ "${output}" == *'Serialize.cfg          pass      ok'* ]]
+  [[ "${status}" -eq 1 ]] || false
+  [[ "${output}" == *'Wire.cfg               violation FAILED'* ]] || false
+  [[ "${output}" == *'Reload.cfg             error     FAILED'* ]] || false
+  [[ "${output}" == *'Serialize.cfg          pass      ok'* ]] || false
   configs="$(find "${ROOT}/specs" -name '*.cfg' | wc -l | tr -d ' ')"
-  [[ "$(grep -c ' ok$' <<<"${output}")" -eq $((configs - 2)) ]]
+  [[ "$(grep -c ' ok$' <<<"${output}")" -eq $((configs - 2)) ]] || false
 }
 
 @test "passes when every config passes" {
   printf '#!/usr/bin/env python3\nprint("No error has been found.")\n' >"${TLC}"
   run --separate-stderr bash "${ROOT}/specs/check.sh"
-  [[ "${status}" -eq 0 ]]
-  [[ "${output}" != *'FAILED'* ]]
+  [[ "${status}" -eq 0 ]] || false
+  [[ "${output}" != *'FAILED'* ]] || false
 }
 
 @test "--coverage keeps the statistics, names an action that never fired, fails on it, and updates the table" {
   run --separate-stderr bash "${ROOT}/specs/check.sh" --coverage
-  [[ "${status}" -eq 1 ]]
-  [[ "${stderr}" == *'specs/Serialize.tla: action Never never fired, and specs/README.md does not say it never fires'* ]]
-  [[ -f "${COVERAGE_ROOT}/tla/Serialize.txt" ]]
-  [[ "$(head -1 "${COVERAGE_ROOT}/tla/Serialize.txt")" == 'The coverage statistics'* ]]
-  [[ "${output}" == *'  Serialize: action Never never fired'* ]]
-  [[ -f "${COVERAGE_MD}" ]]
+  [[ "${status}" -eq 1 ]] || false
+  [[ "${stderr}" == *'specs/Serialize.tla: action Never never fired, and specs/README.md does not say it never fires'* ]] || false
+  [[ -f "${COVERAGE_ROOT}/tla/Serialize.txt" ]] || false
+  [[ "$(head -1 "${COVERAGE_ROOT}/tla/Serialize.txt")" == 'The coverage statistics'* ]] || false
+  [[ "${output}" == *'  Serialize: action Never never fired'* ]] || false
+  [[ -f "${COVERAGE_MD}" ]] || false
   grep -q '| `specs/Serialize.tla` | TLA+ | - | - | 2 of 3 actions (never: Never) |' "${COVERAGE_MD}"
-  [[ -f "${COVERAGE_ROOT}/tla/Discovery_InPlace.txt" ]]
-  [[ "${stderr}" != *'specs/Discovery.tla: action Never'* ]]
-  [[ "${output}" != *'Discovery: action Never'* ]]
+  [[ -f "${COVERAGE_ROOT}/tla/Discovery_InPlace.txt" ]] || false
+  [[ "${stderr}" != *'specs/Discovery.tla: action Never'* ]] || false
+  [[ "${output}" != *'Discovery: action Never'* ]] || false
   grep -q '| `specs/Discovery.tla` | TLA+ | - | - | 3 of 3 actions |' "${COVERAGE_MD}"
 }
 
@@ -94,7 +94,7 @@ print('Model checking completed. No error has been found.')
 TLC
   export LOG="${BATS_TEST_TMPDIR}/events" TLC_JOBS=2
   run --separate-stderr bash "${ROOT}/specs/check.sh"
-  [[ "${status}" -eq 0 ]]
+  [[ "${status}" -eq 0 ]] || false
   python3 - "${LOG}" <<'PY'
 import sys
 active = peak = starts = 0
@@ -113,16 +113,16 @@ PY
   printf '#!/bin/bash\necho "No error has been found."\nexit 1\n' >"${TLC}"
   export TLC_JOBS=2
   run --separate-stderr bash "${ROOT}/specs/check.sh"
-  [[ "${status}" -eq 1 ]]
-  [[ "${output}" == *'error     FAILED'* ]]
+  [[ "${status}" -eq 1 ]] || false
+  [[ "${output}" == *'error     FAILED'* ]] || false
 }
 
 @test "rejects invalid or excessive worker counts before starting TLC" {
   for jobs in 0 9 bad; do
     export TLC_JOBS="${jobs}"
     run --separate-stderr bash "${ROOT}/specs/check.sh"
-    [[ "${status}" -eq 1 ]]
-    [[ "${stderr}" == *'TLC_JOBS must be between 1 and 8'* ]]
+    [[ "${status}" -eq 1 ]] || false
+    [[ "${stderr}" == *'TLC_JOBS must be between 1 and 8'* ]] || false
   done
 }
 
@@ -142,7 +142,7 @@ TLC
     [[ -f "${LOG}" ]] && [[ "$(wc -l <"${LOG}")" -eq 2 ]] && break
     sleep 0.02
   done
-  [[ -f "${LOG}" ]]
+  [[ -f "${LOG}" ]] || false
   kill -TERM "${runner}"
   for unused in {1..30}; do
     kill -TERM "${runner}" 2>/dev/null || break
@@ -155,5 +155,5 @@ TLC
       result=1
     fi
   done <"${LOG}"
-  [[ "${result}" -eq 0 ]]
+  [[ "${result}" -eq 0 ]] || false
 }

@@ -97,7 +97,7 @@ FAKE
     local extension test_path
     extension="$(sed -n 's/.*--extensionDevelopmentPath=\([^ ]*\).*/\1/p' <<<"${line}")"
     test_path="$(sed -n 's/.*--extensionTestsPath=\([^ ]*\).*/\1/p' <<<"${line}")"
-    [[ "${test_path}" == "${extension}"/*/integration_*.js ]]
+    [[ "${test_path}" == "${extension}"/*/integration_*.js ]] || false
     [ ! -e "${test_path}" ]
   done <"${RECORD}"
 }
