@@ -2965,10 +2965,13 @@ it('routes OpenRouter catalog, key failure, readiness and sanitized diagnostics'
   await vi.waitFor(() => {
     expect(h.panel.showOpenRouterKeyStatus).toHaveBeenCalledWith(false);
   });
+  expect(h.api.openRouterCatalog()).toBe(h.panel.showOpenRouterCatalog.mock.calls.at(-1)?.[0]);
   wiring.loadOpenRouterModels();
   await vi.waitFor(() => {
     expect(h.panel.showOpenRouterCatalog).toHaveBeenCalledWith(expect.objectContaining({ state: 'error' }));
   });
+  // #100: the integration test reads the catalog the panel was last sent, voice labels and all.
+  expect(h.api.openRouterCatalog()).toBe(h.panel.showOpenRouterCatalog.mock.calls.at(-1)?.[0]);
   const service = last(fakes.made.speech);
   service.options.openRouterDiagnostic?.('auth');
   expect(service.options.openRouterAllowed?.('model', 'voice')).toBe(true);

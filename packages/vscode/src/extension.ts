@@ -35,7 +35,7 @@ import { ElevenLabsClient } from './speech_elevenlabs';
 import { OpenRouterClient } from './speech_openrouter';
 import { SessionSpeechCost } from './session_speech_cost';
 import { createOpenRouterAudioDecoder } from './speech_decode_bridge';
-import { OpenRouterCatalog } from './speech_openrouter_catalog';
+import { OpenRouterCatalog, type OpenRouterCatalogView } from './speech_openrouter_catalog';
 import { installedSpeechModel, setupSpeech, speechModelStatus } from './speech_setup';
 import { coreMlCompute } from './speech_coreml';
 import { speechRuntimeAvailable } from './speech_runtime_status';
@@ -114,6 +114,8 @@ export interface Api {
   panelMessage: (message: unknown) => void;
   /** The keybindings.json the panel's tooltips follow, and the labels the panel holds from it (#94). */
   shortcuts: { file: vscode.Uri; labels: () => ShortcutLabels | undefined };
+  /** The OpenRouter catalog last sent to the panel, with each voice's label (#100); none before the first. */
+  openRouterCatalog: () => OpenRouterCatalogView | undefined;
 }
 
 function config(): vscode.WorkspaceConfiguration {
@@ -472,8 +474,10 @@ export function activate(context: vscode.ExtensionContext): Api {
     createOpenRouterAudioDecoder(() => panel),
     () => sessionCost.capture(),
   );
+  let shownOpenRouterCatalog: OpenRouterCatalogView | undefined;
   openRouterCatalog = new OpenRouterCatalog(openRouter, (value) => {
     if (!shuttingDown) {
+      shownOpenRouterCatalog = value;
       if (value.state === 'ready') speech.openRouterCatalogChanged();
       panel.showOpenRouterCatalog(value);
       publishReadiness();
@@ -1407,6 +1411,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       panel.receiveFromPage(message);
     },
     shortcuts: { file: vscode.Uri.joinPath(userDirectory, 'keybindings.json'), labels: () => panel.shortcutLabels() },
+    openRouterCatalog: () => shownOpenRouterCatalog,
   };
 }
 
