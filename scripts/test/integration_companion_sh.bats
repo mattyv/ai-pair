@@ -25,7 +25,10 @@ if [[ "${NO_DATABASE:-}" != 1 ]]; then
   mkdir -p "${TEST_RUN}/companion-restart/user/User/workspaceStorage/id"
   touch "${TEST_RUN}/companion-restart/user/User/workspaceStorage/id/state.vscdb"
 fi
-if [[ "${FAIL_STAGE:-}" != "${AI_PAIR_COMPANION_RESTART}" ]]; then
+if [[ "${FAIL_STAGE:-}" == "${AI_PAIR_COMPANION_RESTART}" ]]; then
+  printf '{"stage":"%s","ok":false,"failure":"AssertionError: probe"}' \
+    "${AI_PAIR_COMPANION_RESTART}" >"${AI_PAIR_RESTART_RESULT}"
+elif [[ "${NO_RESULT:-}" != "${AI_PAIR_COMPANION_RESTART}" ]]; then
   printf '{"stage":"%s","ok":true}' "${AI_PAIR_COMPANION_RESTART}" >"${AI_PAIR_RESTART_RESULT}"
 fi
 FAKE
@@ -49,13 +52,22 @@ FAKE
   grep -q 'ai-pair-integration-no-audio' "${RECORD}.env"
 }
 
-@test "fails when either stage does not report success" {
+@test "fails when either stage does not report success, and prints its failure" {
   FAIL_STAGE=prepare run bash "${ROOT}/packages/vscode/scripts/integration_companion.sh" \
     "${ROOT}" "${TEST_RUN}" "${BATS_TEST_TMPDIR}" "${CODE}" "${ROOT}/packages/vscode"
   [ "${status}" -ne 0 ]
+  [[ "${output}" == *'AssertionError: probe'* ]]
   FAIL_STAGE=verify run bash "${ROOT}/packages/vscode/scripts/integration_companion.sh" \
     "${ROOT}" "${TEST_RUN}" "${BATS_TEST_TMPDIR}" "${CODE}" "${ROOT}/packages/vscode"
   [ "${status}" -ne 0 ]
+  [[ "${output}" == *'AssertionError: probe'* ]]
+}
+
+@test "fails when a stage writes no result" {
+  NO_RESULT=verify run bash "${ROOT}/packages/vscode/scripts/integration_companion.sh" \
+    "${ROOT}" "${TEST_RUN}" "${BATS_TEST_TMPDIR}" "${CODE}" "${ROOT}/packages/vscode"
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *'Companion verify did not report success'* ]]
 }
 
 @test "requires a persisted workspace database and cleans the profile" {

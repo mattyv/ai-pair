@@ -57,6 +57,10 @@ for stage in prepare verify; do
   if [[ ! -f "${result}" ]] \
     || ! grep -Eq "\"stage\":\"${stage}\",\"ok\":true" "${result}"; then
     printf 'Companion %s did not report success\n' "${stage}" >&2
+    if [[ -f "${result}" ]]; then
+      cat "${result}" >&2
+      printf '\n' >&2
+    fi
     exit 1
   fi
   storage="${profile}/user/User/workspaceStorage"

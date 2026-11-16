@@ -8,13 +8,15 @@ exports.activate = function () {
     const resultPath = process.env.AI_PAIR_RESTART_RESULT
     if ((stage !== "prepare" && stage !== "verify") || !resultPath) return
     let ok = false
+    // A normal window prints no extension host console, so the failure goes in the result.
+    let failure
     try {
       await test.run()
       ok = true
     } catch (error) {
-      console.error("Companion restart assertion failed:", error)
+      failure = error instanceof Error ? (error.stack ?? error.message) : String(error)
     }
-    fs.writeFileSync(resultPath, JSON.stringify({ stage, ok }))
+    fs.writeFileSync(resultPath, JSON.stringify({ stage, ok, failure }))
     await vscode.commands.executeCommand("workbench.action.closeWindow")
   })()
 }
