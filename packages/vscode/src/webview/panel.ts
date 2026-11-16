@@ -379,9 +379,27 @@ function insertHistory(el: HTMLElement): void {
 }
 
 /** Files the current message once before the next entry (specs/Panel.tla, `WithMessageFiled`). */
+/**
+ * An audio tag the agent wrote, such as `[Australian accent]` or `[whispers]`: a short run of letters in brackets,
+ * with the space after it. Brackets with digits or symbols, as in `items[0]`, are not tags.
+ */
+const AUDIO_TAG = /\[[A-Za-z][A-Za-z ,'-]{1,39}\]\s*/g;
+
+/**
+ * Returns the agent's narration as rich text, without the audio tags it wrote (#101; specs/SpeechCue.tla, `Shown`):
+ * the speech model takes them as written, and the panel hides them. A code span keeps its brackets.
+ */
+function narration(s: string): string {
+  const prose = s
+    .split(/(`[^`]+`)/)
+    .map((part, i) => (i % 2 === 1 ? part : part.replaceAll(AUDIO_TAG, '')))
+    .join('');
+  return rich(prose.trim());
+}
+
 function fileCurrent(): void {
   if (current !== undefined && !filed) {
-    const message = entry('agent', rich(current));
+    const message = entry('agent', narration(current));
     message.append(...ui.ref.childNodes);
     insertHistory(message);
     ui.now.textContent = '';
@@ -512,7 +530,7 @@ function setNow(text: string): void {
   current = text;
   filed = false;
   ui.now.classList.remove('empty');
-  ui.now.innerHTML = rich(text);
+  ui.now.innerHTML = narration(text);
   // The agent points first, then says what's there.
   ui.ref.replaceChildren(...(pointed ? [pointed] : []));
   pointed = undefined;

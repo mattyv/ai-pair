@@ -9,10 +9,11 @@
 (* preview, and only with speech context on. Checked over every case: a tag  *)
 (* reaches only a model that takes tags, which would otherwise read it aloud; *)
 (* the accent is sent wherever it can be; the delivery rule is unchanged; the *)
-(* line's own text comes last, once; and what the panel shows and what the   *)
-(* context remembers is the line's text alone.                                *)
+(* line's own text comes last, as the agent wrote it; and the panel shows it  *)
+(* with any audio tags the agent wrote hidden, every word and code span kept, *)
+(* while the context remembers it as written.                                 *)
 (******************************************************************************)
-EXTENDS Naturals, Sequences
+EXTENDS Naturals, Sequences, PairDefs
 
 CONSTANTS
     Providers,   \* the speech providers
@@ -21,18 +22,24 @@ CONSTANTS
     Accents,     \* the accents the setting offers, and NoAccent
     NoAccent,    \* the setting's default: no accent
     Deliveries,  \* a say's delivery cues, "neutral" among them
-    NoDelivery   \* a say without a delivery cue
+    NoDelivery,  \* a say without a delivery cue
+    MaxText      \* the longest say text the check covers, in parts
 
 ASSUME AssumeModels == TagModels \subseteq Models
 ASSUME AssumeAccents == NoAccent \in Accents
 
 --------------------------------------------------------------------------------
 
-\* Every line: its provider and model, the settings, its cue, and whether it is
-\* a preview.
+\* What a say's text is made of: words, audio tags the agent wrote (a short run
+\* of letters in brackets, such as `[Australian accent]`), and code spans,
+\* whose brackets are not tags.
+Parts == {"word", "tag", "code"}
+
+\* Every line: its provider and model, the settings, its cue, whether it is a
+\* preview, and its text.
 Cases == [provider : Providers, model : Models, accent : Accents,
           delivery : Deliveries \cup {NoDelivery}, preview : BOOLEAN,
-          context : BOOLEAN]
+          context : BOOLEAN, text : Seqs(Parts, MaxText)]
 
 \* speechContextCapabilities' tags: an OpenRouter model that takes them.
 Tags(x) == x.provider = "openrouter" /\ x.model \in TagModels
@@ -46,18 +53,22 @@ DeliveryTag(x) ==
        /\ x.delivery \notin {NoDelivery, "neutral"}
     THEN <<"delivery">>
     ELSE <<>>
-ProviderText(x) == AccentTag(x) \o DeliveryTag(x) \o <<"text">>
+ProviderText(x) == AccentTag(x) \o DeliveryTag(x) \o x.text
 
-\* What the panel shows, and what the context remembers: the line's `text`.
-Shown(x) == <<"text">>
-Remembered(x) == <<"text">>
+\* What the panel shows: the text without the tags the agent wrote. What the
+\* context remembers: the text as written.
+IsTag(part) == part = "tag"
+NotTag(part) == part # "tag"
+Shown(x) == SelectSeq(x.text, NotTag)
+Remembered(x) == x.text
 
 Range(s) == {s[i] : i \in 1..Len(s)}
 
 --------------------------------------------------------------------------------
 
-\* A tag goes only to a model that takes tags; any other would read it aloud.
-OnlyTagged(x) == Len(ProviderText(x)) > 1 => Tags(x)
+\* The extension's own tags go only to a model that takes tags; any other would
+\* read them aloud.
+OnlyTagged(x) == Len(ProviderText(x)) > Len(x.text) => Tags(x)
 
 \* The accent is sent wherever it can be, preview included: a code that never
 \* sends it fails, so it says something must happen.
@@ -70,13 +81,20 @@ DeliveryKept(x) ==
         (~x.preview /\ x.context /\ Tags(x)
          /\ x.delivery \notin {NoDelivery, "neutral"})
 
-\* The line's own text is sent last, once: tags only before it.
+\* The line's text is sent last, as the agent wrote it: the extension's tags
+\* only before it.
 TextLast(x) ==
-    /\ ProviderText(x)[Len(ProviderText(x))] = "text"
-    /\ \A i \in 1..(Len(ProviderText(x)) - 1) : ProviderText(x)[i] # "text"
+    LET n == Len(ProviderText(x)) - Len(x.text)
+    IN  /\ Len(ProviderText(x)) >= Len(x.text)
+        /\ SubSeq(ProviderText(x), n + 1, Len(ProviderText(x))) = x.text
+        /\ \A i \in 1..n : ProviderText(x)[i] \in {"accent", "delivery"}
 
-\* The panel and the context see the line's text, never a tag.
-NeverShown(x) == Shown(x) = <<"text">> /\ Remembered(x) = <<"text">>
+\* The panel shows no tag, and every word and code span of the text, in order;
+\* the context remembers the text as written.
+NeverShown(x) ==
+    /\ \A i \in 1..Len(Shown(x)) : ~IsTag(Shown(x)[i])
+    /\ Shown(x) = SelectSeq(x.text, NotTag)
+    /\ Remembered(x) = x.text
 
 ASSUME AssumeOnlyTagged == \A x \in Cases : OnlyTagged(x)
 ASSUME AssumeAccentSent == \A x \in Cases : AccentSent(x)

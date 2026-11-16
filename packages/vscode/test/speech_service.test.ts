@@ -2792,6 +2792,48 @@ it('invalidates attention audio eagerly when settings change away and back', asy
   await second;
 });
 
+it('AccentSent: speaks the attention cue with the accent, and again with a new one (#101)', async () => {
+  let accent: SpeechSettings['openRouterAccent'] = 'Australian';
+  const openRouter = { synthesize: vi.fn().mockResolvedValue({ wav: new Uint8Array(44), durationMs: 1000 }), models: vi.fn() };
+  const output = mock<SpeechOutput>();
+  output.prepare = undefined;
+  output.play.mockReturnValue(7);
+  const service = new SpeechService({
+    runtimeDirectory: '',
+    storageDirectory: '',
+    localDesktop: true,
+    output,
+    openRouter,
+    settings: () => ({
+      enabled: true,
+      provider: 'openrouter',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+      openRouterModel: 'elevenlabs/eleven-v3-conversational',
+      openRouterVoice: 'charlie',
+      openRouterZdr: false,
+      openRouterAccent: accent,
+    }),
+  });
+  service.configureNarrationContext();
+  const first = service.attentionCue();
+  await settle();
+  expect(sentText(openRouter)).toBe("[Australian accent] What's up?");
+  service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+  await first;
+  accent = 'British';
+  service.configureNarrationContext();
+  const second = service.attentionCue();
+  await settle();
+  expect(openRouter.synthesize).toHaveBeenCalledTimes(2);
+  expect(sentText(openRouter)).toBe("[British accent] What's up?");
+  service.cancel();
+  await second;
+  await service.dispose();
+});
+
 it('rejects a late attention result after a settings change', async () => {
   Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
   Object.defineProperty(process, 'arch', { value: 'x64', configurable: true });

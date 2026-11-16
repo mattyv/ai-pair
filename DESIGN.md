@@ -185,7 +185,11 @@ what is stored and sent (#100). **Accent** offers None or an accent, sent as an
 audio tag such as `[Australian accent]` before each line, preview included, to a
 model that takes audio tags; for any other model the field is disabled and says
 why, since that model would read the tag aloud. The panel's text and the
-narration context never hold the tag (#101).
+narration context never hold the tag (#101). The raised-hand "What's up?" gets
+the accent too. Audio tags the agent writes itself, a short run of letters in
+brackets such as `[whispers]`, are hidden from the panel's narration and history
+and sent to the model as written; brackets in code spans or with digits or
+symbols stay.
 
 Immediate replies, Stop, provider changes and key changes invalidate current
 cloud audio. A deferred reply waits until the current action ends.

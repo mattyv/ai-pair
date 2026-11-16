@@ -336,6 +336,8 @@ export class SpeechService implements NarrationPort {
       settings.openRouterVoice,
       settings.openRouterZdr,
       settings.openRouterFormat,
+      // #101: "What's up?" is spoken with the accent, so a new accent makes it again (specs/AttentionCache.tla, Change).
+      settings.openRouterAccent ?? '',
       speechListeningRate(settings.listeningSpeed),
     ]);
     if (this.cueKey !== key) {

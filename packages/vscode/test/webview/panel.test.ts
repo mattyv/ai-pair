@@ -3261,6 +3261,18 @@ function accentSelect(): InstanceType<typeof window.HTMLSelectElement> {
 }
 
 describe('the accent (#101, specs/SpeechCue.tla)', () => {
+  it('NeverShown: hides the audio tags the agent writes, now and in the history, and keeps every word and code span', () => {
+    start();
+    send({ type: 'say', text: "[Australian accent] G'day. Use `items[0]` and `[keep this]`, [whispers] then items[0]." });
+    expect(element('now-text').textContent).toBe("G'day. Use items[0] and [keep this], then items[0].");
+    send({ type: 'say', text: '[strong French accent]' });
+    expect(element('now-text').textContent).toBe('');
+    send({ type: 'programmer', text: '[Australian accent] please' });
+    expect(history()).toContain("G'day. Use items[0] and [keep this], then items[0].");
+    expect(history().some((entry) => entry.includes('[Australian accent] please'))).toBe(true);
+    expect(history().some((entry) => entry.includes('[Australian accent] G'))).toBe(false);
+  });
+
   it('Tags: offers the accent only for a model that takes audio tags, and says so', () => {
     send({ type: 'speechSettings', value: settings('elevenlabs/eleven-v3-conversational') });
     expect(accentSelect().disabled).toBe(false);
