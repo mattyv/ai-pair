@@ -1,6 +1,7 @@
 // Releases the version on main: checks the repository, then tags the commit and pushes the tag.
-// The tag starts .github/workflows/publish.yml, which builds both extensions, publishes them to
-// the Marketplace, and makes the GitHub release with them (#68).
+// The tag starts .github/workflows/publish.yml, which builds both extensions and makes the GitHub
+// release with them (#68). Its Marketplace publishing is off until the extensions have a name the
+// Marketplace accepts (#75).
 //
 //   npm run release [-- --yes]
 //
@@ -105,7 +106,7 @@ if (changes === undefined || changes === '') fail(`${CHANGELOG} has no section f
 if (!yes) {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const answer = await rl.question(
-    `\nTag ${tag} and push it? That publishes ${publisher}.${name} and ${publisher}.${companion.name} ${version} to the Marketplace; a version can't be published twice. [y/N] `,
+    `\nTag ${tag} and push it? That releases ${publisher}.${name} and ${publisher}.${companion.name} ${version} on GitHub; a tag can't be released twice. [y/N] `,
   );
   rl.close();
   if (answer.trim().toLowerCase() !== 'y') fail('Not tagged.');
@@ -124,4 +125,4 @@ try {
 }
 
 console.log(`\nTagged ${version}. Publishing runs at ${WORKFLOW}`);
-console.log(`When it finishes: https://marketplace.visualstudio.com/items?itemName=${publisher}.${name}`);
+console.log(`When it finishes: https://github.com/mattyv/ai-pair/releases/tag/${tag}`);

@@ -158,11 +158,11 @@ describe('a release that goes through', () => {
       'git push --quiet origin v1.2.4',
     ]);
     expect(prompt.question).toBe(
-      "\nTag v1.2.4 and push it? That publishes pub.ai-pair and pub.ai-pair-local-audio 1.2.4 to the Marketplace; a version can't be published twice. [y/N] ",
+      "\nTag v1.2.4 and push it? That releases pub.ai-pair and pub.ai-pair-local-audio 1.2.4 on GitHub; a tag can't be released twice. [y/N] ",
     );
     expect(result.logs.slice(-2)).toEqual([
       '\nTagged 1.2.4. Publishing runs at https://github.com/mattyv/ai-pair/actions/workflows/publish.yml',
-      'When it finishes: https://marketplace.visualstudio.com/items?itemName=pub.ai-pair',
+      'When it finishes: https://github.com/mattyv/ai-pair/releases/tag/v1.2.4',
     ]);
   });
 
