@@ -31,6 +31,8 @@ export class RemoteNarration implements NarrationPort {
   private nextJob = 0;
   private current?: Job;
   private closed = false;
+  /** Whether a hint was sent that no line or discard has used since (#108). */
+  private hinted = false;
 
   constructor(private readonly options: RemoteNarrationOptions) {}
 
@@ -38,6 +40,14 @@ export class RemoteNarration implements NarrationPort {
   speak(text: string, delivery?: import('@ai-pair/protocol').SpeechDelivery): Promise<void> {
     if (speechProblem(text) !== undefined) return Promise.resolve();
     return this.start({ type: 'speak', text, ...(delivery === undefined ? {} : { delivery }) });
+  }
+
+  /** Sends the next line's hint to the companion, which may prepare it (#108; specs/SpeechLookahead.tla, `Hint`). */
+  prepareNext(text: string, delivery?: import('@ai-pair/protocol').SpeechDelivery): void {
+    const page = this.options.page();
+    if (this.closed || page === undefined || speechProblem(text) !== undefined) return;
+    this.hinted = true;
+    this.send({ ...this.envelope(), type: 'prepareNext', pageEpoch: page, text, ...(delivery === undefined ? {} : { delivery }) });
   }
 
   /** Sends an attention cue through the same owned remote job. */
@@ -63,6 +73,7 @@ export class RemoteNarration implements NarrationPort {
       remaining: this.options.timeoutMs,
     };
     this.current = job;
+    this.hinted = false;
     this.arm(job);
     // specs/RemoteCue.tla, `Send`: keep the slot until its terminal acknowledgement.
     this.send({ ...this.envelope(), ...action, jobId: job.id, pageEpoch: page });
@@ -141,7 +152,12 @@ export class RemoteNarration implements NarrationPort {
   /** Settles the caller but retains the slot until a terminal acknowledgement. */
   cancel(): void {
     const job = this.current;
-    if (job === undefined || job.settled) return;
+    if (job === undefined || job.settled) {
+      // specs/SpeechLookahead.tla, Cancel: an interrupt between lines discards the line prepared ahead.
+      this.unprepare();
+      return;
+    }
+    this.hinted = false;
     this.sendControl(job, 'cancel');
     clearTimeout(job.timer);
     this.settle(job);
@@ -152,6 +168,14 @@ export class RemoteNarration implements NarrationPort {
     this.cancel();
     this.closed = true;
     for (const waiter of this.current?.waiters ?? []) waiter();
+  }
+
+  /** Tells the companion to discard a prepared line, when a hint is outstanding. */
+  private unprepare(): void {
+    const page = this.options.page();
+    if (!this.hinted || page === undefined) return;
+    this.hinted = false;
+    this.send({ ...this.envelope(), type: 'unprepare', pageEpoch: page });
   }
 
   /** Arms only the remaining unpaused terminal-acknowledgement budget. */

@@ -35,7 +35,16 @@ export class CompanionNarration {
     const parsed = localAudioFrame.safeParse(value);
     if (!parsed.success || this.closed) return false;
     const frame = parsed.data;
-    if (frame.connectionEpoch !== this.options.epoch || !('jobId' in frame)) return false;
+    if (frame.connectionEpoch !== this.options.epoch) return false;
+    if (frame.type === 'prepareNext' || frame.type === 'unprepare') {
+      if (frame.pageEpoch !== this.options.page() || this.localActions > 0) return false;
+      // specs/SpeechLookahead.tla, Hint and Cancel: the local service prepares the next line, or discards it between
+      // lines; a line in progress is not this frame's to cancel.
+      if (frame.type === 'prepareNext') this.options.speech.prepareNext?.(frame.text, frame.delivery);
+      else if (this.current === undefined) this.options.speech.cancel();
+      return true;
+    }
+    if (!('jobId' in frame)) return false;
     if (frame.type === 'speak' || frame.type === 'attentionCue') {
       if (frame.pageEpoch !== this.options.page() || this.current !== undefined || this.localActions > 0) {
         if (this.current?.id !== frame.jobId || this.current.page !== frame.pageEpoch) {

@@ -13,6 +13,7 @@ function fixture(initialSequence = 0) {
   const pause = vi.fn<NarrationPort['pause']>();
   const resume = vi.fn<NarrationPort['resume']>();
   const cancel = vi.fn<NarrationPort['cancel']>();
+  const prepareNext = vi.fn<NonNullable<NarrationPort['prepareNext']>>();
   const send = vi.fn<(_: unknown) => void>();
   const stopOutput = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
   const observation = vi
@@ -21,17 +22,36 @@ function fixture(initialSequence = 0) {
     .mockReturnValue({ id: 1, state: 'idle', started: true, terminal: 'ended' });
   const narration = new CompanionNarration({
     epoch: 'connection',
-    speech: { speak, attentionCue, pause, resume, cancel },
+    speech: { speak, attentionCue, pause, resume, cancel, prepareNext },
     page: () => 4,
     send,
     stopOutput,
     observation,
     nextSequence: () => ++sequence,
   });
-  return { narration, speak, attentionCue, pause, resume, cancel, send, pending, stopOutput, observation };
+  return { narration, speak, attentionCue, pause, resume, cancel, prepareNext, send, pending, stopOutput, observation };
 }
 
 describe('companion narration receiver', () => {
+  it('Hint, Cancel: prepares the next line on this page, and discards it between lines only (#108)', async () => {
+    const { narration, prepareNext, cancel } = fixture();
+    const hint = { version: base.version, connectionEpoch: 'connection', pageEpoch: 4 };
+    expect(narration.receive({ ...hint, sequence: 1, type: 'prepareNext', text: 'Next.', delivery: 'excited' })).toBe(true);
+    expect(prepareNext).toHaveBeenCalledWith('Next.', 'excited');
+    expect(narration.receive({ ...hint, sequence: 2, type: 'prepareNext', pageEpoch: 5, text: 'Other page.' })).toBe(false);
+    expect(narration.receive({ ...hint, sequence: 3, type: 'unprepare' })).toBe(true);
+    expect(cancel).toHaveBeenCalledOnce();
+    narration.receive({ ...base, sequence: 4, type: 'speak', text: 'Playing.' });
+    expect(narration.receive({ ...hint, sequence: 5, type: 'unprepare' })).toBe(true);
+    expect(cancel).toHaveBeenCalledOnce();
+    const held = narration.interruptThen(() => Promise.resolve());
+    expect(narration.receive({ ...hint, sequence: 6, type: 'prepareNext', text: 'During an action.' })).toBe(false);
+    await held;
+    expect(prepareNext).toHaveBeenCalledOnce();
+    // Frames with no job, other than these two, are not narration's.
+    expect(narration.receive({ version: base.version, connectionEpoch: 'connection', sequence: 7, type: 'heartbeat' })).toBe(false);
+  });
+
   it('keeps ownership when a canceled, rejected cue cannot retire', async () => {
     const { narration, pending, stopOutput, send } = fixture();
     stopOutput.mockRejectedValue(new Error('output could not stop'));

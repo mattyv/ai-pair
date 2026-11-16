@@ -7,13 +7,13 @@ beforeEach(() => {
   fake.problem.mockReset();
 });
 
-const base = { version: 7, connectionEpoch: 'connection-1', sequence: 1 };
+const base = { version: 8, connectionEpoch: 'connection-1', sequence: 1 };
 const owner = { jobId: 'job-1', pageEpoch: 1 };
 
 describe('local audio command frames', () => {
   it('accepts version 7 and rejects version 6 companion frames', () => {
-    expect(localAudioFrame.safeParse({ ...base, version: 7, type: 'attach' }).success).toBe(true);
-    expect(localAudioFrame.safeParse({ ...base, version: 6, type: 'attach' }).success).toBe(false);
+    expect(localAudioFrame.safeParse({ ...base, version: 8, type: 'attach' }).success).toBe(true);
+    expect(localAudioFrame.safeParse({ ...base, version: 7, type: 'attach' }).success).toBe(false);
   });
   it('accepts the bounded commands and terminal acknowledgements', () => {
     for (const frame of [
@@ -59,5 +59,22 @@ describe('speech delivery frame', () => {
     expect(localAudioFrame.safeParse({ ...deliveryBase, type: 'speak', text: 'Hello', delivery: 'curious' }).success).toBe(true);
     expect(localAudioFrame.safeParse({ ...deliveryBase, type: 'speak', text: 'Hello', delivery: 'angry' }).success).toBe(false);
     expect(localAudioFrame.safeParse({ ...deliveryBase, type: 'pause', delivery: 'neutral' }).success).toBe(false);
+  });
+});
+
+describe('look-ahead frames (#108)', () => {
+  it('accepts a page-scoped next line and its discard, without a job', () => {
+    expect(localAudioFrame.safeParse({ ...base, type: 'prepareNext', pageEpoch: 1, text: 'Next.' }).success).toBe(true);
+    expect(localAudioFrame.safeParse({ ...base, type: 'prepareNext', pageEpoch: 1, text: 'Next.', delivery: 'excited' }).success).toBe(
+      true,
+    );
+    expect(localAudioFrame.safeParse({ ...base, type: 'unprepare', pageEpoch: 1 }).success).toBe(true);
+  });
+
+  it('refuses one with a job, without a page, or with unspeakable text', () => {
+    expect(localAudioFrame.safeParse({ ...base, type: 'prepareNext', pageEpoch: 1, jobId: '1', text: 'Next.' }).success).toBe(false);
+    expect(localAudioFrame.safeParse({ ...base, type: 'unprepare' }).success).toBe(false);
+    fake.problem.mockReturnValueOnce('empty');
+    expect(localAudioFrame.safeParse({ ...base, type: 'prepareNext', pageEpoch: 1, text: '' }).success).toBe(false);
   });
 });

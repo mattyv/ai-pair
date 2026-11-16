@@ -214,6 +214,7 @@ const fakes = vi.hoisted(() => {
     readonly configureNarrationContext = vi.fn();
     readonly setNarrationSession = vi.fn();
     readonly prepare = vi.fn();
+    readonly prepareNext = vi.fn();
     readonly speak = vi.fn<() => Promise<void>>().mockResolvedValue();
     readonly attentionCue = vi.fn<() => Promise<void>>().mockResolvedValue();
     readonly pause = vi.fn<() => void>();
@@ -519,6 +520,7 @@ const fakes = vi.hoisted(() => {
       | {
           narration: {
             speak: ReturnType<typeof vi.fn>;
+            prepareNext: ReturnType<typeof vi.fn>;
             attentionCue: ReturnType<typeof vi.fn>;
             waitForRetirement: ReturnType<typeof vi.fn>;
             pause: ReturnType<typeof vi.fn>;
@@ -693,6 +695,7 @@ vi.mock('../src/workspace_session', () => ({
   WorkspaceSession: class {
     narration = {
       speak: vi.fn(() => Promise.resolve()),
+      prepareNext: vi.fn(),
       attentionCue: vi.fn(() => Promise.resolve()),
       waitForRetirement: vi.fn<(_: AbortSignal) => Promise<boolean>>().mockResolvedValue(true),
       pause: vi.fn(),
@@ -2247,6 +2250,8 @@ it('holds narration and secret changes while placement is pending, then selects 
   await expect(facts.model()).resolves.toBe(false);
   await expect(facts.key('elevenlabs')).resolves.toBe(false);
   await h.controller.narration.speak('legacy');
+  h.controller.narration.prepareNext?.('next');
+  expect(speech.prepareNext).toHaveBeenCalledWith('next', undefined);
   await h.controller.narration.attentionCue?.();
   expect(speech.attentionCue).toHaveBeenCalledOnce();
   h.controller.narration.pause();
@@ -2332,6 +2337,9 @@ it('routes companion controls, keys, frame acknowledgements and connection notic
   expect(await h.controller.narration.ready?.()).toBe(false);
   session.pageReady.mockReturnValue(true);
   await h.controller.narration.speak('hello');
+  // specs/SpeechLookahead.tla, Hint: the next line's hint reaches the companion's narration.
+  h.controller.narration.prepareNext?.('next', 'excited');
+  expect(session.narration.prepareNext).toHaveBeenCalledWith('next', 'excited');
   h.controller.narration.pause();
   h.controller.narration.resume();
   h.controller.narration.cancel();

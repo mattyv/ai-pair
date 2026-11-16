@@ -27,6 +27,45 @@ afterEach(() => {
 });
 
 describe('remote narration port', () => {
+  it('Hint, Cancel: sends the next line for this page, and an unprepare on an interrupt between lines (#108)', () => {
+    const send = vi.fn<(_: unknown) => void>();
+    let page: number | undefined = 4;
+    const port = new RemoteNarration({ epoch: 'connection', page: () => page, timeoutMs: 100, send, nextSequence: sequence() });
+    port.cancel();
+    expect(send).not.toHaveBeenCalled();
+    port.prepareNext('Next.', 'excited');
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'prepareNext', pageEpoch: 4, text: 'Next.', delivery: 'excited' }),
+    );
+    port.prepareNext('Plain.');
+    expect(send.mock.lastCall?.[0]).not.toHaveProperty('delivery');
+    port.cancel();
+    expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'unprepare', pageEpoch: 4 }));
+    port.cancel();
+    expect(send).toHaveBeenCalledTimes(3);
+    port.prepareNext('Again.');
+    void port.speak('Again.');
+    port.cancel();
+    expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'cancel', jobId: '1' }));
+    page = undefined;
+    port.prepareNext('No page.');
+    port.cancel();
+    expect(send).toHaveBeenCalledTimes(6);
+  });
+
+  it('sends no hint for unspeakable text, without a page, or once closed', () => {
+    const send = vi.fn<(_: unknown) => void>();
+    const port = new RemoteNarration({ epoch: 'connection', page: () => 4, timeoutMs: 100, send, nextSequence: sequence() });
+    fake.problem.mockReturnValueOnce('empty');
+    port.prepareNext('');
+    port.dispose();
+    port.prepareNext('Closed.');
+    expect(send).not.toHaveBeenCalled();
+    const withoutPage = new RemoteNarration({ epoch: 'connection', page: () => undefined, timeoutMs: 100, send, nextSequence: sequence() });
+    withoutPage.prepareNext('No page.');
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it('NoEarlyReuse: sends a scoped cue and waits for its terminal acknowledgement', async () => {
     const send = vi.fn<(_: unknown) => void>();
     const port = new RemoteNarration({ epoch: 'connection', page: () => 4, timeoutMs: 100, send, nextSequence: sequence() });

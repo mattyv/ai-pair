@@ -952,6 +952,11 @@ export function activate(context: vscode.ExtensionContext): Api {
       await ownerReady;
       if (!shuttingDown && generation === narrationGeneration) await selectedNarration?.speak(text, delivery);
     },
+    // specs/SpeechLookahead.tla, Hint: passed on to whichever narration speaks, local or the companion's.
+    prepareNext: (text, delivery) => {
+      // A disposed service, or a companion without a page, ignores it.
+      selectedNarration?.prepareNext?.(text, delivery);
+    },
     attentionCue: async () => {
       const generation = narrationGeneration;
       await ownerReady;
