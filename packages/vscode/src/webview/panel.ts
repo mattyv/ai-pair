@@ -378,7 +378,6 @@ function insertHistory(el: HTMLElement): void {
   }
 }
 
-/** Files the current message once before the next entry (specs/Panel.tla, `WithMessageFiled`). */
 /**
  * An audio tag the agent wrote, such as `[Australian accent]` or `[whispers]`: a short run of letters in brackets,
  * with the space after it. Brackets with digits or symbols, as in `items[0]`, are not tags.
@@ -397,6 +396,7 @@ function narration(s: string): string {
   return rich(prose.trim());
 }
 
+/** Files the current message once before the next entry (specs/Panel.tla, `WithMessageFiled`). */
 function fileCurrent(): void {
   if (current !== undefined && !filed) {
     const message = entry('agent', narration(current));
