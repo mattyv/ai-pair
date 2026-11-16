@@ -1299,3 +1299,9 @@ and repeats the Build VSIX checks before it packages. The Mac-specific builds
 are not published. Whether a first publish of a new extension works through
 Trusted Publishing is unverified; the fallback is a manual VSIX upload on the
 publisher's page.
+
+The workflow makes the GitHub release before it uploads to the Marketplace
+(#75). The Marketplace refused the name `ai-pair` for v0.39.0, and with the
+upload first the job stopped before the release, so installers it had built
+went unreleased. The job still fails when the Marketplace refuses, and a re-run
+skips the release it already made.

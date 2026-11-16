@@ -478,9 +478,10 @@ Follow the [release checklist](RELEASE.md), including the README and
 architecture review, paired artifacts, and verification evidence. Each change
 bumps the version in its pull request. On `main`, `npm run release` tags that
 version and pushes the tag; the
-[Publish workflow](.github/workflows/publish.yml) then publishes both
-extensions to the VS Code Marketplace and makes the GitHub release. The
-platform assets need separate checks.
+[Publish workflow](.github/workflows/publish.yml) then makes the GitHub
+release with both extensions and publishes them to the VS Code Marketplace. The
+release comes first, so a refused Marketplace upload does not hold back the
+installers (#75). The platform assets need separate checks.
 
 ## License
 
