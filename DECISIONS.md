@@ -1303,5 +1303,10 @@ publisher's page.
 The workflow makes the GitHub release before it uploads to the Marketplace
 (#75). The Marketplace refused the name `ai-pair` for v0.39.0, and with the
 upload first the job stopped before the release, so installers it had built
-went unreleased. The job still fails when the Marketplace refuses, and a re-run
-skips the release it already made.
+went unreleased. A re-run skips the release it already made.
+
+The Marketplace steps are then commented out until the extensions have a name
+the Marketplace accepts (#75; decided 2026-11-16: "we need a new name for the
+market place. lets comment the marketplace stuff out for now"). Every Publish
+run had ended red after making its release, and main showed it. The OIDC
+permission and the Trusted Publishing comments stay for when the steps return.

@@ -1,5 +1,8 @@
-# Makes the GitHub release with AI Pair and AI Pair Local Audio, then publishes both to the VS Code
-# Marketplace, when a version tag is pushed (#68, #75). `npm run release` pushes that tag.
+# Makes the GitHub release with AI Pair and AI Pair Local Audio when a version tag is pushed (#68).
+# `npm run release` pushes that tag.
+#
+# Publishing to the VS Code Marketplace is commented out below until the extensions have a name it
+# accepts: it refuses `ai-pair`, which another extension holds (#75). Uncomment those steps then.
 #
 # The Marketplace trusts this workflow by name: the publisher mattyv has a Trusted Publishing
 # policy for mattyv/ai-pair and publish.yml, so vsce trades the job's OIDC token for a
@@ -124,12 +127,13 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             "ai-pair-${version}.vsix" "ai-pair-local-audio-${version}.vsix" SHA256SUMS \
             --verify-tag --title "AI Pair $version" --notes-file "$RUNNER_TEMP/notes.md"
+      # Off until the Marketplace accepts the extensions' name (#75).
       # --skip-duplicate lets a run that failed after its first publish be run again.
-      - name: Publish AI Pair to the Marketplace
-        run: >-
-          npx vsce publish --oidc --skip-duplicate
-          --packagePath "ai-pair-${{ steps.version.outputs.version }}.vsix"
-      - name: Publish AI Pair Local Audio to the Marketplace
-        run: >-
-          npx vsce publish --oidc --skip-duplicate
-          --packagePath "ai-pair-local-audio-${{ steps.version.outputs.version }}.vsix"
+      # - name: Publish AI Pair to the Marketplace
+      #   run: >-
+      #     npx vsce publish --oidc --skip-duplicate
+      #     --packagePath "ai-pair-${{ steps.version.outputs.version }}.vsix"
+      # - name: Publish AI Pair Local Audio to the Marketplace
+      #   run: >-
+      #     npx vsce publish --oidc --skip-duplicate
+      #     --packagePath "ai-pair-local-audio-${{ steps.version.outputs.version }}.vsix"
