@@ -74,8 +74,9 @@ bottom:
         lines of message, so the reply box moves only for a longer one.
 2.  **History**, below the band, newest first by default. Agent messages use
     the theme foreground; the programmer's replies are neutral bubbles on the
-    right; commands are soft terminal rows with their outcomes; turn changes,
-    interrupts and session boundaries are faint dividers. The Settings dialog
+    right, keeping the line breaks they typed; commands are soft terminal rows
+    with their outcomes; turn changes, interrupts and session boundaries are
+    faint dividers. The Settings dialog
     also offers oldest first: history then appears above the band, with the
     current message and reply at the bottom. Sending a message reveals the
     newest edge; incoming entries follow it when already there and preserve the

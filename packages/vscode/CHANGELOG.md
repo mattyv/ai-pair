@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.45.1
+
+-   Keep the line breaks in your replies in the panel's history. The agent
+    always received them; the panel showed a reply on several lines as one
+    (#107).
+
 ## 0.45.0
 
 -   Set an accent for OpenRouter's ElevenLabs v3, v3 Conversational, v4, and
