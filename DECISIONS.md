@@ -346,8 +346,9 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   After local audio placement is verified, evaluate one-sentence lookahead
     within an admitted narration unit, separate synthesis and pitch-preserving
     playback speed, and a common warm-worker protocol. Preserve selected text,
-    independent reading pace and the speech on/off setting. Avoid speculative
-    synthesis of future cloud narration and dropping explanations to catch up.
+    independent reading pace and the speech on/off setting. Avoid dropping
+    explanations to catch up. (Speculative synthesis of future cloud narration
+    was avoided here too; reversed for one line ahead by #108, below.)
 
 -   Normalize Archi 1.5.1 exports deterministically for repository formatting and
     ASCII checks. Preserve Unicode values with context-specific JSON,
@@ -1310,3 +1311,23 @@ the Marketplace accepts (#75; decided 2026-11-16: "we need a new name for the
 market place. lets comment the marketplace stuff out for now"). Every Publish
 run had ended red after making its release, and main showed it. The OIDC
 permission and the Trusted Publishing comments stay for when the steps return.
+
+## Synthesizing the next cloud line ahead
+
+Reverses the earlier rule against speculative synthesis of future cloud
+narration (decided 2026-11-16 by the programmer, #108). With a cloud voice,
+each line was requested only after the previous one finished, so every line
+began after a full provider round trip.
+
+-   One line ahead at most, on the existing single request slot, and only once
+    the playing line is audible and not paused.
+-   A prepared line plays only when its request equals the one the line makes at
+    its own turn: text, accent tag, delivery cue, provider, model, voice, ZDR,
+    format, and previous text, which `SpeechContext.anticipate` foresees. Every
+    other case discards it, so what plays is what would have played without
+    look-ahead.
+-   Accepted costs: the next line's text reaches the provider before the panel
+    shows it, and a prepared line that is never played, after an interrupt or a
+    settings change, is still charged; at most one line each time. The README
+    says so, and the OpenRouter subtotal includes such lines.
+-   The `aiPair.speech.lookahead` setting, on by default, turns it off.

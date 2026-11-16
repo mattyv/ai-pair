@@ -90,6 +90,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `ProjectGuide.cfg` | every tree of depth 2 over two names, any of its guides ignored by git | holds (`ASSUME`s) | |
 | `VoiceLanguage.cfg` | every voice of five providers, four documented, with five forms of ID and two keys | holds (`ASSUME`s) | |
 | `SpeechCue.cfg` | every line of three providers, a model with tags and one without, an accent or none, three cues, preview, context | holds (`ASSUME`s) | |
+| `SpeechLookahead.cfg` | three lines of two texts, one settings change, two disruptions, one pause, look-ahead on and off | holds | 63,224 |
 | `Resume.cfg` | 2 directories, `MaxSessions = 3`, revive and replacement updates enabled | holds | 56 |
 | `TerminalPanel.cfg` | two command IDs and automatic visibility | holds | 61 |
 | `DiagnosticsCopy.cfg` | explicit request with clipboard success or failure | holds | 3 |
@@ -3821,8 +3822,11 @@ missed while the page was absent.
 `SpeechContext.tla` models logical completed narration history, session and
 setting resets, capture snapshots, cancellation and stale completion. It does
 not model physical playback ownership or Unicode strings; the implementation
-bounds those strings separately. The finite model has four utterances and three
-reset generations, with weak fairness for capture.
+bounds those strings separately. The finite model has five utterances and three
+reset generations, with weak fairness for capture. `Anticipate` (#108) foresees
+the history the next capture will see if the pending line completes, as
+`SpeechContext.anticipate` does for a line prepared ahead; five utterances make
+a capture after a trimmed completion reachable.
 
 | Check | Implementation test |
 | --- | --- |
@@ -3831,13 +3835,16 @@ reset generations, with weak fairness for capture.
 | `ValidHistory` | `captures only completed speech and preserves it across cancellation and replay`; `invalidates stale completion on reset and superseding capture`; `resets on setting changes, session end and disconnect` |
 | `PriorSnapshot` | `captures only completed speech and preserves it across cancellation and replay` |
 | `EventualCapture` | `captures only completed speech and preserves it across cancellation and replay` |
+| `AnticipationExact` | `speech_context.test.ts`: AnticipationExact: foresees the previous text the next capture carries once the playing line completes; AnticipationExact: foresees within the character bound, as completion trims; `speech_service.test.ts`: AnticipationExact, PlayedAsRequested |
 
-TLC checked `SpeechContext.cfg`: 2,450 distinct states, pass. Disabling the
+TLC checked `SpeechContext.cfg`: 44,936 distinct states, pass. Disabling the
 generation guard, clearing history on cancel, trimming, or append-on-complete
 respectively violated `ValidHistory`, `ValidHistory`, `Bounded`, and
 `ValidHistory`. Capturing the current utterance in its own snapshot violates
 `PriorSnapshot`; disabling capture violates `EventualCapture`. Initializing
-`pending` outside its declared range violates `TypeOK`.
+`pending` outside its declared range violates `TypeOK`. Foreseeing without the
+pending line (`ForeseePending = FALSE`), or without the trim that completion
+applies, violates `AnticipationExact`.
 
 ### `RevealCursor`: explicit cursor navigation
 
@@ -4135,3 +4142,59 @@ Each names the test that proves the code obeys it:
 | `DeliveryKept` | `speech_service.test.ts`: AccentSent, DeliveryKept: sends the accent in a preview and with context off, where no delivery cue goes; the existing SpeechContext test, `[curious] Hello` |
 | `TextLast` | `speech_service.test.ts`: AccentSent, TextLast: sends the accent before the delivery cue and the line, to a model that takes tags |
 | `NeverShown` | `speech_service.test.ts`: NeverShown: keeps the tag out of the narration context; `webview/panel.test.ts`: NeverShown: hides the audio tags the agent writes, now and in the history, and keeps every word and code span |
+
+## `SpeechLookahead`: the next cloud line, prepared while one plays
+
+The feature of #108, specified before its code. With a cloud voice each line
+was requested only after the previous one finished; now the next line is
+requested while one plays, one ahead at most, on the single request slot the
+playing line uses, and it plays only if its request is the one the line would
+make at its own turn. Checked with three lines of two texts, one settings
+change, two disruptions (cancels, settings changes, replans, failures, stops),
+and one pause, look-ahead on and off: 63,224 distinct states, holds. A line
+does not end while a prepare could start, since the service starts one in the
+same turn as the audio's start or the hint; `AheadUsed` relies on it.
+
+| Spec | Code |
+|---|---|
+| `Hint` | `Player.announceNext` (the rest of the batch, else the controller's `nextSpokenSay` over queued batches), called when a line starts speaking and when a batch is queued; `NarrationPort.prepareNext`; the extension forwards it; `RemoteNarration` sends `prepareNext`, `CompanionNarration` passes it on |
+| `CanPrepare`, `StartPrepare` | `SpeechService.lookaheadLine`, from `prepareNext`, the audio's `started` event, and `resume` |
+| `Key` | `cloudKey` over `CloudFields`; `sendCloud` builds both requests |
+| `PrepareSettles`, `PrepareFails` | the prepared request's settlement in `lookaheadLine`; `expirePrepared` at the deadline |
+| `Speak` | `SpeechService.promote` from `beginProvider`: use, take over, or discard |
+| `StartOwn`, `RetiredSettles` | `startCloud` waiting on `awaitingSlot`; `wakeCloud` when the slot frees |
+| `Cancel` | `SpeechService.cancel`, `pageClosed`; `RemoteNarration`'s `unprepare` between lines |
+| `Configure` | `configureNarrationContext` when the settings key changes or look-ahead is off; `invalidateCloud`; `openRouterCatalogChanged`; a different hint |
+| `StopLine`, `Replan` | a stopped line, or another next text: the request key differs at `Speak` |
+| `Pause`, `Resume` | `pause`, `resume` |
+
+Each property was proved to bite with a mutation, run in TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| a prepared line matches on its text alone | `PlayedAsRequested` |
+| a prepared line matches without its previous text | `PlayedAsRequested` |
+| a prepared line matches without the settings | `PlayedAsRequested` |
+| `StartPrepare` without the empty-slot guard, adding a second | `OneAhead` |
+| `StartOwn` ignores a retired request | `SlotExclusive` |
+| `Speak` does not advance | `InOrder` |
+| turning look-ahead off keeps the prepared line | `OffNothingAhead` |
+| `Speak` always discards | `BoundedWaste` |
+| prepare while paused | `NoPrepareWhilePaused` |
+| no fairness on `StartOwn` | `LineProgress` |
+| the hint carries no line | `AheadUsed` |
+| a hint out of range | `TypeOK` |
+
+Each names the test that proves the code obeys it:
+
+| Property | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler checks these types |
+| `PlayedAsRequested` | `speech_service.test.ts`: the PlayedAsRequested cases (use, take over, discard for another line, dropped ready audio, previous text) |
+| `OneAhead`, `SlotExclusive` | `speech_service.test.ts`: PlayedAsRequested, SlotExclusive: another line discards the prepared one and waits for its slot |
+| `InOrder` | `player.test.ts`: Hint: announces the next spoken say of the batch, with its delivery, once, while the first speaks |
+| `OffNothingAhead` | `speech_service.test.ts`: OffNothingAhead; `extension.test.ts`, `speech_host.test.ts`, `webview/panel.test.ts`: OffNothingAhead |
+| `BoundedWaste` | `speech_service.test.ts`: Configure, Cancel: a settings change, a new credential, a catalog exclusion, a closed page, or a cancel discards it; PrepareFails: not tried again |
+| `NoPrepareWhilePaused` | `speech_service.test.ts`: NoPrepareWhilePaused: prepares nothing while paused, and prepares once resumed |
+| `LineProgress` | `speech_service.test.ts`: a prepared request that never settles frees the slot at the deadline, and fails a line that took it over |
+| `AheadUsed` | `speech_service.test.ts`: AheadUsed cases; `player.test.ts`, `controller.test.ts`: Hint; `remote_narration.test.ts`, `companion_narration.test.ts`: Hint, Cancel; `integration_cloud_service_paths.ts`: SpeechLookahead: the gap between cloud lines (0 ms with look-ahead, 304 ms without) |

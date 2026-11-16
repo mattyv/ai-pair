@@ -412,9 +412,15 @@ Bounded sentence pipelining is implemented for local Kokoro narration. The Archi
     plays, so there is at most one inference and one part of lookahead. Each
     physical output retires before the next part starts, and the unit finishes
     only on its final part.
--   Only text already admitted for the unit is synthesized. Future cloud
-    narration is never synthesized ahead, and an explanation is never dropped to
-    catch up.
+-   Only text already admitted for the unit is synthesized, and an explanation
+    is never dropped to catch up. One future cloud line may be synthesized ahead
+    while a line plays (#108): core's player hints the next spoken `say` to the
+    narration port (`prepareNext`), and the `SpeechService` that speaks it, local
+    or the companion's (through the `prepareNext` and `unprepare` local audio
+    frames), requests it on the same single request slot once the playing line
+    is audible. It plays only if its request is exactly the one the line makes at
+    its own turn; anything else is discarded. The `aiPair.speech.lookahead`
+    setting turns it off (`specs/SpeechLookahead.tla`).
 -   ElevenLabs keeps one request per unit, and the legacy output path stays one
     waveform.
 

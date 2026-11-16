@@ -192,6 +192,11 @@ brackets such as `[whispers]`, are hidden from the panel's narration and history
 and sent to the model as written; brackets in code spans or with digits or
 symbols stay.
 
+**Prepare the next line while one plays**, a box under speech context, on by
+default, asks a cloud voice for the next line while the current one plays, so
+lines follow without a gap (#108). Its note says that the next line is sent
+before it is shown and that a line prepared but not played is still charged.
+
 Immediate replies, Stop, provider changes and key changes invalidate current
 cloud audio. A deferred reply waits until the current action ends.
 An aborted request may already have consumed credits. Cloud failures leave the

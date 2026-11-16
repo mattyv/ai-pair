@@ -754,6 +754,8 @@ Last updated: css, 2026-11-16.
 | `specs/SpeechCue.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/SpeechLifecycle.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechLifecycle.tla` | TLA+ | - | - | 5 of 6 actions (never: StaleCallback) | - | - | - |
+| `specs/SpeechLookahead.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/SpeechLookahead.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/SpeechOverlap.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechOverlap.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/SpeechOverlap_Continue.cfg` | TLC config | - | - | - | - | - | - |

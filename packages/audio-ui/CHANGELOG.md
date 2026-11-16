@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.46.0
+
+-   Prepare the next cloud line while one plays, in a remote window too (#108).
+    The local audio protocol is version 8: install both extensions at 0.46.0.
+
 ## 0.45.1
 
 -   Version aligned with the main extension, whose panel now keeps the line
