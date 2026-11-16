@@ -181,7 +181,11 @@ access or credit limit. Opening Settings never synthesizes audio.
 For OpenRouter, each voice in the list shows its ID, then the language or accent
 its provider documents, such as `bf_emma (British English)`; a voice whose
 provider documents none, ElevenLabs's included, shows its bare ID. The ID is
-what is stored and sent (#100).
+what is stored and sent (#100). **Accent** offers None or an accent, sent as an
+audio tag such as `[Australian accent]` before each line, preview included, to a
+model that takes audio tags; for any other model the field is disabled and says
+why, since that model would read the tag aloud. The panel's text and the
+narration context never hold the tag (#101).
 
 Immediate replies, Stop, provider changes and key changes invalidate current
 cloud audio. A deferred reply waits until the current action ends.

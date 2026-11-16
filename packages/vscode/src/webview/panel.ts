@@ -1,6 +1,7 @@
 import { speechContextCapabilities } from '../speech_context_capabilities';
 import { voiceIndicator } from '../voice_indicator';
 import type { AudioDiagnostics, ShortcutLabels } from '@ai-pair/protocol';
+import { speechAccent, type SpeechAccent } from '@ai-pair/protocol/speech_accents';
 import type { SpeechComputeState } from '../speech_compute_types';
 import { SPEECH_LISTENING_RATES } from '../speech_tempo';
 // The narration panel's page script, bundled for the webview as dist/panel.js (#6). The markup and
@@ -106,6 +107,8 @@ const ui = {
   openRouterModel: $('openrouter-model', HTMLSelectElement),
   openRouterVoice: $('openrouter-voice', HTMLSelectElement),
   openRouterFormat: $('openrouter-format', HTMLSelectElement),
+  openRouterAccent: $('openrouter-accent', HTMLSelectElement),
+  openRouterAccentStatus: $('openrouter-accent-status', HTMLElement),
   speechContext: $('speech-context', HTMLSelectElement),
   speechContextCapability: $('speech-context-capability', HTMLElement),
   openRouterZdr: $('openrouter-zdr', HTMLButtonElement),
@@ -200,6 +203,8 @@ let openRouterModel = '';
 let openRouterVoice = '';
 let openRouterZdr = false;
 let openRouterFormat: 'pcm' | 'mp3' = 'mp3';
+/** The accent sent as an audio tag to a model that takes them, or empty for none (#101). */
+let openRouterAccent: SpeechAccent = '';
 let openRouterHasKey = false;
 let openRouterCatalogVerified = false;
 let openRouterModels: OpenRouterModel[] = [];
@@ -1140,7 +1145,7 @@ function saveSpeechSettings(): void {
       elevenLabsVoice: cloudVoice,
       elevenLabsSpeed: cloudSpeed,
       ...(speechProvider === 'openrouter' || openRouterModel !== '' || openRouterVoice !== '' || openRouterZdr
-        ? { openRouterModel, openRouterVoice, openRouterZdr, openRouterFormat }
+        ? { openRouterModel, openRouterVoice, openRouterZdr, openRouterFormat, openRouterAccent }
         : {}),
     },
   });
@@ -1187,6 +1192,11 @@ function syncSpeechProvider(): void {
         : capabilities.tags
           ? 'Delivery cues only; previous context is not supported.'
           : 'Unsupported by this model; ordinary speech only.';
+  // specs/SpeechCue.tla, `Tags`: an accent goes only to a model that takes audio tags; another would read it aloud.
+  ui.openRouterAccent.disabled = !capabilities.tags;
+  ui.openRouterAccentStatus.textContent = capabilities.tags
+    ? 'Sent as an audio tag, such as [Australian accent], before each line. Accent tags are experimental; a voice may not follow one.'
+    : 'This model does not take audio tags, so no accent is sent. Eleven v3 and v4 models do.';
   const cloud = speechProvider === 'elevenlabs';
   ui.speechLocal.hidden = speechProvider !== 'kokoro';
   ui.speechLocalModel.hidden = speechProvider !== 'kokoro';
@@ -1285,6 +1295,13 @@ ui.openRouterModel.addEventListener('change', () => {
 ui.openRouterVoice.addEventListener('change', () => {
   openRouterVoice = ui.openRouterVoice.value;
   syncSpeechProvider();
+  saveSpeechSettings();
+});
+ui.openRouterAccent.addEventListener('change', () => {
+  // #101: only an offered accent, or none, is saved.
+  const parsed = speechAccent.safeParse(ui.openRouterAccent.value);
+  if (!parsed.success) return;
+  openRouterAccent = parsed.data;
   saveSpeechSettings();
 });
 ui.openRouterFormat.addEventListener('change', () => {
@@ -1582,6 +1599,7 @@ function handle(message: ToPanel): void {
       openRouterVoice = message.value.openRouterVoice ?? '';
       openRouterZdr = message.value.openRouterZdr ?? false;
       openRouterFormat = message.value.openRouterFormat === 'pcm' ? 'pcm' : 'mp3';
+      openRouterAccent = message.value.openRouterAccent ?? '';
       if (
         !openRouterCatalogVerified &&
         openRouterModel !== '' &&
@@ -1594,6 +1612,7 @@ function handle(message: ToPanel): void {
       }
       ui.openRouterModel.value = openRouterModel;
       ui.openRouterFormat.value = openRouterFormat;
+      ui.openRouterAccent.value = openRouterAccent;
       renderOpenRouterVoices();
       ui.speechCloudSpeed.value = String(cloudSpeed);
       selectCloudVoice();

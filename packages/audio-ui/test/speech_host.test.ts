@@ -1229,6 +1229,19 @@ it('drops transient busy feedback after an ABA mode change', async () => {
   await host.dispose();
 });
 
+it('restores and saves the accent in the local companion, and reads a stored one not offered as none (#101)', async () => {
+  fakes.config.set('speech.provider', 'openrouter');
+  fakes.config.set('speech.openRouterAccent', 'Australian');
+  const { host } = harness();
+  expect(host.panelSpeech.settings.get()).toMatchObject({ openRouterAccent: 'Australian' });
+  host.panelSpeech.settings.set({ ...host.panelSpeech.settings.get(), openRouterAccent: 'Irish' });
+  await vi.waitFor(() => {
+    expect(fakes.update).toHaveBeenCalledWith('speech.openRouterAccent', 'Irish', 1);
+  });
+  fakes.config.set('speech.openRouterAccent', 'Klingon');
+  expect(harness().host.panelSpeech.settings.get()).toMatchObject({ openRouterAccent: '' });
+});
+
 it('restores OpenRouter model, voice and ZDR settings in the local companion', () => {
   fakes.config.set('speech.provider', 'openrouter');
   fakes.config.set('speech.openRouterModel', 'model');

@@ -2,7 +2,7 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.44.0",
+  "version": "0.45.0",
   "publisher": "mattyv",
   "author": {
     "name": "mattyv"
@@ -273,6 +273,24 @@
           ],
           "default": "mp3",
           "description": "Audio response format requested from the selected OpenRouter speech model.",
+          "scope": "application"
+        },
+        "aiPair.speech.openRouterAccent": {
+          "type": "string",
+          "enum": [
+            "",
+            "American",
+            "Australian",
+            "British",
+            "Canadian",
+            "Indian",
+            "Irish",
+            "New Zealand",
+            "Scottish",
+            "South African"
+          ],
+          "default": "",
+          "description": "An accent sent as an audio tag, such as [Australian accent], before each line, to OpenRouter models that take audio tags (ElevenLabs v3 and v4). Empty for none. Accent tags are experimental: a model may not follow one.",
           "scope": "application"
         },
         "aiPair.speech.elevenLabsVoice": {

@@ -119,6 +119,10 @@ Choose a provider in Settings:
     `en-AU-Isla:MAI-Voice-2.1 (Australian English)`: Microsoft MAI, Kokoro,
     Voxtral, and Deepgram Aura-2 voices. Others, ElevenLabs's included, show
     their bare ID; how a model renders a voice can still differ.
+    **Accent** sends an audio tag such as `[Australian accent]` before each
+    line, to the models that take audio tags: ElevenLabs v3, v3 Conversational,
+    v4, and v4 Turbo. The panel and the agent never see the tag. Accent tags are
+    experimental, so a voice may not follow one; other models get no tag.
     The **ZDR** filter narrows the eligible models and requests OpenRouter's
     ZDR routing policy; account Safety Retention settings still apply. The
     catalog does not establish format, voice, or standard text-input

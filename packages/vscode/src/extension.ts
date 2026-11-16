@@ -15,6 +15,7 @@ import {
   discoveryDir,
   LOCAL_AUDIO_VERSION,
   NAVIGATOR_COMMENTARY_SCHEMA,
+  speechAccent,
   type NavigatorCommentary,
   type ShortcutLabels,
 } from '@ai-pair/protocol';
@@ -330,6 +331,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     const openRouterVoice: unknown = config().get('speech.openRouterVoice');
     const openRouterZdr: unknown = config().get('speech.openRouterZdr');
     const openRouterFormat: unknown = config().get('speech.openRouterFormat');
+    const openRouterAccent: unknown = config().get('speech.openRouterAccent');
     return {
       enabled: enabled === true,
       contextEnabled: config().get('speech.contextEnabled') === true,
@@ -345,6 +347,8 @@ export function activate(context: vscode.ExtensionContext): Api {
             openRouterVoice: typeof openRouterVoice === 'string' ? openRouterVoice : '',
             openRouterZdr: openRouterZdr === true,
             openRouterFormat: openRouterFormat === 'pcm' ? 'pcm' : 'mp3',
+            // #101: an accent the setting does not offer is none.
+            openRouterAccent: speechAccent.catch('').parse(openRouterAccent),
           }
         : {}),
     };
@@ -399,6 +403,7 @@ export function activate(context: vscode.ExtensionContext): Api {
           ...(value.openRouterVoice === undefined ? [] : [['speech.openRouterVoice', value.openRouterVoice] as [string, unknown]]),
           ...(value.openRouterZdr === undefined ? [] : [['speech.openRouterZdr', value.openRouterZdr] as [string, unknown]]),
           ...(value.openRouterFormat === undefined ? [] : [['speech.openRouterFormat', value.openRouterFormat] as [string, unknown]]),
+          ...(value.openRouterAccent === undefined ? [] : [['speech.openRouterAccent', value.openRouterAccent] as [string, unknown]]),
         ];
         for (const [key, setting] of updates) {
           await config().update(key, setting, vscode.ConfigurationTarget.Global);

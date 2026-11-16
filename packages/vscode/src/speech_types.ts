@@ -1,3 +1,4 @@
+import type { SpeechAccent } from '@ai-pair/protocol/speech_accents';
 import { SPEECH_LISTENING_RATES, type SpeechTempoRate } from './speech_tempo';
 
 /** The voices available for selected local narration. */
@@ -24,6 +25,8 @@ export interface SpeechSettings {
   openRouterVoice?: string;
   openRouterZdr?: boolean;
   openRouterFormat?: OpenRouterAudioFormat;
+  /** The accent sent as an audio tag to a model that takes them, or empty for none (#101). */
+  openRouterAccent?: SpeechAccent;
   voice: string;
   speed: number;
 }

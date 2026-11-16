@@ -432,6 +432,13 @@
       "functions": 100
     }
   },
+  "packages/protocol/src/speech_accents.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/protocol/src/speech_decode.ts": {
     "unit": {
       "lines": 100,

@@ -1998,6 +1998,14 @@ it('routes OpenRouter key and catalog actions and validates the selected pair', 
   speech.settings.set.mockClear();
   view.receive({ type: 'speechSettings', value: { ...choice, openRouterFormat: 'unsupported' } });
   expect(speech.settings.set).not.toHaveBeenCalled();
+  // #101: an offered accent, or none, is saved; any other is refused.
+  view.send({ type: 'speechSettings', value: { ...choice, openRouterAccent: 'Australian' } });
+  view.send({ type: 'speechSettings', value: { ...choice, openRouterAccent: '' } });
+  expect(speech.settings.set).toHaveBeenCalledWith({ ...choice, openRouterAccent: 'Australian' });
+  expect(speech.settings.set).toHaveBeenCalledWith({ ...choice, openRouterAccent: '' });
+  speech.settings.set.mockClear();
+  view.receive({ type: 'speechSettings', value: { ...choice, openRouterAccent: '[Australian accent]' } });
+  expect(speech.settings.set).not.toHaveBeenCalled();
   panel.showOpenRouterKeyStatus(true);
   panel.showOpenRouterCatalog({ state: 'ready', verified: true, models: [] });
   expect(view.posted).toContainEqual({ type: 'openRouterKeyStatus', hasKey: true });

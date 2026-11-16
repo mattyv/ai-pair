@@ -49,6 +49,54 @@ async function events(api: Api): Promise<Array<z.infer<typeof report>['events'][
   return report.parse(JSON.parse(value)).events;
 }
 
+/** The text a speech preview speaks. */
+const PREVIEW = 'Here is a short example of the voice for our pairing session.';
+
+/** Returns the speech requests among `requests`. */
+function speechRequests(
+  requests: ReadonlyArray<{ url: URL; init: RequestInit | undefined }>,
+): Array<{ url: URL; init: RequestInit | undefined }> {
+  return requests.filter((request) => request.url.pathname === '/api/v1/audio/speech');
+}
+
+/** Asks for a preview, and returns the text the speech request it makes sends (#101). */
+async function previewInput(api: Api, requests: ReadonlyArray<{ url: URL; init: RequestInit | undefined }>): Promise<string> {
+  const before = speechRequests(requests).length;
+  api.panelMessage({ type: 'speechPreview' });
+  for (let attempt = 0; attempt < 100 && speechRequests(requests).length === before; attempt++) {
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 50);
+    });
+  }
+  const body = speechRequests(requests).at(-1)?.init?.body;
+  if (typeof body !== 'string') return assert.fail('the preview made no speech request');
+  return z.looseObject({ input: z.string() }).parse(JSON.parse(body)).input;
+}
+
+/** Returns the saved `aiPair` setting `key`. */
+function saved(key: string): unknown {
+  return vscode.workspace.getConfiguration('aiPair').get(key);
+}
+
+/** Selects an OpenRouter model, voice and accent as the page would, and waits for the settings to be saved. */
+async function selectAccent(
+  api: Api,
+  settings: Record<string, unknown> & { openRouterModel: string; openRouterAccent: string },
+): Promise<void> {
+  for (
+    let attempt = 0;
+    attempt < 100 &&
+    (saved('speech.openRouterModel') !== settings.openRouterModel || saved('speech.openRouterAccent') !== settings.openRouterAccent);
+    attempt++
+  ) {
+    api.panelMessage({ type: 'speechSettings', value: settings });
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 50);
+    });
+  }
+  assert.equal(saved('speech.openRouterAccent'), settings.openRouterAccent);
+}
+
 /** Waits for a real catalog diagnostic produced after the given sequence. */
 async function catalog(api: Api, phase: string, reason?: string, more = false): Promise<void> {
   const previous = Math.max(0, ...(await events(api)).map((event) => event.seq));
@@ -410,6 +458,17 @@ export async function run(): Promise<void> {
       response_format: 'pcm',
       provider: { zdr: true },
     });
+    // #101, specs/SpeechCue.tla: the accent goes as a tag to a model that takes tags, and to no other.
+    await selectAccent(api, {
+      ...selectedRouter,
+      openRouterModel: 'elevenlabs/eleven-v3',
+      openRouterVoice: 'charlie',
+      openRouterAccent: 'Australian',
+    });
+    assert.equal(await previewInput(api, routerRequests), `[Australian accent] ${PREVIEW}`);
+    await selectAccent(api, { ...selectedRouter, openRouterAccent: 'Australian' });
+    assert.equal(await previewInput(api, routerRequests), PREVIEW);
+    console.log('SpeechCue: the accent goes as a tag to a model that takes tags, and to no other');
     routerDenied = true;
     api.panelMessage({ type: 'openRouterModelsLoad' });
     for (

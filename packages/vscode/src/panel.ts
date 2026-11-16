@@ -8,6 +8,7 @@ import {
   AUDIO_DIAGNOSTICS_SCHEMA,
   NAVIGATOR_COMMENTARY_SCHEMA,
   type NavigatorCommentary,
+  speechAccent,
   speechDecodeFromPage,
   localPanelAction,
   localPanelUpdate,
@@ -760,6 +761,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
           (message.value.openRouterFormat === undefined ||
             message.value.openRouterFormat === 'pcm' ||
             message.value.openRouterFormat === 'mp3') &&
+          (message.value.openRouterAccent === undefined || speechAccent.safeParse(message.value.openRouterAccent).success) &&
           (message.value.openRouterModel === undefined || typeof message.value.openRouterModel === 'string') &&
           (message.value.openRouterVoice === undefined || typeof message.value.openRouterVoice === 'string') &&
           (message.value.provider !== 'openrouter' ||
