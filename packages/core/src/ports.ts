@@ -8,6 +8,11 @@ export interface NarrationPort {
   ready?: () => Promise<boolean>;
   /** Speaks one displayed unit and resolves on completion, cancellation, or text-only fallback. */
   speak: (text: string, delivery?: SpeechDelivery) => Promise<void>;
+  /**
+   * Announces the next line that will be spoken while one plays, so it can be prepared ahead (#108;
+   * specs/SpeechLookahead.tla, `Hint`). Only a hint: the line is spoken by its own `speak`, and a port may ignore it.
+   */
+  prepareNext?: (text: string, delivery?: SpeechDelivery) => void;
   /** Plays the fixed attention cue using the current voice. */
   attentionCue: () => Promise<void>;
   /** Waits boundedly for any previous physical owner; false leaves narration unavailable. */

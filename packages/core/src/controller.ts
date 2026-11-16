@@ -411,6 +411,8 @@ export class Controller {
         readingSpeed: () => this.readingSpeed,
         codePlayback: () => this.codePlayback,
         narration: this.narration,
+        // specs/SpeechLookahead.tla, Hint: the next spoken line may sit in a batch queued behind this one.
+        nextSpokenSay: () => s.queue.find((batch) => batch.state === 'queued')?.actions.find((action) => spokenSay(action)),
         attentionBoundary: (speech) => this.attentionBoundary(s, speech),
         afterAction: () => {
           if (s.deferredMessages.length > 0) this.interrupt(s);
@@ -551,6 +553,8 @@ export class Controller {
       if (current === true) {
         const queued: QueuedBatch = { id: this.nextBatchId++, actions, state: 'queued', after: rehearsal.after };
         session.queue.push(queued);
+        // specs/SpeechLookahead.tla, Hint: a line speaking now can have this batch's first line prepared.
+        session.player.announceNext();
         session.speechReminder.batch(actions.some((action) => spokenSay(action)));
         this.trace?.(`batch ${queued.id} queued: ${actions.length} actions`);
         if (anchor?.anchored === true) session.anchorNeeded = false;

@@ -75,6 +75,8 @@ export interface Stage {
   codePlayback(): CodePlayback;
   /** Live narration only; omitted for rehearsal. */
   narration?: NarrationPort;
+  /** Returns the first spoken `say` of the batches queued behind this one, if any (#108). */
+  nextSpokenSay?(): Action | undefined;
   /** Waits at an attention boundary after draining the current speech. */
   attentionBoundary?(speech: Promise<void>): Promise<void>;
   /** Runs after each live action has finished. */
@@ -131,6 +133,8 @@ interface Playing {
   moved: boolean;
   /** The action that failed it, once one has. */
   failed?: Failure;
+  /** The actions after the one performing (#108): where the next spoken line is looked for first. */
+  ahead: Action[];
 }
 
 function fail(error: ErrorKind, message: string): Outcome {
@@ -205,6 +209,10 @@ export class Player {
   get commandRunning(): boolean {
     return this.command !== undefined;
   }
+  /** The speech in progress, until it settles: the next line is announced only while one speaks (#108). */
+  private speaking?: Promise<void>;
+  /** The `say` last announced to the narration port, so each is announced once. */
+  private announced?: Action;
   private playing?: Playing;
   private readingId?: number;
   private speech?: Promise<void>;
@@ -230,6 +238,25 @@ export class Player {
     return this.speech ?? Promise.resolve();
   }
 
+  /**
+   * Announces the next line that will be spoken to the narration port, while a line speaks (#108;
+   * specs/SpeechLookahead.tla, `Hint`): the first spoken `say` after the action performing, else the first of the
+   * batches queued behind. Each is announced once; a port that fails cannot affect playback.
+   */
+  announceNext(): void {
+    const narration = this.stage.narration;
+    if (narration?.prepareNext === undefined || this.speaking === undefined) return;
+    const next = this.playing?.ahead.find((action) => spokenSay(action)) ?? this.stage.nextSpokenSay?.();
+    if (next === undefined || next === this.announced || !('say' in next)) return;
+    this.announced = next;
+    try {
+      if (next.speech_delivery === undefined) narration.prepareNext(next.say);
+      else narration.prepareNext(next.say, next.speech_delivery);
+    } catch {
+      // A broken optional hint cannot affect what plays.
+    }
+  }
+
   /** Plays a batch, saves the files it edited, and says how it went, and which lines that shows. */
   async play(
     id: number,
@@ -242,6 +269,7 @@ export class Player {
       runs: [],
       sightings: [],
       moved: false,
+      ahead: [],
     };
     this.playing = playing;
     let result: BatchResult;
@@ -349,6 +377,7 @@ export class Player {
       // specs/Turns.tla, `Perform`, and specs/Actions.tla, `StopBeforeAction`: an interrupt stops the batch between actions.
       if (this.stage.pacing.isInterrupted) return this.stopped(id, actions.slice(i), effect);
       let outcome: Outcome;
+      playing.ahead = actions.slice(i + 1);
       try {
         outcome = await this.perform(action, playing);
       } catch (error) {
@@ -460,8 +489,15 @@ export class Player {
             speech = (
               action.speech_delivery === undefined ? narration.speak(action.say) : narration.speak(action.say, action.speech_delivery)
             ).catch(() => {});
+            this.speaking = speech;
+            // The next line starts only once this one settles, after this clears.
+            void speech.then(() => {
+              this.speaking = undefined;
+            });
           }
           this.speech = speech;
+          // specs/SpeechLookahead.tla, Hint: once this line is speaking, the next one can be prepared.
+          this.announceNext();
         } catch {
           // A broken optional speech port cannot prevent reading the message.
         }

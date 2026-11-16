@@ -77,6 +77,7 @@ const fakes = vi.hoisted(() => {
       Promise.resolve({ result: { id, status: 'completed' }, sightings: [], editedFiles: [] }),
     );
     readonly transform = vi.fn();
+    readonly announceNext = vi.fn();
     /** By default, the cursor's file can't be read, so a report adds no cursor. */
     readonly codeAt = vi.fn((): Promise<unknown> => Promise.reject(new Error('unread')));
     readonly scene: unknown;
@@ -715,6 +716,22 @@ describe('steps and their batches', () => {
     expect((await report(second)).rejected).toBeUndefined();
     await settle();
     expect(player().play).toHaveBeenCalledTimes(2);
+  });
+
+  it('Hint: announces the next line when a batch is queued, and finds it in the first queued batch (#108)', async () => {
+    const h = await started();
+    const finish = holdPlay();
+    await report(h.controller.step([{ say: 'One.' }]));
+    expect(player().announceNext).toHaveBeenCalledOnce();
+    const second = h.controller.step([{ say: 'Shown.', speak: false }, { say: 'Two.' }]);
+    await vi.waitFor(() => {
+      expect(player().announceNext).toHaveBeenCalledTimes(2);
+    });
+    expect(stage().nextSpokenSay?.()).toEqual({ say: 'Two.' });
+    finish();
+    await report(second);
+    await settle();
+    expect(stage().nextSpokenSay?.()).toBeUndefined();
   });
 
   it('BatchEnds, ReadyAtHead: returns the first step immediately and blocks the second until the first finishes', async () => {
