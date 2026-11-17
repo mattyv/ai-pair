@@ -13,6 +13,8 @@ import type { Api } from '../src/extension';
 /** How often, and how many times, to look for a run the panel shows. */
 const POLL_MS = 50;
 const POLLS = 200;
+/** Polls for a command that runs on after its batch: 30 seconds. */
+const FINISH_POLLS = 600;
 
 /** How long a report may take after an interrupt. */
 const INTERRUPT_WAIT_MS = 5000;
@@ -47,6 +49,16 @@ async function runEnded(api: Api, command: string): Promise<void> {
     await sleep(POLL_MS);
   }
   assert.fail(`the panel never showed ${command} ended`);
+}
+
+/** Waits for the panel to show `command` done in its batch, or exited after running on in the background. */
+async function runFinished(api: Api, command: string): Promise<void> {
+  for (let i = 0; i < FINISH_POLLS; i++) {
+    const run = api.history().findLast((e) => e.type === 'run' && e.command === command);
+    if (run?.type === 'run' && (run.phase === 'done' || run.phase === 'exited')) return;
+    await sleep(POLL_MS);
+  }
+  assert.fail(`the panel never showed ${command} finished`);
 }
 
 /** Disposes every terminal there is, so the next command opens a new one, and waits for the extension to forget them. */
@@ -413,8 +425,9 @@ async function terminalWithoutReportedCwd(api: Api): Promise<void> {
       const command = 'printf cwd-fallback-reused';
       await controller.step([{ run: command, wait: 5 }]);
       const report = await controller.step([]);
-      // On a slow runner the batch ends before the command does; its output then comes later, as a command_exit event (#97).
-      await runEnded(api, command);
+      // On a slow runner the batch ends before the command does: the panel shows it in the background, and its output comes
+      // later, as a command_exit event, once the panel shows it exited (#97).
+      await runFinished(api, command);
       const later = await controller.step([]);
       const output = [
         ...report.batches.flatMap((batch) => (batch.runs ?? []).map((run) => run.output)),
