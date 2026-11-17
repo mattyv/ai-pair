@@ -10,6 +10,7 @@ import {
   typeProblem,
   withinFolder,
   type Action,
+  type SpokenSay,
   type BatchError,
   type BatchResult,
   type Candidate,
@@ -76,7 +77,7 @@ export interface Stage {
   /** Live narration only; omitted for rehearsal. */
   narration?: NarrationPort;
   /** Returns the first spoken `say` of the batches queued behind this one, if any (#108). */
-  nextSpokenSay?(): Action | undefined;
+  nextSpokenSay?(): SpokenSay | undefined;
   /** Waits at an attention boundary after draining the current speech. */
   attentionBoundary?(speech: Promise<void>): Promise<void>;
   /** Runs after each live action has finished. */
@@ -247,7 +248,7 @@ export class Player {
     const narration = this.stage.narration;
     if (narration?.prepareNext === undefined || this.speaking === undefined) return;
     const next = this.playing?.ahead.find((action) => spokenSay(action)) ?? this.stage.nextSpokenSay?.();
-    if (next === undefined || next === this.announced || !('say' in next)) return;
+    if (next === undefined || next === this.announced) return;
     this.announced = next;
     try {
       if (next.speech_delivery === undefined) narration.prepareNext(next.say);

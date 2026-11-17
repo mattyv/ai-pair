@@ -1,6 +1,6 @@
 // Types of the agent-facing protocol. See PROTOCOL.md.
 
-import type { MoveTarget, SpanFields, ToolErrorCode } from './schemas';
+import type { Action, MoveTarget, SpanFields, ToolErrorCode } from './schemas';
 
 /**
  * Marks the agent cursor: in a report's code, where a spot puts it, and where a `type` leaves it.
@@ -115,11 +115,14 @@ export function speechProblem(text: unknown): string | undefined {
   return undefined;
 }
 
+/** A `say` action, as `spokenSay` narrows one. */
+export type SpokenSay = Extract<Action, { say: string }>;
+
 /**
  * Reports whether an action is a `say` that is spoken: every `say` is, unless it opts out with
  * `speak: false` or its text cannot be spoken, in which case it is shown only (#41).
  */
-export function spokenSay(action: unknown): boolean {
+export function spokenSay(action: unknown): action is SpokenSay {
   // specs/ActionValidation.tla, Spoken: opting out and unspeakable text both leave the message shown only.
   if (typeof action !== 'object' || action === null || !('say' in action)) return false;
   return !('speak' in action && action.speak === false) && speechProblem(action.say) === undefined;
