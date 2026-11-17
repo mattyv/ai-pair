@@ -1,7 +1,7 @@
 /* oxlint-disable typescript/unbound-method -- Lifecycle methods are Vitest mocks without a receiver. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mock } from 'vitest-mock-extended';
-import { LOCAL_PROTOCOL_VERSION, LOCAL_REQUEST } from '../src/speech_local_protocol';
+import { LOCAL_PROTOCOL_VERSION, LOCAL_REQUEST, LOCAL_WORKER_TIMEOUT_MS } from '../src/speech_local_protocol';
 import { installedSpeechModel } from '../src/speech_setup';
 import { speechRuntimeAvailable } from '../src/speech_runtime_status';
 import { SpeechService, type SpeechOutput } from '../src/speech_service';
@@ -10,7 +10,13 @@ import type { ElevenLabsSpeechPort, LocalSpeechFailureReason, SpeechSettings } f
 import { decodeSpeechWav, encodeTempoWav } from '../src/speech_tempo_pcm';
 import type { SpeechLifecycle, SpeechLifecycleOptions, SpeechLifecycleResult, SpeechLifecycleSnapshot } from '../src/speech_lifecycle';
 
-const contextDouble = vi.hoisted(() => ({ session: vi.fn(), configure: vi.fn(), disconnect: vi.fn(), capture: vi.fn() }));
+const contextDouble = vi.hoisted(() => ({
+  session: vi.fn(),
+  configure: vi.fn(),
+  disconnect: vi.fn(),
+  capture: vi.fn(),
+  anticipate: vi.fn(),
+}));
 vi.mock('@ai-pair/core', () => ({
   // A constructor mock must be constructable.
   // oxlint-disable-next-line eslint/prefer-arrow-callback
@@ -2980,4 +2986,411 @@ it('rejects attention completion after a settings change during playback', async
   expect(engine.calls).toHaveLength(2);
   service.cancel();
   await second;
+});
+
+describe('the next line, prepared ahead (#108, specs/SpeechLookahead.tla)', () => {
+  const AUDIO = { wav: new Uint8Array(44), durationMs: 1000 };
+
+  /** A request the fake cloud received, for the test to settle. */
+  interface Sent {
+    text: unknown;
+    previousText: unknown;
+    signal: AbortSignal;
+    resolve: (audio: typeof AUDIO) => void;
+    reject: (error: unknown) => void;
+  }
+
+  /** Returns an OpenRouter service whose requests the test settles, with settings it can change. */
+  function ahead(overrides: Partial<SpeechSettings> = {}, eleven = false) {
+    const sent: Sent[] = [];
+    const synthesize = vi.fn((request: { text: string; previousText?: string }, signal: AbortSignal) => {
+      const { promise, resolve, reject } = Promise.withResolvers<typeof AUDIO>();
+      sent.push({ text: request.text, previousText: request.previousText, signal, resolve, reject });
+      return promise;
+    });
+    const output = mock<SpeechOutput>();
+    output.prepare = undefined;
+    output.play.mockReturnValue(7);
+    let settings: SpeechSettings = {
+      enabled: true,
+      provider: 'openrouter',
+      voice: 'af_heart',
+      speed: 1,
+      elevenLabsVoice: '',
+      elevenLabsSpeed: 1,
+      openRouterModel: 'elevenlabs/eleven-v3-conversational',
+      openRouterVoice: 'charlie',
+      openRouterZdr: false,
+      ...overrides,
+    };
+    let allowed = true;
+    const diagnostic = vi.fn();
+    const service = new SpeechService({
+      runtimeDirectory: '',
+      storageDirectory: '',
+      localDesktop: true,
+      output,
+      openRouter: { synthesize, models: vi.fn() },
+      ...(eleven ? { cloud: { synthesize, voices: vi.fn() } } : {}),
+      openRouterAllowed: () => allowed,
+      openRouterDiagnostic: (reason) => {
+        diagnostic(reason);
+      },
+      settings: () => settings,
+    });
+    return {
+      service,
+      output,
+      sent,
+      diagnostic,
+      change(next: Partial<SpeechSettings>): void {
+        settings = { ...settings, ...next };
+      },
+      exclude(): void {
+        allowed = false;
+      },
+    };
+  }
+
+  /** Speaks `text`, answers its own request, and makes it audible: the line whose id is `id`. */
+  async function audible(h: ReturnType<typeof ahead>, text: string, id: number): Promise<{ done: Promise<void> }> {
+    const done = h.service.speak(text);
+    await settle();
+    h.sent.at(-1)?.resolve(AUDIO);
+    await settle();
+    h.service.audioEvent({ id, pageId: 7, event: 'started' });
+    return { done };
+  }
+
+  it('AheadUsed, PlayedAsRequested: prepares the next line while one plays, and plays it without a request of its own', async () => {
+    const h = ahead();
+    const { done: first } = await audible(h, 'One.', 1);
+    h.service.prepareNext('Two.');
+    expect(h.sent.map((request) => request.text)).toEqual(['One.', 'Two.']);
+    h.sent[1]?.resolve(AUDIO);
+    await settle();
+    h.service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+    await first;
+    void h.service.speak('Two.');
+    await settle();
+    expect(h.sent).toHaveLength(2);
+    expect(h.output.play).toHaveBeenCalledTimes(2);
+    h.service.cancel();
+  });
+
+  it('AheadUsed: a hint given before the line is audible prepares once it is, and a repeated hint does nothing', async () => {
+    const h = ahead();
+    void h.service.speak('One.');
+    await settle();
+    h.service.prepareNext('Two.', 'excited');
+    expect(h.sent).toHaveLength(1);
+    h.sent[0]?.resolve(AUDIO);
+    await settle();
+    h.service.audioEvent({ id: 1, pageId: 7, event: 'started' });
+    h.service.prepareNext('Two.', 'excited');
+    expect(h.sent.map((request) => request.text)).toEqual(['One.', 'Two.']);
+    h.service.cancel();
+  });
+
+  it('PlayedAsRequested: a line takes over the prepared request still in flight, and a cancel aborts it', async () => {
+    const h = ahead();
+    const { done: first } = await audible(h, 'One.', 1);
+    h.service.prepareNext('Two.');
+    h.service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+    await first;
+    void h.service.speak('Two.');
+    await settle();
+    expect(h.sent).toHaveLength(2);
+    h.sent[1]?.resolve(AUDIO);
+    await settle();
+    expect(h.output.play).toHaveBeenCalledTimes(2);
+    h.service.cancel();
+    const { done: third } = await audible(h, 'Three.', 4);
+    h.service.prepareNext('Four.');
+    h.service.audioEvent({ id: 4, pageId: 7, event: 'ended' });
+    await third;
+    void h.service.speak('Four.');
+    await settle();
+    h.service.cancel();
+    expect(h.sent[3]?.signal.aborted).toBe(true);
+    h.sent[3]?.resolve(AUDIO);
+    await settle();
+    expect(h.output.play).toHaveBeenCalledTimes(3);
+  });
+
+  it('PlayedAsRequested, SlotExclusive: another line discards the prepared one and waits for its slot', async () => {
+    const h = ahead();
+    const { done: first } = await audible(h, 'One.', 1);
+    h.service.prepareNext('Two.');
+    h.service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+    await first;
+    void h.service.speak('Other.');
+    await settle();
+    expect(h.sent[1]?.signal.aborted).toBe(true);
+    expect(h.sent).toHaveLength(2);
+    h.sent[1]?.reject(new DOMException('aborted', 'AbortError'));
+    await settle();
+    expect(h.sent.map((request) => request.text)).toEqual(['One.', 'Two.', 'Other.']);
+    expect(h.diagnostic).not.toHaveBeenCalled();
+    h.service.cancel();
+  });
+
+  it('PlayedAsRequested: a prepared line whose audio arrived is dropped for another line, which requests at once', async () => {
+    const h = ahead();
+    const { done: first } = await audible(h, 'One.', 1);
+    h.service.prepareNext('Two.');
+    h.sent[1]?.resolve(AUDIO);
+    await settle();
+    h.service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+    await first;
+    void h.service.speak('Other.');
+    await settle();
+    expect(h.sent.map((request) => request.text)).toEqual(['One.', 'Two.', 'Other.']);
+    h.service.cancel();
+  });
+
+  it('PrepareFails: a failed prepared request is reported, not tried again, and the line requests its own', async () => {
+    const h = ahead();
+    const { done: first } = await audible(h, 'One.', 1);
+    h.service.prepareNext('Two.');
+    h.sent[1]?.reject(new Error('rate'));
+    await settle();
+    expect(h.diagnostic).toHaveBeenCalledOnce();
+    h.service.pause();
+    h.service.resume();
+    expect(h.sent).toHaveLength(2);
+    h.service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+    await first;
+    void h.service.speak('Two.');
+    await settle();
+    expect(h.sent).toHaveLength(3);
+    h.service.cancel();
+  });
+
+  it('a line that took over a request fails with it, and ignores it once canceled', async () => {
+    const h = ahead();
+    const { done: first } = await audible(h, 'One.', 1);
+    h.service.prepareNext('Two.');
+    h.service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+    await first;
+    const second = h.service.speak('Two.');
+    await settle();
+    h.sent[1]?.reject(new Error('rate'));
+    await second;
+    expect(h.output.status).toHaveBeenCalledWith(3, 'unavailable', expect.any(String));
+    const { done: third } = await audible(h, 'Three.', 4);
+    h.service.prepareNext('Four.');
+    h.service.audioEvent({ id: 4, pageId: 7, event: 'ended' });
+    await third;
+    void h.service.speak('Four.');
+    await settle();
+    h.service.cancel();
+    h.sent[3]?.reject(new Error('late'));
+    await settle();
+    expect(h.diagnostic).toHaveBeenCalledOnce();
+  });
+
+  it('a prepared request that never settles frees the slot at the deadline, and fails a line that took it over', async () => {
+    const h = ahead();
+    const { done: first } = await audible(h, 'One.', 1);
+    h.service.prepareNext('Two.');
+    vi.advanceTimersByTime(LOCAL_WORKER_TIMEOUT_MS);
+    expect(h.sent[1]?.signal.aborted).toBe(true);
+    h.service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+    await first;
+    void h.service.speak('Two.');
+    await settle();
+    expect(h.sent).toHaveLength(3);
+    h.sent[2]?.resolve(AUDIO);
+    await settle();
+    h.service.audioEvent({ id: 3, pageId: 7, event: 'started' });
+    h.service.prepareNext('Three.');
+    h.service.audioEvent({ id: 3, pageId: 7, event: 'ended' });
+    await settle();
+    const third = h.service.speak('Three.');
+    await settle();
+    vi.advanceTimersByTime(LOCAL_WORKER_TIMEOUT_MS);
+    await third;
+    expect(h.output.status).toHaveBeenCalledWith(5, 'unavailable', expect.any(String));
+    h.sent[3]?.resolve(AUDIO);
+    await settle();
+  });
+
+  it('NoPrepareWhilePaused: prepares nothing while paused, and prepares once resumed', async () => {
+    const h = ahead();
+    void h.service.speak('One.');
+    await settle();
+    h.sent[0]?.resolve(AUDIO);
+    await settle();
+    h.service.pause();
+    h.service.audioEvent({ id: 1, pageId: 7, event: 'started' });
+    h.service.prepareNext('Two.');
+    expect(h.sent).toHaveLength(1);
+    h.service.resume();
+    expect(h.sent).toHaveLength(2);
+    h.service.cancel();
+  });
+
+  it('OffNothingAhead: with look-ahead off nothing is prepared, and turning it off drops what was', async () => {
+    const off = ahead({ speechLookahead: false });
+    await audible(off, 'One.', 1);
+    off.service.prepareNext('Two.');
+    expect(off.sent).toHaveLength(1);
+    off.service.cancel();
+    const h = ahead();
+    await audible(h, 'One.', 1);
+    h.service.prepareNext('Two.');
+    h.change({ speechLookahead: false });
+    h.service.configureNarrationContext();
+    expect(h.sent[1]?.signal.aborted).toBe(true);
+    h.service.cancel();
+  });
+
+  it('Configure, Cancel: a settings change, a new credential, a catalog exclusion, a closed page, or a cancel discards it', async () => {
+    const discards: Array<[string, (h: ReturnType<typeof ahead>) => void]> = [
+      [
+        'settings',
+        (h) => {
+          h.change({ openRouterVoice: 'george' });
+          h.service.configureNarrationContext();
+        },
+      ],
+      [
+        'credential',
+        (h) => {
+          h.service.invalidateCloud();
+        },
+      ],
+      [
+        'catalog',
+        (h) => {
+          h.exclude();
+          h.service.openRouterCatalogChanged();
+        },
+      ],
+      [
+        'page',
+        (h) => {
+          h.service.pageClosed(9);
+        },
+      ],
+      [
+        'cancel',
+        (h) => {
+          h.service.cancel();
+        },
+      ],
+      [
+        'another hint',
+        (h) => {
+          h.service.prepareNext('Other.');
+        },
+      ],
+    ];
+    for (const [, discard] of discards) {
+      const h = ahead();
+      await audible(h, 'One.', 1);
+      h.service.prepareNext('Two.');
+      discard(h);
+      expect(h.sent[1]?.signal.aborted).toBe(true);
+      h.service.cancel();
+    }
+    const kept = ahead();
+    await audible(kept, 'One.', 1);
+    kept.service.prepareNext('Two.');
+    kept.service.openRouterCatalogChanged();
+    expect(kept.sent[1]?.signal.aborted).toBe(false);
+    kept.service.cancel();
+  });
+
+  it('prepares nothing for Kokoro, a preview, the cue, a disabled or unadmitted selection, or after disposal', async () => {
+    const preview = ahead();
+    void preview.service.preview();
+    await settle();
+    preview.sent[0]?.resolve(AUDIO);
+    await settle();
+    preview.service.audioEvent({ id: 1, pageId: 7, event: 'started' });
+    preview.service.prepareNext('Two.');
+    expect(preview.sent).toHaveLength(1);
+    preview.service.cancel();
+    for (const change of [
+      { openRouterModel: '' },
+      { enabled: false },
+      { provider: 'kokoro' as const },
+      { provider: 'elevenlabs' as const },
+    ]) {
+      const h = ahead();
+      await audible(h, 'One.', 1);
+      h.change(change);
+      h.service.prepareNext('Two.');
+      expect(h.sent).toHaveLength(1);
+      h.service.cancel();
+    }
+    const excluded = ahead();
+    await audible(excluded, 'One.', 1);
+    excluded.exclude();
+    excluded.service.prepareNext('Two.');
+    expect(excluded.sent).toHaveLength(1);
+    excluded.service.cancel();
+    const disposed = ahead();
+    await disposed.service.dispose();
+    disposed.service.prepareNext('Two.');
+  });
+
+  it('AheadUsed: prepares a direct ElevenLabs line too, and only with a voice and speed it can admit', async () => {
+    const eleven = { provider: 'elevenlabs' as const, elevenLabsVoice: 'charlie', openRouterModel: undefined, openRouterVoice: undefined };
+    const h = ahead(eleven, /* eleven= */ true);
+    const { done: first } = await audible(h, 'One.', 1);
+    h.service.prepareNext('Two.');
+    h.service.openRouterCatalogChanged();
+    expect(h.sent.map((request) => request.text)).toEqual(['One.', 'Two.']);
+    h.sent[1]?.resolve(AUDIO);
+    await settle();
+    h.service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+    await first;
+    void h.service.speak('Two.');
+    await settle();
+    expect(h.sent).toHaveLength(2);
+    h.service.cancel();
+    for (const change of [{ elevenLabsVoice: '' }, { elevenLabsSpeed: 3 }]) {
+      const blocked = ahead(eleven, /* eleven= */ true);
+      await audible(blocked, 'One.', 1);
+      blocked.change(change);
+      blocked.service.prepareNext('Two.');
+      expect(blocked.sent).toHaveLength(1);
+      blocked.service.cancel();
+    }
+    const unconfigured = ahead(eleven);
+    unconfigured.change({ provider: 'openrouter', openRouterModel: 'elevenlabs/eleven-v3' });
+    await audible(unconfigured, 'One.', 1);
+    unconfigured.change(eleven);
+    unconfigured.service.prepareNext('Two.');
+    expect(unconfigured.sent).toHaveLength(1);
+    unconfigured.service.cancel();
+  });
+
+  it("AnticipationExact, PlayedAsRequested: a prepared v4 line is used only when its previous text is the line's own", async () => {
+    for (const [captured, requests] of [
+      ['One.', 2],
+      ['Something else.', 3],
+    ] as const) {
+      const h = ahead({ openRouterModel: 'elevenlabs/eleven-v4', openRouterZdr: true, contextEnabled: true });
+      contextDouble.anticipate.mockReturnValue('One.');
+      contextDouble.capture
+        .mockReturnValueOnce(undefined)
+        .mockReturnValueOnce({ previousText: captured, complete: vi.fn(), cancel: vi.fn() });
+      const { done: first } = await audible(h, 'One.', 1);
+      h.service.prepareNext('Two.');
+      expect(contextDouble.anticipate).toHaveBeenCalledWith('One.');
+      expect(h.sent[1]?.previousText).toBe('One.');
+      h.sent[1]?.resolve(AUDIO);
+      await settle();
+      h.service.audioEvent({ id: 1, pageId: 7, event: 'ended' });
+      await first;
+      void h.service.speak('Two.');
+      await settle();
+      expect(h.sent).toHaveLength(requests);
+      h.service.cancel();
+    }
+  });
 });

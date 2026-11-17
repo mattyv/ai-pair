@@ -2,7 +2,7 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.45.1",
+  "version": "0.46.0",
   "publisher": "mattyv",
   "author": {
     "name": "mattyv"
@@ -273,6 +273,12 @@
           ],
           "default": "mp3",
           "description": "Audio response format requested from the selected OpenRouter speech model.",
+          "scope": "application"
+        },
+        "aiPair.speech.lookahead": {
+          "type": "boolean",
+          "default": true,
+          "description": "Prepare the next narration line while one plays, so cloud voices (OpenRouter and ElevenLabs) have no gap between lines. The next line's text reaches the provider before it is shown, and a line prepared but not played, after an interrupt or a settings change, is still charged.",
           "scope": "application"
         },
         "aiPair.speech.openRouterAccent": {

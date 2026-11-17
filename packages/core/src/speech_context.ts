@@ -16,6 +16,13 @@ export interface SpeechContextCapture {
 const MAX_UTTERANCES = 3;
 const MAX_CHARACTERS = 500;
 
+/** Returns `history` with `text` appended, bounded to the last utterances and characters a request may carry. */
+function appended(history: readonly string[], text: string): string[] {
+  let next = [...history, Array.from(text).slice(-MAX_CHARACTERS).join('')].slice(-MAX_UTTERANCES);
+  while (next.length > 1 && Array.from(next.join(' ')).length > MAX_CHARACTERS) next = next.slice(1);
+  return next;
+}
+
 /** Owns bounded, session-scoped completed speech history. */
 export class SpeechContext {
   private identity: string | number | undefined;
@@ -70,15 +77,23 @@ export class SpeechContext {
         // specs/SpeechContext.tla, Complete.
         if (settled || generation !== this.generation || current !== this.current) return;
         settled = true;
-        this.history.push(Array.from(text).slice(-MAX_CHARACTERS).join(''));
-        this.history = this.history.slice(-MAX_UTTERANCES);
-        while (this.history.length > 1 && Array.from(this.history.join(' ')).length > MAX_CHARACTERS) this.history.shift();
+        this.history = appended(this.history, text);
       },
       cancel: () => {
         // specs/SpeechContext.tla, Cancel.
         settled = true;
       },
     };
+  }
+
+  /**
+   * Returns the previous text the next capture will carry if `playing` completes, without capturing or settling
+   * anything (#108; specs/SpeechContext.tla, `Anticipate`): a line prepared ahead is requested with it.
+   */
+  anticipate(playing: string): string | undefined {
+    if (!this.active || this.config?.enabled !== true) return undefined;
+    const previousText = appended(this.history, playing).join(' ');
+    return previousText === '' ? undefined : previousText;
   }
 
   private reset(): void {

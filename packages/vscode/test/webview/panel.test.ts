@@ -2018,6 +2018,7 @@ it('sends explicit setup, preview, stop and validated speech preferences', () =>
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: true,
       provider: 'kokoro',
       voice: 'af_heart',
@@ -2034,6 +2035,7 @@ it('sends explicit setup, preview, stop and validated speech preferences', () =>
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: true,
       provider: 'kokoro',
       voice: 'bf_emma',
@@ -2122,6 +2124,7 @@ it('silences the current audio synchronously before posting a reply and ignores 
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: true,
       provider: 'kokoro',
       voice: 'af_heart',
@@ -2271,6 +2274,7 @@ it('does not stop a preview when voice changes while automatic speech is off', a
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: false,
       provider: 'kokoro',
       voice: 'af_heart',
@@ -2286,6 +2290,7 @@ it('does not stop a preview when voice changes while automatic speech is off', a
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: false,
       provider: 'kokoro',
       voice: 'bf_emma',
@@ -2375,6 +2380,7 @@ it('reports page visibility and ignores stale speech status while controlling th
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: true,
       provider: 'kokoro',
       voice: 'af_heart',
@@ -2400,6 +2406,7 @@ it('reports page visibility and ignores stale speech status while controlling th
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: false,
       provider: 'kokoro',
       voice: 'af_heart',
@@ -2440,6 +2447,7 @@ it('validates selection controls and stops live speech when disabled', () => {
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: true,
       provider: 'kokoro',
       voice: 'af_heart',
@@ -2454,6 +2462,7 @@ it('validates selection controls and stops live speech when disabled', () => {
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: false,
       provider: 'kokoro',
       voice: 'af_heart',
@@ -2501,6 +2510,7 @@ it('shows the saved account voice after reload without fetching a catalog', () =
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: true,
       provider: 'elevenlabs',
       voice: 'af_heart',
@@ -2525,6 +2535,7 @@ it('chooses a cloud voice and speed, loads more, and keeps provider errors sanit
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: true,
       provider: 'elevenlabs',
       voice: 'af_heart',
@@ -2550,6 +2561,7 @@ it('chooses a cloud voice and speed, loads more, and keeps provider errors sanit
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: true,
       provider: 'elevenlabs',
       voice: 'af_heart',
@@ -2574,6 +2586,7 @@ it('keeps cloud actions disabled without a key and while setup is pending', () =
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: false,
       provider: 'elevenlabs',
       voice: 'af_heart',
@@ -2600,6 +2613,7 @@ it('switches to cloud even when old local voice settings are invalid', () => {
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: true,
       provider: 'kokoro',
       voice: 'removed_voice',
@@ -2617,6 +2631,7 @@ it('switches to cloud even when old local voice settings are invalid', () => {
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: true,
       provider: 'elevenlabs',
       voice: 'af_heart',
@@ -2633,6 +2648,7 @@ it('switches to cloud with the default rate when a saved cloud rate is invalid',
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: false,
       provider: 'kokoro',
       voice: 'af_heart',
@@ -2649,6 +2665,7 @@ it('switches to cloud with the default rate when a saved cloud rate is invalid',
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: false,
       provider: 'elevenlabs',
       voice: 'af_heart',
@@ -2665,6 +2682,7 @@ it('switches back to Kokoro when saved inactive cloud settings are invalid', () 
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: false,
       provider: 'elevenlabs',
       voice: 'af_heart',
@@ -2681,6 +2699,7 @@ it('switches back to Kokoro when saved inactive cloud settings are invalid', () 
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: false,
       provider: 'kokoro',
       voice: 'af_heart',
@@ -2836,6 +2855,7 @@ it('saves fine listening speed independently of synthesis speeds and retains it 
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: true,
       provider: 'elevenlabs',
       voice: 'af_heart',
@@ -2855,6 +2875,7 @@ it('saves fine listening speed independently of synthesis speeds and retains it 
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: true,
       provider: 'elevenlabs',
       voice: 'af_heart',
@@ -3040,6 +3061,7 @@ it('mutes active narration from the toolbar without pausing the session and togg
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: true,
       provider: 'kokoro',
       voice: 'af_heart',
@@ -3061,6 +3083,7 @@ it('mutes active narration from the toolbar without pausing the session and togg
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: false,
       provider: 'kokoro',
       voice: 'af_heart',
@@ -3101,6 +3124,7 @@ it('shows OpenRouter provider-default voice as ready only with current allowed-v
       type: 'speechSettings',
       value: {
         contextEnabled: false,
+        speechLookahead: true,
         enabled: true,
         provider: 'openrouter',
         voice: 'af_heart',
@@ -3240,6 +3264,7 @@ function settings(model: string, accent?: SpeechSettings['openRouterAccent']): S
   return {
     enabled: true,
     contextEnabled: false,
+    speechLookahead: true,
     provider: 'openrouter',
     voice: 'af_heart',
     speed: 1,
@@ -3259,6 +3284,23 @@ function accentSelect(): InstanceType<typeof window.HTMLSelectElement> {
   if (!(select instanceof window.HTMLSelectElement)) throw new TypeError('Missing accent select');
   return select;
 }
+
+it('OffNothingAhead: the look-ahead box starts on, follows the host, and saves its choice (#108)', () => {
+  const box = element('speech-lookahead');
+  if (!(box instanceof window.HTMLInputElement)) throw new TypeError('Missing look-ahead box');
+  expect(box.checked).toBe(true);
+  send({ type: 'speechSettings', value: settings('elevenlabs/eleven-v3') });
+  expect(box.checked).toBe(true);
+  send({ type: 'speechSettings', value: { ...settings('elevenlabs/eleven-v3'), speechLookahead: false } });
+  expect(box.checked).toBe(false);
+  box.checked = true;
+  box.dispatchEvent(new window.Event('change'));
+  expect(posted().at(-1)).toEqual({
+    type: 'speechSettings',
+    // oxlint-disable-next-line typescript/no-unsafe-assignment -- Vitest's asymmetric matcher validates this value.
+    value: expect.objectContaining({ speechLookahead: true }),
+  });
+});
 
 describe('the accent (#101, specs/SpeechCue.tla)', () => {
   it('NeverShown: hides the audio tags the agent writes, now and in the history, and keeps every word and code span', () => {
@@ -3324,6 +3366,7 @@ it('reports OpenRouter catalog states and restores saved settings', () => {
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: true,
       provider: 'openrouter',
       voice: 'af_heart',
@@ -3359,6 +3402,7 @@ it('reports OpenRouter catalog states and restores saved settings', () => {
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: true,
       provider: 'openrouter',
       voice: 'af_heart',
@@ -3372,6 +3416,7 @@ it('reports OpenRouter catalog states and restores saved settings', () => {
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: true,
       provider: 'openrouter',
       voice: 'af_heart',
@@ -3389,6 +3434,7 @@ it('marks a remembered OpenRouter selection unavailable when a current catalog e
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: true,
       provider: 'openrouter',
       voice: 'af_heart',
@@ -3423,6 +3469,7 @@ it('retains authoritative exclusion during a refresh and its failure', () => {
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: true,
       provider: 'openrouter',
       voice: 'af_heart',
@@ -3451,6 +3498,7 @@ it('saves the ZDR choice before refreshing compatible account models', () => {
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: false,
       provider: 'openrouter',
       voice: 'af_heart',
@@ -3482,6 +3530,7 @@ it('saves ZDR without requesting a catalog when no key is saved', () => {
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: false,
       provider: 'openrouter',
       voice: 'af_heart',
@@ -3507,6 +3556,7 @@ it('saves ZDR without requesting a catalog when cloud speech is unsupported', ()
     type: 'speechSettings',
     value: {
       contextEnabled: false,
+      speechLookahead: true,
       enabled: false,
       provider: 'openrouter',
       voice: 'af_heart',
@@ -3531,6 +3581,7 @@ it('shows model capability and saves context without enabling speech', () => {
     value: {
       enabled: false,
       contextEnabled: false,
+      speechLookahead: true,
       provider: 'openrouter',
       voice: 'af_heart',
       speed: 1,
@@ -3562,6 +3613,7 @@ it('shows context capabilities for supported and unsupported models', () => {
     elevenLabsSpeed: 1,
     openRouterVoice: '',
     contextEnabled: true,
+    speechLookahead: true,
     openRouterZdr: true,
   };
   send({ type: 'speechSettings', value: { ...base, openRouterModel: 'elevenlabs/eleven-v4' } });

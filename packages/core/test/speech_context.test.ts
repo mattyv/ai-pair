@@ -74,4 +74,51 @@ describe('SpeechContext', () => {
     expect(Array.from(previous)).toHaveLength(500);
     expect(previous).toBe('\u{1F600}'.repeat(500));
   });
+
+  describe('anticipate (#108)', () => {
+    it('AnticipationExact: foresees the previous text the next capture carries once the playing line completes', () => {
+      const context = new SpeechContext();
+      context.session(1, true);
+      context.configure(config);
+      for (const text of ['one', 'two', 'three']) capture(context, text).complete();
+      const playing = capture(context, 'four');
+      const foreseen = context.anticipate('four');
+      expect(foreseen).toBe('two three four');
+      playing.complete();
+      expect(capture(context, 'five').previousText).toBe(foreseen);
+    });
+
+    it('AnticipationExact: foresees within the character bound, as completion trims', () => {
+      const context = new SpeechContext();
+      context.session(1, true);
+      context.configure(config);
+      capture(context, 'short').complete();
+      const long = '\u{1F600}'.repeat(600);
+      const playing = capture(context, long);
+      const foreseen = context.anticipate(long);
+      playing.complete();
+      expect(capture(context, 'next').previousText).toBe(foreseen);
+    });
+
+    it('settles nothing: the playing line still completes, and history is unchanged until it does', () => {
+      const context = new SpeechContext();
+      context.session(1, true);
+      context.configure(config);
+      const playing = capture(context, 'playing');
+      context.anticipate('playing');
+      context.anticipate('playing');
+      playing.complete();
+      expect(capture(context, 'next').previousText).toBe('playing');
+    });
+
+    it('foresees nothing when context is off or the session is not active, or for an empty first line', () => {
+      const context = new SpeechContext();
+      expect(context.anticipate('line')).toBeUndefined();
+      context.session(1, true);
+      context.configure({ ...config, enabled: false });
+      expect(context.anticipate('line')).toBeUndefined();
+      context.configure(config);
+      expect(context.anticipate('')).toBeUndefined();
+    });
+  });
 });

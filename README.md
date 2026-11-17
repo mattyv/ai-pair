@@ -77,7 +77,16 @@ and supported delivery cues remain available without it.
 This is plain previous agent narration, not chat history; it is held only for
 the current session. OpenRouter ElevenLabs v4 supports previous text and
 delivery cues; v3, v3 conversational and v4 turbo support delivery cues only.
-Other models use ordinary speech. This does not enable speech, change the
+Other models use ordinary speech.
+
+With a cloud voice, **Prepare the next line while one plays** (on by default)
+requests the next line while the current one plays, so lines follow each other
+without a gap. The next line's text reaches the provider before the panel shows
+it, and a line prepared but not played, after an interrupt or a settings change,
+is still charged and counts in the OpenRouter subtotal. Turn it off in Pair
+Settings.
+
+Speech context does not enable speech, change the
 provider, add a microphone, or create a voice chat.
 
 Speech is off by default. Enable narration in Pair Settings or with the toolbar

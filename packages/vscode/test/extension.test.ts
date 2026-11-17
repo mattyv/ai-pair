@@ -214,6 +214,7 @@ const fakes = vi.hoisted(() => {
     readonly configureNarrationContext = vi.fn();
     readonly setNarrationSession = vi.fn();
     readonly prepare = vi.fn();
+    readonly prepareNext = vi.fn();
     readonly speak = vi.fn<() => Promise<void>>().mockResolvedValue();
     readonly attentionCue = vi.fn<() => Promise<void>>().mockResolvedValue();
     readonly pause = vi.fn<() => void>();
@@ -519,6 +520,7 @@ const fakes = vi.hoisted(() => {
       | {
           narration: {
             speak: ReturnType<typeof vi.fn>;
+            prepareNext: ReturnType<typeof vi.fn>;
             attentionCue: ReturnType<typeof vi.fn>;
             waitForRetirement: ReturnType<typeof vi.fn>;
             pause: ReturnType<typeof vi.fn>;
@@ -693,6 +695,7 @@ vi.mock('../src/workspace_session', () => ({
   WorkspaceSession: class {
     narration = {
       speak: vi.fn(() => Promise.resolve()),
+      prepareNext: vi.fn(),
       attentionCue: vi.fn(() => Promise.resolve()),
       waitForRetirement: vi.fn<(_: AbortSignal) => Promise<boolean>>().mockResolvedValue(true),
       pause: vi.fn(),
@@ -1283,6 +1286,7 @@ describe('activate', () => {
     expect(h.controller.narration).toBeDefined();
     expect(speech.options.settings()).toEqual({
       contextEnabled: false,
+      speechLookahead: true,
       enabled: false,
       provider: 'kokoro',
       voice: 'af_heart',
@@ -1298,6 +1302,7 @@ describe('activate', () => {
     fakes.settings.set('speech.speed', 1.25);
     expect(speech.options.settings()).toEqual({
       contextEnabled: false,
+      speechLookahead: true,
       enabled: true,
       provider: 'kokoro',
       voice: 'bf_emma',
@@ -1310,6 +1315,7 @@ describe('activate', () => {
     fakes.settings.set('speech.speed', 9);
     expect(speech.options.settings()).toEqual({
       contextEnabled: false,
+      speechLookahead: true,
       enabled: true,
       provider: 'kokoro',
       voice: 'invalid',
@@ -2247,6 +2253,8 @@ it('holds narration and secret changes while placement is pending, then selects 
   await expect(facts.model()).resolves.toBe(false);
   await expect(facts.key('elevenlabs')).resolves.toBe(false);
   await h.controller.narration.speak('legacy');
+  h.controller.narration.prepareNext?.('next');
+  expect(speech.prepareNext).toHaveBeenCalledWith('next', undefined);
   await h.controller.narration.attentionCue?.();
   expect(speech.attentionCue).toHaveBeenCalledOnce();
   h.controller.narration.pause();
@@ -2332,6 +2340,9 @@ it('routes companion controls, keys, frame acknowledgements and connection notic
   expect(await h.controller.narration.ready?.()).toBe(false);
   session.pageReady.mockReturnValue(true);
   await h.controller.narration.speak('hello');
+  // specs/SpeechLookahead.tla, Hint: the next line's hint reaches the companion's narration.
+  h.controller.narration.prepareNext?.('next', 'excited');
+  expect(session.narration.prepareNext).toHaveBeenCalledWith('next', 'excited');
   h.controller.narration.pause();
   h.controller.narration.resume();
   h.controller.narration.cancel();
@@ -2909,6 +2920,19 @@ it('suppresses failed commit notifications after shutdown', async () => {
   commit.resolve(false);
   await h.api.ready;
   expect(fakes.infos).toEqual([]);
+});
+
+it('OffNothingAhead: reads look-ahead as on unless turned off, and saves it (#108)', async () => {
+  const h = activated();
+  await h.api.ready;
+  const wiring = h.panel.wiring.speech;
+  expect(wiring.settings.get()).toMatchObject({ speechLookahead: true });
+  wiring.settings.set({ ...wiring.settings.get(), speechLookahead: false });
+  await vi.waitFor(() => {
+    expect(fakes.updated).toContainEqual(['speech.lookahead', false, 1]);
+  });
+  fakes.settings.set('speech.lookahead', false);
+  expect(activated().panel.wiring.speech.settings.get()).toMatchObject({ speechLookahead: false });
 });
 
 it('restores and saves the accent, and reads a stored one not offered as none (#101)', async () => {

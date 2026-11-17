@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.46.0
+
+-   With a cloud voice (OpenRouter or ElevenLabs), prepare the next line while
+    one plays, so lines follow each other without waiting for the provider:
+    measured with a 300 ms provider, the gap went from 304 ms to 0 (#108). A
+    prepared line plays only if it is exactly what that line would have
+    requested, so what you hear does not change. The next line's text reaches
+    the provider before it is shown, and one prepared but not played, after an
+    interrupt or a settings change, is still charged. Pair Settings has **Prepare
+    the next line while one plays**, on by default.
+
 ## 0.45.1
 
 -   Keep the line breaks in your replies in the panel's history. The agent

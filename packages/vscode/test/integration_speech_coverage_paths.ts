@@ -124,3 +124,64 @@ export async function speechCoveragePaths(api: Api): Promise<void> {
     controller.disconnect();
   }
 }
+
+/**
+ * Hint, in specs/SpeechLookahead.tla, through the loaded controller and player (#108): the next say of the batch is
+ * announced with its delivery, a batch queued behind does not announce it again, the queued batch's say is announced
+ * once the batch has none left, and the last line announces nothing.
+ */
+export async function lookaheadHintPaths(api: Api): Promise<void> {
+  const LoadedController = z.custom<typeof Controller>((value) => typeof value === 'function').parse(api.controller.constructor);
+  const prepared: Array<[string, string | undefined]> = [];
+  const speaking: Array<() => void> = [];
+  const controller = new LoadedController(api.editor, { post: () => {} }, undefined, {
+    speak: () =>
+      new Promise<void>((resolve) => {
+        speaking.push(resolve);
+      }),
+    prepareNext: (text, delivery) => {
+      prepared.push([text, delivery]);
+    },
+    attentionCue: () => Promise.resolve(),
+    pause: () => {},
+    resume: () => {},
+    cancel: () => {
+      for (const finish of speaking) finish();
+    },
+  });
+  controller.setSpeed(20);
+  controller.setReadingSpeed(20);
+  try {
+    await within(controller.start('look-ahead hints'), 'look-ahead session did not start');
+    await within(
+      controller.step([
+        { say: 'First line.', speech_mode: 'continue' },
+        { say: 'Second line.', speech_mode: 'continue', speech_delivery: 'curious' },
+      ]),
+      'the first batch was not accepted',
+    );
+    await until(() => speaking.length === 1 && prepared.length === 1, 'the second line was not announced');
+    const queued = controller.step([{ say: 'Queued line.', speech_mode: 'continue' }]);
+    // The queued batch's say is not next while this batch has one left.
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    assert.deepEqual(prepared, [['Second line.', 'curious']]);
+    speaking[0]?.();
+    await until(() => speaking.length === 2 && prepared.length === 2, 'the queued line was not announced');
+    speaking[1]?.();
+    await within(queued, 'the queued batch did not start');
+    await until(() => speaking.length === 3, 'the queued line did not speak');
+    speaking[2]?.();
+    await within(controller.step([]), 'the last batch did not finish');
+    assert.deepEqual(prepared, [
+      ['Second line.', 'curious'],
+      ['Queued line.', undefined],
+    ]);
+    console.log('SpeechLookahead Hint: the next line announced once, from its batch or the queued one, and none after the last');
+  } finally {
+    for (const finish of speaking) finish();
+    controller.endSession();
+    controller.disconnect();
+  }
+}

@@ -158,6 +158,8 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
         <select data-ui="speech-context"><option value="off">Off</option><option value="on">On</option></select>
       </label>
       <p data-ui="speech-context-capability"></p>
+      <label class="settings-check"><input type="checkbox" data-ui="speech-lookahead" checked> Prepare the next line while one plays</label>
+      <p>Cloud voices only. The next line is sent before it is shown, and one prepared but not played is still charged.</p>
       <label class="settings-field">Listening speed (experimental)
         <input type="range" data-ui="speech-listening-speed" min="0.75" max="1.5" step="0.05" value="1" aria-valuetext="1.00x">
         <span data-ui="speech-listening-speed-value" aria-hidden="true">1.00x</span>

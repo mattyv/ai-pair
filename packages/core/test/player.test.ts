@@ -542,6 +542,98 @@ describe('say', () => {
   });
 });
 
+/** A narration port whose speech stays playing until the test settles it, and whose hints are recorded. */
+function lookahead(h: Harness, prepareNext: (text: string, delivery?: string) => void = vi.fn()) {
+  const speeches: Array<PromiseWithResolvers<void>> = [];
+  const speak = vi.fn(() => {
+    const speech = Promise.withResolvers<void>();
+    speeches.push(speech);
+    return speech.promise;
+  });
+  Object.assign(h.stage, { narration: { speak, prepareNext, pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() } });
+  return { speak, prepareNext, speeches };
+}
+
+describe('announcing the next line (#108, specs/SpeechLookahead.tla)', () => {
+  it('Hint: announces the next spoken say of the batch, with its delivery, once, while the first speaks', async () => {
+    const h = harness();
+    const { prepareNext, speeches } = lookahead(h);
+    const playing = h.player.play(1, [
+      { say: 'First.', speech_mode: 'continue' },
+      { say: 'Shown only.', speak: false },
+      { say: 'Second.', speech_delivery: 'excited' },
+    ]);
+    await vi.waitFor(() => {
+      expect(prepareNext).toHaveBeenCalledWith('Second.', 'excited');
+    });
+    h.player.announceNext();
+    expect(prepareNext).toHaveBeenCalledOnce();
+    speeches[0]?.resolve();
+    await vi.waitFor(() => {
+      expect(speeches).toHaveLength(2);
+    });
+    speeches[1]?.resolve();
+    await playing;
+    expect(prepareNext).toHaveBeenCalledOnce();
+  });
+
+  it('Hint: announces the first spoken say of a queued batch, without a delivery, when this batch has none left', async () => {
+    const h = harness();
+    const { prepareNext, speeches } = lookahead(h);
+    Object.assign(h.stage, { nextSpokenSay: () => ({ say: 'Queued.' }) });
+    const playing = h.player.play(1, [{ say: 'Only.', speech_mode: 'continue' }]);
+    await vi.waitFor(() => {
+      expect(prepareNext).toHaveBeenCalledWith('Queued.');
+    });
+    speeches[0]?.resolve();
+    await playing;
+  });
+
+  it('announces nothing when nothing speaks, nothing is next, or the port has no hint', async () => {
+    const h = harness();
+    const { prepareNext, speeches } = lookahead(h);
+    h.player.announceNext();
+    const playing = h.player.play(1, [{ say: 'Last.', speech_mode: 'continue' }]);
+    await vi.waitFor(() => {
+      expect(speeches).toHaveLength(1);
+    });
+    speeches[0]?.resolve();
+    await playing;
+    await Promise.resolve();
+    Object.assign(h.stage, { nextSpokenSay: () => ({ say: 'Later.' }) });
+    h.player.announceNext();
+    expect(prepareNext).not.toHaveBeenCalled();
+    const bare = harness();
+    Object.assign(bare.stage, {
+      narration: { speak: vi.fn(() => new Promise<void>(() => {})), pause: vi.fn(), resume: vi.fn(), cancel: vi.fn() },
+      nextSpokenSay: () => ({ say: 'Later.' }),
+    });
+    void bare.player.play(1, [{ say: 'Speaking.', speech_mode: 'continue' }]);
+    await Promise.resolve();
+    bare.player.announceNext();
+  });
+
+  it('keeps playing when the hint throws', async () => {
+    const h = harness();
+    const { speeches } = lookahead(
+      h,
+      vi.fn(() => {
+        throw new Error('broken hint');
+      }),
+    );
+    const playing = h.player.play(1, [{ say: 'First.', speech_mode: 'continue' }, { say: 'Second.' }]);
+    await vi.waitFor(() => {
+      expect(speeches).toHaveLength(1);
+    });
+    speeches[0]?.resolve();
+    await vi.waitFor(() => {
+      expect(speeches).toHaveLength(2);
+    });
+    speeches[1]?.resolve();
+    expect((await playing).result.status).toBe('completed');
+  });
+});
+
 describe('selected speech', () => {
   it('interrupts a say waiting for the previous speech before display', async () => {
     const h = harness();

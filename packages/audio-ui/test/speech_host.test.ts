@@ -495,7 +495,7 @@ it('keeps the latest setting while serialized writes are pending and rolls back 
   });
   pending.resolve();
   await vi.waitFor(() => {
-    expect(fakes.update).toHaveBeenCalledTimes(16);
+    expect(fakes.update).toHaveBeenCalledTimes(18);
   });
   expect(panel.showSpeechSettings).toHaveBeenCalledTimes(3);
   fakes.update.mockRejectedValueOnce(new Error('private'));
@@ -623,6 +623,7 @@ it('reads local settings, previews installed models, and keeps cloud unavailable
   const { host, panel } = harness();
   expect(host.panelSpeech.settings.get()).toEqual({
     contextEnabled: false,
+    speechLookahead: true,
     enabled: true,
     voice: 'am_michael',
     speed: 1.25,
@@ -649,21 +650,21 @@ it('restores a newly validated voice and ignores a superseded failed save', asyn
   const { host } = harness();
   fakes.credentialChanged?.();
   await vi.waitFor(() => {
-    expect(fakes.update).toHaveBeenCalledTimes(8);
+    expect(fakes.update).toHaveBeenCalledTimes(9);
   });
   const blocked = Promise.withResolvers<void>();
   fakes.update.mockReturnValueOnce(blocked.promise);
   const first = { ...host.panelSpeech.settings.get(), enabled: true };
   host.panelSpeech.settings.set(first);
   await vi.waitFor(() => {
-    expect(fakes.update).toHaveBeenCalledTimes(8);
+    expect(fakes.update).toHaveBeenCalledTimes(9);
   });
   fakes.contains.mockReturnValue(true);
   const second = { ...first, elevenLabsVoice: 'new_voice' };
   host.panelSpeech.settings.set(second);
   blocked.reject(new Error('old failure'));
   await vi.waitFor(() => {
-    expect(fakes.update).toHaveBeenCalledTimes(17);
+    expect(fakes.update).toHaveBeenCalledTimes(19);
   });
   expect(fakes.errorMessage).not.toHaveBeenCalled();
   fakes.config.set('speech.elevenLabsVoice', 'new_voice');
@@ -1227,6 +1228,17 @@ it('drops transient busy feedback after an ABA mode change', async () => {
   expect(host.panelSpeech.computeState().gpuCheck).toEqual({ phase: 'idle' });
   fakes.setupBusy.mockReturnValue(false);
   await host.dispose();
+});
+
+it('OffNothingAhead: reads look-ahead as on unless turned off, and saves it, in the local companion (#108)', async () => {
+  const { host } = harness();
+  expect(host.panelSpeech.settings.get()).toMatchObject({ speechLookahead: true });
+  host.panelSpeech.settings.set({ ...host.panelSpeech.settings.get(), speechLookahead: false });
+  await vi.waitFor(() => {
+    expect(fakes.update).toHaveBeenCalledWith('speech.lookahead', false, 1);
+  });
+  fakes.config.set('speech.lookahead', false);
+  expect(harness().host.panelSpeech.settings.get()).toMatchObject({ speechLookahead: false });
 });
 
 it('restores and saves the accent in the local companion, and reads a stored one not offered as none (#101)', async () => {

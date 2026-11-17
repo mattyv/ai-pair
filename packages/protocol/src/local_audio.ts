@@ -5,7 +5,7 @@ import { SPEECH_DELIVERY_SCHEMA } from './schemas';
 import { localPanelChunk } from './panel_chunks';
 
 /** The supported workspace-to-companion protocol version. */
-export const LOCAL_AUDIO_VERSION = 7;
+export const LOCAL_AUDIO_VERSION = 8;
 
 /** Lists the `<platform>-<arch>` hosts the bundled Kokoro runtime is built for (#39). */
 export const KOKORO_HOSTS: readonly string[] = ['linux-x64', 'darwin-x64', 'darwin-arm64'];
@@ -33,6 +33,16 @@ export const localAudioFrame = z.discriminatedUnion('type', [
     text: z.string().refine((text) => speechProblem(text) === undefined),
   }),
   z.strictObject({ ...envelope, ...owner, type: z.literal('attentionCue') }),
+  // #108: the next line to prepare ahead while one plays, and its discard on an interrupt between lines; no job owns
+  // either, since a prepared line plays only through its own `speak`.
+  z.strictObject({
+    ...envelope,
+    type: z.literal('prepareNext'),
+    pageEpoch: z.int().nonnegative(),
+    delivery: SPEECH_DELIVERY_SCHEMA.optional(),
+    text: z.string().refine((text) => speechProblem(text) === undefined),
+  }),
+  z.strictObject({ ...envelope, type: z.literal('unprepare'), pageEpoch: z.int().nonnegative() }),
   z.strictObject({ ...envelope, ...owner, type: z.literal('pause') }),
   z.strictObject({ ...envelope, ...owner, type: z.literal('resume') }),
   z.strictObject({ ...envelope, ...owner, type: z.literal('cancel') }),
