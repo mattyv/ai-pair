@@ -255,6 +255,17 @@ test('open menu follows its trigger when bottom band grows', async ({ page }) =>
     })
     .toBe(true);
 });
+test("a reply keeps the programmer's line breaks (#107)", async ({ page }) => {
+  const post = await load(page);
+  await post({ type: 'session', active: true, task: 'Notes' });
+  await post({ type: 'programmer', text: 'is this true ?\nFunding: the publisher connects directly.\n\nThe rebalancer does not.' });
+  const reply = page.locator('.you').last();
+  await expect(reply).toHaveCSS('white-space', 'pre-wrap');
+  // innerText follows what the page renders, so a collapsed break reads as a space; textContent would not show it.
+  // oxlint-disable-next-line unicorn/prefer-dom-node-text-content
+  expect(await reply.innerText()).toBe('is this true ?\nFunding: the publisher connects directly.\n\nThe rebalancer does not.');
+});
+
 for (const width of [320, 240]) {
   test(`OpenRouter settings fit at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });

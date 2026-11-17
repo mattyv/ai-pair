@@ -410,11 +410,19 @@ async function terminalWithoutReportedCwd(api: Api): Promise<void> {
       },
     });
     try {
-      await controller.step([{ run: 'printf cwd-fallback-reused', wait: 5 }]);
+      const command = 'printf cwd-fallback-reused';
+      await controller.step([{ run: command, wait: 5 }]);
       const report = await controller.step([]);
+      // On a slow runner the batch ends before the command does; its output then comes later, as a command_exit event (#97).
+      await runEnded(api, command);
+      const later = await controller.step([]);
+      const output = [
+        ...report.batches.flatMap((batch) => (batch.runs ?? []).map((run) => run.output)),
+        ...[...report.events, ...later.events].flatMap((event) => (event.kind === 'command_exit' ? [event.output] : [])),
+      ];
       assert.ok(
-        report.batches.some((batch) => batch.runs?.some((run) => run.output.includes('cwd-fallback-reused')) === true),
-        JSON.stringify(report),
+        output.some((text) => text.includes('cwd-fallback-reused')),
+        JSON.stringify({ report, later }),
       );
       assert.ok(reads > 0, 'the injected missing cwd was not read');
       assert.deepEqual(vscode.window.terminals, [terminal], 'the terminal was not reused');

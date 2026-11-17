@@ -693,7 +693,7 @@ button:focus-visible {
   color: var(--fg);
 }
 
-/* you: the programmer's reply, as a bubble on the right. */
+/* you: the programmer's reply, as a bubble on the right, with the line breaks they typed (#107). */
 .you {
   align-self: flex-end;
   background: var(--soft);
@@ -702,6 +702,7 @@ button:focus-visible {
   line-height: 1.45;
   max-width: 85%;
   padding: 6px 10px;
+  white-space: pre-wrap;
 }
 
 .you .ref {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.45.1
+
+-   Version aligned with the main extension, whose panel now keeps the line
+    breaks in your replies (#107). In a remote window this companion draws
+    that panel.
+
 ## 0.45.0
 
 -   Keep the OpenRouter accent setting with the other speech settings in a
