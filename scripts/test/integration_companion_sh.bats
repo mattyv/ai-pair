@@ -56,18 +56,18 @@ FAKE
   FAIL_STAGE=prepare run bash "${ROOT}/packages/vscode/scripts/integration_companion.sh" \
     "${ROOT}" "${TEST_RUN}" "${BATS_TEST_TMPDIR}" "${CODE}" "${ROOT}/packages/vscode"
   [ "${status}" -ne 0 ]
-  [[ "${output}" == *'AssertionError: probe'* ]]
+  [[ "${output}" == *'AssertionError: probe'* ]] || false
   FAIL_STAGE=verify run bash "${ROOT}/packages/vscode/scripts/integration_companion.sh" \
     "${ROOT}" "${TEST_RUN}" "${BATS_TEST_TMPDIR}" "${CODE}" "${ROOT}/packages/vscode"
   [ "${status}" -ne 0 ]
-  [[ "${output}" == *'AssertionError: probe'* ]]
+  [[ "${output}" == *'AssertionError: probe'* ]] || false
 }
 
 @test "fails when a stage writes no result" {
   NO_RESULT=verify run bash "${ROOT}/packages/vscode/scripts/integration_companion.sh" \
     "${ROOT}" "${TEST_RUN}" "${BATS_TEST_TMPDIR}" "${CODE}" "${ROOT}/packages/vscode"
   [ "${status}" -ne 0 ]
-  [[ "${output}" == *'Companion verify did not report success'* ]]
+  [[ "${output}" == *'Companion verify did not report success'* ]] || false
 }
 
 @test "requires a persisted workspace database and cleans the profile" {
