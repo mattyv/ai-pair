@@ -42,4 +42,23 @@ awk -v max_columns="${MAX_COLUMNS}" -v max_lines="${MAX_LINES}" '
   }
   END { exit bad }
 ' "${FILES[@]}" || status=1
+
+# Bash 3.2, which macOS ships, does not fail a bats test on a false [[ ]] or
+# (( )) before its last line, so every such assertion ends in || false (#112).
+BATS_LISTING="$(git ls-files --cached --others --exclude-standard '*.bats')" \
+  || exit 1
+if [[ -n "${BATS_LISTING}" ]]; then
+  BATS_FILES=()
+  while IFS= read -r file; do
+    BATS_FILES+=("${file}")
+  done <<<"${BATS_LISTING}"
+  awk '
+    /^[ \t]+(\[\[|\(\().*(\]\]|\)\))[ \t]*$/ {
+      printf "%s:%d: end the assertion with || false\n", FILENAME, FNR \
+        > "/dev/stderr"
+      bad = 1
+    }
+    END { exit bad }
+  ' "${BATS_FILES[@]}" || status=1
+fi
 exit "${status}"

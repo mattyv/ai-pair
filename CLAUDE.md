@@ -297,7 +297,10 @@ Set by Justine on 2026-10-07.
     `npm run lint:sh` (`scripts/lint_shell.sh`) runs ShellCheck with the
     optional checks in `.shellcheckrc`, shfmt with the settings in
     `.editorconfig`, and checks the `#!/bin/bash` first line, lowercase file
-    names, 80 columns, and 100 lines; it runs in CI's `check` job. These rules
+    names, 80 columns, and 100 lines. It also fails a bats test's `[[ ]]` or
+    `(( ))` assertion that does not end in `|| false`: under bash 3.2, which
+    macOS ships, a false one before a test's last line does not fail the test
+    (#112). It runs in CI's `check` job. These rules
     no tool checks, so follow them by hand:
     -   Run scripts with `bash`, never `sh`: `bash scripts/integration.sh`
         (Which Shell to Use).

@@ -22,20 +22,20 @@ TLC
 
 @test "runs each config with one worker and records each process outcome" {
   run bash "${ROOT}/specs/run_configs.sh" "${BATS_TEST_TMPDIR}/out"
-  [[ "${status}" -eq 0 ]]
-  [[ "$(cat out/Alpha.status)" == 0 ]]
-  [[ "$(cat out/Beta_Model.status)" == 3 ]]
-  [[ "$(cat out/Alpha.out)" == *'No error has been found.'* ]]
-  [[ "$(cat out/Beta_Model.out)" == 'bad config' ]]
+  [[ "${status}" -eq 0 ]] || false
+  [[ "$(cat out/Alpha.status)" == 0 ]] || false
+  [[ "$(cat out/Beta_Model.status)" == 3 ]] || false
+  [[ "$(cat out/Alpha.out)" == *'No error has been found.'* ]] || false
+  [[ "$(cat out/Beta_Model.out)" == 'bad config' ]] || false
 }
 
 @test "rejects unsafe parallelism before starting a child" {
   for jobs in 9 18446744073709551616; do
     export TLC_JOBS="${jobs}"
     run --separate-stderr bash "${ROOT}/specs/run_configs.sh" "${BATS_TEST_TMPDIR}/out"
-    [[ "${status}" -eq 1 ]]
-    [[ "${stderr}" == *'TLC_JOBS must be between 1 and 8'* ]]
-    [[ -z "$(ls -A out)" ]]
+    [[ "${status}" -eq 1 ]] || false
+    [[ "${stderr}" == *'TLC_JOBS must be between 1 and 8'* ]] || false
+    [[ -z "$(ls -A out)" ]] || false
   done
 }
 
@@ -55,7 +55,7 @@ TLC
     [[ -f "${LOG}" ]] && [[ "$(wc -l <"${LOG}")" -eq 2 ]] && break
     sleep 0.02
   done
-  [[ -f "${LOG}" ]]
+  [[ -f "${LOG}" ]] || false
   kill -TERM "${owner}"
   for unused in {1..30}; do
     kill -TERM "${owner}" 2>/dev/null || break
@@ -68,7 +68,7 @@ TLC
       result=1
     fi
   done <"${LOG}"
-  [[ "${result}" -eq 0 ]]
+  [[ "${result}" -eq 0 ]] || false
 }
 
 @test "a cancellation racing child registration still retires the child" {
@@ -83,8 +83,8 @@ time.sleep(30)
 TLC
   export LOG="${BATS_TEST_TMPDIR}/racing-pids"
   run bash "${ROOT}/specs/run_configs.sh" "${BATS_TEST_TMPDIR}/out"
-  [[ "${status}" -eq 130 ]]
-  [[ -f "${LOG}" ]]
+  [[ "${status}" -eq 130 ]] || false
+  [[ -f "${LOG}" ]] || false
   result=0
   while read -r child; do
     if kill -0 "${child}" 2>/dev/null; then
@@ -92,7 +92,7 @@ TLC
       result=1
     fi
   done <"${LOG}"
-  [[ "${result}" -eq 0 ]]
+  [[ "${result}" -eq 0 ]] || false
 }
 
 @test "cancellation retires a TLC process that ignores termination" {
@@ -112,7 +112,7 @@ TLC
     [[ -f "${LOG}" ]] && [[ "$(wc -l <"${LOG}")" -eq 2 ]] && break
     sleep 0.02
   done
-  [[ -f "${LOG}" ]]
+  [[ -f "${LOG}" ]] || false
   kill -TERM "${owner}"
   for unused in {1..100}; do
     kill -0 "${owner}" 2>/dev/null || break
@@ -127,5 +127,5 @@ TLC
     kill -KILL "${child}" 2>/dev/null || true
   done <"${LOG}"
   wait "${owner}" || true
-  [[ "${result}" -eq 0 ]]
+  [[ "${result}" -eq 0 ]] || false
 }
