@@ -751,6 +751,13 @@
       "functions": 100
     }
   },
+  "packages/vscode/src/setting_store.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/vscode/src/setup.ts": {
     "unit": {
       "lines": 100,
