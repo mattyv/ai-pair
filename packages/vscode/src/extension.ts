@@ -56,6 +56,7 @@ import { builtInPassage, type Passage } from './passage';
 import { PanelPlacement, type PanelOwner, type PanelPrepareFailure } from './panel_placement';
 import { WorkspaceSession } from './workspace_session';
 import { warnOldExtension } from './old_extension';
+import { StoredSetting, settleWithin, type Settling } from './setting_store';
 
 /** Values compiled into this running bundle, not the extension currently on disk. */
 declare const AI_PAIR_VERSION: string;
@@ -76,6 +77,8 @@ const TIMING = 'timing';
 const AGENT_NAME = 'agentName';
 const CONFIRM_COMMANDS = 'confirmCommands';
 const CALIBRATION_PASSAGE = 'calibrationPassage';
+/** How long a reload waits for panel settings still being saved; VS Code allows deactivation about five seconds (#119). */
+const SETTINGS_FLUSH_MS = 3000;
 /** Maximum wait for companion preparation before choosing a fallback. */
 const COMPANION_PREPARE_TIMEOUT_MS = 1500;
 /** Cold extension activation may load the companion bundle before command dispatch. */
@@ -180,6 +183,9 @@ function showInstallCompanion(): void {
 
 /** Waits for the active legacy speech service to retire during deactivation. */
 let stopSpeech: (() => Promise<void>) | undefined;
+
+/** Waits, during deactivation, for panel settings still being saved (#119). */
+let flushSettings: (() => Promise<void>) | undefined;
 
 /** Starts the extension: the controller, the editor, the panel, the bridge, and the commands; returns the API the integration test drives. */
 export function activate(context: vscode.ExtensionContext): Api {
@@ -302,27 +308,66 @@ export function activate(context: vscode.ExtensionContext): Api {
     () => config().get<unknown>('showTerminalsAutomatically') === true,
     record,
   );
-  const speed = {
-    get: () => settingSpeed(config().get<unknown>(SPEED, 1)),
-    set: (value: number) => {
-      void config().update(SPEED, value, vscode.ConfigurationTarget.Global);
+  // Frames and panel messages at the Trace level, which VS Code hides unless it is set, and resets
+  // when the extension is reinstalled; with `aiPair.trace`, at Info, which it shows (#27).
+  const log = vscode.window.createOutputChannel('AI Pair', { log: true });
+  function trace(line: string): void {
+    if (config().get('trace', false)) {
+      log.info(line);
+    } else {
+      log.trace(line);
+    }
+  }
+  /** The panel's settings by key, to note VS Code's change events and await writes before a reload (#119). */
+  const storedSettings = new Map<string, Settling & { changed: () => void }>();
+  /**
+   * Returns a panel setting written to the user settings, which reads its requested value until the write lands; a
+   * failed write is logged and warned about, and `apply` shows the stored value again (specs/SettingRoundTrip.tla).
+   */
+  function panelSetting<T>(key: string, label: string, read: () => T, apply: () => void): StoredSetting<T> {
+    const setting = new StoredSetting<T>({
+      read,
+      write: (value) => config().update(key, value, vscode.ConfigurationTarget.Global),
+      failed: (value, error) => {
+        log.warn(`Could not save aiPair.${key} as ${JSON.stringify(value)}: ${String(error)}`);
+        void vscode.window.showErrorMessage(`Could not save the ${label} setting.`);
+        apply();
+      },
+    });
+    storedSettings.set(key, setting);
+    return setting;
+  }
+  flushSettings = () => settleWithin([...storedSettings.values()], SETTINGS_FLUSH_MS);
+  const speed = panelSetting(
+    SPEED,
+    'speed',
+    () => settingSpeed(config().get<unknown>(SPEED, 1)),
+    () => {
+      controller.setSpeed(speed.get());
+      panel.showSpeed(speed.get());
     },
-  };
-  const readingSpeed = {
-    get: () => settingSpeed(config().get<unknown>(READING_SPEED, 1)),
-    set: (value: number) => {
-      void config().update(READING_SPEED, value, vscode.ConfigurationTarget.Global);
+  );
+  const readingSpeed = panelSetting(
+    READING_SPEED,
+    'reading speed',
+    () => settingSpeed(config().get<unknown>(READING_SPEED, 1)),
+    () => {
+      controller.setReadingSpeed(readingSpeed.get());
+      panel.showReadingSpeed(readingSpeed.get());
     },
-  };
-  const codePlayback = {
-    get: (): import('@ai-pair/core').CodePlayback => {
+  );
+  const codePlayback = panelSetting(
+    CODE_PLAYBACK,
+    'code display',
+    (): import('@ai-pair/core').CodePlayback => {
       const value: unknown = config().get(CODE_PLAYBACK);
       return value === 'lines' || value === 'blocks' ? value : 'typing';
     },
-    set: (value: import('@ai-pair/core').CodePlayback) => {
-      void config().update(CODE_PLAYBACK, value, vscode.ConfigurationTarget.Global);
+    () => {
+      controller.setCodePlayback(codePlayback.get());
+      panel.showCodePlayback(codePlayback.get());
     },
-  };
+  );
   const setupAbort = new AbortController();
   let computeGeneration = 0;
   let computeTail: Promise<void> = Promise.resolve();
@@ -546,54 +591,50 @@ export function activate(context: vscode.ExtensionContext): Api {
       },
     );
   }
-  const replyBehavior = {
-    get: () => (config().get<unknown>('replyBehavior') === 'finishAction' ? ('finishAction' as const) : ('interrupt' as const)),
-    set: (value: 'interrupt' | 'finishAction') => {
-      void config().update('replyBehavior', value, vscode.ConfigurationTarget.Global);
+  const replyBehavior = panelSetting(
+    'replyBehavior',
+    'reply behavior',
+    () => (config().get<unknown>('replyBehavior') === 'finishAction' ? ('finishAction' as const) : ('interrupt' as const)),
+    () => {
+      panel.showReplyBehavior(replyBehavior.get());
     },
-  };
-  const navigatorCommentary = {
-    get: (): NavigatorCommentary => {
+  );
+  const navigatorCommentary = panelSetting(
+    'navigatorCommentary',
+    'navigator commentary',
+    (): NavigatorCommentary => {
       const parsed = NAVIGATOR_COMMENTARY_SCHEMA.safeParse(config().get<unknown>('navigatorCommentary'));
       return parsed.success ? parsed.data : 'helpful';
     },
-    set: (value: NavigatorCommentary) => {
-      void config()
-        .update('navigatorCommentary', value, vscode.ConfigurationTarget.Global)
-        .then(undefined, () => {
-          panel.showNavigatorCommentary(navigatorCommentary.get());
-          void vscode.window.showErrorMessage('Could not save navigator commentary.');
-        });
+    () => {
+      controller.setNavigatorCommentary(navigatorCommentary.get());
+      panel.showNavigatorCommentary(navigatorCommentary.get());
     },
-  };
-  const chatOrder = {
-    get: () => (config().get<unknown>('chatOrder') === 'oldestFirst' ? ('oldestFirst' as const) : ('newestFirst' as const)),
-    set: (value: 'newestFirst' | 'oldestFirst') => {
-      void config().update('chatOrder', value, vscode.ConfigurationTarget.Global);
+  );
+  const chatOrder = panelSetting(
+    'chatOrder',
+    'chat order',
+    () => (config().get<unknown>('chatOrder') === 'oldestFirst' ? ('oldestFirst' as const) : ('newestFirst' as const)),
+    () => {
+      panel.showChatOrder(chatOrder.get());
     },
-  };
-  const terminalSettings = {
-    get: () => config().get<unknown>('showTerminalsAutomatically') === true,
-    set: (value: boolean) => {
-      void config().update('showTerminalsAutomatically', value, vscode.ConfigurationTarget.Global);
+  );
+  const terminalSettings = panelSetting(
+    'showTerminalsAutomatically',
+    'show terminals',
+    () => config().get<unknown>('showTerminalsAutomatically') === true,
+    () => {
+      panel.showTerminalPreference(terminalSettings.get());
     },
-  };
-  const commandApprovalSound = {
-    get: () => config().get<unknown>('commandApprovalSound') === true,
-    set: (value: boolean) => {
-      void config().update('commandApprovalSound', value, vscode.ConfigurationTarget.Global);
+  );
+  const commandApprovalSound = panelSetting(
+    'commandApprovalSound',
+    'command approval sound',
+    () => config().get<unknown>('commandApprovalSound') === true,
+    () => {
+      panel.showCommandApprovalSound(commandApprovalSound.get());
     },
-  };
-  // Frames and panel messages at the Trace level, which VS Code hides unless it is set, and resets
-  // when the extension is reinstalled; with `aiPair.trace`, at Info, which it shows (#27).
-  const log = vscode.window.createOutputChannel('AI Pair', { log: true });
-  function trace(line: string): void {
-    if (config().get('trace', false)) {
-      log.info(line);
-    } else {
-      log.trace(line);
-    }
-  }
+  );
   const launcher = writeLauncher(context.extensionPath);
   const starter = claudeStarter(launcher);
   /** Checks the installed model while ignoring superseded or disposed results. */
@@ -1086,7 +1127,13 @@ export function activate(context: vscode.ExtensionContext): Api {
     }),
     calibrate: (chosen) => {
       if (!calibration.arm(chosen)) return false;
-      void config().update(CALIBRATION_PASSAGE, chosen, vscode.ConfigurationTarget.Global);
+      // A failed save is reported, not dropped (#119); the passage armed for this calibration still plays.
+      config()
+        .update(CALIBRATION_PASSAGE, chosen, vscode.ConfigurationTarget.Global)
+        .then(undefined, (error: unknown) => {
+          log.warn(`Could not save aiPair.${CALIBRATION_PASSAGE}: ${String(error)}`);
+          void vscode.window.showErrorMessage('Could not save the calibration passage.');
+        });
       return true;
     },
   });
@@ -1165,6 +1212,10 @@ export function activate(context: vscode.ExtensionContext): Api {
     vscode.commands.registerCommand('aiPair.setUpAgent', setUp),
     editor,
     vscode.workspace.onDidChangeConfiguration((e) => {
+      // specs/SettingRoundTrip.tla, Land: a write that landed is now in what VS Code reads.
+      for (const [key, setting] of storedSettings) {
+        if (e.affectsConfiguration(`aiPair.${key}`)) setting.changed();
+      }
       if (e.affectsConfiguration('aiPair.speech')) {
         if (!computePending) {
           const mode: unknown = config().get('speech.computeMode');
@@ -1463,5 +1514,6 @@ export function activate(context: vscode.ExtensionContext): Api {
 
 /** Waits for the speech lifecycle to retire its resources. */
 export function deactivate(): Promise<void> {
-  return stopSpeech?.() ?? Promise.resolve();
+  // specs/SettingRoundTrip.tla, Reload: settings still being saved are given a bounded wait.
+  return Promise.all([stopSpeech?.() ?? Promise.resolve(), flushSettings?.() ?? Promise.resolve()]).then(() => {});
 }
