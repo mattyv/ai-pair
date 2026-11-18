@@ -2828,6 +2828,12 @@ current page instead of the immutable job page in `Retired` violates
 `LeaseStops`, `RetirementStops` and `ParentLossSettles` after page replacement;
 the unchanged baseline passes 3,632 states.
 
+The model abstracts time. The code's bounds are a 3 s heartbeat, a 10 s wait
+for each acknowledgement on either side, and a 20 s lease: longer than the
+acknowledgement wait plus one heartbeat, so a stall the workspace survives
+does not end the lease. They were 3 s and 10 s before #115, when a 6.8 s stall
+of a sandbox's extension host dropped the connection.
+
 | Property | Current test evidence |
 |---|---|
 | `NoOverlap`, `NoStaleAck` | `audio-native/test/ownership.test.ts`: holds exclusive ownership until the corresponding process has actually retired; snapshots owner identity and rejects leases after retirement or replacement. |

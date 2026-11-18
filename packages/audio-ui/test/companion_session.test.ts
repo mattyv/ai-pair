@@ -401,7 +401,7 @@ it('stops locally on connection loss and handles repeated shutdown safely', () =
   expect(fake.showSpeechTransport).toHaveBeenCalledWith(false);
   // The companion's warning names its side and the lease it lost (#115).
   expect(fake.warning).toHaveBeenCalledWith(
-    'AI Pair Local Audio lost its workspace connection: no heartbeat from the workspace for 10 seconds. Reload the window to reconnect.',
+    'AI Pair Local Audio lost its workspace connection: no heartbeat from the workspace for 20 seconds. Reload the window to reconnect.',
   );
   fake.channelOptions?.lost('timeout');
   expect(fake.hostDispose).toHaveBeenCalledOnce();

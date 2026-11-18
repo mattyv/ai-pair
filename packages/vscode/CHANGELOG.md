@@ -19,6 +19,11 @@
     side gave up and why, such as "Local Audio did not answer a message in
     time" or "no heartbeat from the workspace for 10 seconds", and the AI Pair
     output logs it (#115).
+-   Keep the AI Pair Local Audio connection through a pause of several seconds
+    in either window's extension host: each side now waits 10 seconds for an
+    answer instead of 3, and the companion 20 seconds for a heartbeat instead
+    of 10. In a sandbox, a 7-second pause dropped the connection about 35
+    seconds after it was made (#115).
 -   The local audio protocol is version 9: install both extensions at 0.47.0.
 
 ## 0.46.0

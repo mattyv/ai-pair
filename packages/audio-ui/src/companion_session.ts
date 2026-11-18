@@ -23,8 +23,8 @@ import { createSpeechHost, type LocalSpeechObservation, type SpeechHost } from '
 declare const AI_PAIR_VERSION: string;
 declare const AI_PAIR_BUILD_ID: string;
 
-/** Maximum delay for a command acknowledgement. */
-const COMMAND_TIMEOUT_MS = 3000;
+/** Maximum delay for a command acknowledgement, as long as the workspace waits for one (#115). */
+const COMMAND_TIMEOUT_MS = 10_000;
 /** Milliseconds in a second, for a lease stated in seconds. */
 const MS_PER_SECOND = 1000;
 /** Why this side dropped its workspace connection, as its warning says (#115). */
@@ -36,8 +36,11 @@ const CHANNEL_LOSS: Record<ChannelLoss, string> = {
 };
 /** Maximum queued outbound commands. */
 const MAX_PENDING_COMMANDS = 128;
-/** Local silence follows a missed heartbeat within this lease. */
-const LEASE_MS = 10_000;
+/**
+ * Local silence follows a missed heartbeat within this lease. It outlasts the workspace's 10 s wait for
+ * one acknowledgement plus a heartbeat interval, so a stall the workspace survives cannot end it (#115).
+ */
+const LEASE_MS = 20_000;
 
 /** Operations exposed to the private activation commands. */
 export interface CompanionSession {
