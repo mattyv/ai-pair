@@ -36,7 +36,10 @@ export async function deferredSettlementPaths(api: Api, root: string): Promise<v
     assert.equal(sent, true, 'the final save participant did not run');
     assert.equal(document.getText(), 'done');
     assert.equal(traces.filter((line) => line.startsWith('interrupt:')).length, 1);
-    assert.deepEqual([...first.events, ...second.events], [{ kind: 'message', text: 'After the action' }]);
+    const events = [...first.events, ...second.events];
+    const receipt = events[0]?.kind === 'message' ? events[0].receipt : undefined;
+    assert.ok(receipt !== undefined && receipt > 0, 'the deferred reply has no receipt');
+    assert.deepEqual(events, [{ kind: 'message', text: 'After the action', receipt }]);
     assert.deepEqual(
       [...first.batches, ...second.batches].map((batch) => batch.status),
       ['completed'],

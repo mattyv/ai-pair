@@ -331,10 +331,13 @@ export async function run(): Promise<void> {
   api.panelMessage({ type: 'reply', text: 'Wait', defer: true });
   const deferredSaved = controller.saved;
   assert.ok(deferredSaved, 'the queued reply has a saved session');
-  assert.deepEqual(deferredSaved.events, [{ kind: 'message', text: 'Wait' }]);
+  // The message keeps one receipt from the saved session, through its report, to the revived session (#117).
+  const waitReceipt = deferredSaved.events[0]?.kind === 'message' ? deferredSaved.events[0].receipt : undefined;
+  assert.ok(waitReceipt !== undefined && waitReceipt > 0, 'the queued reply has no receipt');
+  assert.deepEqual(deferredSaved.events, [{ kind: 'message', text: 'Wait', receipt: waitReceipt }]);
   const deferredReport = await controller.step([]);
   assert.equal(deferred.getText(), 'abcdefghijkl');
-  assert.deepEqual(deferredReport.events, [{ kind: 'message', text: 'Wait' }]);
+  assert.deepEqual(deferredReport.events, [{ kind: 'message', text: 'Wait', receipt: waitReceipt }]);
   assert.deepEqual(
     deferredReport.batches.map((batch) => batch.status),
     ['interrupted'],
@@ -343,7 +346,7 @@ export async function run(): Promise<void> {
   await controller.end();
   controller.revive(deferredSaved);
   const revivedReply = await controller.start(undefined, deferredSaved.scene.root);
-  assert.deepEqual(revivedReply.events, [{ kind: 'message', text: 'Wait' }]);
+  assert.deepEqual(revivedReply.events, [{ kind: 'message', text: 'Wait', receipt: waitReceipt }]);
   await controller.end();
   console.log('NoEarlyDelivery, Store: deferred reply waits for typing and survives reload');
 
