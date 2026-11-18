@@ -49,8 +49,9 @@ export async function companionFaults(api: Api): Promise<void> {
     Object.defineProperty(vscode.window, 'showWarningMessage', {
       ...warningDescriptor,
       value: (...args: unknown[]) => {
-        if (args[0] === 'AI Pair lost its local audio connection: Local Audio refused a message. Reload the window to reconnect.')
+        if (args[0] === 'AI Pair lost its local audio connection: Local Audio refused a message. Reload the window to reconnect.') {
           lostWarnings++;
+        }
         const result: unknown = Reflect.apply(showWarning, undefined, args);
         return result;
       },
