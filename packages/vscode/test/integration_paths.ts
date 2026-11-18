@@ -207,11 +207,16 @@ export async function playerPaths(api: Api, root: string): Promise<void> {
   await refused([{ move: { file: 'paths.txt', line: 1, to: 'line_end' } }, { type: `x${CURSOR_MARKER}` }], 'not_your_turn');
   controller.handBack('over to you', { file: file('paths.txt'), from: { line: 1, column: 1 }, to: { line: 1, column: 6 }, text: 'alpha' });
   const handed = await controller.listen();
-  assert.deepEqual(handed.events.at(-1), {
+  const handback = handed.events.at(-1);
+  // A handback that says something carries a receipt, like a message (#117).
+  const receipt = handback?.kind === 'turn' ? handback.receipt : undefined;
+  assert.ok(receipt !== undefined && receipt > 0, 'the handback has no receipt');
+  assert.deepEqual(handback, {
     kind: 'turn',
     to: 'agent',
     message: 'over to you',
     selection: { file: 'paths.txt', from: { line: 1, column: 1 }, to: { line: 1, column: 6 }, text: 'alpha' },
+    receipt,
   });
 
   // In a file with CRLF line ends, typed newlines are CRLF, and the step back into the pair counts them.
