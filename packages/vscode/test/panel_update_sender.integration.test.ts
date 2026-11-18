@@ -3,7 +3,7 @@ import type { LocalAudioFrame } from '@ai-pair/protocol';
 import { PanelUpdateSender } from '../src/panel_update_sender';
 
 describe('workspace panel update sender', () => {
-  it('sends replay as ordered bounded per-event updates using the shared sequence', async () => {
+  it('sends replay as ordered bounded batches using the shared sequence (#118)', async () => {
     const frames: LocalAudioFrame[] = [];
     let sequence = 5;
     const sender = new PanelUpdateSender({
@@ -22,12 +22,15 @@ describe('workspace panel update sender', () => {
         events: [
           { type: 'say', text: 'one' },
           { type: 'say', text: 'two' },
+          { type: 'session', active: true },
+          { type: 'say', text: 'three' },
         ],
       }),
     ).toBe(true);
-    expect(frames).toHaveLength(2);
+    expect(frames).toHaveLength(3);
     expect(frames[0]).toMatchObject({ type: 'panelChunk', sequence: 6, messageId: 1 });
     expect(frames[1]).toMatchObject({ type: 'panelChunk', sequence: 7, messageId: 2 });
+    expect(frames[2]).toMatchObject({ type: 'panelChunk', sequence: 8, messageId: 3 });
   });
 
   it('reports oversized updates and stops sending after page replacement', async () => {

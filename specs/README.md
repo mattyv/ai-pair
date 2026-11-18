@@ -101,6 +101,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `PlaybackPreference.cfg` | three modes and two independent pace settings | holds | 36 |
 | `DeferredMessage.cfg` | one action, deferred reply and urgent stop | holds | 8 |
 | `MessageReceipt.cfg` | two messages, two put-back reports, one disconnect, reloads | holds | 348 |
+| `ReplayBatching.cfg` | every sequence of four events of four kinds, bound three | holds | 1,233 |
 | `ModelStatus.cfg` | installed and missing model, verification | holds | 4 |
 | `SpeechSetup.cfg` | two files; install, cancellation and rollback outcomes | holds | 42 |
 | `SpeechPage.cfg` | two page identities and two narration units | holds | 28 |
@@ -2916,7 +2917,8 @@ complete JSON and the visible-event schema before delivery. The payload classes
 abstract that validation; this model does not inspect JSON or prove that a
 particular field is nonsecret. Production bounds are 16,384 UTF-16 code units
 per chunk, 1,024 chunks and 16 MiB per message; oversize must be reported.
-Per-event messages preserve replay order without truncating the whole history.
+Replay messages are ordered batches of events (`ReplayBatching`, #118), which
+preserve replay order without truncating the whole history.
 
 The command channel now reports why it closed (timeout, refusal, overflow, or
 its owner closing it), and each side's warning names its side and that reason
@@ -2932,7 +2934,31 @@ reason is not modeled.
 | `DisconnectClears` | `protocol/test/panel_chunks.test.ts`: never combines fragments across page replacement or a duplicate fragment; `protocol/test/command_channel.test.ts`: settles active and queued sends on disposal and ignores a late rejection. Direct disconnect-to-assembler integration coverage remains pending. |
 | `CanStart`, `CanComplete`, `CanAbort` | `protocol/test/panel_chunks.test.ts`: reassembles a complete ordered update only for the current page; discards partial, reordered, stale-page, malformed and oversized updates. |
 | `PendingSettles`, `EventuallySettled` | `protocol/test/command_channel.test.ts`: closes on a lost acknowledgement without accepting late completion; sends one frame at a time and preserves enqueue order. |
-| Replay ordering and oversize | `vscode/test/panel_update_sender.integration.test.ts`: sends replay as ordered bounded per-event updates using the shared sequence; reports an oversized replay event and still sends later complete events. |
+| Replay ordering and oversize | `vscode/test/panel_update_sender.integration.test.ts`: sends replay as ordered bounded batches using the shared sequence (#118); reports an oversized replay event and still sends later complete events. |
+
+### `ReplayBatching`: ordered replay batches to a companion's page
+
+`ReplayBatching.tla` checks how the workspace splits a replay into messages
+for a companion's page (#118). Sending one message per event cost one
+cross-host round trip each, so a long history filled in slowly in a remote
+window. `SendBatch` sends consecutive small events together up to a size
+bound; a session event, which the companion's cost tracking acts on alone,
+and an event over the bound each go alone; an event too large to transfer is
+reported and skipped. TLC checked every sequence of four events of four kinds
+with a bound of three: 1,233 distinct states, safety and liveness holding.
+
+| Property | Code test |
+|---|---|
+| `Ordered`, `Bounded`, `SessionAlone` | `panel_update_sender.test.ts`: SessionAlone, Bounded, Ordered: sends session events and oversized events alone, and splits a run at the bound (#118); `panel_update_sender.integration.test.ts`: sends replay as ordered bounded batches using the shared sequence (#118) |
+| `Packed` | `panel_update_sender.test.ts`: serializes replay events and uses the shared sequence |
+| `Done` | `panel_update_sender.integration.test.ts`: reports an oversized replay event and still sends later complete events |
+| `TypeOK` | `panel_update_sender.test.ts`: SessionAlone, Bounded, Ordered: sends session events and oversized events alone, and splits a run at the bound (#118) |
+
+Mutations checked with TLC: `GuardPacked = FALSE`, which allows the old one
+event per message, violates `Packed`; `GuardAlone = FALSE` violates
+`SessionAlone`; `GuardBound = FALSE` violates `Bounded`; both of those false,
+with an event too large to transfer sent inside a batch, violates `Ordered`;
+removing fairness violates `Done`.
 
 TLC checked `LocalPanelReplay.cfg` with 51,992 generated and 138 distinct states;
 `LocalPanelReplay_Delivery.cfg` checked three distinct states under fair successful

@@ -724,6 +724,8 @@ Last updated: css, 2026-11-18.
 | `specs/Reload.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/RemoteCue.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/RemoteCue.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
+| `specs/ReplayBatching.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/ReplayBatching.tla` | TLA+ | - | - | 1 of 1 actions | - | - | - |
 | `specs/Resume.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Resume.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/RevealCursor.cfg` | TLC config | - | - | - | - | - | - |

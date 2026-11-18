@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.48.1
+
+-   Version aligned with AI Pair, which now sends this companion's panel its
+    history in a few batches after a restart (#118).
+
 ## 0.48.0
 
 -   The panel this companion draws in a remote window shows which of your
