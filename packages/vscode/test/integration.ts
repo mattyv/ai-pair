@@ -51,7 +51,7 @@ import { renderDiagnosticPaths } from './integration_render_diagnostic';
 import { run as guidedDiagnosticPaths } from './integration_guided_diagnostics';
 import { exerciseReleaseExtensionPaths } from './integration_release_extension_paths';
 import { flowGatePaths } from './integration_flow_gate';
-import { lookaheadHintPaths, speechCoveragePaths } from './integration_speech_coverage_paths';
+import { gpuCheckPaths, lookaheadHintPaths, speechCoveragePaths } from './integration_speech_coverage_paths';
 import { vscodeCoveragePaths } from './integration_vscode_coverage_paths';
 import { diagnosticCoveragePaths } from './integration_diagnostic_coverage_paths';
 import { attentionPaths } from './integration_attention_paths';
@@ -1618,6 +1618,7 @@ export async function run(): Promise<void> {
   await flowGatePaths(api, root);
   await speechCoveragePaths(api);
   await lookaheadHintPaths(api);
+  await gpuCheckPaths(api);
   await messageReceiptPaths(api);
   await settingRoundTripPaths(api);
   await vscodeCoveragePaths(api);

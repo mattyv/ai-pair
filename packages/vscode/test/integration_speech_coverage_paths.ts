@@ -1,5 +1,6 @@
 // Exercises interrupted speech gates through the loaded controller and player.
 import * as assert from 'node:assert/strict';
+import * as vscode from 'vscode';
 import { z } from 'zod';
 import type { Controller, PanelEvent } from '@ai-pair/core';
 import type { Api } from '../src/extension';
@@ -184,4 +185,34 @@ export async function lookaheadHintPaths(api: Api): Promise<void> {
     controller.endSession();
     controller.disconnect();
   }
+}
+
+/**
+ * Asks the extension for a GPU setup check from the panel, as the Settings button does. On a host with no GPU path the
+ * check settles as unavailable at once: no error is shown, and the panel still answers (specs/CoreMlCompute.tla, Init).
+ */
+export async function gpuCheckPaths(api: Api): Promise<void> {
+  const errorDescriptor = Object.getOwnPropertyDescriptor(vscode.window, 'showErrorMessage');
+  assert.ok(errorDescriptor, 'VS Code message APIs are unavailable');
+  const errors: string[] = [];
+  try {
+    Object.defineProperty(vscode.window, 'showErrorMessage', {
+      ...errorDescriptor,
+      value: (...args: unknown[]) => {
+        if (typeof args[0] === 'string') errors.push(args[0]);
+        return Promise.resolve(undefined);
+      },
+    });
+    api.panelMessage({ type: 'checkGpuSetup' });
+    api.panelMessage({ type: 'checkGpuSetup' });
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 500);
+    });
+    assert.deepEqual(errors, [], 'a GPU check on a host without one showed an error');
+    await api.controller.start('after a GPU check');
+    await api.controller.end();
+  } finally {
+    Object.defineProperty(vscode.window, 'showErrorMessage', errorDescriptor);
+  }
+  console.log('a GPU setup check on a host without a GPU path settles without an error');
 }
