@@ -473,7 +473,7 @@ describe('where the controller and the player meet', () => {
     controller.userMessage('Wait', undefined, /* defer= */ true);
     const report = await until(controller.listen());
     expect(editor.text('a.py')).toBe('unknown');
-    expect(report.events).toContainEqual({ kind: 'message', text: 'Wait' });
+    expect(report.events).toContainEqual({ kind: 'message', text: 'Wait', receipt: 1 });
     expect(report.batches).toMatchObject([{ status: 'interrupted', unplayed: [{ say: 'Later.' }] }]);
   });
 
@@ -486,7 +486,7 @@ describe('where the controller and the player meet', () => {
     controller.userInterrupt();
     const report = await until(controller.listen());
     expect(editor.text('a.py')).toBe('unk');
-    expect(report.events).toEqual([{ kind: 'message', text: 'Wait' }, { kind: 'interrupt' }]);
+    expect(report.events).toEqual([{ kind: 'message', text: 'Wait', receipt: 1 }, { kind: 'interrupt' }]);
   });
 
   it('Urgent: a programmer edit stops immediately without losing the queued reply', async () => {
@@ -498,7 +498,7 @@ describe('where the controller and the player meet', () => {
     editor.userEdit('a.py', { offset: 0, deleteLength: 0, text: '!' });
     const report = await until(controller.listen());
     expect(editor.text('a.py')).toBe('!unk');
-    expect(report.events[0]).toEqual({ kind: 'message', text: 'Wait' });
+    expect(report.events[0]).toEqual({ kind: 'message', text: 'Wait', receipt: 1 });
     expect(report.events[1]).toMatchObject({ kind: 'edit', by: 'programmer' });
   });
 

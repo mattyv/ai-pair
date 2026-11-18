@@ -31,6 +31,7 @@ import { DEFAULT_TIMINGS } from '../src/timings';
 import { controllerPaths, extensionPaths, playerPaths } from './integration_paths';
 import { deferredSettlementPaths } from './integration_deferred_settlement';
 import { panelPaths } from './integration_panel_paths';
+import { messageReceiptPaths } from './integration_message_receipt';
 import { gapPaths } from './integration_gap_paths';
 import { codePlaybackPaths } from './integration_code_playback';
 import { preservedPlaybackPaths } from './integration_preserved_playback';
@@ -1613,6 +1614,7 @@ export async function run(): Promise<void> {
   await flowGatePaths(api, root);
   await speechCoveragePaths(api);
   await lookaheadHintPaths(api);
+  await messageReceiptPaths(api);
   await vscodeCoveragePaths(api);
   await diagnosticCoveragePaths(api);
   await shortcutCommandPaths(api);

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.48.0
+
+-   Show which of your messages the agent has received: a reply in the panel's
+    history is dimmed and labeled *waiting* until a report carries it to the
+    agent, when its next `step` or `listen` returns. A report put back unseen,
+    after racing a cancellation, makes its messages wait again; one the agent
+    may have seen keeps them received. The state survives a window reload
+    (#117). It means delivered to the agent, not read by the model.
+
 ## 0.47.0
 
 -   In a remote window, keep looking for AI Pair Local Audio for up to 10

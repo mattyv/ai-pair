@@ -185,8 +185,11 @@ export type PanelEvent =
   | { type: 'attention'; state: 'none' | 'requested' | 'granted' }
   | { type: 'reading'; ms: number; id?: number; owner?: 'code' }
   | { type: 'state'; state: AgentState; turn: Turn; paused: boolean; ready?: number; speechPaused?: boolean }
-  | { type: 'programmer'; text: string; ref?: Ref }
-  | { type: 'turn'; to: Turn; message?: string; ref?: Ref }
+  /** `receipt`: identifies the message until a report carries it to the agent (#117); absent in older history. */
+  | { type: 'programmer'; text: string; ref?: Ref; receipt?: number }
+  | { type: 'turn'; to: Turn; message?: string; ref?: Ref; receipt?: number }
+  /** The messages a report carried to the agent, or, when it was put back unseen, that wait again (#117). */
+  | { type: 'receipt'; ids: number[]; received: boolean }
   | { type: 'interrupt' }
   | { type: 'point'; file: string; line: number }
   /** Files changed on disk outside the protocol, written close together (#15). As the agent names them. */
