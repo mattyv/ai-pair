@@ -66,7 +66,7 @@ interface QueuedBatch extends Batch {
 type PendingEvent = Receipted | ReportedEdit | RecordedEdit;
 
 /** An event other than an edit; a programmer's message carries the receipt the panel shows it by (#117). */
-type Receipted = Exclude<Event, { kind: 'edit' }> & { receipt?: number };
+type Receipted = Exclude<Event, { kind: 'edit' }>;
 
 /** An edit a restored report carries, with its diff. */
 type ReportedEdit = Extract<Event, { kind: 'edit' }> & { interrupted?: true };
@@ -103,6 +103,11 @@ export interface SavedSession {
   /** The next message receipt, absent in sessions saved by older versions (#117). */
   nextReceipt?: number;
   events: Receipted[];
+}
+
+/** Returns the receipts of the programmer's messages among `events` (#117). */
+function receiptsOf(events: readonly Event[]): number[] {
+  return events.flatMap((e) => ((e.kind === 'message' || e.kind === 'turn') && e.receipt !== undefined ? [e.receipt] : []));
 }
 
 /** Returns whether `v` has the fields of a saved session; its storage is the window's own, so the check is shallow. */
@@ -294,6 +299,8 @@ export class Controller {
   private nextBatchId = 1;
   /** The next receipt for a programmer's message, kept across reloads so a replayed history never shares one (#117). */
   private nextReceipt = 1;
+  /** Receipts of messages a report the agent may have seen carried: they stay received (specs/MessageReceipt.tla, `maybe`). */
+  private readonly maySeen = new Set<number>();
   private readonly pauseReasons = new Set<PauseReason>();
   /** An attention grant not yet delivered to a navigator listen. */
   private attentionNotice = false;
@@ -525,9 +532,9 @@ export class Controller {
     this.nextBatchId = typeof next === 'number' && Number.isSafeInteger(next) && next >= reportedNext ? next : reportedNext;
     session.finished = [...saved.finished];
     session.events = [...saved.events];
-    // specs/MessageReceipt.tla, Reload: a receipt is never reused, or a new message would share an old one's state.
+    // A receipt is never reused, or a new message would share an old one's bubble; the spec does not model ids.
     const savedReceipt = saved.nextReceipt;
-    const pendingReceipt = Math.max(0, ...saved.events.map((e) => e.receipt ?? 0)) + 1;
+    const pendingReceipt = Math.max(0, ...receiptsOf(saved.events)) + 1;
     this.nextReceipt =
       typeof savedReceipt === 'number' && Number.isSafeInteger(savedReceipt) && savedReceipt >= pendingReceipt
         ? savedReceipt
@@ -677,8 +684,14 @@ export class Controller {
     session.finished.unshift(...report.batches);
     session.events.unshift(...report.events);
     // specs/MessageReceipt.tla, RestoreUnseen and RestoreRepeat: only a report the agent never saw makes its messages
-    // wait again; one it may have seen keeps them received.
-    if (!mayRepeat) this.postReceipts(report.events, /* received= */ false);
+    // wait again; one it may have seen keeps them received, for good (GuardSticky).
+    if (mayRepeat) {
+      for (const id of receiptsOf(report.events)) {
+        this.maySeen.add(id);
+      }
+    } else {
+      this.postReceipts(report.events, /* received= */ false);
+    }
     if (mayRepeat) session.mayRepeat = true;
     if (report.events.some(interrupting) || report.batches.some((b) => b.status !== 'completed')) markStale(session);
     // A step that never queued its batch: its rejection is the only report of it.
@@ -1483,7 +1496,7 @@ export class Controller {
 
   /** Posts the receipts of the programmer's messages among `events`, if any, as received or waiting again (#117). */
   private postReceipts(events: readonly Event[], received: boolean): void {
-    const ids = events.flatMap((e) => ('receipt' in e && typeof e.receipt === 'number' ? [e.receipt] : []));
+    const ids = receiptsOf(events).filter((id) => received || !this.maySeen.has(id));
     if (ids.length > 0) this.panel.post({ type: 'receipt', ids, received });
   }
 

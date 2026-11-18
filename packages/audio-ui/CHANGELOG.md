@@ -3,7 +3,8 @@
 ## 0.48.0
 
 -   The panel this companion draws in a remote window shows which of your
-    messages the agent has received (#117). Install both extensions at 0.48.0.
+    messages the agent has received (#117). The local audio protocol is version
+    10: install both extensions at 0.48.0.
 
 ## 0.47.0
 

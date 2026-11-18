@@ -62,3 +62,19 @@ it('requires a session origin on returned reports', () => {
     report: { sessionId: 'session-1' },
   });
 });
+
+it('keeps the receipts of the messages in a returned report, so a put-back report can make them wait again (#117)', () => {
+  const report = {
+    batches: [],
+    turn: 'agent',
+    sessionId: 'session-1',
+    events: [
+      { kind: 'message', text: 'Unseen.', receipt: 4 },
+      { kind: 'turn', to: 'agent', message: 'Yours.', receipt: 5 },
+    ],
+  };
+  expect(parseRelayMessage(Buffer.from(JSON.stringify({ type: 'return', report })))).toMatchObject({
+    type: 'return',
+    report: { events: report.events },
+  });
+});

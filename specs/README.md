@@ -100,7 +100,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Timeline.cfg` | `MaxSleeps = 3` sleeps, holds, and a second sleep while one is pending | holds | 864 |
 | `PlaybackPreference.cfg` | three modes and two independent pace settings | holds | 36 |
 | `DeferredMessage.cfg` | one action, deferred reply and urgent stop | holds | 8 |
-| `MessageReceipt.cfg` | two messages, two put-back reports, one disconnect, reloads | holds | 255 |
+| `MessageReceipt.cfg` | two messages, two put-back reports, one disconnect, reloads | holds | 348 |
 | `ModelStatus.cfg` | installed and missing model, verification | holds | 4 |
 | `SpeechSetup.cfg` | two files; install, cancellation and rollback outcomes | holds | 42 |
 | `SpeechPage.cfg` | two page identities and two narration units | holds | 28 |
@@ -3235,21 +3235,30 @@ panel shows it waiting until that report, then received. `RestoreUnseen` puts a
 report back that the agent never saw, and its messages wait again;
 `RestoreRepeat` puts back one the agent may have seen, and they stay received.
 `Drop` and `Reconnect` suspend and resume the agent, and `Reload` replays the
-page from the panel's log. TLC checked two messages, two put-back reports and
-one disconnect: 255 distinct states, safety and liveness holding, with fair
-`Flush`, `Report`, `Take` and `Reconnect`.
+page from the panel's log. `maybe` remembers, for good, that some report
+carrying a message may have reached the agent (`Take` or `RestoreRepeat`), so a
+later report put back unseen does not make it wait again. TLC checked two
+messages, two put-back reports and one disconnect: 348 distinct states, safety
+and liveness holding, with fair `Flush`, `Report`, `Take` and `Reconnect`.
+
+The receipt travels in the agent-facing event schema, because a report the
+relay puts back reaches `restore` through `parseRelayMessage`; a review found
+the schema dropping it, so a put-back report never made its messages wait. The
+relay renders only the text, so the agent never sees the receipt.
 
 | Property | Code test |
 |---|---|
 | `NoFalseReceipt` | `controller.test.ts`: Send, Report, NoFalseReceipt: shows a message waiting until a report carries it, then received; Report: posts no receipt for a report without a message; `webview/panel.test.ts`: Send, Report, RestoreUnseen: shows your message waiting until the agent receives it, and waiting again if put back (#117); `integration_message_receipt.ts` |
-| `NoSeenWaiting` | `controller.test.ts`: RestoreUnseen and RestoreRepeat, NoSeenWaiting: only a report the agent never saw makes its messages wait again; Reload: saves the next receipt and never reuses one after a reload; `integration_message_receipt.ts` |
+| `NoSeenWaiting` | `controller.test.ts`: RestoreUnseen and RestoreRepeat, NoSeenWaiting: only a report the agent never saw makes its messages wait again; NoSeenWaiting, GuardSticky: a message the agent may have seen never waits again, even if a later report is put back unseen; Reload: saves the next receipt and never reuses one after a reload; `protocol/test/wire.test.ts`: keeps the receipts of the messages in a returned report, so a put-back report can make them wait again (#117); `integration_message_receipt.ts` |
 | `ReceiptProgress` | `controller.test.ts`: Send: a handback that says something waits for its report; a plain one has no receipt; `integration_message_receipt.ts` |
 | `TypeOK` | `protocol/test/panel_update.test.ts`: bounds the receipts one update carries (#117) |
 
 Mutations checked with TLC: `GuardEarly = FALSE` (received when queued) and
 `GuardUnseen = FALSE` (an unseen put-back stays received) violate
 `NoFalseReceipt`; `GuardRepeat = FALSE` (a possibly seen put-back waits) and
-`GuardReload = FALSE` (a replay that forgets receipts) violate `NoSeenWaiting`;
+`GuardReload = FALSE` (a replay that forgets receipts) and `GuardSticky =
+FALSE` (an unseen put-back after one that may have been seen makes the message
+wait) violate `NoSeenWaiting`;
 removing the fairness of `Report`, `Flush` or `Reconnect` violates
 `ReceiptProgress`.
 
