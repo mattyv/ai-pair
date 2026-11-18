@@ -14,6 +14,8 @@ export async function companionFaults(api: Api): Promise<void> {
   const showError = vscode.window.showErrorMessage.bind(vscode.window);
   const showWarning = vscode.window.showWarningMessage.bind(vscode.window);
   let lostWarnings = 0;
+  let anyLost = 0;
+  let delayNextFrame = 0;
   let target = '';
   let failures = 0;
   let invalidGpu = false;
@@ -24,6 +26,13 @@ export async function companionFaults(api: Api): Promise<void> {
       value: (command: string, ...args: unknown[]) => {
         if (command === 'aiPair.localAudio.gpuDiagnostics' && invalidGpu) {
           return Promise.resolve({ path: '/private/gpu-secret' });
+        }
+        if (command === 'aiPair.localAudio.frame' && delayNextFrame > 0) {
+          const ms = delayNextFrame;
+          delayNextFrame = 0;
+          return new Promise<void>((resolve) => {
+            setTimeout(resolve, ms);
+          }).then(() => execute(command, ...args));
         }
         if (command === target && command === 'aiPair.localAudio.frame') {
           target = '';
@@ -49,6 +58,7 @@ export async function companionFaults(api: Api): Promise<void> {
     Object.defineProperty(vscode.window, 'showWarningMessage', {
       ...warningDescriptor,
       value: (...args: unknown[]) => {
+        if (typeof args[0] === 'string' && args[0].startsWith('AI Pair lost its local audio connection')) anyLost++;
         if (args[0] === 'AI Pair lost its local audio connection: Local Audio refused a message. Reload the window to reconnect.') {
           lostWarnings++;
         }
@@ -143,6 +153,23 @@ export async function companionFaults(api: Api): Promise<void> {
       });
     }
     assert.ok(api.speechPageReady(), 'the companion page did not become ready');
+    // A frame the companion accepts after 3.5 s, past the old 3 s bound, keeps the connection (#115).
+    delayNextFrame = 3500;
+    /** Reports whether the delay still waits for a frame; the transport hook clears it. */
+    function slowPending(): boolean {
+      return delayNextFrame > 0;
+    }
+    for (let attempt = 0; attempt < 100 && slowPending(); attempt++) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 100);
+      });
+    }
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 4000);
+    });
+    assert.equal(slowPending(), false, 'no frame reached the slow acknowledgement');
+    assert.equal(anyLost, 0, 'a slow acknowledgement dropped the connection');
+    assert.ok(api.speechPageReady(), 'a slow acknowledgement closed the companion page');
     target = 'aiPair.localAudio.frame';
     api.panelMessage({ type: 'reply', text: 'retained after frame refusal', attach: false });
     for (let attempt = 0; attempt < 100; attempt++) {

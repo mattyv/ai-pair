@@ -130,7 +130,8 @@ UnsafeFallback ==
     /\ UNCHANGED <<tokenValid, committed, companionRegistered, lateSeen,
                    badEarly, acked>> /\ UNCHANGED other
 
-Next == Appear \/ Activate \/ Prepare \/ Prepared \/ Commit \/ ExpireBeforeCommit
+Next == Appear \/ Activate \/ Prepare \/ Prepared \/ Commit
+        \/ ExpireBeforeCommit
         \/ GiveUpEarly \/ RejectInstalled \/ LatePrepared
         \/ Register \/ Acknowledged \/ StartSession \/ Close
         \/ TimeoutAfterCommit \/ UnsafeFallback
