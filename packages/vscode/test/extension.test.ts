@@ -2373,6 +2373,10 @@ it('routes companion controls, keys, frame acknowledgements and connection notic
   await expect(options.send(frame)).resolves.toBeUndefined();
   fakes.frameAccepted = false;
   await expect(options.send(frame)).rejects.toThrow('not accepted');
+  options.slow?.('speak', 1500);
+  expect(fakes.logged).toContainEqual(['info', 'Local Audio took 1500 ms to accept a speak frame']);
+  options.lost('timeout', 'speak');
+  expect(fakes.logged).toContainEqual(['warn', 'Local Audio connection lost: timeout, waiting on a speak frame']);
   options.lost('timeout');
   options.unavailable?.();
   // The warning says why this side gave up (#115).

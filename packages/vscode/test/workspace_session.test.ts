@@ -117,10 +117,42 @@ describe('workspace session wiring', () => {
     await vi.advanceTimersByTimeAsync(3000);
     expect(fake.send).toHaveBeenCalled();
     fake.channelOptions?.lost('refused');
-    expect(lost).toHaveBeenCalledExactlyOnceWith('refused');
+    expect(lost).toHaveBeenCalledExactlyOnceWith('refused', undefined);
     expect(closeRemote).toHaveBeenCalledWith(1);
     session.dispose();
     expect(lost).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs a slow acknowledgement, and names the frame a timeout left waiting (#115)', async () => {
+    const lost = vi.fn<(reason: import('@ai-pair/protocol').ChannelLoss, waiting?: LocalAudioFrame['type']) => void>();
+    const slow = vi.fn<(type: LocalAudioFrame['type'], ms: number) => void>();
+    const answer = Promise.withResolvers<void>();
+    const send = vi
+      .fn<(_: LocalAudioFrame) => Promise<void>>()
+      .mockResolvedValueOnce()
+      .mockImplementationOnce(() => answer.promise);
+    const session = new WorkspaceSession({
+      epoch: 'epoch',
+      panel: {
+        attachRemote: vi.fn<(_: number, send: (message: unknown) => void) => void>(),
+        receiveRemote: vi.fn<(_: number, action: import('@ai-pair/protocol').LocalPanelAction) => void>(),
+        closeRemote: vi.fn<(_: number) => void>(),
+      },
+      send,
+      lost,
+      slow,
+    });
+    await fake.channelOptions?.send(frame);
+    expect(slow).not.toHaveBeenCalled();
+    const waiting = fake.channelOptions?.send({ ...frame, type: 'heartbeat' });
+    await vi.advanceTimersByTimeAsync(3000);
+    fake.channelOptions?.lost('timeout');
+    expect(lost).toHaveBeenCalledExactlyOnceWith('timeout', 'heartbeat');
+    await vi.advanceTimersByTimeAsync(2000);
+    answer.resolve();
+    await waiting;
+    expect(slow).toHaveBeenCalledExactlyOnceWith('heartbeat', 5000);
+    session.dispose();
   });
 
   it('disposes an idle session without reporting loss', () => {

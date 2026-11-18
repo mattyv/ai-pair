@@ -115,8 +115,10 @@ describe('workspace companion session', () => {
       }),
     ).toBe(true);
     const next = session.narration.speak('New.');
-    await Promise.resolve();
-    expect(send.mock.calls.map(([value]) => value)).toContainEqual(expect.objectContaining({ type: 'speak', jobId: '2', pageEpoch: 2 }));
+    // Waits for the serial channel to reach the frame, however many steps the frames before it take.
+    await vi.waitFor(() => {
+      expect(send.mock.calls.map(([value]) => value)).toContainEqual(expect.objectContaining({ type: 'speak', jobId: '2', pageEpoch: 2 }));
+    });
     session.narration.cancel();
     await next;
     session.dispose();

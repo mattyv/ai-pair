@@ -1345,12 +1345,15 @@ export function activate(context: vscode.ExtensionContext): Api {
           const accepted: unknown = await vscode.commands.executeCommand('aiPair.localAudio.frame', frame);
           if (accepted !== true) throw new Error('Companion frame was not accepted.');
         },
-        lost: (reason) => {
+        lost: (reason, waiting) => {
           // Says which side gave up, and why: the companion reports its own loss separately (#115).
-          log.warn(`Local Audio connection lost: ${reason}`);
+          log.warn(`Local Audio connection lost: ${reason}${waiting === undefined ? '' : `, waiting on a ${waiting} frame`}`);
           void vscode.window.showWarningMessage(
             `AI Pair lost its local audio connection: ${CONNECTION_LOSS[reason]}. Reload the window to reconnect.`,
           );
+        },
+        slow: (type, ms) => {
+          log.info(`Local Audio took ${ms} ms to accept a ${type} frame`);
         },
         unavailable: () => {
           void vscode.window.showWarningMessage('A Pair panel update was too large or unavailable; later updates will continue.');
