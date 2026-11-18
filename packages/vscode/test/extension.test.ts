@@ -598,6 +598,7 @@ vi.mock('vscode', () => ({
     createOutputChannel: () => ({
       info: (line: string) => fakes.logged.push(['info', line]),
       trace: (line: string) => fakes.logged.push(['trace', line]),
+      warn: (line: string) => fakes.logged.push(['warn', line]),
       dispose: () => {},
       show: fakes.showOutput,
     }),
@@ -2372,9 +2373,13 @@ it('routes companion controls, keys, frame acknowledgements and connection notic
   await expect(options.send(frame)).resolves.toBeUndefined();
   fakes.frameAccepted = false;
   await expect(options.send(frame)).rejects.toThrow('not accepted');
-  options.lost();
+  options.lost('timeout');
   options.unavailable?.();
-  expect(fakes.infos.some((message) => message.includes('lost its local audio'))).toBe(true);
+  // The warning says why this side gave up (#115).
+  expect(fakes.infos).toContain(
+    'AI Pair lost its local audio connection: Local Audio did not answer a message in time. Reload the window to reconnect.',
+  );
+  expect(fakes.logged).toContainEqual(['warn', 'Local Audio connection lost: timeout']);
   expect(fakes.infos.some((message) => message.includes('too large'))).toBe(true);
 });
 

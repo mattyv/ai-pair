@@ -1,4 +1,4 @@
-import { CommandChannel, LOCAL_AUDIO_VERSION, type LocalAudioFrame, type LocalPanelAction } from '@ai-pair/protocol';
+import { CommandChannel, LOCAL_AUDIO_VERSION, type ChannelLoss, type LocalAudioFrame, type LocalPanelAction } from '@ai-pair/protocol';
 import { PanelUpdateSender } from './panel_update_sender';
 import { RemoteNarration } from './remote_narration';
 import { WorkspacePanelBridge } from './workspace_panel_bridge';
@@ -48,7 +48,7 @@ export interface WorkspaceSessionOptions {
   epoch: string;
   panel: WorkspaceSessionPanel;
   send: (frame: LocalAudioFrame) => Promise<void>;
-  lost: () => void;
+  lost: (reason: ChannelLoss) => void;
   unavailable?: () => void;
 }
 
@@ -68,8 +68,8 @@ export class WorkspaceSession {
       send: options.send,
       timeoutMs: COMMAND_TIMEOUT_MS,
       maxPending: MAX_PENDING_COMMANDS,
-      lost: () => {
-        this.stop(true);
+      lost: (reason) => {
+        this.stop(reason);
       },
     });
     this.narration = new RemoteNarration({
@@ -126,11 +126,11 @@ export class WorkspaceSession {
 
   /** Disposes the selected connection without switching back to a legacy owner. */
   dispose(): void {
-    this.stop(false);
+    this.stop();
   }
 
-  /** Stops the session, preserving the selected owner after connection failure. */
-  private stop(notify: boolean): void {
+  /** Stops the session, preserving the selected owner after connection failure, which it reports with its reason. */
+  private stop(lost?: ChannelLoss): void {
     if (this.closed) return;
     this.closed = true;
     clearInterval(this.heartbeat);
@@ -139,6 +139,6 @@ export class WorkspaceSession {
     this.bridge.dispose();
     if (page !== undefined) this.options.panel.closeRemote(page);
     this.channel.dispose();
-    if (notify) this.options.lost();
+    if (lost !== undefined) this.options.lost(lost);
   }
 }

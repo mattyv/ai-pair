@@ -2911,6 +2911,11 @@ particular field is nonsecret. Production bounds are 16,384 UTF-16 code units
 per chunk, 1,024 chunks and 16 MiB per message; oversize must be reported.
 Per-event messages preserve replay order without truncating the whole history.
 
+The command channel now reports why it closed (timeout, refusal, overflow, or
+its owner closing it), and each side's warning names its side and that reason
+(#115). Behavior is unchanged: the same events close the channel, once; the
+reason is not modeled.
+
 | Property | Code test |
 |---|---|
 | `NoPartialOrMixed` | `protocol/test/panel_chunks.test.ts`: reassembles a complete ordered update only for the current page; drops mixed chunk counts and invalid assembled JSON or updates. |

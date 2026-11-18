@@ -80,6 +80,13 @@ const CALIBRATION_PASSAGE = 'calibrationPassage';
 const COMPANION_PREPARE_TIMEOUT_MS = 1500;
 /** Cold extension activation may load the companion bundle before command dispatch. */
 const COMPANION_ACTIVATION_TIMEOUT_MS = 10_000;
+/** Why the workspace dropped its companion connection, as its warning says (#115). */
+const CONNECTION_LOSS: Record<import('@ai-pair/protocol').ChannelLoss, string> = {
+  timeout: 'Local Audio did not answer a message in time',
+  refused: 'Local Audio refused a message',
+  overflow: 'too many messages were waiting for Local Audio',
+  closed: 'the connection was closed',
+};
 
 /** The latest speech state, without narration text or audio bytes. */
 export interface SpeechObservation {
@@ -1338,8 +1345,12 @@ export function activate(context: vscode.ExtensionContext): Api {
           const accepted: unknown = await vscode.commands.executeCommand('aiPair.localAudio.frame', frame);
           if (accepted !== true) throw new Error('Companion frame was not accepted.');
         },
-        lost: () => {
-          void vscode.window.showWarningMessage('AI Pair lost its local audio connection. Reload the window to reconnect.');
+        lost: (reason) => {
+          // Says which side gave up, and why: the companion reports its own loss separately (#115).
+          log.warn(`Local Audio connection lost: ${reason}`);
+          void vscode.window.showWarningMessage(
+            `AI Pair lost its local audio connection: ${CONNECTION_LOSS[reason]}. Reload the window to reconnect.`,
+          );
         },
         unavailable: () => {
           void vscode.window.showWarningMessage('A Pair panel update was too large or unavailable; later updates will continue.');

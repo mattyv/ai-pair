@@ -1,4 +1,4 @@
-import { LOCAL_AUDIO_VERSION, MAC_MODIFIERS, type LocalAudioFrame, type LocalPanelAction } from '@ai-pair/protocol';
+import { LOCAL_AUDIO_VERSION, MAC_MODIFIERS, type ChannelLoss, type LocalAudioFrame, type LocalPanelAction } from '@ai-pair/protocol';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { mock } from 'vitest-mock-extended';
 import type * as vscode from 'vscode';
@@ -14,7 +14,7 @@ interface ConnectionOptions {
   receive(frame: LocalAudioFrame): void;
 }
 interface ChannelOptions {
-  lost(): void;
+  lost(reason: ChannelLoss): void;
   send(frame: LocalAudioFrame): Promise<void>;
 }
 interface HostOptions {
@@ -399,8 +399,11 @@ it('stops locally on connection loss and handles repeated shutdown safely', () =
   const current = session();
   fake.connectionOptions?.lost();
   expect(fake.showSpeechTransport).toHaveBeenCalledWith(false);
-  expect(fake.warning).toHaveBeenCalledWith('AI Pair lost its local audio connection. Reload the window to reconnect.');
-  fake.channelOptions?.lost();
+  // The companion's warning names its side and the lease it lost (#115).
+  expect(fake.warning).toHaveBeenCalledWith(
+    'AI Pair Local Audio lost its workspace connection: no heartbeat from the workspace for 10 seconds. Reload the window to reconnect.',
+  );
+  fake.channelOptions?.lost('timeout');
   expect(fake.hostDispose).toHaveBeenCalledOnce();
   expect(fake.warning).toHaveBeenCalledOnce();
   void current.dispose();
@@ -471,11 +474,13 @@ it('rejects malformed diagnostics from a local snapshot', () => {
 
 it('closes local audio and warns when the outbound command channel is lost', () => {
   const current = session();
-  fake.channelOptions?.lost();
+  fake.channelOptions?.lost('timeout');
   expect(fake.narrationDispose).toHaveBeenCalledOnce();
   expect(fake.hostDispose).toHaveBeenCalledOnce();
   expect(fake.connectionDispose).toHaveBeenCalledOnce();
-  expect(fake.warning).toHaveBeenCalledWith('AI Pair lost its local audio connection. Reload the window to reconnect.');
+  expect(fake.warning).toHaveBeenCalledWith(
+    'AI Pair Local Audio lost its workspace connection: the workspace did not answer a message in time. Reload the window to reconnect.',
+  );
   void current.dispose();
 });
 

@@ -15,6 +15,10 @@
     that reloads the window. The "Speech is unavailable in this remote
     workspace" notice has a **Reload Window** button, and copied diagnostics
     include the companion's version and build, or why it did not connect (#115).
+-   When the connection to AI Pair Local Audio drops, the warning says which
+    side gave up and why, such as "Local Audio did not answer a message in
+    time" or "no heartbeat from the workspace for 10 seconds", and the AI Pair
+    output logs it (#115).
 -   The local audio protocol is version 9: install both extensions at 0.47.0.
 
 ## 0.46.0

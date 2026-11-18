@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CommandChannel } from '../src/command_channel';
+import { CommandChannel, type ChannelLoss } from '../src/command_channel';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -9,7 +9,7 @@ describe('ordered command channel', () => {
   it('sends one frame at a time and preserves enqueue order', async () => {
     const first = Promise.withResolvers<void>();
     const send = vi.fn<(frame: number) => Promise<void>>().mockReturnValueOnce(first.promise).mockResolvedValue(undefined);
-    const channel = new CommandChannel({ send, timeoutMs: 100, maxPending: 3, lost: vi.fn<() => void>() });
+    const channel = new CommandChannel({ send, timeoutMs: 100, maxPending: 3, lost: vi.fn<(reason: ChannelLoss) => void>() });
     const one = channel.send(1);
     const two = channel.send(2);
     expect(send.mock.calls).toEqual([[1]]);
@@ -22,7 +22,7 @@ describe('ordered command channel', () => {
   it('closes on timeout or overflow and settles all queued callers', async () => {
     vi.useFakeTimers();
     const send = vi.fn<(_: number) => Promise<void>>(() => new Promise(() => {}));
-    const lost = vi.fn<() => void>();
+    const lost = vi.fn<(reason: ChannelLoss) => void>();
     const channel = new CommandChannel({ send, timeoutMs: 100, maxPending: 2, lost });
     const first = channel.send(1);
     const second = channel.send(2);
@@ -30,26 +30,26 @@ describe('ordered command channel', () => {
     expect(await third).toBe(false);
     expect(await first).toBe(false);
     expect(await second).toBe(false);
-    expect(lost).toHaveBeenCalledTimes(1);
+    expect(lost).toHaveBeenCalledExactlyOnceWith('overflow');
     expect(await channel.send(4)).toBe(false);
   });
 
   it('closes on a lost acknowledgement without accepting late completion', async () => {
     vi.useFakeTimers();
     const pending = Promise.withResolvers<void>();
-    const lost = vi.fn<() => void>();
+    const lost = vi.fn<(reason: ChannelLoss) => void>();
     const channel = new CommandChannel({ send: () => pending.promise, timeoutMs: 100, maxPending: 2, lost });
     const sent = channel.send(1);
     await vi.advanceTimersByTimeAsync(100);
     expect(await sent).toBe(false);
     pending.resolve();
     await Promise.resolve();
-    expect(lost).toHaveBeenCalledTimes(1);
+    expect(lost).toHaveBeenCalledExactlyOnceWith('timeout');
   });
 });
 
 it('closes on synchronous and asynchronous send failure', async () => {
-  const lost = vi.fn<() => void>();
+  const lost = vi.fn<(reason: ChannelLoss) => void>();
   const first = new CommandChannel<number>({
     send: () => {
       throw new Error('private');
@@ -61,16 +61,16 @@ it('closes on synchronous and asynchronous send failure', async () => {
   expect(await first.send(1)).toBe(false);
   const second = new CommandChannel<number>({ send: () => Promise.reject(new Error('private')), timeoutMs: 100, maxPending: 2, lost });
   expect(await second.send(2)).toBe(false);
-  expect(lost).toHaveBeenCalledTimes(2);
+  expect(lost.mock.calls).toEqual([['refused'], ['refused']]);
 });
 
 it('reports a single loss when disposed before any frame is queued', async () => {
   const send = vi.fn<(frame: number) => Promise<void>>().mockResolvedValue(undefined);
-  const lost = vi.fn<() => void>();
+  const lost = vi.fn<(reason: ChannelLoss) => void>();
   const channel = new CommandChannel({ send, timeoutMs: 100, maxPending: 2, lost });
   channel.dispose();
   channel.dispose();
-  expect(lost).toHaveBeenCalledOnce();
+  expect(lost).toHaveBeenCalledExactlyOnceWith('closed');
   expect(await channel.send(1)).toBe(false);
   expect(send).not.toHaveBeenCalled();
 });
@@ -78,7 +78,7 @@ it('reports a single loss when disposed before any frame is queued', async () =>
 it('settles active and queued sends on disposal and ignores a late rejection', async () => {
   const pending = Promise.withResolvers<void>();
   const send = vi.fn<(frame: number) => Promise<void>>().mockReturnValue(pending.promise);
-  const lost = vi.fn<() => void>();
+  const lost = vi.fn<(reason: ChannelLoss) => void>();
   const channel = new CommandChannel({ send, timeoutMs: 100, maxPending: 3, lost });
   const first = channel.send(1);
   const second = channel.send(2);

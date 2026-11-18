@@ -116,8 +116,8 @@ describe('workspace session wiring', () => {
     expect(unavailable).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(3000);
     expect(fake.send).toHaveBeenCalled();
-    fake.channelOptions?.lost();
-    expect(lost).toHaveBeenCalledTimes(1);
+    fake.channelOptions?.lost('refused');
+    expect(lost).toHaveBeenCalledExactlyOnceWith('refused');
     expect(closeRemote).toHaveBeenCalledWith(1);
     session.dispose();
     expect(lost).toHaveBeenCalledTimes(1);

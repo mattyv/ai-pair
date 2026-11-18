@@ -4,6 +4,7 @@ import {
   LOCAL_AUDIO_VERSION,
   PanelChunkAssembler,
   localSpeechReport,
+  type ChannelLoss,
   type LocalAudioFrame,
   type LocalPanelAction,
   type LocalSpeechReport,
@@ -24,6 +25,15 @@ declare const AI_PAIR_BUILD_ID: string;
 
 /** Maximum delay for a command acknowledgement. */
 const COMMAND_TIMEOUT_MS = 3000;
+/** Milliseconds in a second, for a lease stated in seconds. */
+const MS_PER_SECOND = 1000;
+/** Why this side dropped its workspace connection, as its warning says (#115). */
+const CHANNEL_LOSS: Record<ChannelLoss, string> = {
+  timeout: 'the workspace did not answer a message in time',
+  refused: 'the workspace refused a message',
+  overflow: 'too many messages were waiting for the workspace',
+  closed: 'the connection was closed',
+};
 /** Maximum queued outbound commands. */
 const MAX_PENDING_COMMANDS = 128;
 /** Local silence follows a missed heartbeat within this lease. */
@@ -64,7 +74,8 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
   function nextSequence(): number {
     return ++sequence;
   }
-  function shutdown(notify: boolean): Promise<void> {
+  /** Retires the session once; a lost connection is reported with the reason this side gave up (#115). */
+  function shutdown(lost?: string): Promise<void> {
     if (shutdownPromise !== undefined) return shutdownPromise;
     closed = true;
     panel?.showSpeechTransport(false);
@@ -73,14 +84,16 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
     shutdownPromise = Promise.resolve(host.dispose());
     connection.dispose();
     channel.dispose();
-    if (notify) void vscode.window.showWarningMessage('AI Pair lost its local audio connection. Reload the window to reconnect.');
+    if (lost !== undefined) {
+      void vscode.window.showWarningMessage(`AI Pair Local Audio lost its workspace connection: ${lost}. Reload the window to reconnect.`);
+    }
     return shutdownPromise;
   }
   channel = new CommandChannel<LocalAudioFrame>({
     timeoutMs: COMMAND_TIMEOUT_MS,
     maxPending: MAX_PENDING_COMMANDS,
-    lost: () => {
-      void shutdown(true);
+    lost: (reason) => {
+      void shutdown(CHANNEL_LOSS[reason]);
     },
     send: async (frame) => {
       await vscode.commands.executeCommand('aiPair.localAudio.workspace', frame);
@@ -112,7 +125,7 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
   connection = new LocalConnection({
     leaseMs: LEASE_MS,
     lost: () => {
-      void shutdown(true);
+      void shutdown(`no heartbeat from the workspace for ${LEASE_MS / MS_PER_SECOND} seconds`);
     },
     receive: (frame) => {
       if (frame.type === 'panelChunk') {
@@ -247,7 +260,7 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
     dispose: () => {
       provider.dispose();
       shortcuts.dispose();
-      return shutdown(false);
+      return shutdown();
     },
   };
 }
