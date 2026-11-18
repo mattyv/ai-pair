@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { NAVIGATOR_COMMENTARY_SCHEMA } from './schemas';
+import { extensionVersion, localAudioStatus } from './local_audio_status';
 
 /** The panel retains up to 400 recent events and one preceding session event. */
 const MAX_REPLAY_EVENTS = 401;
@@ -86,6 +87,13 @@ export const localPanelUpdate = z.union([
   z.strictObject({ type: z.literal('canStart'), value: z.boolean() }),
   z.strictObject({ type: z.literal('startEnded') }),
   z.strictObject({ type: z.literal('timings'), tipDelayMs: number, tipWarmMs: number }),
+  // The workspace extension's identity and its companion's status, for the settings footer (#115).
+  z.strictObject({
+    type: z.literal('localAudio'),
+    version: extensionVersion,
+    build: extensionVersion,
+    status: localAudioStatus,
+  }),
 ]);
 
 /** A validated visible update for the UI-local panel. */

@@ -1,9 +1,15 @@
+/**
+ * Why a channel closed: a frame went unanswered past the bound, the other side refused one, too many
+ * waited, or its owner closed it (#115).
+ */
+export type ChannelLoss = 'timeout' | 'refused' | 'overflow' | 'closed';
+
 /** Transport and bounds for a serial VS Code command channel. */
 export interface CommandChannelOptions<T> {
   send: (frame: T) => Promise<void>;
   timeoutMs: number;
   maxPending: number;
-  lost: () => void;
+  lost: (reason: ChannelLoss) => void;
 }
 
 interface Pending<T> {
@@ -24,7 +30,7 @@ export class CommandChannel<T> {
   send(frame: T): Promise<boolean> {
     if (this.closed) return Promise.resolve(false);
     if (this.queue.length + (this.current === undefined ? 0 : 1) >= this.options.maxPending) {
-      this.dispose();
+      this.close('overflow');
       return Promise.resolve(false);
     }
     const { promise, resolve } = Promise.withResolvers<boolean>();
@@ -35,6 +41,11 @@ export class CommandChannel<T> {
 
   /** Stops dispatch, settles queued callers and reports the lost connection once. */
   dispose(): void {
+    this.close('closed');
+  }
+
+  /** Closes the channel once, reporting why. */
+  private close(reason: ChannelLoss): void {
     if (this.closed) return;
     this.closed = true;
     clearTimeout(this.timer);
@@ -43,7 +54,7 @@ export class CommandChannel<T> {
     for (const pending of this.queue.splice(0)) {
       pending.resolve(false);
     }
-    this.options.lost();
+    this.options.lost(reason);
   }
 
   /** Dispatches one frame and waits for its bounded acknowledgement. */
@@ -53,13 +64,13 @@ export class CommandChannel<T> {
     if (pending === undefined) return;
     this.current = pending;
     this.timer = setTimeout(() => {
-      this.dispose();
+      this.close('timeout');
     }, this.options.timeoutMs);
     let sent: Promise<void>;
     try {
       sent = this.options.send(pending.frame);
     } catch {
-      this.dispose();
+      this.close('refused');
       return;
     }
     void sent.then(
@@ -71,7 +82,7 @@ export class CommandChannel<T> {
         this.dispatch();
       },
       () => {
-        this.dispose();
+        this.close('refused');
       },
     );
   }

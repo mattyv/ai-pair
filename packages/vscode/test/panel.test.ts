@@ -999,6 +999,22 @@ describe('receive', () => {
     expect(vi.mocked(vscode.window.showErrorMessage)).toHaveBeenCalledWith('Could not copy AI Pair diagnostics.');
   });
 
+  it("shows the companion's status with this extension's identity, again to a new page, and reloads to reconnect (#115)", () => {
+    const { panel } = harness();
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(view.posted.some((message) => message.type === 'localAudio')).toBe(false);
+    const status = { state: 'failed', reason: 'not_found' } as const;
+    panel.showLocalAudio(status);
+    expect(view.posted).toContainEqual({ type: 'localAudio', version: '0.10.0', build: 'test-build', status });
+    view.posted.length = 0;
+    view.send({ type: 'ready' });
+    expect(view.posted).toContainEqual({ type: 'localAudio', version: '0.10.0', build: 'test-build', status });
+    vi.mocked(vscode.commands.executeCommand).mockClear();
+    view.send({ type: 'reconnectLocalAudio' });
+    expect(vi.mocked(vscode.commands.executeCommand)).toHaveBeenCalledExactlyOnceWith('workbench.action.reloadWindow');
+  });
+
   it('ChoiceApplied: sends the saved mode and accepts only valid choices', () => {
     const { panel, codePlayback } = harness();
     const view = open(panel);

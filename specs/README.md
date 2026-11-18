@@ -116,7 +116,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `OutputPreference.cfg` | ordered choice, discovery and failed persistence | holds | 934 |
 | `LocalAudioAdmission.cfg` | capability, device snapshot and cloud admission | holds | 624 |
 | `LocalAudioOwnership.cfg` | local ownership, directional sequences and lease loss | holds | 3,632 |
-| `PanelPlacement.cfg` | bounded activation and prepare, irrevocable commit and fallback | holds | 16 |
+| `PanelPlacement.cfg` | bounded activation and prepare, irrevocable commit and fallback, a companion registered late or never | holds | 20 |
 | `SentencePipeline.cfg` | two units, three parts, pause, cancel and late callbacks | holds | 2,242 |
 | `SpeechTempo.cfg` | two units, two parts, rate changes and stale results | holds | 868 |
 | `SpeechTempo_Healthy.cfg` | two fair completed units | holds | 17 |
@@ -2828,6 +2828,12 @@ current page instead of the immutable job page in `Retired` violates
 `LeaseStops`, `RetirementStops` and `ParentLossSettles` after page replacement;
 the unchanged baseline passes 3,632 states.
 
+The model abstracts time. The code's bounds are a 3 s heartbeat, a 10 s wait
+for each acknowledgement on either side, and a 20 s lease: longer than the
+acknowledgement wait plus one heartbeat, so a stall the workspace survives
+does not end the lease. They were 3 s and 10 s before #115, when a 6.8 s stall
+of a sandbox's extension host dropped the connection.
+
 | Property | Current test evidence |
 |---|---|
 | `NoOverlap`, `NoStaleAck` | `audio-native/test/ownership.test.ts`: holds exclusive ownership until the corresponding process has actually retired; snapshots owner identity and rejects leases after retirement or replacement. |
@@ -2860,10 +2866,29 @@ start preparation after the selection has settled. `RejectInstalled`
 models the new incompatible result without registering either owner;
 `StatusTransport` models the version guard that selects this result.
 
+`Appear` lets the companion become known to the window at any time, as a
+remote window's UI host may register it after the workspace host starts (#115).
+`Prepare` needs a known companion and records that it was reached;
+`ExpireBeforeCommit` reports a companion missing only from activation, while it
+is still unknown, and marks the discovery deadline passed. `NoEarlyMissing`
+says missing is reported only after that deadline; `NoMissingOnceReached` says a
+companion that answered is never reported missing. `RejectInstalled` now
+settles a known companion that fails, with its own fairness, and
+`LatePrepared` models a late reply after either result. TLC checked 20 states.
+
 The prepare-registration, late-registration and post-commit fallback negative
 controls violate `NoEarlyRegistration`, `NoDuplicateRegistration` and
 `NoFallbackAfterCommit`. Disabling the precommit timeout violates
 `PreparationSettles`.
+
+`GiveUpEarly` never fires in the checked configuration because
+`GuardDiscovery` is true: it is the design before #115, which reported the
+companion missing on the first attempt that did not find it. Its negative
+control sets `GuardDiscovery` false and violates `NoEarlyMissing`. Setting
+`GuardReached` false lets `ExpireBeforeCommit` report a reached companion
+missing, as a remote prepare timeout did before, and violates
+`NoMissingOnceReached`. Removing the fairness of `ExpireBeforeCommit` or of
+`RejectInstalled` violates `PreparationSettles`.
 
 `UnsafeFallback` never fires in the checked configuration because
 `GuardFallback` is true: falling back to the legacy panel after commit is
@@ -2875,6 +2900,8 @@ forbidden. The negative control disables this guard and violates
 | `NoSessionBeforeAck`, `NoSessionAfterClose` | `panel_placement.test.ts`: waits for a successful commit acknowledgement before creating the session; `extension.test.ts`: does not create a workspace session after the window closes during commit. |
 | `RejectInstalled` | `panel_placement.test.ts`: rejects an installed incompatible companion before selecting any panel owner; `integration_workspace_incompatible.ts`: a synthetic companion refusal shows the warning without committing or previewing. |
 | `NoFallbackAfterCommit`, `CommittedSettles` | `panel_placement.test.ts`: chooses companion irrevocably before committing, including on a lost acknowledgement. |
+| `NoEarlyMissing` | `panel_placement.test.ts`: NoEarlyMissing: in a remote window, asks again for a companion not yet registered, and uses it once it answers (#115); NoEarlyMissing: reports a remote companion missing only once the deadline passes (#115). |
+| `NoMissingOnceReached` | `panel_placement.test.ts`: NoMissingOnceReached: a remote companion that answered and then failed is not reported missing (#115). |
 | `NoEarlyRegistration`, `NoDuplicateRegistration`, `PreparationSettles` | `panel_placement.test.ts`: falls back only before commit and ignores late prepare replies; ignores activation completing after its deadline; uses local legacy only for a failed or invalid preparation before commit. |
 
 ### `LocalPanelReplay`: ordered local panel replay
@@ -2889,6 +2916,11 @@ abstract that validation; this model does not inspect JSON or prove that a
 particular field is nonsecret. Production bounds are 16,384 UTF-16 code units
 per chunk, 1,024 chunks and 16 MiB per message; oversize must be reported.
 Per-event messages preserve replay order without truncating the whole history.
+
+The command channel now reports why it closed (timeout, refusal, overflow, or
+its owner closing it), and each side's warning names its side and that reason
+(#115). Behavior is unchanged: the same events close the channel, once; the
+reason is not modeled.
 
 | Property | Code test |
 |---|---|

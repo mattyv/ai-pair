@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { localSpeechDiagnostics, localSpeechReport } from './local_diagnostics';
 import { gpuDiagnostics } from './gpu_diagnostics';
+import { localAudioStatus } from './local_audio_status';
 
 const MAX_PAUSE_REASONS = 5;
 const MAX_EVENTS = 100;
@@ -59,6 +60,8 @@ export const DIAGNOSTIC_SNAPSHOT_SCHEMA = z.strictObject({
   localSpeech: z.union([localSpeechReport, z.literal('unavailable')]).optional(),
   gpu: gpuDiagnostics.optional(),
   audio: AUDIO_DIAGNOSTICS_SCHEMA.optional(),
+  /** The companion's version, or why the window did not connect to it; absent where no companion was looked for (#115). */
+  localAudio: localAudioStatus.optional(),
 });
 /** A validated, privacy-preserving diagnostics report. */
 export type DiagnosticSnapshot = z.infer<typeof DIAGNOSTIC_SNAPSHOT_SCHEMA>;

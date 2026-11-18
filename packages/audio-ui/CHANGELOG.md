@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.47.0
+
+-   Report this extension's version and build ID to AI Pair when a window
+    connects, for Pair Settings and diagnostics (#115). The local audio
+    protocol is version 9: install both extensions at 0.47.0.
+-   Name this side and the reason in its lost-connection warning (#115).
+-   Wait 10 seconds for an answer from the workspace instead of 3, and 20
+    seconds for its heartbeat instead of 10, so a pause of several seconds no
+    longer drops the connection (#115).
+
 ## 0.46.0
 
 -   Prepare the next cloud line while one plays, in a remote window too (#108).

@@ -385,6 +385,7 @@ const fakes = vi.hoisted(() => {
     readonly showSpeechKeyStatus = vi.fn();
     readonly showSpeechReadiness = vi.fn();
     readonly showSpeechTransport = vi.fn();
+    readonly showLocalAudio = vi.fn();
     readonly showSpeechCatalog = vi.fn();
     readonly showOpenRouterCatalog = vi.fn();
     readonly showOpenRouterKeyStatus = vi.fn();
@@ -597,6 +598,7 @@ vi.mock('vscode', () => ({
     createOutputChannel: () => ({
       info: (line: string) => fakes.logged.push(['info', line]),
       trace: (line: string) => fakes.logged.push(['trace', line]),
+      warn: (line: string) => fakes.logged.push(['warn', line]),
       dispose: () => {},
       show: fakes.showOutput,
     }),
@@ -637,7 +639,12 @@ vi.mock('vscode', () => ({
         value !== null &&
         'epoch' in value
       ) {
-        return Promise.resolve({ version: LOCAL_AUDIO_VERSION, epoch: value.epoch, token: 'token' });
+        return Promise.resolve({
+          version: LOCAL_AUDIO_VERSION,
+          epoch: value.epoch,
+          token: 'token',
+          extension: { version: '0.47.0', build: 'abc' },
+        });
       }
       if (name === 'aiPair.localAudio.activate') return Promise.resolve(true);
       if (name === 'aiPair.localAudio.gpuDiagnostics' && fakes.companionAvailable) return Promise.resolve(fakes.gpuSnapshot);
@@ -647,6 +654,7 @@ vi.mock('vscode', () => ({
       }
       if (name === 'aiPair.localAudio.frame' && fakes.companionAvailable) return Promise.resolve(fakes.frameAccepted);
       if (name === 'workbench.extensions.action.installVSIX') return Promise.resolve();
+      if (name === 'workbench.action.reloadWindow') return Promise.resolve();
       if (name === 'workbench.action.openGlobalKeybindings') return Promise.resolve();
       if (name.startsWith('aiPair.localAudio.') && fakes.companionAvailable) return Promise.resolve(true);
       return Promise.reject(new Error('missing command'));
@@ -2365,9 +2373,17 @@ it('routes companion controls, keys, frame acknowledgements and connection notic
   await expect(options.send(frame)).resolves.toBeUndefined();
   fakes.frameAccepted = false;
   await expect(options.send(frame)).rejects.toThrow('not accepted');
-  options.lost();
+  options.slow?.('speak', 1500);
+  expect(fakes.logged).toContainEqual(['info', 'Local Audio took 1500 ms to accept a speak frame']);
+  options.lost('timeout', 'speak');
+  expect(fakes.logged).toContainEqual(['warn', 'Local Audio connection lost: timeout, waiting on a speak frame']);
+  options.lost('timeout');
   options.unavailable?.();
-  expect(fakes.infos.some((message) => message.includes('lost its local audio'))).toBe(true);
+  // The warning says why this side gave up (#115).
+  expect(fakes.infos).toContain(
+    'AI Pair lost its local audio connection: Local Audio did not answer a message in time. Reload the window to reconnect.',
+  );
+  expect(fakes.logged).toContainEqual(['warn', 'Local Audio connection lost: timeout']);
   expect(fakes.infos.some((message) => message.includes('too large'))).toBe(true);
 });
 
@@ -2377,7 +2393,12 @@ it('exposes fixed prepare and commit commands and merges only valid local diagno
   await h.api.ready;
   const placement = fakes.placementOptions;
   if (placement === undefined) throw new Error('No placement');
-  const prepared = { version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'test-epoch', token: 'token' };
+  const prepared = {
+    version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+    epoch: 'test-epoch',
+    token: 'token',
+    extension: { version: '0.47.0', build: 'abc' },
+  };
   await expect(placement.prepare()).resolves.toEqual(prepared);
   await expect(placement.commit(prepared)).resolves.toBe(true);
   await h.panel.wiring.copyDiagnostics();
@@ -2397,6 +2418,44 @@ it('remote text routes preview and key actions to local installation, including 
   expect(fakes.commandCalls.some(([name]) => name === 'workbench.extensions.action.installVSIX')).toBe(true);
 });
 
+it('looks for the companion in a remote window, reports it missing in Settings, and reloads to reconnect (#115)', async () => {
+  fakes.remoteName = 'ssh-remote';
+  fakes.answer = 'Reload Window';
+  const h = activated();
+  const placement = fakes.placementOptions;
+  if (placement === undefined) throw new Error('No placement');
+  // getExtension cannot see the companion from a remote host, so it is looked for by its command.
+  expect(placement.activate).toBeDefined();
+  placement.failure?.('not_found');
+  await h.api.ready;
+  expect(h.panel.showLocalAudio).toHaveBeenCalledWith({ state: 'failed', reason: 'not_found' });
+  expect(fakes.commandCalls.some(([name]) => name === 'workbench.action.reloadWindow')).toBe(true);
+  await h.panel.wiring.copyDiagnostics();
+  expect(vi.mocked(collectDiagnostics).mock.calls.at(-1)?.[0].localAudio).toEqual({ state: 'failed', reason: 'not_found' });
+});
+
+it('reports why an installed companion did not connect in diagnostics, and nothing for a local window without one (#115)', async () => {
+  const local = activated();
+  fakes.placementOptions?.failure?.('activation_failure');
+  await local.api.ready;
+  await local.panel.wiring.copyDiagnostics();
+  expect(vi.mocked(collectDiagnostics).mock.calls.at(-1)?.[0].localAudio).toBeUndefined();
+  fakes.companionInstalled = true;
+  const installed = activated();
+  fakes.placementOptions?.failure?.('timeout');
+  await installed.api.ready;
+  await installed.panel.wiring.copyDiagnostics();
+  expect(vi.mocked(collectDiagnostics).mock.calls.at(-1)?.[0].localAudio).toEqual({ state: 'failed', reason: 'timeout' });
+});
+
+it("shows the companion's version once it prepares (#115)", async () => {
+  fakes.companionAvailable = true;
+  const h = activated();
+  fakes.placementOptions?.prepared?.({ version: '0.47.0', build: 'abc' });
+  await h.api.ready;
+  expect(h.panel.showLocalAudio).toHaveBeenCalledWith({ state: 'connected', version: '0.47.0', build: 'abc' });
+});
+
 it('does not register a provider when placement resolves after shutdown', async () => {
   const choice = Promise.withResolvers<'legacy'>();
   fakes.placementChoice = choice.promise;
@@ -2414,7 +2473,12 @@ it('keeps companion command failures private and does not change panel ownership
   await h.api.ready;
   const placement = fakes.placementOptions;
   if (placement === undefined) throw new Error('No placement');
-  const prepared = { version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'test-epoch', token: 'token' };
+  const prepared = {
+    version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+    epoch: 'test-epoch',
+    token: 'token',
+    extension: { version: '0.47.0', build: 'abc' },
+  };
   fakes.failedCommands.add('aiPair.localAudio.prepare');
   fakes.failedCommands.add('aiPair.localAudio.commit');
   fakes.failedCommands.add('aiPair.localAudio.keySet');

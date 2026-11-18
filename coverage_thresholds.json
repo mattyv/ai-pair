@@ -373,6 +373,13 @@
       "functions": 100
     }
   },
+  "packages/protocol/src/local_audio_status.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/protocol/src/local_diagnostics.ts": {
     "unit": {
       "lines": 100,

@@ -4,6 +4,11 @@ import { LOCAL_AUDIO_VERSION, localAudioPrepared } from '@ai-pair/protocol';
 import { AttachmentGate } from './attachment_gate';
 import { createCompanionSession, type CompanionSession } from './companion_session';
 
+/** The companion's version, which the build defines from its manifest. */
+declare const AI_PAIR_VERSION: string;
+/** The companion's build ID, which the build defines from its inputs. */
+declare const AI_PAIR_BUILD_ID: string;
+
 /** How long a prepared but uncommitted attachment remains valid. */
 const PREPARE_TIMEOUT_MS = 5000;
 
@@ -38,6 +43,7 @@ export function activate(context: vscode.ExtensionContext): void {
   }
   const gate = new AttachmentGate({
     token: randomUUID,
+    extension: { version: AI_PAIR_VERSION, build: AI_PAIR_BUILD_ID },
     timeoutMs: PREPARE_TIMEOUT_MS,
     register: () => {
       const epoch = commitEpoch;

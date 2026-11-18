@@ -243,7 +243,7 @@ Code goes without a spec for one of these reasons:
 | `calibration.ts` | all | `Calibration` |
 | `passage.ts` | `builtInPassage` | Glue: reads the passage's media files |
 | `timings.ts` | `setTimings` | Glue: the extension's delays, one set for tests |
-| `panel_placement.ts` | panel prepare, commit and fallback | `PanelPlacement` |
+| `panel_placement.ts` | panel prepare, commit and fallback, looking again for a companion registered late | `PanelPlacement` |
 | `panel_html.ts` | `panelHtml`, `settingSpeed` | Format |
 | `webview/panel.css` | all | Look |
 | `panel_messages.ts` | | Types |

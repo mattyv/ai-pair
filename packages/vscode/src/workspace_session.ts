@@ -1,4 +1,4 @@
-import { CommandChannel, LOCAL_AUDIO_VERSION, type LocalAudioFrame, type LocalPanelAction } from '@ai-pair/protocol';
+import { CommandChannel, LOCAL_AUDIO_VERSION, type ChannelLoss, type LocalAudioFrame, type LocalPanelAction } from '@ai-pair/protocol';
 import { PanelUpdateSender } from './panel_update_sender';
 import { RemoteNarration } from './remote_narration';
 import { WorkspacePanelBridge } from './workspace_panel_bridge';
@@ -6,8 +6,13 @@ import { SPEECH_TEMPO_TIMEOUT_MS } from './speech_tempo_client';
 
 /** Interval between connection lease heartbeats. */
 const HEARTBEAT_MS = 3000;
-/** Maximum time to wait for one command acknowledgement. */
-const COMMAND_TIMEOUT_MS = 3000;
+/**
+ * Maximum time to wait for one command acknowledgement. A remote window's extension host can stall for
+ * seconds while another extension works; 3 s dropped a sandbox's connection on a 6.8 s stall (#115).
+ */
+const COMMAND_TIMEOUT_MS = 10_000;
+/** An acknowledgement this slow is logged, to find what delays the companion (#115). */
+const SLOW_FRAME_MS = 1000;
 /** Maximum queued commands before failing the connection closed. */
 const MAX_PENDING_COMMANDS = 128;
 /** Unpaused admission deadline in SpeechService. */
@@ -48,7 +53,10 @@ export interface WorkspaceSessionOptions {
   epoch: string;
   panel: WorkspaceSessionPanel;
   send: (frame: LocalAudioFrame) => Promise<void>;
-  lost: () => void;
+  /** Reports why the connection closed, and the kind of frame that was waiting for an answer, if any. */
+  lost: (reason: ChannelLoss, waiting?: LocalAudioFrame['type']) => void;
+  /** Reports a frame the companion took at least `SLOW_FRAME_MS` to accept, a lost one included once it settles (#115). */
+  slow?: (type: LocalAudioFrame['type'], ms: number) => void;
   unavailable?: () => void;
 }
 
@@ -61,15 +69,27 @@ export class WorkspaceSession {
   private readonly heartbeat: ReturnType<typeof setInterval>;
   private sequence = 1;
   private closed = false;
+  /** The kind of the frame sent last, which a timeout leaves unanswered. */
+  private waiting?: LocalAudioFrame['type'];
 
   constructor(private readonly options: WorkspaceSessionOptions) {
     const nextSequence = (): number => ++this.sequence;
     this.channel = new CommandChannel({
-      send: options.send,
+      send: async (frame) => {
+        // The channel is serial, so the frame sent last is the one a timeout leaves waiting.
+        this.waiting = frame.type;
+        const started = Date.now();
+        try {
+          await options.send(frame);
+        } finally {
+          const ms = Date.now() - started;
+          if (ms >= SLOW_FRAME_MS) options.slow?.(frame.type, ms);
+        }
+      },
       timeoutMs: COMMAND_TIMEOUT_MS,
       maxPending: MAX_PENDING_COMMANDS,
-      lost: () => {
-        this.stop(true);
+      lost: (reason) => {
+        this.stop(reason);
       },
     });
     this.narration = new RemoteNarration({
@@ -126,11 +146,11 @@ export class WorkspaceSession {
 
   /** Disposes the selected connection without switching back to a legacy owner. */
   dispose(): void {
-    this.stop(false);
+    this.stop();
   }
 
-  /** Stops the session, preserving the selected owner after connection failure. */
-  private stop(notify: boolean): void {
+  /** Stops the session, preserving the selected owner after connection failure, which it reports with its reason. */
+  private stop(lost?: ChannelLoss): void {
     if (this.closed) return;
     this.closed = true;
     clearInterval(this.heartbeat);
@@ -139,6 +159,6 @@ export class WorkspaceSession {
     this.bridge.dispose();
     if (page !== undefined) this.options.panel.closeRemote(page);
     this.channel.dispose();
-    if (notify) this.options.lost();
+    if (lost !== undefined) this.options.lost(lost, lost === 'timeout' ? this.waiting : undefined);
   }
 }

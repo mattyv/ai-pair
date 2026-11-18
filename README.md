@@ -54,7 +54,9 @@ development build, use both artifacts from the same [Build VSIX workflow run](ht
 Install AI Pair in the workspace and the audio companion locally on the
 computer with your speakers. In an SSH or container window, install the
 companion on the local side. Reload the VS Code window after installing or
-updating both extensions.
+updating both extensions. The footer of Pair Settings shows both versions; if
+it says Local Audio did not answer, **Reconnect Local Audio** reloads the
+window to look for it again.
 
 AI Pair was published as `michalstrba.ai-pair` before. VS Code treats that as a
 different extension, so uninstall it when you install `mattyv.ai-pair`; AI Pair
@@ -341,10 +343,11 @@ The design is written up in:
 
 You need **VS Code 1.106 or newer**. Install the paired VSIX artifacts from
 the same release as described in [Get started](#get-started). Reload the
-window and restart the agent. Settings shows the running version and build ID.
+window and restart the agent. Settings shows the running version and build ID,
+and AI Pair Local Audio's version and build ID when a window looked for it.
 **Copy diagnostics** explicitly copies bounded connection, session, request,
-pause, and command status metadata; it does not include chat, code, paths,
-command text, or output.
+pause, and command status metadata, and the companion's version or why it did
+not connect; it does not include chat, code, paths, command text, or output.
 
 To build it from source instead, you also need **Node.js 22.19 or newer**:
 
