@@ -710,9 +710,11 @@ button:focus-visible {
   margin-top: 4px;
 }
 
-/* A message not yet carried to the agent: dimmed, and labeled (#117). */
+/* A message not yet carried to the agent: an outlined bubble, filled once received, and labeled (#117). */
 .you.waiting {
-  opacity: 0.6;
+  background: transparent;
+  outline: 1px dashed var(--border);
+  outline-offset: -1px;
 }
 
 .you .wait {

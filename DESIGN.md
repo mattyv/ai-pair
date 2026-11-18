@@ -74,7 +74,7 @@ bottom:
         lines of message, so the reply box moves only for a longer one.
 2.  **History**, below the band, newest first by default. Agent messages use the
     theme foreground; the programmer's replies are neutral bubbles on the right,
-    keeping the line breaks they typed, dimmed and labeled *waiting* until a
+    keeping the line breaks they typed, outlined and labeled *waiting* until a
     report carries them to the agent (#117); commands are soft terminal rows
     with their outcomes; turn changes, interrupts and session boundaries are
     faint dividers. The Settings dialog also offers oldest first: history then

@@ -14,8 +14,9 @@ a multi-line command waits up to 500 ms for identification. If it remains
 unknown, Pair submits the original command. Bash trap/debug context and
 error line numbers can differ; normal shell state and exit status are kept.
 
-A reply shows dimmed, labeled *waiting*, until the agent receives it: when its
-next `step` or `listen` returns with it. That is delivery to the agent, not
+A reply shows as an outlined bubble, labeled *waiting*, until the agent
+receives it: when its next `step` or `listen` returns with it. Then the bubble
+fills in. That is delivery to the agent, not
 proof that the model read it.
 
 Use the hand button to the left of Reply to request a chance to interject. The agent
