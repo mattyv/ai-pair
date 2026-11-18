@@ -274,10 +274,11 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
       <p>Copies version and recent connection, session, and command status; no command text.</p>
       <div class="settings-actions">
         <button type="button" data-ui="copy-diagnostics" class="soft">Copy diagnostics</button>
+        <button type="button" data-ui="reconnect-local-audio" class="soft" hidden>Reconnect Local Audio</button>
       </div>
     </section>
     <div class="settings-footer">
-      <p class="build-identity">v${safeVersion} - build ${safeBuild}</p>
+      <p data-ui="build-identity" class="build-identity">v${safeVersion} - build ${safeBuild}</p>
       <button type="button" data-ui="settings-close" class="primary">Close</button>
     </div>
   </dialog>

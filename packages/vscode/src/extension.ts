@@ -160,11 +160,14 @@ function speechSupported(): boolean {
 function showInstallCompanion(): void {
   void vscode.window
     .showInformationMessage(
-      'Speech is unavailable in this remote workspace. Install the AI Pair Local Audio VSIX locally and reload the window.',
+      'Speech is unavailable in this remote workspace: AI Pair Local Audio did not answer. Install its VSIX locally, or reload the window if it is installed.',
       'Install VSIX...',
+      'Reload Window',
     )
     .then((answer) => {
       if (answer === 'Install VSIX...') void vscode.commands.executeCommand('workbench.extensions.action.installVSIX');
+      // A window chooses its panel owner once, so finding a companion again takes a reload (#115).
+      else if (answer === 'Reload Window') void vscode.commands.executeCommand('workbench.action.reloadWindow');
     });
 }
 
@@ -213,6 +216,8 @@ export function activate(context: vscode.ExtensionContext): Api {
   const connectionEpoch = randomUUID();
   let selectedNarration: NarrationPort | undefined;
   let owner: PanelOwner | 'pending' = 'pending';
+  /** Where this window's companion stands, once placement has looked for one (#115). */
+  let localAudio: import('@ai-pair/protocol').LocalAudioStatus | undefined;
   let ownerReady: Promise<void>;
   let workspaceSession: WorkspaceSession | undefined;
   let shuttingDown = false;
@@ -612,6 +617,7 @@ export function activate(context: vscode.ExtensionContext): Api {
         return { ...snapshot, session };
       },
       companion: owner === 'companion',
+      localAudio,
       timeoutMs: COMPANION_PREPARE_TIMEOUT_MS,
       command: (name) =>
         vscode.commands.executeCommand(
@@ -1279,15 +1285,18 @@ export function activate(context: vscode.ExtensionContext): Api {
     },
   );
   let prepareFailure: PanelPrepareFailure | undefined;
+  const remote = vscode.env.remoteName !== undefined;
+  // getExtension sees only this extension host's extensions: in a remote window, never the companion,
+  // which runs in the local one. There it is always looked for, by its command (#115).
   const companion = vscode.extensions.getExtension('mattyv.ai-pair-local-audio');
   const placement = new PanelPlacement({
     epoch: connectionEpoch,
-    remote: vscode.env.remoteName !== undefined,
+    remote,
     companionInstalled: companion !== undefined,
     timeoutMs: COMPANION_PREPARE_TIMEOUT_MS,
     activationTimeoutMs: COMPANION_ACTIVATION_TIMEOUT_MS,
     activate:
-      companion === undefined
+      companion === undefined && !remote
         ? undefined
         : async () => {
             const started = Date.now();
@@ -1307,9 +1316,14 @@ export function activate(context: vscode.ExtensionContext): Api {
     },
     failure: (reason) => {
       prepareFailure = reason;
-      if (vscode.extensions.getExtension('mattyv.ai-pair-local-audio') !== undefined) {
-        log.info(`Local Audio preparation failed: ${reason}`);
-      }
+      // A local window without the companion speaks for itself: no companion was looked for.
+      if (companion === undefined && !remote) return;
+      localAudio = { state: 'failed', reason };
+      log.info(`Local Audio preparation failed: ${reason}`);
+    },
+    prepared: (version) => {
+      localAudio = { state: 'connected', version };
+      log.info(`Local Audio ${version} prepared`);
     },
     beforeCommit: () => {
       owner = 'companion';
@@ -1347,9 +1361,13 @@ export function activate(context: vscode.ExtensionContext): Api {
     .then((chosen) => {
       if (chosen === undefined || shuttingDown) return;
       owner = chosen;
-      if (chosen === 'companion') return;
+      if (chosen === 'companion') {
+        panel.showLocalAudio(localAudio);
+        return;
+      }
       if (chosen === 'incompatible') {
         const detail: Record<PanelPrepareFailure, string> = {
+          not_found: 'The Local Audio extension did not answer.',
           timeout: 'The Local Audio extension did not respond in time.',
           activation_failure: 'The Local Audio extension could not be started.',
           activation_timeout: 'The Local Audio extension did not start in time.',
@@ -1372,6 +1390,7 @@ export function activate(context: vscode.ExtensionContext): Api {
         return;
       }
       panel.showSpeechTransport(chosen === 'legacy');
+      panel.showLocalAudio(localAudio);
       if (chosen === 'legacy') {
         selectedNarration = speech;
         speech.prepare();

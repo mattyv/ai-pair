@@ -1,10 +1,18 @@
-import { AUDIO_DIAGNOSTICS_SCHEMA, gpuDiagnostics, localSpeechReport, type DiagnosticSnapshot } from '@ai-pair/protocol';
+import {
+  AUDIO_DIAGNOSTICS_SCHEMA,
+  gpuDiagnostics,
+  localSpeechReport,
+  type DiagnosticSnapshot,
+  type LocalAudioStatus,
+} from '@ai-pair/protocol';
 import type { DiagnosticSnapshot as WorkspaceSnapshot } from './diagnostics';
 
 /** Dependencies for the bounded, read-only diagnostics collector. */
 export interface DiagnosticCollectorOptions {
   snapshot: () => WorkspaceSnapshot;
   companion: boolean;
+  /** Where the companion stands, once placement has looked for one (#115). */
+  localAudio?: LocalAudioStatus;
   command: (name: string) => PromiseLike<unknown>;
   timeoutMs: number;
   audio?: () => PromiseLike<DiagnosticSnapshot['audio']>;
@@ -50,5 +58,6 @@ export async function collectDiagnostics(options: DiagnosticCollectorOptions): P
     ...(options.companion ? { localSpeech: speech.success ? speech.data : ('unavailable' as const) } : {}),
     ...(gpu.success ? { gpu: gpu.data } : {}),
     ...(audio.success ? { audio: audio.data } : {}),
+    ...(options.localAudio === undefined ? {} : { localAudio: options.localAudio }),
   };
 }

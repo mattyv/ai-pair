@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: css, 2026-11-16.
+Last updated: css, 2026-11-18.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -135,6 +135,7 @@ Last updated: css, 2026-11-16.
 | `packages/protocol/src/index.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/keybindings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/protocol/src/local_audio.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/protocol/src/local_audio_status.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/protocol/src/local_diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/openrouter.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/panel_action.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
@@ -151,6 +152,7 @@ Last updated: css, 2026-11-16.
 | `packages/protocol/test/index.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/protocol/test/keybindings.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/protocol/test/local_audio.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/protocol/test/local_audio_status.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/protocol/test/local_diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/openrouter.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/panel_action.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -680,7 +682,7 @@ Last updated: css, 2026-11-16.
 | `specs/PanelMenus.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/PanelMenus.tla` | TLA+ | - | - | 4 of 4 actions | - | - | - |
 | `specs/PanelPlacement.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/PanelPlacement.tla` | TLA+ | - | - | 13 of 14 actions (never: UnsafeFallback) | - | - | - |
+| `specs/PanelPlacement.tla` | TLA+ | - | - | 14 of 16 actions (never: GiveUpEarly, UnsafeFallback) | - | - | - |
 | `specs/PanelReplay.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/PanelReplay.tla` | TLA+ | - | - | 3 of 3 actions | - | - | - |
 | `specs/PanelScroll.cfg` | TLC config | - | - | - | - | - | - |

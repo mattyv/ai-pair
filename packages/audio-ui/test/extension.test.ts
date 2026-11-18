@@ -11,6 +11,7 @@ const fake = vi.hoisted(() => ({
   warning: vi.fn(),
   commit: vi.fn(),
   register: undefined as (() => void) | undefined,
+  extension: undefined as string | undefined,
   session: {
     accept: vi.fn(),
     keySet: vi.fn(),
@@ -27,8 +28,9 @@ vi.mock('../src/attachment_gate', () => ({
     prepare = fake.prepare;
     commit = fake.commit;
     dispose() {}
-    constructor(options: { register: () => void }) {
+    constructor(options: { register: () => void; extension: string }) {
       fake.register = options.register;
+      fake.extension = options.extension;
     }
   },
 }));
@@ -60,13 +62,20 @@ describe('local companion activation', () => {
   it('signals readiness without preparing or registering a provider', () => {
     activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
     expect(fake.commands.get('aiPair.localAudio.activate')?.(undefined)).toBe(true);
+    // Each preparation reports the companion's own version (#115).
+    expect(fake.extension).toBe('test');
     expect(fake.prepare).not.toHaveBeenCalled();
     expect(createCompanionSession).not.toHaveBeenCalled();
   });
 
   it('prepares without registering a provider and commits only once', () => {
     const subscriptions: vscode.Disposable[] = [];
-    fake.prepare.mockReturnValue({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'epoch', token: 'token' });
+    fake.prepare.mockReturnValue({
+      version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+      epoch: 'epoch',
+      token: 'token',
+      extension: 'test',
+    });
     fake.commit
       .mockImplementationOnce(() => {
         fake.register?.();
@@ -115,7 +124,12 @@ it('rejects malformed commit and makes unattached commands safe', async () => {
 
 it('forwards attached commands to the local session and disposes it', async () => {
   const subscriptions: vscode.Disposable[] = [];
-  fake.prepare.mockReturnValue({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'epoch', token: 'token' });
+  fake.prepare.mockReturnValue({
+    version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+    epoch: 'epoch',
+    token: 'token',
+    extension: 'test',
+  });
   fake.commit.mockImplementation(() => {
     fake.register?.();
     return true;
@@ -153,6 +167,7 @@ it('isolates audio diagnostics callback failures', () => {
     version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
     epoch: 'epoch',
     token: 'token',
+    extension: 'test',
   });
   expect(fake.commands.get('aiPair.localAudio.audioDiagnostics')?.(undefined)).toBeUndefined();
 });
@@ -227,6 +242,7 @@ it('acknowledges a replacement commit only after its first frame can be accepted
     version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
     epoch: 'epoch',
     token: 'token',
+    extension: 'test',
   });
   let acknowledged = false;
   const pending = Promise.resolve(value).then((result) => {
@@ -278,9 +294,11 @@ it('keeps the accepted epoch when a later invalid commit arrives before startup'
     .mockReturnValueOnce(false);
   const commit = fake.commands.get('aiPair.localAudio.commit');
   const accepted = Promise.resolve(
-    commit?.({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'accepted', token: 'token' }),
+    commit?.({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'accepted', token: 'token', extension: 'test' }),
   );
-  expect(commit?.({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'rejected', token: 'wrong' })).toBe(false);
+  expect(
+    commit?.({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'rejected', token: 'wrong', extension: 'test' }),
+  ).toBe(false);
   stopped.resolve();
   await previous;
   expect(await accepted).toBe(true);
@@ -305,6 +323,7 @@ it('rejects readiness and commit when the previous companion cannot retire', asy
       version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
       epoch: 'epoch',
       token: 'token',
+      extension: 'test',
     }),
   );
   failed.reject(new Error('private'));

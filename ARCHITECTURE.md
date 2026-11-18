@@ -161,15 +161,22 @@ The `Companion attachment bootstrap` diagram shows the cross-host sequence.
 The workspace first calls `aiPair.localAudio.activate`, which activates the UI
 extension through VS Code and returns readiness without creating a token or
 session. Activation has a 10-second bound; only a successful response starts
-prepare, with its own 1.5-second bound. Prepare validates the private protocol
-and epoch without registering a view. The workspace selects the companion
-before dispatching commit, and creates its workspace session only after a
-successful commit acknowledgement. A missing or
-late acknowledgement cannot select another owner or start workspace transport.
-Late activation or preparation cannot change the decision. An installed
-companion that fails attachment fails closed; a missing companion retains the
-legacy local or remote text-only behavior. Deactivation waits for speech
-resources to be reaped; a replacement session waits for that retirement.
+prepare, with its own 1.5-second bound. `vscode.extensions.getExtension` lists
+only the calling host's extensions, so a remote workspace cannot see the
+companion: there activation always runs, and a rejected attempt, from a command
+the UI host has not registered yet, is retried every 250 ms until the bound.
+Only a companion that never answered is reported missing; one that answered and
+then failed fails closed (#115). Prepare also returns the companion's version,
+which Pair Settings and diagnostics show. Prepare validates the private protocol
+and epoch without registering a view. The workspace selects the companion before
+dispatching commit, and creates its workspace session only after a successful
+commit acknowledgement. A missing or late acknowledgement cannot select another
+owner or start workspace transport. Late activation or preparation cannot change
+the decision; looking again takes a window reload, which the remote notice and
+Pair Settings offer. An installed companion that fails attachment fails closed;
+a missing companion retains the legacy local or remote text-only behavior.
+Deactivation waits for speech resources to be reaped; a replacement session
+waits for that retirement.
 
 The hosts exchange versioned allowlisted command frames with separate sequence
 numbers per direction. Ordered bounded chunks carry visible panel updates;

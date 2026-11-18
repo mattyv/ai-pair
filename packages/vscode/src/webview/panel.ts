@@ -91,6 +91,8 @@ const ui = {
   navigatorCommentary: $('navigator-commentary', HTMLSelectElement),
   settingsCodePlayback: $('settings-code-playback', HTMLSelectElement),
   copyDiagnostics: $('copy-diagnostics', HTMLButtonElement),
+  reconnectLocalAudio: $('reconnect-local-audio', HTMLButtonElement),
+  buildIdentity: $('build-identity', HTMLElement),
   speechEnabled: $('speech-enabled', HTMLInputElement),
   speechProvider: $('speech-provider', HTMLSelectElement),
   speechOutput: $('speech-output', HTMLSelectElement),
@@ -1083,6 +1085,10 @@ ui.copyDiagnostics.addEventListener('click', () => {
   vscode.postMessage({ type: 'copyDiagnostics' });
 });
 
+ui.reconnectLocalAudio.addEventListener('click', () => {
+  vscode.postMessage({ type: 'reconnectLocalAudio' });
+});
+
 /** Updates the accessible status from the latest validated host facts. */
 function syncVoiceStatus(): void {
   const indicator = voiceIndicator(voiceFacts, voiceCompute, voiceTransport, voiceSettingsValid);
@@ -2034,6 +2040,13 @@ function handle(message: ToPanel): void {
     case 'timings':
       tipDelayMs = message.tipDelayMs;
       tipWarmMs = message.tipWarmMs;
+      return;
+    case 'localAudio':
+      // The workspace extension's identity, which a companion's page would otherwise show as its own (#115).
+      ui.buildIdentity.textContent = `v${message.version} - build ${message.build} · Local Audio ${
+        message.status.state === 'connected' ? `v${message.status.version}` : 'did not answer'
+      }`;
+      ui.reconnectLocalAudio.hidden = message.status.state === 'connected';
       return;
     default:
       throw new Error(`Unknown panel message: ${JSON.stringify(message satisfies never)}`);

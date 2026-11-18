@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.47.0
+
+-   In a remote window, keep looking for AI Pair Local Audio for up to 10
+    seconds while the window starts, instead of deciding on the first try that
+    it is missing (#115). The workspace extension cannot list an extension that
+    runs on your computer, so it found the companion only when the companion
+    answered within 1.5 seconds; a slower start, such as after installing
+    another extension, left the window without speech until a reload. A
+    companion that answers and then fails is now reported as failing to
+    connect, not as missing.
+-   Pair Settings shows AI Pair Local Audio's version beside AI Pair's, or that
+    it did not answer, with a **Reconnect Local Audio** button that reloads the
+    window. The "Speech is unavailable in this remote workspace" notice has a
+    **Reload Window** button, and copied diagnostics include the companion's
+    version or why it did not connect (#115).
+-   The local audio protocol is version 9: install both extensions at 0.47.0.
+
 ## 0.46.0
 
 -   With a cloud voice (OpenRouter or ElevenLabs), prepare the next line while

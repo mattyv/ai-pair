@@ -329,6 +329,12 @@ Issue discussions and working notes hold the detailed evidence and history.
     a lost acknowledgement cannot cause a second legacy provider to register.
     Without a companion, retain the existing local experience; remote speech
     remains unavailable rather than playing on the workspace machine.
+-   In a remote window, look for the companion by its activation command until
+    the activation deadline, not once: the workspace host cannot list UI-host
+    extensions, and the UI host may register the command late (#115). Report
+    it missing only when it never answered, and reconnect by reloading the
+    window rather than by changing the panel owner in place, which would
+    break the once-per-window choice.
 -   Reserve and validate a concrete local endpoint before synthesis, including
     resolving System default for that narration unit. Recheck and open that
     endpoint at playback; do not substitute another device. Removal after a

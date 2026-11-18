@@ -116,7 +116,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `OutputPreference.cfg` | ordered choice, discovery and failed persistence | holds | 934 |
 | `LocalAudioAdmission.cfg` | capability, device snapshot and cloud admission | holds | 624 |
 | `LocalAudioOwnership.cfg` | local ownership, directional sequences and lease loss | holds | 3,632 |
-| `PanelPlacement.cfg` | bounded activation and prepare, irrevocable commit and fallback | holds | 16 |
+| `PanelPlacement.cfg` | bounded activation and prepare, irrevocable commit and fallback, a companion registered late or never | holds | 20 |
 | `SentencePipeline.cfg` | two units, three parts, pause, cancel and late callbacks | holds | 2,242 |
 | `SpeechTempo.cfg` | two units, two parts, rate changes and stale results | holds | 868 |
 | `SpeechTempo_Healthy.cfg` | two fair completed units | holds | 17 |
@@ -2860,10 +2860,29 @@ start preparation after the selection has settled. `RejectInstalled`
 models the new incompatible result without registering either owner;
 `StatusTransport` models the version guard that selects this result.
 
+`Appear` lets the companion become known to the window at any time, as a
+remote window's UI host may register it after the workspace host starts (#115).
+`Prepare` needs a known companion and records that it was reached;
+`ExpireBeforeCommit` reports a companion missing only from activation, while it
+is still unknown, and marks the discovery deadline passed. `NoEarlyMissing`
+says missing is reported only after that deadline; `NoMissingOnceReached` says a
+companion that answered is never reported missing. `RejectInstalled` now
+settles a known companion that fails, with its own fairness, and
+`LatePrepared` models a late reply after either result. TLC checked 20 states.
+
 The prepare-registration, late-registration and post-commit fallback negative
 controls violate `NoEarlyRegistration`, `NoDuplicateRegistration` and
 `NoFallbackAfterCommit`. Disabling the precommit timeout violates
 `PreparationSettles`.
+
+`GiveUpEarly` never fires in the checked configuration because
+`GuardDiscovery` is true: it is the design before #115, which reported the
+companion missing on the first attempt that did not find it. Its negative
+control sets `GuardDiscovery` false and violates `NoEarlyMissing`. Setting
+`GuardReached` false lets `ExpireBeforeCommit` report a reached companion
+missing, as a remote prepare timeout did before, and violates
+`NoMissingOnceReached`. Removing the fairness of `ExpireBeforeCommit` or of
+`RejectInstalled` violates `PreparationSettles`.
 
 `UnsafeFallback` never fires in the checked configuration because
 `GuardFallback` is true: falling back to the legacy panel after commit is
@@ -2875,6 +2894,8 @@ forbidden. The negative control disables this guard and violates
 | `NoSessionBeforeAck`, `NoSessionAfterClose` | `panel_placement.test.ts`: waits for a successful commit acknowledgement before creating the session; `extension.test.ts`: does not create a workspace session after the window closes during commit. |
 | `RejectInstalled` | `panel_placement.test.ts`: rejects an installed incompatible companion before selecting any panel owner; `integration_workspace_incompatible.ts`: a synthetic companion refusal shows the warning without committing or previewing. |
 | `NoFallbackAfterCommit`, `CommittedSettles` | `panel_placement.test.ts`: chooses companion irrevocably before committing, including on a lost acknowledgement. |
+| `NoEarlyMissing` | `panel_placement.test.ts`: NoEarlyMissing: in a remote window, asks again for a companion not yet registered, and uses it once it answers (#115); NoEarlyMissing: reports a remote companion missing only once the deadline passes (#115). |
+| `NoMissingOnceReached` | `panel_placement.test.ts`: NoMissingOnceReached: a remote companion that answered and then failed is not reported missing (#115). |
 | `NoEarlyRegistration`, `NoDuplicateRegistration`, `PreparationSettles` | `panel_placement.test.ts`: falls back only before commit and ignores late prepare replies; ignores activation completing after its deadline; uses local legacy only for a failed or invalid preparation before commit. |
 
 ### `LocalPanelReplay`: ordered local panel replay

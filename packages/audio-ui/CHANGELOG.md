@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.47.0
+
+-   Report this extension's version to AI Pair when a window connects, for Pair
+    Settings and diagnostics (#115). The local audio protocol is version 9:
+    install both extensions at 0.47.0.
+
 ## 0.46.0
 
 -   Prepare the next cloud line while one plays, in a remote window too (#108).

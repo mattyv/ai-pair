@@ -8,7 +8,7 @@ import type { SpeechModelStatus } from './speech_setup';
 import type { CatalogView } from './speech_catalog';
 import type { OpenRouterCatalogView } from './speech_openrouter_catalog';
 import type { OutputChoice } from './speech_output_types';
-import type { AudioDiagnostics, SpeechDecodeFromPage, NavigatorCommentary, ShortcutLabels } from '@ai-pair/protocol';
+import type { AudioDiagnostics, LocalAudioStatus, SpeechDecodeFromPage, NavigatorCommentary, ShortcutLabels } from '@ai-pair/protocol';
 import type { OutputPreferenceView } from './speech_output_preferences';
 import type { SessionSpeechCostView } from './session_speech_cost';
 
@@ -24,6 +24,7 @@ export type FromPanel =
   | SpeechDecodeFromPage
   | { type: 'ready' }
   | { type: 'copyDiagnostics' }
+  | { type: 'reconnectLocalAudio' }
   | { type: 'speechOutputRefresh' }
   | { type: 'speechOutputSelect'; choice: OutputChoice }
   | { type: 'speechSettings'; value: SpeechSettings }
@@ -86,6 +87,7 @@ export type ToPanel =
   | { type: 'speechReadiness'; value: AudioDiagnostics }
   | { type: 'speechCost'; value: SessionSpeechCostView }
   | { type: 'speechTransport'; available: boolean }
+  | { type: 'localAudio'; version: string; build: string; status: LocalAudioStatus }
   | { type: 'speechSupport'; supported: boolean; gpu: boolean }
   | { type: 'speechModelStatus'; value: SpeechModelStatus }
   | { type: 'speechModelStatusUnavailable' }

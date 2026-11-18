@@ -13,6 +13,7 @@ import {
   localPanelAction,
   localPanelUpdate,
   type AudioDiagnostics,
+  type LocalAudioStatus,
   type LocalPanelAction,
   type ShortcutLabels,
 } from '@ai-pair/protocol';
@@ -152,6 +153,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   });
   private speechSetupCheck = 0;
   private speechTransportAvailable = true;
+  /** Where this window's companion stands, once placement has looked for one (#115). */
+  private localAudio?: LocalAudioStatus;
   private observedCostSession = false;
   /** Session generation is local to this workspace/companion connection. */
   private workspaceCostGeneration = 0;
@@ -231,6 +234,12 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   showSpeechTransport(available: boolean): void {
     this.speechTransportAvailable = available;
     this.send({ type: 'speechTransport', available });
+  }
+
+  /** Shows the companion's version, or that it did not answer, beside this extension's in the settings footer (#115). */
+  showLocalAudio(status: LocalAudioStatus | undefined): void {
+    this.localAudio = status;
+    if (status !== undefined) this.send({ type: 'localAudio', ...this.buildInfo, status });
   }
 
   /** Returns the labels of the extension's shortcuts the panel holds, for the integration test; none before a read lands. */
@@ -872,6 +881,10 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
           },
         );
         return;
+      case 'reconnectLocalAudio':
+        // A window chooses its panel owner once (specs/PanelPlacement.tla), so looking again takes a reload (#115).
+        void vscode.commands.executeCommand('workbench.action.reloadWindow');
+        return;
       case 'copyDiagnostics':
         // specs/DiagnosticsCopy.tla, `Click`: report both clipboard outcomes.
         void this.wiring.copyDiagnostics().then(
@@ -902,6 +915,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         this.showCodePlayback(this.codePlayback.get());
         this.showSelection(this.selection.ref());
         this.showTimings();
+        this.showLocalAudio(this.localAudio);
         // The new page asks once whether a session can start: specs/Start.tla, `LoadPage`.
         this.askStart();
         if (this.replyFocusPending) {

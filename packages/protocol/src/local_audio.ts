@@ -3,9 +3,10 @@ import { speechProblem } from './index';
 import { localPanelAction } from './panel_action';
 import { SPEECH_DELIVERY_SCHEMA } from './schemas';
 import { localPanelChunk } from './panel_chunks';
+import { extensionVersion } from './local_audio_status';
 
 /** The supported workspace-to-companion protocol version. */
-export const LOCAL_AUDIO_VERSION = 8;
+export const LOCAL_AUDIO_VERSION = 9;
 
 /** Lists the `<platform>-<arch>` hosts the bundled Kokoro runtime is built for (#39). */
 export const KOKORO_HOSTS: readonly string[] = ['linux-x64', 'darwin-x64', 'darwin-arm64'];
@@ -62,6 +63,8 @@ export const localAudioPrepared = z.strictObject({
   version: z.literal(LOCAL_AUDIO_VERSION),
   epoch: identity,
   token: identity,
+  /** The companion extension's own version, for the settings dialog and diagnostics (#115). */
+  extension: extensionVersion,
 });
 
 /** The validated response to a companion preparation request. */

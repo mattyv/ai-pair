@@ -3,6 +3,8 @@ import { localAudioPrepare, localAudioPrepared, type LocalAudioPrepared } from '
 /** Dependencies of the companion's bounded provider-registration handshake. */
 export interface AttachmentGateOptions {
   token: () => string;
+  /** The companion extension's version, reported with each preparation (#115). */
+  extension: string;
   timeoutMs: number;
   register: () => void;
 }
@@ -20,7 +22,7 @@ export class AttachmentGate {
   prepare(value: unknown): LocalAudioPrepared | undefined {
     const parsed = localAudioPrepare.safeParse(value);
     if (!parsed.success || this.closed || this.attached || this.pending !== undefined) return undefined;
-    const prepared = localAudioPrepared.safeParse({ ...parsed.data, token: this.options.token() });
+    const prepared = localAudioPrepared.safeParse({ ...parsed.data, token: this.options.token(), extension: this.options.extension });
     if (!prepared.success) return undefined;
     this.pending = prepared.data;
     // specs/PanelPlacement.tla, ExpireBeforeCommit: a late commit cannot register a provider.
