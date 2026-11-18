@@ -14,6 +14,9 @@ const MAX_BATCH_CHUNKS = 64;
 /** The most one batch of replay events serializes to. */
 const MAX_BATCH_UNITS = PANEL_CHUNK_UNITS * MAX_BATCH_CHUNKS;
 
+/** The units a replay update takes around its events, so the bound counts the whole message (specs/ReplayBatching.tla, Bounded). */
+const REPLAY_ENVELOPE_UNITS = JSON.stringify({ type: 'replay', events: [] }).length;
+
 /** One event of a replay. */
 type ReplayEvent = Extract<LocalPanelUpdate, { type: 'replay' }>['events'][number];
 
@@ -29,7 +32,7 @@ function replayBatches(events: readonly ReplayEvent[]): ReplayEvent[][] {
   let units = 0;
   for (const event of events) {
     const size = JSON.stringify(event).length;
-    if (event.type === 'session' || size > MAX_BATCH_UNITS) {
+    if (event.type === 'session' || REPLAY_ENVELOPE_UNITS + size > MAX_BATCH_UNITS) {
       if (current.length > 0) batches.push(current);
       batches.push([event]);
       current = [];
@@ -37,7 +40,7 @@ function replayBatches(events: readonly ReplayEvent[]): ReplayEvent[][] {
       continue;
     }
     // One more for the comma that joins it to the batch.
-    if (current.length > 0 && units + 1 + size > MAX_BATCH_UNITS) {
+    if (current.length > 0 && REPLAY_ENVELOPE_UNITS + units + 1 + size > MAX_BATCH_UNITS) {
       batches.push(current);
       current = [];
       units = 0;
