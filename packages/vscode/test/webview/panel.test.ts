@@ -1916,12 +1916,12 @@ it("shows the workspace extension's identity with the companion's version, and o
   const reconnect = element('reconnect-local-audio');
   expect(reconnect.hidden).toBe(true);
   send({ type: 'localAudio', version: '0.47.0', build: 'abc', status: { state: 'failed', reason: 'not_found' } });
-  expect(identity.textContent).toBe('v0.47.0 - build abc · Local Audio did not answer');
+  expect(identity.textContent).toBe('v0.47.0 - build abc, Local Audio did not answer');
   expect(reconnect.hidden).toBe(false);
   click(reconnect);
   expect(posted().filter((message) => message.type === 'reconnectLocalAudio')).toEqual([{ type: 'reconnectLocalAudio' }]);
-  send({ type: 'localAudio', version: '0.47.0', build: 'abc', status: { state: 'connected', version: '0.47.1' } });
-  expect(identity.textContent).toBe('v0.47.0 - build abc · Local Audio v0.47.1');
+  send({ type: 'localAudio', version: '0.47.0', build: 'abc', status: { state: 'connected', version: '0.47.1', build: 'def' } });
+  expect(identity.textContent).toBe('v0.47.0 - build abc, Local Audio v0.47.1 - build def');
   expect(reconnect.hidden).toBe(true);
 });
 

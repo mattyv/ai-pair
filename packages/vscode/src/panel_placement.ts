@@ -1,4 +1,10 @@
-import { LOCAL_AUDIO_VERSION, localAudioPrepared, type LocalAudioFailure, type LocalAudioPrepared } from '@ai-pair/protocol';
+import {
+  LOCAL_AUDIO_VERSION,
+  localAudioPrepared,
+  type ExtensionIdentity,
+  type LocalAudioFailure,
+  type LocalAudioPrepared,
+} from '@ai-pair/protocol';
 
 /** The single panel owner chosen for this window. */
 export type PanelOwner = 'companion' | 'legacy' | 'remote-text' | 'incompatible';
@@ -21,8 +27,8 @@ export interface PanelPlacementOptions {
   retryMs?: number;
   prepare: () => Promise<unknown>;
   failure?: (reason: PanelPrepareFailure) => void;
-  /** Receives the companion's version once its preparation is valid. */
-  prepared?: (extension: string) => void;
+  /** Receives the companion's version and build once its preparation is valid. */
+  prepared?: (extension: ExtensionIdentity) => void;
   beforeCommit?: () => void;
   afterCommit?: () => void;
   commitFailed?: () => void;

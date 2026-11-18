@@ -5,7 +5,7 @@ import { PanelPlacement } from '../src/panel_placement';
 
 it('keeps an installed incompatible companion unattached without fallback', async () => {
   const register = vi.fn<() => void>();
-  const gate = new AttachmentGate({ token: () => 'token', extension: '0.47.0', timeoutMs: 100, register });
+  const gate = new AttachmentGate({ token: () => 'token', extension: { version: '0.47.0', build: 'abc' }, timeoutMs: 100, register });
   const commit = vi.fn((value: unknown) => Promise.resolve(gate.commit(value)));
   const placement = new PanelPlacement({
     epoch: 'epoch',
@@ -24,7 +24,7 @@ it('keeps an installed incompatible companion unattached without fallback', asyn
 
 it('attaches matching workspace and companion versions once', async () => {
   const register = vi.fn<() => void>();
-  const gate = new AttachmentGate({ token: () => 'token', extension: '0.47.0', timeoutMs: 100, register });
+  const gate = new AttachmentGate({ token: () => 'token', extension: { version: '0.47.0', build: 'abc' }, timeoutMs: 100, register });
   const commit = vi.fn((value: unknown) => Promise.resolve(gate.commit(value)));
   const placement = new PanelPlacement({
     epoch: 'epoch',
@@ -46,7 +46,7 @@ it('waits for delayed activation before preparing and committing the gate', asyn
   vi.useFakeTimers();
   const activation = Promise.withResolvers<unknown>();
   const register = vi.fn<() => void>();
-  const gate = new AttachmentGate({ token: () => 'token', extension: '0.47.0', timeoutMs: 500, register });
+  const gate = new AttachmentGate({ token: () => 'token', extension: { version: '0.47.0', build: 'abc' }, timeoutMs: 500, register });
   try {
     const placement = new PanelPlacement({
       epoch: 'epoch',

@@ -638,7 +638,12 @@ vi.mock('vscode', () => ({
         value !== null &&
         'epoch' in value
       ) {
-        return Promise.resolve({ version: LOCAL_AUDIO_VERSION, epoch: value.epoch, token: 'token', extension: '0.47.0' });
+        return Promise.resolve({
+          version: LOCAL_AUDIO_VERSION,
+          epoch: value.epoch,
+          token: 'token',
+          extension: { version: '0.47.0', build: 'abc' },
+        });
       }
       if (name === 'aiPair.localAudio.activate') return Promise.resolve(true);
       if (name === 'aiPair.localAudio.gpuDiagnostics' && fakes.companionAvailable) return Promise.resolve(fakes.gpuSnapshot);
@@ -2379,7 +2384,12 @@ it('exposes fixed prepare and commit commands and merges only valid local diagno
   await h.api.ready;
   const placement = fakes.placementOptions;
   if (placement === undefined) throw new Error('No placement');
-  const prepared = { version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'test-epoch', token: 'token', extension: '0.47.0' };
+  const prepared = {
+    version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+    epoch: 'test-epoch',
+    token: 'token',
+    extension: { version: '0.47.0', build: 'abc' },
+  };
   await expect(placement.prepare()).resolves.toEqual(prepared);
   await expect(placement.commit(prepared)).resolves.toBe(true);
   await h.panel.wiring.copyDiagnostics();
@@ -2432,9 +2442,9 @@ it('reports why an installed companion did not connect in diagnostics, and nothi
 it("shows the companion's version once it prepares (#115)", async () => {
   fakes.companionAvailable = true;
   const h = activated();
-  fakes.placementOptions?.prepared?.('0.47.0');
+  fakes.placementOptions?.prepared?.({ version: '0.47.0', build: 'abc' });
   await h.api.ready;
-  expect(h.panel.showLocalAudio).toHaveBeenCalledWith({ state: 'connected', version: '0.47.0' });
+  expect(h.panel.showLocalAudio).toHaveBeenCalledWith({ state: 'connected', version: '0.47.0', build: 'abc' });
 });
 
 it('does not register a provider when placement resolves after shutdown', async () => {
@@ -2454,7 +2464,12 @@ it('keeps companion command failures private and does not change panel ownership
   await h.api.ready;
   const placement = fakes.placementOptions;
   if (placement === undefined) throw new Error('No placement');
-  const prepared = { version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'test-epoch', token: 'token', extension: '0.47.0' };
+  const prepared = {
+    version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+    epoch: 'test-epoch',
+    token: 'token',
+    extension: { version: '0.47.0', build: 'abc' },
+  };
   fakes.failedCommands.add('aiPair.localAudio.prepare');
   fakes.failedCommands.add('aiPair.localAudio.commit');
   fakes.failedCommands.add('aiPair.localAudio.keySet');

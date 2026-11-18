@@ -10,11 +10,11 @@
     another extension, left the window without speech until a reload. A
     companion that answers and then fails is now reported as failing to
     connect, not as missing.
--   Pair Settings shows AI Pair Local Audio's version beside AI Pair's, or that
-    it did not answer, with a **Reconnect Local Audio** button that reloads the
-    window. The "Speech is unavailable in this remote workspace" notice has a
-    **Reload Window** button, and copied diagnostics include the companion's
-    version or why it did not connect (#115).
+-   Pair Settings shows AI Pair Local Audio's version and build ID beside AI
+    Pair's, or that it did not answer, with a **Reconnect Local Audio** button
+    that reloads the window. The "Speech is unavailable in this remote
+    workspace" notice has a **Reload Window** button, and copied diagnostics
+    include the companion's version and build, or why it did not connect (#115).
 -   The local audio protocol is version 9: install both extensions at 0.47.0.
 
 ## 0.46.0

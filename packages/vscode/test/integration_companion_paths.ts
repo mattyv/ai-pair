@@ -116,13 +116,11 @@ export async function run(): Promise<void> {
     copied = await vscode.env.clipboard.readText();
   }
   assert.ok(copied.includes('localSpeech'), 'copied diagnostics omitted the local companion');
-  // The companion reports its own version when it prepares, and diagnostics carry it (#115).
+  // The companion reports its own version and build when it prepares, and diagnostics carry them (#115).
   const manifest: unknown = vscode.extensions.getExtension('mattyv.ai-pair-local-audio')?.packageJSON;
   assert.ok(typeof manifest === 'object' && manifest !== null && 'version' in manifest && typeof manifest.version === 'string');
-  assert.ok(
-    copied.includes(JSON.stringify({ state: 'connected', version: manifest.version }).slice(1, -1)),
-    "copied diagnostics omitted the companion's version",
-  );
+  const prefix = JSON.stringify({ state: 'connected', version: manifest.version }).slice(0, -1);
+  assert.ok(copied.includes(`"localAudio":${prefix},"build":"`), "copied diagnostics omitted the companion's version and build");
   api.controller.pause('reply');
   await vscode.commands.executeCommand('workbench.action.webview.reloadWebviewAction');
   await until(() => !api.controller.isPaused && api.speechPageReady(), 'the reloaded companion webview');

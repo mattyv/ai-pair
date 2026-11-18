@@ -1,10 +1,10 @@
-import { localAudioPrepare, localAudioPrepared, type LocalAudioPrepared } from '@ai-pair/protocol';
+import { localAudioPrepare, localAudioPrepared, type ExtensionIdentity, type LocalAudioPrepared } from '@ai-pair/protocol';
 
 /** Dependencies of the companion's bounded provider-registration handshake. */
 export interface AttachmentGateOptions {
   token: () => string;
-  /** The companion extension's version, reported with each preparation (#115). */
-  extension: string;
+  /** The companion extension's version and build, reported with each preparation (#115). */
+  extension: ExtensionIdentity;
   timeoutMs: number;
   register: () => void;
 }

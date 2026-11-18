@@ -3,7 +3,7 @@ import { speechProblem } from './index';
 import { localPanelAction } from './panel_action';
 import { SPEECH_DELIVERY_SCHEMA } from './schemas';
 import { localPanelChunk } from './panel_chunks';
-import { extensionVersion } from './local_audio_status';
+import { extensionIdentity } from './local_audio_status';
 
 /** The supported workspace-to-companion protocol version. */
 export const LOCAL_AUDIO_VERSION = 9;
@@ -63,8 +63,8 @@ export const localAudioPrepared = z.strictObject({
   version: z.literal(LOCAL_AUDIO_VERSION),
   epoch: identity,
   token: identity,
-  /** The companion extension's own version, for the settings dialog and diagnostics (#115). */
-  extension: extensionVersion,
+  /** The companion extension's own version and build, for the settings dialog and diagnostics (#115). */
+  extension: extensionIdentity,
 });
 
 /** The validated response to a companion preparation request. */

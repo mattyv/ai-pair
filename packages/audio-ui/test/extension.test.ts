@@ -11,7 +11,7 @@ const fake = vi.hoisted(() => ({
   warning: vi.fn(),
   commit: vi.fn(),
   register: undefined as (() => void) | undefined,
-  extension: undefined as string | undefined,
+  extension: undefined as { version: string; build: string } | undefined,
   session: {
     accept: vi.fn(),
     keySet: vi.fn(),
@@ -28,7 +28,7 @@ vi.mock('../src/attachment_gate', () => ({
     prepare = fake.prepare;
     commit = fake.commit;
     dispose() {}
-    constructor(options: { register: () => void; extension: string }) {
+    constructor(options: { register: () => void; extension: { version: string; build: string } }) {
       fake.register = options.register;
       fake.extension = options.extension;
     }
@@ -63,7 +63,7 @@ describe('local companion activation', () => {
     activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
     expect(fake.commands.get('aiPair.localAudio.activate')?.(undefined)).toBe(true);
     // Each preparation reports the companion's own version (#115).
-    expect(fake.extension).toBe('test');
+    expect(fake.extension).toEqual({ version: 'test', build: 'test-build' });
     expect(fake.prepare).not.toHaveBeenCalled();
     expect(createCompanionSession).not.toHaveBeenCalled();
   });
@@ -74,7 +74,7 @@ describe('local companion activation', () => {
       version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
       epoch: 'epoch',
       token: 'token',
-      extension: 'test',
+      extension: { version: 'test', build: 'test-build' },
     });
     fake.commit
       .mockImplementationOnce(() => {
@@ -128,7 +128,7 @@ it('forwards attached commands to the local session and disposes it', async () =
     version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
     epoch: 'epoch',
     token: 'token',
-    extension: 'test',
+    extension: { version: 'test', build: 'test-build' },
   });
   fake.commit.mockImplementation(() => {
     fake.register?.();
@@ -167,7 +167,7 @@ it('isolates audio diagnostics callback failures', () => {
     version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
     epoch: 'epoch',
     token: 'token',
-    extension: 'test',
+    extension: { version: 'test', build: 'test-build' },
   });
   expect(fake.commands.get('aiPair.localAudio.audioDiagnostics')?.(undefined)).toBeUndefined();
 });
@@ -242,7 +242,7 @@ it('acknowledges a replacement commit only after its first frame can be accepted
     version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
     epoch: 'epoch',
     token: 'token',
-    extension: 'test',
+    extension: { version: 'test', build: 'test-build' },
   });
   let acknowledged = false;
   const pending = Promise.resolve(value).then((result) => {
@@ -294,10 +294,20 @@ it('keeps the accepted epoch when a later invalid commit arrives before startup'
     .mockReturnValueOnce(false);
   const commit = fake.commands.get('aiPair.localAudio.commit');
   const accepted = Promise.resolve(
-    commit?.({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'accepted', token: 'token', extension: 'test' }),
+    commit?.({
+      version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+      epoch: 'accepted',
+      token: 'token',
+      extension: { version: 'test', build: 'test-build' },
+    }),
   );
   expect(
-    commit?.({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'rejected', token: 'wrong', extension: 'test' }),
+    commit?.({
+      version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+      epoch: 'rejected',
+      token: 'wrong',
+      extension: { version: 'test', build: 'test-build' },
+    }),
   ).toBe(false);
   stopped.resolve();
   await previous;
@@ -323,7 +333,7 @@ it('rejects readiness and commit when the previous companion cannot retire', asy
       version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
       epoch: 'epoch',
       token: 'token',
-      extension: 'test',
+      extension: { version: 'test', build: 'test-build' },
     }),
   );
   failed.reject(new Error('private'));

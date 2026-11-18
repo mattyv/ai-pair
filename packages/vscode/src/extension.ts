@@ -1321,9 +1321,9 @@ export function activate(context: vscode.ExtensionContext): Api {
       localAudio = { state: 'failed', reason };
       log.info(`Local Audio preparation failed: ${reason}`);
     },
-    prepared: (version) => {
-      localAudio = { state: 'connected', version };
-      log.info(`Local Audio ${version} prepared`);
+    prepared: (extension) => {
+      localAudio = { state: 'connected', ...extension };
+      log.info(`Local Audio ${extension.version} (build ${extension.build}) prepared`);
     },
     beforeCommit: () => {
       owner = 'companion';

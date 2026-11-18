@@ -344,7 +344,7 @@ The design is written up in:
 You need **VS Code 1.106 or newer**. Install the paired VSIX artifacts from
 the same release as described in [Get started](#get-started). Reload the
 window and restart the agent. Settings shows the running version and build ID,
-and AI Pair Local Audio's version when a window looked for it.
+and AI Pair Local Audio's version and build ID when a window looked for it.
 **Copy diagnostics** explicitly copies bounded connection, session, request,
 pause, and command status metadata, and the companion's version or why it did
 not connect; it does not include chat, code, paths, command text, or output.

@@ -79,7 +79,7 @@ it('collects legacy audio without calling the companion', async () => {
 it("reports the companion's version, or why it did not connect, where one was looked for (#115)", async () => {
   const command = vi.fn();
   for (const localAudio of [
-    { state: 'connected', version: '0.47.0' },
+    { state: 'connected', version: '0.47.0', build: 'abc' },
     { state: 'failed', reason: 'not_found' },
   ] as const) {
     expect(await collectDiagnostics({ snapshot: () => snapshot, companion: false, localAudio, command, timeoutMs: 100 })).toEqual({

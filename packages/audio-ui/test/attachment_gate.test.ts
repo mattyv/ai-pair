@@ -10,12 +10,22 @@ describe('companion attachment gate', () => {
   it('does not register on prepare and permits only the matching commit once', () => {
     vi.useFakeTimers();
     const register = vi.fn<() => void>();
-    const gate = new AttachmentGate({ token: () => 'token', extension: '0.47.0', timeoutMs: 100, register });
+    const gate = new AttachmentGate({ token: () => 'token', extension: { version: '0.47.0', build: 'abc' }, timeoutMs: 100, register });
     const response = gate.prepare({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'epoch' });
-    expect(response).toEqual({ version: LOCAL_AUDIO_VERSION, epoch: 'epoch', token: 'token', extension: '0.47.0' });
+    expect(response).toEqual({
+      version: LOCAL_AUDIO_VERSION,
+      epoch: 'epoch',
+      token: 'token',
+      extension: { version: '0.47.0', build: 'abc' },
+    });
     expect(register).not.toHaveBeenCalled();
     expect(
-      gate.commit({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'epoch', token: 'wrong', extension: '0.47.0' }),
+      gate.commit({
+        version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+        epoch: 'epoch',
+        token: 'wrong',
+        extension: { version: '0.47.0', build: 'abc' },
+      }),
     ).toBe(false);
     expect(gate.commit(response)).toBe(true);
     expect(register).toHaveBeenCalledTimes(1);
@@ -26,7 +36,7 @@ describe('companion attachment gate', () => {
   it('expires preparation and rejects late commits without registering', () => {
     vi.useFakeTimers();
     const register = vi.fn<() => void>();
-    const gate = new AttachmentGate({ token: () => 'token', extension: '0.47.0', timeoutMs: 100, register });
+    const gate = new AttachmentGate({ token: () => 'token', extension: { version: '0.47.0', build: 'abc' }, timeoutMs: 100, register });
     const response = gate.prepare({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'epoch' });
     vi.advanceTimersByTime(100);
     expect(gate.commit(response)).toBe(false);
@@ -35,7 +45,7 @@ describe('companion attachment gate', () => {
       version: LOCAL_AUDIO_VERSION,
       epoch: 'new',
       token: 'token',
-      extension: '0.47.0',
+      extension: { version: '0.47.0', build: 'abc' },
     });
     gate.dispose();
   });
@@ -43,7 +53,7 @@ describe('companion attachment gate', () => {
   it('rejects malformed or overlapping preparations and stays committed if registration throws', () => {
     const gate = new AttachmentGate({
       token: () => 'token',
-      extension: '0.47.0',
+      extension: { version: '0.47.0', build: 'abc' },
       timeoutMs: 100,
       register: () => {
         throw new Error('failed');
@@ -57,12 +67,22 @@ describe('companion attachment gate', () => {
     gate.dispose();
   });
   it('rejects an invalid generated token and all requests after disposal', () => {
-    const gate = new AttachmentGate({ token: () => '', extension: '0.47.0', timeoutMs: 100, register: vi.fn<() => void>() });
+    const gate = new AttachmentGate({
+      token: () => '',
+      extension: { version: '0.47.0', build: 'abc' },
+      timeoutMs: 100,
+      register: vi.fn<() => void>(),
+    });
     expect(gate.prepare({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'epoch' })).toBeUndefined();
     gate.dispose();
     expect(gate.prepare({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'epoch' })).toBeUndefined();
     expect(
-      gate.commit({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'epoch', token: 'token', extension: '0.47.0' }),
+      gate.commit({
+        version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+        epoch: 'epoch',
+        token: 'token',
+        extension: { version: '0.47.0', build: 'abc' },
+      }),
     ).toBe(false);
   });
 });

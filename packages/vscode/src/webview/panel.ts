@@ -2043,8 +2043,8 @@ function handle(message: ToPanel): void {
       return;
     case 'localAudio':
       // The workspace extension's identity, which a companion's page would otherwise show as its own (#115).
-      ui.buildIdentity.textContent = `v${message.version} - build ${message.build} · Local Audio ${
-        message.status.state === 'connected' ? `v${message.status.version}` : 'did not answer'
+      ui.buildIdentity.textContent = `v${message.version} - build ${message.build}, Local Audio ${
+        message.status.state === 'connected' ? `v${message.status.version} - build ${message.status.build}` : 'did not answer'
       }`;
       ui.reconnectLocalAudio.hidden = message.status.state === 'connected';
       return;

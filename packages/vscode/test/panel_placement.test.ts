@@ -14,7 +14,7 @@ describe('panel placement', () => {
       version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
       epoch: 'epoch',
       token: 'token',
-      extension: '0.47.0',
+      extension: { version: '0.47.0', build: 'abc' },
     });
     const commit = vi.fn().mockResolvedValue(true);
     const placement = new PanelPlacement({
@@ -103,14 +103,19 @@ describe('panel placement', () => {
       version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
       epoch: 'epoch',
       token: 'token',
-      extension: '0.47.0',
+      extension: { version: '0.47.0', build: 'abc' },
     });
     const commit = vi.fn().mockRejectedValue(new Error('lost'));
     const placement = new PanelPlacement({ epoch: 'epoch', remote: false, timeoutMs: 100, prepare, commit });
     expect(await placement.choose()).toBe('companion');
     expect(await placement.choose()).toBe('companion');
     expect(commit).toHaveBeenCalledTimes(1);
-    expect(commit).toHaveBeenCalledWith({ version: LOCAL_AUDIO_VERSION, epoch: 'epoch', token: 'token', extension: '0.47.0' });
+    expect(commit).toHaveBeenCalledWith({
+      version: LOCAL_AUDIO_VERSION,
+      epoch: 'epoch',
+      token: 'token',
+      extension: { version: '0.47.0', build: 'abc' },
+    });
   });
 
   it('falls back only before commit and ignores late prepare replies', async () => {
@@ -122,7 +127,12 @@ describe('panel placement', () => {
     const result = placement.choose();
     await vi.advanceTimersByTimeAsync(100);
     expect(await result).toBe('remote-text');
-    pending.resolve({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'epoch', token: 'late', extension: '0.47.0' });
+    pending.resolve({
+      version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+      epoch: 'epoch',
+      token: 'late',
+      extension: { version: '0.47.0', build: 'abc' },
+    });
     await Promise.resolve();
     expect(commit).not.toHaveBeenCalled();
     expect(await placement.choose()).toBe('remote-text');
@@ -131,8 +141,13 @@ describe('panel placement', () => {
   it('uses local legacy only for a failed or invalid preparation before commit', async () => {
     for (const reply of [
       undefined,
-      { version: LOCAL_AUDIO_VERSION - 1, epoch: 'epoch', token: 'token', extension: '0.47.0' },
-      { version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'wrong', token: 'token', extension: '0.47.0' },
+      { version: LOCAL_AUDIO_VERSION - 1, epoch: 'epoch', token: 'token', extension: { version: '0.47.0', build: 'abc' } },
+      {
+        version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+        epoch: 'wrong',
+        token: 'token',
+        extension: { version: '0.47.0', build: 'abc' },
+      },
     ]) {
       const commit = vi.fn();
       const placement = new PanelPlacement({
@@ -172,10 +187,20 @@ describe('panel placement', () => {
     const cases: Array<[() => Promise<unknown>, string]> = [
       [() => Promise.reject(new Error('private path')), 'activation_failure'],
       [
-        () => Promise.resolve({ version: LOCAL_AUDIO_VERSION - 1, epoch: 'epoch', token: 'token', extension: '0.47.0' }),
+        () =>
+          Promise.resolve({
+            version: LOCAL_AUDIO_VERSION - 1,
+            epoch: 'epoch',
+            token: 'token',
+            extension: { version: '0.47.0', build: 'abc' },
+          }),
         'protocol_mismatch',
       ],
-      [() => Promise.resolve({ version: LOCAL_AUDIO_VERSION, epoch: 'wrong', token: 'token', extension: '0.47.0' }), 'epoch_mismatch'],
+      [
+        () =>
+          Promise.resolve({ version: LOCAL_AUDIO_VERSION, epoch: 'wrong', token: 'token', extension: { version: '0.47.0', build: 'abc' } }),
+        'epoch_mismatch',
+      ],
       [() => Promise.resolve({ unexpected: true }), 'invalid_response'],
     ];
     for (const [prepare, reason] of cases) {
@@ -214,7 +239,12 @@ describe('panel placement', () => {
     await vi.advanceTimersByTimeAsync(100);
     expect(await result).toBe('incompatible');
     expect(failure).toHaveBeenCalledExactlyOnceWith('timeout');
-    pending.resolve({ version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION, epoch: 'epoch', token: 'token', extension: '0.47.0' });
+    pending.resolve({
+      version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+      epoch: 'epoch',
+      token: 'token',
+      extension: { version: '0.47.0', build: 'abc' },
+    });
     await Promise.resolve();
     expect(commit).not.toHaveBeenCalled();
   });
@@ -225,7 +255,8 @@ describe('panel placement', () => {
       epoch: 'epoch',
       remote: false,
       timeoutMs: 100,
-      prepare: () => Promise.resolve({ version: LOCAL_AUDIO_VERSION, epoch: 'epoch', token: 'token', extension: '0.47.0' }),
+      prepare: () =>
+        Promise.resolve({ version: LOCAL_AUDIO_VERSION, epoch: 'epoch', token: 'token', extension: { version: '0.47.0', build: 'abc' } }),
       beforeCommit: () => {
         order.push('ready');
       },
@@ -244,7 +275,7 @@ describe('panel placement', () => {
       .mockRejectedValueOnce(new Error('command not found'))
       .mockRejectedValueOnce(new Error('command not found'))
       .mockResolvedValue(true);
-    const prepared = vi.fn<(extension: string) => void>();
+    const prepared = vi.fn<(extension: { version: string; build: string }) => void>();
     const placement = new PanelPlacement({
       epoch: 'epoch',
       remote: true,
@@ -252,7 +283,8 @@ describe('panel placement', () => {
       activationTimeoutMs: 10_000,
       retryMs: 50,
       activate,
-      prepare: () => Promise.resolve({ version: LOCAL_AUDIO_VERSION, epoch: 'epoch', token: 'token', extension: '0.47.0' }),
+      prepare: () =>
+        Promise.resolve({ version: LOCAL_AUDIO_VERSION, epoch: 'epoch', token: 'token', extension: { version: '0.47.0', build: 'abc' } }),
       prepared,
       commit: () => Promise.resolve(true),
     });
@@ -260,7 +292,7 @@ describe('panel placement', () => {
     await vi.advanceTimersByTimeAsync(100);
     expect(await result).toBe('companion');
     expect(activate).toHaveBeenCalledTimes(3);
-    expect(prepared).toHaveBeenCalledExactlyOnceWith('0.47.0');
+    expect(prepared).toHaveBeenCalledExactlyOnceWith({ version: '0.47.0', build: 'abc' });
   });
 
   it('NoEarlyMissing: reports a remote companion missing only once the deadline passes (#115)', async () => {
@@ -324,7 +356,8 @@ describe('panel placement', () => {
       epoch: 'epoch',
       remote: false,
       timeoutMs: 100,
-      prepare: () => Promise.resolve({ version: LOCAL_AUDIO_VERSION, epoch: 'epoch', token: 'token', extension: '0.47.0' }),
+      prepare: () =>
+        Promise.resolve({ version: LOCAL_AUDIO_VERSION, epoch: 'epoch', token: 'token', extension: { version: '0.47.0', build: 'abc' } }),
       beforeCommit: () => {
         throw new Error('failed');
       },
@@ -344,7 +377,8 @@ it('waits for a successful commit acknowledgement before creating the session', 
     remote: false,
     // Long enough that a slow runner cannot reach the deadline: this case is not about it.
     timeoutMs: 60_000,
-    prepare: () => Promise.resolve({ version: LOCAL_AUDIO_VERSION, epoch: 'epoch', token: 'token', extension: '0.47.0' }),
+    prepare: () =>
+      Promise.resolve({ version: LOCAL_AUDIO_VERSION, epoch: 'epoch', token: 'token', extension: { version: '0.47.0', build: 'abc' } }),
     beforeCommit,
     afterCommit,
     commit: () => commit.promise,
@@ -367,7 +401,8 @@ it('keeps companion ownership after rejected, false, or timed out commit without
       epoch: 'epoch',
       remote: false,
       timeoutMs: 100,
-      prepare: () => Promise.resolve({ version: LOCAL_AUDIO_VERSION, epoch: 'epoch', token: 'token', extension: '0.47.0' }),
+      prepare: () =>
+        Promise.resolve({ version: LOCAL_AUDIO_VERSION, epoch: 'epoch', token: 'token', extension: { version: '0.47.0', build: 'abc' } }),
       afterCommit,
       commit: () => result,
     });
@@ -380,7 +415,8 @@ it('keeps companion ownership after rejected, false, or timed out commit without
     epoch: 'epoch',
     remote: false,
     timeoutMs: 100,
-    prepare: () => Promise.resolve({ version: LOCAL_AUDIO_VERSION, epoch: 'epoch', token: 'token', extension: '0.47.0' }),
+    prepare: () =>
+      Promise.resolve({ version: LOCAL_AUDIO_VERSION, epoch: 'epoch', token: 'token', extension: { version: '0.47.0', build: 'abc' } }),
     afterCommit,
     commit: () => pending.promise,
   });
