@@ -977,9 +977,10 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
           controller().resume('reply');
           return;
         }
-        // The owner sees the held reply before resume releases attention.
-        controller().userMessage(message.text, message.attach === true ? this.selection.current() : undefined, message.defer === true);
-        controller().resume(undefined, { reveal: false });
+        // The reply releases attention, then ends every pause, before a waiting agent is answered (#125).
+        controller().userMessage(message.text, message.attach === true ? this.selection.current() : undefined, message.defer === true, {
+          resume: true,
+        });
         return;
       case 'draft':
         // Typing a reply pauses playback, the way a pair stops when you start talking (specs/Draft.tla, `TypeDraft`, `Clear`).
@@ -1011,12 +1012,15 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         if (this.remote === undefined && (controller().turn !== 'programmer' || message.message !== undefined || selection !== undefined)) {
           this.wiring.speech.stop();
         }
+        const says = message.message !== undefined || selection !== undefined;
         if (controller().turn === 'programmer') {
-          controller().handBack(message.message, selection);
+          // A handback that says something ends every pause before a waiting agent is answered (#125).
+          controller().handBack(message.message, selection, { resume: says });
         } else {
+          // The page sends a message only when handing back (webview/panel.ts, the turn button), so taking the turn
+          // never carries one to resume for.
           controller().takeTurn();
         }
-        if (message.message !== undefined || selection !== undefined) controller().resume();
         return;
       }
       case 'end':

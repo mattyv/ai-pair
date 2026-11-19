@@ -28,7 +28,7 @@ Code goes without a spec for one of these reasons:
 | `cursorAnchor`, `rejectUnanchored`, `anchorNeeded` in `step` and `snapshot` | `Anchor` |
 | `unnamedEdit` and its preflight in `step` | `BatchFile` (`EditRequiresNamed`) |
 | `selectedSpeech` and admission in `step`; pause, resume and cancellation propagation | `Narration` (`Admit`, `Pause`, `Resume`, `Reply`); reminder counting and reporting: `SpeechReminder` |
-| `interrupt`, `discard`, `interrupting`, `userInterrupt`, `userMessage`, `flushDeferred` | `Controller` (`Interrupt`), `Actions` (`Interrupt`); deferred replies: `DeferredMessage` |
+| `interrupt`, `discard`, `interrupting`, `userInterrupt`, `userMessage`, `flushDeferred` | `Controller` (`Interrupt`), `Actions` (`Interrupt`); deferred replies: `DeferredMessage`; a reply's pauses ending before a waiting listen is answered (`userMessage` and `handBack` with `resume`): `ReplyReport` (`SendReply`) |
 | `userEdit` | `EditorAdapter`, `Navigator` (the programmer's turn), `Player` (`TypeBefore`, `TypeAfter`: the interrupt in the agent's turn) |
 | navigator notice generation, `finishCall` and `restore` | `Navigator`, `Attention`, `ListenGrace`; timeout retention and canceled notice redelivery: controller and scripted MCP regressions |
 | `otherEdit`, `recordEdit` | `Reload`, `Rehearsal`, `EditEvents` |

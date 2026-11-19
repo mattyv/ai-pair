@@ -33,6 +33,7 @@ import { deferredSettlementPaths } from './integration_deferred_settlement';
 import { panelPaths } from './integration_panel_paths';
 import { messageReceiptPaths } from './integration_message_receipt';
 import { settingRoundTripPaths } from './integration_setting_roundtrip';
+import { replyReportPaths } from './integration_reply_report';
 import { gapPaths } from './integration_gap_paths';
 import { codePlaybackPaths } from './integration_code_playback';
 import { preservedPlaybackPaths } from './integration_preserved_playback';
@@ -1621,6 +1622,7 @@ export async function run(): Promise<void> {
   await gpuCheckPaths(api);
   await messageReceiptPaths(api);
   await settingRoundTripPaths(api);
+  await replyReportPaths(api);
   await vscodeCoveragePaths(api);
   await diagnosticCoveragePaths(api);
   await shortcutCommandPaths(api);

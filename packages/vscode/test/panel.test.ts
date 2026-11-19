@@ -1086,13 +1086,13 @@ describe('receive', () => {
     expect(readingSpeed.set.mock.calls).toEqual([[SPEEDS[3]]]);
   });
 
-  it('delivers a held reply before resuming so the owner can release attention safely', () => {
+  it('NoPausedReply: a reply asks the controller to end the pauses itself, before a waiting agent is answered (#125)', () => {
     const { panel, controller } = harness();
     const view = open(panel);
     view.send({ type: 'draft', empty: false });
     view.send({ type: 'reply', text: 'Hello' });
-    expect(controller.userMessage.mock.invocationCallOrder[0]).toBeLessThan(controller.resume.mock.invocationCallOrder[0] ?? 0);
-    expect(controller.resume.mock.calls).toEqual([[undefined, { reveal: false }]]);
+    expect(controller.userMessage.mock.calls).toEqual([['Hello', undefined, false, { resume: true }]]);
+    expect(controller.resume.mock.calls).toEqual([]);
   });
 
   it("ReplyMeansDraft: a reply the calibration takes ends the draft's pause; any other resumes without revealing and is sent on", () => {
@@ -1104,10 +1104,10 @@ describe('receive', () => {
     view.send({ type: 'reply', text: 'with', attach: true });
     view.send({ type: 'reply', text: 'without' });
     expect(calibration.reply.mock.calls).toEqual([['done'], ['with'], ['without']]);
-    expect(controller.resume.mock.calls).toEqual([['reply'], [undefined, { reveal: false }], [undefined, { reveal: false }]]);
+    expect(controller.resume.mock.calls).toEqual([['reply']]);
     expect(controller.userMessage.mock.calls).toEqual([
-      ['with', SELECTION, false],
-      ['without', undefined, false],
+      ['with', SELECTION, false, { resume: true }],
+      ['without', undefined, false, { resume: true }],
     ]);
   });
 
@@ -1115,8 +1115,7 @@ describe('receive', () => {
     const { panel, controller, speech } = harness();
     open(panel).send({ type: 'reply', text: 'Wait', defer: true });
     expect(speech.stop).not.toHaveBeenCalled();
-    expect(controller.userMessage.mock.calls).toContainEqual(['Wait', undefined, true]);
-    expect(controller.resume.mock.calls).toContainEqual([undefined, { reveal: false }]);
+    expect(controller.userMessage.mock.calls).toContainEqual(['Wait', undefined, true, { resume: true }]);
   });
 
   it('draft: an empty draft ends the draft pause', () => {
@@ -1159,10 +1158,11 @@ describe('receive', () => {
     const view = open(panel);
     view.send({ type: 'turn', message: 'yours', attach: true });
     view.send({ type: 'turn' });
-    expect(controller.resume.mock.calls).toEqual([[]]);
+    // A handback that says something ends the pauses in the controller, before a waiting agent is answered (#125).
+    expect(controller.resume.mock.calls).toEqual([]);
     expect(controller.handBack.mock.calls).toEqual([
-      ['yours', SELECTION],
-      [undefined, undefined],
+      ['yours', SELECTION, { resume: true }],
+      [undefined, undefined, { resume: false }],
     ]);
     expect(controller.takeTurn.mock.calls).toEqual([]);
   });
@@ -1336,12 +1336,12 @@ it('sends audio only to the ready current page and never adds it to history', ()
   expect(speech.pageClosed).toHaveBeenCalledWith(2);
 });
 
-it('cancels speech before resuming for a reply', () => {
+it('cancels speech before the reply resumes playback', () => {
   const { panel, speech, controller } = harness();
   const view = open(panel);
   view.send({ type: 'reply', text: 'Continue' });
   expect(speech.stop).toHaveBeenCalledOnce();
-  expect(speech.stop.mock.invocationCallOrder[0]).toBeLessThan(controller.resume.mock.invocationCallOrder[0] ?? 0);
+  expect(speech.stop.mock.invocationCallOrder[0]).toBeLessThan(controller.userMessage.mock.invocationCallOrder[0] ?? 0);
 });
 
 it('does not offer setup or preview on an unsupported host', async () => {

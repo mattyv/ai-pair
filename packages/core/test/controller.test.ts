@@ -1895,6 +1895,46 @@ describe('message receipts (#117)', () => {
   });
 });
 
+describe('a reply to a waiting agent (#125)', () => {
+  for (const reason of ['reply', 'away', 'programmer'] as const) {
+    it(`NoPausedReply: a reply sent during a ${reason} pause answers the listening agent with no pause`, async () => {
+      const h = await started();
+      const listening = h.controller.listen();
+      await settle(CONFIG.listenGraceMs);
+      h.controller.pause(reason);
+      h.controller.userMessage('But anyway.', undefined, /* defer= */ false, { resume: true });
+      const answered = await report(listening);
+      expect(answered.events.map((event) => event.kind)).toEqual(['message']);
+      expect(answered.paused).toBeUndefined();
+      expect(h.controller.isPaused).toBe(false);
+    });
+  }
+
+  it('NoPausedReply: a handback with a message answers the listening agent with no pause', async () => {
+    const h = await started();
+    h.controller.takeTurn();
+    await report(h.controller.listen());
+    const listening = h.controller.listen();
+    await settle(CONFIG.listenGraceMs);
+    h.controller.pause('reply');
+    h.controller.handBack('Your turn.', undefined, { resume: true });
+    const answered = await report(listening);
+    expect(answered.events.at(-1)).toMatchObject({ kind: 'turn', to: 'agent', message: 'Your turn.' });
+    expect(answered.paused).toBeUndefined();
+    expect(h.controller.isPaused).toBe(false);
+  });
+
+  it('keeps the pause for a message recorded without resuming, as a deferred send or a test does', async () => {
+    const h = await started();
+    const listening = h.controller.listen();
+    await settle(CONFIG.listenGraceMs);
+    h.controller.pause('programmer');
+    h.controller.userMessage('Noted.');
+    expect((await report(listening)).paused).toEqual(['programmer']);
+    expect(h.controller.isPaused).toBe(true);
+  });
+});
+
 describe("the programmer's input", () => {
   it('records a message, with the code they had selected, and shows it in the panel', async () => {
     const h = await started();

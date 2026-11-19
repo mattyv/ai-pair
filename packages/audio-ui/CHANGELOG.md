@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.48.3
+
+-   Version aligned with AI Pair, whose replies no longer reach a waiting
+    agent with a false pause (#125).
+
 ## 0.48.2
 
 -   Version aligned with AI Pair, which now keeps panel settings changed while
