@@ -32,6 +32,7 @@ import { controllerPaths, extensionPaths, playerPaths } from './integration_path
 import { deferredSettlementPaths } from './integration_deferred_settlement';
 import { panelPaths } from './integration_panel_paths';
 import { messageReceiptPaths } from './integration_message_receipt';
+import { settingRoundTripPaths } from './integration_setting_roundtrip';
 import { gapPaths } from './integration_gap_paths';
 import { codePlaybackPaths } from './integration_code_playback';
 import { preservedPlaybackPaths } from './integration_preserved_playback';
@@ -50,7 +51,7 @@ import { renderDiagnosticPaths } from './integration_render_diagnostic';
 import { run as guidedDiagnosticPaths } from './integration_guided_diagnostics';
 import { exerciseReleaseExtensionPaths } from './integration_release_extension_paths';
 import { flowGatePaths } from './integration_flow_gate';
-import { lookaheadHintPaths, speechCoveragePaths } from './integration_speech_coverage_paths';
+import { gpuCheckPaths, lookaheadHintPaths, speechCoveragePaths } from './integration_speech_coverage_paths';
 import { vscodeCoveragePaths } from './integration_vscode_coverage_paths';
 import { diagnosticCoveragePaths } from './integration_diagnostic_coverage_paths';
 import { attentionPaths } from './integration_attention_paths';
@@ -1617,7 +1618,9 @@ export async function run(): Promise<void> {
   await flowGatePaths(api, root);
   await speechCoveragePaths(api);
   await lookaheadHintPaths(api);
+  await gpuCheckPaths(api);
   await messageReceiptPaths(api);
+  await settingRoundTripPaths(api);
   await vscodeCoveragePaths(api);
   await diagnosticCoveragePaths(api);
   await shortcutCommandPaths(api);

@@ -246,6 +246,7 @@ Code goes without a spec for one of these reasons:
 | `panel_placement.ts` | panel prepare, commit and fallback, looking again for a companion registered late | `PanelPlacement` |
 | `panel_html.ts` | `panelHtml`, `settingSpeed` | Format |
 | `panel_update_sender.ts` | `replayBatches`, `transmit` | `ReplayBatching` (`SendBatch`); chunk framing: `LocalPanelReplay` |
+| `setting_store.ts` | `StoredSetting`, `settleWithin` | `SettingRoundTrip` (`Set`, `Land`, `Fail`, `Reload`) |
 | `webview/panel.css` | all | Look |
 | `panel_messages.ts` | | Types |
 

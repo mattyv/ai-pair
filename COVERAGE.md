@@ -217,6 +217,7 @@ Last updated: css, 2026-11-18.
 | `packages/vscode/src/python_diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.3% B 62.5% F 100.0% | - | - | - | - |
 | `packages/vscode/src/remote_narration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 78.6% B 39.4% F 86.7% | - | - | - | - |
 | `packages/vscode/src/session_speech_cost.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 66.3% B 90.9% F 66.7% | - | - | - | - |
+| `packages/vscode/src/setting_store.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 85.1% B 85.4% F 83.3% | - | - | - | - |
 | `packages/vscode/src/shortcut_labels.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/shortcut_watcher.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -365,6 +366,7 @@ Last updated: css, 2026-11-18.
 | `packages/vscode/test/integration_render_diagnostic.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_restricted_runtime.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_runtime_identity.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_setting_roundtrip.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/integration_shortcuts.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/integration_speech_coverage_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_speech_reminder.ts` | TypeScript | test | test | test | - | - | test |
@@ -390,6 +392,7 @@ Last updated: css, 2026-11-18.
 | `packages/vscode/test/python_diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/remote_narration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/session_speech_cost.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/setting_store.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/setup.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/shortcut_labels.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/shortcut_watcher.test.ts` | TypeScript | test | - | test | - | - | test |
@@ -745,6 +748,8 @@ Last updated: css, 2026-11-18.
 | `specs/Serialize.tla` | TLA+ | - | - | 13 of 13 actions | - | - | - |
 | `specs/SessionSpeechCost.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SessionSpeechCost.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
+| `specs/SettingRoundTrip.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/SettingRoundTrip.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
 | `specs/SettingsAccess.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SettingsAccess.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/ShellIdentity.cfg` | TLC config | - | - | - | - | - | - |

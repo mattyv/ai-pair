@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.48.2
+
+-   Version aligned with AI Pair, which now keeps panel settings changed while
+    a save is slow (#119).
+
 ## 0.48.1
 
 -   Version aligned with AI Pair, which now sends this companion's panel its

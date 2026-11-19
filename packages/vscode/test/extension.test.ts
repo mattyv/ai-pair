@@ -509,6 +509,8 @@ const fakes = vi.hoisted(() => {
     providerGate: undefined as Promise<void> | undefined,
     computeGate: undefined as Promise<void> | undefined,
     commentaryGate: undefined as Promise<void> | undefined,
+    /** Holds a setting's next write until the test settles it (#119). */
+    updateGates: new Map<string, Promise<void>>(),
     updated: [] as Array<[string, unknown, unknown]>,
     commands: new Map<string, (value?: unknown) => unknown>(),
     providerRegistered: vi.fn(),
@@ -573,6 +575,13 @@ vi.mock('vscode', () => ({
       update: (key: string, value: unknown, target: unknown) => {
         fakes.updated.push([key, value, target]);
         if (key === 'navigatorCommentary' && fakes.commentaryGate !== undefined) return fakes.commentaryGate;
+        const held = fakes.updateGates.get(key);
+        if (held !== undefined) {
+          fakes.updateGates.delete(key);
+          return held.then(() => {
+            fakes.settings.set(key, value);
+          });
+        }
         if (key === 'speech.computeMode' && fakes.computeGate !== undefined) {
           const gate = fakes.computeGate;
           fakes.computeGate = undefined;
@@ -869,6 +878,7 @@ afterEach(() => {
   fakes.settings.clear();
   fakes.delaySettings = false;
   fakes.commentaryGate = undefined;
+  fakes.updateGates.clear();
   fakes.providerGate = undefined;
   fakes.commands.clear();
   for (const list of [fakes.made.controllers, fakes.made.bridges, fakes.made.editors, fakes.made.panels, fakes.made.calibrations]) {
@@ -883,6 +893,13 @@ afterEach(() => {
 it('deactivates safely before a service is activated', async () => {
   await expect(deactivate()).resolves.toBeUndefined();
 });
+
+/** Lets settings writes already started settle: the fake writes resolve on the next turns (#119). */
+async function settle(): Promise<void> {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
 
 describe('activate', () => {
   it('builds the editor in the first folder, or the home folder with none, and wires the controller to it', () => {
@@ -941,7 +958,7 @@ describe('activate', () => {
     expect(fakes.updated).toContainEqual(['confirmCommands', true, 1]);
   });
 
-  it('ChoiceSaved: reads, stores and applies the playback mode, defaulting invalid values to typing', () => {
+  it('ChoiceSaved: reads, stores and applies the playback mode, defaulting invalid values to typing', async () => {
     const h = activated();
     expect(h.controller.setCodePlayback).toHaveBeenCalledWith('typing');
     expect(h.panel.codePlayback.get()).toBe('typing');
@@ -951,18 +968,21 @@ describe('activate', () => {
     expect(h.panel.showCodePlayback).toHaveBeenLastCalledWith('blocks');
     h.panel.codePlayback.set('lines');
     expect(fakes.updated).toContainEqual(['codePlayback', 'lines', 1]);
+    // The write lands before a later change made elsewhere (#119).
+    await settle();
     fakes.settings.set('codePlayback', 'invalid');
     changed('codePlayback');
     expect(h.controller.setCodePlayback).toHaveBeenLastCalledWith('typing');
     expect(h.panel.showCodePlayback).toHaveBeenLastCalledWith('typing');
   });
 
-  it('persists navigator commentary and applies the workspace snapshot on changes', () => {
+  it('persists navigator commentary and applies the workspace snapshot on changes', async () => {
     const h = activated();
     expect(h.controller.setNavigatorCommentary).toHaveBeenCalledWith('helpful');
     expect(h.panel.navigatorCommentary.get()).toBe('helpful');
     h.panel.navigatorCommentary.set('coach');
     expect(fakes.updated).toContainEqual(['navigatorCommentary', 'coach', 1]);
+    await settle();
     fakes.settings.set('navigatorCommentary', 'quiet');
     changed('navigatorCommentary');
     expect(h.controller.setNavigatorCommentary).toHaveBeenLastCalledWith('quiet');
@@ -979,9 +999,10 @@ describe('activate', () => {
     const h = activated();
     h.panel.navigatorCommentary.set('coach');
     gate.reject(new Error('save failed'));
-    await Promise.resolve();
+    await settle();
     expect(h.panel.showNavigatorCommentary).toHaveBeenCalledWith('helpful');
-    expect(fakes.errors).toContain('Could not save navigator commentary.');
+    expect(h.controller.setNavigatorCommentary).toHaveBeenLastCalledWith('helpful');
+    expect(fakes.errors).toContain('Could not save the navigator commentary setting.');
   });
 
   it('restores saved navigator commentary on activation', () => {
@@ -1015,6 +1036,139 @@ describe('activate', () => {
     fakes.settings.set('commandApprovalSound', 'true');
     changed('commandApprovalSound');
     expect(h.panel.showCommandApprovalSound).toHaveBeenLastCalledWith(false);
+  });
+
+  it('ShowsChoice: reads the chosen chat order while its write crosses a slow link (#119)', async () => {
+    const gate = Promise.withResolvers<void>();
+    fakes.updateGates.set('chatOrder', gate.promise);
+    const h = activated();
+    h.panel.chatOrder.set('oldestFirst');
+    expect(h.panel.chatOrder.get()).toBe('oldestFirst');
+    // A page that loads now, or an echoed change, is sent the choice, not the old value.
+    changed('chatOrder');
+    expect(h.panel.showChatOrder).toHaveBeenLastCalledWith('oldestFirst');
+    gate.resolve();
+    await gate.promise;
+    await Promise.resolve();
+    expect(h.panel.chatOrder.get()).toBe('oldestFirst');
+  });
+
+  it('NoSilentFailure, SettledTruth: warns when a setting cannot be saved, and shows the stored value again (#119)', async () => {
+    const gate = Promise.withResolvers<void>();
+    fakes.updateGates.set('codePlayback', gate.promise);
+    const h = activated();
+    h.panel.codePlayback.set('lines');
+    expect(h.panel.codePlayback.get()).toBe('lines');
+    gate.reject(new Error('remote link lost'));
+    await vi.waitFor(() => {
+      expect(fakes.errors).toContain('Could not save the code display setting.');
+    });
+    expect(h.panel.codePlayback.get()).toBe('typing');
+    expect(h.panel.showCodePlayback).toHaveBeenLastCalledWith('typing');
+    expect(fakes.logged).toContainEqual(['warn', 'Could not save aiPair.codePlayback as "lines": Error: remote link lost']);
+  });
+
+  it('NoSilentFailure, SettledTruth: every panel setting warns and shows its stored value when its save fails (#119)', async () => {
+    const h = activated();
+    const cases: Array<[string, string, () => void, () => void]> = [
+      [
+        'speed',
+        'speed',
+        () => {
+          h.panel.speed.set(2);
+        },
+        () => {
+          expect(h.panel.showSpeed).toHaveBeenLastCalledWith(1);
+        },
+      ],
+      [
+        'readingSpeed',
+        'reading speed',
+        () => {
+          h.panel.readingSpeed.set(2);
+        },
+        () => {
+          expect(h.panel.showReadingSpeed).toHaveBeenLastCalledWith(1);
+        },
+      ],
+      [
+        'replyBehavior',
+        'reply behavior',
+        () => {
+          h.panel.replyBehavior.set('finishAction');
+        },
+        () => {
+          expect(h.panel.showReplyBehavior).toHaveBeenLastCalledWith('interrupt');
+        },
+      ],
+      [
+        'chatOrder',
+        'chat order',
+        () => {
+          h.panel.chatOrder.set('oldestFirst');
+        },
+        () => {
+          expect(h.panel.showChatOrder).toHaveBeenLastCalledWith('newestFirst');
+        },
+      ],
+      [
+        'showTerminalsAutomatically',
+        'show terminals',
+        () => {
+          h.panel.terminalSettings.set(true);
+        },
+        () => {
+          expect(h.panel.showTerminalPreference).toHaveBeenLastCalledWith(false);
+        },
+      ],
+      [
+        'commandApprovalSound',
+        'command approval sound',
+        () => {
+          h.panel.commandApprovalSound.set(true);
+        },
+        () => {
+          expect(h.panel.showCommandApprovalSound).toHaveBeenLastCalledWith(false);
+        },
+      ],
+    ];
+    for (const [key, label, choose, shown] of cases) {
+      fakes.updateGates.set(key, Promise.reject(new Error('no link')));
+      choose();
+      await settle();
+      expect(fakes.errors).toContain(`Could not save the ${label} setting.`);
+      shown();
+    }
+    expect(h.controller.setSpeed).toHaveBeenLastCalledWith(1);
+    expect(h.controller.setReadingSpeed).toHaveBeenLastCalledWith(1);
+  });
+
+  it('NoSilentFailure: reports a calibration passage it could not save, and still calibrates with it (#119)', async () => {
+    fakes.updateGates.set('calibrationPassage', Promise.reject(new Error('no link')));
+    const h = activated();
+    expect(h.bridge.options.calibrate({ title: 'Agent', text: 'Words.' })).toBe(true);
+    await settle();
+    expect(fakes.errors).toContain('Could not save the calibration passage.');
+    expect(fakes.logged).toContainEqual(['warn', 'Could not save aiPair.calibrationPassage: Error: no link']);
+  });
+
+  it('NoLostWrite: deactivation waits for a setting still being saved (#119)', async () => {
+    const gate = Promise.withResolvers<void>();
+    fakes.updateGates.set('speed', gate.promise);
+    const h = activated();
+    await h.api.ready;
+    h.panel.speed.set(2);
+    let done = false;
+    const stopped = deactivate().then(() => {
+      done = true;
+    });
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 20);
+    });
+    expect(done).toBe(false);
+    gate.resolve();
+    await stopped;
+    expect(fakes.settings.get('speed')).toBe(2);
   });
 
   it('reads, saves, and applies the chat order, defaulting invalid values to newest first', () => {

@@ -102,6 +102,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `DeferredMessage.cfg` | one action, deferred reply and urgent stop | holds | 8 |
 | `MessageReceipt.cfg` | two messages, two put-back reports, one disconnect, reloads | holds | 348 |
 | `ReplayBatching.cfg` | every sequence of four events of four kinds, bound three | holds | 1,233 |
+| `SettingRoundTrip.cfg` | two values, up to three changes, failures, page loads and reloads | holds | 84 |
 | `ModelStatus.cfg` | installed and missing model, verification | holds | 4 |
 | `SpeechSetup.cfg` | two files; install, cancellation and rollback outcomes | holds | 42 |
 | `SpeechPage.cfg` | two page identities and two narration units | holds | 28 |
@@ -2935,6 +2936,33 @@ reason is not modeled.
 | `CanStart`, `CanComplete`, `CanAbort` | `protocol/test/panel_chunks.test.ts`: reassembles a complete ordered update only for the current page; discards partial, reordered, stale-page, malformed and oversized updates. |
 | `PendingSettles`, `EventuallySettled` | `protocol/test/command_channel.test.ts`: closes on a lost acknowledgement without accepting late completion; sends one frame at a time and preserves enqueue order. |
 | Replay ordering and oversize | `vscode/test/panel_update_sender.integration.test.ts`: sends replay as ordered bounded batches using the shared sequence (#118); reports an oversized replay event and still sends later complete events. |
+
+### `SettingRoundTrip`: panel settings across a slow link
+
+`SettingRoundTrip.tla` follows a panel setting from `Set`, through writes in
+flight to VS Code's user settings, to `Land` or `Fail`, with `PageLoad` and
+`Reload` at any time (#119). In a remote window the write crosses VS Code's
+remote link, and a stalled extension host makes it take seconds. Until the
+latest write lands, a read returns the requested value, so a page that loads
+or an echoed change never shows the old one (`ShowsChoice`). Once writes
+settle the page shows what is stored (`SettledTruth`); a failed latest write
+is warned about (`NoSilentFailure`) and the page shown the stored value; a
+reload waits for writes in flight (`NoLostWrite`), within a bound in the code
+of 3 seconds. TLC checked two values and up to three changes: 84 distinct
+states, safety and liveness holding.
+
+| Property | Code test |
+|---|---|
+| `ShowsChoice` | `setting_store.test.ts`: ShowsChoice: reads the requested value while its write is in flight, then the stored one; an older write landing never replaces a newer choice; keeps the choice until the stored value catches up with a write that already landed; `extension.test.ts`: ShowsChoice: reads the chosen chat order while its write crosses a slow link (#119) |
+| `NoSilentFailure`, `SettledTruth` | `setting_store.test.ts`: reports only the latest failed write, and then reads the stored value; treats a write that throws at once as failed; `extension.test.ts`: warns when a setting cannot be saved, and shows the stored value again (#119); every panel setting warns and shows its stored value when its save fails (#119); `integration_setting_roundtrip.ts` |
+| `NoLostWrite` | `setting_store.test.ts`: settles once every write in flight has landed or failed; a reload waits for writes in flight, but no longer than its bound; `extension.test.ts`: deactivation waits for a setting still being saved (#119) |
+| `WritesSettle` | `setting_store.test.ts`: NoLostWrite: settles once every write in flight has landed or failed |
+
+Mutations checked with TLC: `GuardPending = FALSE`, the old read of the
+stored value, violates `ShowsChoice`; `GuardWarn = FALSE` violates
+`NoSilentFailure`; `GuardRevert = FALSE` violates `SettledTruth`;
+`GuardFlush = FALSE` violates `NoLostWrite`; removing the fairness of `Land`
+and `Fail` violates `WritesSettle`.
 
 ### `ReplayBatching`: ordered replay batches to a companion's page
 

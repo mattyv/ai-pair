@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.48.2
+
+-   Keep panel settings you change, such as chat order and code display, when
+    VS Code is slow to save them, as across a remote window's link (#119). The
+    setting shows your choice until the save is done, so a page that loads
+    meanwhile no longer shows the old value; a save that fails is reported, and
+    the setting shown as it is stored; and reloading the window waits up to 3
+    seconds for saves still in flight, instead of dropping them.
+
 ## 0.48.1
 
 -   In a remote window, the panel's history no longer fills in slowly after a
