@@ -120,6 +120,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `OutputPreference.cfg` | ordered choice, discovery and failed persistence | holds | 934 |
 | `LocalAudioAdmission.cfg` | capability, device snapshot and cloud admission | holds | 624 |
 | `LocalAudioOwnership.cfg` | local ownership, directional sequences and lease loss | holds | 3,632 |
+| `LocalAudioReconnect.cfg` | two losses, up to three attempts each, one closed view, late frames of old epochs | holds | 411 |
 | `PanelPlacement.cfg` | bounded activation and prepare, irrevocable commit and fallback, a companion registered late or never | holds | 20 |
 | `SentencePipeline.cfg` | two units, three parts, pause, cancel and late callbacks | holds | 2,242 |
 | `SpeechTempo.cfg` | two units, two parts, rate changes and stale results | holds | 868 |
@@ -2809,6 +2810,50 @@ page's disposal independently violates `NoPrematureRelease`.
 | `NoPrematureRelease`, `NoOverlap` | `panel.test.ts`: retains replaced browser-page ownership until its actual disposal; `extension.test.ts`: routes speech through the output router and invalidates it before a preference change. |
 | `CanRefuse` | `speech_output_router.test.ts`: blocks native admission until the matching browser stop is acknowledged. |
 
+### `LocalAudioReconnect`: reconnecting a lost companion connection
+
+`LocalAudioReconnect.tla` follows a remote window's connection to its
+companion through a loss (`Lose`), when a stall outlasts the acknowledgement
+bound, and the workspace's retries (#127). Each `Attempt` takes a new epoch.
+The companion's `CompanionCommit` retires a live session and queues the new
+one behind it, or starts it at once; `RetireDone` starts what was queued once
+the old session's disposal settles; `WorkspaceAck` answers the workspace once
+the epoch's session runs. `AttemptFails` can come at any time an attempt
+waits, as a timeout, and after the last attempt warns the programmer to
+reload. `CloseView` and `OpenView` are the programmer closing and opening the
+Pair view, which the companion's one view provider hands to each session.
+`LateFrame` delivers a frame of an old epoch. TLC checked two losses with up
+to three attempts each and one closed view: 411 distinct states, safety and
+liveness holding, with fair `Attempt`, `RetireDone`, and settling of each
+attempt.
+
+The first version of this spec made the companion's prepare, retirement,
+commit and start one step, so it could not see what the review of #129 found:
+an attempt the workspace gives up on while the old session still retires
+leaves its start queued, and the next attempt's start queues beside it, so two
+sessions start; and the slot handed a closed view to the next session.
+
+| Property | Code test |
+|---|---|
+| `SingleSession` | `audio-ui/test/extension.test.ts`: CompanionCommit, RetireDone, SingleSession: retires the session for a replacing connection, and starts the next once it has (#127); SingleSession: a session that cannot retire for a replacing connection keeps the next one from starting (#127); SingleSession, ConnectedIsLive: of the commits waiting on a retirement, only the latest starts, and only it is acknowledged (#127 review); `audio-ui/test/reconnect_queue.e2e.test.ts`: SingleSession, ConnectedIsLive: an attempt given up during a slow retirement neither starts nor is acknowledged (#127 review); `audio-ui/test/attachment_gate.test.ts`: CompanionCommit, SingleSession: a prepare for a new epoch retires the attachment first, then registers once committed (#127) |
+| `ConnectedIsLive` | the two SingleSession tests above; `extension.test.ts`: LossSettles, WorkspaceAck: a lost connection reconnects with a new epoch and no warning (#127) |
+| `NoDeadView` | `audio-ui/test/view_slot.test.ts`: NoDeadView: forgets a view the programmer closed, and hands the next panel the one opened after it (#127 review) |
+| `NoStaleFrame` | `audio-ui/test/local_connection.test.ts`: accepts ordered messages, rejects stale or malformed frames, and expires locally |
+| `NoNeedlessWarning` | `companion_reconnect.test.ts`: NoNeedlessWarning: warns only once every attempt has failed; `extension.test.ts`: NoNeedlessWarning: warns to reload only once every reconnect attempt has failed (#127); `audio-ui/test/companion_session.test.ts`: closes local audio, without a warning, when the outbound command channel is lost; `integration_companion_faults.ts` |
+| `LossSettles` | `companion_reconnect.test.ts`: Attempt, WorkspaceAck: retries after each delay with a new epoch, and stops once one connects; `extension.test.ts`: LossSettles, WorkspaceAck: a lost connection reconnects with a new epoch and no warning (#127); `integration_companion_faults.ts` |
+
+Mutations checked with TLC: `GuardRetry = FALSE`, the old design that warned
+at once and stayed failed, violates `NoNeedlessWarning`; `GuardQueue = FALSE`,
+where every start queued behind a retirement runs, violates `SingleSession`
+in eight steps, the review's trace; `GuardView = FALSE`, a slot that keeps a
+closed view, violates `NoDeadView`; `GuardEpoch = FALSE` violates
+`NoStaleFrame`; acknowledging a commit before its session starts violates
+`ConnectedIsLive`; removing the fairness of `Attempt` violates `LossSettles`.
+
+The view provider is registered once, at the first commit, by construction
+(`provider ??=` in `audio-ui/src/extension.ts`), so the spec no longer counts
+providers.
+
 ### `LocalAudioAdmission` and `LocalAudioOwnership`: local playback bridge
 
 The admission model checks a logical snapshot of the selected output and its
@@ -2832,11 +2877,13 @@ current page instead of the immutable job page in `Retired` violates
 `LeaseStops`, `RetirementStops` and `ParentLossSettles` after page replacement;
 the unchanged baseline passes 3,632 states.
 
-The model abstracts time. The code's bounds are a 3 s heartbeat, a 10 s wait
-for each acknowledgement on either side, and a 20 s lease: longer than the
+The model abstracts time. The code's bounds are a 3 s heartbeat, a 30 s wait
+for each acknowledgement on either side, and a 60 s lease: longer than the
 acknowledgement wait plus one heartbeat, so a stall the workspace survives
 does not end the lease. They were 3 s and 10 s before #115, when a 6.8 s stall
-of a sandbox's extension host dropped the connection.
+of a sandbox's extension host dropped the connection, and 10 s and 20 s
+before #127, when an 11.7 s one did. A loss past them now reconnects
+(`LocalAudioReconnect`).
 
 | Property | Current test evidence |
 |---|---|

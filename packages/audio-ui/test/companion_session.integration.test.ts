@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { mock } from 'vitest-mock-extended';
 import * as vscode from 'vscode';
+import { ViewSlot } from '../src/view_slot';
 import { createCompanionSession } from '../src/companion_session';
 
 const fake = vi.hoisted(() => ({
@@ -51,6 +52,8 @@ vi.mock('../../vscode/src/panel', () => ({
     }
     showRemoteUpdate = vi.fn();
     showSpeechTransport = fake.showSpeechTransport;
+    resolveWebviewView = vi.fn();
+    release = vi.fn();
   },
 }));
 
@@ -74,7 +77,11 @@ describe('companion session integration', () => {
     fake.speechResume.mockClear();
     fake.execute.mockClear().mockResolvedValue(undefined);
     fake.register.mockReturnValue({ dispose: () => {} });
-    const current = createCompanionSession(mock<vscode.ExtensionContext>({ extensionPath: '/trusted', subscriptions: [] }), 'epoch');
+    const current = createCompanionSession(
+      mock<vscode.ExtensionContext>({ extensionPath: '/trusted', subscriptions: [] }),
+      'epoch',
+      new ViewSlot(),
+    );
     const panel = fake.panel;
     if (typeof panel !== 'object' || panel === null || !('routing' in panel) || !isRouting(panel.routing)) throw new Error('No routing');
     panel.routing.forward({ type: 'draft', empty: false }, 1);
@@ -92,16 +99,22 @@ describe('companion session integration', () => {
     expect(fake.showSpeechTransport).toHaveBeenCalledWith(false);
   });
 
-  it('registers one local provider and forwards a reply only after local retirement', async () => {
+  it('takes the view from the slot, registering no provider of its own, and forwards a reply only after local retirement', async () => {
     const retirement = Promise.withResolvers<void>();
     fake.stop.mockReturnValue(retirement.promise);
     fake.execute.mockResolvedValue(undefined);
     fake.register.mockReturnValue({ dispose: () => {} });
     const context = mock<vscode.ExtensionContext>({ extensionPath: '/trusted', subscriptions: [] });
-    const session = createCompanionSession(context, 'epoch');
-    expect(fake.register).toHaveBeenCalledTimes(1);
+    const slot = new ViewSlot();
+    const view = mock<vscode.WebviewView>();
+    slot.resolveWebviewView(view);
+    const session = createCompanionSession(context, 'epoch', slot);
+    // The companion's one provider is the slot, registered by the extension; the session takes the open view (#127).
+    expect(fake.register).not.toHaveBeenCalled();
     const panel = fake.panel;
     if (typeof panel !== 'object' || panel === null || !('routing' in panel)) throw new Error('No panel routing');
+    if (!('resolveWebviewView' in panel) || typeof panel.resolveWebviewView !== 'function') throw new Error('No view handling');
+    expect(panel.resolveWebviewView).toHaveBeenCalledWith(view);
     const routing: unknown = panel.routing;
     if (!isRouting(routing)) throw new Error('No forward');
     routing.forward({ type: 'reply', text: 'Hello.' }, 1);
@@ -121,7 +134,7 @@ describe('companion session integration', () => {
     fake.execute.mockClear().mockResolvedValue(undefined);
     fake.register.mockReturnValue({ dispose: () => {} });
     const context = mock<vscode.ExtensionContext>({ extensionPath: '/trusted', subscriptions: [] });
-    const session = createCompanionSession(context, 'epoch');
+    const session = createCompanionSession(context, 'epoch', new ViewSlot());
     const panel = fake.panel;
     if (typeof panel !== 'object' || panel === null || !('routing' in panel)) throw new Error('No panel routing');
     const routing: unknown = panel.routing;
@@ -143,7 +156,11 @@ describe('companion session integration', () => {
     fake.register.mockReturnValue({ dispose: () => {} });
     fake.speechPause.mockClear();
     fake.speechResume.mockClear();
-    const session = createCompanionSession(mock<vscode.ExtensionContext>({ extensionPath: '/trusted', subscriptions: [] }), 'epoch');
+    const session = createCompanionSession(
+      mock<vscode.ExtensionContext>({ extensionPath: '/trusted', subscriptions: [] }),
+      'epoch',
+      new ViewSlot(),
+    );
     const panel = fake.panel;
     if (typeof panel !== 'object' || panel === null || !('routing' in panel)) throw new Error('No panel routing');
     if (!isRouting(panel.routing)) throw new Error('No routing');
@@ -159,7 +176,11 @@ describe('companion session integration', () => {
     fake.execute.mockResolvedValue(undefined);
     fake.register.mockReturnValue({ dispose: () => {} });
     fake.speechResume.mockClear();
-    const session = createCompanionSession(mock<vscode.ExtensionContext>({ extensionPath: '/trusted', subscriptions: [] }), 'epoch');
+    const session = createCompanionSession(
+      mock<vscode.ExtensionContext>({ extensionPath: '/trusted', subscriptions: [] }),
+      'epoch',
+      new ViewSlot(),
+    );
     const panel = fake.panel;
     if (typeof panel !== 'object' || panel === null || !('routing' in panel)) throw new Error('No panel routing');
     if (!isRouting(panel.routing)) throw new Error('No routing');
@@ -176,7 +197,11 @@ describe('companion session integration', () => {
     fake.stop.mockResolvedValue(undefined);
     fake.execute.mockResolvedValue(undefined);
     fake.register.mockReturnValue({ dispose: () => {} });
-    const session = createCompanionSession(mock<vscode.ExtensionContext>({ extensionPath: '/trusted', subscriptions: [] }), 'epoch');
+    const session = createCompanionSession(
+      mock<vscode.ExtensionContext>({ extensionPath: '/trusted', subscriptions: [] }),
+      'epoch',
+      new ViewSlot(),
+    );
     fake.diagnostic?.({ kind: 'speech', event: 'preview', phase: 'ready', provider: 'kokoro' });
     expect(session.diagnostics()).toMatchObject({ version: 'test', build: 'test-build', events: [{ kind: 'speech', event: 'preview' }] });
     await session.dispose();
@@ -187,7 +212,11 @@ describe('companion session integration', () => {
     fake.register.mockReturnValue({ dispose: () => {} });
     fake.speechCancel.mockClear();
     fake.speechResume.mockClear();
-    const session = createCompanionSession(mock<vscode.ExtensionContext>({ extensionPath: '/trusted', subscriptions: [] }), 'epoch');
+    const session = createCompanionSession(
+      mock<vscode.ExtensionContext>({ extensionPath: '/trusted', subscriptions: [] }),
+      'epoch',
+      new ViewSlot(),
+    );
     const panel = fake.panel;
     if (typeof panel !== 'object' || panel === null || !('routing' in panel)) throw new Error('No panel routing');
     if (!isRouting(panel.routing)) throw new Error('No routing');

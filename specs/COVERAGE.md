@@ -137,6 +137,8 @@ Code goes without a spec for one of these reasons:
 | File | Functions | Spec |
 |---|---|---|
 | `local_connection.ts` | ordered frames and local lease | `LocalAudioOwnership`; physical retirement integration pending |
+| `attachment_gate.ts`, `extension.ts` | a commit for a new epoch replacing the attachment, `retireSession`, `register`'s queued start | `LocalAudioReconnect` (`CompanionCommit`, `RetireDone`, `WorkspaceAck`) |
+| `view_slot.ts` | `ViewSlot` | `LocalAudioReconnect` (`CloseView`, `OpenView`, `NoDeadView`) |
 | `companion_session.ts`, `speech_host.ts` | readiness query and host facts | `SpeechReminder` abstracts readiness; concrete local checks: unit and integration tests |
 | `speech_host.ts` | restored output discovery and disposal | `OutputPreference` (`Init`), `OutputDiscoveryLifecycle` (`Complete`); solitary and fake-adapter composed tests |
 | `companion_output.ts` | page and job ownership | `LocalAudioAdmission`, `LocalAudioOwnership`, `MultipartAudioLease`; native integration pending |
@@ -246,6 +248,8 @@ Code goes without a spec for one of these reasons:
 | `panel_placement.ts` | panel prepare, commit and fallback, looking again for a companion registered late | `PanelPlacement` |
 | `panel_html.ts` | `panelHtml`, `settingSpeed` | Format |
 | `panel_update_sender.ts` | `replayBatches`, `transmit` | `ReplayBatching` (`SendBatch`); chunk framing: `LocalPanelReplay` |
+| `companion_reconnect.ts` | `CompanionReconnect` | `LocalAudioReconnect` (`Attempt`, `AttemptFails`) |
+| `extension.ts` | `placementFor` with a new epoch on a lost connection | `LocalAudioReconnect` (`Lose`, `Attempt`, `AttemptFails`) |
 | `setting_store.ts` | `StoredSetting`, `settleWithin` | `SettingRoundTrip` (`Set`, `Land`, `Fail`, `Reload`) |
 | `webview/panel.css` | all | Look |
 | `panel_messages.ts` | | Types |

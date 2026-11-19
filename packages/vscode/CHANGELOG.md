@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.48.4
+
+-   Reconnect to AI Pair Local Audio by itself when a remote window loses the
+    connection, instead of asking you to reload (#127). A stall in either
+    extension host past the bound, as in a sandbox, used to end the connection
+    for good. AI Pair now tries again up to five times over about 40 seconds,
+    keeping the session and the panel, and tells you to reload only if every
+    attempt fails. The bounds are longer too: 30 seconds for an answer, and 60
+    for the companion's lease, after an 11.7-second stall passed the old 10.
+    Each reconnect attempt waits up to 30 seconds, since it waits on the old
+    companion session to shut down, and Pair Settings shows the connection as
+    failed once AI Pair gives up.
+
 ## 0.48.3
 
 -   A reply you send while the agent waits now reaches it without a false

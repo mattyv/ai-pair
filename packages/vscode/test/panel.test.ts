@@ -2,7 +2,7 @@
 // panel_html's panelHtml are mocks; the controller, calibration, starter, view, and the panel's other hooks are fakes
 // passed in, so a test says what each answers and sees what the panel asked of it.
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { mock, type MockProxy } from 'vitest-mock-extended';
 import * as vscode from 'vscode';
 import type { Controller, PanelEvent, Ref } from '@ai-pair/core';
@@ -206,6 +206,8 @@ interface FakeView {
   /** Sends the panel what the page sent, typed or not, as VS Code hands it over. */
   receive: (message: unknown) => void;
   dispose: () => void;
+  /** Counts the listeners the panel removed from the view. */
+  unlisten: Mock<() => void>;
 }
 
 /** Returns a panel with every collaborator a fake, the controller's turn `turn`. */
@@ -360,6 +362,9 @@ function open(panel: NarrationPanel): FakeView {
     return Promise.resolve(true);
   });
   const view = mock<vscode.WebviewView>({ webview });
+  const unlisten = vi.fn<() => void>();
+  webview.onDidReceiveMessage.mockReturnValue({ dispose: unlisten });
+  view.onDidDispose.mockReturnValue({ dispose: unlisten });
   panel.resolveWebviewView(view);
   const [receive] = webview.onDidReceiveMessage.mock.lastCall ?? [];
   const [dispose] = view.onDidDispose.mock.lastCall ?? [];
@@ -379,6 +384,7 @@ function open(panel: NarrationPanel): FakeView {
     dispose: () => {
       dispose();
     },
+    unlisten,
   };
 }
 
@@ -1013,6 +1019,21 @@ describe('receive', () => {
     vi.mocked(vscode.commands.executeCommand).mockClear();
     view.send({ type: 'reconnectLocalAudio' });
     expect(vi.mocked(vscode.commands.executeCommand)).toHaveBeenCalledExactlyOnceWith('workbench.action.reloadWindow');
+  });
+
+  it('CompanionCommit: a released panel ignores its old view, which a replacing panel now owns (#127)', () => {
+    const { panel, controller } = harness();
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(panel.speechPageIsReady()).toBe(true);
+    panel.release();
+    expect(panel.speechPageIsReady()).toBe(false);
+    // Both of its listeners leave the view, which outlives the panel (#127 review).
+    expect(view.unlisten).toHaveBeenCalledTimes(2);
+    view.send({ type: 'pause' });
+    expect(controller.pause.mock.calls).toEqual([]);
+    // Releasing again, or with no view, does nothing.
+    panel.release();
   });
 
   it('ChoiceApplied: sends the saved mode and accepts only valid choices', () => {
