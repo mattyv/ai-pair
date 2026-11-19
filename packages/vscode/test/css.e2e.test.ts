@@ -105,6 +105,7 @@ const SCENARIO: object[] = [
   { type: 'state', state: 'navigator', turn: 'programmer', paused: false },
   { type: 'turn', to: 'programmer', message: 'Your turn: fix the import.', ref: { file: 'src/todos.ts', line: 3, endLine: 5 } },
   { type: 'programmer', text: 'Looks good.', ref: { file: 'src/todos.ts', line: 1, endLine: 2 } },
+  { type: 'programmer', text: 'Still waiting for the agent.', receipt: 1 },
   { type: 'turn', to: 'agent' },
   { type: 'interrupt' },
   { type: 'point', file: 'src/server.ts', line: 12 },

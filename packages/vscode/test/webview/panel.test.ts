@@ -449,6 +449,28 @@ describe('the history (specs/Panel.tla, specs/PanelScroll.tla)', () => {
     expect(posted().at(-1)).toEqual({ type: 'openChange', file: 'b.ts' });
   });
 
+  it('Send, Report, RestoreUnseen: shows your message waiting until the agent receives it, and waiting again if put back (#117)', () => {
+    start();
+    send({ type: 'programmer', text: 'Old history.' });
+    send({ type: 'programmer', text: 'New.', receipt: 1 });
+    send({ type: 'turn', to: 'agent', message: 'Yours.', receipt: 2 });
+    const yours = [...element('history').querySelectorAll('.you')];
+    /** Returns your message with this text. */
+    function byText(t: string): Element | undefined {
+      return yours.find((e) => e.textContent.includes(t));
+    }
+    expect(byText('Old history.')?.classList.contains('waiting')).toBe(false);
+    expect(byText('New.')?.classList.contains('waiting')).toBe(true);
+    expect(byText('New.')?.querySelector('.wait')?.textContent).toBe('waiting');
+    expect(byText('Yours.')?.classList.contains('waiting')).toBe(true);
+    send({ type: 'receipt', ids: [1, 2, 9], received: true });
+    expect(byText('New.')?.classList.contains('waiting')).toBe(false);
+    expect(byText('Yours.')?.classList.contains('waiting')).toBe(false);
+    send({ type: 'receipt', ids: [1], received: false });
+    expect(byText('New.')?.classList.contains('waiting')).toBe(true);
+    expect(byText('Yours.')?.classList.contains('waiting')).toBe(false);
+  });
+
   it('shows your reply with the code it was about, as a link that opens it, a range with a dash', () => {
     start();
     send({ type: 'programmer', text: 'one line', ref: { file: 'src/a.ts', line: 5, endLine: 5 } });

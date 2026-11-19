@@ -169,9 +169,14 @@ export const PASSAGE_SCHEMA = z.object({
   notice: z.string().optional(),
 });
 
+/** A programmer's message receipt: a positive whole number (#117). */
+const RECEIPT_SCHEMA = z.number().int().positive();
+
 /** Checks an {@link Event}. */
 export const EVENT_SCHEMA = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('message'), text: z.string(), selection: EXCERPT_SCHEMA.optional() }),
+  // `receipt`: the panel's handle on the message (#117). It travels with a report so one put back by the relay keeps it;
+  // the relay renders only the text, so the agent never sees it.
+  z.object({ kind: z.literal('message'), text: z.string(), selection: EXCERPT_SCHEMA.optional(), receipt: RECEIPT_SCHEMA.optional() }),
   z.object({
     kind: z.literal('edit'),
     file: z.string(),
@@ -191,7 +196,13 @@ export const EVENT_SCHEMA = z.discriminatedUnion('kind', [
     closed: z.literal(true).optional(),
   }),
   z.object({ kind: z.literal('interrupt') }),
-  z.object({ kind: z.literal('turn'), to: TURN_SCHEMA, message: z.string().optional(), selection: EXCERPT_SCHEMA.optional() }),
+  z.object({
+    kind: z.literal('turn'),
+    to: TURN_SCHEMA,
+    message: z.string().optional(),
+    selection: EXCERPT_SCHEMA.optional(),
+    receipt: RECEIPT_SCHEMA.optional(),
+  }),
   z.object({ kind: z.literal('end') }),
 ]);
 

@@ -63,7 +63,10 @@ interface QueuedBatch extends Batch {
 }
 
 /** Like `Event`, but an edit since the last report gets its diff when the report is taken; a restored one has it. */
-type PendingEvent = Exclude<Event, { kind: 'edit' }> | ReportedEdit | RecordedEdit;
+type PendingEvent = Receipted | ReportedEdit | RecordedEdit;
+
+/** An event other than an edit; a programmer's message carries the receipt the panel shows it by (#117). */
+type Receipted = Exclude<Event, { kind: 'edit' }>;
 
 /** An edit a restored report carries, with its diff. */
 type ReportedEdit = Extract<Event, { kind: 'edit' }> & { interrupted?: true };
@@ -97,7 +100,14 @@ export interface SavedSession {
   finished: BatchResult[];
   /** The next batch ID, absent in sessions saved by older versions. */
   nextBatchId?: number;
-  events: Array<Exclude<Event, { kind: 'edit' }>>;
+  /** The next message receipt, absent in sessions saved by older versions (#117). */
+  nextReceipt?: number;
+  events: Receipted[];
+}
+
+/** Returns the receipts of the programmer's messages among `events` (#117). */
+function receiptsOf(events: readonly Event[]): number[] {
+  return events.flatMap((e) => ((e.kind === 'message' || e.kind === 'turn') && e.receipt !== undefined ? [e.receipt] : []));
 }
 
 /** Returns whether `v` has the fields of a saved session; its storage is the window's own, so the check is shallow. */
@@ -287,6 +297,10 @@ export class Controller {
   private openCalls = 0;
   private chain: Promise<unknown> = Promise.resolve();
   private nextBatchId = 1;
+  /** The next receipt for a programmer's message, kept across reloads so a replayed history never shares one (#117). */
+  private nextReceipt = 1;
+  /** Receipts of messages a report the agent may have seen carried: they stay received (specs/MessageReceipt.tla, `maybe`). */
+  private readonly maySeen = new Set<number>();
   private readonly pauseReasons = new Set<PauseReason>();
   /** An attention grant not yet delivered to a navigator listen. */
   private attentionNotice = false;
@@ -482,8 +496,9 @@ export class Controller {
       },
       finished: session.finished,
       nextBatchId: this.nextBatchId,
+      nextReceipt: this.nextReceipt,
       // specs/Resume.tla, Store: a queued reply survives reload without changing the live queue.
-      events: [...session.events, ...session.deferredMessages].filter((e): e is Exclude<Event, { kind: 'edit' }> => e.kind !== 'edit'),
+      events: [...session.events, ...session.deferredMessages].filter((e): e is Receipted => e.kind !== 'edit'),
     };
   }
 
@@ -517,6 +532,13 @@ export class Controller {
     this.nextBatchId = typeof next === 'number' && Number.isSafeInteger(next) && next >= reportedNext ? next : reportedNext;
     session.finished = [...saved.finished];
     session.events = [...saved.events];
+    // A receipt is never reused, or a new message would share an old one's bubble; the spec does not model ids.
+    const savedReceipt = saved.nextReceipt;
+    const pendingReceipt = Math.max(0, ...receiptsOf(saved.events)) + 1;
+    this.nextReceipt =
+      typeof savedReceipt === 'number' && Number.isSafeInteger(savedReceipt) && savedReceipt >= pendingReceipt
+        ? savedReceipt
+        : pendingReceipt;
     // specs/Resume.tla, `ReloadWindow`: the replayed history may end with the session live (#138).
     this.panel.post({ type: 'session', active: true, task: session.task, suspended: true });
     this.panel.post({ type: 'attention', state: 'none' });
@@ -661,6 +683,15 @@ export class Controller {
     }
     session.finished.unshift(...report.batches);
     session.events.unshift(...report.events);
+    // specs/MessageReceipt.tla, RestoreUnseen and RestoreRepeat: only a report the agent never saw makes its messages
+    // wait again; one it may have seen keeps them received, for good (GuardSticky).
+    if (mayRepeat) {
+      for (const id of receiptsOf(report.events)) {
+        this.maySeen.add(id);
+      }
+    } else {
+      this.postReceipts(report.events, /* received= */ false);
+    }
     if (mayRepeat) session.mayRepeat = true;
     if (report.events.some(interrupting) || report.batches.some((b) => b.status !== 'completed')) markStale(session);
     // A step that never queued its batch: its rejection is the only report of it.
@@ -682,10 +713,12 @@ export class Controller {
     if (!session) return;
     const attentionGranted = this.attention === 'granted';
     this.releaseAttention();
+    // specs/MessageReceipt.tla, Send: the panel shows the message waiting until a report carries it.
+    const receipt = this.nextReceipt++;
     const event: PendingEvent = selection
-      ? { kind: 'message', text, selection: this.excerpt(session, selection) }
-      : { kind: 'message', text };
-    this.panel.post({ type: 'programmer', text, ref: selection && this.ref(selection) });
+      ? { kind: 'message', text, selection: this.excerpt(session, selection), receipt }
+      : { kind: 'message', text, receipt };
+    this.panel.post({ type: 'programmer', text, ref: selection && this.ref(selection), receipt });
     // specs/DeferredMessage.tla, SendDeferred: hold the event until the current action finishes.
     if (defer && !attentionGranted && session.queue[0]?.state === 'playing' && !session.timeline.isInterrupted) {
       session.deferredMessages.push(event);
@@ -817,12 +850,21 @@ export class Controller {
     session.navigatorReady = false;
     session.navigatorGeneration = ++this.noticeGeneration;
     clearTimeout(session.navigatorTimer);
-    const event: Event = { kind: 'turn', to: 'agent' };
+    const event: Receipted = { kind: 'turn', to: 'agent' };
     if (message !== undefined) event.message = message;
     if (selection) event.selection = this.excerpt(session, selection);
+    // specs/MessageReceipt.tla, Send: a handback that says something waits for its report like a message.
+    const receipt = message !== undefined || selection !== undefined ? this.nextReceipt++ : undefined;
+    if (receipt !== undefined) event.receipt = receipt;
     this.flushDeferred(session);
     session.events.push(event);
-    this.panel.post({ type: 'turn', to: 'agent', message, ref: selection && this.ref(selection) });
+    this.panel.post({
+      type: 'turn',
+      to: 'agent',
+      message,
+      ref: selection && this.ref(selection),
+      ...(receipt === undefined ? {} : { receipt }),
+    });
     // specs/Turns.tla and specs/Rehearsal.tla: plain handback preserves navigator work.
     if (message !== undefined || selection !== undefined) this.interrupt(session);
     this.update();
@@ -1452,6 +1494,12 @@ export class Controller {
     }
   }
 
+  /** Posts the receipts of the programmer's messages among `events`, if any, as received or waiting again (#117). */
+  private postReceipts(events: readonly Event[], received: boolean): void {
+    const ids = receiptsOf(events).filter((id) => received || !this.maySeen.has(id));
+    if (ids.length > 0) this.panel.post({ type: 'receipt', ids, received });
+  }
+
   /** Takes everything not yet reported. `submitted`: the batch the call submitted, if any. */
   private snapshot(session: Session, waiting: boolean, submitted?: Batch): Report {
     const batches = session.finished.toSorted((a, b) => a.id - b.id);
@@ -1498,6 +1546,8 @@ export class Controller {
     }
 
     const report: Report = { batches, events, turn: session.scene.turn, sessionId: session.sessionId };
+    // specs/MessageReceipt.tla, Report: the messages this report carries are received.
+    this.postReceipts(events, /* received= */ true);
     const commands: NonNullable<Report['commands']> = [...session.player.backgroundCommands];
     const confirming = session.confirming;
     if (confirming !== undefined) commands.push({ id: confirming.id, command: confirming.command, phase: 'confirm' });

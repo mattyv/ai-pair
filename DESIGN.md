@@ -72,16 +72,17 @@ bottom:
     -   **The reply box**, under the message. It's where the eye goes after
         reading, which is when the programmer replies. The band has room for two
         lines of message, so the reply box moves only for a longer one.
-2.  **History**, below the band, newest first by default. Agent messages use
-    the theme foreground; the programmer's replies are neutral bubbles on the
-    right, keeping the line breaks they typed; commands are soft terminal rows
+2.  **History**, below the band, newest first by default. Agent messages use the
+    theme foreground; the programmer's replies are neutral bubbles on the right,
+    keeping the line breaks they typed, outlined and labeled *waiting* until a
+    report carries them to the agent (#117); commands are soft terminal rows
     with their outcomes; turn changes, interrupts and session boundaries are
-    faint dividers. The Settings dialog
-    also offers oldest first: history then appears above the band, with the
-    current message and reply at the bottom. Sending a message reveals the
-    newest edge; incoming entries follow it when already there and preserve the
-    reader's place when reading older history. A message moves out of the band
-    when filed, with its code link, so it appears once in time order.
+    faint dividers. The Settings dialog also offers oldest first: history then
+    appears above the band, with the current message and reply at the bottom.
+    Sending a message reveals the newest edge; incoming entries follow it when
+    already there and preserve the reader's place when reading older history. A
+    message moves out of the band when filed, with its code link, so it appears
+    once in time order.
 
 Without a session, the band has no header: it says there's no session and how to
 start one, and after a session, how it ended, with the agent's summary. While a

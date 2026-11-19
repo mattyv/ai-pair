@@ -31,6 +31,7 @@ import { DEFAULT_TIMINGS } from '../src/timings';
 import { controllerPaths, extensionPaths, playerPaths } from './integration_paths';
 import { deferredSettlementPaths } from './integration_deferred_settlement';
 import { panelPaths } from './integration_panel_paths';
+import { messageReceiptPaths } from './integration_message_receipt';
 import { gapPaths } from './integration_gap_paths';
 import { codePlaybackPaths } from './integration_code_playback';
 import { preservedPlaybackPaths } from './integration_preserved_playback';
@@ -330,10 +331,13 @@ export async function run(): Promise<void> {
   api.panelMessage({ type: 'reply', text: 'Wait', defer: true });
   const deferredSaved = controller.saved;
   assert.ok(deferredSaved, 'the queued reply has a saved session');
-  assert.deepEqual(deferredSaved.events, [{ kind: 'message', text: 'Wait' }]);
+  // The message keeps one receipt from the saved session, through its report, to the revived session (#117).
+  const waitReceipt = deferredSaved.events[0]?.kind === 'message' ? deferredSaved.events[0].receipt : undefined;
+  assert.ok(waitReceipt !== undefined && waitReceipt > 0, 'the queued reply has no receipt');
+  assert.deepEqual(deferredSaved.events, [{ kind: 'message', text: 'Wait', receipt: waitReceipt }]);
   const deferredReport = await controller.step([]);
   assert.equal(deferred.getText(), 'abcdefghijkl');
-  assert.deepEqual(deferredReport.events, [{ kind: 'message', text: 'Wait' }]);
+  assert.deepEqual(deferredReport.events, [{ kind: 'message', text: 'Wait', receipt: waitReceipt }]);
   assert.deepEqual(
     deferredReport.batches.map((batch) => batch.status),
     ['interrupted'],
@@ -342,7 +346,7 @@ export async function run(): Promise<void> {
   await controller.end();
   controller.revive(deferredSaved);
   const revivedReply = await controller.start(undefined, deferredSaved.scene.root);
-  assert.deepEqual(revivedReply.events, [{ kind: 'message', text: 'Wait' }]);
+  assert.deepEqual(revivedReply.events, [{ kind: 'message', text: 'Wait', receipt: waitReceipt }]);
   await controller.end();
   console.log('NoEarlyDelivery, Store: deferred reply waits for typing and survives reload');
 
@@ -1613,6 +1617,7 @@ export async function run(): Promise<void> {
   await flowGatePaths(api, root);
   await speechCoveragePaths(api);
   await lookaheadHintPaths(api);
+  await messageReceiptPaths(api);
   await vscodeCoveragePaths(api);
   await diagnosticCoveragePaths(api);
   await shortcutCommandPaths(api);

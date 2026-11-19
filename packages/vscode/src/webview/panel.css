@@ -710,6 +710,24 @@ button:focus-visible {
   margin-top: 4px;
 }
 
+/* A message not yet carried to the agent: an outlined bubble, filled once received, and labeled (#117). */
+.you.waiting {
+  background: transparent;
+  outline: 1px dashed var(--border);
+  outline-offset: -1px;
+}
+
+.you .wait {
+  display: none;
+}
+
+.you.waiting .wait {
+  display: block;
+  font-size: 11px;
+  font-style: italic;
+  margin-top: 4px;
+}
+
 /* run: a command the agent ran, with its outcome on the right. */
 .run {
   align-items: center;

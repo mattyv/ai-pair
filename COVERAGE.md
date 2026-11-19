@@ -307,7 +307,7 @@ Last updated: css, 2026-11-18.
 | `packages/vscode/src/voice_indicator.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/voice_language.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/approval_sound.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 166 of 166 rules matched |
+| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 169 of 169 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/speech_audio.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/speech_decode.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -348,6 +348,7 @@ Last updated: css, 2026-11-18.
 | `packages/vscode/test/integration_guided_diagnostics.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_invalid_calibration.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_legacy_speech_paths.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_message_receipt.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/integration_model_status.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_no_workspace.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_notification.ts` | TypeScript | test | test | test | - | - | test |
@@ -640,6 +641,8 @@ Last updated: css, 2026-11-18.
 | `specs/LocalPanelReplay.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/LocalPanelReplay.tla` | TLA+ | - | - | 7 of 7 actions | - | - | - |
 | `specs/LocalPanelReplay_Delivery.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/MessageReceipt.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/MessageReceipt.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
 | `specs/ModelStatus.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ModelStatus.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/MultipartAudioLease.cfg` | TLC config | - | - | - | - | - | - |

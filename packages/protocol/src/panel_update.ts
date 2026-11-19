@@ -4,6 +4,8 @@ import { extensionVersion, localAudioStatus } from './local_audio_status';
 
 /** The panel retains up to 400 recent events and one preceding session event. */
 const MAX_REPLAY_EVENTS = 401;
+/** The most message receipts one report can carry to the page: far more than a person types between two reports (#117). */
+const MAX_RECEIPTS = 10_000;
 const text = z.string();
 const number = z.number();
 const reference = z.strictObject({ file: text, line: number, endLine: number.optional() });
@@ -36,8 +38,10 @@ const panelEvent = z.union([
     speechPaused: z.boolean().optional(),
     ready: z.number().int().nonnegative().optional(),
   }),
-  z.strictObject({ type: z.literal('programmer'), text, ref: reference.optional() }),
-  z.strictObject({ type: z.literal('turn'), to: turn, message: text.optional(), ref: reference.optional() }),
+  z.strictObject({ type: z.literal('programmer'), text, ref: reference.optional(), receipt: number.optional() }),
+  z.strictObject({ type: z.literal('turn'), to: turn, message: text.optional(), ref: reference.optional(), receipt: number.optional() }),
+  // The messages a report carried to the agent, or that wait again after it was put back unseen (#117).
+  z.strictObject({ type: z.literal('receipt'), ids: z.array(number).max(MAX_RECEIPTS), received: z.boolean() }),
   z.strictObject({ type: z.literal('interrupt') }),
   z.strictObject({ type: z.literal('point'), file: text, line: number }),
   z.strictObject({ type: z.literal('outside'), files: z.array(text) }),

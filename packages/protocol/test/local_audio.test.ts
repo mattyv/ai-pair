@@ -7,13 +7,13 @@ beforeEach(() => {
   fake.problem.mockReset();
 });
 
-const base = { version: 9, connectionEpoch: 'connection-1', sequence: 1 };
+const base = { version: 10, connectionEpoch: 'connection-1', sequence: 1 };
 const owner = { jobId: 'job-1', pageEpoch: 1 };
 
 describe('local audio command frames', () => {
-  it('accepts version 9 and rejects version 8 companion frames', () => {
-    expect(localAudioFrame.safeParse({ ...base, version: 9, type: 'attach' }).success).toBe(true);
-    expect(localAudioFrame.safeParse({ ...base, version: 8, type: 'attach' }).success).toBe(false);
+  it('accepts version 10 and rejects version 9 companion frames', () => {
+    expect(localAudioFrame.safeParse({ ...base, version: 10, type: 'attach' }).success).toBe(true);
+    expect(localAudioFrame.safeParse({ ...base, version: 9, type: 'attach' }).success).toBe(false);
   });
   it('accepts the bounded commands and terminal acknowledgements', () => {
     for (const frame of [

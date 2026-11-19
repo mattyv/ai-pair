@@ -21,6 +21,9 @@ describe('cross-host panel updates', () => {
       { type: 'session', active: true, costSessionGeneration: 1 },
       { type: 'replay', events: [], costSessionGeneration: 1, costSessionActive: true },
       { type: 'calibration', view: { phase: 'idle' } },
+      { type: 'programmer', text: 'Hi.', receipt: 1 },
+      { type: 'turn', to: 'agent', message: 'Yours.', receipt: 2 },
+      { type: 'receipt', ids: [1, 2], received: true },
     ]) {
       expect(localPanelUpdate.safeParse(update).success).toBe(true);
     }
@@ -45,5 +48,12 @@ describe('cross-host panel updates', () => {
     ]) {
       expect(localPanelUpdate.safeParse(update).success).toBe(false);
     }
+  });
+
+  it('bounds the receipts one update carries (#117)', () => {
+    expect(localPanelUpdate.safeParse({ type: 'receipt', ids: Array.from({ length: 10_001 }, (_, i) => i), received: true }).success).toBe(
+      false,
+    );
+    expect(localPanelUpdate.safeParse({ type: 'receipt', ids: [1], received: 'yes' }).success).toBe(false);
   });
 });

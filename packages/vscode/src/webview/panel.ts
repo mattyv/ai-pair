@@ -457,9 +457,24 @@ function addOutside(files: string[]): void {
   add(el);
 }
 
-function addYou(text: string | undefined, ref: Ref | undefined): void {
+/** The programmer's messages by receipt, to show when a report carries each to the agent (#117). */
+const receipts = new Map<number, HTMLElement>();
+
+/**
+ * Adds a programmer's message. One with a `receipt` shows waiting until a report carries it to the agent
+ * (specs/MessageReceipt.tla, Send); one from older history, without, shows as received.
+ */
+function addYou(text: string | undefined, ref: Ref | undefined, receipt?: number): void {
   const el = entry('you', text === undefined ? '' : rich(text));
   if (ref) el.append(refLink(ref));
+  if (receipt !== undefined) {
+    const wait = document.createElement('span');
+    wait.className = 'wait';
+    wait.textContent = 'waiting';
+    el.append(wait);
+    el.classList.add('waiting');
+    receipts.set(receipt, el);
+  }
   add(el);
   // specs/PanelScroll.tla, `AddYours`: reveal the programmer's message at the newest edge.
   ui.history.scrollTop = chatOrder === 'newestFirst' ? 0 : ui.history.scrollHeight;
@@ -1943,7 +1958,13 @@ function handle(message: ToPanel): void {
       setState(message);
       return;
     case 'programmer':
-      addYou(message.text, message.ref);
+      addYou(message.text, message.ref, message.receipt);
+      return;
+    case 'receipt':
+      // specs/MessageReceipt.tla, Report and RestoreUnseen: received once a report carries it, waiting again if put back.
+      for (const id of message.ids) {
+        receipts.get(id)?.classList.toggle('waiting', !message.received);
+      }
       return;
     case 'interrupt':
       addDivider('You interrupted');
@@ -1953,7 +1974,7 @@ function handle(message: ToPanel): void {
       return;
     case 'turn':
       addDivider(message.to === 'programmer' ? 'You took the turn' : 'You handed the turn back');
-      if (message.message !== undefined || message.ref !== undefined) addYou(message.message, message.ref);
+      if (message.message !== undefined || message.ref !== undefined) addYou(message.message, message.ref, message.receipt);
       replyPrompt = message.to === 'programmer' ? `Ask the agent${ELLIPSIS}` : `Reply to the agent${ELLIPSIS}`;
       ui.reply.placeholder = withKeys(replyPrompt, [shortcuts.reply]);
       return;

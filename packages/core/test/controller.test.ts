@@ -318,6 +318,15 @@ async function settle(ms = 0): Promise<void> {
 }
 
 /** Returns a promise's report once it settles, parsed by its schema, letting timers run until then. */
+/** Returns the events without the receipts that travel with a programmer's messages, for tests about what was delivered (#117). */
+function noReceipts(events: ReadonlyArray<Report['events'][number]>): unknown[] {
+  return events.map((event) => {
+    if ((event.kind !== 'message' && event.kind !== 'turn') || event.receipt === undefined) return event;
+    const { receipt: _receipt, ...rest } = event;
+    return rest;
+  });
+}
+
 async function report(promise: Promise<Report>): Promise<Report> {
   const state = { done: false };
   void promise.finally(() => {
@@ -629,6 +638,7 @@ describe('a session the agent leaves, and comes back to', () => {
       scene: { root: ROOT, turn: 'agent', cursor: { file: A, offset: 2 }, selection: undefined, allowedCommands: ['ls'] },
       finished: [],
       nextBatchId: 1,
+      nextReceipt: 1,
       events: [{ kind: 'interrupt' }],
     });
     h.controller.endSession();
@@ -1325,7 +1335,7 @@ describe('playing the queue', () => {
     expect(timeline().interrupt).toHaveBeenCalledOnce();
     finish({ status: 'interrupted' });
     const result = await report(h.controller.listen());
-    expect(result.events).toEqual([
+    expect(noReceipts(result.events)).toEqual([
       { kind: 'message', text: 'first' },
       { kind: 'message', text: 'second' },
     ]);
@@ -1339,7 +1349,7 @@ describe('playing the queue', () => {
     finish();
     await settle();
     expect(timeline().interrupt).toHaveBeenCalledOnce();
-    expect((await report(h.controller.listen())).events).toEqual([{ kind: 'message', text: 'late' }]);
+    expect(noReceipts((await report(h.controller.listen())).events)).toEqual([{ kind: 'message', text: 'late' }]);
   });
 
   it('Store: saves queued replies without delivering or duplicating them in the live session', async () => {
@@ -1351,24 +1361,28 @@ describe('playing the queue', () => {
     const saved = h.controller.saved;
     if (saved === undefined) throw new Error('Missing saved session');
     expect(saved.events).toEqual([
-      { kind: 'message', text: 'first' },
-      { kind: 'message', text: 'second' },
+      { kind: 'message', text: 'first', receipt: 1 },
+      { kind: 'message', text: 'second', receipt: 2 },
     ]);
     expect(timeline().interrupt).not.toHaveBeenCalled();
     const liveStage = stage();
     const restored = harness();
     restored.controller.revive(saved);
-    expect((await restored.controller.start()).events).toEqual(saved.events);
+    const reported = [
+      { kind: 'message', text: 'first' },
+      { kind: 'message', text: 'second' },
+    ];
+    expect(noReceipts((await report(restored.controller.start())).events)).toEqual(reported);
     liveStage.afterAction?.();
     finish({ status: 'interrupted' });
-    expect((await report(h.controller.listen())).events).toEqual(saved.events);
+    expect(noReceipts((await report(h.controller.listen())).events)).toEqual(reported);
   });
 
   it('SendDeferred: delivers immediately when no action is playing', async () => {
     const h = await started();
     h.controller.userMessage('now', undefined, /* defer= */ true);
     expect(timeline().interrupt).toHaveBeenCalledOnce();
-    expect((await report(h.controller.listen())).events).toEqual([{ kind: 'message', text: 'now' }]);
+    expect(noReceipts((await report(h.controller.listen())).events)).toEqual([{ kind: 'message', text: 'now' }]);
   });
 
   it('waits for an interrupted batch to finish before it reports, so the report says what was typed', async () => {
@@ -1418,7 +1432,7 @@ describe('listen', () => {
     h.controller.otherEdit(B, 'b', 'c', []);
     expect(await pending(listen)).toBe(true);
     h.controller.userMessage('Look.');
-    expect((await report(listen)).events).toEqual([
+    expect(noReceipts((await report(listen)).events)).toEqual([
       { kind: 'edit', file: 'b.ts', diff: 'b.ts: b -> c', by: 'other' },
       { kind: 'message', text: 'Look.' },
     ]);
@@ -1464,7 +1478,7 @@ describe('listen', () => {
     const next = h.controller.listen();
     h.controller.userEdit(A, 'abc', 'abcd', []);
     h.controller.handBack('Your turn.', selection());
-    expect((await report(next)).events).toEqual([
+    expect(noReceipts((await report(next)).events)).toEqual([
       { kind: 'edit', file: 'a.ts', diff: 'a.ts: abc -> abcd', by: 'programmer' },
       { kind: 'turn', to: 'agent', message: 'Your turn.', selection: { ...selection(), file: 'a.ts' } },
     ]);
@@ -1622,7 +1636,7 @@ describe('cancelled calls', () => {
     abort.abort();
     await expect(listen).rejects.toMatchObject({ code: 'cancelled' });
     h.controller.userMessage('Kept.');
-    expect((await report(h.controller.listen())).events).toEqual([{ kind: 'message', text: 'Kept.' }]);
+    expect(noReceipts((await report(h.controller.listen())).events)).toEqual([{ kind: 'message', text: 'Kept.' }]);
     abort.abort();
   });
 
@@ -1753,7 +1767,7 @@ describe('restore', () => {
     h.controller.userMessage('Last words.');
     h.controller.endSession();
     const last = await report(h.controller.listen());
-    expect(last.events).toEqual([{ kind: 'message', text: 'Last words.' }, { kind: 'end' }]);
+    expect(noReceipts(last.events)).toEqual([{ kind: 'message', text: 'Last words.' }, { kind: 'end' }]);
     h.controller.restore(last);
     expect(h.controller.isActive).toBe(false);
     expect((await report(h.controller.listen())).events).toEqual(last.events);
@@ -1790,13 +1804,105 @@ describe('restore', () => {
   });
 });
 
+describe('message receipts (#117)', () => {
+  it('Send, Report, NoFalseReceipt: shows a message waiting until a report carries it, then received', async () => {
+    const h = await started();
+    h.controller.userMessage('One.');
+    h.controller.userMessage('Two.');
+    expect(posted(h).filter((e) => e.type === 'receipt')).toEqual([]);
+    await h.controller.listen();
+    expect(posted(h).findLast((e) => e.type === 'receipt')).toEqual({ type: 'receipt', ids: [1, 2], received: true });
+  });
+
+  it('Report: posts no receipt for a report without a message', async () => {
+    const h = await started();
+    h.controller.userInterrupt();
+    await h.controller.listen();
+    expect(posted(h).filter((e) => e.type === 'receipt')).toEqual([]);
+  });
+
+  it('RestoreUnseen and RestoreRepeat, NoSeenWaiting: only a report the agent never saw makes its messages wait again', async () => {
+    const h = await started();
+    h.controller.userMessage('Unseen.');
+    h.controller.restore(await h.controller.listen());
+    expect(posted(h).findLast((e) => e.type === 'receipt')).toEqual({ type: 'receipt', ids: [1], received: false });
+    const again = await h.controller.listen();
+    expect(posted(h).findLast((e) => e.type === 'receipt')).toEqual({ type: 'receipt', ids: [1], received: true });
+    const before = posted(h).length;
+    h.controller.restore(again, /* mayRepeat= */ true);
+    expect(
+      posted(h)
+        .slice(before)
+        .filter((e) => e.type === 'receipt'),
+    ).toEqual([]);
+  });
+
+  it('NoSeenWaiting, GuardSticky: a message the agent may have seen never waits again, even if a later report is put back unseen', async () => {
+    const h = await started();
+    h.controller.userMessage('Maybe seen.');
+    h.controller.restore(await h.controller.listen(), /* mayRepeat= */ true);
+    const unseen = await h.controller.listen();
+    const before = posted(h).length;
+    h.controller.restore(unseen);
+    expect(
+      posted(h)
+        .slice(before)
+        .filter((e) => e.type === 'receipt'),
+    ).toEqual([]);
+  });
+
+  it('Send: a handback that says something waits for its report; a plain one has no receipt', async () => {
+    const h = await started();
+    h.controller.takeTurn();
+    h.controller.handBack('Your turn.');
+    expect(posted(h).findLast((e) => e.type === 'turn')).toEqual({
+      type: 'turn',
+      to: 'agent',
+      message: 'Your turn.',
+      ref: undefined,
+      receipt: 1,
+    });
+    h.controller.takeTurn();
+    h.controller.handBack();
+    expect(posted(h).findLast((e) => e.type === 'turn')).toEqual({ type: 'turn', to: 'agent', message: undefined, ref: undefined });
+    await h.controller.listen();
+    expect(posted(h).filter((e) => e.type === 'receipt')).toEqual([{ type: 'receipt', ids: [1], received: true }]);
+  });
+
+  it('Reload: saves the next receipt and never reuses one after a reload', async () => {
+    const h = await started();
+    h.controller.userMessage('Kept.');
+    const saved = h.controller.saved;
+    if (saved === undefined) throw new Error('Missing saved session');
+    expect(saved.nextReceipt).toBe(2);
+    for (const [nextReceipt, expected] of [
+      [7, 7],
+      [undefined, 2],
+      [1, 2],
+      [Number.NaN, 2],
+    ] as const) {
+      const restored = harness();
+      restored.controller.revive({ ...saved, nextReceipt });
+      await restored.controller.start();
+      restored.controller.userMessage('New.');
+      expect(posted(restored).findLast((e) => e.type === 'programmer')).toMatchObject({ receipt: expected });
+    }
+    const empty = harness();
+    empty.controller.revive({ ...saved, events: [{ kind: 'interrupt' }], nextReceipt: undefined });
+    await empty.controller.start();
+    empty.controller.userMessage('First.');
+    expect(posted(empty).findLast((e) => e.type === 'programmer')).toMatchObject({ receipt: 1 });
+  });
+});
+
 describe("the programmer's input", () => {
   it('records a message, with the code they had selected, and shows it in the panel', async () => {
     const h = await started();
     h.controller.userMessage('This.', selection());
-    expect(posted(h).at(-1)).toEqual({ type: 'programmer', text: 'This.', ref: { file: 'a.ts', line: 1, endLine: 2 } });
+    expect(posted(h).at(-1)).toEqual({ type: 'programmer', text: 'This.', ref: { file: 'a.ts', line: 1, endLine: 2 }, receipt: 1 });
+    // The receipt travels with the report, so one put back through the relay keeps it; the relay renders only the text (#117).
     expect((await report(h.controller.listen())).events).toEqual([
-      { kind: 'message', text: 'This.', selection: { ...selection(), file: 'a.ts' } },
+      { kind: 'message', text: 'This.', selection: { ...selection(), file: 'a.ts' }, receipt: 1 },
     ]);
   });
 
