@@ -518,6 +518,16 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     });
   }
 
+  /**
+   * Lets go of the view, for a panel that replaces this one in the same view after a reconnect: messages from it are
+   * ignored from now on (specs/LocalAudioReconnect.tla, Attach; #127).
+   */
+  release(): void {
+    this.view = undefined;
+    this.speechPageReady = false;
+    this.replyPageReady = false;
+  }
+
   /** Routes workspace actions out of a UI-local companion panel. */
   useCompanion(routing: CompanionPanelRouting): void {
     this.companion = routing;

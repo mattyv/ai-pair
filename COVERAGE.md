@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: css, 2026-11-19.
+Last updated: unit, 2026-11-19.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -73,6 +73,7 @@ Last updated: css, 2026-11-19.
 | `packages/audio-ui/src/extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 87.2% B 67.5% F 100.0% | - | - | - | - |
 | `packages/audio-ui/src/local_connection.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.5% B 60.0% F 100.0% | - | - | - | - |
 | `packages/audio-ui/src/speech_host.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 72.9% B 57.0% F 54.4% | - | - | - | - |
+| `packages/audio-ui/src/view_slot.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/audio-ui/test/attachment_gate.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/bridge.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/build_identity.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -90,6 +91,7 @@ Last updated: css, 2026-11-19.
 | `packages/audio-ui/test/speech_host.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_restart_handshake.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_tempo_composed.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/view_slot.test.ts` | TypeScript | test | - | - | - | - | - |
 | `packages/audio-ui/test/worker_diagnostics.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/core/src/bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/config.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
@@ -199,6 +201,7 @@ Last updated: css, 2026-11-19.
 | `packages/vscode/scripts/vscode_bin.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/src/agents.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 83.0% B 68.8% F 89.7% | - | - | - | - |
 | `packages/vscode/src/calibration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.2% F 100.0% | - | - | - | - |
+| `packages/vscode/src/companion_reconnect.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/demo.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.8% B 83.9% F 100.0% | - | - | - | - |
 | `packages/vscode/src/diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.5% B 72.1% F 100.0% | - | - | - | - |
 | `packages/vscode/src/diagnostics_collector.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.3% B 90.5% F 100.0% | - | - | - | - |
@@ -319,6 +322,7 @@ Last updated: css, 2026-11-19.
 | `packages/vscode/test/attention_composed.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/calibration.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/command_approval_composed.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/companion_reconnect.test.ts` | TypeScript | test | - | - | - | - | - |
 | `packages/vscode/test/css.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -364,6 +368,7 @@ Last updated: css, 2026-11-19.
 | `packages/vscode/test/integration_release_extension_owner_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_release_extension_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_render_diagnostic.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_reply_report.ts` | TypeScript | test | - | - | - | - | - |
 | `packages/vscode/test/integration_restricted_runtime.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_runtime_identity.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_setting_roundtrip.ts` | TypeScript | test | - | - | - | - | test |
@@ -641,6 +646,8 @@ Last updated: css, 2026-11-19.
 | `specs/LocalAudioAdmission.tla` | TLA+ | - | - | 13 of 13 actions | - | - | - |
 | `specs/LocalAudioOwnership.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/LocalAudioOwnership.tla` | TLA+ | - | - | 14 of 14 actions | - | - | - |
+| `specs/LocalAudioReconnect.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/LocalAudioReconnect.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
 | `specs/LocalPanelReplay.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/LocalPanelReplay.tla` | TLA+ | - | - | 7 of 7 actions | - | - | - |
 | `specs/LocalPanelReplay_Delivery.cfg` | TLC config | - | - | - | - | - | - |

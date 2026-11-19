@@ -157,8 +157,8 @@ output devices. The main extension keeps workspace state and dispatches editor,
 file and terminal actions on the workspace host. The `Local audio placement`
 diagram shows this boundary, including an isolated SSH placement proof.
 
-The `Companion attachment bootstrap` diagram shows the cross-host sequence.
-The workspace first calls `aiPair.localAudio.activate`, which activates the UI
+The `Companion attachment bootstrap` diagram shows the cross-host sequence. The
+workspace first calls `aiPair.localAudio.activate`, which activates the UI
 extension through VS Code and returns readiness without creating a token or
 session. Activation has a 10-second bound; only a successful response starts
 prepare, with its own 1.5-second bound. `vscode.extensions.getExtension` lists
@@ -172,11 +172,16 @@ and epoch without registering a view. The workspace selects the companion before
 dispatching commit, and creates its workspace session only after a successful
 commit acknowledgement. A missing or late acknowledgement cannot select another
 owner or start workspace transport. Late activation or preparation cannot change
-the decision; looking again takes a window reload, which the remote notice and
-Pair Settings offer. An installed companion that fails attachment fails closed;
-a missing companion retains the legacy local or remote text-only behavior.
-Deactivation waits for speech resources to be reaped; a replacement session
-waits for that retirement.
+the decision; looking again for a missing companion takes a window reload, which
+the remote notice and Pair Settings offer. A connection lost after commit is
+retried instead: the workspace prepares and commits again with a new epoch, up
+to five times over about 40 seconds, and warns only if every attempt fails. The
+companion lets a new epoch replace its attachment, retiring the old session
+first, and keeps one Pair view provider (`ViewSlot`) for as long as it runs, so
+the replacing session takes over the open view (#127). An installed companion
+that fails attachment fails closed; a missing companion retains the legacy local
+or remote text-only behavior. Deactivation waits for speech resources to be
+reaped; a replacement session waits for that retirement.
 
 The hosts exchange versioned allowlisted command frames with separate sequence
 numbers per direction. Ordered bounded chunks carry visible panel updates;

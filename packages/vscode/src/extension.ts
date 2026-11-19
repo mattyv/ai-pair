@@ -55,6 +55,7 @@ import { Calibration } from './calibration';
 import { builtInPassage, type Passage } from './passage';
 import { PanelPlacement, type PanelOwner, type PanelPrepareFailure } from './panel_placement';
 import { WorkspaceSession } from './workspace_session';
+import { CompanionReconnect } from './companion_reconnect';
 import { warnOldExtension } from './old_extension';
 import { StoredSetting, settleWithin, type Settling } from './setting_store';
 
@@ -83,13 +84,12 @@ const SETTINGS_FLUSH_MS = 3000;
 const COMPANION_PREPARE_TIMEOUT_MS = 1500;
 /** Cold extension activation may load the companion bundle before command dispatch. */
 const COMPANION_ACTIVATION_TIMEOUT_MS = 10_000;
-/** Why the workspace dropped its companion connection, as its warning says (#115). */
-const CONNECTION_LOSS: Record<import('@ai-pair/protocol').ChannelLoss, string> = {
-  timeout: 'Local Audio did not answer a message in time',
-  refused: 'Local Audio refused a message',
-  overflow: 'too many messages were waiting for Local Audio',
-  closed: 'the connection was closed',
-};
+/**
+ * The waits before each attempt to reconnect to Local Audio after a lost connection: about 40 seconds in all, longer
+ * than the stalls seen in a remote sandbox, before the programmer is told to reload (#127).
+ */
+// oxlint-disable-next-line no-magic-numbers -- the list is the constant.
+const RECONNECT_DELAYS_MS = [1000, 2000, 5000, 10_000, 20_000];
 
 /** The latest speech state, without narration text or audio bytes. */
 export interface SpeechObservation {
@@ -226,7 +226,8 @@ export function activate(context: vscode.ExtensionContext): Api {
   let modelGeneration = 0;
   let cloudVoiceInvalidated = false;
   let panel: NarrationPanel;
-  const connectionEpoch = randomUUID();
+  /** The current connection to Local Audio; a reconnect makes a new one (#127). */
+  let connectionEpoch: string = randomUUID();
   let selectedNarration: NarrationPort | undefined;
   let owner: PanelOwner | 'pending' = 'pending';
   /** Where this window's companion stands, once placement has looked for one (#115). */
@@ -1347,78 +1348,112 @@ export function activate(context: vscode.ExtensionContext): Api {
   // getExtension sees only this extension host's extensions: in a remote window, never the companion,
   // which runs in the local one. There it is always looked for, by its command (#115).
   const companion = vscode.extensions.getExtension('mattyv.ai-pair-local-audio');
-  const placement = new PanelPlacement({
-    epoch: connectionEpoch,
-    remote,
-    companionInstalled: companion !== undefined,
-    timeoutMs: COMPANION_PREPARE_TIMEOUT_MS,
-    activationTimeoutMs: COMPANION_ACTIVATION_TIMEOUT_MS,
-    activate:
-      companion === undefined && !remote
-        ? undefined
-        : async () => {
-            const started = Date.now();
-            try {
-              return await vscode.commands.executeCommand('aiPair.localAudio.activate');
-            } finally {
-              log.info(`Local Audio activation completed in ${Date.now() - started} ms`);
-            }
+  /** The epoch of the last connection whose commit Local Audio acknowledged. */
+  let committedEpoch: string | undefined;
+  /**
+   * Returns the prepare and commit handshake for a connection to Local Audio with `epoch`. The first one looks for the
+   * companion; a reconnect knows it is installed (specs/LocalAudioReconnect.tla, Attempt and Attach; #127). `lost`: what to
+   * do when the connection is lost: reconnect.
+   */
+  function placementFor(epoch: string, reconnecting: boolean, lost: () => void): PanelPlacement {
+    return new PanelPlacement({
+      epoch,
+      remote,
+      companionInstalled: reconnecting || companion !== undefined,
+      timeoutMs: COMPANION_PREPARE_TIMEOUT_MS,
+      activationTimeoutMs: COMPANION_ACTIVATION_TIMEOUT_MS,
+      activate:
+        (companion === undefined && !remote) || reconnecting
+          ? undefined
+          : async () => {
+              const started = Date.now();
+              try {
+                return await vscode.commands.executeCommand('aiPair.localAudio.activate');
+              } finally {
+                log.info(`Local Audio activation completed in ${Date.now() - started} ms`);
+              }
+            },
+      prepare: async () => {
+        const started = Date.now();
+        try {
+          return await vscode.commands.executeCommand('aiPair.localAudio.prepare', { version: LOCAL_AUDIO_VERSION, epoch });
+        } finally {
+          log.info(`Local Audio prepare command completed in ${Date.now() - started} ms`);
+        }
+      },
+      failure: (reason) => {
+        prepareFailure = reason;
+        // A local window without the companion speaks for itself: no companion was looked for.
+        if (companion === undefined && !remote) return;
+        localAudio = { state: 'failed', reason };
+        log.info(`Local Audio preparation failed: ${reason}`);
+      },
+      prepared: (extension) => {
+        localAudio = { state: 'connected', ...extension };
+        log.info(`Local Audio ${extension.version} (build ${extension.build}) prepared`);
+      },
+      beforeCommit: () => {
+        owner = 'companion';
+        if (shuttingDown) throw new Error('Window is closing.');
+      },
+      afterCommit: () => {
+        if (shuttingDown) return;
+        connectionEpoch = epoch;
+        committedEpoch = epoch;
+        workspaceSession = new WorkspaceSession({
+          epoch,
+          panel,
+          send: async (frame) => {
+            const accepted: unknown = await vscode.commands.executeCommand('aiPair.localAudio.frame', frame);
+            if (accepted !== true) throw new Error('Companion frame was not accepted.');
           },
-    prepare: async () => {
-      const started = Date.now();
-      try {
-        return await vscode.commands.executeCommand('aiPair.localAudio.prepare', { version: LOCAL_AUDIO_VERSION, epoch: connectionEpoch });
-      } finally {
-        log.info(`Local Audio prepare command completed in ${Date.now() - started} ms`);
-      }
+          lost: (reason, waiting) => {
+            // Says why, then reconnects; the programmer is told only if every attempt fails (#115, #127).
+            log.warn(`Local Audio connection lost: ${reason}${waiting === undefined ? '' : `, waiting on a ${waiting} frame`}`);
+            lost();
+          },
+          slow: (type, ms) => {
+            log.info(`Local Audio took ${ms} ms to accept a ${type} frame`);
+          },
+          unavailable: () => {
+            void vscode.window.showWarningMessage('A Pair panel update was too large or unavailable; later updates will continue.');
+          },
+        });
+        selectedNarration = workspaceSession.narration;
+        context.subscriptions.push(workspaceSession);
+      },
+      commitFailed: () => {
+        if (!shuttingDown && !reconnecting) {
+          void vscode.window.showWarningMessage('AI Pair could not complete its local audio connection. Reload the window to reconnect.');
+        }
+      },
+      commit: (prepared) => Promise.resolve(vscode.commands.executeCommand('aiPair.localAudio.commit', prepared)),
+    });
+  }
+  // specs/LocalAudioReconnect.tla: a lost connection is retried with new epochs before the programmer is told (#127).
+  const reconnect = new CompanionReconnect({
+    delaysMs: RECONNECT_DELAYS_MS,
+    newEpoch: () => randomUUID(),
+    attempt: async (epoch) => {
+      const chosen = await placementFor(epoch, /* reconnecting= */ true, () => {
+        reconnect.start();
+      }).choose();
+      return chosen === 'companion' && committedEpoch === epoch;
     },
-    failure: (reason) => {
-      prepareFailure = reason;
-      // A local window without the companion speaks for itself: no companion was looked for.
-      if (companion === undefined && !remote) return;
-      localAudio = { state: 'failed', reason };
-      log.info(`Local Audio preparation failed: ${reason}`);
+    connected: (attempts) => {
+      log.info(`Local Audio reconnected after ${attempts} attempt${attempts === 1 ? '' : 's'}`);
+      panel.showLocalAudio(localAudio);
     },
-    prepared: (extension) => {
-      localAudio = { state: 'connected', ...extension };
-      log.info(`Local Audio ${extension.version} (build ${extension.build}) prepared`);
+    failed: () => {
+      log.warn('Local Audio did not reconnect');
+      void vscode.window.showWarningMessage(
+        'AI Pair lost its local audio connection and could not reconnect. Reload the window to reconnect.',
+      );
     },
-    beforeCommit: () => {
-      owner = 'companion';
-      if (shuttingDown) throw new Error('Window is closing.');
-    },
-    afterCommit: () => {
-      if (shuttingDown) return;
-      workspaceSession = new WorkspaceSession({
-        epoch: connectionEpoch,
-        panel,
-        send: async (frame) => {
-          const accepted: unknown = await vscode.commands.executeCommand('aiPair.localAudio.frame', frame);
-          if (accepted !== true) throw new Error('Companion frame was not accepted.');
-        },
-        lost: (reason, waiting) => {
-          // Says which side gave up, and why: the companion reports its own loss separately (#115).
-          log.warn(`Local Audio connection lost: ${reason}${waiting === undefined ? '' : `, waiting on a ${waiting} frame`}`);
-          void vscode.window.showWarningMessage(
-            `AI Pair lost its local audio connection: ${CONNECTION_LOSS[reason]}. Reload the window to reconnect.`,
-          );
-        },
-        slow: (type, ms) => {
-          log.info(`Local Audio took ${ms} ms to accept a ${type} frame`);
-        },
-        unavailable: () => {
-          void vscode.window.showWarningMessage('A Pair panel update was too large or unavailable; later updates will continue.');
-        },
-      });
-      selectedNarration = workspaceSession.narration;
-      context.subscriptions.push(workspaceSession);
-    },
-    commitFailed: () => {
-      if (!shuttingDown) {
-        void vscode.window.showWarningMessage('AI Pair could not complete its local audio connection. Reload the window to reconnect.');
-      }
-    },
-    commit: (prepared) => Promise.resolve(vscode.commands.executeCommand('aiPair.localAudio.commit', prepared)),
+  });
+  context.subscriptions.push(reconnect);
+  const placement = placementFor(connectionEpoch, /* reconnecting= */ false, () => {
+    reconnect.start();
   });
   // specs/SpeechLifecycle.tla, Reap: replacement ownership waits for prior resource exit.
   ownerReady = previousRetirement

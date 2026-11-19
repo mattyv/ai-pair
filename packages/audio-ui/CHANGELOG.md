@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.48.4
+
+-   Let a reconnecting window replace this companion's connection: the old
+    session retires, and the new one takes over the open Pair view, which the
+    companion now keeps one provider for (#127). A lost connection is no longer
+    announced here; AI Pair reconnects, and warns only if it cannot.
+
 ## 0.48.3
 
 -   Version aligned with AI Pair, whose replies no longer reach a waiting

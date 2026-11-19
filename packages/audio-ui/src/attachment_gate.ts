@@ -7,12 +7,16 @@ export interface AttachmentGateOptions {
   extension: ExtensionIdentity;
   timeoutMs: number;
   register: () => void;
+  /** Retires the current attachment's session, for a new connection that replaces it (#127). */
+  retire: () => void;
 }
 
 /** Allows one provider registration only after a current preparation is committed. */
 export class AttachmentGate {
   private pending?: LocalAudioPrepared;
   private attached = false;
+  /** The epoch of the current attachment, once committed. */
+  private attachedEpoch?: string;
   private closed = false;
   private timer?: ReturnType<typeof setTimeout>;
 
@@ -21,7 +25,13 @@ export class AttachmentGate {
   /** Prepares an expiring token without registering a panel provider. */
   prepare(value: unknown): LocalAudioPrepared | undefined {
     const parsed = localAudioPrepare.safeParse(value);
-    if (!parsed.success || this.closed || this.attached || this.pending !== undefined) return undefined;
+    if (!parsed.success || this.closed || this.pending !== undefined) return undefined;
+    if (this.attached) {
+      if (parsed.data.epoch === this.attachedEpoch) return undefined;
+      // specs/LocalAudioReconnect.tla, Attach: a new epoch replaces the attachment, which retires first (SingleProvider).
+      this.attached = false;
+      this.options.retire();
+    }
     const prepared = localAudioPrepared.safeParse({ ...parsed.data, token: this.options.token(), extension: this.options.extension });
     if (!prepared.success) return undefined;
     this.pending = prepared.data;
@@ -39,6 +49,7 @@ export class AttachmentGate {
     if (parsed.data.epoch !== this.pending.epoch || parsed.data.token !== this.pending.token) return false;
     // specs/PanelPlacement.tla, Commit: a failed registration does not permit another owner.
     this.attached = true;
+    this.attachedEpoch = parsed.data.epoch;
     this.pending = undefined;
     clearTimeout(this.timer);
     this.options.register();

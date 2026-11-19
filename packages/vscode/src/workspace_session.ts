@@ -8,9 +8,10 @@ import { SPEECH_TEMPO_TIMEOUT_MS } from './speech_tempo_client';
 const HEARTBEAT_MS = 3000;
 /**
  * Maximum time to wait for one command acknowledgement. A remote window's extension host can stall for
- * seconds while another extension works; 3 s dropped a sandbox's connection on a 6.8 s stall (#115).
+ * seconds while another extension works: 3 s dropped a sandbox's connection on a 6.8 s stall (#115), and 10 s
+ * on an 11.7 s one (#127). A loss past this bound reconnects rather than ending for good.
  */
-const COMMAND_TIMEOUT_MS = 10_000;
+const COMMAND_TIMEOUT_MS = 30_000;
 /** An acknowledgement this slow is logged, to find what delays the companion (#115). */
 const SLOW_FRAME_MS = 1000;
 /** Maximum queued commands before failing the connection closed. */

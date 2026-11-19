@@ -1015,6 +1015,19 @@ describe('receive', () => {
     expect(vi.mocked(vscode.commands.executeCommand)).toHaveBeenCalledExactlyOnceWith('workbench.action.reloadWindow');
   });
 
+  it('Attach: a released panel ignores its old view, which a replacing panel now owns (#127)', () => {
+    const { panel, controller } = harness();
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(panel.speechPageIsReady()).toBe(true);
+    panel.release();
+    expect(panel.speechPageIsReady()).toBe(false);
+    view.send({ type: 'pause' });
+    expect(controller.pause.mock.calls).toEqual([]);
+    // Releasing again, or with no view, does nothing.
+    panel.release();
+  });
+
   it('ChoiceApplied: sends the saved mode and accepts only valid choices', () => {
     const { panel, codePlayback } = harness();
     const view = open(panel);
