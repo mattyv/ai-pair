@@ -85,13 +85,14 @@ Last updated: unit, 2026-11-19.
 | `packages/audio-ui/test/local_connection.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/native_output.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/packaging.integration.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/reconnect_queue.e2e.test.ts` | TypeScript | test | - | test | - | - | - |
 | `packages/audio-ui/test/sentence_pipeline.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_context_flow.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_host.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_host.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_restart_handshake.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_tempo_composed.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/audio-ui/test/view_slot.test.ts` | TypeScript | test | - | - | - | - | - |
+| `packages/audio-ui/test/view_slot.test.ts` | TypeScript | test | - | test | - | - | - |
 | `packages/audio-ui/test/worker_diagnostics.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/core/src/bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/config.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
@@ -154,14 +155,14 @@ Last updated: unit, 2026-11-19.
 | `packages/protocol/test/index.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/protocol/test/keybindings.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/protocol/test/local_audio.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/protocol/test/local_audio_status.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/protocol/test/local_audio_status.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/protocol/test/local_diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/openrouter.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/panel_action.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/panel_chunks.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/panel_update.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/paths.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/protocol/test/speech_accents.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/protocol/test/speech_accents.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/protocol/test/speech_decode.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/wire.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/src/guide.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.6% B 88.9% F 100.0% | - | - | - | - |
@@ -322,7 +323,7 @@ Last updated: unit, 2026-11-19.
 | `packages/vscode/test/attention_composed.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/calibration.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/command_approval_composed.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/companion_reconnect.test.ts` | TypeScript | test | - | - | - | - | - |
+| `packages/vscode/test/companion_reconnect.test.ts` | TypeScript | test | - | test | - | - | - |
 | `packages/vscode/test/css.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -353,7 +354,7 @@ Last updated: unit, 2026-11-19.
 | `packages/vscode/test/integration_guided_diagnostics.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_invalid_calibration.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_legacy_speech_paths.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_message_receipt.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/integration_message_receipt.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/integration_model_status.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_no_workspace.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_notification.ts` | TypeScript | test | test | test | - | - | test |
@@ -368,10 +369,10 @@ Last updated: unit, 2026-11-19.
 | `packages/vscode/test/integration_release_extension_owner_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_release_extension_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_render_diagnostic.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_reply_report.ts` | TypeScript | test | - | - | - | - | - |
+| `packages/vscode/test/integration_reply_report.ts` | TypeScript | test | - | test | - | - | - |
 | `packages/vscode/test/integration_restricted_runtime.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_runtime_identity.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_setting_roundtrip.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/integration_setting_roundtrip.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/integration_shortcuts.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/integration_speech_coverage_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_speech_reminder.ts` | TypeScript | test | test | test | - | - | test |
@@ -397,13 +398,13 @@ Last updated: unit, 2026-11-19.
 | `packages/vscode/test/python_diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/remote_narration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/session_speech_cost.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/setting_store.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/setting_store.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/setup.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/shortcut_labels.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/shortcut_watcher.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/shortcuts_manifest.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/smoke_integration.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/speech_accent_manifest.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_accent_manifest.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/speech_audio.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_cached_assets.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_catalog.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -520,7 +521,7 @@ Last updated: unit, 2026-11-19.
 | `packages/vscode/test/visual/chat_order.spec.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/visual/panel.spec.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/voice_indicator.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/voice_language.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/voice_language.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/webview/approval_sound.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/webview/panel.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/workspace_panel_bridge.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -647,12 +648,12 @@ Last updated: unit, 2026-11-19.
 | `specs/LocalAudioOwnership.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/LocalAudioOwnership.tla` | TLA+ | - | - | 14 of 14 actions | - | - | - |
 | `specs/LocalAudioReconnect.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/LocalAudioReconnect.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
+| `specs/LocalAudioReconnect.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
 | `specs/LocalPanelReplay.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/LocalPanelReplay.tla` | TLA+ | - | - | 7 of 7 actions | - | - | - |
 | `specs/LocalPanelReplay_Delivery.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/MessageReceipt.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/MessageReceipt.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
+| `specs/MessageReceipt.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
 | `specs/ModelStatus.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ModelStatus.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/MultipartAudioLease.cfg` | TLC config | - | - | - | - | - | - |
@@ -735,9 +736,9 @@ Last updated: unit, 2026-11-19.
 | `specs/RemoteCue.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/RemoteCue.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
 | `specs/ReplayBatching.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/ReplayBatching.tla` | TLA+ | - | - | 1 of 1 actions | - | - | - |
+| `specs/ReplayBatching.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/ReplyReport.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/ReplyReport.tla` | TLA+ | - | - | 4 of 5 actions (never: ResumeAfter) | - | - | - |
+| `specs/ReplyReport.tla` | TLA+ | - | - | 5 of 6 actions (never: ResumeAfter) | - | - | - |
 | `specs/Resume.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Resume.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/RevealCursor.cfg` | TLC config | - | - | - | - | - | - |
@@ -758,7 +759,7 @@ Last updated: unit, 2026-11-19.
 | `specs/SessionSpeechCost.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SessionSpeechCost.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/SettingRoundTrip.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/SettingRoundTrip.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
+| `specs/SettingRoundTrip.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/SettingsAccess.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SettingsAccess.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/ShellIdentity.cfg` | TLC config | - | - | - | - | - | - |
@@ -770,13 +771,13 @@ Last updated: unit, 2026-11-19.
 | `specs/SpeechBackendHandoff.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechBackendHandoff.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/SpeechContext.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/SpeechContext.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
+| `specs/SpeechContext.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
 | `specs/SpeechCue.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/SpeechCue.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/SpeechCue.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/SpeechLifecycle.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechLifecycle.tla` | TLA+ | - | - | 5 of 6 actions (never: StaleCallback) | - | - | - |
 | `specs/SpeechLookahead.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/SpeechLookahead.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/SpeechLookahead.tla` | TLA+ | - | - | 19 of 19 actions | - | - | - |
 | `specs/SpeechOverlap.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechOverlap.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/SpeechOverlap_Continue.cfg` | TLC config | - | - | - | - | - | - |
@@ -824,7 +825,7 @@ Last updated: unit, 2026-11-19.
 | `specs/VoiceIndicator.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/VoiceIndicator.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/VoiceLanguage.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/VoiceLanguage.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/VoiceLanguage.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/WarmSynthesisWorker.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/WarmSynthesisWorker.tla` | TLA+ | - | - | 16 of 16 actions | - | - | - |
 | `specs/WarmSynthesisWorker_Cancellation.cfg` | TLC config | - | - | - | - | - | - |

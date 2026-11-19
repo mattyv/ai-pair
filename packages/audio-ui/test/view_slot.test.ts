@@ -9,7 +9,7 @@ function panel(): SlotPanel & { resolveWebviewView: ReturnType<typeof vi.fn>; re
 }
 
 describe('the companion view slot (#127)', () => {
-  it('SingleProvider: gives the open view to the panel attached, and to each panel that replaces it', () => {
+  it('CompanionCommit: gives the open view to the panel attached, and to each panel that replaces it', () => {
     const slot = new ViewSlot();
     const first = panel();
     slot.attach(first);
@@ -30,6 +30,26 @@ describe('the companion view slot (#127)', () => {
     const first = panel();
     slot.attach(first);
     expect(first.resolveWebviewView).toHaveBeenCalledExactlyOnceWith(view);
+  });
+
+  it('NoDeadView: forgets a view the programmer closed, and hands the next panel the one opened after it (#127 review)', () => {
+    const slot = new ViewSlot();
+    const closed = mock<vscode.WebviewView>();
+    slot.resolveWebviewView(closed);
+    const [closeView] = closed.onDidDispose.mock.lastCall ?? [];
+    if (closeView === undefined) throw new Error('The slot did not watch its view.');
+    const reopened = mock<vscode.WebviewView>();
+    slot.resolveWebviewView(reopened);
+    // The earlier view's disposal, arriving late, leaves the newer one alone.
+    closeView();
+    const first = panel();
+    slot.attach(first);
+    expect(first.resolveWebviewView).toHaveBeenCalledExactlyOnceWith(reopened);
+    const [closeReopened] = reopened.onDidDispose.mock.lastCall ?? [];
+    closeReopened?.();
+    const second = panel();
+    slot.attach(second);
+    expect(second.resolveWebviewView).not.toHaveBeenCalled();
   });
 
   it('lets go of a detached panel, and ignores one that is no longer current', () => {

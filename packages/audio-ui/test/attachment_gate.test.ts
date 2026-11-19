@@ -101,7 +101,7 @@ describe('companion attachment gate', () => {
     ).toBe(false);
   });
 
-  it('Attach, SingleProvider: a prepare for a new epoch retires the attachment first, then registers once committed (#127)', () => {
+  it('CompanionCommit, SingleSession: a prepare for a new epoch retires the attachment first, then registers once committed (#127)', () => {
     vi.useFakeTimers();
     const register = vi.fn<() => void>();
     const retire = vi.fn<() => void>();

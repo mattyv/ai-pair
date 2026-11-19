@@ -10,7 +10,7 @@ export interface SlotPanel {
  * The companion's one Pair view provider, kept for as long as the companion runs, which hands the view to the current
  * session's panel (#127). VS Code does not give a view already open to a provider registered later, so a session that
  * replaces another after a reconnect takes the open view from this slot instead of registering a provider of its own
- * (specs/LocalAudioReconnect.tla, Attach and SingleProvider).
+ * (specs/LocalAudioReconnect.tla, CompanionCommit and RetireDone).
  */
 export class ViewSlot implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
@@ -19,6 +19,10 @@ export class ViewSlot implements vscode.WebviewViewProvider {
   /** Keeps the view VS Code resolves, and gives it to the current panel. */
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
+    // specs/LocalAudioReconnect.tla, CloseView: a closed view is forgotten, never handed to the next session (NoDeadView).
+    view.onDidDispose(() => {
+      if (this.view === view) this.view = undefined;
+    });
     this.current?.resolveWebviewView(view);
   }
 

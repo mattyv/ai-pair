@@ -226,7 +226,7 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
     },
   });
   // The companion's one view provider gives this panel the open view; a session that replaces this one after a
-  // reconnect takes it over (specs/LocalAudioReconnect.tla, Attach; #127).
+  // reconnect takes it over (specs/LocalAudioReconnect.tla, CompanionCommit; #127).
   slot.attach(panel);
   const attached = panel;
   // The page runs here, so its tooltips name this machine's shortcuts (#94). VS Code's User folder holds globalStorage.

@@ -28,7 +28,7 @@ export class AttachmentGate {
     if (!parsed.success || this.closed || this.pending !== undefined) return undefined;
     if (this.attached) {
       if (parsed.data.epoch === this.attachedEpoch) return undefined;
-      // specs/LocalAudioReconnect.tla, Attach: a new epoch replaces the attachment, which retires first (SingleProvider).
+      // specs/LocalAudioReconnect.tla, CompanionCommit: a new epoch replaces the attachment, which retires first (SingleSession).
       this.attached = false;
       this.options.retire();
     }

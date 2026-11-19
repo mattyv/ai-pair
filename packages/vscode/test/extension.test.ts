@@ -2542,7 +2542,7 @@ it('routes companion controls, keys, frame acknowledgements and connection notic
   expect(fakes.infos.some((message) => message.includes('too large'))).toBe(true);
 });
 
-it('LossSettles, Attach: a lost connection reconnects with a new epoch and no warning (#127)', async () => {
+it('LossSettles, WorkspaceAck: a lost connection reconnects with a new epoch and no warning (#127)', async () => {
   fakes.companionAvailable = true;
   const h = activated();
   await h.api.ready;
@@ -2602,7 +2602,10 @@ it('NoNeedlessWarning: warns to reload only once every reconnect attempt has fai
     expect(fakes.infos).toContain('AI Pair lost its local audio connection and could not reconnect. Reload the window to reconnect.');
     expect(fakes.infos.some((message) => message.includes('could not complete'))).toBe(false);
     expect(fakes.logged).toContainEqual(['warn', 'Local Audio did not reconnect']);
-    expect(h.panel.showLocalAudio).toHaveBeenCalled();
+    // Pair Settings no longer says connected, though the first attempt's prepare succeeded (#127 review).
+    expect(h.panel.showLocalAudio).toHaveBeenLastCalledWith({ state: 'failed', reason: 'timeout' });
+    // Each attempt waits as long as an acknowledgement: its commit waits on the old session's retirement.
+    expect(fakes.placementOptions?.timeoutMs).toBe(30_000);
   } finally {
     vi.useRealTimers();
   }

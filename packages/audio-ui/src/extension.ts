@@ -21,6 +21,10 @@ let retiring: Promise<void> | undefined;
 export function activate(context: vscode.ExtensionContext): void {
   if (closeActive !== undefined) void closeActive().catch(() => {});
   let session: CompanionSession | undefined;
+  /** The epoch of the running session. */
+  let sessionEpoch: string | undefined;
+  /** The epoch whose session is to start once retirement settles: the latest commit's (#127 review). */
+  let wanted: string | undefined;
   let commitEpoch = '';
   let closing: Promise<void> | undefined;
   let registration: Promise<void> | undefined;
@@ -52,15 +56,17 @@ export function activate(context: vscode.ExtensionContext): void {
       webviewOptions: { retainContextWhenHidden: true },
     });
     session = createCompanionSession(context, epoch, slot);
+    sessionEpoch = epoch;
   }
   /**
    * Retires the current session, provider included, for a new connection that replaces it; the next session starts once
-   * this one has (specs/LocalAudioReconnect.tla, Attach; #127). Unlike close(), the extension keeps running.
+   * this one has (specs/LocalAudioReconnect.tla, CompanionCommit; #127). Unlike close(), the extension keeps running.
    */
   function retireSession(): void {
     if (session === undefined) return;
     const retired = Promise.resolve(session.dispose());
     session = undefined;
+    sessionEpoch = undefined;
     registration = undefined;
     retiring = retired;
     // No session starts, so none is retired again, before this retirement settles. One that fails keeps refusing new
@@ -79,11 +85,14 @@ export function activate(context: vscode.ExtensionContext): void {
     retire: retireSession,
     register: () => {
       const epoch = commitEpoch;
+      wanted = epoch;
       if (retiring === undefined) {
         start(epoch);
       } else {
+        // specs/LocalAudioReconnect.tla, RetireDone: of the commits waiting on retirement, only the latest starts
+        // (SingleSession); one the workspace gave up on and replaced does not.
         registration = retiring.then(() => {
-          start(epoch);
+          if (wanted === epoch) start(epoch);
         });
       }
     },
@@ -113,8 +122,10 @@ export function activate(context: vscode.ExtensionContext): void {
       commitEpoch = parsed.data.epoch;
       if (!gate.commit(parsed.data)) return false;
       if (registration === undefined) return true;
+      const epoch = parsed.data.epoch;
+      // specs/LocalAudioReconnect.tla, WorkspaceAck: true only once this epoch's own session runs (ConnectedIsLive).
       return registration.then(
-        () => !stopped && session !== undefined,
+        () => !stopped && sessionEpoch === epoch,
         () => false,
       );
     }),

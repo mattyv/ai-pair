@@ -9,6 +9,9 @@
     keeping the session and the panel, and tells you to reload only if every
     attempt fails. The bounds are longer too: 30 seconds for an answer, and 60
     for the companion's lease, after an 11.7-second stall passed the old 10.
+    Each reconnect attempt waits up to 30 seconds, since it waits on the old
+    companion session to shut down, and Pair Settings shows the connection as
+    failed once AI Pair gives up.
 
 ## 0.48.3
 

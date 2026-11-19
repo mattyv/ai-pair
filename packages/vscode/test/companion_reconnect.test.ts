@@ -33,7 +33,7 @@ function harness(answers: boolean[]): {
 }
 
 describe('reconnecting to Local Audio (#127)', () => {
-  it('Attempt, Attach: retries after each delay with a new epoch, and stops once one connects', async () => {
+  it('Attempt, WorkspaceAck: retries after each delay with a new epoch, and stops once one connects', async () => {
     const h = harness([false, true]);
     h.reconnect.start();
     await vi.advanceTimersByTimeAsync(99);

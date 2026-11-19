@@ -5,7 +5,10 @@
 -   Let a reconnecting window replace this companion's connection: the old
     session retires, and the new one takes over the open Pair view, which the
     companion now keeps one provider for (#127). A lost connection is no longer
-    announced here; AI Pair reconnects, and warns only if it cannot.
+    announced here; AI Pair reconnects, and warns only if it cannot. Of
+    several reconnect attempts that arrive while the old session shuts down,
+    only the latest starts a session, and a Pair view you closed meanwhile is
+    never handed to it.
 
 ## 0.48.3
 

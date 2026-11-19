@@ -330,7 +330,7 @@ it('keeps the accepted epoch when a later invalid commit arrives before startup'
   await deactivate();
 });
 
-it('Attach, SingleProvider: retires the session for a replacing connection, and starts the next once it has (#127)', async () => {
+it('CompanionCommit, RetireDone, SingleSession: retires the session for a replacing connection, and starts the next once it has (#127)', async () => {
   const retired = Promise.withResolvers<void>();
   fake.session.dispose.mockReturnValueOnce(retired.promise);
   activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
@@ -357,7 +357,37 @@ it('Attach, SingleProvider: retires the session for a replacing connection, and 
   await deactivate();
 });
 
-it('SingleProvider: a session that cannot retire for a replacing connection keeps the next one from starting (#127)', async () => {
+it('SingleSession, ConnectedIsLive: of the commits waiting on a retirement, only the latest starts, and only it is acknowledged (#127 review)', async () => {
+  const retired = Promise.withResolvers<void>();
+  fake.session.dispose.mockReturnValueOnce(retired.promise);
+  fake.commit.mockImplementation(() => {
+    fake.register?.();
+    return true;
+  });
+  activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
+  /** Commits `epoch` through the companion's command, as the workspace does. */
+  function commit(epoch: string): unknown {
+    return fake.commands.get('aiPair.localAudio.commit')?.({
+      version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+      epoch,
+      token: 'token',
+      extension: { version: 'test', build: 'test-build' },
+    });
+  }
+  expect(commit('first')).toBe(true);
+  fake.retire?.();
+  // The workspace gives up on the second while the first retires, and commits a third.
+  const second = commit('second');
+  const third = commit('third');
+  retired.resolve();
+  expect(await third).toBe(true);
+  expect(await second).toBe(false);
+  expect(vi.mocked(createCompanionSession).mock.calls.map((call) => call[1])).toEqual(['first', 'third']);
+  fake.commit.mockReset();
+  await deactivate();
+});
+
+it('SingleSession: a session that cannot retire for a replacing connection keeps the next one from starting (#127)', async () => {
   // A fresh module, so the failed retirement it keeps cannot reach the tests after this one.
   vi.resetModules();
   const fresh = await import('../src/extension');

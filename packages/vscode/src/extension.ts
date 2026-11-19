@@ -82,6 +82,11 @@ const CALIBRATION_PASSAGE = 'calibrationPassage';
 const SETTINGS_FLUSH_MS = 3000;
 /** Maximum wait for companion preparation before choosing a fallback. */
 const COMPANION_PREPARE_TIMEOUT_MS = 1500;
+/**
+ * How long a reconnect attempt waits for each answer: its commit waits on the old companion session's retirement,
+ * which can outlast the first placement's short wait, so it waits as long as any acknowledgement (#127 review).
+ */
+const RECONNECT_ATTEMPT_TIMEOUT_MS = 30_000;
 /** Cold extension activation may load the companion bundle before command dispatch. */
 const COMPANION_ACTIVATION_TIMEOUT_MS = 10_000;
 /**
@@ -1360,7 +1365,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       epoch,
       remote,
       companionInstalled: reconnecting || companion !== undefined,
-      timeoutMs: COMPANION_PREPARE_TIMEOUT_MS,
+      timeoutMs: reconnecting ? RECONNECT_ATTEMPT_TIMEOUT_MS : COMPANION_PREPARE_TIMEOUT_MS,
       activationTimeoutMs: COMPANION_ACTIVATION_TIMEOUT_MS,
       activate:
         (companion === undefined && !remote) || reconnecting
@@ -1446,6 +1451,9 @@ export function activate(context: vscode.ExtensionContext): Api {
     },
     failed: () => {
       log.warn('Local Audio did not reconnect');
+      // An attempt's prepare may have marked it connected before its commit failed.
+      localAudio = { state: 'failed', reason: 'timeout' };
+      panel.showLocalAudio(localAudio);
       void vscode.window.showWarningMessage(
         'AI Pair lost its local audio connection and could not reconnect. Reload the window to reconnect.',
       );
