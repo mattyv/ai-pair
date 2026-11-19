@@ -453,6 +453,10 @@ the Rainbow Passage for the calibration"):
     was discarded, what the programmer said or did. Their words take priority
     over your plan. Reuse unplayed actions only if they still make sense.
     Acknowledge briefly and continue.
+-   **Answer a message before anything else.** A report that carries what the
+    programmer said, in a message or with the turn, is answered in your next
+    `step`: reply with a `say`, or do what they asked. Never call `listen`
+    first; they are waiting on you, and nothing comes until you answer.
 -   **When a message comes with code the programmer had selected,** it's about
     that code. Answer about it, `point` at it while you explain, and change it
     if that's what they asked.

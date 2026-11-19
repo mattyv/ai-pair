@@ -276,5 +276,14 @@ export function renderReport(report: Report, tool: ReportingTool): string {
   } else if (report.turn === 'programmer' && !ended) {
     sections.push("It's the programmer's turn: you're the navigator. Only `say` and `point` work, and `listen` follows along.");
   }
+  // #128: the guide reaches the agent once, at `start`; this rule travels with each message, last, so it is read last.
+  const said = report.events.some(
+    (e) => e.kind === 'message' || (e.kind === 'turn' && e.to === 'agent' && (e.message !== undefined || e.selection !== undefined)),
+  );
+  if (said && !ended) {
+    sections.push(
+      'Answer what the programmer said first: in your next `step`, reply with a `say` or do what they asked. Do not call `listen` before you have.',
+    );
+  }
   return sections.length > 0 ? sections.join('\n\n') : 'Nothing to report.';
 }

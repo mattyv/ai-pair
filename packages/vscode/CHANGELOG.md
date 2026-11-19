@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.48.5
+
+-   Tell the agent to answer your message before anything else (#128). A
+    report that carries what you said now ends with a reminder to reply, or do
+    what you asked, in its next step, and the pairing guide says never to
+    `listen` first: an agent sometimes went back to waiting instead.
+
 ## 0.48.4
 
 -   Reconnect to AI Pair Local Audio by itself when a remote window loses the

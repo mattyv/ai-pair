@@ -150,6 +150,20 @@ describe('reports', () => {
     expect(missing).toMatch(/\(end of file, with no newline after the last line\)$/);
   });
 
+  it('tells the agent to answer a message before it listens, and only when the programmer said something (#128)', () => {
+    const answer = 'Answer what the programmer said first';
+    const said = renderReport(
+      report({ events: [{ kind: 'message', text: 'Yeah, draft it' }], batches: [{ id: 6, status: 'discarded' }] }),
+      'step',
+    );
+    expect(said).toContain(answer);
+    expect(said.lastIndexOf(answer)).toBeGreaterThan(said.indexOf('Batch 6'));
+    expect(renderReport(report({ events: [{ kind: 'turn', to: 'agent', message: 'Over to you' }] }), 'listen')).toContain(answer);
+    expect(renderReport(report({ events: [{ kind: 'turn', to: 'agent' }] }), 'listen')).not.toContain(answer);
+    expect(renderReport(report({ events: [{ kind: 'turn', to: 'programmer' }] }), 'listen')).not.toContain(answer);
+    expect(renderReport(report({ events: [{ kind: 'message', text: 'bye' }, { kind: 'end' }] }), 'listen')).not.toContain(answer);
+  });
+
   it('shows gaps in long code', () => {
     const lines = [1, 2, 58, 59].map((number) => ({ number, text: `line ${number}` }));
     const text = renderReport(report({ batches: [{ id: 1, status: 'completed', code: { file: 'a.ts', lines } }] }), 'step');
