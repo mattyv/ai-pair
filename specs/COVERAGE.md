@@ -245,6 +245,7 @@ Code goes without a spec for one of these reasons:
 | `timings.ts` | `setTimings` | Glue: the extension's delays, one set for tests |
 | `panel_placement.ts` | panel prepare, commit and fallback, looking again for a companion registered late | `PanelPlacement` |
 | `panel_html.ts` | `panelHtml`, `settingSpeed` | Format |
+| `panel_update_sender.ts` | `replayBatches`, `transmit` | `ReplayBatching` (`SendBatch`); chunk framing: `LocalPanelReplay` |
 | `webview/panel.css` | all | Look |
 | `panel_messages.ts` | | Types |
 

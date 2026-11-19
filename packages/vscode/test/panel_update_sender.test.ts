@@ -34,8 +34,52 @@ describe('panel update sender wiring', () => {
         ],
       }),
     ).toBe(true);
-    expect(fake.split.mock.calls).toHaveLength(2);
-    expect(send.mock.calls.map(([frame]) => frame.sequence)).toEqual([1, 2]);
+    // SendBatch, Packed: consecutive small events share one message (#118).
+    expect(fake.split.mock.calls.map(([update]) => update)).toEqual([
+      {
+        type: 'replay',
+        events: [
+          { type: 'say', text: 'one' },
+          { type: 'say', text: 'two' },
+        ],
+      },
+    ]);
+    expect(send.mock.calls.map(([frame]) => frame.sequence)).toEqual([1]);
+  });
+
+  it('SessionAlone, Bounded, Ordered: sends session events and oversized events alone, and splits a run at the bound (#118)', async () => {
+    const send = vi.fn<(_: LocalAudioFrame) => Promise<boolean>>().mockResolvedValue(true);
+    const sender = new PanelUpdateSender({ epoch: 'epoch', page: () => 1, nextSequence: () => 1, send, unavailable: vi.fn<() => void>() });
+    // The batch bound is 64 chunks of 16,384 units.
+    const half = 'x'.repeat(600_000);
+    const over = 'y'.repeat(1_100_000);
+    const events = [
+      { type: 'say', text: 'a' },
+      { type: 'session', active: true, task: 'T' },
+      { type: 'say', text: 'b' },
+      { type: 'say', text: 'c' },
+      { type: 'say', text: over },
+      { type: 'say', text: half },
+      { type: 'say', text: half },
+      { type: 'say', text: 'd' },
+    ] as const;
+    expect(await sender.post({ type: 'replay', events })).toBe(true);
+    expect(fake.split.mock.calls.map(([update]) => update)).toEqual([
+      { type: 'replay', events: [events[0]] },
+      { type: 'replay', events: [events[1]] },
+      { type: 'replay', events: [events[2], events[3]] },
+      { type: 'replay', events: [events[4]] },
+      { type: 'replay', events: [events[5]] },
+      { type: 'replay', events: [events[6], events[7]] },
+    ]);
+    fake.split.mockClear();
+    const edges = [
+      { type: 'session', active: true },
+      { type: 'say', text: 'e' },
+      { type: 'session', active: false, reason: 'agent' },
+    ] as const;
+    expect(await sender.post({ type: 'replay', events: edges })).toBe(true);
+    expect(fake.split.mock.calls.map(([update]) => update)).toEqual(edges.map((event) => ({ type: 'replay', events: [event] })));
   });
 
   it('rejects invalid or unready updates and surfaces unavailable transfers once', async () => {

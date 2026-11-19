@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.48.1
+
+-   In a remote window, the panel's history no longer fills in slowly after a
+    restart: it is sent to AI Pair Local Audio in a few ordered batches instead
+    of one entry per round trip through VS Code's remote link, which cost up to
+    400 round trips for a long session (#118).
+
 ## 0.48.0
 
 -   Show which of your messages the agent has received: a reply in the panel's
