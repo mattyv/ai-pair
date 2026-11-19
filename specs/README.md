@@ -3262,7 +3262,7 @@ Mutations checked with TLC: an invalid display state violates `TypeOK`;
 reporting verified for a missing model violates `VerifiedIsInstalled`; removing
 fairness for the check violates `StatusProgress`.
 
-## Reply reports
+### `ReplyReport`: what a waiting agent is told about a reply
 
 `ReplyReport.tla` checks what an agent waiting in `listen` is told when the
 programmer sends a reply (#125). A reply records the message and ends every
