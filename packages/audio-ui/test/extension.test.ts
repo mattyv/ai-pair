@@ -362,14 +362,24 @@ it('SingleProvider: a session that cannot retire for a replacing connection keep
   vi.resetModules();
   const fresh = await import('../src/extension');
   const freshSession = await import('../src/companion_session');
-  fake.session.dispose.mockReturnValueOnce(Promise.reject(new Error('private')));
+  // Rejected only when called, so the companion handles it rather than leaving it unhandled.
+  fake.session.dispose.mockImplementationOnce(() => Promise.reject(new Error('private')));
   fresh.activate(mock<vscode.ExtensionContext>({ subscriptions: [] }));
   fake.register?.();
   expect(vi.mocked(freshSession.createCompanionSession)).toHaveBeenCalledOnce();
   fake.retire?.();
-  fake.register?.();
-  await Promise.resolve();
-  await Promise.resolve();
+  // The replacing connection's commit registers through the command, which refuses it while retirement has failed.
+  fake.commit.mockImplementationOnce(() => {
+    fake.register?.();
+    return true;
+  });
+  const committed = await fake.commands.get('aiPair.localAudio.commit')?.({
+    version: LOCAL_AUDIO_VERSION as typeof LOCAL_AUDIO_VERSION,
+    epoch: 'replacing',
+    token: 'token',
+    extension: { version: 'test', build: 'test-build' },
+  });
+  expect(committed).toBe(false);
   expect(vi.mocked(freshSession.createCompanionSession)).toHaveBeenCalledOnce();
   expect(await fake.commands.get('aiPair.localAudio.activate')?.(undefined)).toBe(false);
 });
