@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.48.5
+
+- Version kept in step with AI Pair 0.48.5; no change to the companion.
+
 ## 0.48.4
 
 -   Let a reconnecting window replace this companion's connection: the old

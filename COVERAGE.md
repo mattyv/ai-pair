@@ -85,14 +85,14 @@ Last updated: unit, 2026-11-19.
 | `packages/audio-ui/test/local_connection.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/native_output.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/packaging.integration.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/audio-ui/test/reconnect_queue.e2e.test.ts` | TypeScript | test | - | test | - | - | - |
+| `packages/audio-ui/test/reconnect_queue.e2e.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/audio-ui/test/sentence_pipeline.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_context_flow.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_host.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_host.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_restart_handshake.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_tempo_composed.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/audio-ui/test/view_slot.test.ts` | TypeScript | test | - | test | - | - | - |
+| `packages/audio-ui/test/view_slot.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/audio-ui/test/worker_diagnostics.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/core/src/bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/config.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
@@ -323,7 +323,7 @@ Last updated: unit, 2026-11-19.
 | `packages/vscode/test/attention_composed.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/calibration.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/command_approval_composed.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/companion_reconnect.test.ts` | TypeScript | test | - | test | - | - | - |
+| `packages/vscode/test/companion_reconnect.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/css.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -369,7 +369,7 @@ Last updated: unit, 2026-11-19.
 | `packages/vscode/test/integration_release_extension_owner_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_release_extension_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_render_diagnostic.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_reply_report.ts` | TypeScript | test | - | test | - | - | - |
+| `packages/vscode/test/integration_reply_report.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/integration_restricted_runtime.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_runtime_identity.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_setting_roundtrip.ts` | TypeScript | test | - | test | - | - | test |
