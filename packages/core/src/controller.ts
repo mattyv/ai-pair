@@ -706,9 +706,10 @@ export class Controller {
 
   /**
    * Records a message from the programmer. `selection`: code they had selected, sent along with it. To an active or a suspended session
-   * (specs/Resume.tla, `SendMessage`); the next report takes it to the agent (`Report`).
+   * (specs/Resume.tla, `SendMessage`); the next report takes it to the agent (`Report`). `resume`: a reply from the panel, which
+   * ends every pause; they end before a waiting agent is answered, so its report does not say playback is paused (#125).
    */
-  userMessage(text: string, selection?: SharedSelection, defer = false): void {
+  userMessage(text: string, selection?: SharedSelection, defer = false, { resume = false }: { resume?: boolean } = {}): void {
     const session = this.activeSession();
     if (!session) return;
     const attentionGranted = this.attention === 'granted';
@@ -727,6 +728,8 @@ export class Controller {
       session.events.push(event);
       this.interrupt(session);
     }
+    // specs/ReplyReport.tla, SendReply: the pauses end before update() answers a waiting listen (NoPausedReply).
+    if (resume) this.resume(undefined, { reveal: false });
     this.update();
   }
 
@@ -842,7 +845,11 @@ export class Controller {
     this.update();
   }
 
-  handBack(message?: string, selection?: SharedSelection): void {
+  /**
+   * Hands the turn back to the agent, with what the programmer said, if anything. `resume`: the handback ends every pause,
+   * before a waiting agent is answered, so its report does not say playback is paused (#125).
+   */
+  handBack(message?: string, selection?: SharedSelection, { resume = false }: { resume?: boolean } = {}): void {
     const session = this.activeSession();
     if (!session || session.scene.turn === 'agent') return;
     session.scene.turn = 'agent';
@@ -867,6 +874,8 @@ export class Controller {
     });
     // specs/Turns.tla and specs/Rehearsal.tla: plain handback preserves navigator work.
     if (message !== undefined || selection !== undefined) this.interrupt(session);
+    // specs/ReplyReport.tla, SendReply: the pauses end before update() answers a waiting listen (NoPausedReply).
+    if (resume) this.resume();
     this.update();
   }
 

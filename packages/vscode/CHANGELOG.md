@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.48.3
+
+-   A reply you send while the agent waits now reaches it without a false
+    "Playback is paused" note (#125). Typing in the reply box pauses playback,
+    and the agent was answered with your message a moment before the reply
+    ended that pause, so it waited for you to resume until its next `listen`
+    timed out. The reply now ends every pause first; handing the turn back
+    with a message does the same.
+
 ## 0.48.2
 
 -   Keep panel settings you change, such as chat order and code display, when

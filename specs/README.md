@@ -100,6 +100,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `Timeline.cfg` | `MaxSleeps = 3` sleeps, holds, and a second sleep while one is pending | holds | 864 |
 | `PlaybackPreference.cfg` | three modes and two independent pace settings | holds | 36 |
 | `DeferredMessage.cfg` | one action, deferred reply and urgent stop | holds | 8 |
+| `ReplyReport.cfg` | up to three replies, with pauses, listens and reports between them | holds | 49 |
 | `MessageReceipt.cfg` | two messages, two put-back reports, one disconnect, reloads | holds | 348 |
 | `ReplayBatching.cfg` | every sequence of four events of four kinds, bound three | holds | 1,233 |
 | `SettingRoundTrip.cfg` | two values, up to three changes, failures, page loads and reloads | holds | 84 |
@@ -3260,6 +3261,29 @@ reports the result of a check, not a continuously watched guarantee.
 Mutations checked with TLC: an invalid display state violates `TypeOK`;
 reporting verified for a missing model violates `VerifiedIsInstalled`; removing
 fairness for the check violates `StatusProgress`.
+
+### `ReplyReport`: what a waiting agent is told about a reply
+
+`ReplyReport.tla` checks what an agent waiting in `listen` is told when the
+programmer sends a reply (#125). A reply records the message and ends every
+pause (`Draft.tla`, `ResumeAll`), and a waiting agent is answered at once, so
+its report must be built from what holds once the reply is done. `SendReply`
+ends the pauses before the report is built; `Listen` answers a later `listen`
+with the pause as it stands, which may be a new one. TLC checked up to three
+replies with pauses, listens and taken reports: 49 distinct states, safety
+and liveness holding, with fair `Listen` and `Take`.
+
+`ResumeAfter` never fires in the checked configuration, because `GuardOrder`
+is true: it is the old design's second step, which ended the pauses only after
+a waiting agent had been answered, so the report said playback was paused and
+the agent waited for nothing. Setting `GuardOrder` false violates
+`NoPausedReply`; removing the fairness of `Listen` violates `ReplyReaches`.
+
+| Property | Code test |
+|---|---|
+| `NoPausedReply` | `controller.test.ts`: NoPausedReply: a reply sent during a reply, away or programmer pause answers the listening agent with no pause; NoPausedReply: a handback with a message answers the listening agent with no pause; `panel.test.ts`: NoPausedReply: a reply asks the controller to end the pauses itself, before a waiting agent is answered (#125); `integration_reply_report.ts` |
+| `ReplyReaches` | `controller.test.ts`: keeps the pause for a message recorded without resuming, as a deferred send or a test does; `integration_reply_report.ts` |
+| `TypeOK` | `controller.test.ts`: NoPausedReply cases |
 
 ## Deferred messages
 
