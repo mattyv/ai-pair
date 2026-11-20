@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.49.0
+
+- Version aligned with AI Pair's experimental worker build (#134).
+
 ## 0.48.3
 
 -   Version aligned with AI Pair, whose replies no longer reach a waiting

@@ -131,6 +131,10 @@ function renderBatch(batch: BatchResult): string {
 
 function renderEvent(event: Event): string {
   switch (event.kind) {
+    case 'worker_notice':
+      return `Background worker ${event.notice}: ${event.text}`;
+    case 'worker_complete':
+      return `Background worker completed: ${event.text}`;
     case 'message':
       return `The programmer said:\n${quote(event.text)}${event.selection ? `\n${renderExcerpt(event.selection)}` : ''}`;
     case 'edit':

@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: css, 2026-11-19.
+Last updated: css, 2026-11-20.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -159,6 +159,7 @@ Last updated: css, 2026-11-19.
 | `packages/protocol/test/panel_chunks.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/panel_update.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/paths.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/protocol/test/schemas.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/protocol/test/speech_accents.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/protocol/test/speech_decode.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/wire.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -308,7 +309,7 @@ Last updated: css, 2026-11-19.
 | `packages/vscode/src/voice_indicator.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/voice_language.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/approval_sound.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 169 of 169 rules matched |
+| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 172 of 172 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/speech_audio.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/speech_decode.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -364,6 +365,7 @@ Last updated: css, 2026-11-19.
 | `packages/vscode/test/integration_release_extension_owner_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_release_extension_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_render_diagnostic.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_reply_report.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/integration_restricted_runtime.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_runtime_identity.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_setting_roundtrip.ts` | TypeScript | test | - | - | - | - | test |
@@ -373,6 +375,7 @@ Last updated: css, 2026-11-19.
 | `packages/vscode/test/integration_startup_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_terminal_cleanup.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_vscode_coverage_paths.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_worker.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/integration_workspace_incompatible.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/launcher.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/navigator_editor.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -557,6 +560,8 @@ Last updated: css, 2026-11-19.
 | `specs/AttentionCache.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/AudioOutput.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/AudioOutput.tla` | TLA+ | - | - | 12 of 12 actions | - | - | - |
+| `specs/BackgroundWorker.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/BackgroundWorker.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/BatchFile.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/BatchFile.tla` | TLA+ | - | - | 4 of 4 actions | - | - | - |
 | `specs/Bridge.cfg` | TLC config | - | - | - | - | - | - |
@@ -826,6 +831,14 @@ Last updated: css, 2026-11-19.
 | `specs/WarmSynthesisWorker_Watchdog.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Wire.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Wire.tla` | TLA+ | - | - | 15 of 15 actions | - | - | - |
+| `specs/WorkerActivity.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/WorkerActivity.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/WorkerAttachment.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/WorkerAttachment.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/WorkerDriver.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/WorkerDriver.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/WorkerNotice.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/WorkerNotice.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/check.sh` | Shell | - | - | - | - | L 100.0% (59 of 59) | - |
 | `specs/run_configs.sh` | Shell | - | - | - | - | L 100.0% (40 of 40) | - |
 | `vitest.config.ts` | TypeScript | - | - | - | - | - | - |

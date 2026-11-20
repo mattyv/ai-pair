@@ -66,6 +66,24 @@ body {
   height: 100%;
 }
 
+/* Worker views */
+
+.worker-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 6px 14px;
+}
+
+.worker-view {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px;
+}
+
+button[hidden] {
+  display: none;
+}
+
 /* Buttons */
 
 button {
@@ -667,7 +685,7 @@ button:focus-visible {
 
 /* The history. entry() in webview/panel.ts gives each entry the class entry and its kind. */
 
-.history {
+.history:not([hidden]) {
   color: var(--muted);
   display: flex;
   flex: 1;

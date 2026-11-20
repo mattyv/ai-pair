@@ -23,7 +23,23 @@ const EMPTY_REPORT: Report = REPORT_SCHEMA.parse({ batches: [], events: [], turn
 const FILE: FileContent = FILE_CONTENT_SCHEMA.parse({ file: 'a.ts', dirty: false, lines: [{ number: 1, text: 'x' }] });
 
 /** The tools the server registers, in order. */
-const TOOL_NAMES = ['start', 'step', 'listen', 'end', 'read', 'calibrate', 'diagnostics'] as const;
+const TOOL_NAMES = [
+  'start',
+  'step',
+  'listen',
+  'end',
+  'read',
+  'calibrate',
+  'worker_grant',
+  'worker_say',
+  'worker_read',
+  'worker_step',
+  'worker_status',
+  'worker_notice',
+  'worker_progress',
+  'worker_done',
+  'diagnostics',
+] as const;
 
 /** The fakes the mocked modules hand out, made before the `vi.mock` factories run. */
 const fakes = vi.hoisted(() => {
@@ -74,6 +90,7 @@ const fakes = vi.hoisted(() => {
     /** Every one made, in order. */
     static readonly made: FakeEditorLink[] = [];
     readonly call = vi.fn<EditorLink['call']>();
+    readonly callWorker = vi.fn<EditorLink['callWorker']>();
     readonly locate = vi.fn<EditorLink['locate']>();
     readonly workspace = vi.fn<EditorLink['workspace']>();
     readonly handBack = vi.fn<EditorLink['handBack']>();
@@ -115,6 +132,14 @@ vi.mock('../src/tools', () => ({
     end: 'end schema',
     read: 'read schema',
     calibrate: 'calibrate schema',
+    worker_grant: 'worker_grant schema',
+    worker_say: 'worker_say schema',
+    worker_read: 'worker_read schema',
+    worker_step: 'worker_step schema',
+    worker_status: 'worker_status schema',
+    worker_notice: 'worker_notice schema',
+    worker_progress: 'worker_progress schema',
+    worker_done: 'worker_done schema',
     diagnostics: 'diagnostics schema',
   },
 }));
@@ -487,4 +512,57 @@ describe('serve', () => {
 it('always tells agents that each short say is spoken while leaving playback to the programmer', () => {
   expect(INSTRUCTIONS).toContain('Each short `say` is spoken aloud');
   expect(INSTRUCTIONS).toContain('when the programmer has speech enabled');
+});
+
+describe('worker tools', () => {
+  it('sends worker completion only to its exact port and does not hand back a report', async () => {
+    const { sdk, link } = build();
+    link.callWorker.mockResolvedValueOnce({ ok: true });
+    const result = await call(sdk, 'worker_done', { port: 4567, capability: 'secret', text: 'done' });
+    expect(link.callWorker).toHaveBeenCalledWith(4567, 'worker_done', { capability: 'secret', text: 'done' }, expect.any(AbortSignal));
+    expect(texts(result)).toEqual(['{"ok":true}']);
+    expect(link.handBack).not.toHaveBeenCalled();
+  });
+
+  it('returns a grant only after validating the editor result', async () => {
+    const { sdk, link } = build();
+    link.call.mockResolvedValueOnce({ port: 4567, capability: 'secret' });
+    expect(texts(await call(sdk, 'worker_grant'))).toEqual(['{"port":4567,"capability":"secret"}']);
+    link.call.mockResolvedValueOnce({ port: 0, capability: 'secret' });
+    expect((await call(sdk, 'worker_grant')).isError).toBe(true);
+  });
+});
+
+it.each(['worker_say', 'worker_status'])('does not expose editor errors from %s', async (tool) => {
+  const { sdk, link } = build();
+  link.call.mockRejectedValueOnce(new Error('private information'));
+  const result = await call(sdk, tool, tool === 'worker_say' ? { text: 'hello' } : {});
+  expect(result.isError).toBe(true);
+  expect(texts(result).join()).not.toContain('private information');
+});
+
+it('validates and renders each worker response independently', async () => {
+  const { sdk, link } = build();
+  link.callWorker.mockResolvedValueOnce(FILE);
+  expect(texts(await call(sdk, 'worker_read', { port: 1234, capability: 'secret', file: 'a' }))).toEqual(['the file']);
+  link.callWorker.mockResolvedValueOnce({ id: 3, status: 'completed' });
+  expect(texts(await call(sdk, 'worker_step', { port: 1234, capability: 'secret', actions: [] }))).toEqual([
+    '{"id":3,"status":"completed"}',
+  ]);
+  for (const tool of ['worker_notice', 'worker_progress']) {
+    link.callWorker.mockResolvedValueOnce({ ok: true });
+    expect(texts(await call(sdk, tool, { port: 1234, capability: 'secret', text: 'hi' }))).toEqual(['{"ok":true}']);
+  }
+  link.call.mockResolvedValueOnce({ ok: true });
+  expect(texts(await call(sdk, 'worker_say', { text: 'hi' }))).toEqual(['{"ok":true}']);
+  link.call.mockResolvedValueOnce({ active: true, busy: false });
+  expect(texts(await call(sdk, 'worker_status'))).toEqual(['{"active":true,"busy":false}']);
+});
+
+it.each([new RelayError('no_editor', 'secret'), new Error('secret')])('sanitizes worker call errors', async (error) => {
+  const { sdk, link } = build();
+  link.callWorker.mockRejectedValueOnce(error);
+  const result = await call(sdk, 'worker_done', { port: 1234, capability: 'secret', text: 'hi' });
+  expect(result.isError).toBe(true);
+  expect(texts(result).join()).not.toContain('secret');
 });

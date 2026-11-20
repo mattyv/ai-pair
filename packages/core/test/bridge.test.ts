@@ -202,6 +202,14 @@ function fakeController(): FakeController {
     resolveFile: vi.fn<BridgeController['resolveFile']>((file) => path.join('/project', file)),
     restore: vi.fn<BridgeController['restore']>(),
     disconnect: vi.fn<BridgeController['disconnect']>(),
+    grantWorker: vi.fn(() => 'worker-secret'),
+    workerRead: vi.fn(() => Promise.resolve(FILE_CONTENT)),
+    workerStep: vi.fn(() => Promise.resolve({ id: 1, status: 'completed' as const })),
+    workerDone: vi.fn<BridgeController['workerDone']>(),
+    workerProgress: vi.fn<BridgeController['workerProgress']>(),
+    workerNotice: vi.fn<BridgeController['workerNotice']>(),
+    workerStatus: vi.fn(() => ({ active: true, busy: false })),
+    workerSay: vi.fn(() => Promise.resolve()),
   };
 }
 
@@ -759,4 +767,119 @@ describe('DiagnosticsRequest failure and cancellation', () => {
     expect(controller.start).not.toHaveBeenCalled();
     expect(controller.disconnect).not.toHaveBeenCalled();
   });
+});
+
+describe('background worker routing', () => {
+  it('gives the owner a grant and lets a separate socket complete without becoming owner', async () => {
+    const { server } = await started({ workerModel: () => 'example-model' });
+    const main = await owner(server);
+    const worker = welcomed(server);
+    expect(await call(main, 2, 'worker_grant', { brief: 'Inspect tests' })).toEqual({
+      type: 'result',
+      id: 2,
+      result: { port: fakes.port, capability: 'worker-secret', model: 'example-model' },
+    });
+    expect(await call(worker, 3, 'worker_done', { capability: 'worker-secret', text: 'finished' })).toEqual({
+      type: 'result',
+      id: 3,
+      result: { ok: true },
+    });
+    expect(controller.workerDone).toHaveBeenCalledWith('worker-secret', 'finished');
+    expect(controller.grantWorker).toHaveBeenCalledWith('Inspect tests');
+    expect(await call(worker, 6, 'worker_progress', { capability: 'worker-secret', text: 'Checking' })).toEqual({
+      type: 'result',
+      id: 6,
+      result: { ok: true },
+    });
+    expect(controller.workerProgress).toHaveBeenCalledWith('worker-secret', 'Checking');
+    expect(await call(worker, 7, 'worker_notice', { capability: 'worker-secret', notice: 'question', text: 'Which?' })).toMatchObject({
+      type: 'result',
+      result: { ok: true },
+    });
+    expect(controller.workerNotice).toHaveBeenCalledWith('worker-secret', 'question', 'Which?');
+    expect(await call(main, 8, 'worker_status')).toMatchObject({ type: 'result', result: { active: true, busy: false } });
+    expect(await call(worker, 4, 'listen')).toMatchObject({ type: 'error', code: 'no_session' });
+    expect(await call(main, 5, 'listen')).toMatchObject({ type: 'result', result: REPORT });
+  });
+
+  it('rejects a non-owner grant and malformed worker actions', async () => {
+    const { server } = await started();
+    await owner(server);
+    const worker = welcomed(server);
+    expect(await call(worker, 2, 'worker_grant')).toMatchObject({ type: 'error', code: 'no_session' });
+    expect(await call(worker, 3, 'worker_step', { capability: 'secret', actions: [{ unknown: true }] })).toMatchObject({
+      type: 'error',
+      code: 'invalid_arguments',
+    });
+    expect(controller.workerStep).not.toHaveBeenCalled();
+  });
+});
+
+describe('worker request boundary', () => {
+  it.each([
+    ['missing capability', 'worker_read', { file: 'a.ts' }],
+    ['empty capability', 'worker_read', { capability: '', file: 'a.ts' }],
+    ['long capability', 'worker_read', { capability: 'x'.repeat(257), file: 'a.ts' }],
+    ['missing file', 'worker_read', { capability: 'secret' }],
+    ['empty file', 'worker_read', { capability: 'secret', file: '' }],
+    ['long file', 'worker_read', { capability: 'secret', file: 'x'.repeat(4097) }],
+    ['fractional start', 'worker_read', { capability: 'secret', file: 'a', from_line: 1.5 }],
+    ['zero start', 'worker_read', { capability: 'secret', file: 'a', from_line: 0 }],
+    ['fractional end', 'worker_read', { capability: 'secret', file: 'a', to_line: 1.5 }],
+    ['zero end', 'worker_read', { capability: 'secret', file: 'a', to_line: 0 }],
+    ['missing actions', 'worker_step', { capability: 'secret' }],
+    ['many actions', 'worker_step', { capability: 'secret', actions: Array.from({ length: 101 }, () => ({ say: 'x' })) }],
+    ['large actions', 'worker_step', { capability: 'secret', actions: [{ say: 'x'.repeat(65_537) }] }],
+    ['missing text', 'worker_done', { capability: 'secret' }],
+    ['empty text', 'worker_done', { capability: 'secret', text: '' }],
+    ['large text', 'worker_done', { capability: 'secret', text: 'x'.repeat(16_385) }],
+    ['invalid notice', 'worker_notice', { capability: 'secret', notice: 'unknown', text: 'question' }],
+  ])('rejects %s', async (label, tool, args) => {
+    const { server } = await started();
+    const worker = welcomed(server);
+    expect(await call(worker, 1, tool, args), label).toMatchObject({ type: 'error', code: 'invalid_arguments' });
+  });
+
+  it('passes valid line bounds and blocker notices to the controller', async () => {
+    const { server } = await started();
+    const worker = welcomed(server);
+    expect(await call(worker, 1, 'worker_read', { capability: 'secret', file: 'a', from_line: 1, to_line: 2 })).toMatchObject({
+      type: 'result',
+    });
+    expect(controller.workerRead).toHaveBeenCalledWith('secret', 'a', 1, 2);
+    expect(await call(worker, 2, 'worker_notice', { capability: 'secret', notice: 'blocked', text: 'Need input' })).toMatchObject({
+      type: 'result',
+    });
+    expect(controller.workerNotice).toHaveBeenCalledWith('secret', 'blocked', 'Need input');
+  });
+
+  it.each([
+    ['invalid brief type', { brief: 5 }, undefined],
+    ['oversized brief', { brief: 'x'.repeat(16_385) }, undefined],
+    ['blank model', {}, ' '],
+    ['oversized model', {}, 'x'.repeat(257)],
+  ])('rejects %s before issuing a grant', async (label, args, model) => {
+    const { server } = await started({ workerModel: () => model });
+    const main = await owner(server);
+    expect(await call(main, 2, 'worker_grant', args), label).toMatchObject({ type: 'error', code: 'invalid_arguments' });
+    expect(controller.grantWorker).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, '', 'x'.repeat(16_385)])('rejects invalid owner narration', async (text) => {
+    const { server } = await started();
+    const main = await owner(server);
+    expect(await call(main, 2, 'worker_say', { text })).toMatchObject({ type: 'error', code: 'invalid_arguments' });
+  });
+});
+
+it('forwards valid worker actions and owner narration without a configured model', async () => {
+  const { server } = await started();
+  const main = await owner(server);
+  const worker = welcomed(server);
+  expect(await call(main, 2, 'worker_grant')).toMatchObject({ type: 'result', result: { port: fakes.port, capability: 'worker-secret' } });
+  expect(await call(main, 3, 'worker_say', { text: 'Working.' })).toMatchObject({ type: 'result', result: { ok: true } });
+  expect(await call(worker, 4, 'worker_step', { capability: 'secret', actions: [{ move: { file: 'a', line: 1 } }] })).toMatchObject({
+    type: 'result',
+  });
+  expect(controller.workerStep).toHaveBeenCalledWith('secret', [{ move: { file: 'a', line: 1 } }], expect.any(AbortSignal));
 });

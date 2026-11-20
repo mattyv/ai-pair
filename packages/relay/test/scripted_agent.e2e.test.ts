@@ -13,6 +13,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { CURSOR_MARKER } from '@ai-pair/protocol';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { Bridge, Controller, type NarrationPort } from '@ai-pair/core';
 import { FakeEditor, FakePanel, testConfig } from '../../core/test/fake';
@@ -27,7 +28,7 @@ afterEach(async () => {
 });
 
 /** Builds a real MCP-to-websocket path with a deterministic in-memory editor. */
-async function setup(seed: number, narration?: NarrationPort) {
+async function setup(seed: number, narration?: NarrationPort, workerEnabled = false) {
   const trace: string[] = [];
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-pair-script-'));
   const editor = new FakeEditor();
@@ -41,6 +42,7 @@ async function setup(seed: number, narration?: NarrationPort) {
       timing: { ...testConfig.timing, reading: { msPerChar: 0, minMs: 1 }, beforeMoveMs: 1 },
     },
     narration,
+    { workerEnabled: () => workerEnabled },
   );
   editor.controller = controller;
   const bridge = new Bridge(controller, {
@@ -464,5 +466,114 @@ describe('scripted agent flows', () => {
     h.controller.userMessage('new session');
     expect(await h.call(next, 'listen')).toContain('new session');
     await h.call(next, 'end');
+  });
+});
+
+describe('background worker composed flow', () => {
+  it('routes a granted worker to the same editor and wakes the pending owner once', async () => {
+    const h = await setup(801, undefined, true);
+    const main = await h.connect();
+    const worker = await h.connect();
+    await h.call(main, 'start');
+    const granted = await main.callTool({ name: 'worker_grant', arguments: {} });
+    expect(granted.isError).not.toBe(true);
+    expect(Array.isArray(granted.content)).toBe(true);
+    if (!Array.isArray(granted.content)) throw new Error('Missing grant');
+    const content: unknown = granted.content[0];
+    if (typeof content !== 'object' || content === null || !('text' in content) || typeof content.text !== 'string') {
+      throw new Error('Missing grant text');
+    }
+    const grant: unknown = JSON.parse(content.text);
+    const { WORKER_GRANT_SCHEMA } = await import('@ai-pair/protocol');
+    const credentials = WORKER_GRANT_SCHEMA.parse(grant);
+    const read = await h.call(worker, 'worker_read', { ...credentials, file: 'a.ts' });
+    expect(read).toContain('a.ts');
+    await h.call(main, 'worker_say', { text: 'The worker will add a line.' });
+    await h.call(worker, 'worker_progress', { ...credentials, text: 'Reading the file.' });
+    expect(h.panel.events).toContainEqual(
+      expect.objectContaining({ type: 'workerActivity', phase: 'progress', text: 'Reading the file.' }),
+    );
+    const step = await h.call(worker, 'worker_step', {
+      ...credentials,
+      actions: [{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `hello${CURSOR_MARKER}` }],
+    });
+    expect(step).toContain('completed');
+    expect(h.editor.files.get(h.editor.resolvePath('src/a.ts'))).toBe('hello');
+    expect(h.panel.says()).toContain('The worker will add a line.');
+    const status = await h.call(main, 'worker_status');
+    expect(status).toContain('active');
+    expect(status).not.toContain(credentials.capability);
+    const question = h.call(main, 'listen');
+    await h.waitFor('owner listening for question', () => h.trace.some((line) => line.includes('call') && line.endsWith('listen')));
+    await h.call(worker, 'worker_notice', { ...credentials, notice: 'question', text: 'Which name?' });
+    expect(await question).toContain('Which name?');
+    const pending = h.call(main, 'listen');
+    await h.waitFor('owner listening', () => h.trace.filter((line) => line.includes('call') && line.endsWith('listen')).length >= 2);
+    await h.call(worker, 'worker_done', { ...credentials, text: 'worker finished' });
+    expect(await pending).toContain('worker finished');
+    const replay = await worker.callTool({ name: 'worker_done', arguments: { ...credentials, text: 'duplicate' } });
+    expect(replay.isError).toBe(true);
+    const next = h.call(main, 'listen');
+    await h.waitFor('second owner listen', () => h.trace.filter((line) => line.includes('call') && line.endsWith('listen')).length >= 3);
+    h.controller.userMessage('continue');
+    const report = await next;
+    expect(report).toContain('continue');
+    expect(report).not.toContain('worker finished');
+  });
+
+  it('revokes a worker when the programmer interrupts held playback', async () => {
+    const h = await setup(802, undefined, true);
+    const main = await h.connect();
+    const worker = await h.connect();
+    await h.call(main, 'start');
+    const grant = await main.callTool({ name: 'worker_grant', arguments: {} });
+    if (!Array.isArray(grant.content)) throw new Error('Missing grant');
+    const content: unknown = grant.content[0];
+    if (typeof content !== 'object' || content === null || !('text' in content) || typeof content.text !== 'string') {
+      throw new Error('Missing grant text');
+    }
+    const { WORKER_GRANT_SCHEMA } = await import('@ai-pair/protocol');
+    const credentials = WORKER_GRANT_SCHEMA.parse(JSON.parse(content.text) as unknown);
+    await h.call(worker, 'worker_read', { ...credentials, file: 'a.ts' });
+    await h.call(main, 'worker_say', { text: 'The worker is editing.' });
+    h.controller.pause();
+    const step = worker.callTool({
+      name: 'worker_step',
+      arguments: {
+        ...credentials,
+        actions: [{ move: { file: 'a.ts', line: 1, to: 'line_end' } }, { type: `held${CURSOR_MARKER}` }],
+      },
+    });
+    await h.waitFor('worker step received', () => h.trace.some((line) => line.includes('call') && line.endsWith('worker_step')));
+    h.controller.userInterrupt();
+    const result = await deadline(step, 2000, 802, h.trace);
+    expect(JSON.stringify(result)).toContain('discarded');
+    expect(h.editor.files.get(h.editor.resolvePath('src/a.ts'))).toBe('');
+    const done = await worker.callTool({ name: 'worker_done', arguments: { ...credentials, text: 'stale' } });
+    expect(done.isError).toBe(true);
+  });
+
+  it('holds a worker command for programmer approval before executing', async () => {
+    const h = await setup(803, undefined, true);
+    const main = await h.connect();
+    const worker = await h.connect();
+    await h.call(main, 'start');
+    const grant = await main.callTool({ name: 'worker_grant', arguments: {} });
+    if (!Array.isArray(grant.content)) throw new Error('Missing grant');
+    const content: unknown = grant.content[0];
+    if (typeof content !== 'object' || content === null || !('text' in content) || typeof content.text !== 'string') {
+      throw new Error('Missing grant text');
+    }
+    const { WORKER_GRANT_SCHEMA } = await import('@ai-pair/protocol');
+    const credentials = WORKER_GRANT_SCHEMA.parse(JSON.parse(content.text) as unknown);
+    h.editor.commandScript.set('echo worker', { ms: 1, exitCode: 0, output: 'worker output' });
+    const step = h.call(worker, 'worker_step', { ...credentials, actions: [{ run: 'echo worker' }] });
+    await h.waitFor('worker command confirmation', () => h.panel.events.some((event) => event.type === 'run' && event.phase === 'confirm'));
+    const confirmation = h.panel.events.find((event) => event.type === 'run' && event.phase === 'confirm');
+    if (confirmation?.type !== 'run') throw new Error('Missing command confirmation');
+    expect(h.editor.commands).toHaveLength(0);
+    h.controller.decideRun(confirmation.id, true, 'once');
+    expect(await step).toContain('worker output');
+    expect(h.editor.commands).toHaveLength(1);
   });
 });

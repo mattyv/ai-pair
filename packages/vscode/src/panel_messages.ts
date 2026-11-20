@@ -19,10 +19,15 @@ export type SpeechAction = 'pause' | 'resume' | 'stop';
 /** The order of the panel history. */
 export type ChatOrder = 'newestFirst' | 'oldestFirst';
 
+/** Visibility of worker events in the Pair conversation. */
+export type WorkerVisibility = 'milestones' | 'everything' | 'off';
+
 /** Messages from the page. */
 export type FromPanel =
   | SpeechDecodeFromPage
   | { type: 'ready' }
+  | { type: 'cancelWorker' }
+  | { type: 'workerVisibility'; value: WorkerVisibility }
   | { type: 'copyDiagnostics' }
   | { type: 'reconnectLocalAudio' }
   | { type: 'speechOutputRefresh' }
@@ -109,6 +114,8 @@ export type ToPanel =
   | { type: 'replyBehavior'; value: 'interrupt' | 'finishAction' }
   | { type: 'navigatorCommentary'; value: NavigatorCommentary }
   | { type: 'chatOrder'; value: ChatOrder }
+  | { type: 'workerVisibility'; value: WorkerVisibility }
+  | { type: 'workerActive'; id?: number }
   | { type: 'showTerminals'; value: boolean }
   | { type: 'commandApprovalSound'; value: boolean }
   | { type: 'commandApprovals'; all: boolean; count: number; confirmationRequired: boolean }

@@ -7,6 +7,13 @@ import type { AddressInfo } from 'node:net';
 import * as path from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
+  ACTION_SCHEMA,
+  WORKER_ACTION_LIMIT,
+  WORKER_ACTION_SIZE_LIMIT,
+  WORKER_CAPABILITY_LIMIT,
+  WORKER_PATH_LIMIT,
+  WORKER_MODEL_LIMIT,
+  WORKER_TEXT_LIMIT,
   DIAGNOSTIC_SNAPSHOT_SCHEMA,
   parseRelayMessage,
   PROTOCOL_VERSION,
@@ -30,6 +37,8 @@ export interface BridgeOptions {
   workspaceFolders: () => string[];
   /** Identifies the extension and its shipped relay. */
   runtime: NonNullable<Discovery['runtime']>;
+  /** The configured worker model, if one was selected. */
+  workerModel?: () => string | undefined;
   /** Called with a line for each frame sent or received, for diagnosing deliveries (#27). */
   trace?: (line: string) => void;
   /** Receives allowlisted owner-connection and request lifecycle facts. */
@@ -63,7 +72,25 @@ function diagnosticMethod(tool: string): DiagnosticMethod {
 /** What a bridge calls on the controller: the pair tools, and whether a session runs. */
 export type BridgeController = Pick<
   Controller,
-  'isActive' | 'isSuspended' | 'start' | 'step' | 'listen' | 'end' | 'read' | 'calibrate' | 'resolveFile' | 'restore' | 'disconnect'
+  | 'isActive'
+  | 'isSuspended'
+  | 'start'
+  | 'step'
+  | 'listen'
+  | 'end'
+  | 'read'
+  | 'calibrate'
+  | 'resolveFile'
+  | 'restore'
+  | 'disconnect'
+  | 'grantWorker'
+  | 'workerRead'
+  | 'workerStep'
+  | 'workerDone'
+  | 'workerProgress'
+  | 'workerNotice'
+  | 'workerStatus'
+  | 'workerSay'
 >;
 
 /** Returns what a report says, for `trace`: its batches, events, and flags; nothing for a result that is no report. */
@@ -339,10 +366,80 @@ export class Bridge {
       this.diagnostic({ kind: 'connection', state: 'connected', connectionId });
       return report;
     }
+    if (
+      tool === 'worker_read' ||
+      tool === 'worker_step' ||
+      tool === 'worker_done' ||
+      tool === 'worker_progress' ||
+      tool === 'worker_notice'
+    ) {
+      if (typeof args.capability !== 'string' || args.capability.length === 0 || args.capability.length > WORKER_CAPABILITY_LIMIT) {
+        throw new ToolError('invalid_arguments', 'Invalid worker capability.');
+      }
+      if (tool === 'worker_read') {
+        if (
+          typeof args.file !== 'string' ||
+          args.file.length === 0 ||
+          args.file.length > WORKER_PATH_LIMIT ||
+          (args.from_line !== undefined && (!Number.isSafeInteger(args.from_line) || Number(args.from_line) < 1)) ||
+          (args.to_line !== undefined && (!Number.isSafeInteger(args.to_line) || Number(args.to_line) < 1))
+        ) {
+          throw new ToolError('invalid_arguments', 'Invalid file or line.');
+        }
+        return controller.workerRead(args.capability, args.file, optionalNumber(args.from_line), optionalNumber(args.to_line));
+      }
+      if (tool === 'worker_step') {
+        if (
+          !Array.isArray(args.actions) ||
+          args.actions.length > WORKER_ACTION_LIMIT ||
+          JSON.stringify(args.actions).length > WORKER_ACTION_SIZE_LIMIT
+        ) {
+          throw new ToolError('invalid_arguments', 'Invalid actions.');
+        }
+        const actions: Action[] = [];
+        for (const action of args.actions) {
+          const parsed = ACTION_SCHEMA.safeParse(action);
+          if (!parsed.success) throw new ToolError('invalid_arguments', 'Invalid actions.');
+          actions.push(parsed.data);
+        }
+        return controller.workerStep(args.capability, actions, signal);
+      }
+      if (typeof args.text !== 'string' || args.text.length === 0 || args.text.length > WORKER_TEXT_LIMIT) {
+        throw new ToolError('invalid_arguments', 'Invalid text.');
+      }
+      if (tool === 'worker_progress') controller.workerProgress(args.capability, args.text);
+      else if (tool === 'worker_notice') {
+        if (args.notice !== 'question' && args.notice !== 'blocked') throw new ToolError('invalid_arguments', 'Invalid notice.');
+        controller.workerNotice(args.capability, args.notice, args.text);
+      } else controller.workerDone(args.capability, args.text);
+      return { ok: true };
+    }
     if (this.owner !== ws) {
       throw new ToolError('no_session', 'No pairing session is active. Call `start` to begin one.');
     }
     switch (tool) {
+      case 'worker_grant': {
+        if (args.brief !== undefined && (typeof args.brief !== 'string' || args.brief.length > WORKER_TEXT_LIMIT)) {
+          throw new ToolError('invalid_arguments', 'Invalid worker brief.');
+        }
+        const model = this.options.workerModel?.();
+        if (model !== undefined && (model.trim() === '' || model.length > WORKER_MODEL_LIMIT)) {
+          throw new ToolError('invalid_arguments', 'Invalid worker model.');
+        }
+        return {
+          port: this.port,
+          capability: controller.grantWorker(optionalString(args.brief)),
+          ...(model === undefined ? {} : { model }),
+        };
+      }
+      case 'worker_status':
+        return controller.workerStatus();
+      case 'worker_say':
+        if (typeof args.text !== 'string' || args.text.length === 0 || args.text.length > WORKER_TEXT_LIMIT) {
+          throw new ToolError('invalid_arguments', 'Invalid text.');
+        }
+        await controller.workerSay(args.text);
+        return { ok: true };
       case 'step':
         if (!Array.isArray(args.actions)) throw new ToolError('invalid_arguments', '`actions` must be an array.');
         // Each action is checked as it's rehearsed and played; the relay's schema checked them too.

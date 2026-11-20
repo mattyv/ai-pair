@@ -62,6 +62,10 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | Config | Bounds | Result | Distinct states |
 |---|---|---|---|
 | `AttentionCache.cfg` | two settings changes, one pending completion and cancellation | holds | 52 |
+| `BackgroundWorker.cfg` | proposal, two providers, two session generations, one worker per generation | holds | 180 |
+| `WorkerAttachment.cfg` | proposal, two owner attachments, one job and one grant per attachment | holds | 45 |
+| `WorkerDriver.cfg` | proposal, two worker tasks and three physical batch identities | holds | 68 |
+| `WorkerNotice.cfg` | two worker generations, one pending notice, ordinary progress separate | holds | 72 |
 | `Serialize.cfg` | `NumCalls = 2` calls, each empty or not, the session ending, an interrupt, and the socket closing at any point | holds | 3,646 |
 | `Wire.cfg` | `NumSockets = 2` sockets, `NumCalls = 2` calls | holds | 43,426 |
 | `StructuralTyping.cfg` | both operations, closed and opaque field categories, selection and one or two closes | holds | 288 |
@@ -186,6 +190,77 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 
 Each violation TLC found was checked against the code step by step before it was
 reported. The traces are in the issues.
+
+## Background worker proposal (#134)
+
+`BackgroundWorker.tla` models one worker per session across two generations.
+Each session starts with delegation off and can opt in before starting a
+worker. The worker uses the active main agent's provider. A current result
+survives until delivery, arrives once, and wakes a pending `listen`. Weak
+fairness applies to delivering a queued result. The model assumes each worker
+completes once and does not model live setting changes, process retirement,
+transport authentication, or draft playback.
+
+| Property | Mutation | Planned implementation test |
+|---|---|---|
+| `TypeOK` | An initial delivery count of `3` is out of bounds | Nothing yet |
+| `OptIn` | `BypassOptIn = TRUE` allows a worker in a disabled session | Disabled sessions refuse delegation |
+| `SameProvider` | `MatchProvider = FALSE` assigns Codex to a Claude session | Both providers delegate within the active provider |
+| `CurrentQueue` | `CheckGeneration = FALSE` queues a late result for a replaced session | Stale results do not wake the replacement session |
+| `Conservation` | `DropCompletion = TRUE` drops a current completion | Completion survives until the next listen |
+| `AtMostOnce` | `ConsumeResult = FALSE` delivers the result twice | The next listen cannot replay a result |
+| `Wake` | `WakeListen = FALSE` leaves a pending listen waiting indefinitely | Completion wakes an already pending listen |
+
+There are no implementation tests for this proposal yet. A live spike showed
+that a Codex subagent with the Pair tool received `no_session` while the main
+agent was listening. A separate synthetic Codex CLI probe returned lifecycle
+and reply events. It did not produce a command event.
+
+`WorkerAttachment.tla` models publication through a scoped grant. It treats
+tokens as unforgeable and assumes weak fairness of handling a valid attempt
+while its owner stays attached. It tracks admission counts. The result queue
+itself, replay acknowledgements, and edit authority are separate concerns.
+
+| Property | Mutation | Planned implementation test |
+|---|---|---|
+| `TypeOK` | Initialize owner to `3`, outside the two attachments | Nothing yet |
+| `OptIn` | `AllowDisabled = TRUE` issues a grant before opt-in | Disabled sessions refuse grants |
+| `Revoked` | `RevokeGrant = FALSE` keeps the live grant after disconnect | Reattachment invalidates the previous grant |
+| `CorrectGrant` | `CheckToken = FALSE`, with consumption state isolated, admits a mismatched grant | A mismatched job or token cannot publish |
+| `AcceptedMatches` | `CheckToken = FALSE` permits a wrong token or job | Wrong job and wrong token are rejected |
+| `AtMostOnce` | `ConsumeGrant = FALSE` admits a second publication | Retrying a publication queues one result |
+| `OwnerStable` | `KeepOwner = FALSE` transfers ownership on publication | Publishing leaves the main agent in control |
+| `SubmissionHandled` | `HandleSubmission = FALSE` leaves a valid attempt pending | A valid submission reaches the report queue |
+
+`WorkerDriver.tla` models the worker driving visible edits while the main
+agent retains the session. Disabling delegation or interrupting revokes
+worker authority immediately. A batch keeps the playback slot until its own
+retirement arrives. Retirement is weakly fair. The small model assumes
+immediate admission to playback and leaves queued batches, narration,
+command approval, and process retirement to later models and tests.
+
+| Property | Mutation | Planned implementation test |
+|---|---|---|
+| `TypeOK` | Start with `issued` outside the bound | Nothing yet |
+| `Exclusive` | `GuardExclusive = FALSE` allows overlapping playing batches | Only one edit batch can play |
+| `CurrentOnly` | `GuardCurrent = FALSE` admits work without current authority | Stale worker batches cannot start |
+| `DrainBeforeGrant` | `GuardDrain = FALSE` grants before retirement, checking this invariant in isolation | A replacement waits for the interrupted batch to retire |
+| `MainRespectsGrant` | `GuardAuthority = FALSE` allows main edits during a worker grant | The main agent can talk during a grant and cannot start edits |
+| `MatchingRetirement` | `GuardRetire = FALSE` accepts the wrong batch identity | A late completion cannot release a newer batch |
+| `Retirement` | Remove weak fairness of retirement | The slot is released when its interrupted batch settles |
+
+`WorkerNotice.tla` checks the latest pending question or blocker. The newest
+notice replaces the previous one. A current notice wakes a pending main
+`listen` under weak delivery fairness. A session replacement drops stale
+notices. Routine progress stays in the Worker view.
+
+| Property | Mutation | Implementation test |
+|---|---|---|
+| `TypeOK` | Start with an invalid worker generation | Nothing yet |
+| `CurrentNotice` | Allow a stale worker to publish a notice | The previous grant cannot publish into a successor |
+| `NoProgressWake` | Make progress return the listen call | Routine progress stays in the Worker activity lane |
+| `Wake` | Disable notice delivery | A question wakes the owner while a worker batch plays |
+| `Cleared` | Keep the notice pending after delivery | A previously delivered notice is not delivered again |
 
 ## Specs and the code they model
 
@@ -4345,3 +4420,20 @@ Each names the test that proves the code obeys it:
 | `NoPrepareWhilePaused` | `speech_service.test.ts`: NoPrepareWhilePaused: prepares nothing while paused, and prepares once resumed |
 | `LineProgress` | `speech_service.test.ts`: a prepared request that never settles frees the slot at the deadline, and fails a line that took it over |
 | `AheadUsed` | `speech_service.test.ts`: AheadUsed cases; `player.test.ts`, `controller.test.ts`: Hint; `remote_narration.test.ts`, `companion_narration.test.ts`: Hint, Cancel; `integration_cloud_service_paths.ts`: SpeechLookahead: the gap between cloud lines (0 ms with look-ahead, 304 ms without) |
+
+## Worker activity projection (#134)
+
+`WorkerActivity.tla` models worker events retained in the Worker view and
+filtered into Pair, with preference changes, a current-owner snapshot after reload,
+and command confirmation visibility.
+It bounds two IDs and three events, and assumes an ordered event stream. TLC
+checked 222,435 distinct states with no fairness assumptions or liveness claim.
+It does not model log truncation, rendering, transport, or physical worker retirement.
+
+| Property | Mutation | Implementation test |
+|---|---|---|
+| `TypeOK` | Initialize an invalid visibility; TLC rejects the initial state | `worker controls call the controller and validate visibility` |
+| `InlineRecorded` | Suppress the history append; TLC finds a counterexample | `filters inline activity and never restores a live worker from replay` |
+| `ActiveRecorded` | Initialize an active worker without a start; TLC rejects the initial state | `groups activity by worker, shows running state, and requests cancellation` |
+| `ActiveOwned` | Restore a worker without owner evidence; TLC rejects the snapshot | `restores a live worker from a current snapshot, not replay alone` |
+| `ConfirmVisible` | Leave Worker selected on confirmation; TLC rejects the transition | `reveals Pair when a command needs confirmation while Worker is selected` |

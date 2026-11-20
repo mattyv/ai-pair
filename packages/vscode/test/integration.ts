@@ -36,6 +36,7 @@ import { settingRoundTripPaths } from './integration_setting_roundtrip';
 import { replyReportPaths } from './integration_reply_report';
 import { gapPaths } from './integration_gap_paths';
 import { codePlaybackPaths } from './integration_code_playback';
+import { workerPaths } from './integration_worker';
 import { preservedPlaybackPaths } from './integration_preserved_playback';
 import { corePaths } from './integration_core_paths';
 import { playerGapPaths } from './integration_player_gap_paths';
@@ -1603,6 +1604,7 @@ export async function run(): Promise<void> {
   console.log('Set Up Agent: closed, copied, and configured multiple agents in the isolated profile');
 
   // Last, since they change the playback's settings: the player's and the controller's paths (#176).
+  await workerPaths(api, root);
   await codePlaybackPaths(api, root);
   await preservedPlaybackPaths(api, root);
   await playerGapPaths(api, root);

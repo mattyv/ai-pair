@@ -23,6 +23,10 @@ Code goes without a spec for one of these reasons:
 |---|---|
 | `step`, `listen`, `block`, `finishCall`, `callReady`, `ready`, `pump`, `update`, `serialize` | `Serialize`, `Controller`, `NavigatorCommentary` (final projection), `NavigatorFollowup`, `CommandTracking` |
 | `setNavigatorCommentary` | `NavigatorCommentary` |
+| `grantWorker`, `revokeWorker`, `workerStep`, worker playback settlement and main edit admission | `WorkerDriver`; controller unit tests and packaged `integration_worker.ts` |
+| `workerRead`, `workerDone`, worker report delivery | `WorkerAttachment`, `BackgroundWorker`; separate relay links in `scripted_agent.e2e.test.ts` |
+| `workerProgress`, `workerNotice`, worker notice projection and restore | `WorkerNotice`; controller unit tests and scripted relay wake-up |
+| `workerSay` | Existing narration port with worker-grant admission and retirement, covered by controller unit and scripted relay tests |
 | `snapshot`, `restore`, `withCursor`, `end`, `endSession`, `close` | `Controller`; message receipts in `snapshot` and `restore` (`postReceipts`): `MessageReceipt` (`Report`, `RestoreUnseen`, `RestoreRepeat`); `close` terminal cleanup: `QuietTerminals`; `snapshot`'s edit events: `EditEvents`; a held rejection in `restore` and `snapshot`: `Anchor` (`Restore`, `TakeHeld`); command news and origin: `CommandTracking` |
 | `rehearse`, `rejectBatch`, `planned`, `saw`, `read` | `Rehearsal` |
 | `cursorAnchor`, `rejectUnanchored`, `anchorNeeded` in `step` and `snapshot` | `Anchor` |
@@ -67,6 +71,7 @@ Code goes without a spec for one of these reasons:
 | File | Functions | Spec |
 |---|---|---|
 | `bridge.ts` | `start`, `accept`, `dispatch`, `dispose` | `Bridge`; typed diagnostic events: `DiagnosticsPrivacy`; nonowner requests: `DiagnosticsRequest` |
+| | owner grants and nonowner worker requests | `WorkerAttachment`; exact-window bridge and relay tests |
 | | `connections` | Glue: what a test reads |
 | | `writeDiscovery`, `focused`, `file` | `Discovery` |
 | | `tokenMatches` | Pure: compares tokens in constant time |
@@ -93,6 +98,7 @@ Code goes without a spec for one of these reasons:
 | File | Functions | Spec |
 |---|---|---|
 | `link.ts` | `call`, `connect`, `open`, `openWindow`, `handBack`, `close`, `locate` | `Wire` |
+| | `callWorker` | `WorkerAttachment`; separate bounded connection pinned to the grant's editor port |
 | | `findWindows`, `alive` | `Discovery` |
 | | `workspace`, `contains`, `realpath` | Pure |
 | | `EDITOR_DISCONNECTED`, `LINK_CLOSED` | Format |
@@ -165,6 +171,7 @@ Code goes without a spec for one of these reasons:
 | File | Functions | Spec |
 |---|---|---|
 | `panel.ts` | `post`, the `ready` message | `PanelReplay` |
+| `panel.ts`, `webview/panel.ts` | Worker activity, current-worker snapshot and chat visibility | `WorkerActivity`; panel and webview tests |
 | | `history`, `restoreHistory`, `onPost` | `Resume` (`Store`, `ReloadWindow`) |
 | | the `draft` and `reply` messages, `onDidDispose` | `Draft`; the `reply` lifting the pause without a reveal: `PointFocus`; deferred reply: `DeferredMessage` |
 | | mode preference messages | `PlaybackPreference` (`Choose`, `Reload`) |

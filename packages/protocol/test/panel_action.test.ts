@@ -72,3 +72,9 @@ describe('cross-host panel actions', () => {
     }
   });
 });
+
+it('accepts worker cancellation and bounded visibility choices', () => {
+  expect(localPanelAction.safeParse({ type: 'cancelWorker' }).success).toBe(true);
+  expect(localPanelAction.safeParse({ type: 'workerVisibility', value: 'milestones' }).success).toBe(true);
+  expect(localPanelAction.safeParse({ type: 'workerVisibility', value: 'unknown' }).success).toBe(false);
+});

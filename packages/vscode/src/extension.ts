@@ -76,6 +76,7 @@ const CODE_PLAYBACK = 'codePlayback';
 const TIMING = 'timing';
 const AGENT_NAME = 'agentName';
 const CONFIRM_COMMANDS = 'confirmCommands';
+const WORKER_ENABLED = 'worker.enabled';
 const CALIBRATION_PASSAGE = 'calibrationPassage';
 /** How long a reload waits for panel settings still being saved; VS Code allows deactivation about five seconds (#119). */
 const SETTINGS_FLUSH_MS = 3000;
@@ -131,6 +132,12 @@ export interface Api {
 
 function config(): vscode.WorkspaceConfiguration {
   return vscode.workspace.getConfiguration('aiPair');
+}
+
+/** Returns whether the programmer enabled background worker delegation. */
+function workerEnabled(): boolean {
+  const enabled: unknown = config().get(WORKER_ENABLED);
+  return enabled === true;
 }
 
 /** Returns whether `v` is an object, as a setting or stored value is read: JSON nobody has checked. */
@@ -611,6 +618,17 @@ export function activate(context: vscode.ExtensionContext): Api {
       panel.showNavigatorCommentary(navigatorCommentary.get());
     },
   );
+  const workerVisibility = panelSetting(
+    'worker.visibility',
+    'worker visibility',
+    () => {
+      const value: unknown = config().get('worker.visibility');
+      return value === 'everything' || value === 'off' ? value : 'milestones';
+    },
+    () => {
+      panel.showWorkerVisibility(workerVisibility.get());
+    },
+  );
   const chatOrder = panelSetting(
     'chatOrder',
     'chat order',
@@ -709,6 +727,7 @@ export function activate(context: vscode.ExtensionContext): Api {
     context.extensionUri,
     {
       controller: () => controller,
+      workerVisibility,
       calibration: () => calibration,
       starter,
       copyDiagnostics,
@@ -1041,7 +1060,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       selectedNarration?.cancel();
     },
   };
-  controller = new Controller(editor, panel, undefined, narration);
+  controller = new Controller(editor, panel, undefined, narration, { workerEnabled });
   controller.onDiagnostic = record;
   controller.trace = (line) => {
     log.info(line);
@@ -1115,6 +1134,10 @@ export function activate(context: vscode.ExtensionContext): Api {
   };
 
   const bridge = new Bridge(controller, {
+    workerModel: () => {
+      const value: unknown = config().get('worker.model');
+      return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
+    },
     onDiagnostic: record,
     collectDiagnostics: diagnosticSnapshot,
     runtime: { version: AI_PAIR_VERSION, build: AI_PAIR_BUILD_ID, relayHash: AI_PAIR_RELAY_HASH },
@@ -1216,6 +1239,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       for (const [key, setting] of storedSettings) {
         if (e.affectsConfiguration(`aiPair.${key}`)) setting.changed();
       }
+      if (e.affectsConfiguration(`aiPair.${WORKER_ENABLED}`) && !workerEnabled()) controller.revokeWorker();
       if (e.affectsConfiguration('aiPair.speech')) {
         if (!computePending) {
           const mode: unknown = config().get('speech.computeMode');
@@ -1258,6 +1282,7 @@ export function activate(context: vscode.ExtensionContext): Api {
         controller.setNavigatorCommentary(value);
         panel.showNavigatorCommentary(value);
       }
+      if (e.affectsConfiguration('aiPair.worker.visibility')) panel.showWorkerVisibility(workerVisibility.get());
       if (e.affectsConfiguration('aiPair.chatOrder')) panel.showChatOrder(chatOrder.get());
       if (e.affectsConfiguration('aiPair.showTerminalsAutomatically')) panel.showTerminalPreference(terminalSettings.get());
       if (e.affectsConfiguration('aiPair.commandApprovalSound')) panel.showCommandApprovalSound(commandApprovalSound.get());

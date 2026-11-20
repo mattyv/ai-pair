@@ -8,7 +8,7 @@ import { SPEECH_LISTENING_RATES } from '../speech_tempo';
 // styles are in panel_html.ts; the messages in panel_messages.ts.
 
 import type { AgentState, CodePlayback, PanelEvent, Ref } from '@ai-pair/core';
-import type { ChatOrder, FromPanel, SpeechState, ToPanel } from '../panel_messages';
+import type { ChatOrder, FromPanel, SpeechState, ToPanel, WorkerVisibility } from '../panel_messages';
 import { SpeechAudio, decodeWav } from './speech_audio';
 import { ApprovalSound } from './approval_sound';
 import { localSpeechDecoder } from './speech_decode';
@@ -82,6 +82,13 @@ function $<T extends HTMLElement>(name: string, type: abstract new () => T): T {
 
 const ui = {
   band: $('band', HTMLElement),
+  pairTab: $('pair-tab', HTMLButtonElement),
+  workerTab: $('worker-tab', HTMLButtonElement),
+  workerView: $('worker-view', HTMLElement),
+  workerHistory: $('worker-history', HTMLElement),
+  workerRunning: $('worker-running', HTMLElement),
+  workerCancel: $('worker-cancel', HTMLButtonElement),
+  workerVisibility: $('worker-visibility', HTMLSelectElement),
   settings: $('settings', HTMLButtonElement),
   voiceStatus: $('voice-status', HTMLButtonElement),
   settingsDialog: $('settings-dialog', HTMLDialogElement),
@@ -192,6 +199,9 @@ const ui = {
 };
 
 let chatOrder: ChatOrder = 'newestFirst';
+let workerVisibility: WorkerVisibility = 'milestones';
+const workerGroups = new Map<number, HTMLElement>();
+const activeWorkers = new Set<number>();
 let voiceFacts: AudioDiagnostics | undefined;
 let voiceCompute: SpeechComputeState | undefined;
 let voiceTransport = false;
@@ -808,6 +818,8 @@ function setState(e: Extract<PanelEvent, { type: 'state' }>): void {
 function clearRun(): void {
   runId = undefined;
   runConfirming = false;
+  ui.workerTab.disabled = false;
+  ui.workerTab.removeAttribute('title');
   ui.run.classList.remove('on', 'confirm');
   ui.run.removeAttribute('role');
 }
@@ -1530,8 +1542,74 @@ function showSpeechCost(value: SessionSpeechCostView): void {
   if (tipTarget === ui.speechCost) showTip(ui.speechCost);
 }
 
+function showPair(): void {
+  ui.workerView.hidden = true;
+  ui.band.hidden = false;
+  ui.history.hidden = false;
+  ui.pairTab.setAttribute('aria-pressed', 'true');
+  ui.workerTab.setAttribute('aria-pressed', 'false');
+}
+ui.pairTab.addEventListener('click', showPair);
+ui.workerTab.addEventListener('click', () => {
+  ui.workerView.hidden = false;
+  ui.band.hidden = true;
+  ui.history.hidden = true;
+  ui.pairTab.setAttribute('aria-pressed', 'false');
+  ui.workerTab.setAttribute('aria-pressed', 'true');
+});
+ui.workerCancel.addEventListener('click', () => {
+  vscode.postMessage({ type: 'cancelWorker' });
+});
+ui.workerVisibility.addEventListener('change', () => {
+  const value = ui.workerVisibility.value;
+  if (value === 'milestones' || value === 'everything' || value === 'off') {
+    vscode.postMessage({ type: 'workerVisibility', value });
+  }
+});
+
 function handle(message: ToPanel): void {
   switch (message.type) {
+    case 'workerActive':
+      // specs/WorkerActivity.tla, Snapshot: replay cannot establish a live grant.
+      activeWorkers.clear();
+      if (message.id !== undefined) activeWorkers.add(message.id);
+      ui.workerRunning.hidden = activeWorkers.size === 0;
+      ui.workerCancel.hidden = activeWorkers.size === 0;
+      return;
+    case 'workerVisibility':
+      workerVisibility = message.value;
+      ui.workerVisibility.value = message.value;
+      return;
+    case 'workerActivity': {
+      // specs/WorkerActivity.tla, Publish: history is grouped by worker ID.
+      if (!replaying && message.phase === 'started' && !activeWorkers.has(message.id)) {
+        workerGroups.get(message.id)?.remove();
+        workerGroups.delete(message.id);
+      }
+      let group = workerGroups.get(message.id);
+      if (group === undefined) {
+        group = document.createElement('section');
+        const heading = document.createElement('h2');
+        heading.textContent = `Worker ${message.id}`;
+        group.append(heading);
+        workerGroups.set(message.id, group);
+        ui.workerHistory.prepend(group);
+      }
+      const line = document.createElement('p');
+      line.textContent = message.text;
+      group.append(line);
+      if (!replaying && message.phase === 'started') activeWorkers.add(message.id);
+      if (message.phase === 'completed' || message.phase === 'stopped') activeWorkers.delete(message.id);
+      ui.workerRunning.hidden = activeWorkers.size === 0;
+      ui.workerCancel.hidden = activeWorkers.size === 0;
+      if (
+        workerVisibility === 'everything' ||
+        (workerVisibility === 'milestones' && message.phase !== 'editing' && message.phase !== 'progress')
+      ) {
+        add(entry('worker')).textContent = `Worker: ${message.text}`;
+      }
+      return;
+    }
     case 'speechCost':
       showSpeechCost(message.value);
       return;
@@ -1902,6 +1980,13 @@ function handle(message: ToPanel): void {
       ui.starting.hidden = true;
       return;
     case 'session':
+      if (message.active) {
+        workerGroups.clear();
+        activeWorkers.clear();
+        ui.workerHistory.replaceChildren();
+        ui.workerRunning.hidden = true;
+        ui.workerCancel.hidden = true;
+      }
       // specs/Panel.tla, `ChangeSession`: the band is filed and a divider is added.
       if (message.active) {
         // specs/Start.tla, `StartSession`: a session clears the note (NoteUntilSession).
@@ -1986,12 +2071,17 @@ function handle(message: ToPanel): void {
       if (message.phase === 'confirm' || message.phase === 'running') {
         // specs/CommandCue.tla, Handle: replay and repeated IDs never sound.
         if (message.phase === 'confirm') {
+          // specs/WorkerActivity.tla, Confirm: reveal the command decision.
+          showPair();
           const first = !shownApprovals.has(message.id);
           shownApprovals.add(message.id);
           if (first && !replaying && ui.commandApprovalSound.checked) approvalSound.play();
         }
         runId = message.id;
         runConfirming = message.phase === 'confirm';
+        ui.workerTab.disabled = runConfirming;
+        if (runConfirming) ui.workerTab.title = 'Decide the pending command first';
+        else ui.workerTab.removeAttribute('title');
         ui.showTerminal.hidden = runConfirming;
         ui.run.classList.add('on');
         ui.run.classList.toggle('confirm', runConfirming);

@@ -152,7 +152,23 @@ describe('relay', () => {
   it('lists the tools and the prompt, with short instructions', async () => {
     const client = await connect();
     const tools = await client.listTools();
-    expect(tools.tools.map((t) => t.name).toSorted()).toEqual(['calibrate', 'diagnostics', 'end', 'listen', 'read', 'start', 'step']);
+    expect(tools.tools.map((t) => t.name).toSorted()).toEqual([
+      'calibrate',
+      'diagnostics',
+      'end',
+      'listen',
+      'read',
+      'start',
+      'step',
+      'worker_done',
+      'worker_grant',
+      'worker_notice',
+      'worker_progress',
+      'worker_read',
+      'worker_say',
+      'worker_status',
+      'worker_step',
+    ]);
     expect(client.getInstructions()).toContain('`start`');
     const prompt = await client.getPrompt({ name: 'start', arguments: { task: 'add a todos API' } });
     expect(JSON.stringify(prompt.messages)).toContain('The task: add a todos API');

@@ -27,6 +27,13 @@
       </label>
       <p>During your turn, this sets written and spoken commentary on the next returned report; direct requests override it.
         Audio is controlled separately.</p>
+      <label class="settings-field">Worker activity in Pair
+        <select data-ui="worker-visibility">
+          <option value="milestones">Milestones</option>
+          <option value="everything">Everything</option>
+          <option value="off">Off</option>
+        </select>
+      </label>
       <label class="settings-field">Chat order
         <select data-ui="chat-order">
           <option value="newestFirst">Newest first</option>
@@ -209,6 +216,14 @@
       <button type="button" data-ui="settings-close" class="primary">Close</button>
     </div>
   </dialog>
+  <nav class="worker-tabs" aria-label="Panel views">
+    <button type="button" data-ui="pair-tab" aria-pressed="true">Pair</button>
+    <button type="button" data-ui="worker-tab" aria-pressed="false">Worker <span data-ui="worker-running" hidden>Running</span></button>
+  </nav>
+  <section data-ui="worker-view" class="worker-view" aria-label="Worker activity" hidden>
+    <button type="button" data-ui="worker-cancel" hidden>Cancel worker</button>
+    <div data-ui="worker-history"></div>
+  </section>
   <div data-ui="band" class="band">
     <div class="main">
       <div class="head">

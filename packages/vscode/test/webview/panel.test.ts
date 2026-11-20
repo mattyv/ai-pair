@@ -3794,3 +3794,72 @@ describe('shortcuts', () => {
     expect(replyBox().placeholder).toBe(`Reply to the agent${ELLIPSIS}`);
   });
 });
+
+describe('worker activity projection', () => {
+  it('filters inline activity and never restores a live worker from replay', () => {
+    send({ type: 'workerVisibility', value: 'off' });
+    send({ type: 'replay', events: [{ type: 'workerActivity', id: 1, phase: 'started', text: 'Old task' }] });
+    expect(element('worker-running').hidden).toBe(true);
+    expect(text('history')).not.toContain('Old task');
+    send({ type: 'workerVisibility', value: 'everything' });
+    send({ type: 'workerActivity', id: 1, phase: 'started', text: 'New task' });
+    send({ type: 'workerActivity', id: 1, phase: 'progress', text: 'Reading' });
+    expect(text('history')).toContain('Reading');
+    expect(text('worker-history')).not.toContain('Old task');
+    click(element('worker-tab'));
+    expect(element('worker-view').hidden).toBe(false);
+    expect(element('history').hidden).toBe(true);
+    click(element('pair-tab'));
+    expect(element('history').hidden).toBe(false);
+  });
+
+  it('groups activity by worker, shows running state, and requests cancellation', () => {
+    send({ type: 'workerActivity', id: 1, phase: 'started', text: 'Inspect code' });
+    send({ type: 'workerActivity', id: 1, phase: 'progress', text: 'Reading' });
+    expect(text('worker-history')).toContain('Inspect code');
+    expect(text('worker-history')).toContain('Reading');
+    expect(element('worker-running').hidden).toBe(false);
+    click(element('worker-cancel'));
+    expect(posted()).toContainEqual({ type: 'cancelWorker' });
+    send({ type: 'workerActivity', id: 1, phase: 'completed', text: 'Done' });
+    expect(element('worker-running').hidden).toBe(true);
+  });
+});
+
+it('restores a live worker from a current snapshot, not replay alone', () => {
+  send({ type: 'replay', events: [{ type: 'workerActivity', id: 1, phase: 'started', text: 'Working' }] });
+  expect(element('worker-running').hidden).toBe(true);
+  send({ type: 'workerActive', id: 1 });
+  expect(element('worker-running').hidden).toBe(false);
+  expect(element('worker-cancel').hidden).toBe(false);
+  send({ type: 'workerActive' });
+  expect(element('worker-running').hidden).toBe(true);
+});
+
+it('reveals Pair when a command needs confirmation while Worker is selected', () => {
+  click(element('worker-tab'));
+  send({ type: 'run', id: 1, command: 'npm test', phase: 'confirm' });
+  expect(element('worker-view').hidden).toBe(true);
+  expect(element('band').hidden).toBe(false);
+  expect(element('worker-tab')).toHaveProperty('disabled', true);
+  runPhase('running');
+  click(element('worker-tab'));
+  expect(element('worker-view').hidden).toBe(false);
+});
+
+it('sends each worker visibility choice', () => {
+  const select = ui('worker-visibility');
+  if (!(select instanceof window.HTMLSelectElement)) throw new Error('Missing worker visibility');
+  for (const value of ['milestones', 'everything', 'off']) {
+    select.value = value;
+    select.dispatchEvent(new window.Event('change'));
+    expect(posted()).toContainEqual({ type: 'workerVisibility', value });
+  }
+  const option = document.createElement('option');
+  option.value = 'invalid';
+  select.append(option);
+  select.value = 'invalid';
+  const before = posted().length;
+  select.dispatchEvent(new window.Event('change'));
+  expect(posted()).toHaveLength(before);
+});

@@ -129,6 +129,10 @@ const REF: Ref = { file: 'a.ts', line: 1, endLine: 2 };
 /** A panel on fakes, and the parts a test drives or reads. */
 interface Harness {
   panel: NarrationPanel;
+  workerVisibility: {
+    get: ReturnType<typeof vi.fn<() => 'milestones' | 'everything' | 'off'>>;
+    set: ReturnType<typeof vi.fn<(value: 'milestones' | 'everything' | 'off') => void>>;
+  };
   controller: MockProxy<Controller>;
   controllerAccessor: ReturnType<typeof vi.fn<() => MockProxy<Controller>>>;
   calibration: MockProxy<Calibration>;
@@ -299,6 +303,10 @@ function harness(
   const starter = mock<Starter>();
   starter.available.mockResolvedValue(true);
   starter.start.mockResolvedValue();
+  const workerVisibility = {
+    get: vi.fn<() => 'milestones' | 'everything' | 'off'>(() => 'milestones'),
+    set: vi.fn<(value: 'milestones' | 'everything' | 'off') => void>(),
+  };
   const panel = new NarrationPanel(
     (file) => `${ROOT}/${file}`,
     speed,
@@ -314,6 +322,7 @@ function harness(
       starter,
       copyDiagnostics,
       requireCommandApproval,
+      workerVisibility,
       speech,
     },
     chatOrder,
@@ -329,6 +338,7 @@ function harness(
   panel.onPost = onPost;
   return {
     panel,
+    workerVisibility,
     controller,
     controllerAccessor,
     requireCommandApproval,
@@ -875,10 +885,12 @@ describe('receive', () => {
       { type: 'speechSupport', supported: true, gpu: false },
       { type: 'navigatorCommentary', value: 'helpful' },
       { type: 'chatOrder', value: 'newestFirst' },
+      { type: 'workerVisibility', value: 'milestones' },
       { type: 'replyBehavior', value: 'interrupt' },
       { type: 'commandApprovalSound', value: false },
       { type: 'commandApprovals', all: false, count: 0, confirmationRequired: true },
       { type: 'replay', events: [{ type: 'say', text: 'hi' }] },
+      { type: 'workerActive' },
       { type: 'showTerminals', value: false },
       { type: 'speed', value: SPEEDS[1] },
       { type: 'readingSpeed', value: SPEEDS[2] },
@@ -931,12 +943,14 @@ describe('receive', () => {
     chatOrder.get.mockReturnValue('oldestFirst');
     const view = open(panel);
     view.send({ type: 'ready' });
-    expect(view.posted.slice(8, 13)).toEqual([
+    expect(view.posted.slice(8, 15)).toEqual([
       { type: 'chatOrder', value: 'oldestFirst' },
+      { type: 'workerVisibility', value: 'milestones' },
       { type: 'replyBehavior', value: 'interrupt' },
       { type: 'commandApprovalSound', value: false },
       { type: 'commandApprovals', all: false, count: 0, confirmationRequired: true },
       { type: 'replay', events: [] },
+      { type: 'workerActive' },
     ]);
     view.send({ type: 'chatOrder', value: 'newestFirst' });
     expect(chatOrder.set).toHaveBeenCalledWith('newestFirst');
@@ -2163,4 +2177,25 @@ describe('showShortcuts', () => {
     panel.receiveRemote(1, { type: 'ready' });
     expect(send.mock.calls.map(([message]) => message.type)).not.toContain('shortcuts');
   });
+});
+
+it('worker controls call the controller and validate visibility', () => {
+  const { panel, controller, workerVisibility } = harness();
+  const view = open(panel);
+  view.send({ type: 'cancelWorker' });
+  expect(controller.revokeWorker.mock.calls).toHaveLength(1);
+  view.send({ type: 'workerVisibility', value: 'everything' });
+  expect(workerVisibility.set).toHaveBeenCalledWith('everything');
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  view.send({ type: 'workerVisibility', value: 'invalid' } as unknown as FromPanel);
+  expect(workerVisibility.set).toHaveBeenCalledOnce();
+});
+
+it('sends the current worker snapshot after replay', () => {
+  const { panel, controller } = harness();
+  controller.activeWorkerId.mockReturnValue(17);
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  const replay = view.posted.findIndex((message) => message.type === 'replay');
+  expect(view.posted[replay + 1]).toEqual({ type: 'workerActive', id: 17 });
 });

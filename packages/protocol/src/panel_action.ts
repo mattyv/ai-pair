@@ -25,6 +25,8 @@ export const localPanelAction = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('revealCursor') }),
   z.strictObject({ type: z.literal('resume') }),
   z.strictObject({ type: z.literal('interrupt') }),
+  z.strictObject({ type: z.literal('cancelWorker') }),
+  z.strictObject({ type: z.literal('workerVisibility'), value: z.enum(['milestones', 'everything', 'off']) }),
   z.strictObject({ type: z.literal('turn'), message: text.optional(), attach: z.boolean().optional() }),
   z.strictObject({ type: z.literal('end') }),
   z.strictObject({ type: z.literal('holdReading'), id, held: z.boolean() }),

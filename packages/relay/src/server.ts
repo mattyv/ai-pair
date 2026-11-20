@@ -8,7 +8,16 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { isJSONRPCNotification, type CallToolResult, type RequestId } from '@modelcontextprotocol/sdk/types.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { z } from 'zod';
-import { aiPairHome, DIAGNOSTIC_SNAPSHOT_SCHEMA, FILE_CONTENT_SCHEMA, REPORT_SCHEMA, type ToolName } from '@ai-pair/protocol';
+import {
+  aiPairHome,
+  BATCH_RESULT_SCHEMA,
+  DIAGNOSTIC_SNAPSHOT_SCHEMA,
+  FILE_CONTENT_SCHEMA,
+  REPORT_SCHEMA,
+  WORKER_ACK_SCHEMA,
+  WORKER_GRANT_SCHEMA,
+  type ToolName,
+} from '@ai-pair/protocol';
 import { readGuides, renderGuides, type Guide } from './guide';
 import { EditorLink, RelayError } from './link';
 import { renderFile, renderReport } from './render';
@@ -79,7 +88,7 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
   // The reports the relay answered with, by request: a cancel for one may come after its answer (#67).
   const answered = new Map<RequestId, unknown>();
   async function run(
-    tool: Exclude<ToolName, 'diagnostics'>,
+    tool: Extract<ToolName, 'start' | 'step' | 'listen' | 'end' | 'read' | 'calibrate'>,
     args: Record<string, unknown>,
     { signal, requestId }: { signal: AbortSignal; requestId: RequestId },
     before?: () => Promise<Record<string, unknown>>,
@@ -149,6 +158,55 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
   server.registerTool('end', TOOLS.end, (args, extra) => run('end', args, extra));
   server.registerTool('read', TOOLS.read, (args, extra) => run('read', args, extra));
   server.registerTool('calibrate', TOOLS.calibrate, (args, extra) => run('calibrate', args, extra));
+  async function workerCall(
+    tool: 'worker_read' | 'worker_step' | 'worker_done' | 'worker_progress' | 'worker_notice',
+    args: Record<string, unknown> & { port: number },
+    signal: AbortSignal,
+  ): Promise<CallToolResult> {
+    try {
+      const { port, ...request } = args;
+      const result = await link.callWorker(port, tool, request, signal);
+      const text =
+        tool === 'worker_read'
+          ? renderFile(FILE_CONTENT_SCHEMA.parse(result))
+          : tool === 'worker_step'
+            ? JSON.stringify(BATCH_RESULT_SCHEMA.parse(result))
+            : JSON.stringify(WORKER_ACK_SCHEMA.parse(result));
+      return { content: [{ type: 'text', text }] };
+    } catch (error) {
+      const code = error instanceof RelayError ? error.code : 'internal';
+      return { isError: true, content: [{ type: 'text', text: `${code}: Worker call failed.` }] };
+    }
+  }
+  server.registerTool('worker_grant', TOOLS.worker_grant, async (args, extra) => {
+    try {
+      const result = WORKER_GRANT_SCHEMA.parse(await link.call('worker_grant', args, extra.signal));
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    } catch {
+      return { isError: true, content: [{ type: 'text', text: 'Worker grant unavailable.' }] };
+    }
+  });
+  server.registerTool('worker_say', TOOLS.worker_say, async (args, extra) => {
+    try {
+      const result = WORKER_ACK_SCHEMA.parse(await link.call('worker_say', args, extra.signal));
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    } catch {
+      return { isError: true, content: [{ type: 'text', text: 'Worker narration unavailable.' }] };
+    }
+  });
+  server.registerTool('worker_read', TOOLS.worker_read, (args, extra) => workerCall('worker_read', args, extra.signal));
+  server.registerTool('worker_step', TOOLS.worker_step, (args, extra) => workerCall('worker_step', args, extra.signal));
+  server.registerTool('worker_status', TOOLS.worker_status, async (args, extra) => {
+    try {
+      const result = z.object({ active: z.boolean(), busy: z.boolean() }).parse(await link.call('worker_status', args, extra.signal));
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    } catch {
+      return { isError: true, content: [{ type: 'text', text: 'Worker status unavailable.' }] };
+    }
+  });
+  server.registerTool('worker_notice', TOOLS.worker_notice, (args, extra) => workerCall('worker_notice', args, extra.signal));
+  server.registerTool('worker_progress', TOOLS.worker_progress, (args, extra) => workerCall('worker_progress', args, extra.signal));
+  server.registerTool('worker_done', TOOLS.worker_done, (args, extra) => workerCall('worker_done', args, extra.signal));
   server.registerTool('diagnostics', TOOLS.diagnostics, async ({ cwd: given }) => {
     if (given !== undefined && !path.isAbsolute(given)) {
       return { isError: true, content: [{ type: 'text', text: 'invalid_cwd: The working directory must be an absolute path.' }] };

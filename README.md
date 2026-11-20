@@ -1,5 +1,8 @@
 # AI Pair Programmer
 
+For the experimental split between a speaking main agent and a worker that
+drives visible edits, see [Testing background workers](docs/worker-preview.md).
+
 Command reports distinguish approval from waiting for completion, and retain
 commands left in the background after the wait limit. A later observed finish
 reports the original run ID, exit status and bounded output tail. A timeout

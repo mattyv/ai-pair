@@ -3,6 +3,12 @@
 import { z } from 'zod';
 import {
   ACTION_KINDS,
+  MAX_PORT,
+  WORKER_ACTION_LIMIT,
+  WORKER_ACTION_SIZE_LIMIT,
+  WORKER_CAPABILITY_LIMIT,
+  WORKER_PATH_LIMIT,
+  WORKER_TEXT_LIMIT,
   actionKinds,
   CURSOR_MARKER,
   moveProblem,
@@ -250,6 +256,64 @@ After a report says a batch was interrupted, discarded, or failed, your cursor i
       file,
       from_line: z.number().int().optional(),
       to_line: z.number().int().optional(),
+    },
+  },
+  worker_grant: {
+    description: 'Grant a background worker access to this exact editor attachment. Pass the result only to that worker.',
+    inputSchema: { brief: z.string().max(WORKER_TEXT_LIMIT).optional().describe('A short, visible description of the worker task.') },
+  },
+  worker_say: {
+    description: 'Tell the programmer what the background worker is doing.',
+    inputSchema: { text: z.string().min(1).max(WORKER_TEXT_LIMIT) },
+  },
+  worker_read: {
+    description: 'Read from the editor selected by the owner using its worker grant.',
+    inputSchema: {
+      port: z.number().int().min(1).max(MAX_PORT),
+      capability: z.string().min(1).max(WORKER_CAPABILITY_LIMIT),
+      file: z.string().min(1).max(WORKER_PATH_LIMIT),
+      from_line: z.number().int().positive().optional(),
+      to_line: z.number().int().positive().optional(),
+    },
+  },
+  worker_step: {
+    description: 'Submit visible actions using the worker grant.',
+    inputSchema: {
+      port: z.number().int().min(1).max(MAX_PORT),
+      capability: z.string().min(1).max(WORKER_CAPABILITY_LIMIT),
+      actions: z
+        .array(actionSchema)
+        .max(WORKER_ACTION_LIMIT)
+        .refine((actions) => JSON.stringify(actions).length <= WORKER_ACTION_SIZE_LIMIT),
+    },
+  },
+  worker_status: {
+    description: 'Get the current worker status without receiving its capability.',
+    inputSchema: {},
+  },
+  worker_notice: {
+    description: 'Ask a question or report a blocker to the main agent, waking its listen. New notices replace older undelivered ones.',
+    inputSchema: {
+      port: z.number().int().min(1).max(MAX_PORT),
+      capability: z.string().min(1).max(WORKER_CAPABILITY_LIMIT),
+      notice: z.enum(['question', 'blocked']),
+      text: z.string().min(1).max(WORKER_TEXT_LIMIT),
+    },
+  },
+  worker_progress: {
+    description: 'Show a short noninterrupting progress update for the background worker.',
+    inputSchema: {
+      port: z.number().int().min(1).max(MAX_PORT),
+      capability: z.string().min(1).max(WORKER_CAPABILITY_LIMIT),
+      text: z.string().min(1).max(WORKER_TEXT_LIMIT),
+    },
+  },
+  worker_done: {
+    description: 'Send one completion to the owner using the worker grant.',
+    inputSchema: {
+      port: z.number().int().min(1).max(MAX_PORT),
+      capability: z.string().min(1).max(WORKER_CAPABILITY_LIMIT),
+      text: z.string().min(1).max(WORKER_TEXT_LIMIT),
     },
   },
   diagnostics: {

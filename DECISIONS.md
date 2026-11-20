@@ -10,6 +10,24 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   GPT-6.1 Terra agents write code and tests; GPT-6 Astra agents review them.
     Resolve findings and verify the resulting changes before reporting completion.
 
+## Background delegation (#134)
+
+-   Delegation is off by default. When enabled, a Codex session delegates to
+    Codex and a Claude session delegates to Claude. The programmer can choose
+    a worker model within the active provider. Reuse the provider's existing
+    sign-in so users do not need to supply a separate API key.
+-   The current direction is for the worker to drive visible edits through
+    Pair while the main agent handles conversation, review, and spoken
+    narration. This keeps the main agent available during edits. Give the
+    worker authority for one task at a time and revoke it on interruption.
+    Coordinate narration with the worker's intended batches. The Worker tab
+    shows its activity, and chat can show milestones, every event, or no
+    worker events.
+-   A worker needs an explicit attachment to its owning session. A Codex
+    subagent with access to the Pair tool could not read from the active main
+    session in the spike. This establishes a limit in the tested Codex setup.
+    Claude attachment and the mechanism for authenticating workers are open.
+
 ## CI tool downloads
 
 -   Download pinned shfmt from its direct upstream release first, then the

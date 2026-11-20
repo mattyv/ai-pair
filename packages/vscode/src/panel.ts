@@ -19,7 +19,7 @@ import {
 } from '@ai-pair/protocol';
 import { panelHtml, SPEEDS } from './panel_html';
 import { timings } from './timings';
-import type { ChatOrder, FromPanel, SpeechAction, SpeechEvent, SpeechState, ToPanel } from './panel_messages';
+import type { ChatOrder, FromPanel, SpeechAction, SpeechEvent, SpeechState, ToPanel, WorkerVisibility } from './panel_messages';
 import { ELEVENLABS_SPEEDS, SPEECH_SPEEDS, SPEECH_VOICES, type SpeechSettings, type OpenRouterAudioDecodeLease } from './speech_types';
 import { SPEECH_LISTENING_RATES } from './speech_tempo';
 import type { CatalogView } from './speech_catalog';
@@ -81,6 +81,7 @@ export interface PanelWiring {
   /** Copies the sanitized diagnostics snapshot on explicit request. */
   copyDiagnostics: () => Promise<void>;
   requireCommandApproval: () => Promise<void>;
+  workerVisibility?: { get: () => WorkerVisibility; set: (value: WorkerVisibility) => void };
   speech: {
     sessionCost?: Pick<SessionSpeechCost, 'start' | 'restore' | 'end' | 'view'>;
     narrationSession?: (id: number, ongoing: boolean) => void;
@@ -327,6 +328,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   /** Shows the workspace's current navigator commentary preference. */
   showNavigatorCommentary(value: NavigatorCommentary): void {
     this.send({ type: 'navigatorCommentary', value });
+  }
+
+  /** Shows the saved worker activity visibility. */
+  showWorkerVisibility(value: WorkerVisibility): void {
+    this.send({ type: 'workerVisibility', value });
   }
 
   /** Shows the saved history order, including changes made in VS Code settings. */
@@ -899,6 +905,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         controller().resume('reply');
         this.showNavigatorCommentary(this.navigatorCommentary.get());
         this.showChatOrder(this.chatOrder.get());
+        this.showWorkerVisibility(this.wiring.workerVisibility?.get() ?? 'milestones');
         this.showReplyBehavior(this.replyBehavior.get());
         this.showCommandApprovalSound(this.commandApprovalSound.get());
         this.showCommandApprovals();
@@ -909,6 +916,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
             ? { costSessionGeneration: this.workspaceCostGeneration, costSessionActive: this.workspaceCostActive }
             : {}),
         });
+        // specs/WorkerActivity.tla, Snapshot: the owner, not history, establishes a live worker.
+        const workerId = controller().activeWorkerId();
+        this.send(workerId === undefined ? { type: 'workerActive' } : { type: 'workerActive', id: workerId });
         this.showTerminalPreference(this.terminalSettings.get());
         this.showSpeed(this.speed.get());
         this.showReadingSpeed(this.readingSpeed.get());
@@ -931,6 +941,14 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         if (parsed.success) this.navigatorCommentary.set(parsed.data);
         return;
       }
+      case 'cancelWorker':
+        controller().revokeWorker();
+        return;
+      case 'workerVisibility':
+        if (message.value === 'milestones' || message.value === 'everything' || message.value === 'off') {
+          this.wiring.workerVisibility?.set(message.value);
+        }
+        return;
       case 'chatOrder':
         if (message.value === 'newestFirst' || message.value === 'oldestFirst') this.chatOrder.set(message.value);
         return;

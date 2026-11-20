@@ -12,6 +12,23 @@ built and connected is in [ARCHITECTURE.md](ARCHITECTURE.md).
 Status: describes 0.2.0. Numbers marked *tunable* are initial guesses to be
 adjusted by feel.
 
+## Background worker preview
+
+When the programmer enables delegation, the main connection can request a
+private grant with `worker_grant`. Its result identifies the editor window
+and carries the capability the worker needs for `worker_read`, `worker_step`,
+`worker_progress`, `worker_notice`, and `worker_done`. Workers select that
+window explicitly. The bridge authenticates the grant without transferring
+ownership of the Pair session.
+
+`worker_step` performs one visible batch and returns its own outcome to the
+worker. The main connection can speak with `worker_say` independently of
+typing. `worker_done` posts the completion to the main report stream. A
+question or blocker from `worker_notice` wakes a pending main `listen`.
+Routine progress goes to the Worker tab. The main connection can call
+`worker_status` without draining a report. Worker responses do not consume
+or restore main-agent reports.
+
 ## Goals
 
 -   The programmer can follow everything the agent does, at a pace they can

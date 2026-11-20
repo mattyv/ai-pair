@@ -303,6 +303,7 @@ const fakes = vi.hoisted(() => {
     readonly setNavigatorCommentary = vi.fn();
     readonly setTiming = vi.fn();
     readonly setConfirmCommands = vi.fn();
+    readonly revokeWorker = vi.fn();
     readonly pause = vi.fn();
     readonly resume = vi.fn();
     readonly userInterrupt = vi.fn();
@@ -318,6 +319,7 @@ const fakes = vi.hoisted(() => {
       readonly panel: unknown,
       readonly config: unknown,
       readonly narration: import('@ai-pair/core').NarrationPort,
+      readonly options?: { workerEnabled?: () => boolean },
     ) {
       made.controllers.push(this);
     }
@@ -334,6 +336,7 @@ const fakes = vi.hoisted(() => {
     constructor(
       readonly controller: unknown,
       readonly options: {
+        workerModel: () => string | undefined;
         workspaceFolders: () => string[];
         trace: (line: string) => void;
         failed: (error: unknown) => void;
@@ -375,6 +378,7 @@ const fakes = vi.hoisted(() => {
     readonly showSpeed = vi.fn();
     readonly showReadingSpeed = vi.fn();
     readonly showChatOrder = vi.fn();
+    readonly showWorkerVisibility = vi.fn();
     readonly showNavigatorCommentary = vi.fn();
     readonly showReplyBehavior = vi.fn();
     readonly showCommandApprovalSound = vi.fn();
@@ -415,6 +419,7 @@ const fakes = vi.hoisted(() => {
       readonly trace: (line: string) => void,
       readonly extensionUri: unknown,
       readonly wiring: {
+        workerVisibility: { get: () => 'milestones' | 'everything' | 'off'; set: (value: 'milestones' | 'everything' | 'off') => void };
         controller: () => unknown;
         calibration: () => unknown;
         starter: unknown;
@@ -952,6 +957,21 @@ describe('activate', () => {
     expect(h.panel.showSelection).toHaveBeenCalledWith('a ref');
   });
 
+  it('defaults background workers off and revokes an active grant when disabled', () => {
+    const { controller } = activated();
+    expect(controller.options?.workerEnabled?.()).toBe(false);
+
+    fakes.settings.set('worker.enabled', true);
+    changed('worker.enabled');
+    expect(controller.options?.workerEnabled?.()).toBe(true);
+    expect(controller.revokeWorker).not.toHaveBeenCalled();
+
+    fakes.settings.set('worker.enabled', false);
+    changed('worker.enabled');
+    expect(controller.options?.workerEnabled?.()).toBe(false);
+    expect(controller.revokeWorker).toHaveBeenCalledOnce();
+  });
+
   it('persists the request to require command approval in global settings', async () => {
     const h = activated();
     await h.panel.wiring.requireCommandApproval();
@@ -1099,6 +1119,16 @@ describe('activate', () => {
         },
         () => {
           expect(h.panel.showReplyBehavior).toHaveBeenLastCalledWith('interrupt');
+        },
+      ],
+      [
+        'worker.visibility',
+        'worker visibility',
+        () => {
+          h.panel.wiring.workerVisibility.set('everything');
+        },
+        () => {
+          expect(h.panel.showWorkerVisibility).toHaveBeenLastCalledWith('milestones');
         },
       ],
       [
@@ -3373,6 +3403,21 @@ it('applies pending and external context changes immediately and forwards sessio
   expect(speech.setNarrationSession).toHaveBeenCalledWith(9, true);
   changed('speech');
   expect(seen).toEqual([true, false, false]);
+});
+
+it('reads worker model and visibility settings', () => {
+  const h = activated();
+  const bridge = last(fakes.made.bridges);
+  expect(bridge.options.workerModel()).toBeUndefined();
+  fakes.settings.set('worker.model', '  model-name  ');
+  expect(bridge.options.workerModel()).toBe('model-name');
+  fakes.settings.set('worker.model', '   ');
+  expect(bridge.options.workerModel()).toBeUndefined();
+  for (const value of ['everything', 'off', 'invalid']) {
+    fakes.settings.set('worker.visibility', value);
+    changed('worker.visibility');
+    expect(h.panel.showWorkerVisibility).toHaveBeenLastCalledWith(value === 'invalid' ? 'milestones' : value);
+  }
 });
 
 it('handles context disposal rejection and reports it to deactivate', async () => {

@@ -57,3 +57,11 @@ describe('cross-host panel updates', () => {
     expect(localPanelUpdate.safeParse({ type: 'receipt', ids: [1], received: 'yes' }).success).toBe(false);
   });
 });
+
+it('accepts bounded worker activity and visibility updates', () => {
+  expect(localPanelUpdate.safeParse({ type: 'workerActivity', id: 1, phase: 'progress', text: 'Checking.' }).success).toBe(true);
+  expect(localPanelUpdate.safeParse({ type: 'workerVisibility', value: 'everything' }).success).toBe(true);
+  expect(localPanelUpdate.safeParse({ type: 'workerActive', id: 1 }).success).toBe(true);
+  expect(localPanelUpdate.safeParse({ type: 'workerActive' }).success).toBe(true);
+  expect(localPanelUpdate.safeParse({ type: 'workerActivity', id: 0, phase: 'progress', text: 'Checking.' }).success).toBe(false);
+});

@@ -58,6 +58,17 @@ diagram was inspected in headless Chromium without page errors.
 
 ## Components
 
+### Background worker preview
+
+The `Worker delegation preview` view shows the experimental owner and worker
+paths. The workspace controller owns the worker grant and the shared playback
+slot. The bridge keeps the main agent's connection ownership while admitting
+only worker calls that present a valid grant to the exact window. The
+controller revokes the grant when the programmer interrupts or disables the
+feature. Playback owns a live batch until it returns that batch's outcome.
+Main-agent speech uses the existing narration port independently of worker
+playback. The agent harness launches the worker and selects its provider.
+
 ```text
 ┌──────────────────┐  stdio (MCP)  ┌────────────┐  WebSocket, 127.0.0.1  ┌─────────────────────────────┐
 │  agent harness   │ ────────────▶ │  pair-mcp  │ ─────────────────────▶ │  VS Code extension          │

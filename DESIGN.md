@@ -8,6 +8,14 @@ programmer experiences.
 Status: describes 0.2.0. Numbers marked *tunable* are initial guesses to be
 adjusted by feel.
 
+## Background worker preview
+
+Enable the preview in VS Code User Settings. The main agent keeps the
+conversation and speaks. It can grant one background worker permission to
+drive visible edits for the current task. Interrupting or disabling the
+setting revokes that permission. See [Testing background workers](docs/worker-preview.md)
+for the setup and current limits.
+
 ## Agent cursor
 
 Rendered with decorations: a thin vertical bar in the agent's color, plus a

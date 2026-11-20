@@ -6,7 +6,7 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; img-src  data:; style-src  'unsafe-inline'; script-src 'nonce-archi-standalone';"
     />
-    <title>Archi-Techture &#x2014; ai-pair</title>
+    <title>AI Pair architecture</title>
     <style>
       :root {
         --bg: #012624;
@@ -1052,7 +1052,7 @@
     <div id="app" class="side-collapsed viewer-mode">
       <div id="main">
         <div id="toolbar">
-          <span id="diagram-name" title="Open diagram">Archi-Techture &#x2014; ai-pair</span>
+          <span id="diagram-name" title="Open diagram">AI Pair architecture</span>
           <button class="type-tab active" data-type="overview" style="border-color: #07e5db; color: #07e5db">Overview</button>
           <button class="type-tab" data-type="architecture" style="">Architecture</button>
           <button class="type-tab" data-type="flow" style="">Flow</button>
@@ -40121,6 +40121,74 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                   },
                 ],
               },
+            },
+          },
+          {
+            id: "worker-delegation-preview",
+            name: "Worker delegation preview",
+            type: "architecture",
+            doc: {
+              type: "architecture",
+              nodes: [
+                { id: "main", label: "Main agent\nConversation and narration", x: 35, y: 45, files: [] },
+                { id: "worker", label: "Same-provider worker\nEdits and approved commands", x: 35, y: 280, files: [] },
+                {
+                  id: "relay",
+                  label: "Pair relay\nRoutes to the exact editor",
+                  x: 380,
+                  y: 45,
+                  files: ["packages/relay/src/server.ts", "packages/relay/src/link.ts"],
+                },
+                {
+                  id: "bridge",
+                  label: "Editor bridge\nKeeps the main connection owner",
+                  x: 695,
+                  y: 45,
+                  files: ["packages/core/src/bridge.ts"],
+                },
+                {
+                  id: "controller",
+                  label: "Pair controller\nOwns grant and playback admission",
+                  x: 695,
+                  y: 260,
+                  files: ["packages/core/src/controller.ts"],
+                },
+                {
+                  id: "player",
+                  label: "Playback\nKeeps the slot until the batch finishes",
+                  x: 1035,
+                  y: 260,
+                  files: ["packages/core/src/player.ts"],
+                },
+                {
+                  id: "voice",
+                  label: "Narration port\nSpeaks on behalf of the main agent",
+                  x: 695,
+                  y: 500,
+                  files: ["packages/core/src/ports.ts", "packages/vscode/src/extension.ts"],
+                },
+                { id: "programmer", label: "Programmer\nEnables or interrupts", x: 375, y: 510, files: [] },
+                {
+                  id: "worker-panel",
+                  label: "Worker tab\nProjects bounded activity and cancel",
+                  x: 1035,
+                  y: 500,
+                  files: ["packages/vscode/src/panel.ts", "packages/vscode/src/webview/panel.ts", "packages/protocol/src/panel_update.ts"],
+                },
+              ],
+              edges: [
+                { from: "main", to: "worker", label: "Privately delegates one task and grant" },
+                { from: "main", to: "relay", label: "Session tools" },
+                { from: "worker", to: "relay", label: "Submit visible batch with grant" },
+                { from: "relay", to: "bridge", label: "Owner or scoped worker operations" },
+                { from: "bridge", to: "controller", label: "Verify authority for the active session" },
+                { from: "controller", to: "player", label: "Rehearse and play one edit batch" },
+                { from: "controller", to: "voice", label: "Send main-agent speech" },
+                { from: "programmer", to: "controller", label: "Disable or interrupt the grant" },
+                { from: "controller", to: "worker-panel", label: "Publish worker activity" },
+              ],
+              groups: [],
+              comments: {},
             },
           },
         ],

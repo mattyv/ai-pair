@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.49.0
+
+-   Add an experimental, default-off background worker mode. The main agent
+    keeps the conversation and speech. A worker can drive one visible editor
+    batch at a time with a grant from the main agent (#134).
+
 ## 0.48.3
 
 -   A reply you send while the agent waits now reaches it without a false
