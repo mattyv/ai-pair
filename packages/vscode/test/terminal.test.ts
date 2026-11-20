@@ -770,8 +770,8 @@ it('encodes carriage return and control bytes without physical control input', (
 });
 
 it('encodes leading Bash subshell syntax while preserving characters and other shells', () => {
-  const command = " \t(printf '%s' 'café') && true";
-  expect(commandForShell(command, 'bash')).toBe("builtin eval -- $' \\x09(printf \\'%s\\' \\'café\\') && true'");
+  const command = " \t(printf '%s' 'caf\u00E9') && true";
+  expect(commandForShell(command, 'bash')).toBe("builtin eval -- $' \\x09(printf \\'%s\\' \\'caf\u00E9\\') && true'");
   expect(commandForShell(command, 'zsh')).toBe(command);
   expect(commandForShell(command, undefined)).toBe(command);
   expect(commandForShell('(printf x)\u0000', 'bash')).toBe('(printf x)\u0000');

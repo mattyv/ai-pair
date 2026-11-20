@@ -16,7 +16,7 @@ if curl "${CURL_ARGS[@]}" "${DIRECT}v1.8.0/tla2tools.jar" \
   exit 0
 fi
 rm -f "${OUTPUT}"
-if curl "${CURL_ARGS[@]}" "${API}749260120" \
+if curl "${CURL_ARGS[@]}" "${API}768714348" \
   && echo "${SHA256}  ${OUTPUT}" | sha256sum -c -; then
   exit 0
 fi

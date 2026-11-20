@@ -71,3 +71,12 @@ CURL
   [ "${status}" -ne 0 ]
   [ ! -e "${OUTPUT}" ]
 }
+
+@test "fallback uses the current pinned official release asset" {
+  export PRIMARY=fail FALLBACK=abc
+  run bash "${ROOT}/scripts/download_tlc.sh" "${OUTPUT}" \
+    ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+  [ "${status}" -eq 0 ]
+  [ "$(tail -n 1 "${CALLS}")" = \
+    'https://api.github.com/repos/tlaplus/tlaplus/releases/assets/768714348' ]
+}
