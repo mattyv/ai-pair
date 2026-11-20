@@ -37,6 +37,7 @@ import { replyReportPaths } from './integration_reply_report';
 import { gapPaths } from './integration_gap_paths';
 import { codePlaybackPaths } from './integration_code_playback';
 import { workerPaths } from './integration_worker';
+import { workerCliPaths } from './integration_worker_cli';
 import { preservedPlaybackPaths } from './integration_preserved_playback';
 import { corePaths } from './integration_core_paths';
 import { playerGapPaths } from './integration_player_gap_paths';
@@ -1622,6 +1623,7 @@ export async function run(): Promise<void> {
 
   // Last, since they change the playback's settings: the player's and the controller's paths (#176).
   await workerPaths(api, root);
+  await workerCliPaths(api, root, relayEnv());
   await codePlaybackPaths(api, root);
   await preservedPlaybackPaths(api, root);
   await playerGapPaths(api, root);
