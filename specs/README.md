@@ -35,7 +35,8 @@ once the fixes were in.
 
 The TLA+ tools are one jar, `tla2tools.jar`, from the
 [tlaplus/tlaplus releases](https://github.com/tlaplus/tlaplus/releases). CI and
-local runs use 1.8.0, published 2026-10-06 (GitHub marks it a prerelease).
+local runs use 1.8.0 (GitHub marks it a prerelease). Its current replacement
+asset was published on 2026-11-19; CI pins its SHA-256 and asset ID.
 Check a download against the SHA-256 GitHub lists for it:
 
 ```sh
