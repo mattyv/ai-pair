@@ -70,7 +70,7 @@ Code goes without a spec for one of these reasons:
 
 | File | Functions | Spec |
 |---|---|---|
-| `bridge.ts` | `start`, `accept`, `dispatch`, `dispose` | `Bridge`; typed diagnostic events: `DiagnosticsPrivacy`; nonowner requests: `DiagnosticsRequest` |
+| `bridge.ts` | `start`, `accept`, `dispatch`, `dispose` | `Bridge`; provider binding and retirement: `WorkerProvider`; typed diagnostic events: `DiagnosticsPrivacy`; nonowner requests: `DiagnosticsRequest` |
 | | owner grants and nonowner worker requests | `WorkerAttachment`; exact-window bridge and relay tests |
 | | `connections` | Glue: what a test reads |
 | | `writeDiscovery`, `focused`, `file` | `Discovery` |
@@ -105,7 +105,7 @@ Code goes without a spec for one of these reasons:
 | `guide.ts` | `projectGuides` | `ProjectGuide` |
 | | `gitIgnores`, `readGuides` | Glue: git and the file system |
 | | `renderGuides` | Format |
-| `server.ts` | `createServer`, `agentGuide`, `startPrompt`, `shownPath` | Glue: registers the tools, each a call through `link.ts` |
+| `server.ts` | `createServer`, `agentGuide`, `startPrompt`, `shownPath`, `clientProvider` | `WorkerProvider` for client precedence and explicit hints; glue registers tools through `link.ts` |
 | | `serve` | `Wire` (`Shutdown`) |
 | `tools.ts` | `action`, `actionError`, `combined` | Pure: the tools' schemas; `validation.test.ts` holds them to the player's checks |
 | `render.ts` | all | Format; `render.test.ts` |

@@ -21,6 +21,10 @@ and carries the capability the worker needs for `worker_read`, `worker_step`,
 window explicitly. The bridge authenticates the grant without transferring
 ownership of the Pair session.
 
+A grant includes the saved worker model for the active chat provider when
+that preference is set. An omitted model tells the main agent to use its
+exact chat model. The provider hint only selects the preference.
+
 `worker_step` performs one visible batch and returns its own outcome to the
 worker. The main connection can speak with `worker_say` independently of
 typing. `worker_done` posts the completion to the main report stream. A

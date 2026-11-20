@@ -104,8 +104,11 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
         Audio is controlled separately.</p>
       <h2>Background Worker</h2>
       <label class="settings-check"><input type="checkbox" data-ui="worker-enabled"> Enable background worker</label>
-      <label class="settings-field">Model (leave empty to use the main model)
-        <input type="text" data-ui="worker-model" maxlength="${WORKER_MODEL_LIMIT}">
+      <label class="settings-field">Codex model (leave empty to use the main chat model)
+        <input type="text" data-ui="worker-model-codex" maxlength="${WORKER_MODEL_LIMIT}">
+      </label>
+      <label class="settings-field">Claude model (leave empty to use the main chat model)
+        <input type="text" data-ui="worker-model-claude" maxlength="${WORKER_MODEL_LIMIT}">
       </label>
       <label class="settings-field">Worker activity in Pair
         <select data-ui="worker-visibility">

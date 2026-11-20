@@ -8759,7 +8759,7 @@
           {
             "from": "main",
             "to": "relay",
-            "label": "Session tools"
+            "label": "Tools and provider hint"
           },
           {
             "from": "worker",
@@ -8769,7 +8769,7 @@
           {
             "from": "relay",
             "to": "bridge",
-            "label": "Owner or scoped worker operations"
+            "label": "Scoped operations and model routing"
           },
           {
             "from": "bridge",

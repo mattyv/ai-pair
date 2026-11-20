@@ -81,7 +81,7 @@ it('accepts worker cancellation and bounded visibility choices', () => {
 
 it('validates worker settings at the panel boundary', () => {
   expect(localPanelAction.safeParse({ type: 'workerEnabled', value: false }).success).toBe(true);
-  expect(localPanelAction.safeParse({ type: 'workerModel', value: '' }).success).toBe(true);
-  expect(localPanelAction.safeParse({ type: 'workerModel', value: 'x'.repeat(257) }).success).toBe(false);
+  expect(localPanelAction.safeParse({ type: 'workerModel', provider: 'codex', value: '' }).success).toBe(true);
+  expect(localPanelAction.safeParse({ type: 'workerModel', provider: 'codex', value: 'x'.repeat(257) }).success).toBe(false);
   expect(localPanelAction.safeParse({ type: 'workerEnabled', value: 'false' }).success).toBe(false);
 });

@@ -336,7 +336,7 @@ const fakes = vi.hoisted(() => {
     constructor(
       readonly controller: unknown,
       readonly options: {
-        workerModel: () => string | undefined;
+        workerModel: (provider: 'codex' | 'claude') => string | undefined;
         workspaceFolders: () => string[];
         trace: (line: string) => void;
         failed: (error: unknown) => void;
@@ -422,7 +422,7 @@ const fakes = vi.hoisted(() => {
       readonly extensionUri: unknown,
       readonly wiring: {
         workerEnabled: { get: () => boolean; set: (value: boolean) => void };
-        workerModel: { get: () => string; set: (value: string) => void };
+        workerModel: { get: (provider: 'codex' | 'claude') => string; set: (provider: 'codex' | 'claude', value: string) => void };
         workerVisibility: { get: () => 'milestones' | 'everything' | 'off'; set: (value: 'milestones' | 'everything' | 'off') => void };
         controller: () => unknown;
         calibration: () => unknown;
@@ -1136,13 +1136,23 @@ describe('activate', () => {
         },
       ],
       [
-        'worker.model',
-        'worker model',
+        'worker.codexModel',
+        'Codex worker model',
         () => {
-          h.panel.wiring.workerModel.set('model');
+          h.panel.wiring.workerModel.set('codex', 'model');
         },
         () => {
-          expect(h.panel.showWorkerModel).toHaveBeenLastCalledWith('');
+          expect(h.panel.showWorkerModel).toHaveBeenLastCalledWith('codex', '');
+        },
+      ],
+      [
+        'worker.claudeModel',
+        'Claude worker model',
+        () => {
+          h.panel.wiring.workerModel.set('claude', 'model');
+        },
+        () => {
+          expect(h.panel.showWorkerModel).toHaveBeenLastCalledWith('claude', '');
         },
       ],
       [
@@ -3429,16 +3439,22 @@ it('applies pending and external context changes immediately and forwards sessio
   expect(seen).toEqual([true, false, false]);
 });
 
-it('reads worker model and visibility settings', () => {
+it('keeps worker models independent and ignores the legacy setting', () => {
   const h = activated();
   const bridge = last(fakes.made.bridges);
-  expect(bridge.options.workerModel()).toBeUndefined();
-  fakes.settings.set('worker.model', '  model-name  ');
-  changed('worker.model');
-  expect(h.panel.showWorkerModel).toHaveBeenLastCalledWith('  model-name  ');
-  expect(bridge.options.workerModel()).toBe('model-name');
-  fakes.settings.set('worker.model', '   ');
-  expect(bridge.options.workerModel()).toBeUndefined();
+  fakes.settings.set('worker.model', 'legacy');
+  expect(bridge.options.workerModel('codex')).toBeUndefined();
+  expect(bridge.options.workerModel('claude')).toBeUndefined();
+  fakes.settings.set('worker.codexModel', '  codex-model  ');
+  fakes.settings.set('worker.claudeModel', '  claude-model  ');
+  changed('worker.codexModel', 'worker.claudeModel');
+  expect(h.panel.showWorkerModel).toHaveBeenCalledWith('codex', '  codex-model  ');
+  expect(h.panel.showWorkerModel).toHaveBeenCalledWith('claude', '  claude-model  ');
+  expect(bridge.options.workerModel('codex')).toBe('codex-model');
+  expect(bridge.options.workerModel('claude')).toBe('claude-model');
+  fakes.settings.set('worker.codexModel', '   ');
+  expect(bridge.options.workerModel('codex')).toBeUndefined();
+  expect(bridge.options.workerModel('claude')).toBe('claude-model');
   for (const value of ['everything', 'off', 'invalid']) {
     fakes.settings.set('worker.visibility', value);
     changed('worker.visibility');
@@ -3452,13 +3468,34 @@ it('applies worker settings immediately and writes them globally', () => {
   h.panel.wiring.workerEnabled.set(true);
   expect(h.panel.wiring.workerEnabled.get()).toBe(true);
   expect(h.controller.options?.workerEnabled?.()).toBe(true);
-  h.panel.wiring.workerModel.set(' model ');
-  expect(bridge.options.workerModel()).toBe('model');
+  h.panel.wiring.workerModel.set('codex', ' codex-model ');
+  h.panel.wiring.workerModel.set('claude', ' claude-model ');
+  expect(h.panel.wiring.workerModel.get('codex')).toBe(' codex-model ');
+  expect(h.panel.wiring.workerModel.get('claude')).toBe(' claude-model ');
+  expect(bridge.options.workerModel('codex')).toBe('codex-model');
+  expect(bridge.options.workerModel('claude')).toBe('claude-model');
   h.panel.wiring.workerEnabled.set(false);
   expect(h.controller.options?.workerEnabled?.()).toBe(false);
   expect(h.controller.revokeWorker).toHaveBeenCalled();
   expect(fakes.updated).toContainEqual(['worker.enabled', false, 1]);
-  expect(fakes.updated).toContainEqual(['worker.model', ' model ', 1]);
+  expect(fakes.updated).toContainEqual(['worker.codexModel', ' codex-model ', 1]);
+  expect(fakes.updated).toContainEqual(['worker.claudeModel', ' claude-model ', 1]);
+});
+
+it('keeps model writes independent while one provider save fails', async () => {
+  const gate = Promise.withResolvers<void>();
+  fakes.updateGates.set('worker.codexModel', gate.promise);
+  const h = activated();
+  const bridge = last(fakes.made.bridges);
+  h.panel.wiring.workerModel.set('codex', 'codex-pending');
+  h.panel.wiring.workerModel.set('claude', 'claude-pending');
+  expect(bridge.options.workerModel('codex')).toBe('codex-pending');
+  expect(bridge.options.workerModel('claude')).toBe('claude-pending');
+  gate.reject(new Error('save failed'));
+  await settle();
+  expect(bridge.options.workerModel('codex')).toBeUndefined();
+  expect(bridge.options.workerModel('claude')).toBe('claude-pending');
+  expect(h.panel.showWorkerModel).toHaveBeenCalledWith('codex', '');
 });
 
 it('keeps the requested worker setting authoritative while a write is pending', async () => {

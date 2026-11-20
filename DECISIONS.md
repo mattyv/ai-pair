@@ -30,6 +30,13 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   The Worker tab follows Chat order for task groups and activity within
     each task. Both views place new activity at the same end. This order
     preference affects presentation while the source events stay chronological.
+-   Save worker model preferences separately for Codex and Claude. Use the
+    preference associated with the current main connection. A blank
+    preference or an unidentified provider supplies no model override,
+    allowing the main agent to use its exact chat model. MCP client identity
+    is a preference hint. Grant authorization still depends on session
+    ownership and the worker capability. Preserve the legacy single value
+    in user settings without assigning it to an unverified provider.
 
 ## Pair Settings sections (#130)
 

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { NAVIGATOR_COMMENTARY_SCHEMA, WORKER_MODEL_LIMIT } from './schemas';
+import { NAVIGATOR_COMMENTARY_SCHEMA, WORKER_MODEL_LIMIT, WORKER_PROVIDER_SCHEMA } from './schemas';
 
 /** Largest text carried by one cross-host panel action. */
 const MAX_PANEL_TEXT = 65_536;
@@ -27,7 +27,7 @@ export const localPanelAction = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('interrupt') }),
   z.strictObject({ type: z.literal('cancelWorker') }),
   z.strictObject({ type: z.literal('workerEnabled'), value: z.boolean() }),
-  z.strictObject({ type: z.literal('workerModel'), value: z.string().max(WORKER_MODEL_LIMIT) }),
+  z.strictObject({ type: z.literal('workerModel'), provider: WORKER_PROVIDER_SCHEMA, value: z.string().max(WORKER_MODEL_LIMIT) }),
   z.strictObject({ type: z.literal('workerVisibility'), value: z.enum(['milestones', 'everything', 'off']) }),
   z.strictObject({ type: z.literal('turn'), message: text.optional(), attach: z.boolean().optional() }),
   z.strictObject({ type: z.literal('end') }),

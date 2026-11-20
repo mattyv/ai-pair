@@ -18,6 +18,7 @@ import {
   WORKER_MODEL_LIMIT,
   speechAccent,
   type NavigatorCommentary,
+  type WorkerProvider,
   type ShortcutLabels,
 } from '@ai-pair/protocol';
 import { playDemo } from './demo';
@@ -625,17 +626,25 @@ export function activate(context: vscode.ExtensionContext): Api {
     if (!enabled) controller.revokeWorker();
     panel.showWorkerEnabled(enabled);
   });
-  const workerModel = panelSetting(
-    'worker.model',
-    'worker model',
-    () => {
-      const value: unknown = config().get('worker.model');
-      return typeof value === 'string' && value.length <= WORKER_MODEL_LIMIT ? value : '';
-    },
-    () => {
-      panel.showWorkerModel(workerModel.get());
-    },
-  );
+  /** Creates a separately persisted model setting for one worker provider. */
+  function workerModelSetting(provider: WorkerProvider, key: string): StoredSetting<string> {
+    const setting = panelSetting(
+      key,
+      `${provider === 'codex' ? 'Codex' : 'Claude'} worker model`,
+      () => {
+        const value: unknown = config().get(key);
+        return typeof value === 'string' && value.length <= WORKER_MODEL_LIMIT ? value : '';
+      },
+      () => {
+        panel.showWorkerModel(provider, setting.get());
+      },
+    );
+    return setting;
+  }
+  const workerModels = {
+    codex: workerModelSetting('codex', 'worker.codexModel'),
+    claude: workerModelSetting('claude', 'worker.claudeModel'),
+  };
   const workerVisibility = panelSetting(
     'worker.visibility',
     'worker visibility',
@@ -754,7 +763,12 @@ export function activate(context: vscode.ExtensionContext): Api {
           if (!value) controller.revokeWorker();
         },
       },
-      workerModel,
+      workerModel: {
+        get: (provider) => workerModels[provider].get(),
+        set: (provider, value) => {
+          void workerModels[provider].set(value);
+        },
+      },
       calibration: () => calibration,
       starter,
       copyDiagnostics,
@@ -1161,8 +1175,8 @@ export function activate(context: vscode.ExtensionContext): Api {
   };
 
   const bridge = new Bridge(controller, {
-    workerModel: () => {
-      const value = workerModel.get().trim();
+    workerModel: (provider) => {
+      const value = workerModels[provider].get().trim();
       return value !== '' ? value : undefined;
     },
     onDiagnostic: record,
@@ -1271,7 +1285,8 @@ export function activate(context: vscode.ExtensionContext): Api {
         if (!enabled) controller.revokeWorker();
         panel.showWorkerEnabled(enabled);
       }
-      if (e.affectsConfiguration('aiPair.worker.model')) panel.showWorkerModel(workerModel.get());
+      if (e.affectsConfiguration('aiPair.worker.codexModel')) panel.showWorkerModel('codex', workerModels.codex.get());
+      if (e.affectsConfiguration('aiPair.worker.claudeModel')) panel.showWorkerModel('claude', workerModels.claude.get());
       if (e.affectsConfiguration('aiPair.speech')) {
         if (!computePending) {
           const mode: unknown = config().get('speech.computeMode');

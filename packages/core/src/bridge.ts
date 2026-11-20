@@ -14,6 +14,8 @@ import {
   WORKER_PATH_LIMIT,
   WORKER_MODEL_LIMIT,
   WORKER_TEXT_LIMIT,
+  WORKER_PROVIDER_SCHEMA,
+  type WorkerProvider,
   DIAGNOSTIC_SNAPSHOT_SCHEMA,
   parseRelayMessage,
   PROTOCOL_VERSION,
@@ -38,7 +40,7 @@ export interface BridgeOptions {
   /** Identifies the extension and its shipped relay. */
   runtime: NonNullable<Discovery['runtime']>;
   /** The configured worker model, if one was selected. */
-  workerModel?: () => string | undefined;
+  workerModel?: (provider: WorkerProvider) => string | undefined;
   /** Called with a line for each frame sent or received, for diagnosing deliveries (#27). */
   trace?: (line: string) => void;
   /** Receives allowlisted owner-connection and request lifecycle facts. */
@@ -151,6 +153,7 @@ export class Bridge {
   /** The relay connection whose agent started the current (or last) session. */
   private owner: WebSocket | undefined = undefined;
   private ownerConnectionId: number | undefined = undefined;
+  private ownerProvider: WorkerProvider | undefined = undefined;
   /** Sockets accepted so far, to tell them apart in `trace`. */
   private accepted = 0;
 
@@ -214,6 +217,7 @@ export class Bridge {
   }
 
   dispose(): void {
+    this.ownerProvider = undefined;
     // specs/Discovery.tla, `CloseWindow`: the file goes with the window.
     try {
       fs.unlinkSync(this.file);
@@ -315,6 +319,8 @@ export class Bridge {
       }
       if (this.owner === ws) {
         this.owner = undefined;
+        // specs/WorkerProvider.tla, Disconnect: retire the attachment's routing hint.
+        this.ownerProvider = undefined;
         this.ownerConnectionId = undefined;
         this.diagnostic({ kind: 'connection', state: 'disconnected', connectionId: socket });
         this.controller.disconnect();
@@ -352,6 +358,7 @@ export class Bridge {
       // cleared too: a socket that owned an ended session the start replaced must not drive the suspended one.
       if (ws.readyState !== ws.OPEN) {
         this.owner = undefined;
+        this.ownerProvider = undefined;
         const disconnected = this.ownerConnectionId ?? connectionId;
         this.ownerConnectionId = undefined;
         this.diagnostic({ kind: 'connection', state: 'disconnected', connectionId: disconnected });
@@ -362,6 +369,9 @@ export class Bridge {
         this.diagnostic({ kind: 'connection', state: 'disconnected', connectionId: this.ownerConnectionId });
       }
       this.owner = ws;
+      // specs/WorkerProvider.tla, Start: bind routing to this successful owner attachment.
+      const provider = WORKER_PROVIDER_SCHEMA.safeParse(args.provider);
+      this.ownerProvider = provider.success ? provider.data : undefined;
       this.ownerConnectionId = connectionId;
       this.diagnostic({ kind: 'connection', state: 'connected', connectionId });
       return report;
@@ -422,7 +432,7 @@ export class Bridge {
         if (args.brief !== undefined && (typeof args.brief !== 'string' || args.brief.length > WORKER_TEXT_LIMIT)) {
           throw new ToolError('invalid_arguments', 'Invalid worker brief.');
         }
-        const model = this.options.workerModel?.();
+        const model = this.ownerProvider === undefined ? undefined : this.options.workerModel?.(this.ownerProvider);
         if (model !== undefined && (model.trim() === '' || model.length > WORKER_MODEL_LIMIT)) {
           throw new ToolError('invalid_arguments', 'Invalid worker model.');
         }

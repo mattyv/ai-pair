@@ -4,6 +4,11 @@
 
 import { z } from 'zod';
 
+/** Supported worker provider routing hints. */
+export const WORKER_PROVIDER_SCHEMA = z.enum(['codex', 'claude']);
+/** A supported worker provider. */
+export type WorkerProvider = z.infer<typeof WORKER_PROVIDER_SCHEMA>;
+
 /** Maximum worker result or narration length. */
 export const WORKER_TEXT_LIMIT = 16_384;
 /** Maximum worker capability length. */

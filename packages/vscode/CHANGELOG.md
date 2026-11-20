@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.51.0
+
+-   Save different worker models for Codex and Claude. Pair uses the
+    active chat's preference. Leaving it blank uses that chat's model.
+
 ## 0.50.0
 
 -   Distinguish the Pair and Worker tabs with a selected indicator, and

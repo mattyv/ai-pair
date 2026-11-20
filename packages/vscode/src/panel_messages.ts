@@ -8,7 +8,14 @@ import type { SpeechModelStatus } from './speech_setup';
 import type { CatalogView } from './speech_catalog';
 import type { OpenRouterCatalogView } from './speech_openrouter_catalog';
 import type { OutputChoice } from './speech_output_types';
-import type { AudioDiagnostics, LocalAudioStatus, SpeechDecodeFromPage, NavigatorCommentary, ShortcutLabels } from '@ai-pair/protocol';
+import type {
+  AudioDiagnostics,
+  LocalAudioStatus,
+  SpeechDecodeFromPage,
+  NavigatorCommentary,
+  ShortcutLabels,
+  WorkerProvider,
+} from '@ai-pair/protocol';
 import type { OutputPreferenceView } from './speech_output_preferences';
 import type { SessionSpeechCostView } from './session_speech_cost';
 
@@ -28,7 +35,7 @@ export type FromPanel =
   | { type: 'ready' }
   | { type: 'cancelWorker' }
   | { type: 'workerEnabled'; value: boolean }
-  | { type: 'workerModel'; value: string }
+  | { type: 'workerModel'; provider: WorkerProvider; value: string }
   | { type: 'workerVisibility'; value: WorkerVisibility }
   | { type: 'copyDiagnostics' }
   | { type: 'reconnectLocalAudio' }
@@ -117,7 +124,7 @@ export type ToPanel =
   | { type: 'navigatorCommentary'; value: NavigatorCommentary }
   | { type: 'chatOrder'; value: ChatOrder }
   | { type: 'workerEnabled'; value: boolean }
-  | { type: 'workerModel'; value: string }
+  | { type: 'workerModel'; provider: WorkerProvider; value: string }
   | { type: 'workerVisibility'; value: WorkerVisibility }
   | { type: 'workerActive'; id?: number }
   | { type: 'showTerminals'; value: boolean }

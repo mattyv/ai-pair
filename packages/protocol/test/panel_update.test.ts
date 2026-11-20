@@ -68,7 +68,7 @@ it('accepts bounded worker activity and visibility updates', () => {
 
 it('validates worker settings at the panel boundary', () => {
   expect(localPanelUpdate.safeParse({ type: 'workerEnabled', value: false }).success).toBe(true);
-  expect(localPanelUpdate.safeParse({ type: 'workerModel', value: '' }).success).toBe(true);
-  expect(localPanelUpdate.safeParse({ type: 'workerModel', value: 'x'.repeat(257) }).success).toBe(false);
+  expect(localPanelUpdate.safeParse({ type: 'workerModel', provider: 'codex', value: '' }).success).toBe(true);
+  expect(localPanelUpdate.safeParse({ type: 'workerModel', provider: 'codex', value: 'x'.repeat(257) }).success).toBe(false);
   expect(localPanelUpdate.safeParse({ type: 'workerEnabled', value: 'false' }).success).toBe(false);
 });

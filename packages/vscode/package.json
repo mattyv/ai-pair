@@ -2,7 +2,7 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.50.0",
+  "version": "0.51.0",
   "publisher": "mattyv",
   "author": {
     "name": "mattyv"
@@ -395,7 +395,22 @@
         "aiPair.worker.model": {
           "type": "string",
           "default": "",
-          "description": "Model for the background worker. Empty uses the main agent model.",
+          "deprecationMessage": "This legacy setting is ignored. Configure the Codex or Claude worker model instead.",
+          "description": "Legacy worker model setting; retained but ignored.",
+          "scope": "application"
+        },
+        "aiPair.worker.codexModel": {
+          "type": "string",
+          "default": "",
+          "maxLength": 256,
+          "description": "Codex worker model. Empty uses the active chat model.",
+          "scope": "application"
+        },
+        "aiPair.worker.claudeModel": {
+          "type": "string",
+          "default": "",
+          "maxLength": 256,
+          "description": "Claude worker model. Empty uses the active chat model.",
           "scope": "application"
         },
         "aiPair.worker.visibility": {

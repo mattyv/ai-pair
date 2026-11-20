@@ -166,7 +166,10 @@ it('routes commentary through the production workspace session and projects its 
         expect.objectContaining({ type: 'panelChunk', data: JSON.stringify({ type: 'workerEnabled', value: true }) }),
       );
       expect(frames).toContainEqual(
-        expect.objectContaining({ type: 'panelChunk', data: JSON.stringify({ type: 'workerModel', value: 'worker-model' }) }),
+        expect.objectContaining({
+          type: 'panelChunk',
+          data: JSON.stringify({ type: 'workerModel', provider: 'codex', value: 'worker-model' }),
+        }),
       );
     });
   } finally {

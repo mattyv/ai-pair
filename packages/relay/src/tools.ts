@@ -9,6 +9,7 @@ import {
   WORKER_CAPABILITY_LIMIT,
   WORKER_PATH_LIMIT,
   WORKER_TEXT_LIMIT,
+  WORKER_PROVIDER_SCHEMA,
   actionKinds,
   CURSOR_MARKER,
   moveProblem,
@@ -213,6 +214,7 @@ export const TOOLS = {
       "Start a live pair programming session in the programmer's editor. Call this when the programmer asks to pair. The result includes the pairing guide: read it and follow it for the whole session. From then on, everything you do through `step` appears in their editor at a human pace, with your narration.",
     inputSchema: {
       task: z.string().optional().describe("A short description of what you'll work on, shown to the programmer."),
+      provider: WORKER_PROVIDER_SCHEMA.optional().describe('Your current chat provider, when the client does not identify itself.'),
       cwd: z
         .string()
         .optional()

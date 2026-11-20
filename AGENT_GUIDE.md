@@ -28,7 +28,8 @@ Everything below the line is written to the agent.
 In the optional background worker mode, the main agent keeps this session and
 speaks. Call `worker_grant` only when the programmer wants to delegate. Give
 the returned grant privately to a worker from your own provider, using the
-model preference in the grant or your own model when it is absent. The worker
+model preference in the grant or your exact current chat model when it is
+absent. The worker
 calls `worker_read`, `worker_step`, `worker_progress`, `worker_notice`, and
 `worker_done` with the grant. It leaves speech and editor control outside the
 task to the main agent. It requests commands through normal Pair approval.

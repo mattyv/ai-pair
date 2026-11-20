@@ -55,7 +55,7 @@ const fakes = vi.hoisted(() => {
     readonly connected: Transport[] = [];
     /** Whether `connect` sets the transport's handler, as the SDK does. */
     setsHandler = true;
-    readonly server = { getClientCapabilities: vi.fn(), listRoots: vi.fn() };
+    readonly server = { getClientCapabilities: vi.fn(), getClientVersion: vi.fn(), listRoots: vi.fn() };
     readonly close = vi.fn(() => Promise.resolve());
     readonly connect = vi.fn((transport: Transport) => {
       this.connected.push(transport);
@@ -565,4 +565,34 @@ it.each([new RelayError('no_editor', 'secret'), new Error('secret')])('sanitizes
   const result = await call(sdk, 'worker_done', { port: 1234, capability: 'secret', text: 'hi' });
   expect(result.isError).toBe(true);
   expect(texts(result).join()).not.toContain('secret');
+});
+
+describe('worker provider selection', () => {
+  it.each([
+    ['codex-mcp-client', 'claude', 'codex'],
+    ['codex-cli', 'claude', 'codex'],
+    ['codex', 'claude', 'codex'],
+    ['Claude Code', 'codex', 'claude'],
+    ['Codex CLI', 'claude', 'claude'],
+    ['claude-code', 'codex', 'claude'],
+    ['unknown', 'codex', 'codex'],
+  ])('prefers recognized client %s and otherwise uses the hint', async (name, provider, expected) => {
+    const { sdk, link } = build();
+    sdk.server.getClientVersion.mockReturnValue({ name, version: '1' });
+    link.call.mockResolvedValueOnce(EMPTY_REPORT);
+    link.locate.mockReturnValueOnce('/project');
+    link.workspace.mockReturnValueOnce({ folder: '/project', root: '/project' });
+    await call(sdk, 'start', { provider });
+    expect(link.call).toHaveBeenCalledWith('start', expect.objectContaining({ provider: expected }), expect.any(AbortSignal));
+  });
+});
+
+it('leaves worker provider unset for an unidentified client without a hint', async () => {
+  const { sdk, link } = build();
+  sdk.server.getClientVersion.mockReturnValue({ name: 'unknown', version: '1' });
+  link.call.mockResolvedValueOnce(EMPTY_REPORT);
+  link.locate.mockReturnValueOnce('/project');
+  link.workspace.mockReturnValueOnce({ folder: '/project', root: '/project' });
+  await call(sdk, 'start');
+  expect(link.call.mock.calls[0]?.[1]).not.toHaveProperty('provider');
 });

@@ -1032,11 +1032,14 @@ test('background worker settings are labeled and keyboard accessible', async ({ 
   const post = await load(page);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const enabled = page.getByRole('checkbox', { name: 'Enable background worker' });
-  const model = page.getByRole('textbox', { name: 'Model (leave empty to use the main model)' });
+  const model = page.getByRole('textbox', { name: 'Codex model (leave empty to use the main chat model)' });
+  const claude = page.getByRole('textbox', { name: 'Claude model (leave empty to use the main chat model)' });
   await post({ type: 'workerEnabled', value: true });
-  await post({ type: 'workerModel', value: 'model-a' });
+  await post({ type: 'workerModel', provider: 'codex', value: 'model-a' });
+  await post({ type: 'workerModel', provider: 'claude', value: 'model-b' });
   await expect(enabled).toBeChecked();
   await expect(model).toHaveValue('model-a');
+  await expect(claude).toHaveValue('model-b');
   await enabled.focus();
   await page.keyboard.press('Space');
   await expect(enabled).not.toBeChecked();
@@ -1053,7 +1056,7 @@ test('background worker settings are labeled and keyboard accessible', async ({ 
         return (globalThis as unknown as { messages: unknown[] }).messages;
       }),
     )
-    .toContainEqual({ type: 'workerModel', value: '' });
+    .toContainEqual({ type: 'workerModel', provider: 'codex', value: '' });
 });
 
 test('settings sections start compact and retain their state without losing other webview state', async ({ page }) => {

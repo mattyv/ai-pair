@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.51.0
+
+- Version aligned with the provider-specific worker model settings.
+
 ## 0.50.0
 
 - Version aligned with the Pair Settings and Worker tab updates.

@@ -77,11 +77,16 @@ afterEach(async () => {
 });
 
 /** Connects a client to a new relay server over an in-memory transport; `roots`: the harness's roots, as file URLs, if it has them. */
-async function connect(cwd = '/project/src', roots?: string[], runtime?: { version: string; relayHash: string }): Promise<Client> {
+async function connect(
+  cwd = '/project/src',
+  roots?: string[],
+  runtime?: { version: string; relayHash: string },
+  name = 'test',
+): Promise<Client> {
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   const server = createServer(new EditorLink(cwd, dir, runtime), 'THE GUIDE', cwd);
   await server.connect(serverSide);
-  const client = new Client({ name: 'test', version: '0' }, { capabilities: roots === undefined ? {} : { roots: {} } });
+  const client = new Client({ name, version: '0' }, { capabilities: roots === undefined ? {} : { roots: {} } });
   if (roots !== undefined) client.setRequestHandler(ListRootsRequestSchema, () => ({ roots: roots.map((uri) => ({ uri })) }));
   await client.connect(clientSide);
   clients.push(client);
@@ -736,5 +741,30 @@ describe('discovery', () => {
     } finally {
       registered.mockRestore();
     }
+  });
+});
+
+describe('worker provider routing', () => {
+  it.each([
+    ['codex-mcp-client', 'claude', 'codex-model'],
+    ['claude-code', 'codex', 'claude-model'],
+    ['generic', 'codex', 'codex-model'],
+  ])('uses the selected provider for %s', async (name, hint, expected) => {
+    bridge.dispose();
+    controller = new Controller(editor, panel, fast, undefined, { workerEnabled: () => true });
+    editor.controller = controller;
+    bridge = new Bridge(controller, {
+      dir,
+      workspaceFolders: () => ['/project'],
+      runtime: { version: 'test', build: 'build-one', relayHash: 'abc' },
+      calibrate: () => true,
+      workerModel: (provider) => `${provider}-model`,
+    });
+    await bridge.start();
+    const client = await connect('/project/src', undefined, undefined, name);
+    expect((await call(client, 'start', { provider: hint })).error).toBe(false);
+    const grant = await call(client, 'worker_grant');
+    expect(grant.error).toBe(false);
+    expect(JSON.parse(grant.text)).toMatchObject({ model: expected });
   });
 });

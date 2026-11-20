@@ -68,6 +68,10 @@ controller revokes the grant when the programmer interrupts or disables the
 feature. Playback owns a live batch until it returns that batch's outcome.
 Main-agent speech uses the existing narration port independently of worker
 playback. The agent harness launches the worker and selects its provider.
+The relay passes the chat's provider hint when opening or resuming a session.
+The bridge binds that hint to the owning connection and reads only its saved
+model preference. The hint selects a setting. Session ownership and the
+capability continue to authorize worker operations.
 
 ```text
 ┌──────────────────┐  stdio (MCP)  ┌────────────┐  WebSocket, 127.0.0.1  ┌─────────────────────────────┐

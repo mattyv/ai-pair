@@ -1,14 +1,14 @@
 # Testing background workers
 
-The 0.50.0 preview lets a background worker drive visible edits while the main
+The 0.51.0 preview lets a background worker drive visible edits while the main
 agent keeps the conversation and provides spoken narration. The setting is
 off by default.
 
 1.  Install the matching AI Pair and AI Pair Local Audio VSIX files and reload
     VS Code. Reconnect Pair in the agent harness so it uses the new relay.
-2.  Enable split agents in **Pair Settings**. Set **Worker model** to a
-    model from your agent's provider to override the main model. Leave it
-    empty to inherit the main model.
+2.  Enable split agents in **Pair Settings**. Set **Codex worker model**
+    and **Claude worker model** independently. Pair uses the preference for
+    the active chat. A blank field uses that chat's exact model.
 3.  Start Pair normally. Ask the main agent to create a grant with
     `worker_grant` and launch a native worker from the same provider, using
     the worker model you choose. Give the worker a small edit in a scratch
@@ -33,3 +33,7 @@ authenticates the grant. It does not authenticate the model or launch a
 separate CLI process. There is one worker and one batch at a time. Commands
 use the existing Pair approval policy. A command you approved can keep running
 after you cancel the worker, as with ordinary Pair commands.
+
+The previous single `aiPair.worker.model` setting remains in existing
+settings files. If you used it, copy it once to the appropriate provider
+field. Pair cannot tell which provider the shared value belonged to.

@@ -3864,22 +3864,32 @@ it('sends each worker visibility choice', () => {
   expect(posted()).toHaveLength(before);
 });
 
-it('reflects and saves background worker settings', () => {
+it('reflects and saves independent background worker model settings', () => {
   const enabled = ui('worker-enabled');
-  const model = ui('worker-model');
-  if (!(enabled instanceof window.HTMLInputElement) || !(model instanceof window.HTMLInputElement)) {
+  const codex = ui('worker-model-codex');
+  const claude = ui('worker-model-claude');
+  if (
+    !(enabled instanceof window.HTMLInputElement) ||
+    !(codex instanceof window.HTMLInputElement) ||
+    !(claude instanceof window.HTMLInputElement)
+  ) {
     throw new Error('Missing worker settings');
   }
   send({ type: 'workerEnabled', value: true });
-  send({ type: 'workerModel', value: 'model-a' });
+  send({ type: 'workerModel', provider: 'codex', value: 'codex-model' });
+  send({ type: 'workerModel', provider: 'claude', value: 'claude-model' });
   expect(enabled.checked).toBe(true);
-  expect(model.value).toBe('model-a');
+  expect(codex.value).toBe('codex-model');
+  expect(claude.value).toBe('claude-model');
   enabled.checked = false;
   enabled.dispatchEvent(new window.Event('change'));
-  model.value = '';
-  model.dispatchEvent(new window.Event('change'));
+  codex.value = '';
+  codex.dispatchEvent(new window.Event('change'));
+  claude.value = 'another-model';
+  claude.dispatchEvent(new window.Event('change'));
   expect(posted()).toContainEqual({ type: 'workerEnabled', value: false });
-  expect(posted()).toContainEqual({ type: 'workerModel', value: '' });
+  expect(posted()).toContainEqual({ type: 'workerModel', provider: 'codex', value: '' });
+  expect(posted()).toContainEqual({ type: 'workerModel', provider: 'claude', value: 'another-model' });
 });
 
 it('restores valid settings disclosures and preserves other webview state on toggle', async () => {

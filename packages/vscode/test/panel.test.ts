@@ -130,7 +130,10 @@ const REF: Ref = { file: 'a.ts', line: 1, endLine: 2 };
 interface Harness {
   panel: NarrationPanel;
   workerEnabled: { get: ReturnType<typeof vi.fn<() => boolean>>; set: ReturnType<typeof vi.fn<(value: boolean) => void>> };
-  workerModel: { get: ReturnType<typeof vi.fn<() => string>>; set: ReturnType<typeof vi.fn<(value: string) => void>> };
+  workerModel: {
+    get: ReturnType<typeof vi.fn<(provider: 'codex' | 'claude') => string>>;
+    set: ReturnType<typeof vi.fn<(provider: 'codex' | 'claude', value: string) => void>>;
+  };
   workerVisibility: {
     get: ReturnType<typeof vi.fn<() => 'milestones' | 'everything' | 'off'>>;
     set: ReturnType<typeof vi.fn<(value: 'milestones' | 'everything' | 'off') => void>>;
@@ -307,7 +310,10 @@ function harness(
   starter.available.mockResolvedValue(true);
   starter.start.mockResolvedValue();
   const workerEnabled = { get: vi.fn(() => false), set: vi.fn<(value: boolean) => void>() };
-  const workerModel = { get: vi.fn(() => ''), set: vi.fn<(value: string) => void>() };
+  const workerModel = {
+    get: vi.fn<(provider: 'codex' | 'claude') => string>(() => ''),
+    set: vi.fn<(provider: 'codex' | 'claude', value: string) => void>(),
+  };
   const workerVisibility = {
     get: vi.fn<() => 'milestones' | 'everything' | 'off'>(() => 'milestones'),
     set: vi.fn<(value: 'milestones' | 'everything' | 'off') => void>(),
@@ -893,7 +899,8 @@ describe('receive', () => {
       { type: 'navigatorCommentary', value: 'helpful' },
       { type: 'chatOrder', value: 'newestFirst' },
       { type: 'workerEnabled', value: false },
-      { type: 'workerModel', value: '' },
+      { type: 'workerModel', provider: 'codex', value: '' },
+      { type: 'workerModel', provider: 'claude', value: '' },
       { type: 'workerVisibility', value: 'milestones' },
       { type: 'replyBehavior', value: 'interrupt' },
       { type: 'commandApprovalSound', value: false },
@@ -952,10 +959,11 @@ describe('receive', () => {
     chatOrder.get.mockReturnValue('oldestFirst');
     const view = open(panel);
     view.send({ type: 'ready' });
-    expect(view.posted.slice(8, 17)).toEqual([
+    expect(view.posted.slice(8, 18)).toEqual([
       { type: 'chatOrder', value: 'oldestFirst' },
       { type: 'workerEnabled', value: false },
-      { type: 'workerModel', value: '' },
+      { type: 'workerModel', provider: 'codex', value: '' },
+      { type: 'workerModel', provider: 'claude', value: '' },
       { type: 'workerVisibility', value: 'milestones' },
       { type: 'replyBehavior', value: 'interrupt' },
       { type: 'commandApprovalSound', value: false },
@@ -2216,18 +2224,24 @@ it('validates worker setting actions and sends current settings', () => {
   const view = open(panel);
   view.send({ type: 'ready' });
   expect(view.posted).toContainEqual({ type: 'workerEnabled', value: false });
-  expect(view.posted).toContainEqual({ type: 'workerModel', value: '' });
+  expect(view.posted).toContainEqual({ type: 'workerModel', provider: 'codex', value: '' });
+  expect(view.posted).toContainEqual({ type: 'workerModel', provider: 'claude', value: '' });
   view.send({ type: 'workerEnabled', value: true });
-  view.send({ type: 'workerModel', value: 'model' });
+  view.send({ type: 'workerModel', provider: 'codex', value: 'model' });
+  view.send({ type: 'workerModel', provider: 'claude', value: 'other' });
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   view.send({ type: 'workerEnabled', value: 'true' } as unknown as FromPanel);
-  view.send({ type: 'workerModel', value: 'x'.repeat(257) });
+  view.send({ type: 'workerModel', provider: 'codex', value: 'x'.repeat(257) });
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  view.send({ type: 'workerModel', provider: 'unknown', value: 'model' } as unknown as FromPanel);
   expect(workerEnabled.set).toHaveBeenCalledExactlyOnceWith(true);
-  expect(workerModel.set).toHaveBeenCalledExactlyOnceWith('model');
+  expect(workerModel.set).toHaveBeenCalledTimes(2);
+  expect(workerModel.set).toHaveBeenCalledWith('codex', 'model');
+  expect(workerModel.set).toHaveBeenCalledWith('claude', 'other');
   panel.showWorkerEnabled(true);
-  panel.showWorkerModel('model');
+  panel.showWorkerModel('codex', 'model');
   expect(view.posted).toContainEqual({ type: 'workerEnabled', value: true });
-  expect(view.posted).toContainEqual({ type: 'workerModel', value: 'model' });
+  expect(view.posted).toContainEqual({ type: 'workerModel', provider: 'codex', value: 'model' });
 });
 
 it('shows default worker settings when wiring is absent', () => {
@@ -2235,6 +2249,7 @@ it('shows default worker settings when wiring is absent', () => {
   const view = open(panel);
   view.send({ type: 'ready' });
   expect(view.posted).toContainEqual({ type: 'workerEnabled', value: false });
-  expect(view.posted).toContainEqual({ type: 'workerModel', value: '' });
+  expect(view.posted).toContainEqual({ type: 'workerModel', provider: 'codex', value: '' });
+  expect(view.posted).toContainEqual({ type: 'workerModel', provider: 'claude', value: '' });
   expect(view.posted).toContainEqual({ type: 'workerVisibility', value: 'milestones' });
 });

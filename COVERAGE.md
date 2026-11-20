@@ -841,6 +841,8 @@ Last updated: css, 2026-11-20.
 | `specs/WorkerDriver.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/WorkerNotice.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/WorkerNotice.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/WorkerProvider.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/WorkerProvider.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/check.sh` | Shell | - | - | - | - | L 100.0% (59 of 59) | - |
 | `specs/run_configs.sh` | Shell | - | - | - | - | L 100.0% (40 of 40) | - |
 | `vitest.config.ts` | TypeScript | - | - | - | - | - | - |

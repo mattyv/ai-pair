@@ -90,7 +90,8 @@ const ui = {
   workerCancel: $('worker-cancel', HTMLButtonElement),
   workerVisibility: $('worker-visibility', HTMLSelectElement),
   workerEnabled: $('worker-enabled', HTMLInputElement),
-  workerModel: $('worker-model', HTMLInputElement),
+  workerModelCodex: $('worker-model-codex', HTMLInputElement),
+  workerModelClaude: $('worker-model-claude', HTMLInputElement),
   settings: $('settings', HTMLButtonElement),
   voiceStatus: $('voice-status', HTMLButtonElement),
   settingsDialog: $('settings-dialog', HTMLDialogElement),
@@ -1604,8 +1605,11 @@ ui.workerCancel.addEventListener('click', () => {
 ui.workerEnabled.addEventListener('change', () => {
   vscode.postMessage({ type: 'workerEnabled', value: ui.workerEnabled.checked });
 });
-ui.workerModel.addEventListener('change', () => {
-  vscode.postMessage({ type: 'workerModel', value: ui.workerModel.value });
+ui.workerModelCodex.addEventListener('change', () => {
+  vscode.postMessage({ type: 'workerModel', provider: 'codex', value: ui.workerModelCodex.value });
+});
+ui.workerModelClaude.addEventListener('change', () => {
+  vscode.postMessage({ type: 'workerModel', provider: 'claude', value: ui.workerModelClaude.value });
 });
 ui.workerVisibility.addEventListener('change', () => {
   const value = ui.workerVisibility.value;
@@ -1627,7 +1631,8 @@ function handle(message: ToPanel): void {
       ui.workerEnabled.checked = message.value;
       return;
     case 'workerModel':
-      ui.workerModel.value = message.value;
+      if (message.provider === 'codex') ui.workerModelCodex.value = message.value;
+      else ui.workerModelClaude.value = message.value;
       return;
     case 'workerVisibility':
       workerVisibility = message.value;

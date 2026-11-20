@@ -64,6 +64,21 @@ function shownPath(file: string): string {
   return file.startsWith(`${home}${path.sep}`) ? `~${file.slice(home.length)}` : file;
 }
 
+/** Selects a provider only from recognized local MCP client names. */
+function clientProvider(name?: string): 'codex' | 'claude' | undefined {
+  switch (name?.trim().toLowerCase()) {
+    case 'codex-mcp-client':
+    case 'codex-cli':
+    case 'codex':
+      return 'codex';
+    case 'claude-code':
+    case 'claude code':
+      return 'claude';
+    default:
+      return undefined;
+  }
+}
+
 /**
  * Creates the MCP server. `cwd` is the relay's working directory. The agent's paths are relative to its own, which `start`
  * takes from an explicit directory, or finds in the harness's roots and `cwd` when none is supplied.
@@ -127,7 +142,7 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
     }
   }
 
-  server.registerTool('start', TOOLS.start, ({ cwd: given, ...args }, extra) =>
+  server.registerTool('start', TOOLS.start, ({ cwd: given, provider: hint, ...args }, extra) =>
     run('start', args, extra, async () => {
       // specs/StartDirectory.tla, `Start`: an explicit directory never falls back.
       if (given !== undefined) {
@@ -142,7 +157,9 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
       const located = link.locate(folders);
       const { folder, root } = link.workspace(located);
       guides = readGuides(aiPairHome(), folder, root);
-      return { cwd: located, rules: guides.map((g) => shownPath(g.file)) };
+      // specs/WorkerProvider.tla, Start: recognized client identity takes precedence over the hint.
+      const provider = clientProvider(server.server.getClientVersion()?.name) ?? hint;
+      return { cwd: located, rules: guides.map((g) => shownPath(g.file)), ...(provider === undefined ? {} : { provider }) };
     }),
   );
   server.registerTool('step', TOOLS.step, (args, extra) =>

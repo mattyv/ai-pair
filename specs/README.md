@@ -66,6 +66,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `WorkerAttachment.cfg` | proposal, two owner attachments, one job and one grant per attachment | holds | 45 |
 | `WorkerDriver.cfg` | proposal, two worker tasks and three physical batch identities | holds | 68 |
 | `WorkerNotice.cfg` | two worker generations, one pending notice, ordinary progress separate | holds | 72 |
+| `WorkerProvider.cfg` | two attachment identities, two providers and an unknown provider | holds | 45 |
 | `Serialize.cfg` | `NumCalls = 2` calls, each empty or not, the session ending, an interrupt, and the socket closing at any point | holds | 3,646 |
 | `Wire.cfg` | `NumSockets = 2` sockets, `NumCalls = 2` calls | holds | 43,426 |
 | `StructuralTyping.cfg` | both operations, closed and opaque field categories, selection and one or two closes | holds | 288 |
@@ -262,6 +263,25 @@ notices. Routine progress stays in the Worker view.
 | `NoProgressWake` | Make progress return the listen call | Routine progress stays in the Worker activity lane |
 | `Wake` | Disable notice delivery | A question wakes the owner while a worker batch plays |
 | `Cleared` | Keep the notice pending after delivery | A previously delivered notice is not delivered again |
+
+`WorkerProvider.tla` models provider routing as a hint bound to the successful
+owner attachment. Known client identity takes precedence over a caller's hint;
+an unknown client may provide an explicit hint, or use no model override. The
+owner check is independent of that hint. Disconnect clears the binding, and a
+resumed session starts with its new attachment's evidence. The model checks two
+attachment identities, Codex, Claude and no provider. TLC generated 217 states
+and found 45 distinct states at depth 3. Weak fairness of each grant action is
+assumed; client identity authenticity, real transport and model availability
+are outside the model.
+
+| Property | Mutation | Implementation test |
+|---|---|---|
+| `TypeOK` | Initialize the owner outside the attachment set | Nothing yet |
+| `KnownClientWins` | `PreferClient = FALSE` | `server.test.ts`: known client takes precedence over the hint |
+| `HintForUnknown` | Ignore the hint for an unknown client | `server.test.ts`: unknown client uses the hint |
+| `DetachedHasNoProvider` | `ClearOnDisconnect = FALSE` | `bridge.test.ts`: the next owner without a provider receives no override |
+| `NoForeignGrant` | `AllowForeignGrant = TRUE` | `bridge.test.ts`: non-owner grant is refused |
+| `GrantProgress` | Disable the grant action | `bridge.test.ts`: the current owner receives a grant |
 
 ## Specs and the code they model
 

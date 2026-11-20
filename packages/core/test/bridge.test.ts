@@ -278,9 +278,9 @@ async function call(socket: FakeSocket, id: number, tool: string, args?: Record<
 }
 
 /** Connects a socket that starts a session, which it then owns. */
-async function owner(server: FakeServer): Promise<FakeSocket> {
+async function owner(server: FakeServer, provider?: 'codex' | 'claude'): Promise<FakeSocket> {
   const socket = welcomed(server);
-  expect(await call(socket, 1, 'start', {})).toEqual({ type: 'result', id: 1, result: REPORT });
+  expect(await call(socket, 1, 'start', provider === undefined ? {} : { provider })).toEqual({ type: 'result', id: 1, result: REPORT });
   controller.isActive = true;
   return socket;
 }
@@ -771,8 +771,8 @@ describe('DiagnosticsRequest failure and cancellation', () => {
 
 describe('background worker routing', () => {
   it('gives the owner a grant and lets a separate socket complete without becoming owner', async () => {
-    const { server } = await started({ workerModel: () => 'example-model' });
-    const main = await owner(server);
+    const { server } = await started({ workerModel: (provider) => (provider === 'codex' ? 'example-model' : 'other') });
+    const main = await owner(server, 'codex');
     const worker = welcomed(server);
     expect(await call(main, 2, 'worker_grant', { brief: 'Inspect tests' })).toEqual({
       type: 'result',
@@ -860,7 +860,7 @@ describe('worker request boundary', () => {
     ['oversized model', {}, 'x'.repeat(257)],
   ])('rejects %s before issuing a grant', async (label, args, model) => {
     const { server } = await started({ workerModel: () => model });
-    const main = await owner(server);
+    const main = await owner(server, 'codex');
     expect(await call(main, 2, 'worker_grant', args), label).toMatchObject({ type: 'error', code: 'invalid_arguments' });
     expect(controller.grantWorker).not.toHaveBeenCalled();
   });
@@ -882,4 +882,29 @@ it('forwards valid worker actions and owner narration without a configured model
     type: 'result',
   });
   expect(controller.workerStep).toHaveBeenCalledWith('secret', [{ move: { file: 'a', line: 1 } }], expect.any(AbortSignal));
+});
+
+describe('worker provider binding', () => {
+  it.each(['codex', 'claude'] as const)('routes %s model only to its current owner', async (provider) => {
+    const model = vi.fn((selected: 'codex' | 'claude') => `${selected}-model`);
+    const { server } = await started({ workerModel: model });
+    const main = await owner(server, provider);
+    expect(await call(main, 2, 'worker_grant')).toMatchObject({ type: 'result', result: { model: `${provider}-model` } });
+    expect(model).toHaveBeenCalledWith(provider);
+    main.closed();
+    controller.isSuspended = true;
+    const next = await owner(server);
+    model.mockClear();
+    expect(await call(next, 3, 'worker_grant')).toMatchObject({ type: 'result', result: { capability: 'worker-secret' } });
+    expect(model).not.toHaveBeenCalled();
+  });
+});
+
+it('ignores an unrecognized provider rather than borrowing another model', async () => {
+  const model = vi.fn(() => 'wrong-model');
+  const { server } = await started({ workerModel: model });
+  const main = welcomed(server);
+  expect(await call(main, 1, 'start', { provider: 'unknown' })).toMatchObject({ type: 'result' });
+  expect(await call(main, 2, 'worker_grant')).toMatchObject({ type: 'result', result: { capability: 'worker-secret' } });
+  expect(model).not.toHaveBeenCalled();
 });

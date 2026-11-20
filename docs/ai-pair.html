@@ -40178,9 +40178,9 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
               ],
               edges: [
                 { from: "main", to: "worker", label: "Privately delegates one task and grant" },
-                { from: "main", to: "relay", label: "Session tools" },
+                { from: "main", to: "relay", label: "Tools and provider hint" },
                 { from: "worker", to: "relay", label: "Submit visible batch with grant" },
-                { from: "relay", to: "bridge", label: "Owner or scoped worker operations" },
+                { from: "relay", to: "bridge", label: "Scoped operations and model routing" },
                 { from: "bridge", to: "controller", label: "Verify authority for the active session" },
                 { from: "controller", to: "player", label: "Rehearse and play one edit batch" },
                 { from: "controller", to: "voice", label: "Send main-agent speech" },

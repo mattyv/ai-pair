@@ -8,6 +8,8 @@ import {
   AUDIO_DIAGNOSTICS_SCHEMA,
   NAVIGATOR_COMMENTARY_SCHEMA,
   WORKER_MODEL_LIMIT,
+  WORKER_PROVIDER_SCHEMA,
+  type WorkerProvider,
   type NavigatorCommentary,
   speechAccent,
   speechDecodeFromPage,
@@ -83,7 +85,7 @@ export interface PanelWiring {
   copyDiagnostics: () => Promise<void>;
   requireCommandApproval: () => Promise<void>;
   workerEnabled?: { get: () => boolean; set: (value: boolean) => void };
-  workerModel?: { get: () => string; set: (value: string) => void };
+  workerModel?: { get: (provider: WorkerProvider) => string; set: (provider: WorkerProvider, value: string) => void };
   workerVisibility?: { get: () => WorkerVisibility; set: (value: WorkerVisibility) => void };
   speech: {
     sessionCost?: Pick<SessionSpeechCost, 'start' | 'restore' | 'end' | 'view'>;
@@ -339,8 +341,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   }
 
   /** Shows the configured worker model. */
-  showWorkerModel(value: string): void {
-    this.send({ type: 'workerModel', value });
+  showWorkerModel(provider: WorkerProvider, value: string): void {
+    this.send({ type: 'workerModel', provider, value });
   }
 
   /** Shows the saved worker activity visibility. */
@@ -919,7 +921,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         this.showNavigatorCommentary(this.navigatorCommentary.get());
         this.showChatOrder(this.chatOrder.get());
         this.showWorkerEnabled(this.wiring.workerEnabled?.get() ?? false);
-        this.showWorkerModel(this.wiring.workerModel?.get() ?? '');
+        this.showWorkerModel('codex', this.wiring.workerModel?.get('codex') ?? '');
+        this.showWorkerModel('claude', this.wiring.workerModel?.get('claude') ?? '');
         this.showWorkerVisibility(this.wiring.workerVisibility?.get() ?? 'milestones');
         this.showReplyBehavior(this.replyBehavior.get());
         this.showCommandApprovalSound(this.commandApprovalSound.get());
@@ -963,7 +966,13 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         if (typeof message.value === 'boolean') this.wiring.workerEnabled?.set(message.value);
         return;
       case 'workerModel':
-        if (typeof message.value === 'string' && message.value.length <= WORKER_MODEL_LIMIT) this.wiring.workerModel?.set(message.value);
+        if (
+          WORKER_PROVIDER_SCHEMA.safeParse(message.provider).success &&
+          typeof message.value === 'string' &&
+          message.value.length <= WORKER_MODEL_LIMIT
+        ) {
+          this.wiring.workerModel?.set(message.provider, message.value);
+        }
         return;
       case 'workerVisibility':
         if (message.value === 'milestones' || message.value === 'everything' || message.value === 'off') {
