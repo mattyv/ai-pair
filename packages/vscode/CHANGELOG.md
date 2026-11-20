@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.52.2
+
+- Clarify the worker, code display, and speech context tooltips.
+
 ## 0.52.1
 
 - Show Settings tooltips when hovering the setting name as well as its control.

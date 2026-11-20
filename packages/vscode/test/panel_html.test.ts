@@ -301,12 +301,16 @@ it('offers an opt-in speech context selector and a capability explanation', () =
   expect(page.querySelector('[data-ui="speech-context-capability"]')).not.toBeNull();
 });
 
-it.each(['worker-enabled', 'worker-visibility', 'settings-code-playback', 'speech-context'])(
-  'provides a nonempty custom tooltip on the %s settings control',
-  (control) => {
-    const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js');
-    const page = new window.DOMParser().parseFromString(html, 'text/html');
-    const tip = page.querySelector<HTMLElement>(`[data-ui="${control}"]`)?.dataset.tip;
-    expect(tip?.trim()).toBeTruthy();
-  },
-);
+it.each([
+  ['worker-enabled', 'Let a worker make the edits while the main agent stays free to answer questions and narrate.'],
+  [
+    'worker-visibility',
+    'Milestones shows starts and results in chat. Everything adds progress and edit updates. Off keeps updates in Worker.',
+  ],
+  ['settings-code-playback', 'Typing shows each keystroke. Lines and Blocks reveal larger chunks with a pause to read.'],
+  ['speech-context', 'Shares recent narration with supported cloud models for smoother speech and cues like whispering.'],
+])('explains the impact of the %s setting', (control, explanation) => {
+  const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js');
+  const page = new window.DOMParser().parseFromString(html, 'text/html');
+  expect(page.querySelector<HTMLElement>(`[data-ui="${control}"]`)?.dataset.tip).toBe(explanation);
+});
