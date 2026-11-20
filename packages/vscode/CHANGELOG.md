@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.52.1
+
+- Show Settings tooltips when hovering the setting name as well as its control.
+
 ## 0.52.0
 
 -   Add hover and keyboard-focus tooltips for background worker settings,

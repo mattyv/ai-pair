@@ -71,8 +71,9 @@ Pair narration connects relevant choices to earlier verified work; ask for a
 teaching style for more concept explanations without compulsory exercises.
 
 Optional **Speech context and delivery cues** can be enabled in Pair Settings.
-Hover or move keyboard focus to that control, **Code display**, or the
-background worker controls for a short explanation.
+Hover the setting name or control for a short explanation of speech context,
+**Code display**, or the background worker controls. Keyboard focus on a
+control also shows its explanation.
 For supported models, the provider receives up to three previously completed
 agent utterances, bounded to 500 Unicode code points, to improve continuity.
 Previous context requires OpenRouter Zero Data Retention; ordinary narration

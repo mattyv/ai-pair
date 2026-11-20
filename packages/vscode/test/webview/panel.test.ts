@@ -4105,3 +4105,34 @@ it('keeps keyboard tooltip on stationary-pointer retargeting and follows real po
   expect(focused.hasAttribute('aria-describedby')).toBe(false);
   expect(underPointer.getAttribute('aria-describedby')).toBe('tip');
 });
+
+describe('settings label tooltips', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    start();
+    click(element('settings'));
+  });
+
+  it.each(['worker-enabled', 'settings-code-playback'] as const)('shows the %s control tooltip when its label text is hovered', (name) => {
+    const control = element(name);
+    control.dataset.tip = `${name} explanation`;
+    const label = control.closest('label');
+    ok(label);
+    movePointer(label);
+    vi.advanceTimersByTime(TIP_DELAY_MS);
+    expect(tip()).toBe(`${name} explanation`);
+    expect(control.getAttribute('aria-describedby')).toBe(element('tip').id);
+    expect(label.hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('does not invent a tooltip for a label whose control has none', () => {
+    const control = element('chat-order');
+    delete control.dataset.tip;
+    const label = control.closest('label');
+    ok(label);
+    movePointer(label);
+    vi.advanceTimersByTime(TIP_DELAY_MS);
+    expect(tip()).toBeUndefined();
+    expect(control.hasAttribute('aria-describedby')).toBe(false);
+  });
+});

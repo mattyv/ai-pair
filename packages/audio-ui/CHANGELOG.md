@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.52.1
+
+- Version aligned with the Settings tooltip fix.
+
 ## 0.52.0
 
 - Version aligned with the Pair Settings tooltip update.

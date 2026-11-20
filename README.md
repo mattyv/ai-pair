@@ -419,9 +419,10 @@ has it fetch the text and start the calibration with it.
 
 ## Settings
 
-Hover or move keyboard focus to **Enable background worker**, **Worker
-activity in Pair**, **Code display**, or **Speech context and delivery cues**
-for an explanation in Pair Settings.
+In Pair Settings, hover a setting's name or control for help with **Enable
+background worker**, **Worker activity in Pair**, **Code display**, and
+**Speech context and delivery cues**. Moving keyboard focus to the control
+also shows its explanation.
 
 Commands use quiet terminals by default; **Show terminal** reveals one. If shell
 integration is unavailable, the terminal opens so you can see the command.

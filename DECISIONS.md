@@ -59,7 +59,9 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   Explain selected settings through the existing hover and keyboard-focus
     tooltip. Place the shared popup inside the modal dialog for settings
     controls so it remains visible above the modal backdrop, and clear its
-    accessibility reference when focus moves or the dialog closes.
+    accessibility reference when focus moves or the dialog closes. A hover
+    on the setting name uses the associated control as the tooltip target,
+    giving pointer and keyboard users the same explanation.
 
 ## CI tool downloads
 

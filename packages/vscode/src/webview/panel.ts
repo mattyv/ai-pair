@@ -2389,7 +2389,9 @@ ui.end.addEventListener('click', () => {
 
 /** Finds the tooltip target under the pointer, including over nested icons. */
 function hoverTipFromEvent(event: PointerEvent): void {
-  hoverTip(event.target instanceof Element ? (event.target.closest<HTMLElement>('[data-tip]') ?? undefined) : undefined);
+  const element = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-tip], label') : undefined;
+  const control = element instanceof HTMLLabelElement ? element.control : element;
+  hoverTip(control?.dataset.tip !== undefined ? control : undefined);
 }
 
 // Scrolling can move a Settings control under a stationary pointer.

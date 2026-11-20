@@ -94,6 +94,21 @@ async function load(page: Page): Promise<(event: object) => Promise<void>> {
   };
 }
 
+/** Waits for scroll events and layout to settle before pointer movement. */
+async function settleScroll(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const browser = globalThis as unknown as { requestAnimationFrame(callback: () => void): number };
+    return new Promise<void>((resolve) => {
+      browser.requestAnimationFrame(() => {
+        browser.requestAnimationFrame(() => {
+          resolve();
+        });
+      });
+    });
+  });
+}
+
 /** Populates enough history to make the panel scroll. */
 async function populate(post: (event: object) => Promise<void>): Promise<void> {
   await post({ type: 'session', active: true, task: 'Order test' });
@@ -1191,4 +1206,32 @@ test('settings tooltips appear above the modal on hover and keyboard focus, then
   const settings = page.getByRole('button', { name: 'Settings' });
   await settings.hover();
   await expect(page.getByRole('tooltip')).toContainText('Settings');
+});
+
+test('settings label text shows the associated control tooltip', async ({ page }) => {
+  const post = await load(page);
+  await post({ type: 'timings', tipDelayMs: 0, tipWarmMs: 0 });
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Settings' });
+  const tooltip = dialog.getByRole('tooltip');
+  for (const [name, x] of [
+    ['worker-enabled', 80],
+    ['settings-code-playback', 10],
+  ] as const) {
+    const control = dialog.locator(`[data-ui="${name}"]`);
+    const label = control.locator('xpath=..');
+    await label.scrollIntoViewIfNeeded();
+    await settleScroll(page);
+    await label.hover({ position: { x, y: 8 } });
+    const expected = await control.getAttribute('data-tip');
+    expect(expected?.trim()).not.toBe('');
+    await expect(tooltip).toHaveText(expected ?? '');
+    await expect(control).toHaveAttribute('aria-describedby', 'tip');
+    await expect(label).not.toHaveAttribute('aria-describedby');
+  }
+  const unsupported = dialog.locator('[data-ui="chat-order"]').locator('xpath=..');
+  await unsupported.scrollIntoViewIfNeeded();
+  await settleScroll(page);
+  await unsupported.hover({ position: { x: 10, y: 8 } });
+  await expect(tooltip).toBeHidden();
 });
