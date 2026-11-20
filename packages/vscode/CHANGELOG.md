@@ -4,6 +4,12 @@
 
 -   Grow the worker's response in the Worker tab as Codex writes it.
     The Codex App Server runner forwards visible text during the turn.
+-   Add opt-in background workers, separate Codex and Claude worker models,
+    and controls for worker activity in Pair chat.
+-   Organize Pair Settings into collapsible sections with tooltips. Hide the
+    Pair and Worker tabs when split mode is off.
+-   Open externally changed files when Git has no diff to show, and capture
+    the output and exit status of Bash commands that start with a subshell.
 
 ## 0.53.0
 
