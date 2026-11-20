@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.50.0
+
+-   Distinguish the Pair and Worker tabs with a selected indicator, and
+    display Worker activity in the same order as Pair chat.
+-   Enable split agents and set the worker model in Pair Settings.
+-   Fold Pair Settings into collapsible sections and remember which
+    sections you open. Conversation and Playback start open (#130).
+
 ## 0.49.0
 
 -   Add an experimental, default-off background worker mode. The main agent

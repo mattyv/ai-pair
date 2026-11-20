@@ -379,6 +379,8 @@ const fakes = vi.hoisted(() => {
     readonly showReadingSpeed = vi.fn();
     readonly showChatOrder = vi.fn();
     readonly showWorkerVisibility = vi.fn();
+    readonly showWorkerEnabled = vi.fn();
+    readonly showWorkerModel = vi.fn();
     readonly showNavigatorCommentary = vi.fn();
     readonly showReplyBehavior = vi.fn();
     readonly showCommandApprovalSound = vi.fn();
@@ -419,6 +421,8 @@ const fakes = vi.hoisted(() => {
       readonly trace: (line: string) => void,
       readonly extensionUri: unknown,
       readonly wiring: {
+        workerEnabled: { get: () => boolean; set: (value: boolean) => void };
+        workerModel: { get: () => string; set: (value: string) => void };
         workerVisibility: { get: () => 'milestones' | 'everything' | 'off'; set: (value: 'milestones' | 'everything' | 'off') => void };
         controller: () => unknown;
         calibration: () => unknown;
@@ -1119,6 +1123,26 @@ describe('activate', () => {
         },
         () => {
           expect(h.panel.showReplyBehavior).toHaveBeenLastCalledWith('interrupt');
+        },
+      ],
+      [
+        'worker.enabled',
+        'worker enabled',
+        () => {
+          h.panel.wiring.workerEnabled.set(true);
+        },
+        () => {
+          expect(h.panel.showWorkerEnabled).toHaveBeenLastCalledWith(false);
+        },
+      ],
+      [
+        'worker.model',
+        'worker model',
+        () => {
+          h.panel.wiring.workerModel.set('model');
+        },
+        () => {
+          expect(h.panel.showWorkerModel).toHaveBeenLastCalledWith('');
         },
       ],
       [
@@ -3410,6 +3434,8 @@ it('reads worker model and visibility settings', () => {
   const bridge = last(fakes.made.bridges);
   expect(bridge.options.workerModel()).toBeUndefined();
   fakes.settings.set('worker.model', '  model-name  ');
+  changed('worker.model');
+  expect(h.panel.showWorkerModel).toHaveBeenLastCalledWith('  model-name  ');
   expect(bridge.options.workerModel()).toBe('model-name');
   fakes.settings.set('worker.model', '   ');
   expect(bridge.options.workerModel()).toBeUndefined();
@@ -3418,6 +3444,60 @@ it('reads worker model and visibility settings', () => {
     changed('worker.visibility');
     expect(h.panel.showWorkerVisibility).toHaveBeenLastCalledWith(value === 'invalid' ? 'milestones' : value);
   }
+});
+
+it('applies worker settings immediately and writes them globally', () => {
+  const h = activated();
+  const bridge = last(fakes.made.bridges);
+  h.panel.wiring.workerEnabled.set(true);
+  expect(h.panel.wiring.workerEnabled.get()).toBe(true);
+  expect(h.controller.options?.workerEnabled?.()).toBe(true);
+  h.panel.wiring.workerModel.set(' model ');
+  expect(bridge.options.workerModel()).toBe('model');
+  h.panel.wiring.workerEnabled.set(false);
+  expect(h.controller.options?.workerEnabled?.()).toBe(false);
+  expect(h.controller.revokeWorker).toHaveBeenCalled();
+  expect(fakes.updated).toContainEqual(['worker.enabled', false, 1]);
+  expect(fakes.updated).toContainEqual(['worker.model', ' model ', 1]);
+});
+
+it('keeps the requested worker setting authoritative while a write is pending', async () => {
+  const gate = Promise.withResolvers<void>();
+  fakes.settings.set('worker.enabled', true);
+  fakes.updateGates.set('worker.enabled', gate.promise);
+  const h = activated();
+  h.panel.wiring.workerEnabled.set(false);
+  changed('worker.enabled');
+  expect(h.controller.options?.workerEnabled?.()).toBe(false);
+  expect(h.panel.showWorkerEnabled).toHaveBeenLastCalledWith(false);
+  expect(h.controller.revokeWorker).toHaveBeenCalled();
+  gate.resolve();
+  await settle();
+});
+
+it('revokes a grant when a pending enable fails and restores disabled authority', async () => {
+  const gate = Promise.withResolvers<void>();
+  fakes.updateGates.set('worker.enabled', gate.promise);
+  const h = activated();
+  h.panel.wiring.workerEnabled.set(true);
+  expect(h.controller.options?.workerEnabled?.()).toBe(true);
+  expect(h.controller.revokeWorker).not.toHaveBeenCalled();
+  gate.reject(new Error('save failed'));
+  await settle();
+  expect(h.controller.options?.workerEnabled?.()).toBe(false);
+  expect(h.controller.revokeWorker).toHaveBeenCalledOnce();
+  expect(h.panel.showWorkerEnabled).toHaveBeenLastCalledWith(false);
+});
+
+it('restores enabled authority after a failed disable', async () => {
+  fakes.settings.set('worker.enabled', true);
+  fakes.updateGates.set('worker.enabled', Promise.reject(new Error('save failed')));
+  const h = activated();
+  h.panel.wiring.workerEnabled.set(false);
+  await settle();
+  expect(h.panel.wiring.workerEnabled.get()).toBe(true);
+  expect(h.panel.showWorkerEnabled).toHaveBeenLastCalledWith(true);
+  expect(h.controller.revokeWorker).toHaveBeenCalledOnce();
 });
 
 it('handles context disposal rejection and reports it to deactivate', async () => {

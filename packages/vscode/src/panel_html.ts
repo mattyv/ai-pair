@@ -4,6 +4,7 @@
 
 import { randomBytes } from 'node:crypto';
 import { ELLIPSIS, SPEED_SUFFIX } from '@ai-pair/core/constants';
+import { WORKER_MODEL_LIMIT } from '@ai-pair/protocol/schemas';
 import { SPEECH_ACCENTS } from '@ai-pair/protocol/speech_accents';
 import { SPEECH_PREVIEW_TEXT } from './speech_types';
 
@@ -82,8 +83,9 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
 <div class="app">
   <dialog data-ui="settings-dialog" class="settings-dialog" aria-label="Settings">
     <h1>Settings</h1>
-    <section class="settings-section">
-      <h2>Conversation</h2>
+    <details class="settings-section" data-ui="settings-conversation" open>
+      <summary>Conversation</summary>
+      <div class="settings-section-content">
       <label class="settings-field">When I send a reply
         <select data-ui="reply-behavior">
           <option value="interrupt">Interrupt immediately</option>
@@ -100,6 +102,11 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
       </label>
       <p>During your turn, this sets written and spoken commentary on the next returned report; direct requests override it.
         Audio is controlled separately.</p>
+      <h2>Background Worker</h2>
+      <label class="settings-check"><input type="checkbox" data-ui="worker-enabled"> Enable background worker</label>
+      <label class="settings-field">Model (leave empty to use the main model)
+        <input type="text" data-ui="worker-model" maxlength="${WORKER_MODEL_LIMIT}">
+      </label>
       <label class="settings-field">Worker activity in Pair
         <select data-ui="worker-visibility">
           <option value="milestones">Milestones</option>
@@ -113,9 +120,11 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
           <option value="oldestFirst">Oldest first</option>
         </select>
       </label>
-    </section>
-    <section class="settings-section">
-      <h2>Playback</h2>
+      </div>
+    </details>
+    <details class="settings-section" data-ui="settings-playback" open>
+      <summary>Playback</summary>
+      <div class="settings-section-content">
       <label class="settings-field">Code display
         <select data-ui="settings-code-playback">
           <option value="typing">Typing</option>
@@ -124,17 +133,21 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
         </select>
       </label>
       <p>Changes apply to the next typing action. You can also choose this in the toolbar.</p>
-    </section>
-    <section class="settings-section">
-      <h2>Keyboard shortcuts</h2>
+      </div>
+    </details>
+    <details class="settings-section" data-ui="settings-shortcuts">
+      <summary>Keyboard shortcuts</summary>
+      <div class="settings-section-content">
       <p>Defaults on Windows/Linux: Alt+Q pauses or resumes, Alt+W raises or lowers the hand,
         and Ctrl+Alt+Space focuses reply. On macOS, use Ctrl+Shift+Q, Ctrl+Shift+W,
         and Ctrl+Shift+Space, respectively. Your shortcuts may differ.</p>
       <p>Change shortcuts in VS Code. Your keyboard, system, or terminal may reserve a key.</p>
       <button type="button" data-ui="configure-shortcuts">Configure shortcuts</button>
-    </section>
-    <section class="settings-section">
-      <h2>Commands</h2>
+      </div>
+    </details>
+    <details class="settings-section" data-ui="settings-commands">
+      <summary>Commands</summary>
+      <div class="settings-section-content">
       <label class="settings-check"><input type="checkbox" data-ui="show-terminals"> Show terminals automatically</label>
       <label class="settings-check">
         <input type="checkbox" data-ui="command-approval-sound">
@@ -144,9 +157,11 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
       <p data-ui="command-approvals-status">No session command grants.</p>
       <button type="button" data-ui="revoke-command-approvals" disabled>Require command approval</button>
       <p>Turns command confirmation on and clears remembered session grants.</p>
-    </section>
-    <section class="settings-section">
-      <h2>Speech</h2>
+      </div>
+    </details>
+    <details class="settings-section" data-ui="settings-speech">
+      <summary>Speech</summary>
+      <div class="settings-section-content">
       <label class="settings-field">Speech provider
         <select data-ui="speech-provider">
           <option value="kokoro">Kokoro (local)</option>
@@ -171,6 +186,8 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
         <input type="range" data-ui="speech-listening-speed" min="0.75" max="1.5" step="0.05" value="1" aria-valuetext="1.00x">
         <span data-ui="speech-listening-speed-value" aria-hidden="true">1.00x</span>
       </label>
+      <details data-ui="speech-provider-details" class="speech-details" open>
+        <summary data-ui="speech-provider-summary">Kokoro settings</summary>
       <div data-ui="speech-local">
       <label class="settings-field">Voice
         <select data-ui="speech-voice">
@@ -181,6 +198,39 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
         </select>
       </label>
       </div>
+      <div data-ui="speech-local-model" class="speech-model">
+        <h3>Local model</h3>
+        <p data-ui="speech-model-status" role="status">Checking model verification...</p>
+        <div data-ui="speech-setup-primary" class="settings-actions">
+          <button type="button" data-ui="speech-setup" class="soft" disabled>Download Kokoro model</button>
+        </div>
+        <label class="settings-field"><span>Kokoro compute <span class="speech-badge">Experimental</span></span>
+          <select data-ui="speech-compute">
+            <option value="cpu">CPU</option>
+            <option value="auto">Auto (use CPU if GPU is unavailable)</option>
+            <option value="gpu">GPU</option>
+          </select>
+        </label>
+        <p data-ui="gpu-status" role="status">GPU setup has not been checked. Actual backend: NONE.</p>
+        <div class="settings-actions"><button type="button" data-ui="gpu-check" class="soft">Set up GPU</button></div>
+        <details data-ui="speech-details" class="speech-details">
+          <summary>Technical details and synthesis speed</summary>
+        <p data-ui="gpu-model-info">GPU setup requires the CPU model and an additional model (about 326 MB).</p>
+          <div data-ui="speech-setup-secondary" class="settings-actions"></div>
+      <label class="settings-field">Synthesis speed
+        <select data-ui="speech-speed">
+          <option value="0.75">0.75x</option>
+          <option value="1" selected>1.0x</option>
+          <option value="1.25">1.25x</option>
+          <option value="1.5">1.5x</option>
+        </select>
+      </label>
+          <p>CPU setup downloads a local voice model of about 94 MB.</p>
+          <p data-ui="speech-model-details">Model details are not available yet.</p>
+          <p data-ui="gpu-details">Compute details are not available yet.</p>
+        </details>
+      </div>
+
       <div data-ui="openrouter" hidden>
         <p>Selected narration and previews are sent to OpenRouter and may use account credits.</p>
         <p data-ui="openrouter-key-status" role="status"></p>
@@ -237,53 +287,25 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
         </label>
         </details>
       </div>
+      </details>
       <p>Preview: ${SPEECH_PREVIEW_TEXT}</p>
       <div class="settings-actions">
         <button type="button" data-ui="speech-preview" class="soft" disabled>Preview voice</button>
         <button type="button" data-ui="speech-stop" class="soft">Stop speech</button>
       </div>
-      <div data-ui="speech-local-model" class="speech-model">
-        <h3>Local model</h3>
-        <p data-ui="speech-model-status" role="status">Checking model verification...</p>
-        <div data-ui="speech-setup-primary" class="settings-actions">
-          <button type="button" data-ui="speech-setup" class="soft" disabled>Download Kokoro model</button>
-        </div>
-        <label class="settings-field"><span>Kokoro compute <span class="speech-badge">Experimental</span></span>
-          <select data-ui="speech-compute">
-            <option value="cpu">CPU</option>
-            <option value="auto">Auto (use CPU if GPU is unavailable)</option>
-            <option value="gpu">GPU</option>
-          </select>
-        </label>
-        <p data-ui="gpu-status" role="status">GPU setup has not been checked. Actual backend: NONE.</p>
-        <div class="settings-actions"><button type="button" data-ui="gpu-check" class="soft">Set up GPU</button></div>
-        <details data-ui="speech-details" class="speech-details">
-          <summary>Technical details and synthesis speed</summary>
-        <p data-ui="gpu-model-info">GPU setup requires the CPU model and an additional model (about 326 MB).</p>
-          <div data-ui="speech-setup-secondary" class="settings-actions"></div>
-      <label class="settings-field">Synthesis speed
-        <select data-ui="speech-speed">
-          <option value="0.75">0.75x</option>
-          <option value="1" selected>1.0x</option>
-          <option value="1.25">1.25x</option>
-          <option value="1.5">1.5x</option>
-        </select>
-      </label>
-          <p>CPU setup downloads a local voice model of about 94 MB.</p>
-          <p data-ui="speech-model-details">Model details are not available yet.</p>
-          <p data-ui="gpu-details">Compute details are not available yet.</p>
-        </details>
-      </div>
       <p data-ui="speech-settings-status" role="status"></p>
-    </section>
-    <section class="settings-section">
-      <h2>Diagnostics</h2>
+      </div>
+    </details>
+    <details class="settings-section" data-ui="settings-diagnostics">
+      <summary>Diagnostics</summary>
+      <div class="settings-section-content">
       <p>Copies version and recent connection, session, and command status; no command text.</p>
       <div class="settings-actions">
         <button type="button" data-ui="copy-diagnostics" class="soft">Copy diagnostics</button>
         <button type="button" data-ui="reconnect-local-audio" class="soft" hidden>Reconnect Local Audio</button>
       </div>
-    </section>
+      </div>
+    </details>
     <div class="settings-footer">
       <p data-ui="build-identity" class="build-identity">v${safeVersion} - build ${safeBuild}</p>
       <button type="button" data-ui="settings-close" class="primary">Close</button>

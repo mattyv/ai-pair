@@ -27,6 +27,18 @@ Issue discussions and working notes hold the detailed evidence and history.
     subagent with access to the Pair tool could not read from the active main
     session in the spike. This establishes a limit in the tested Codex setup.
     Claude attachment and the mechanism for authenticating workers are open.
+-   The Worker tab follows Chat order for task groups and activity within
+    each task. Both views place new activity at the same end. This order
+    preference affects presentation while the source events stay chronological.
+
+## Pair Settings sections (#130)
+
+-   Use native disclosures for settings sections. Conversation and Playback
+    start open. The webview saves the programmer's choices, and the footer
+    stays visible outside the sections.
+-   Show the selected speech provider's controls in a disclosure and open it
+    when the programmer switches providers. This keeps provider controls
+    close to the choice that governs them.
 
 ## CI tool downloads
 

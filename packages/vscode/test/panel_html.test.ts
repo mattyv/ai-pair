@@ -163,7 +163,7 @@ it('offers an optional sound for command approvals, disabled by default', () => 
   expect(cue.type).toBe('checkbox');
   expect(cue.checked).toBe(false);
   expect(cue.closest('label')?.textContent).toContain('Play a sound when command approval is needed');
-  expect(cue.closest('section')?.textContent).toContain('The approval sound uses your system default audio output.');
+  expect(cue.closest('details')?.textContent).toContain('The approval sound uses your system default audio output.');
 });
 
 it('offers one accessible narration toggle in the toolbar, disabled until settings load', () => {

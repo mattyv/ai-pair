@@ -15,6 +15,7 @@ import {
   discoveryDir,
   LOCAL_AUDIO_VERSION,
   NAVIGATOR_COMMENTARY_SCHEMA,
+  WORKER_MODEL_LIMIT,
   speechAccent,
   type NavigatorCommentary,
   type ShortcutLabels,
@@ -618,6 +619,23 @@ export function activate(context: vscode.ExtensionContext): Api {
       panel.showNavigatorCommentary(navigatorCommentary.get());
     },
   );
+  const workerEnabledSetting = panelSetting(WORKER_ENABLED, 'worker enabled', workerEnabled, () => {
+    const enabled = workerEnabledSetting.get();
+    // specs/WorkerDriver.tla, Disable: rollback can withdraw a pending enable.
+    if (!enabled) controller.revokeWorker();
+    panel.showWorkerEnabled(enabled);
+  });
+  const workerModel = panelSetting(
+    'worker.model',
+    'worker model',
+    () => {
+      const value: unknown = config().get('worker.model');
+      return typeof value === 'string' && value.length <= WORKER_MODEL_LIMIT ? value : '';
+    },
+    () => {
+      panel.showWorkerModel(workerModel.get());
+    },
+  );
   const workerVisibility = panelSetting(
     'worker.visibility',
     'worker visibility',
@@ -728,6 +746,15 @@ export function activate(context: vscode.ExtensionContext): Api {
     {
       controller: () => controller,
       workerVisibility,
+      workerEnabled: {
+        get: () => workerEnabledSetting.get(),
+        set: (value) => {
+          void workerEnabledSetting.set(value);
+          // specs/WorkerDriver.tla, Disable: revoke the grant as soon as off is requested.
+          if (!value) controller.revokeWorker();
+        },
+      },
+      workerModel,
       calibration: () => calibration,
       starter,
       copyDiagnostics,
@@ -1060,7 +1087,7 @@ export function activate(context: vscode.ExtensionContext): Api {
       selectedNarration?.cancel();
     },
   };
-  controller = new Controller(editor, panel, undefined, narration, { workerEnabled });
+  controller = new Controller(editor, panel, undefined, narration, { workerEnabled: () => workerEnabledSetting.get() });
   controller.onDiagnostic = record;
   controller.trace = (line) => {
     log.info(line);
@@ -1135,8 +1162,8 @@ export function activate(context: vscode.ExtensionContext): Api {
 
   const bridge = new Bridge(controller, {
     workerModel: () => {
-      const value: unknown = config().get('worker.model');
-      return typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
+      const value = workerModel.get().trim();
+      return value !== '' ? value : undefined;
     },
     onDiagnostic: record,
     collectDiagnostics: diagnosticSnapshot,
@@ -1239,7 +1266,12 @@ export function activate(context: vscode.ExtensionContext): Api {
       for (const [key, setting] of storedSettings) {
         if (e.affectsConfiguration(`aiPair.${key}`)) setting.changed();
       }
-      if (e.affectsConfiguration(`aiPair.${WORKER_ENABLED}`) && !workerEnabled()) controller.revokeWorker();
+      if (e.affectsConfiguration(`aiPair.${WORKER_ENABLED}`)) {
+        const enabled = workerEnabledSetting.get();
+        if (!enabled) controller.revokeWorker();
+        panel.showWorkerEnabled(enabled);
+      }
+      if (e.affectsConfiguration('aiPair.worker.model')) panel.showWorkerModel(workerModel.get());
       if (e.affectsConfiguration('aiPair.speech')) {
         if (!computePending) {
           const mode: unknown = config().get('speech.computeMode');

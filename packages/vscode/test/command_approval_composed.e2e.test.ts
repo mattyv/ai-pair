@@ -18,6 +18,8 @@ it('Revoke: a current companion page clears grants, stale pages cannot revoke, a
   await controller.start();
   const wiring = mock<PanelWiring>();
   wiring.workerVisibility = { get: () => 'milestones', set: () => {} };
+  wiring.workerEnabled = { get: () => true, set: () => {} };
+  wiring.workerModel = { get: () => 'worker-model', set: () => {} };
   wiring.controller.mockReturnValue(controller);
   const starter = mock<Starter>();
   starter.available.mockResolvedValue(true);
@@ -104,6 +106,8 @@ it('routes commentary through the production workspace session and projects its 
   const { controller } = setup();
   const wiring = mock<PanelWiring>();
   wiring.workerVisibility = { get: () => 'milestones', set: () => {} };
+  wiring.workerEnabled = { get: () => true, set: () => {} };
+  wiring.workerModel = { get: () => 'worker-model', set: () => {} };
   wiring.controller.mockReturnValue(controller);
   wiring.calibration.mockReturnValue(mock());
   const starter = mock<Starter>();
@@ -157,6 +161,12 @@ it('routes commentary through the production workspace session and projects its 
     await vi.waitFor(() => {
       expect(frames).toContainEqual(
         expect.objectContaining({ type: 'panelChunk', data: JSON.stringify({ type: 'navigatorCommentary', value: 'coach' }) }),
+      );
+      expect(frames).toContainEqual(
+        expect.objectContaining({ type: 'panelChunk', data: JSON.stringify({ type: 'workerEnabled', value: true }) }),
+      );
+      expect(frames).toContainEqual(
+        expect.objectContaining({ type: 'panelChunk', data: JSON.stringify({ type: 'workerModel', value: 'worker-model' }) }),
       );
     });
   } finally {

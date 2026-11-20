@@ -27,6 +27,8 @@ export type FromPanel =
   | SpeechDecodeFromPage
   | { type: 'ready' }
   | { type: 'cancelWorker' }
+  | { type: 'workerEnabled'; value: boolean }
+  | { type: 'workerModel'; value: string }
   | { type: 'workerVisibility'; value: WorkerVisibility }
   | { type: 'copyDiagnostics' }
   | { type: 'reconnectLocalAudio' }
@@ -114,6 +116,8 @@ export type ToPanel =
   | { type: 'replyBehavior'; value: 'interrupt' | 'finishAction' }
   | { type: 'navigatorCommentary'; value: NavigatorCommentary }
   | { type: 'chatOrder'; value: ChatOrder }
+  | { type: 'workerEnabled'; value: boolean }
+  | { type: 'workerModel'; value: string }
   | { type: 'workerVisibility'; value: WorkerVisibility }
   | { type: 'workerActive'; id?: number }
   | { type: 'showTerminals'; value: boolean }

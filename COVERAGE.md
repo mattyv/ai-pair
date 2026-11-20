@@ -309,7 +309,7 @@ Last updated: css, 2026-11-20.
 | `packages/vscode/src/voice_indicator.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/voice_language.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/approval_sound.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 172 of 172 rules matched |
+| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 179 of 179 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/speech_audio.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/speech_decode.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -759,6 +759,8 @@ Last updated: css, 2026-11-20.
 | `specs/SettingRoundTrip.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
 | `specs/SettingsAccess.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SettingsAccess.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
+| `specs/SettingsSections.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/SettingsSections.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/ShellIdentity.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ShellIdentity.tla` | TLA+ | - | - | 7 of 7 actions | - | - | - |
 | `specs/ShfmtDownload.cfg` | TLC config | - | - | - | - | - | - |

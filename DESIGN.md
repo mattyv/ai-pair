@@ -16,6 +16,16 @@ drive visible edits for the current task. Interrupting or disabling the
 setting revokes that permission. See [Testing background workers](docs/worker-preview.md)
 for the setup and current limits.
 
+## Pair Settings
+
+Conversation and Playback start expanded. Keyboard shortcuts, Commands,
+Speech, and Diagnostics start collapsed. Pair remembers open sections when
+the webview reloads. Choosing a speech provider opens its own controls.
+The version information and Close button sit outside the disclosures.
+
+Conversation contains the split-agent switch, the worker model preference,
+and the amount of Worker activity shown in Pair.
+
 ## Agent cursor
 
 Rendered with decorations: a thin vertical bar in the agent's color, plus a

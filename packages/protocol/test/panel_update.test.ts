@@ -65,3 +65,10 @@ it('accepts bounded worker activity and visibility updates', () => {
   expect(localPanelUpdate.safeParse({ type: 'workerActive' }).success).toBe(true);
   expect(localPanelUpdate.safeParse({ type: 'workerActivity', id: 0, phase: 'progress', text: 'Checking.' }).success).toBe(false);
 });
+
+it('validates worker settings at the panel boundary', () => {
+  expect(localPanelUpdate.safeParse({ type: 'workerEnabled', value: false }).success).toBe(true);
+  expect(localPanelUpdate.safeParse({ type: 'workerModel', value: '' }).success).toBe(true);
+  expect(localPanelUpdate.safeParse({ type: 'workerModel', value: 'x'.repeat(257) }).success).toBe(false);
+  expect(localPanelUpdate.safeParse({ type: 'workerEnabled', value: 'false' }).success).toBe(false);
+});

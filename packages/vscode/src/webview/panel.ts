@@ -19,7 +19,7 @@ import type { OutputChoice } from '../speech_output_types';
 import type { SessionSpeechCostView } from '../session_speech_cost';
 import { ELLIPSIS, LABEL_SEPARATOR, RANGE_DASH, RIGHT_ARROW, SPEED_SUFFIX } from '@ai-pair/core/constants';
 
-declare function acquireVsCodeApi(): { postMessage(message: FromPanel): void };
+declare function acquireVsCodeApi(): { postMessage(message: FromPanel): void; getState(): unknown; setState(state: unknown): void };
 
 const vscode = acquireVsCodeApi();
 
@@ -89,9 +89,13 @@ const ui = {
   workerRunning: $('worker-running', HTMLElement),
   workerCancel: $('worker-cancel', HTMLButtonElement),
   workerVisibility: $('worker-visibility', HTMLSelectElement),
+  workerEnabled: $('worker-enabled', HTMLInputElement),
+  workerModel: $('worker-model', HTMLInputElement),
   settings: $('settings', HTMLButtonElement),
   voiceStatus: $('voice-status', HTMLButtonElement),
   settingsDialog: $('settings-dialog', HTMLDialogElement),
+  providerDetails: $('speech-provider-details', HTMLDetailsElement),
+  providerSummary: $('speech-provider-summary', HTMLElement),
   settingsClose: $('settings-close', HTMLButtonElement),
   configureShortcuts: $('configure-shortcuts', HTMLButtonElement),
   chatOrder: $('chat-order', HTMLSelectElement),
@@ -973,6 +977,10 @@ function setChatOrder(value: ChatOrder): void {
   ui.history.classList.add('reordering');
   document.body.classList.toggle('oldest-first', value === 'oldestFirst');
   ui.history.replaceChildren(...entries.toReversed());
+  for (const group of workerGroups.values()) {
+    group.append(...[...group.querySelectorAll('p')].toReversed());
+  }
+  ui.workerHistory.replaceChildren(...[...ui.workerHistory.children].toReversed());
   if (value === 'oldestFirst') {
     ui.band.before(ui.history);
   } else {
@@ -1133,6 +1141,37 @@ function syncVoiceStatus(): void {
   if (tipTarget === ui.voiceStatus) showTip(ui.voiceStatus);
 }
 
+// specs/SettingsSections.tla, Restore and Toggle: retain only valid disclosure state.
+const settingsSections = ['conversation', 'playback', 'shortcuts', 'commands', 'speech', 'diagnostics'] as const;
+const savedPageState = vscode.getState();
+const pageState = typeof savedPageState === 'object' && savedPageState !== null && !Array.isArray(savedPageState) ? savedPageState : {};
+const savedSections: unknown = 'settingsSections' in pageState ? pageState.settingsSections : undefined;
+const validSections =
+  typeof savedSections === 'object' &&
+  savedSections !== null &&
+  !Array.isArray(savedSections) &&
+  Object.entries(savedSections).length === settingsSections.length &&
+  settingsSections.every(
+    (name) => name in savedSections && typeof Object.getOwnPropertyDescriptor(savedSections, name)?.value === 'boolean',
+  );
+const disclosures = settingsSections.map((name) => ({ name, element: $(`settings-${name}`, HTMLDetailsElement) }));
+if (validSections) {
+  for (const { name, element } of disclosures) {
+    element.open = Object.getOwnPropertyDescriptor(savedSections, name)?.value === true;
+  }
+}
+for (const { element } of disclosures) {
+  element.addEventListener('toggle', () => {
+    const currentPageState = vscode.getState();
+    const preservedState =
+      typeof currentPageState === 'object' && currentPageState !== null && !Array.isArray(currentPageState) ? currentPageState : {};
+    vscode.setState({
+      ...preservedState,
+      settingsSections: Object.fromEntries(disclosures.map(({ name, element: section }) => [name, section.open])),
+    });
+  });
+}
+
 // specs/Panel.tla, `OpenSettings` and `CloseSettings`.
 let focusReplyAfterSettings = false;
 function focusReplyBox(): void {
@@ -1145,7 +1184,7 @@ function focusReplyBox(): void {
 }
 ui.settings.addEventListener('click', () => {
   ui.settingsDialog.showModal();
-  ui.chatOrder.focus();
+  $('settings-conversation', HTMLDetailsElement).querySelector('summary')?.focus();
 });
 ui.settingsClose.addEventListener('click', () => {
   ui.settingsDialog.close();
@@ -1250,6 +1289,7 @@ function syncSpeechProvider(): void {
   ui.openRouterAccentStatus.textContent = capabilities.tags
     ? 'Sent as an audio tag, such as [Australian accent], before each line. Accent tags are experimental; a voice may not follow one.'
     : 'This model does not take audio tags, so no accent is sent. Eleven v3 and v4 models do.';
+  ui.providerSummary.textContent = `${speechProvider === 'kokoro' ? 'Kokoro' : speechProvider === 'elevenlabs' ? 'ElevenLabs' : 'OpenRouter'} settings`;
   const cloud = speechProvider === 'elevenlabs';
   ui.speechLocal.hidden = speechProvider !== 'kokoro';
   ui.speechLocalModel.hidden = speechProvider !== 'kokoro';
@@ -1302,6 +1342,7 @@ ui.speechProvider.addEventListener('change', () => {
   if (!isSpeechVoice(ui.speechVoice.value)) ui.speechVoice.value = 'af_heart';
   if (!SPEECH_SPEEDS.some((speed) => speed === Number(ui.speechSpeed.value))) ui.speechSpeed.value = '1';
   speechProvider = selected;
+  ui.providerDetails.open = true;
   syncSpeechProvider();
   saveSpeechSettings();
 });
@@ -1560,6 +1601,12 @@ ui.workerTab.addEventListener('click', () => {
 ui.workerCancel.addEventListener('click', () => {
   vscode.postMessage({ type: 'cancelWorker' });
 });
+ui.workerEnabled.addEventListener('change', () => {
+  vscode.postMessage({ type: 'workerEnabled', value: ui.workerEnabled.checked });
+});
+ui.workerModel.addEventListener('change', () => {
+  vscode.postMessage({ type: 'workerModel', value: ui.workerModel.value });
+});
 ui.workerVisibility.addEventListener('change', () => {
   const value = ui.workerVisibility.value;
   if (value === 'milestones' || value === 'everything' || value === 'off') {
@@ -1575,6 +1622,12 @@ function handle(message: ToPanel): void {
       if (message.id !== undefined) activeWorkers.add(message.id);
       ui.workerRunning.hidden = activeWorkers.size === 0;
       ui.workerCancel.hidden = activeWorkers.size === 0;
+      return;
+    case 'workerEnabled':
+      ui.workerEnabled.checked = message.value;
+      return;
+    case 'workerModel':
+      ui.workerModel.value = message.value;
       return;
     case 'workerVisibility':
       workerVisibility = message.value;
@@ -1593,11 +1646,13 @@ function handle(message: ToPanel): void {
         heading.textContent = `Worker ${message.id}`;
         group.append(heading);
         workerGroups.set(message.id, group);
-        ui.workerHistory.prepend(group);
+        if (chatOrder === 'newestFirst') ui.workerHistory.prepend(group);
+        else ui.workerHistory.append(group);
       }
       const line = document.createElement('p');
       line.textContent = message.text;
-      group.append(line);
+      if (chatOrder === 'newestFirst') group.querySelector('h2')?.after(line);
+      else group.append(line);
       if (!replaying && message.phase === 'started') activeWorkers.add(message.id);
       if (message.phase === 'completed' || message.phase === 'stopped') activeWorkers.delete(message.id);
       ui.workerRunning.hidden = activeWorkers.size === 0;

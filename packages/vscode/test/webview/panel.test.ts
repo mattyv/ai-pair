@@ -1431,7 +1431,7 @@ describe('panel settings', () => {
     expect(dialog.getAttribute('aria-label')).toBe('Settings');
     expect(dialog.hasAttribute('open')).toBe(true);
     const select = element('chat-order');
-    expect(document.activeElement).toBe(select);
+    expect(document.activeElement).toBe(element('settings-conversation').querySelector('summary'));
     if (!(select instanceof window.HTMLSelectElement)) throw new TypeError('Expected a select');
     select.value = 'oldestFirst';
     select.dispatchEvent(new window.Event('change', { bubbles: true }));
@@ -3862,4 +3862,67 @@ it('sends each worker visibility choice', () => {
   const before = posted().length;
   select.dispatchEvent(new window.Event('change'));
   expect(posted()).toHaveLength(before);
+});
+
+it('reflects and saves background worker settings', () => {
+  const enabled = ui('worker-enabled');
+  const model = ui('worker-model');
+  if (!(enabled instanceof window.HTMLInputElement) || !(model instanceof window.HTMLInputElement)) {
+    throw new Error('Missing worker settings');
+  }
+  send({ type: 'workerEnabled', value: true });
+  send({ type: 'workerModel', value: 'model-a' });
+  expect(enabled.checked).toBe(true);
+  expect(model.value).toBe('model-a');
+  enabled.checked = false;
+  enabled.dispatchEvent(new window.Event('change'));
+  model.value = '';
+  model.dispatchEvent(new window.Event('change'));
+  expect(posted()).toContainEqual({ type: 'workerEnabled', value: false });
+  expect(posted()).toContainEqual({ type: 'workerModel', value: '' });
+});
+
+it('restores valid settings disclosures and preserves other webview state on toggle', async () => {
+  const state = {
+    value: {
+      unrelated: 42,
+      settingsSections: { conversation: false, playback: true, shortcuts: false, commands: true, speech: false, diagnostics: false },
+    },
+  };
+  await loadPage(post, state);
+  const conversation = element('settings-conversation');
+  const commands = element('settings-commands');
+  expect(conversation.hasAttribute('open')).toBe(false);
+  expect(commands.hasAttribute('open')).toBe(true);
+  commands.removeAttribute('open');
+  commands.dispatchEvent(new window.Event('toggle'));
+  expect(state.value).toMatchObject({ unrelated: 42, settingsSections: { conversation: false, commands: false } });
+});
+
+it('uses disclosure defaults for malformed saved state', async () => {
+  const state = { value: { unrelated: 42, settingsSections: { conversation: 'invalid' } } };
+  await loadPage(post, state);
+  expect(element('settings-conversation').hasAttribute('open')).toBe(true);
+  expect(element('settings-speech').hasAttribute('open')).toBe(false);
+  element('settings-speech').dispatchEvent(new window.Event('toggle'));
+  expect(state.value).toMatchObject({ unrelated: 42, settingsSections: { conversation: true, speech: false } });
+});
+
+it('orders worker groups and event rows with chat order changes', () => {
+  send({ type: 'workerActivity', id: 1, phase: 'started', text: 'First' });
+  send({ type: 'workerActivity', id: 1, phase: 'progress', text: 'Second' });
+  send({ type: 'chatOrder', value: 'oldestFirst' });
+  send({ type: 'workerActivity', id: 1, phase: 'progress', text: 'Third' });
+  send({ type: 'workerActivity', id: 2, phase: 'started', text: 'Fourth' });
+  expect(text('worker-history')).toContain('FirstSecondThird');
+  send({ type: 'chatOrder', value: 'newestFirst' });
+  expect(text('worker-history')).toContain('ThirdSecondFirst');
+});
+
+it('replaces malformed webview state when a settings disclosure changes', async () => {
+  const state: { value: unknown } = { value: undefined };
+  await loadPage(post, state);
+  state.value = 'invalid';
+  element('settings-speech').dispatchEvent(new window.Event('toggle'));
+  expect(state.value).toMatchObject({ settingsSections: { conversation: true, speech: false } });
 });

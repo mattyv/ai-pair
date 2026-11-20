@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { NAVIGATOR_COMMENTARY_SCHEMA, WORKER_TEXT_LIMIT } from './schemas';
+import { NAVIGATOR_COMMENTARY_SCHEMA, WORKER_MODEL_LIMIT, WORKER_TEXT_LIMIT } from './schemas';
 import { extensionVersion, localAudioStatus } from './local_audio_status';
 
 /** The panel retains up to 400 recent events and one preceding session event. */
@@ -81,6 +81,8 @@ export const localPanelUpdate = z.union([
   z.strictObject({ type: z.literal('focusReply') }),
   z.strictObject({ type: z.literal('replyBehavior'), value: z.enum(['interrupt', 'finishAction']) }),
   z.strictObject({ type: z.literal('navigatorCommentary'), value: NAVIGATOR_COMMENTARY_SCHEMA }),
+  z.strictObject({ type: z.literal('workerEnabled'), value: z.boolean() }),
+  z.strictObject({ type: z.literal('workerModel'), value: z.string().max(WORKER_MODEL_LIMIT) }),
   z.strictObject({ type: z.literal('workerVisibility'), value: z.enum(['milestones', 'everything', 'off']) }),
   z.strictObject({ type: z.literal('workerActive'), id: z.int().positive().optional() }),
   z.strictObject({ type: z.literal('chatOrder'), value: z.enum(['newestFirst', 'oldestFirst']) }),

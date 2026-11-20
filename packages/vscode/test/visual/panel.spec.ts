@@ -50,9 +50,14 @@ async function load(page: Page): Promise<(event: object) => Promise<void>> {
   });
   await page.addInitScript(() => {
     const messages: unknown[] = [];
+    let state: unknown;
     Object.assign(globalThis, {
       messages,
       acquireVsCodeApi: () => ({
+        getState: () => state,
+        setState: (value: unknown) => {
+          state = value;
+        },
         postMessage: (message: unknown) => {
           messages.push(message);
         },
@@ -271,6 +276,7 @@ for (const width of [320, 240]) {
     await page.setViewportSize({ width, height: 900 });
     const post = await load(page);
     await page.locator('[data-ui="settings"]').click();
+    await page.locator('[data-ui="settings-speech"] > summary').click();
     await page.locator('[data-ui="speech-provider"]').selectOption('openrouter');
     await post({ type: 'speechCloudSupport', supported: true });
     await post({ type: 'openRouterKeyStatus', hasKey: true });

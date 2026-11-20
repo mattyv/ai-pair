@@ -129,6 +129,8 @@ const REF: Ref = { file: 'a.ts', line: 1, endLine: 2 };
 /** A panel on fakes, and the parts a test drives or reads. */
 interface Harness {
   panel: NarrationPanel;
+  workerEnabled: { get: ReturnType<typeof vi.fn<() => boolean>>; set: ReturnType<typeof vi.fn<(value: boolean) => void>> };
+  workerModel: { get: ReturnType<typeof vi.fn<() => string>>; set: ReturnType<typeof vi.fn<(value: string) => void>> };
   workerVisibility: {
     get: ReturnType<typeof vi.fn<() => 'milestones' | 'everything' | 'off'>>;
     set: ReturnType<typeof vi.fn<(value: 'milestones' | 'everything' | 'off') => void>>;
@@ -219,6 +221,7 @@ function harness(
   readiness?: () => import('@ai-pair/protocol').AudioDiagnostics,
   sessionCost?: PanelWiring['speech']['sessionCost'],
   narrationSession?: PanelWiring['speech']['narrationSession'],
+  omitWorkerSettings = false,
 ): Harness {
   const traced: string[] = [];
   const speed = { get: vi.fn(() => SPEEDS[1] ?? 0), set: vi.fn<(value: number) => void>() };
@@ -303,6 +306,8 @@ function harness(
   const starter = mock<Starter>();
   starter.available.mockResolvedValue(true);
   starter.start.mockResolvedValue();
+  const workerEnabled = { get: vi.fn(() => false), set: vi.fn<(value: boolean) => void>() };
+  const workerModel = { get: vi.fn(() => ''), set: vi.fn<(value: string) => void>() };
   const workerVisibility = {
     get: vi.fn<() => 'milestones' | 'everything' | 'off'>(() => 'milestones'),
     set: vi.fn<(value: 'milestones' | 'everything' | 'off') => void>(),
@@ -322,7 +327,7 @@ function harness(
       starter,
       copyDiagnostics,
       requireCommandApproval,
-      workerVisibility,
+      ...(omitWorkerSettings ? {} : { workerVisibility, workerEnabled, workerModel }),
       speech,
     },
     chatOrder,
@@ -339,6 +344,8 @@ function harness(
   return {
     panel,
     workerVisibility,
+    workerEnabled,
+    workerModel,
     controller,
     controllerAccessor,
     requireCommandApproval,
@@ -885,6 +892,8 @@ describe('receive', () => {
       { type: 'speechSupport', supported: true, gpu: false },
       { type: 'navigatorCommentary', value: 'helpful' },
       { type: 'chatOrder', value: 'newestFirst' },
+      { type: 'workerEnabled', value: false },
+      { type: 'workerModel', value: '' },
       { type: 'workerVisibility', value: 'milestones' },
       { type: 'replyBehavior', value: 'interrupt' },
       { type: 'commandApprovalSound', value: false },
@@ -943,8 +952,10 @@ describe('receive', () => {
     chatOrder.get.mockReturnValue('oldestFirst');
     const view = open(panel);
     view.send({ type: 'ready' });
-    expect(view.posted.slice(8, 15)).toEqual([
+    expect(view.posted.slice(8, 17)).toEqual([
       { type: 'chatOrder', value: 'oldestFirst' },
+      { type: 'workerEnabled', value: false },
+      { type: 'workerModel', value: '' },
       { type: 'workerVisibility', value: 'milestones' },
       { type: 'replyBehavior', value: 'interrupt' },
       { type: 'commandApprovalSound', value: false },
@@ -2198,4 +2209,32 @@ it('sends the current worker snapshot after replay', () => {
   view.send({ type: 'ready' });
   const replay = view.posted.findIndex((message) => message.type === 'replay');
   expect(view.posted[replay + 1]).toEqual({ type: 'workerActive', id: 17 });
+});
+
+it('validates worker setting actions and sends current settings', () => {
+  const { panel, workerEnabled, workerModel } = harness();
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  expect(view.posted).toContainEqual({ type: 'workerEnabled', value: false });
+  expect(view.posted).toContainEqual({ type: 'workerModel', value: '' });
+  view.send({ type: 'workerEnabled', value: true });
+  view.send({ type: 'workerModel', value: 'model' });
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  view.send({ type: 'workerEnabled', value: 'true' } as unknown as FromPanel);
+  view.send({ type: 'workerModel', value: 'x'.repeat(257) });
+  expect(workerEnabled.set).toHaveBeenCalledExactlyOnceWith(true);
+  expect(workerModel.set).toHaveBeenCalledExactlyOnceWith('model');
+  panel.showWorkerEnabled(true);
+  panel.showWorkerModel('model');
+  expect(view.posted).toContainEqual({ type: 'workerEnabled', value: true });
+  expect(view.posted).toContainEqual({ type: 'workerModel', value: 'model' });
+});
+
+it('shows default worker settings when wiring is absent', () => {
+  const { panel } = harness('agent', undefined, undefined, undefined, undefined, true);
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  expect(view.posted).toContainEqual({ type: 'workerEnabled', value: false });
+  expect(view.posted).toContainEqual({ type: 'workerModel', value: '' });
+  expect(view.posted).toContainEqual({ type: 'workerVisibility', value: 'milestones' });
 });

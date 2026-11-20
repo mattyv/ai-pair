@@ -172,6 +172,8 @@ Code goes without a spec for one of these reasons:
 |---|---|---|
 | `panel.ts` | `post`, the `ready` message | `PanelReplay` |
 | `panel.ts`, `webview/panel.ts` | Worker activity, current-worker snapshot and chat visibility | `WorkerActivity`; panel and webview tests |
+| `panel_html.ts`, `webview/panel.ts` | Settings disclosures, saved open sections, provider selection | `SettingsSections`; Chromium settings regressions |
+| `extension.ts`, `panel.ts` | In-panel worker setting changes and rollback | `SettingRoundTrip`; effective disable and revocation: `WorkerDriver` |
 | | `history`, `restoreHistory`, `onPost` | `Resume` (`Store`, `ReloadWindow`) |
 | | the `draft` and `reply` messages, `onDidDispose` | `Draft`; the `reply` lifting the pause without a reveal: `PointFocus`; deferred reply: `DeferredMessage` |
 | | mode preference messages | `PlaybackPreference` (`Choose`, `Reload`) |

@@ -69,9 +69,26 @@ body {
 /* Worker views */
 
 .worker-tabs {
+  border-bottom: 1px solid var(--vscode-panel-border, var(--hair));
   display: flex;
-  gap: 8px;
-  padding: 6px 14px;
+  gap: 2px;
+  padding: 0 14px;
+}
+
+.worker-tabs button {
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--fg);
+  height: 32px;
+  padding: 0 10px;
+}
+
+.worker-tabs button:hover:not(:disabled) {
+  background: var(--vscode-toolbar-hoverBackground, var(--soft-hover));
+}
+
+.worker-tabs button[aria-pressed='true'] {
+  border-bottom-color: var(--vscode-focusBorder, var(--fg));
 }
 
 .worker-view {
@@ -918,12 +935,22 @@ a:hover {
 
 .settings-section {
   border-top: 1px solid var(--border);
-  display: grid;
-  gap: 8px;
   padding: 12px 0;
 }
 
-.settings-section h2 {
+.settings-section-content {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.settings-section summary {
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.settings-section h2,
+.settings-section h3 {
   font-size: 13px;
   margin: 0;
 }
@@ -951,7 +978,8 @@ a:hover {
   gap: 6px;
 }
 
-.settings-dialog select {
+.settings-dialog select,
+.settings-dialog input[type='text'] {
   background: var(--vscode-input-background);
   border: 1px solid var(--vscode-input-border, var(--border));
   box-sizing: border-box;

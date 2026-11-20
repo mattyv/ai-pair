@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.50.0
+
+- Version aligned with the Pair Settings and Worker tab updates.
+
 ## 0.49.0
 
 - Version aligned with AI Pair's experimental worker build (#134).

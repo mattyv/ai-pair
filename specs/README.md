@@ -155,6 +155,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `ReadingGesture.cfg` | short and long gestures across two countdown IDs | holds | 170 |
 | `ListeningHint.cfg` | status and session context | holds | 64 |
 | `SettingsAccess.cfg` | idle and active toolbar | holds | 4 |
+| `SettingsSections.cfg` | four sections, two providers, valid and invalid saved state | holds | 32 |
 | `Terminals.cfg` | `NumTerminals = 2` terminals, `MaxRuns = 3`, 2 directories | holds | 3,361 |
 | `QuietTerminals.cfg` | quiet default, fallback and guarded cleanup | holds | 9 |
 | `QuietTerminals_Visible.cfg` | automatic show, fallback and guarded cleanup | holds | 11 |
@@ -2472,6 +2473,31 @@ in idle and active panels. Mutating the hint to ignore context violates
 | `HintMatchesStatus` | `webview/panel.test.ts`: offers a focusable explanation only while the active agent is listening |
 | `SettingsAvailable` | `panel_html.test.ts`: places one icon-only Settings control in the toolbar before End; `visual/chat_order.spec.ts`: the Settings gear remains available while idle, calibrating, and active |
 
+### `SettingsSections`: collapsible Settings
+
+The bounded model has four representative sections, two of them provider
+panels. Conversation and Playback start open. Each summary can be toggled;
+restoration accepts every subset and falls back to those defaults for invalid
+state. Selecting a provider opens its disclosure and displays only its panel.
+The footer and all summaries remain available. The model abstracts actual DOM
+rendering and field values; its representative sections are not an inventory of
+the shipped panel. TLC explored 737 generated and 32 distinct states at depth
+3. In disposable copies, invalid initial `opened` state violates `TypeOK`;
+disabling each of `GuardDefaults`, `GuardSummaries`, `GuardFooter`,
+`GuardRestore`, `GuardProvider`, and `GuardVisibility` violates its respective
+invariant below. The browser regression test for #130 is being implemented and
+must exercise the actual native details elements and webview-state API.
+
+| Invariant | Regression test mapping |
+|---|---|
+| `TypeOK` | TypeScript checks the disclosure state; the browser test checks malformed saved state. |
+| `DefaultOpen` | Settings browser test: Conversation and Playback alone open initially. |
+| `AllSummariesReachable` | Settings browser test: every summary remains reachable after toggles. |
+| `FooterVisible` | Settings browser test: footer remains visible with sections collapsed and expanded. |
+| `RestoresState` | Settings browser test: reload restores valid state and invalid state falls back to defaults. |
+| `SelectedProviderOnly` | Settings browser test: only the selected provider panel is visible. |
+| `SelectionOpens` | Settings browser test: selecting a provider opens its disclosure. |
+
 ### `TerminalPanel`: preference and explicit terminal reveal
 
 The panel keeps automatic visibility separate from explicit requests. A reveal
@@ -4429,6 +4455,9 @@ and command confirmation visibility.
 It bounds two IDs and three events, and assumes an ordered event stream. TLC
 checked 222,435 distinct states with no fairness assumptions or liveness claim.
 It does not model log truncation, rendering, transport, or physical worker retirement.
+The Worker view renders groups and their event rows in the Pair chat order;
+`Worker activity follows the Pair chat order, including live changes` checks
+this presentation choice without changing the modeled event stream.
 
 | Property | Mutation | Implementation test |
 |---|---|---|
