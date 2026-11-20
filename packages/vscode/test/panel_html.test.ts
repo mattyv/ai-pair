@@ -300,3 +300,13 @@ it('offers an opt-in speech context selector and a capability explanation', () =
   expect(page.querySelector('[data-ui="speech-context"] option[value="on"]')?.textContent).toBe('On');
   expect(page.querySelector('[data-ui="speech-context-capability"]')).not.toBeNull();
 });
+
+it.each(['worker-enabled', 'worker-visibility', 'settings-code-playback', 'speech-context'])(
+  'provides a nonempty custom tooltip on the %s settings control',
+  (control) => {
+    const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js');
+    const page = new window.DOMParser().parseFromString(html, 'text/html');
+    const tip = page.querySelector<HTMLElement>(`[data-ui="${control}"]`)?.dataset.tip;
+    expect(tip?.trim()).toBeTruthy();
+  },
+);

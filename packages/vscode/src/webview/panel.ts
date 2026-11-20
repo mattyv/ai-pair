@@ -203,6 +203,7 @@ const ui = {
   history: $('history', HTMLElement),
   tip: $('tip', HTMLElement),
 };
+ui.tip.id = 'tip';
 
 let chatOrder: ChatOrder = 'newestFirst';
 let workerVisibility: WorkerVisibility = 'milestones';
@@ -755,6 +756,9 @@ function showTip(el: HTMLElement): void {
   ) {
     return;
   }
+  tipTarget?.removeAttribute('aria-describedby');
+  const parent = ui.settingsDialog.contains(el) ? ui.settingsDialog : document.body;
+  parent.append(ui.tip);
   tipTarget = el;
   ui.tip.textContent = el.dataset.tip ?? '';
   ui.tip.hidden = false;
@@ -786,6 +790,24 @@ function syncTip(): void {
   } else {
     placeTip(tipTarget);
   }
+}
+
+/** Keeps a keyboard tooltip visible while Settings scrolls its focused control into view. */
+function handleTipScroll(event: Event): void {
+  if (
+    event.target === ui.settingsDialog &&
+    tipTarget !== undefined &&
+    document.activeElement === tipTarget &&
+    tipTarget.matches(':focus-visible')
+  ) {
+    const anchor = tipTarget.getBoundingClientRect();
+    const dialog = ui.settingsDialog.getBoundingClientRect();
+    if (Math.max(anchor.top, dialog.top) < Math.min(anchor.bottom, dialog.bottom)) {
+      placeTip(tipTarget);
+      return;
+    }
+  }
+  hideTip();
 }
 
 /** Returns the element an event happened on, if it is one. */
@@ -1195,6 +1217,7 @@ ui.configureShortcuts.addEventListener('click', () => {
   vscode.postMessage({ type: 'command', command: 'aiPair.configureShortcuts' });
 });
 ui.settingsDialog.addEventListener('close', () => {
+  hideTip();
   if (focusReplyAfterSettings) {
     focusReplyAfterSettings = false;
     ui.reply.focus();
@@ -2364,10 +2387,16 @@ ui.end.addEventListener('click', () => {
   vscode.postMessage({ type: 'end' });
 });
 
-// From any element under the pointer: over a button's icon, it's an SVG one.
-document.addEventListener('pointerover', (e) => {
-  hoverTip(e.target instanceof Element ? (e.target.closest<HTMLElement>('[data-tip]') ?? undefined) : undefined);
+/** Finds the tooltip target under the pointer, including over nested icons. */
+function hoverTipFromEvent(event: PointerEvent): void {
+  hoverTip(event.target instanceof Element ? (event.target.closest<HTMLElement>('[data-tip]') ?? undefined) : undefined);
+}
+
+// Scrolling can move a Settings control under a stationary pointer.
+document.addEventListener('pointerover', (event) => {
+  if (!event.composedPath().includes(ui.settingsDialog)) hoverTipFromEvent(event);
 });
+ui.settingsDialog.addEventListener('pointermove', hoverTipFromEvent);
 document.documentElement.addEventListener('pointerleave', () => {
   hoverTip(undefined);
 });
@@ -2386,7 +2415,7 @@ document.addEventListener(
   },
   /* useCapture= */ true,
 );
-document.addEventListener('scroll', hideTip, /* useCapture= */ true);
+document.addEventListener('scroll', handleTipScroll, /* useCapture= */ true);
 window.addEventListener('blur', hideTip);
 
 // Space pauses and resumes, anywhere in the panel but the reply box. It doesn't press the focused

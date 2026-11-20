@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.52.0
+
+-   Add hover and keyboard-focus tooltips for background worker settings,
+    code display, and speech context.
+
 ## 0.51.2
 
 -   Capture output and exit status for Bash commands that start with a

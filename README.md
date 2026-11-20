@@ -419,6 +419,10 @@ has it fetch the text and start the calibration with it.
 
 ## Settings
 
+Hover or move keyboard focus to **Enable background worker**, **Worker
+activity in Pair**, **Code display**, or **Speech context and delivery cues**
+for an explanation in Pair Settings.
+
 Commands use quiet terminals by default; **Show terminal** reveals one. If shell
 integration is unavailable, the terminal opens so you can see the command.
 Hidden terminals are not restored when the workspace is reopened.

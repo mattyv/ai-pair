@@ -56,6 +56,10 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   Show the selected speech provider's controls in a disclosure and open it
     when the programmer switches providers. This keeps provider controls
     close to the choice that governs them.
+-   Explain selected settings through the existing hover and keyboard-focus
+    tooltip. Place the shared popup inside the modal dialog for settings
+    controls so it remains visible above the modal backdrop, and clear its
+    accessibility reference when focus moves or the dialog closes.
 
 ## CI tool downloads
 

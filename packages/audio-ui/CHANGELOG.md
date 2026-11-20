@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.52.0
+
+- Version aligned with the Pair Settings tooltip update.
+
 ## 0.51.2
 
 - Version aligned with the Bash command reporting fix.

@@ -103,7 +103,8 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
       <p>During your turn, this sets written and spoken commentary on the next returned report; direct requests override it.
         Audio is controlled separately.</p>
       <h2>Background Worker</h2>
-      <label class="settings-check"><input type="checkbox" data-ui="worker-enabled"> Enable background worker</label>
+      <label class="settings-check"><input type="checkbox" data-ui="worker-enabled"
+          data-tip="Lets the main agent delegate visible edits to a background worker."> Enable background worker</label>
       <label class="settings-field">Codex model (leave empty to use the main chat model)
         <input type="text" data-ui="worker-model-codex" maxlength="${WORKER_MODEL_LIMIT}">
       </label>
@@ -111,7 +112,8 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
         <input type="text" data-ui="worker-model-claude" maxlength="${WORKER_MODEL_LIMIT}">
       </label>
       <label class="settings-field">Worker activity in Pair
-        <select data-ui="worker-visibility">
+        <select data-ui="worker-visibility"
+          data-tip="Milestones shows starts and results. Everything adds editing and progress. Off keeps updates in the Worker tab.">
           <option value="milestones">Milestones</option>
           <option value="everything">Everything</option>
           <option value="off">Off</option>
@@ -129,7 +131,7 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
       <summary>Playback</summary>
       <div class="settings-section-content">
       <label class="settings-field">Code display
-        <select data-ui="settings-code-playback">
+        <select data-ui="settings-code-playback" data-tip="Show edits character by character, one line at a time, or in small blocks.">
           <option value="typing">Typing</option>
           <option value="lines">Lines</option>
           <option value="blocks">Blocks</option>
@@ -180,7 +182,9 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
       <p data-ui="speech-output-status" role="status"></p>
       <label class="settings-check"><input type="checkbox" data-ui="speech-enabled"> Speak selected narration automatically</label>
       <label class="settings-field">Speech context and delivery cues
-        <select data-ui="speech-context"><option value="off">Off</option><option value="on">On</option></select>
+        <select data-ui="speech-context" data-tip="Lets supported voices use previous narration and cues such as whispering.">
+          <option value="off">Off</option><option value="on">On</option>
+        </select>
       </label>
       <p data-ui="speech-context-capability"></p>
       <label class="settings-check"><input type="checkbox" data-ui="speech-lookahead" checked> Prepare the next line while one plays</label>

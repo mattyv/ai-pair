@@ -240,6 +240,11 @@ function hover(target: Element | Window['document']): void {
   target.dispatchEvent(new window.PointerEvent('pointerover', { bubbles: true }));
 }
 
+/** Moves the pointer within a settings control. */
+function movePointer(target: Element): void {
+  target.dispatchEvent(new window.PointerEvent('pointermove', { bubbles: true }));
+}
+
 /** Returns the tooltip's text, if it shows. */
 function tip(): string | undefined {
   return element('tip').hidden ? undefined : text('tip');
@@ -3968,4 +3973,135 @@ it('moves focus from a Worker action when disabled', () => {
   expect(document.activeElement).toBe(element('worker-cancel'));
   send({ type: 'workerEnabled', value: false });
   expect(document.activeElement).toBe(element('settings'));
+});
+
+it('moves the same tooltip into Settings and back for the toolbar, clearing it on close', () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+  start();
+  const settingsButton = element('settings');
+  click(settingsButton);
+  const dialog = element('settings-dialog');
+  const control = element('worker-enabled');
+  control.dataset.tip = 'Enable background work';
+  const tooltip = element('tip');
+  movePointer(control);
+  vi.advanceTimersByTime(TIP_DELAY_MS);
+  expect(tip()).toBe('Enable background work');
+  expect(dialog.contains(tooltip)).toBe(true);
+  const description = control.getAttribute('aria-describedby');
+  expect(description).toBe(tooltip.id);
+  expect(document.querySelector(`#${description ?? ''}`)).toBe(tooltip);
+  click(element('settings-close'));
+  dialog.dispatchEvent(new window.Event('close'));
+  expect(tooltip.hidden).toBe(true);
+  expect(control.hasAttribute('aria-describedby')).toBe(false);
+  hover(element('interrupt'));
+  vi.advanceTimersByTime(TIP_DELAY_MS);
+  expect(tip()).toBe('Interrupt');
+  expect(document.body.contains(tooltip)).toBe(true);
+  expect(dialog.contains(tooltip)).toBe(false);
+  const toolbarDescription = element('interrupt').getAttribute('aria-describedby');
+  expect(toolbarDescription).toBe(tooltip.id);
+  expect(document.querySelector(`#${toolbarDescription ?? ''}`)).toBe(tooltip);
+});
+
+it('clears the hovered control description when keyboard focus moves to another tooltip', () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+  start();
+  click(element('settings'));
+  const dialog = element('settings-dialog');
+  const hovered = element('worker-enabled');
+  const focused = element('settings-code-playback');
+  hovered.dataset.tip = 'Worker setting';
+  focused.dataset.tip = 'Playback setting';
+  movePointer(hovered);
+  vi.advanceTimersByTime(TIP_DELAY_MS);
+  expect(hovered.getAttribute('aria-describedby')).toBe('tip');
+  vi.spyOn(focused, 'matches').mockReturnValue(true);
+  focused.dispatchEvent(new window.FocusEvent('focusin', { bubbles: true }));
+  expect(tip()).toBe('Playback setting');
+  expect(hovered.hasAttribute('aria-describedby')).toBe(false);
+  expect(focused.getAttribute('aria-describedby')).toBe('tip');
+  dialog.dispatchEvent(new window.Event('close'));
+  expect(focused.hasAttribute('aria-describedby')).toBe(false);
+});
+
+describe('settings tooltip scroll', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    start();
+    click(element('settings'));
+    vi.spyOn(element('settings-dialog'), 'getBoundingClientRect').mockReturnValue(new window.DOMRect(0, 100, 300, 200));
+  });
+
+  it('keeps and repositions the focused control tooltip when it remains in view', () => {
+    const control = element('settings-code-playback');
+    control.dataset.tip = 'Playback setting';
+    const bounds = vi.spyOn(control, 'getBoundingClientRect').mockReturnValue(new window.DOMRect(10, 120, 100, 20));
+    vi.spyOn(control, 'matches').mockReturnValue(true);
+    control.focus();
+    expect(tip()).toBe('Playback setting');
+    const before = element('tip').style.top;
+    bounds.mockReturnValue(new window.DOMRect(10, 160, 100, 20));
+    element('settings-dialog').dispatchEvent(new window.Event('scroll'));
+    expect(tip()).toBe('Playback setting');
+    expect(element('tip').style.top).not.toBe(before);
+    expect(control.getAttribute('aria-describedby')).toBe('tip');
+  });
+
+  it('hides the focused control tooltip after it scrolls outside the dialog', () => {
+    const control = element('settings-code-playback');
+    control.dataset.tip = 'Playback setting';
+    const bounds = vi.spyOn(control, 'getBoundingClientRect').mockReturnValue(new window.DOMRect(10, 120, 100, 20));
+    vi.spyOn(control, 'matches').mockReturnValue(true);
+    control.focus();
+    expect(tip()).toBe('Playback setting');
+    bounds.mockReturnValue(new window.DOMRect(10, 310, 100, 20));
+    element('settings-dialog').dispatchEvent(new window.Event('scroll'));
+    expect(tip()).toBeUndefined();
+    expect(control.hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('hides a focused settings tooltip when another surface scrolls', () => {
+    const control = element('settings-code-playback');
+    control.dataset.tip = 'Playback setting';
+    vi.spyOn(control, 'getBoundingClientRect').mockReturnValue(new window.DOMRect(10, 120, 100, 20));
+    vi.spyOn(control, 'matches').mockReturnValue(true);
+    control.focus();
+    expect(tip()).toBe('Playback setting');
+    element('history').dispatchEvent(new window.Event('scroll'));
+    expect(tip()).toBeUndefined();
+    expect(control.hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('hides a hovered settings tooltip on dialog scroll', () => {
+    const control = element('worker-enabled');
+    control.dataset.tip = 'Worker setting';
+    movePointer(control);
+    vi.advanceTimersByTime(TIP_DELAY_MS);
+    expect(tip()).toBe('Worker setting');
+    element('settings-dialog').dispatchEvent(new window.Event('scroll'));
+    expect(tip()).toBeUndefined();
+    expect(control.hasAttribute('aria-describedby')).toBe(false);
+  });
+});
+
+it('keeps keyboard tooltip on stationary-pointer retargeting and follows real pointer movement', () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+  start();
+  click(element('settings'));
+  const focused = element('settings-code-playback');
+  const underPointer = element('worker-enabled');
+  focused.dataset.tip = 'Playback setting';
+  underPointer.dataset.tip = 'Worker setting';
+  vi.spyOn(focused, 'matches').mockReturnValue(true);
+  focused.focus();
+  expect(tip()).toBe('Playback setting');
+  underPointer.dispatchEvent(new window.PointerEvent('pointerover', { bubbles: true }));
+  expect(tip()).toBe('Playback setting');
+  expect(focused.getAttribute('aria-describedby')).toBe('tip');
+  movePointer(underPointer);
+  expect(tip()).toBe('Worker setting');
+  expect(focused.hasAttribute('aria-describedby')).toBe(false);
+  expect(underPointer.getAttribute('aria-describedby')).toBe('tip');
 });

@@ -1162,3 +1162,33 @@ test('worker tabs follow enabled state without losing worker history', async ({ 
   await worker.click();
   await expect(page.locator('[data-ui=worker-history]')).toContainText('Retained activity');
 });
+
+test('settings tooltips appear above the modal on hover and keyboard focus, then clear', async ({ page }) => {
+  const post = await load(page);
+  await post({ type: 'timings', tipDelayMs: 0, tipWarmMs: 0 });
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Settings' });
+  const worker = dialog.locator('[data-ui="worker-enabled"]');
+  const tooltip = dialog.getByRole('tooltip');
+  await worker.hover();
+  await expect(tooltip).toBeVisible();
+  const workerTip = await worker.getAttribute('data-tip');
+  expect(workerTip?.trim()).not.toBe('');
+  await expect(tooltip).toHaveText(workerTip ?? '');
+  await page.keyboard.press('Tab');
+  const playback = page.locator('[data-ui="settings-code-playback"]');
+  await playback.focus();
+  await expect(tooltip).toBeVisible();
+  const playbackTip = await playback.getAttribute('data-tip');
+  expect(playbackTip?.trim()).not.toBe('');
+  await expect(tooltip).toHaveText(playbackTip ?? '');
+  await expect(worker).not.toHaveAttribute('aria-describedby');
+  await expect(playback).toHaveAttribute('aria-describedby', 'tip');
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await expect(tooltip).toBeHidden();
+  await expect(playback).not.toHaveAttribute('aria-describedby');
+  const settings = page.getByRole('button', { name: 'Settings' });
+  await settings.hover();
+  await expect(page.getByRole('tooltip')).toContainText('Settings');
+});
