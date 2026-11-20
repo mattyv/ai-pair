@@ -13,6 +13,7 @@ import {
   WORKER_CAPABILITY_LIMIT,
   WORKER_PATH_LIMIT,
   WORKER_MODEL_LIMIT,
+  WORKER_MESSAGE_ID_LIMIT,
   WORKER_TEXT_LIMIT,
   WORKER_PROVIDER_SCHEMA,
   type WorkerProvider,
@@ -420,8 +421,18 @@ export class Bridge {
         throw new ToolError('invalid_arguments', 'Invalid text.');
       }
       if (tool === 'worker_progress') controller.workerProgress(args.capability, args.text);
-      else if (tool === 'worker_output') controller.workerOutput(args.capability, args.text);
-      else if (tool === 'worker_notice') {
+      else if (tool === 'worker_output') {
+        if (
+          args.message !== undefined &&
+          (typeof args.message !== 'string' || args.message.length === 0 || args.message.length > WORKER_MESSAGE_ID_LIMIT)
+        ) {
+          throw new ToolError('invalid_arguments', 'Invalid worker output message.');
+        }
+        if (args.final !== undefined && (args.final !== true || args.message === undefined)) {
+          throw new ToolError('invalid_arguments', 'Invalid worker output final flag.');
+        }
+        controller.workerOutput(args.capability, args.text, args.message, args.final);
+      } else if (tool === 'worker_notice') {
         if (args.notice !== 'question' && args.notice !== 'blocked') throw new ToolError('invalid_arguments', 'Invalid notice.');
         controller.workerNotice(args.capability, args.notice, args.text);
       } else controller.workerDone(args.capability, args.text);

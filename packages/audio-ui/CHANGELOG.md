@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.54.0
+
+- Version aligned with live Worker transcript updates.
+
 ## 0.53.0
 
 - Version aligned with the Worker transcript update.

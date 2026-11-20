@@ -49,6 +49,15 @@ Issue discussions and working notes hold the detailed evidence and history.
     harnesses. The Codex adapter forwards completed assistant messages, so
     the available granularity is one message at a time. The agent harness
     still owns launch, model choice, and sign-in.
+-   Use a local Codex App Server turn for public text updates. Its runner
+    starts an ephemeral child with read-only native access and an explicit
+    model. Pair still owns editor changes through the existing grant. Each
+    bounded snapshot replaces the same response in view and replay. The
+    controller withholds a pending grant prefix until it can redact the
+    full value or confirm the final text. The runner checks the grant
+    before launch and releases it only after the child closes. If it
+    cannot confirm retirement, it reports the blocker and retains the
+    grant for the programmer's session controls.
 
 ## Opening externally changed files (#15)
 

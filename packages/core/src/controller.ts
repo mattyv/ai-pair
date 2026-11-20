@@ -729,10 +729,20 @@ export class Controller {
   }
 
   /** Posts raw worker output only for the current grant, without changing the conversation. */
-  workerOutput(capability: string, text: string): void {
+  workerOutput(capability: string, text: string, message?: string, final?: true): void {
     const { id } = this.requireWorker(capability);
-    // specs/WorkerOutput.tla, Output: only a live grant publishes to the panel.
-    this.panel.post({ type: 'workerOutput', id, text: text.replaceAll(capability, '[redacted]').slice(0, WORKER_TEXT_LIMIT) });
+    if (message?.includes(capability) === true) throw new ToolError('invalid_arguments', 'Invalid worker output message.');
+    let safe = text.replaceAll(capability, '[redacted]');
+    if (message !== undefined && final !== true) {
+      // specs/WorkerSnapshots.tla, Snapshot: withhold a partial capability until it is resolved.
+      for (let length = Math.min(capability.length - 1, safe.length); length > 0; length--) {
+        if (safe.endsWith(capability.slice(0, length))) {
+          safe = safe.slice(0, -length);
+          break;
+        }
+      }
+    }
+    this.panel.post({ type: 'workerOutput', id, text: safe.slice(0, WORKER_TEXT_LIMIT), ...(message === undefined ? {} : { message }) });
   }
 
   /** Displays and speaks main-agent narration while worker edits are in progress. */

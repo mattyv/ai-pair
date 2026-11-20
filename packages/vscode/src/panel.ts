@@ -400,7 +400,13 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       }
       if (this.remote === undefined) this.costSession(event);
     }
-    this.log.push(event);
+    // specs/WorkerSnapshots.tla, Snapshot: retain the latest value in its original history position.
+    const existing =
+      event.type === 'workerOutput' && event.message !== undefined
+        ? this.log.findIndex((prior) => prior.type === 'workerOutput' && prior.id === event.id && prior.message === event.message)
+        : -1;
+    if (existing >= 0) this.log[existing] = event;
+    else this.log.push(event);
     if (this.log.length > MAX_LOG) {
       const cut = this.log.splice(0, this.log.length - MAX_LOG);
       // A view replays its session state from the last `session` event: keep it, or a view created

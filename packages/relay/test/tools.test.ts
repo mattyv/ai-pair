@@ -11,6 +11,7 @@ import {
   MOVE_TARGET_SCHEMA,
   moveProblem,
   SPAN_TARGET_SCHEMA,
+  WORKER_MESSAGE_ID_LIMIT,
   WORKER_TEXT_LIMIT,
   spanProblem,
   speechProblem,
@@ -31,11 +32,16 @@ vi.mock(import('@ai-pair/protocol'), async (importOriginal) => ({
 const STEP = z.object(TOOLS.step.inputSchema);
 
 it('bounds worker output and requires an exact-window grant', () => {
-  const output = z.object(TOOLS.worker_output.inputSchema);
+  const output = TOOLS.worker_output.inputSchema;
   const exact = { port: 1234, capability: 'secret', text: '\t'.repeat(WORKER_TEXT_LIMIT) };
   expect(output.parse(exact)).toEqual(exact);
   expect(output.safeParse({ ...exact, text: `${exact.text}\n` }).success).toBe(false);
   expect(output.safeParse({ port: exact.port, text: exact.text }).success).toBe(false);
+  const message = 'i'.repeat(WORKER_MESSAGE_ID_LIMIT);
+  expect(output.parse({ ...exact, message, final: true })).toEqual({ ...exact, message, final: true });
+  expect(output.safeParse({ ...exact, message: `${message}i` }).success).toBe(false);
+  expect(output.safeParse({ ...exact, message, final: false }).success).toBe(false);
+  expect(output.safeParse({ ...exact, final: true }).success).toBe(false);
 });
 
 it('guides agents toward safe structural edits and a named file', () => {

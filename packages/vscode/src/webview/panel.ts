@@ -208,6 +208,7 @@ ui.tip.id = 'tip';
 let chatOrder: ChatOrder = 'newestFirst';
 let workerVisibility: WorkerVisibility = 'milestones';
 const workerGroups = new Map<number, HTMLElement>();
+const workerMessages = new Map<number, Map<string, HTMLElement>>();
 const activeWorkers = new Set<number>();
 let voiceFacts: AudioDiagnostics | undefined;
 let voiceCompute: SpeechComputeState | undefined;
@@ -1682,8 +1683,21 @@ function handle(message: ToPanel): void {
         if (chatOrder === 'newestFirst') ui.workerHistory.prepend(group);
         else ui.workerHistory.append(group);
       }
+      // specs/WorkerSnapshots.tla: replace a cumulative snapshot in its first position.
+      const messages = workerMessages.get(message.id) ?? new Map<string, HTMLElement>();
+      if (message.message !== undefined) {
+        const existing = messages.get(message.message);
+        if (existing !== undefined) {
+          existing.textContent = message.text;
+          return;
+        }
+      }
       const line = document.createElement('p');
       line.textContent = message.text;
+      if (message.message !== undefined) {
+        messages.set(message.message, line);
+        workerMessages.set(message.id, messages);
+      }
       if (chatOrder === 'newestFirst') group.querySelector('h2')?.after(line);
       else group.append(line);
       return;
@@ -1693,6 +1707,7 @@ function handle(message: ToPanel): void {
       if (!replaying && message.phase === 'started' && !activeWorkers.has(message.id)) {
         workerGroups.get(message.id)?.remove();
         workerGroups.delete(message.id);
+        workerMessages.delete(message.id);
       }
       if (!replaying && message.phase === 'started') activeWorkers.add(message.id);
       if (message.phase === 'completed' || message.phase === 'stopped') activeWorkers.delete(message.id);
@@ -2079,6 +2094,7 @@ function handle(message: ToPanel): void {
       if (message.active) {
         if (!message.suspended && !message.resumed) {
           workerGroups.clear();
+          workerMessages.clear();
           ui.workerHistory.replaceChildren();
         }
         activeWorkers.clear();

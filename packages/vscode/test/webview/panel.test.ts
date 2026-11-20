@@ -4177,3 +4177,53 @@ it('retains worker transcript across suspension and resume without restoring a l
   expect(text('worker-history')).toContain('Earlier output');
   expect(text('worker-history')).toContain('New output');
 });
+
+it('updates streamed worker output in place without changing its order', () => {
+  send({ type: 'workerOutput', id: 1, message: 'a', text: '  partial' });
+  send({ type: 'workerOutput', id: 1, text: 'Another response' });
+  send({ type: 'workerOutput', id: 1, message: 'a', text: '  partial\n<em>grown</em>  ' });
+  const rows = element('worker-history').querySelectorAll('p');
+  expect(rows).toHaveLength(2);
+  expect(rows[0]?.textContent).toBe('Another response');
+  expect(rows[1]?.textContent).toBe('  partial\n<em>grown</em>  ');
+  expect(element('worker-history').querySelector('em')).toBeNull();
+  send({ type: 'chatOrder', value: 'oldestFirst' });
+  expect(rows[1]?.textContent).toBe('  partial\n<em>grown</em>  ');
+  expect(element('worker-history').querySelector('p')?.textContent).toBe('  partial\n<em>grown</em>  ');
+});
+
+it('coalesces repeated stream snapshots during replay and after reopen', () => {
+  send({
+    type: 'replay',
+    events: [
+      { type: 'workerOutput', id: 1, message: 'a', text: 'first' },
+      { type: 'workerOutput', id: 1, message: 'a', text: 'first and more' },
+    ],
+  });
+  send({ type: 'workerOutput', id: 1, message: 'a', text: 'first and more again' });
+  const rows = element('worker-history').querySelectorAll('p');
+  expect(rows).toHaveLength(1);
+  expect(rows[0]?.textContent).toBe('first and more again');
+});
+
+it('scopes stream identity to each worker and clears it for a fresh session', () => {
+  send({ type: 'workerOutput', id: 1, message: 'same', text: 'One' });
+  send({ type: 'workerOutput', id: 2, message: 'same', text: 'Two' });
+  send({ type: 'workerOutput', id: 1, message: 'same', text: 'One grown' });
+  expect(element('worker-history').querySelectorAll('p')).toHaveLength(2);
+  expect(text('worker-history')).toContain('One grown');
+  expect(text('worker-history')).toContain('Two');
+  send({ type: 'session', active: true });
+  send({ type: 'workerOutput', id: 1, message: 'same', text: 'Fresh' });
+  expect(element('worker-history').querySelectorAll('p')).toHaveLength(1);
+  expect(text('worker-history')).toContain('Fresh');
+});
+
+it('replaces stale stream identity when a worker ID is reused', () => {
+  send({ type: 'replay', events: [{ type: 'workerOutput', id: 1, message: 'same', text: 'Old' }] });
+  send({ type: 'workerActivity', id: 1, phase: 'started', text: 'New worker' });
+  send({ type: 'workerOutput', id: 1, message: 'same', text: 'New' });
+  expect(element('worker-history').querySelectorAll('p')).toHaveLength(1);
+  expect(text('worker-history')).toContain('New');
+  expect(text('worker-history')).not.toContain('Old');
+});

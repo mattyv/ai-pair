@@ -27,10 +27,10 @@ off by default.
 
 Use the main agent's existing session controls to close the session. Keep
 the grant inside the worker's brief. It authorizes edits to the open workspace
-until it is revoked. The main agent uses the harness's native delegation to
-select the same provider and apply the worker model preference. AI Pair
-authenticates the grant. It does not authenticate the model or launch a
-separate CLI process. There is one worker and one batch at a time. Commands
+until it is revoked. The main agent selects the same provider and applies
+the worker model preference. The harness can launch its own worker or use
+the Codex runner below. Pair authenticates the grant, and the launcher
+supplies the requested model. There is one worker and one batch at a time. Commands
 use the existing Pair approval policy. A command you approved can keep running
 after you cancel the worker, as with ordinary Pair commands.
 
@@ -38,7 +38,31 @@ The previous single `aiPair.worker.model` setting remains in existing
 settings files. If you used it, copy it once to the appropriate provider
 field. Pair cannot tell which provider the shared value belonged to.
 
-## Forwarding original responses
+## Showing text as Codex writes it
+
+Use the launcher's `worker-run codex` command from the workspace where
+the worker should run. Feed it two JSON lines on stdin, first the private
+grant, then a task record with the resolved `model` and `prompt`. Resolve
+the model from the grant when present and use the main chat's exact model
+otherwise. Keep both records in owner-only files.
+
+```bash
+{
+  cat "$pair_worker_grant_file"
+  cat "$pair_worker_task_file"
+} | "$pair_launcher" worker-run codex
+```
+
+This starts an ephemeral Codex App Server turn using the current Codex
+sign-in. The runner forwards each public response update as it arrives,
+then completes the grant after the turn. Give the worker its normal Pair
+tool instructions and leave `worker_done` to the runner. The runner keeps
+Codex's native workspace access read-only, while Pair applies approved
+visible edits through the existing grant. Cancel immediately revokes that
+grant. A silent Codex process observes the revocation on its next output
+attempt or the runner deadline.
+
+## Forwarding completed responses
 
 For Codex CLI workers, pass the grant JSON on the first line of stdin to
 the Pair launcher, then pipe the worker's `codex exec --json` output. Use

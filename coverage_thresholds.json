@@ -465,6 +465,13 @@
       "functions": 100
     }
   },
+  "packages/relay/src/codex_worker.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/relay/src/guide.ts": {
     "unit": {
       "lines": 100,

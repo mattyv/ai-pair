@@ -11,6 +11,8 @@ export type WorkerProvider = z.infer<typeof WORKER_PROVIDER_SCHEMA>;
 
 /** Maximum worker result or narration length. */
 export const WORKER_TEXT_LIMIT = 16_384;
+/** Maximum worker output message identifier length. */
+export const WORKER_MESSAGE_ID_LIMIT = 128;
 /** Maximum worker capability length. */
 export const WORKER_CAPABILITY_LIMIT = 256;
 /** Maximum worker model identifier length. */

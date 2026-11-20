@@ -3590,6 +3590,27 @@ describe('raw worker output', () => {
   });
 });
 
+it('withholds a trailing capability prefix only on unfinished snapshots', async () => {
+  const h = harness();
+  const controller = new Controller(h.editor, h.panel, CONFIG, undefined, { workerEnabled: () => true });
+  await controller.start();
+  const capability = controller.grantWorker();
+  const prefix = capability.slice(0, 5);
+  expect(() => {
+    controller.workerOutput(capability, 'text', `id-${capability}`);
+  }).toThrow();
+  controller.workerOutput(capability, `hello ${prefix}`, 'm1');
+  expect(h.panel.post.mock.calls.at(-1)).toEqual([{ type: 'workerOutput', id: 1, message: 'm1', text: 'hello ' }]);
+  controller.workerOutput(capability, prefix, 'm1');
+  expect(h.panel.post.mock.calls.at(-1)).toEqual([{ type: 'workerOutput', id: 1, message: 'm1', text: '' }]);
+  controller.workerOutput(capability, `hello ${prefix}`, 'm1', true);
+  expect(h.panel.post.mock.calls.at(-1)).toEqual([{ type: 'workerOutput', id: 1, message: 'm1', text: `hello ${prefix}` }]);
+  controller.workerOutput(capability, prefix);
+  expect(h.panel.post.mock.calls.at(-1)).toEqual([{ type: 'workerOutput', id: 1, text: prefix }]);
+  controller.workerOutput(capability, `before ${capability} after`, 'm1', true);
+  expect(h.panel.post.mock.calls.at(-1)).toEqual([{ type: 'workerOutput', id: 1, message: 'm1', text: 'before [redacted] after' }]);
+});
+
 describe('worker output identity across reload', () => {
   it('does not reuse an activity ID after saving and reviving a session', async () => {
     const first = harness();

@@ -33,8 +33,10 @@ absent. The worker calls `worker_read`, `worker_step`, `worker_progress`,
 `worker_notice`, and `worker_done` with the grant. To show a response in
 the Worker tab, forward its visible text verbatim with `worker_output`
 before completing the grant.
-If the Codex transcript adapter is forwarding the stream, let it send
-`worker_done` so the final response can arrive first. The worker requests
+For live Codex text, use the Pair launcher's `worker-run codex` command.
+For a Codex CLI JSON transcript, use `worker-transcript codex`. These
+commands send `worker_done` so the final text can arrive first. See
+`docs/worker-preview.md` for their private stdin inputs. The worker requests
 commands through normal Pair approval. The main agent handles speech and
 editor control outside the worker's task.
 Use `worker_say` for main-agent speech while the worker edits. A worker

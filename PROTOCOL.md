@@ -32,9 +32,14 @@ question or blocker from `worker_notice` wakes a pending main `listen`.
 `worker_output` takes the grant's port and capability and one visible response
 (up to 16,384 UTF-16 code units). The controller checks the live grant,
 redacts the capability if present, and records the text under the current
-worker ID for panel replay. Output appears only in the Worker tab. It does not wake
-`listen`, play speech, or enter the main chat. The event uses editor-relay
-wire version 8 and Local Audio panel protocol 11.
+worker ID for panel replay. When the tool includes a nonempty `message` key
+(up to 128 characters), send the full text so far each time. Pair replaces
+that message in place and keeps only its latest text for replay. Use
+`final: true` with a keyed message when all its text has arrived. Until
+then, Pair withholds an unfinished suffix that could be part of the grant.
+Output appears only in the Worker tab. It does not wake `listen`, play
+speech, or enter the main chat. This uses editor-relay wire version 9 and
+Local Audio panel protocol 12.
 The worker activity setting controls whether routine progress appears in
 Pair chat. The main connection can call `worker_status` without draining a
 report. Worker responses do not consume or restore main-agent reports.

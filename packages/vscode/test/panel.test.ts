@@ -656,6 +656,26 @@ describe('cursor navigation', () => {
 });
 
 describe('post', () => {
+  it('replaces cumulative worker snapshots in history while delivering every live update', () => {
+    const { panel } = harness();
+    const view = open(panel);
+    panel.post({ type: 'workerOutput', id: 1, message: 'm1', text: 'a' });
+    panel.post({ type: 'say', text: 'middle' });
+    panel.post({ type: 'workerOutput', id: 1, message: 'm1', text: 'abc' });
+    panel.post({ type: 'workerOutput', id: 1, message: 'm2', text: 'other' });
+    panel.post({ type: 'workerOutput', id: 2, message: 'm1', text: 'new worker' });
+    panel.post({ type: 'workerOutput', id: 1, text: 'complete' });
+    expect(panel.history).toEqual([
+      { type: 'workerOutput', id: 1, message: 'm1', text: 'abc' },
+      { type: 'say', text: 'middle' },
+      { type: 'workerOutput', id: 1, message: 'm2', text: 'other' },
+      { type: 'workerOutput', id: 2, message: 'm1', text: 'new worker' },
+      { type: 'workerOutput', id: 1, text: 'complete' },
+    ]);
+    expect(view.posted.filter((event) => event.type === 'workerOutput')).toHaveLength(5);
+    expect(replayed(panel)).toEqual(panel.history);
+  });
+
   it('LogsPosts: a posted event is on the log a new view replays', () => {
     const panel = harness().panel;
     panel.post({ type: 'say', text: 'hello' });

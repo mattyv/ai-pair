@@ -797,7 +797,11 @@ describe('background worker routing', () => {
       type: 'result',
       result: { ok: true },
     });
-    expect(controller.workerOutput).toHaveBeenCalledWith('worker-secret', 'line 1\nline 2');
+    expect(controller.workerOutput).toHaveBeenCalledWith('worker-secret', 'line 1\nline 2', undefined, undefined);
+    expect(
+      await call(worker, 10, 'worker_output', { capability: 'worker-secret', text: 'snapshot', message: 'm1', final: true }),
+    ).toMatchObject({ type: 'result' });
+    expect(controller.workerOutput).toHaveBeenCalledWith('worker-secret', 'snapshot', 'm1', true);
     expect(await call(worker, 7, 'worker_notice', { capability: 'worker-secret', notice: 'question', text: 'Which?' })).toMatchObject({
       type: 'result',
       result: { ok: true },
@@ -836,6 +840,10 @@ describe('worker request boundary', () => {
     ['missing actions', 'worker_step', { capability: 'secret' }],
     ['many actions', 'worker_step', { capability: 'secret', actions: Array.from({ length: 101 }, () => ({ say: 'x' })) }],
     ['large actions', 'worker_step', { capability: 'secret', actions: [{ say: 'x'.repeat(65_537) }] }],
+    ['empty message id', 'worker_output', { capability: 'secret', text: 'x', message: '' }],
+    ['long message id', 'worker_output', { capability: 'secret', text: 'x', message: 'x'.repeat(129) }],
+    ['invalid final', 'worker_output', { capability: 'secret', text: 'x', message: 'm', final: false }],
+    ['final without id', 'worker_output', { capability: 'secret', text: 'x', final: true }],
     ['empty output', 'worker_output', { capability: 'secret', text: '' }],
     ['oversized output', 'worker_output', { capability: 'secret', text: 'x'.repeat(16_385) }],
     ['missing text', 'worker_done', { capability: 'secret' }],

@@ -163,6 +163,7 @@ Last updated: css, 2026-11-20.
 | `packages/protocol/test/speech_accents.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/protocol/test/speech_decode.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/wire.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/relay/src/codex_worker.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/relay/src/guide.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.6% B 88.9% F 100.0% | - | - | - | - |
 | `packages/relay/src/link.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/relay/src/main.ts` | TypeScript | - | L 100.0% B 100.0% F 100.0% | - | - | - | - |
@@ -173,6 +174,7 @@ Last updated: css, 2026-11-20.
 | `packages/relay/src/tools.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/relay/src/worker_output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/relay/test/agent_guide.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/relay/test/codex_worker.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/relay/test/guide.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/link.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/relay.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -847,6 +849,10 @@ Last updated: css, 2026-11-20.
 | `specs/WorkerOutput.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/WorkerProvider.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/WorkerProvider.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/WorkerRunner.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/WorkerRunner.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/WorkerSnapshots.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/WorkerSnapshots.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/WorkerTabs.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/WorkerTabs.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/check.sh` | Shell | - | - | - | - | L 100.0% (59 of 59) | - |

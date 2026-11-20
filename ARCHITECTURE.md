@@ -76,11 +76,14 @@ capability continue to authorize worker operations.
 The worker harness can forward public assistant responses through
 `worker_output`. The Codex relay adapter reads completed assistant messages
 from the CLI's JSON event stream, and sends completion after the stream ends.
-It owns the input stream and forwards to the same grant-bound window. The
-controller validates the live capability and publishes a separate panel
-event. The existing bounded panel history retains response text and replays it
-into the Worker tab. The controller saves the next worker display ID so
-resuming cannot mix a new worker's responses with old output.
+It owns the input stream and forwards to the same grant-bound window.
+The App Server runner owns an ephemeral Codex child. It matches the
+thread and turn, accumulates public response updates by item, and forwards
+keyed snapshots. The controller validates the live capability and publishes a
+separate panel event. The existing bounded panel history replaces prior
+snapshots for that worker and message, preserving order on replay. The
+controller saves the next worker display ID so resuming keeps the new
+worker's responses separate from earlier output.
 
 ```text
 ┌──────────────────┐  stdio (MCP)  ┌────────────┐  WebSocket, 127.0.0.1  ┌─────────────────────────────┐

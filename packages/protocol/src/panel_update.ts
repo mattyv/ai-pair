@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { NAVIGATOR_COMMENTARY_SCHEMA, WORKER_MODEL_LIMIT, WORKER_PROVIDER_SCHEMA, WORKER_TEXT_LIMIT } from './schemas';
+import {
+  NAVIGATOR_COMMENTARY_SCHEMA,
+  WORKER_MESSAGE_ID_LIMIT,
+  WORKER_MODEL_LIMIT,
+  WORKER_PROVIDER_SCHEMA,
+  WORKER_TEXT_LIMIT,
+} from './schemas';
 import { extensionVersion, localAudioStatus } from './local_audio_status';
 
 /** The panel retains up to 400 recent events and one preceding session event. */
@@ -28,7 +34,12 @@ const panelEvent = z.union([
     costSessionGeneration: z.int().positive().optional(),
   }),
   z.strictObject({ type: z.literal('say'), text }),
-  z.strictObject({ type: z.literal('workerOutput'), id: z.int().positive(), text: z.string().max(WORKER_TEXT_LIMIT) }),
+  z.strictObject({
+    type: z.literal('workerOutput'),
+    id: z.int().positive(),
+    text: z.string().max(WORKER_TEXT_LIMIT),
+    message: z.string().min(1).max(WORKER_MESSAGE_ID_LIMIT).optional(),
+  }),
   z.strictObject({
     type: z.literal('workerActivity'),
     id: z.int().positive(),

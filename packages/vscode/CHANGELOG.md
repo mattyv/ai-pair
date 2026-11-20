@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.54.0
+
+-   Grow the worker's response in the Worker tab as Codex writes it.
+    The Codex App Server runner forwards visible text during the turn.
+
 ## 0.53.0
 
 -   Show the worker's original responses in the Worker tab. The Codex

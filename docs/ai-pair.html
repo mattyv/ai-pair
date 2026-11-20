@@ -40134,10 +40134,10 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 { id: "worker", label: "Same-provider worker\nEdits and approved commands", x: 35, y: 280, files: [] },
                 {
                   id: "transcript-adapter",
-                  label: "Codex transcript adapter\nForwards public response text",
+                  label: "Codex output runner\nOwns the App Server child",
                   x: 380,
                   y: 268,
-                  files: ["packages/relay/src/worker_output.ts"],
+                  files: ["packages/relay/src/worker_output.ts", "packages/relay/src/codex_worker.ts"],
                 },
                 {
                   id: "relay",
@@ -40193,8 +40193,8 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 { from: "controller", to: "voice", label: "Send main-agent speech" },
                 { from: "programmer", to: "controller", label: "Disable or interrupt the grant" },
                 { from: "controller", to: "worker-panel", label: "Publish bounded responses and status" },
-                { from: "worker", to: "transcript-adapter", label: "Codex public response events" },
-                { from: "transcript-adapter", to: "relay", label: "Forward each response with grant" },
+                { from: "worker", to: "transcript-adapter", label: "App Server public text updates" },
+                { from: "transcript-adapter", to: "relay", label: "Forward keyed snapshots with grant" },
               ],
               groups: [],
               comments: {},

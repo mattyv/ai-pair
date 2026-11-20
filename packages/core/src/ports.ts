@@ -182,7 +182,7 @@ export type PanelEvent =
   | { type: 'session'; active: true; task?: string; rules?: string[]; suspended?: true; resumed?: true; costSessionGeneration?: number }
   | { type: 'session'; active: false; reason: 'agent' | 'programmer' | 'disconnected'; summary?: string; costSessionGeneration?: number }
   | { type: 'say'; text: string }
-  | { type: 'workerOutput'; id: number; text: string }
+  | { type: 'workerOutput'; id: number; text: string; message?: string }
   | { type: 'workerActivity'; id: number; phase: 'started' | 'progress' | 'editing' | 'batchDone' | 'completed' | 'stopped'; text: string }
   | { type: 'attention'; state: 'none' | 'requested' | 'granted' }
   | { type: 'reading'; ms: number; id?: number; owner?: 'code' }

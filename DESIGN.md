@@ -14,7 +14,8 @@ Enable the preview in VS Code User Settings. The main agent keeps the
 conversation and speaks. It can grant one background worker permission to
 drive visible edits for the current task. Interrupting or disabling the
 setting revokes that permission. The Worker tab shows the worker's original
-visible responses. Its status and Cancel control sit above the transcript.
+visible responses. When a harness streams updates, each response grows in
+place. Its status and Cancel control sit above the transcript.
 See [Testing background workers](docs/worker-preview.md)
 for the setup and current limits.
 

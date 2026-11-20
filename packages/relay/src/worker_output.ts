@@ -4,7 +4,7 @@ import type { EditorLink } from './link';
 
 /** A JSON code-unit escape takes six bytes. Leave room for the Codex event envelope. */
 const JSON_ESCAPE_BYTES = 6;
-const ENVELOPE_BYTES = 1024;
+const ENVELOPE_BYTES = 2048;
 const MAX_LINE_BYTES = JSON_ESCAPE_BYTES * WORKER_TEXT_LIMIT + ENVELOPE_BYTES;
 const LINE_FEED = 0x0a;
 
@@ -31,7 +31,7 @@ function decodeRecord(record: Buffer, size: number): string | undefined {
 }
 
 /** Reads one bounded UTF-8 record at a time, yielding undefined for an unreadable record. */
-async function* readLines(input: WorkerTranscriptInput): AsyncGenerator<string | undefined> {
+export async function* readWorkerLines(input: WorkerTranscriptInput): AsyncGenerator<string | undefined, void> {
   const record = Buffer.alloc(MAX_LINE_BYTES);
   let size = 0;
   for await (const chunk of input) {
@@ -55,7 +55,7 @@ async function* readLines(input: WorkerTranscriptInput): AsyncGenerator<string |
 }
 
 /** Parses a single NDJSON record without exposing invalid input. */
-function parseRecord(line: string | undefined): unknown {
+export function parseWorkerRecord(line: string | undefined): unknown {
   if (line === undefined) return undefined;
   try {
     return JSON.parse(line);
@@ -70,8 +70,8 @@ export async function forwardCodexWorkerTranscript(input: WorkerTranscriptInput,
   let completed = false;
   let failed = false;
   try {
-    for await (const line of readLines(input)) {
-      const parsed = parseRecord(line);
+    for await (const line of readWorkerLines(input)) {
+      const parsed = parseWorkerRecord(line);
       if (grant === undefined) {
         grant = WORKER_GRANT_SCHEMA.parse(parsed);
         continue;

@@ -66,6 +66,8 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `WorkerAttachment.cfg` | proposal, two owner attachments, one job and one grant per attachment | holds | 45 |
 | `WorkerDriver.cfg` | proposal, two worker tasks and three physical batch identities | holds | 68 |
 | `WorkerTabs.cfg` | enabled and disabled, Pair and Worker selections | holds | 3 |
+| `WorkerRunner.cfg` | one grant, preflight, child and turn; retirement failure and retry | holds | 34 |
+| `WorkerSnapshots.cfg` | two grants, two item keys, three text classes and three retained items | holds | 7,949 |
 | `WorkerOutput.cfg` | two grants, two text atoms, two history events and over-limit input | holds | 173 |
 | `WorkerNotice.cfg` | two worker generations, one pending notice, ordinary progress separate | holds | 72 |
 | `WorkerProvider.cfg` | two attachment identities, two providers and an unknown provider | holds | 45 |
@@ -4540,3 +4542,61 @@ invalid initial active grant violates `TypeOK`.
 | `WorkerOutputOrder` | Worker page tests render only raw messages and preserve order through replay. |
 | `NoRawMain` | Controller and page tests keep raw messages out of main listen, Pair chat and status synthesis. |
 | `ReplayNoAuthority` | Page and controller tests reject stale output after replay or restart and do not restore a live grant. |
+
+### `WorkerSnapshots`: cumulative worker output
+
+Two distinct worker grants, two keyed item identities, anonymous messages,
+three abstract input text classes, and up to three retained items cover
+replacement, first-insertion ordering, replay, and cross-worker key reuse.
+Anonymous output appends; a keyed snapshot replaces the prior text for that
+worker and key. The `final` flag requires a key. A partial grant-token suffix
+may be withheld while streaming; a final snapshot restores an ordinary suffix
+while complete token occurrences are redacted. The panel receives the key and
+sanitized text, and raw output is excluded from Pair, main listen, and voice.
+The model treats text as abstract atoms: it does not verify literal substring
+matching, Unicode lengths, cumulative-prefix behavior of the producer, actual
+transport loss, or DOM rendering. Those need protocol, controller and browser
+regression tests. TLC explored 48,019 generated and 7,949 distinct states at
+depth 8; actions bound retained items rather than using a TLC constraint.
+
+`GuardCurrent` and `GuardBounds` mutations violate `OnlyLiveBounded`;
+`GuardCoalesce`, `GuardScope`, and `GuardRedact` violate `CoalescedInOrder`;
+`GuardReplay` violates `VisibleLatest`; and `GuardPair`, `GuardListen`, and
+`GuardVoice` independently violate `NoRawMain`. A bad initial active grant
+violates `TypeOK`.
+
+| Invariant | Regression mapping |
+|---|---|
+| `TypeOK` | Protocol schemas and TypeScript check optional message ID and final flag. |
+| `OnlyLiveBounded` | Bridge tests reject stale grants, invalid or oversized keys and text, and final without a key. |
+| `CoalescedInOrder` | Controller tests cover cumulative snapshots, anonymous append, cross-worker key reuse and token redaction. |
+| `VisibleLatest` | Worker browser tests check in-place replacement, insertion order and retained replay. |
+| `NoRawMain` | Controller and browser tests keep raw worker text out of Pair, listen and voice. |
+
+### `WorkerRunner`: native child retirement
+
+The bounded model has one grant, preflight, native app-server child and turn.
+Launch requires an accepted preflight while the grant and ownership remain
+live; a rejected preflight cannot launch. Output and turn completion precede
+physical child closure. A failed retirement reports a blocker and retains
+ownership; `worker_done` may release ownership only after confirmed closure.
+Grant revocation and held physical ownership are separate. It abstracts
+message contents, process signals and OS-level close evidence. TLC explored
+44 generated and 34 distinct states at depth 9. Weak fairness of `Close`
+assumes a completed child can eventually be physically retired, even after a
+failed attempt; it is not a guarantee that an uncooperative OS process exits.
+
+Mutating `GuardPreflight`, `GuardRetired`, or `GuardHold` independently violates
+`LaunchAcknowledged`, `ReleaseAfterClose`, or `FailedRetainsOwner`. Removing
+the physical-child guard on output violates `OutputNeedsChild`; removing close
+fairness violates `RetirementProgress`. An invalid initial preflight violates
+`TypeOK`.
+
+| Invariant or property | Regression mapping |
+|---|---|
+| `TypeOK` | TypeScript and wire schemas check lifecycle values. |
+| `LaunchAcknowledged` | Relay runner tests reject missing, stale, and failed preflight before spawn. |
+| `ReleaseAfterClose` | Runner tests hold `worker_done` until the child close event. |
+| `FailedRetainsOwner` | Runner tests report a blocker and keep ownership on close timeout or failed termination. |
+| `OutputNeedsChild` | Runner tests forward output only from the spawned child. |
+| `RetirementProgress` | Runner tests settle after a confirmed physical close, including after a retry. |

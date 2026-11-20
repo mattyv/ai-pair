@@ -1274,3 +1274,19 @@ test('Worker replay retains raw transcript across resume without restoring runni
   await expect(page.locator('[data-ui=worker-running]')).toBeHidden();
   await expect(page.locator('[data-ui=worker-cancel]')).toBeHidden();
 });
+
+test('Worker displays streamed growth in one stable paragraph before completion', async ({ page }) => {
+  const post = await load(page);
+  await post({ type: 'workerEnabled', value: true });
+  await post({ type: 'workerActivity', id: 1, phase: 'started', text: 'Working' });
+  await page.locator('[data-ui=worker-tab]').click();
+  await post({ type: 'workerOutput', id: 1, message: 'stream-1', text: '  partial\n' });
+  const rows = page.locator('[data-ui=worker-history] p');
+  await expect(rows).toHaveCount(1);
+  expect(await rows.first().textContent()).toBe('  partial\n');
+  await post({ type: 'workerOutput', id: 1, message: 'stream-1', text: '  partial\n<script>literal</script>  ' });
+  await expect(rows).toHaveCount(1);
+  expect(await rows.first().textContent()).toBe('  partial\n<script>literal</script>  ');
+  await expect(page.locator('[data-ui=worker-history] script')).toHaveCount(0);
+  await expect(page.locator('[data-ui=worker-running]')).toBeVisible();
+});

@@ -2,9 +2,9 @@
   "version": 1,
   "bundleId": "0ded5bcb-a6f0-47d4-a3b0-468f4a47c302",
   "revision": {
-    "number": 3,
+    "number": 4,
     "updatedAt": "2026-11-20T00:00:00.000Z",
-    "summary": "Add grant-bound public worker responses to the Worker tab"
+    "summary": "Stream public worker text from the Codex App Server"
   },
   "diagrams": [
     {
@@ -8702,10 +8702,10 @@
           },
           {
             "id": "transcript-adapter",
-            "label": "Codex transcript adapter\nForwards public response text",
+            "label": "Codex output runner\nOwns the App Server child",
             "x": 380,
             "y": 268,
-            "files": ["packages/relay/src/worker_output.ts"]
+            "files": ["packages/relay/src/worker_output.ts", "packages/relay/src/codex_worker.ts"]
           },
           {
             "id": "relay",
@@ -8806,12 +8806,12 @@
           {
             "from": "worker",
             "to": "transcript-adapter",
-            "label": "Codex public response events"
+            "label": "App Server public text updates"
           },
           {
             "from": "transcript-adapter",
             "to": "relay",
-            "label": "Forward each response with grant"
+            "label": "Forward keyed snapshots with grant"
           }
         ],
         "groups": [],

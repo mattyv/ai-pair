@@ -420,6 +420,15 @@ describe('a cancel after its answer', () => {
     expect(link.handBack).not.toHaveBeenCalled();
   });
 
+  it('passes the message and final marker to the editor for keyed snapshots', async () => {
+    const { sdk, link } = build();
+    link.callWorker.mockResolvedValueOnce({ ok: true });
+    const snapshot = { capability: 'secret', text: '  Worker final  ', message: 'item-1', final: true };
+    const result = await call(sdk, 'worker_output', { port: 4567, ...snapshot });
+    expect(link.callWorker).toHaveBeenCalledWith(4567, 'worker_output', snapshot, expect.any(AbortSignal));
+    expect(texts(result)).toEqual(['{"ok":true}']);
+  });
+
   it('keeps the last MAX_ANSWERED answers: a cancel for an older one hands nothing back', async () => {
     const { server, sdk, link } = build();
     const transport: Transport = { start: () => Promise.resolve(), send: () => Promise.resolve(), close: () => Promise.resolve() };

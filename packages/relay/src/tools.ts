@@ -7,6 +7,7 @@ import {
   WORKER_ACTION_LIMIT,
   WORKER_ACTION_SIZE_LIMIT,
   WORKER_CAPABILITY_LIMIT,
+  WORKER_MESSAGE_ID_LIMIT,
   WORKER_PATH_LIMIT,
   WORKER_TEXT_LIMIT,
   WORKER_PROVIDER_SCHEMA,
@@ -312,11 +313,15 @@ After a report says a batch was interrupted, discarded, or failed, your cursor i
   },
   worker_output: {
     description: 'Show one raw worker message in the Worker view using the worker grant.',
-    inputSchema: {
-      port: z.number().int().min(1).max(MAX_PORT),
-      capability: z.string().min(1).max(WORKER_CAPABILITY_LIMIT),
-      text: z.string().min(1).max(WORKER_TEXT_LIMIT),
-    },
+    inputSchema: z
+      .object({
+        port: z.number().int().min(1).max(MAX_PORT),
+        capability: z.string().min(1).max(WORKER_CAPABILITY_LIMIT),
+        text: z.string().min(1).max(WORKER_TEXT_LIMIT),
+        message: z.string().min(1).max(WORKER_MESSAGE_ID_LIMIT).optional().describe('Item ID for a cumulative message snapshot.'),
+        final: z.literal(true).optional().describe('Marks a final snapshot. Requires a message ID.'),
+      })
+      .refine(({ final, message }) => final !== true || message !== undefined, { message: 'A final snapshot requires a message ID.' }),
   },
   worker_done: {
     description: 'Send one completion to the owner using the worker grant.',
