@@ -6,7 +6,7 @@ import { localPanelChunk } from './panel_chunks';
 import { extensionIdentity } from './local_audio_status';
 
 /** The supported workspace-to-companion protocol version. */
-export const LOCAL_AUDIO_VERSION = 10;
+export const LOCAL_AUDIO_VERSION = 11;
 
 /** Lists the `<platform>-<arch>` hosts the bundled Kokoro runtime is built for (#39). */
 export const KOKORO_HOSTS: readonly string[] = ['linux-x64', 'darwin-x64', 'darwin-arm64'];

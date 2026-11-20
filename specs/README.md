@@ -66,6 +66,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `WorkerAttachment.cfg` | proposal, two owner attachments, one job and one grant per attachment | holds | 45 |
 | `WorkerDriver.cfg` | proposal, two worker tasks and three physical batch identities | holds | 68 |
 | `WorkerTabs.cfg` | enabled and disabled, Pair and Worker selections | holds | 3 |
+| `WorkerOutput.cfg` | two grants, two text atoms, two history events and over-limit input | holds | 173 |
 | `WorkerNotice.cfg` | two worker generations, one pending notice, ordinary progress separate | holds | 72 |
 | `WorkerProvider.cfg` | two attachment identities, two providers and an unknown provider | holds | 45 |
 | `Serialize.cfg` | `NumCalls = 2` calls, each empty or not, the session ending, an interrupt, and the socket closing at any point | holds | 3,646 |
@@ -4512,3 +4513,30 @@ The model abstracts DOM rendering and worker authority.
 | `DefaultOff` | Fresh panel has no tab row before split-agent mode is enabled. |
 | `RowMatchesSetting` | Enabling and disabling shows and hides the tab row. |
 | `WorkerOnlyEnabled` | Disabling while Worker is selected reveals Pair and keeps Worker unavailable. |
+
+### `WorkerOutput`: raw worker messages
+
+This bounded model admits one raw text message only for a matching live grant
+and a message within the size limit. Two distinct, non-reused grant identities
+expose late submission after revocation or restart; two abstract text atoms and
+two history events expose replay ordering. An over-limit atom stands for every
+invalid length. Worker view is the ordered output-only projection of history;
+Pair chat, main listen and status receive lifecycle events but no raw output.
+Replay reconstructs that projection without restoring editing authority. It
+does not model transport loss, actual byte length, visual rendering, or the
+contents of lifecycle events. TLC explored 575 generated and 173 distinct
+states at depth 7. The bound is enforced in the actions, not a TLC constraint.
+
+Mutations of `GuardCurrent` and `GuardBound` each violate `OnlyLiveBounded`;
+mutations of `GuardPair`, `GuardListen`, and `GuardStatus` independently
+violate `NoRawMain`; `GuardProjection` and `GuardOrder` each violate
+`WorkerOutputOrder`; and `GuardReplay` violates `ReplayNoAuthority`. An
+invalid initial active grant violates `TypeOK`.
+
+| Invariant | Regression mapping |
+|---|---|
+| `TypeOK` | Protocol schema and TypeScript validate event shapes and bounded text. |
+| `OnlyLiveBounded` | Controller and bridge tests reject oversized output and stale grants, including after restart. |
+| `WorkerOutputOrder` | Worker page tests render only raw messages and preserve order through replay. |
+| `NoRawMain` | Controller and page tests keep raw messages out of main listen, Pair chat and status synthesis. |
+| `ReplayNoAuthority` | Page and controller tests reject stale output after replay or restart and do not restore a live grant. |

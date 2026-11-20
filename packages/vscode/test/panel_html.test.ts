@@ -305,7 +305,7 @@ it.each([
   ['worker-enabled', 'Let a worker make the edits while the main agent stays free to answer questions and narrate.'],
   [
     'worker-visibility',
-    'Milestones shows starts and results in chat. Everything adds progress and edit updates. Off keeps updates in Worker.',
+    'Milestones shows starts and results in chat. Everything adds progress and edit updates. Off stops new chat updates.',
   ],
   ['settings-code-playback', 'Typing shows each keystroke. Lines and Blocks reveal larger chunks with a pause to read.'],
   ['speech-context', 'Shares recent narration with supported cloud models for smoother speech and cues like whispering.'],

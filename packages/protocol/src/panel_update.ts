@@ -28,6 +28,7 @@ const panelEvent = z.union([
     costSessionGeneration: z.int().positive().optional(),
   }),
   z.strictObject({ type: z.literal('say'), text }),
+  z.strictObject({ type: z.literal('workerOutput'), id: z.int().positive(), text: z.string().max(WORKER_TEXT_LIMIT) }),
   z.strictObject({
     type: z.literal('workerActivity'),
     id: z.int().positive(),

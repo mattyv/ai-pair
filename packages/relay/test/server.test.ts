@@ -37,6 +37,7 @@ const TOOL_NAMES = [
   'worker_status',
   'worker_notice',
   'worker_progress',
+  'worker_output',
   'worker_done',
   'diagnostics',
 ] as const;
@@ -139,6 +140,7 @@ vi.mock('../src/tools', () => ({
     worker_status: 'worker_status schema',
     worker_notice: 'worker_notice schema',
     worker_progress: 'worker_progress schema',
+    worker_output: 'worker_output schema',
     worker_done: 'worker_done schema',
     diagnostics: 'diagnostics schema',
   },
@@ -515,6 +517,16 @@ it('always tells agents that each short say is spoken while leaving playback to 
 });
 
 describe('worker tools', () => {
+  it('sends raw output to the granted port with whitespace intact and only returns an acknowledgement', async () => {
+    const { sdk, link } = build();
+    link.callWorker.mockResolvedValueOnce({ ok: true });
+    const output = '  **Result**\n\n';
+    const result = await call(sdk, 'worker_output', { port: 4567, capability: 'secret', text: output });
+    expect(link.callWorker).toHaveBeenCalledWith(4567, 'worker_output', { capability: 'secret', text: output }, expect.any(AbortSignal));
+    expect(texts(result)).toEqual(['{"ok":true}']);
+    expect(link.handBack).not.toHaveBeenCalled();
+  });
+
   it('sends worker completion only to its exact port and does not hand back a report', async () => {
     const { sdk, link } = build();
     link.callWorker.mockResolvedValueOnce({ ok: true });

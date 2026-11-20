@@ -85,9 +85,9 @@ from the same provider makes visible edits in the editor.
     use. The fields are saved separately. Leave a field blank to use the
     exact model of the active chat.
 3.  Start Pair as usual and ask the main agent to delegate an edit. Open
-    **Worker** for the assigned task, edit activity, and result. **Worker
-    activity in Pair** controls how much of that activity appears in the
-    conversation.
+    **Worker** for the worker's original response text when its harness
+    forwards it. **Worker activity in Pair** controls which status and
+    progress updates appear in the conversation.
 
 Split agents are off by default. With the setting off, the panel shows Pair
 without a tab row. Turning it off during a session returns you to Pair and

@@ -3822,8 +3822,9 @@ describe('worker activity projection', () => {
   it('groups activity by worker, shows running state, and requests cancellation', () => {
     send({ type: 'workerActivity', id: 1, phase: 'started', text: 'Inspect code' });
     send({ type: 'workerActivity', id: 1, phase: 'progress', text: 'Reading' });
-    expect(text('worker-history')).toContain('Inspect code');
-    expect(text('worker-history')).toContain('Reading');
+    send({ type: 'workerOutput', id: 1, text: 'Original output' });
+    expect(text('worker-history')).toContain('Original output');
+    expect(text('worker-history')).not.toContain('Reading');
     expect(element('worker-running').hidden).toBe(false);
     click(element('worker-cancel'));
     expect(posted()).toContainEqual({ type: 'cancelWorker' });
@@ -3926,11 +3927,11 @@ it('uses disclosure defaults for malformed saved state', async () => {
 });
 
 it('orders worker groups and event rows with chat order changes', () => {
-  send({ type: 'workerActivity', id: 1, phase: 'started', text: 'First' });
-  send({ type: 'workerActivity', id: 1, phase: 'progress', text: 'Second' });
+  send({ type: 'workerOutput', id: 1, text: 'First' });
+  send({ type: 'workerOutput', id: 1, text: 'Second' });
   send({ type: 'chatOrder', value: 'oldestFirst' });
-  send({ type: 'workerActivity', id: 1, phase: 'progress', text: 'Third' });
-  send({ type: 'workerActivity', id: 2, phase: 'started', text: 'Fourth' });
+  send({ type: 'workerOutput', id: 1, text: 'Third' });
+  send({ type: 'workerOutput', id: 2, text: 'Fourth' });
   expect(text('worker-history')).toContain('FirstSecondThird');
   send({ type: 'chatOrder', value: 'newestFirst' });
   expect(text('worker-history')).toContain('ThirdSecondFirst');
@@ -3951,7 +3952,7 @@ it('shows Worker tabs only while enabled and retains history after disabling', (
   expect(element('history').hidden).toBe(false);
   send({ type: 'workerEnabled', value: true });
   expect(element('worker-tabs').hidden).toBe(false);
-  send({ type: 'workerActivity', id: 1, phase: 'started', text: 'Retained activity' });
+  send({ type: 'workerOutput', id: 1, text: 'Retained activity' });
   click(element('worker-tab'));
   expect(element('worker-view').hidden).toBe(false);
   element('worker-tab').focus();
@@ -4135,4 +4136,44 @@ describe('settings label tooltips', () => {
     expect(tip()).toBeUndefined();
     expect(control.hasAttribute('aria-describedby')).toBe(false);
   });
+});
+
+it('renders raw worker output safely and never inserts it in Pair', () => {
+  send({ type: 'workerActivity', id: 1, phase: 'started', text: 'Lifecycle text' });
+  send({ type: 'workerOutput', id: 1, text: '  first\n<script>unsafe</script>\n' });
+  const workerHistory = element('worker-history');
+  expect(workerHistory.textContent).toContain('  first\n<script>unsafe</script>\n');
+  expect(workerHistory.textContent).not.toContain('Lifecycle text');
+  expect(workerHistory.querySelector('script')).toBeNull();
+  expect(text('history')).not.toContain('<script>unsafe</script>');
+});
+
+it('replays worker output grouped in the selected chat order', () => {
+  send({ type: 'chatOrder', value: 'oldestFirst' });
+  send({
+    type: 'replay',
+    events: [
+      { type: 'workerOutput', id: 1, text: 'first' },
+      { type: 'workerOutput', id: 1, text: 'second' },
+      { type: 'workerOutput', id: 2, text: 'third' },
+    ],
+  });
+  const workerHistory = element('worker-history');
+  expect(workerHistory.textContent.indexOf('first')).toBeLessThan(workerHistory.textContent.indexOf('second'));
+  expect(workerHistory.textContent.indexOf('second')).toBeLessThan(workerHistory.textContent.indexOf('third'));
+  send({ type: 'chatOrder', value: 'newestFirst' });
+  expect(workerHistory.textContent.indexOf('third')).toBeLessThan(workerHistory.textContent.indexOf('second'));
+  expect(workerHistory.textContent.indexOf('second')).toBeLessThan(workerHistory.textContent.indexOf('first'));
+});
+
+it('retains worker transcript across suspension and resume without restoring a live grant', () => {
+  send({ type: 'workerActivity', id: 1, phase: 'started', text: 'Starting' });
+  send({ type: 'workerOutput', id: 1, text: 'Earlier output' });
+  send({ type: 'session', active: true, suspended: true });
+  send({ type: 'session', active: true, resumed: true });
+  expect(text('worker-history')).toContain('Earlier output');
+  expect(element('worker-running').hidden).toBe(true);
+  send({ type: 'workerOutput', id: 2, text: 'New output' });
+  expect(text('worker-history')).toContain('Earlier output');
+  expect(text('worker-history')).toContain('New output');
 });

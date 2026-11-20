@@ -1024,12 +1024,12 @@ test('view buttons show keyboard focus and disabled Worker does not hover', asyn
   await expect(worker).toHaveCSS('background-color', background);
 });
 
-test('Worker activity follows the Pair chat order, including live changes', async ({ page }) => {
+test('Worker output follows the Pair chat order, including live changes', async ({ page }) => {
   const post = await load(page);
   await post({ type: 'workerEnabled', value: true });
-  await post({ type: 'workerActivity', id: 1, phase: 'started', text: 'First' });
-  await post({ type: 'workerActivity', id: 1, phase: 'progress', text: 'Second' });
-  await post({ type: 'workerActivity', id: 2, phase: 'started', text: 'Third' });
+  await post({ type: 'workerOutput', id: 1, text: 'First' });
+  await post({ type: 'workerOutput', id: 1, text: 'Second' });
+  await post({ type: 'workerOutput', id: 2, text: 'Third' });
   await page.locator('[data-ui=worker-tab]').click();
   const history = page.locator('[data-ui=worker-history]');
   await expect(history.locator('h2')).toHaveText(['Worker 2', 'Worker 1']);
@@ -1037,8 +1037,8 @@ test('Worker activity follows the Pair chat order, including live changes', asyn
   await post({ type: 'chatOrder', value: 'oldestFirst' });
   await expect(history.locator('h2')).toHaveText(['Worker 1', 'Worker 2']);
   await expect(history.locator('section').first().locator('p')).toHaveText(['First', 'Second']);
-  await post({ type: 'workerActivity', id: 2, phase: 'progress', text: 'Fourth' });
-  await post({ type: 'workerActivity', id: 3, phase: 'started', text: 'Fifth' });
+  await post({ type: 'workerOutput', id: 2, text: 'Fourth' });
+  await post({ type: 'workerOutput', id: 3, text: 'Fifth' });
   await expect(history.locator('h2')).toHaveText(['Worker 1', 'Worker 2', 'Worker 3']);
   await expect(history.locator('section').nth(1).locator('p')).toHaveText(['Third', 'Fourth']);
   await post({ type: 'chatOrder', value: 'newestFirst' });
@@ -1163,7 +1163,7 @@ test('worker tabs follow enabled state without losing worker history', async ({ 
   await expect(page.locator('[data-ui=history]')).toBeVisible();
   await post({ type: 'workerEnabled', value: true });
   await expect(tabs).toBeVisible();
-  await post({ type: 'workerActivity', id: 1, phase: 'started', text: 'Retained activity' });
+  await post({ type: 'workerOutput', id: 1, text: 'Retained output' });
   const worker = page.locator('[data-ui=worker-tab]');
   await worker.click();
   await expect(page.locator('[data-ui=worker-view]')).toBeVisible();
@@ -1175,7 +1175,7 @@ test('worker tabs follow enabled state without losing worker history', async ({ 
   await expect(page.locator('[data-ui=settings]')).toBeFocused();
   await post({ type: 'workerEnabled', value: true });
   await worker.click();
-  await expect(page.locator('[data-ui=worker-history]')).toContainText('Retained activity');
+  await expect(page.locator('[data-ui=worker-history]')).toContainText('Retained output');
 });
 
 test('settings tooltips appear above the modal on hover and keyboard focus, then clear', async ({ page }) => {
@@ -1234,4 +1234,43 @@ test('settings label text shows the associated control tooltip', async ({ page }
   await settleScroll(page);
   await unsupported.hover({ position: { x: 10, y: 8 } });
   await expect(tooltip).toBeHidden();
+});
+
+test('Worker preserves raw text while activity visibility is off', async ({ page }) => {
+  const post = await load(page);
+  const raw = '  first line\n<script>alert(1)</script>\n  last line  ';
+  await post({ type: 'workerEnabled', value: true });
+  await post({ type: 'workerVisibility', value: 'off' });
+  await post({ type: 'workerActivity', id: 1, phase: 'started', text: 'Status only' });
+  await post({ type: 'workerOutput', id: 1, text: raw });
+  await expect(page.locator('[data-ui=history]')).not.toContainText('Status only');
+  await expect(page.locator('[data-ui=history]')).not.toContainText('first line');
+  await page.locator('[data-ui=worker-tab]').click();
+  const transcript = page.locator('[data-ui=worker-history]');
+  await expect(transcript.locator('p')).toHaveCount(1);
+  expect(await transcript.locator('p').textContent()).toBe(raw);
+  await expect(transcript.locator('script')).toHaveCount(0);
+  await expect(transcript).not.toContainText('Status only');
+  await expect(transcript.locator('p')).toHaveCSS('white-space', 'pre-wrap');
+  await expect(transcript.locator('p')).toHaveCSS('overflow-wrap', 'anywhere');
+});
+
+test('Worker replay retains raw transcript across resume without restoring running state', async ({ page }) => {
+  const post = await load(page);
+  const raw = '  saved\n<em>literal</em>\n';
+  await post({ type: 'workerEnabled', value: true });
+  await post({
+    type: 'replay',
+    events: [
+      { type: 'workerActivity', id: 1, phase: 'started', text: 'Starting' },
+      { type: 'workerOutput', id: 1, text: raw },
+      { type: 'session', active: true, resumed: true },
+    ],
+  });
+  await page.locator('[data-ui=worker-tab]').click();
+  const history = page.locator('[data-ui=worker-history]');
+  expect(await history.locator('p').textContent()).toBe(raw);
+  await expect(history.locator('em')).toHaveCount(0);
+  await expect(page.locator('[data-ui=worker-running]')).toBeHidden();
+  await expect(page.locator('[data-ui=worker-cancel]')).toBeHidden();
 });

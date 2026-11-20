@@ -114,7 +114,7 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
       </label>
       <label class="settings-field">Worker activity in Pair
         <select data-ui="worker-visibility"
-          data-tip="Milestones shows starts and results in chat. Everything adds progress and edit updates. Off keeps updates in Worker.">
+          data-tip="Milestones shows starts and results in chat. Everything adds progress and edit updates. Off stops new chat updates.">
           <option value="milestones">Milestones</option>
           <option value="everything">Everything</option>
           <option value="off">Off</option>

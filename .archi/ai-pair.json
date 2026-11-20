@@ -2,9 +2,9 @@
   "version": 1,
   "bundleId": "0ded5bcb-a6f0-47d4-a3b0-468f4a47c302",
   "revision": {
-    "number": 2,
-    "updatedAt": "2026-11-15T00:00:00.000Z",
-    "summary": "Propose consent-based nonverbal observation ownership and delivery"
+    "number": 3,
+    "updatedAt": "2026-11-20T00:00:00.000Z",
+    "summary": "Add grant-bound public worker responses to the Worker tab"
   },
   "diagrams": [
     {
@@ -8701,6 +8701,13 @@
             "files": []
           },
           {
+            "id": "transcript-adapter",
+            "label": "Codex transcript adapter\nForwards public response text",
+            "x": 380,
+            "y": 268,
+            "files": ["packages/relay/src/worker_output.ts"]
+          },
+          {
             "id": "relay",
             "label": "Pair relay\nRoutes to the exact editor",
             "x": 380,
@@ -8744,7 +8751,7 @@
           },
           {
             "id": "worker-panel",
-            "label": "Worker tab\nProjects bounded activity and cancel",
+            "label": "Worker tab\nShows original responses and Cancel",
             "x": 1035,
             "y": 500,
             "files": ["packages/vscode/src/panel.ts", "packages/vscode/src/webview/panel.ts", "packages/protocol/src/panel_update.ts"]
@@ -8794,7 +8801,17 @@
           {
             "from": "controller",
             "to": "worker-panel",
-            "label": "Publish worker activity"
+            "label": "Publish bounded responses and status"
+          },
+          {
+            "from": "worker",
+            "to": "transcript-adapter",
+            "label": "Codex public response events"
+          },
+          {
+            "from": "transcript-adapter",
+            "to": "relay",
+            "label": "Forward each response with grant"
           }
         ],
         "groups": [],

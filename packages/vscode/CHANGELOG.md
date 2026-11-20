@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.53.0
+
+-   Show the worker's original responses in the Worker tab. The Codex
+    transcript adapter forwards visible assistant messages from JSON output.
+
 ## 0.52.2
 
 - Clarify the worker, code display, and speech context tooltips.

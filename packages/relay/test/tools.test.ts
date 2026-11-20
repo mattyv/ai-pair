@@ -11,6 +11,7 @@ import {
   MOVE_TARGET_SCHEMA,
   moveProblem,
   SPAN_TARGET_SCHEMA,
+  WORKER_TEXT_LIMIT,
   spanProblem,
   speechProblem,
   typeProblem,
@@ -28,6 +29,14 @@ vi.mock(import('@ai-pair/protocol'), async (importOriginal) => ({
 
 /** The `step` tool's arguments, as the MCP server checks them. */
 const STEP = z.object(TOOLS.step.inputSchema);
+
+it('bounds worker output and requires an exact-window grant', () => {
+  const output = z.object(TOOLS.worker_output.inputSchema);
+  const exact = { port: 1234, capability: 'secret', text: '\t'.repeat(WORKER_TEXT_LIMIT) };
+  expect(output.parse(exact)).toEqual(exact);
+  expect(output.safeParse({ ...exact, text: `${exact.text}\n` }).success).toBe(false);
+  expect(output.safeParse({ port: exact.port, text: exact.text }).success).toBe(false);
+});
 
 it('guides agents toward safe structural edits and a named file', () => {
   const schema = JSON.stringify(z.toJSONSchema(STEP, { unrepresentable: 'any' }));

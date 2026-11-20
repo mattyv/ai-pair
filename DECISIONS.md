@@ -40,6 +40,15 @@ Issue discussions and working notes hold the detailed evidence and history.
     is a preference hint. Grant authorization still depends on session
     ownership and the worker capability. Preserve the legacy single value
     in user settings without assigning it to an unverified provider.
+-   Show original public assistant responses in Worker, with status and
+    Cancel above them. Worker visibility still controls progress and status
+    in Pair chat. The worker grant authorizes forwarding to its own task.
+    Keep the bounded transcript in panel history and redact the grant before
+    display or persistence. Forwarding adds no sound or main-agent report.
+-   Supply a Codex JSON-stream adapter and a generic worker tool for other
+    harnesses. The Codex adapter forwards completed assistant messages, so
+    the available granularity is one message at a time. The agent harness
+    still owns launch, model choice, and sign-in.
 
 ## Opening externally changed files (#15)
 

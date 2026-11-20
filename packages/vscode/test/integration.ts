@@ -1194,6 +1194,7 @@ export async function run(): Promise<void> {
     'worker_done',
     'worker_grant',
     'worker_notice',
+    'worker_output',
     'worker_progress',
     'worker_read',
     'worker_say',

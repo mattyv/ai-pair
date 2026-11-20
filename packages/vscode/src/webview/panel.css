@@ -101,6 +101,11 @@ body {
   padding: 10px 14px;
 }
 
+.worker-view p {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 button[hidden] {
   display: none;
 }

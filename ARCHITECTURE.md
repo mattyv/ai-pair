@@ -73,6 +73,15 @@ The bridge binds that hint to the owning connection and reads only its saved
 model preference. The hint selects a setting. Session ownership and the
 capability continue to authorize worker operations.
 
+The worker harness can forward public assistant responses through
+`worker_output`. The Codex relay adapter reads completed assistant messages
+from the CLI's JSON event stream, and sends completion after the stream ends.
+It owns the input stream and forwards to the same grant-bound window. The
+controller validates the live capability and publishes a separate panel
+event. The existing bounded panel history retains response text and replays it
+into the Worker tab. The controller saves the next worker display ID so
+resuming cannot mix a new worker's responses with old output.
+
 ```text
 ┌──────────────────┐  stdio (MCP)  ┌────────────┐  WebSocket, 127.0.0.1  ┌─────────────────────────────┐
 │  agent harness   │ ────────────▶ │  pair-mcp  │ ─────────────────────▶ │  VS Code extension          │
@@ -752,8 +761,8 @@ submission, and completion still requires the exact execution handle.
 When shell identity is unknown, these command forms wait at most 500 ms for
 VS Code's terminal state. Interruption or closure stops submission. If identity
 remains unknown, Pair submits the original command.
-The editor-relay wire version is 6 for the new command event. The local audio
-contract remains 6 because no new panel message is introduced.
+Editor-relay wire version 6 introduced the command event without changing
+the Local Audio contract.
 
 The native integration harness generates each packaged fixture under its
 owning extension root, ensuring framework stubs use that extension's VS Code

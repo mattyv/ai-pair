@@ -310,6 +310,14 @@ After a report says a batch was interrupted, discarded, or failed, your cursor i
       text: z.string().min(1).max(WORKER_TEXT_LIMIT),
     },
   },
+  worker_output: {
+    description: 'Show one raw worker message in the Worker view using the worker grant.',
+    inputSchema: {
+      port: z.number().int().min(1).max(MAX_PORT),
+      capability: z.string().min(1).max(WORKER_CAPABILITY_LIMIT),
+      text: z.string().min(1).max(WORKER_TEXT_LIMIT),
+    },
+  },
   worker_done: {
     description: 'Send one completion to the owner using the worker grant.',
     inputSchema: {

@@ -639,6 +639,7 @@ describe('a session the agent leaves, and comes back to', () => {
       finished: [],
       nextBatchId: 1,
       nextReceipt: 1,
+      nextWorkerActivityId: 1,
       events: [{ kind: 'interrupt' }],
     });
     h.controller.endSession();
@@ -3564,6 +3565,56 @@ describe('worker activity bounds', () => {
     expect(() => {
       controller.workerProgress(capability, 'late');
     }).toThrow();
+  });
+});
+
+describe('raw worker output', () => {
+  it('preserves text, redacts the grant and rejects stale output without conversation effects', async () => {
+    const h = harness();
+    const controller = new Controller(h.editor, h.panel, CONFIG, undefined, { workerEnabled: () => true });
+    await controller.start();
+    const capability = controller.grantWorker();
+    const text = `  first\n${capability}\n${'x'.repeat(1000)}`;
+    h.panel.post.mockClear();
+    const eventsBefore = structuredClone(controller.saved?.events);
+    controller.workerOutput(capability, text);
+    expect(controller.saved?.events).toEqual(eventsBefore);
+    expect(h.panel.post.mock.calls).toEqual([[{ type: 'workerOutput', id: 1, text: text.replaceAll(capability, '[redacted]') }]]);
+    const maximum = 'x'.repeat(16_384);
+    controller.workerOutput(capability, maximum);
+    expect(h.panel.post.mock.calls.at(-1)).toEqual([{ type: 'workerOutput', id: 1, text: maximum }]);
+    controller.revokeWorker();
+    expect(() => {
+      controller.workerOutput(capability, 'late');
+    }).toThrow();
+  });
+});
+
+describe('worker output identity across reload', () => {
+  it('does not reuse an activity ID after saving and reviving a session', async () => {
+    const first = harness();
+    const original = new Controller(first.editor, first.panel, CONFIG, undefined, { workerEnabled: () => true });
+    await original.start();
+    const capability = original.grantWorker();
+    original.workerOutput(capability, 'before reload');
+    const saved = original.saved;
+    expect(saved?.nextWorkerActivityId).toBe(2);
+    if (saved === undefined) throw new Error('missing session');
+    const next = harness();
+    const revived = new Controller(next.editor, next.panel, CONFIG, undefined, { workerEnabled: () => true });
+    revived.revive(saved);
+    await revived.start();
+    const nextCapability = revived.grantWorker();
+    revived.workerOutput(nextCapability, 'after reload');
+    expect(next.panel.post.mock.calls).toContainEqual([{ type: 'workerOutput', id: 2, text: 'after reload' }]);
+  });
+
+  it.each([undefined, 0, -1, 1.5, 'bad', Number.MAX_SAFE_INTEGER + 1])('accepts legacy or invalid counter %s', (nextWorkerActivityId) => {
+    const h = harness();
+    const saved = { scene: { turn: 'agent', allowedCommands: [] }, finished: [], events: [], nextWorkerActivityId };
+    if (!isSavedSession(saved)) throw new Error('missing session');
+    h.controller.revive(saved);
+    expect(h.controller.saved?.nextWorkerActivityId).toBe(1);
   });
 });
 

@@ -176,7 +176,7 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
   server.registerTool('read', TOOLS.read, (args, extra) => run('read', args, extra));
   server.registerTool('calibrate', TOOLS.calibrate, (args, extra) => run('calibrate', args, extra));
   async function workerCall(
-    tool: 'worker_read' | 'worker_step' | 'worker_done' | 'worker_progress' | 'worker_notice',
+    tool: 'worker_read' | 'worker_step' | 'worker_done' | 'worker_progress' | 'worker_notice' | 'worker_output',
     args: Record<string, unknown> & { port: number },
     signal: AbortSignal,
   ): Promise<CallToolResult> {
@@ -223,6 +223,7 @@ export function createServer(link: EditorLink, guide: string, cwd: string): McpS
   });
   server.registerTool('worker_notice', TOOLS.worker_notice, (args, extra) => workerCall('worker_notice', args, extra.signal));
   server.registerTool('worker_progress', TOOLS.worker_progress, (args, extra) => workerCall('worker_progress', args, extra.signal));
+  server.registerTool('worker_output', TOOLS.worker_output, (args, extra) => workerCall('worker_output', args, extra.signal));
   server.registerTool('worker_done', TOOLS.worker_done, (args, extra) => workerCall('worker_done', args, extra.signal));
   server.registerTool('diagnostics', TOOLS.diagnostics, async ({ cwd: given }) => {
     if (given !== undefined && !path.isAbsolute(given)) {

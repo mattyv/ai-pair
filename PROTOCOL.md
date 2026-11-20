@@ -17,9 +17,9 @@ adjusted by feel.
 When the programmer enables delegation, the main connection can request a
 private grant with `worker_grant`. Its result identifies the editor window
 and carries the capability the worker needs for `worker_read`, `worker_step`,
-`worker_progress`, `worker_notice`, and `worker_done`. Workers select that
-window explicitly. The bridge authenticates the grant without transferring
-ownership of the Pair session.
+`worker_progress`, `worker_notice`, `worker_output`, and `worker_done`.
+Workers select that window explicitly. The bridge authenticates the grant
+without transferring ownership of the Pair session.
 
 A grant includes the saved worker model for the active chat provider when
 that preference is set. An omitted model tells the main agent to use its
@@ -29,9 +29,15 @@ exact chat model. The provider hint only selects the preference.
 worker. The main connection can speak with `worker_say` independently of
 typing. `worker_done` posts the completion to the main report stream. A
 question or blocker from `worker_notice` wakes a pending main `listen`.
-Routine progress goes to the Worker tab. The main connection can call
-`worker_status` without draining a report. Worker responses do not consume
-or restore main-agent reports.
+`worker_output` takes the grant's port and capability and one visible response
+(up to 16,384 UTF-16 code units). The controller checks the live grant,
+redacts the capability if present, and records the text under the current
+worker ID for panel replay. Output appears only in the Worker tab. It does not wake
+`listen`, play speech, or enter the main chat. The event uses editor-relay
+wire version 8 and Local Audio panel protocol 11.
+The worker activity setting controls whether routine progress appears in
+Pair chat. The main connection can call `worker_status` without draining a
+report. Worker responses do not consume or restore main-agent reports.
 
 ## Goals
 
@@ -417,7 +423,7 @@ a clickable reference instead.
 
 Runs a shell command in an integrated terminal in the agent's working directory.
 The Pair panel shows the command and result; the programmer can reveal its
-terminal. New editor-relay reports use wire version 6 and carry immutable
+terminal. Since editor-relay wire version 6, reports have carried an immutable
 session origin. Canceled reports from another session are rejected before any
 facts are restored. For commands whose outcome the programmer should witness: tests,
 builds, starting the app, a request to it. Purely mechanical

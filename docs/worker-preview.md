@@ -1,6 +1,6 @@
 # Testing background workers
 
-The 0.51.1 preview lets a background worker drive visible edits while the main
+The worker preview lets a background worker drive visible edits while the main
 agent keeps the conversation and provides spoken narration. The setting is
 off by default.
 
@@ -17,9 +17,9 @@ off by default.
 4.  Watch the worker edit in the Pair panel. Ask the main agent to speak during
     the batch. It can use `worker_say` while the worker edits and `listen` to
     receive the worker's completion.
-5.  With split agents enabled, open the **Worker** tab to see the brief,
-    edit activity, and result. Set how much appears in Chat to Milestones,
-    Everything, or Off. The Worker tab and Pair chat both use Chat order.
+5.  Open **Worker** to read the helper's original responses when its harness
+    forwards them. Set how much worker status appears in Pair chat to
+    Milestones, Everything, or Off. Both tabs use Chat order.
 6.  Repeat with a longer visible edit and interrupt playback, use Cancel in
     the Worker tab, or turn the setting off. A later submission using the
     previous grant should be refused. Read the file before resuming from
@@ -37,3 +37,30 @@ after you cancel the worker, as with ordinary Pair commands.
 The previous single `aiPair.worker.model` setting remains in existing
 settings files. If you used it, copy it once to the appropriate provider
 field. Pair cannot tell which provider the shared value belonged to.
+
+## Forwarding original responses
+
+For Codex CLI workers, pass the grant JSON on the first line of stdin to
+the Pair launcher, then pipe the worker's `codex exec --json` output. Use
+a private grant file and the same workspace selected by the main agent.
+Set `pair_worker_model` to the grant's model or, when absent, the exact
+model of the main chat. With the launcher, grant, and prompt paths set locally:
+
+```bash
+{
+  cat "$pair_worker_grant_file"
+  codex exec --json -C "$pair_worker_workspace" -m "$pair_worker_model" - < "$pair_worker_prompt_file"
+} | "$pair_launcher" worker-transcript codex
+```
+
+Write the grant file with one trailing newline and access restricted to
+its owner. Keep the worker prompt and grant private and remove any temporary
+handoff after use. The adapter reads completed public assistant messages,
+forwards their text, then completes the grant after the stream ends. The
+worker omits `worker_done` when using this adapter. If an input record or
+response exceeds the forwarding limit, the adapter reports an incomplete
+transcript and keeps the responses it already forwarded.
+
+With a different harness, forward each public response using `worker_output`
+with the worker's grant, before `worker_done`. Pair receives only responses the
+harness forwards. The Worker tab displays that text as plain text.

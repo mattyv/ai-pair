@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import {
   spokenSay,
   CURSOR_MARKER,
+  WORKER_TEXT_LIMIT,
   ToolError,
   type Action,
   type BatchResult,
@@ -105,6 +106,8 @@ export interface SavedSession {
   nextBatchId?: number;
   /** The next message receipt, absent in sessions saved by older versions (#117). */
   nextReceipt?: number;
+  /** The next worker activity ID, absent in sessions saved by older versions. */
+  nextWorkerActivityId?: number;
   events: Receipted[];
 }
 
@@ -510,6 +513,7 @@ export class Controller {
       finished: session.finished,
       nextBatchId: this.nextBatchId,
       nextReceipt: this.nextReceipt,
+      nextWorkerActivityId: this.nextWorkerActivityId,
       // specs/Resume.tla, Store: a queued reply survives reload without changing the live queue.
       events: [...session.events, ...session.deferredMessages].filter((e): e is Receipted => e.kind !== 'edit'),
     };
@@ -543,6 +547,9 @@ export class Controller {
     const next = saved.nextBatchId;
     const reportedNext = Math.max(1, ...saved.finished.map((batch) => batch.id + 1));
     this.nextBatchId = typeof next === 'number' && Number.isSafeInteger(next) && next >= reportedNext ? next : reportedNext;
+    // specs/WorkerOutput.tla, Reload: replayed output retains its identity, not its authority.
+    const nextWorker = saved.nextWorkerActivityId;
+    this.nextWorkerActivityId = typeof nextWorker === 'number' && Number.isSafeInteger(nextWorker) && nextWorker > 0 ? nextWorker : 1;
     session.finished = [...saved.finished];
     session.events = [...saved.events];
     // A receipt is never reused, or a new message would share an old one's bubble; the spec does not model ids.
@@ -719,6 +726,13 @@ export class Controller {
   workerProgress(capability: string, text: string): void {
     this.requireWorker(capability);
     this.workerActivity('progress', text);
+  }
+
+  /** Posts raw worker output only for the current grant, without changing the conversation. */
+  workerOutput(capability: string, text: string): void {
+    const { id } = this.requireWorker(capability);
+    // specs/WorkerOutput.tla, Output: only a live grant publishes to the panel.
+    this.panel.post({ type: 'workerOutput', id, text: text.replaceAll(capability, '[redacted]').slice(0, WORKER_TEXT_LIMIT) });
   }
 
   /** Displays and speaks main-agent narration while worker edits are in progress. */

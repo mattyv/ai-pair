@@ -40133,6 +40133,13 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 { id: "main", label: "Main agent\nConversation and narration", x: 35, y: 45, files: [] },
                 { id: "worker", label: "Same-provider worker\nEdits and approved commands", x: 35, y: 280, files: [] },
                 {
+                  id: "transcript-adapter",
+                  label: "Codex transcript adapter\nForwards public response text",
+                  x: 380,
+                  y: 268,
+                  files: ["packages/relay/src/worker_output.ts"],
+                },
+                {
                   id: "relay",
                   label: "Pair relay\nRoutes to the exact editor",
                   x: 380,
@@ -40170,7 +40177,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 { id: "programmer", label: "Programmer\nEnables or interrupts", x: 375, y: 510, files: [] },
                 {
                   id: "worker-panel",
-                  label: "Worker tab\nProjects bounded activity and cancel",
+                  label: "Worker tab\nShows original responses and Cancel",
                   x: 1035,
                   y: 500,
                   files: ["packages/vscode/src/panel.ts", "packages/vscode/src/webview/panel.ts", "packages/protocol/src/panel_update.ts"],
@@ -40185,7 +40192,9 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 { from: "controller", to: "player", label: "Rehearse and play one edit batch" },
                 { from: "controller", to: "voice", label: "Send main-agent speech" },
                 { from: "programmer", to: "controller", label: "Disable or interrupt the grant" },
-                { from: "controller", to: "worker-panel", label: "Publish worker activity" },
+                { from: "controller", to: "worker-panel", label: "Publish bounded responses and status" },
+                { from: "worker", to: "transcript-adapter", label: "Codex public response events" },
+                { from: "transcript-adapter", to: "relay", label: "Forward each response with grant" },
               ],
               groups: [],
               comments: {},

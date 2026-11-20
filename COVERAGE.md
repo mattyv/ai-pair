@@ -171,6 +171,7 @@ Last updated: css, 2026-11-20.
 | `packages/relay/src/server.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 97.0% B 87.2% F 100.0% | - | - | - | - |
 | `packages/relay/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 50.0% F 100.0% | - | - | - | - |
 | `packages/relay/src/tools.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/relay/src/worker_output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/relay/test/agent_guide.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/relay/test/guide.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/link.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -184,6 +185,7 @@ Last updated: css, 2026-11-20.
 | `packages/relay/test/timings.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/relay/test/tools.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/validation.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/relay/test/worker_output.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/scripts/audio_helper.mts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/scripts/audio_helper.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/scripts/build.mts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -309,7 +311,7 @@ Last updated: css, 2026-11-20.
 | `packages/vscode/src/voice_indicator.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/voice_language.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/approval_sound.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 180 of 180 rules matched |
+| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 181 of 181 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/speech_audio.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/speech_decode.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -841,6 +843,8 @@ Last updated: css, 2026-11-20.
 | `specs/WorkerDriver.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/WorkerNotice.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/WorkerNotice.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/WorkerOutput.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/WorkerOutput.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/WorkerProvider.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/WorkerProvider.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/WorkerTabs.cfg` | TLC config | - | - | - | - | - | - |

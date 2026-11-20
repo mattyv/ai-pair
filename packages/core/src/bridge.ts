@@ -90,6 +90,7 @@ export type BridgeController = Pick<
   | 'workerStep'
   | 'workerDone'
   | 'workerProgress'
+  | 'workerOutput'
   | 'workerNotice'
   | 'workerStatus'
   | 'workerSay'
@@ -381,6 +382,7 @@ export class Bridge {
       tool === 'worker_step' ||
       tool === 'worker_done' ||
       tool === 'worker_progress' ||
+      tool === 'worker_output' ||
       tool === 'worker_notice'
     ) {
       if (typeof args.capability !== 'string' || args.capability.length === 0 || args.capability.length > WORKER_CAPABILITY_LIMIT) {
@@ -418,6 +420,7 @@ export class Bridge {
         throw new ToolError('invalid_arguments', 'Invalid text.');
       }
       if (tool === 'worker_progress') controller.workerProgress(args.capability, args.text);
+      else if (tool === 'worker_output') controller.workerOutput(args.capability, args.text);
       else if (tool === 'worker_notice') {
         if (args.notice !== 'question' && args.notice !== 'blocked') throw new ToolError('invalid_arguments', 'Invalid notice.');
         controller.workerNotice(args.capability, args.notice, args.text);

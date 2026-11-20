@@ -72,3 +72,11 @@ it('validates worker settings at the panel boundary', () => {
   expect(localPanelUpdate.safeParse({ type: 'workerModel', provider: 'codex', value: 'x'.repeat(257) }).success).toBe(false);
   expect(localPanelUpdate.safeParse({ type: 'workerEnabled', value: 'false' }).success).toBe(false);
 });
+
+it('accepts bounded raw worker output in live updates and replay', () => {
+  const output = { type: 'workerOutput', id: 1, text: 'one\n  two' };
+  expect(localPanelUpdate.safeParse(output).success).toBe(true);
+  expect(localPanelUpdate.safeParse({ type: 'replay', events: [output] }).success).toBe(true);
+  expect(localPanelUpdate.safeParse({ ...output, text: 'x'.repeat(16_385) }).success).toBe(false);
+  expect(localPanelUpdate.safeParse({ ...output, id: 0 }).success).toBe(false);
+});

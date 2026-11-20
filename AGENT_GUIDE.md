@@ -29,10 +29,14 @@ In the optional background worker mode, the main agent keeps this session and
 speaks. Call `worker_grant` only when the programmer wants to delegate. Give
 the returned grant privately to a worker from your own provider, using the
 model preference in the grant or your exact current chat model when it is
-absent. The worker
-calls `worker_read`, `worker_step`, `worker_progress`, `worker_notice`, and
-`worker_done` with the grant. It leaves speech and editor control outside the
-task to the main agent. It requests commands through normal Pair approval.
+absent. The worker calls `worker_read`, `worker_step`, `worker_progress`,
+`worker_notice`, and `worker_done` with the grant. To show a response in
+the Worker tab, forward its visible text verbatim with `worker_output`
+before completing the grant.
+If the Codex transcript adapter is forwarding the stream, let it send
+`worker_done` so the final response can arrive first. The worker requests
+commands through normal Pair approval. The main agent handles speech and
+editor control outside the worker's task.
 Use `worker_say` for main-agent speech while the worker edits. A worker
 question or blocker wakes `listen`, and `worker_status` reports whether the
 worker is active and editing. The programmer can interrupt a worker or turn

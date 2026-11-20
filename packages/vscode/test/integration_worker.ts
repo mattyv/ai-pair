@@ -10,6 +10,7 @@ import type { Api } from '../src/extension';
 
 const GRANT = z.object({ port: z.number(), capability: z.string().min(1) });
 const BATCH = z.object({ status: z.string() });
+const OUTPUT_SETTLE_MS = 250;
 
 /** Exercises opt-in, a separate worker's visible edit, and grant revocation. */
 export async function workerPaths(api: Api, root: string): Promise<void> {
@@ -30,6 +31,22 @@ export async function workerPaths(api: Api, root: string): Promise<void> {
     const grant = GRANT.parse(await owner.call('worker_grant', { brief: 'edit scratch file' }));
     await owner.callWorker(grant.port, 'worker_read', { capability: grant.capability, file: name });
     await owner.callWorker(grant.port, 'worker_progress', { capability: grant.capability, text: 'editing scratch file' });
+    const activity = api.history().findLast((event) => event.type === 'workerActivity' && event.phase === 'started');
+    assert.ok(activity?.type === 'workerActivity', 'worker start is missing from history');
+    const raw = '  <worker & output>\n\tsecond line  \n';
+    const pending = owner.call('listen', {});
+    await owner.callWorker(grant.port, 'worker_output', { capability: grant.capability, text: raw });
+    assert.ok(api.history().some((event) => event.type === 'workerOutput' && event.id === activity.id && event.text === raw));
+    const early = await Promise.race([
+      pending.then(() => true),
+      new Promise<false>((resolve) => {
+        setTimeout(() => {
+          resolve(false);
+        }, OUTPUT_SETTLE_MS);
+      }),
+    ]);
+    assert.equal(early, false, 'raw output woke the owner listen');
+
     const batch = BATCH.parse(
       await owner.callWorker(grant.port, 'worker_step', {
         capability: grant.capability,
@@ -40,7 +57,9 @@ export async function workerPaths(api: Api, root: string): Promise<void> {
     const document = await vscode.workspace.openTextDocument(filename);
     assert.equal(document.getText(), 'before after\n');
     await owner.callWorker(grant.port, 'worker_done', { capability: grant.capability, text: 'scratch edit complete' });
-    const report = REPORT_SCHEMA.parse(await owner.call('listen', {}));
+    const report = REPORT_SCHEMA.parse(await pending);
+    assert.ok(!JSON.stringify(report).includes(JSON.stringify(raw)), 'raw output leaked into the owner report');
+    await assert.rejects(owner.callWorker(grant.port, 'worker_output', { capability: grant.capability, text: 'late output' }));
     assert.ok(report.events.some((event) => event.kind === 'worker_complete' && event.text === 'scratch edit complete'));
     assert.ok(api.history().some((event) => event.type === 'workerActivity' && event.phase === 'progress'));
     assert.ok(api.history().some((event) => event.type === 'workerActivity' && event.phase === 'completed'));

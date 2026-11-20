@@ -532,6 +532,13 @@
       "functions": 100
     }
   },
+  "packages/relay/src/worker_output.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/vscode/scripts/audio_helper.mts": {
     "unit": {
       "lines": 100,

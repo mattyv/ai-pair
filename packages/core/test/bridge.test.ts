@@ -207,6 +207,7 @@ function fakeController(): FakeController {
     workerStep: vi.fn(() => Promise.resolve({ id: 1, status: 'completed' as const })),
     workerDone: vi.fn<BridgeController['workerDone']>(),
     workerProgress: vi.fn<BridgeController['workerProgress']>(),
+    workerOutput: vi.fn<BridgeController['workerOutput']>(),
     workerNotice: vi.fn<BridgeController['workerNotice']>(),
     workerStatus: vi.fn(() => ({ active: true, busy: false })),
     workerSay: vi.fn(() => Promise.resolve()),
@@ -792,6 +793,11 @@ describe('background worker routing', () => {
       result: { ok: true },
     });
     expect(controller.workerProgress).toHaveBeenCalledWith('worker-secret', 'Checking');
+    expect(await call(worker, 9, 'worker_output', { capability: 'worker-secret', text: 'line 1\nline 2' })).toMatchObject({
+      type: 'result',
+      result: { ok: true },
+    });
+    expect(controller.workerOutput).toHaveBeenCalledWith('worker-secret', 'line 1\nline 2');
     expect(await call(worker, 7, 'worker_notice', { capability: 'worker-secret', notice: 'question', text: 'Which?' })).toMatchObject({
       type: 'result',
       result: { ok: true },
@@ -830,6 +836,8 @@ describe('worker request boundary', () => {
     ['missing actions', 'worker_step', { capability: 'secret' }],
     ['many actions', 'worker_step', { capability: 'secret', actions: Array.from({ length: 101 }, () => ({ say: 'x' })) }],
     ['large actions', 'worker_step', { capability: 'secret', actions: [{ say: 'x'.repeat(65_537) }] }],
+    ['empty output', 'worker_output', { capability: 'secret', text: '' }],
+    ['oversized output', 'worker_output', { capability: 'secret', text: 'x'.repeat(16_385) }],
     ['missing text', 'worker_done', { capability: 'secret' }],
     ['empty text', 'worker_done', { capability: 'secret', text: '' }],
     ['large text', 'worker_done', { capability: 'secret', text: 'x'.repeat(16_385) }],

@@ -1670,12 +1670,8 @@ function handle(message: ToPanel): void {
       workerVisibility = message.value;
       ui.workerVisibility.value = message.value;
       return;
-    case 'workerActivity': {
-      // specs/WorkerActivity.tla, Publish: history is grouped by worker ID.
-      if (!replaying && message.phase === 'started' && !activeWorkers.has(message.id)) {
-        workerGroups.get(message.id)?.remove();
-        workerGroups.delete(message.id);
-      }
+    case 'workerOutput': {
+      // specs/WorkerOutput.tla, Output: show the original text only in Worker.
       let group = workerGroups.get(message.id);
       if (group === undefined) {
         group = document.createElement('section');
@@ -1690,6 +1686,14 @@ function handle(message: ToPanel): void {
       line.textContent = message.text;
       if (chatOrder === 'newestFirst') group.querySelector('h2')?.after(line);
       else group.append(line);
+      return;
+    }
+    case 'workerActivity': {
+      // specs/WorkerActivity.tla, Publish: history is grouped by worker ID.
+      if (!replaying && message.phase === 'started' && !activeWorkers.has(message.id)) {
+        workerGroups.get(message.id)?.remove();
+        workerGroups.delete(message.id);
+      }
       if (!replaying && message.phase === 'started') activeWorkers.add(message.id);
       if (message.phase === 'completed' || message.phase === 'stopped') activeWorkers.delete(message.id);
       ui.workerRunning.hidden = activeWorkers.size === 0;
@@ -2073,9 +2077,11 @@ function handle(message: ToPanel): void {
       return;
     case 'session':
       if (message.active) {
-        workerGroups.clear();
+        if (!message.suspended && !message.resumed) {
+          workerGroups.clear();
+          ui.workerHistory.replaceChildren();
+        }
         activeWorkers.clear();
-        ui.workerHistory.replaceChildren();
         ui.workerRunning.hidden = true;
         ui.workerCancel.hidden = true;
       }

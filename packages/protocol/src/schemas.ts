@@ -325,6 +325,7 @@ export const TOOL_NAME_SCHEMA = z.enum([
   'worker_step',
   'worker_done',
   'worker_progress',
+  'worker_output',
   'worker_notice',
   'worker_status',
 ]);
