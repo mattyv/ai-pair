@@ -768,3 +768,32 @@ it('encodes Bash multiline input on one physical line and leaves unsupported she
 it('encodes carriage return and control bytes without physical control input', () => {
   expect(commandForShell('a\r\n\t\u007F', 'bash')).toBe("builtin eval -- $'a\\r\\n\\x09\\x7f'");
 });
+
+it('encodes leading Bash subshell syntax while preserving characters and other shells', () => {
+  const command = " \t(printf '%s' 'café') && true";
+  expect(commandForShell(command, 'bash')).toBe("builtin eval -- $' \\x09(printf \\'%s\\' \\'café\\') && true'");
+  expect(commandForShell(command, 'zsh')).toBe(command);
+  expect(commandForShell(command, undefined)).toBe(command);
+  expect(commandForShell('(printf x)\u0000', 'bash')).toBe('(printf x)\u0000');
+  expect(commandForShell('echo (x)', 'bash')).toBe('echo (x)');
+});
+
+it('waits for Bash identity before submitting a leading subshell', async () => {
+  const terminals = new PairTerminals(() => false);
+  const command = ' (printf demo-result)';
+  const outcome = runIn(terminals, command);
+  const terminal = lastTerminal();
+  terminal.state.shell = undefined;
+  const integration = terminal.shellIntegration;
+  if (!integration) throw new Error('Missing integration');
+  const submit = vi.spyOn(integration, 'executeCommand');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(submit).not.toHaveBeenCalled();
+  terminal.state.shell = 'bash';
+  fire('state', terminal);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(submit).toHaveBeenCalledWith("builtin eval -- $' (printf demo-result)'");
+  fire('end', { execution: lastExecution(), exitCode: 0 });
+  await vi.advanceTimersByTimeAsync(DRAIN_MS);
+  await outcome;
+});

@@ -6,13 +6,13 @@ reports the original run ID, exit status and bounded output tail. A timeout
 means completion was not observed; it does not prove the command is still
 alive or succeeded. **Show terminal** opens that run's owned terminal.
 
-For terminals identified as Bash, multi-line commands use a one-line encoded
-submission to avoid a reproduced VS Code shell-integration failure with
-heredocs and pipes. Approval and reports show your original command. Other
-shells keep their original submission behavior. If the shell is not yet known,
-a multi-line command waits up to 500 ms for identification. If it remains
-unknown, Pair submits the original command. Bash trap/debug context and
-error line numbers can differ; normal shell state and exit status are kept.
+For Bash, Pair encodes multi-line commands and commands that start with a
+parenthesized subshell as a single line. This lets VS Code associate the
+output and exit status with the submitted command. Approval and reports show
+your original command. For these forms, Pair waits up to 500 ms to identify an
+unknown shell. It submits the original command if the shell remains unknown
+or is identified as another shell. Bash trap and debugger context and error
+line numbers can differ. Normal shell state and exit status are kept.
 
 A reply shows as an outlined bubble, labeled *waiting*, until the agent
 receives it: when its next `step` or `listen` returns with it. Then the bubble

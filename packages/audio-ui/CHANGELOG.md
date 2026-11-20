@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.51.2
+
+- Version aligned with the Bash command reporting fix.
+
 ## 0.51.1
 
 - Version aligned with the conditional Pair and Worker tabs.

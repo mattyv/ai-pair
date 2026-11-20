@@ -135,9 +135,14 @@ function delay(ms: number): Promise<void> {
   });
 }
 
-/** Encodes multiline Bash input without submitting physical newlines (specs/CommandEncoding.tla, Submit). */
+/** Identifies input that needs Bash-specific submission handling. */
+function needsShellIdentity(command: string): boolean {
+  return command.includes('\n') || /^\s*\(/u.test(command);
+}
+
+/** Encodes Bash input without physical newlines or leading subshell syntax (specs/CommandEncoding.tla, Submit). */
 export function commandForShell(command: string, shell: string | undefined): string {
-  if (shell !== 'bash' || !command.includes('\n') || command.includes('\0')) return command;
+  if (shell !== 'bash' || !needsShellIdentity(command) || command.includes('\0')) return command;
   let encoded = '';
   for (const character of command) {
     // Only ASCII control codes need numeric inspection; all other characters pass through.
@@ -208,9 +213,9 @@ export class PairTerminals implements vscode.Disposable {
         return { output: '[output not captured: this terminal has no shell integration]' };
       }
 
-      // specs/ShellIdentity.tla: wait only for unknown identity on multiline input; never guess a shell.
+      // specs/ShellIdentity.tla: wait for unknown identity on special input; never guess a shell.
       const closedBeforeStart =
-        command.includes('\n') && terminal.state.shell === undefined ? await shellIdentity(terminal, options.signal) : false;
+        needsShellIdentity(command) && terminal.state.shell === undefined ? await shellIdentity(terminal, options.signal) : false;
       if (options.signal.aborted) {
         this.diagnostic({ kind: 'command', id: options.id, phase: 'abort' });
         owned.busy = false;

@@ -744,13 +744,14 @@ and retained on revive. Restore validates this origin before replaying any
 facts or resurrecting a closed session, rather than relying on object identity
 that would be lost at the JSON wire boundary.
 
-For identified Bash only, terminal submission encodes multi-line original text
-as one physical builtin-eval command. It adds no subprocess or temporary-script
-owner. Original command text remains at the approval/report boundary. Other
-shells retain original submission; the exact-ID completion rule never relaxes.
-If shell identity is unknown, multiline submission waits at most 500 ms for
-VS Code's terminal state; interruption or closure stops it. An unresolved
-identity retains the original submission, without guessing a shell.
+For identified Bash only, terminal submission encodes multiline input and
+input beginning with a parenthesized subshell as one physical builtin-eval
+command. It adds no subprocess or temporary-script owner. Original command
+text remains at the approval and report boundary. Other shells retain original
+submission, and completion still requires the exact execution handle.
+When shell identity is unknown, these command forms wait at most 500 ms for
+VS Code's terminal state. Interruption or closure stops submission. If identity
+remains unknown, Pair submits the original command.
 The editor-relay wire version is 6 for the new command event. The local audio
 contract remains 6 because no new panel message is introduced.
 

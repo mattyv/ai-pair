@@ -1312,14 +1312,22 @@ those diagnostic differences are an explicit limit, not exact equivalence.
 Unknown shells keep their existing behavior and honest completion status.
 Shell identity can arrive after shell integration: a native first-command probe
 observed two unwrapped submissions in 30 fresh Bash terminals. Wait up to 500 ms
-for authoritative identity only for multiline input whose shell is unknown;
-known shells and single-line input do not wait. Cancellation or terminal closure
+for authoritative identity when the command is eligible for Bash encoding
+and the shell is unknown. Known shells and commands that need no encoding
+skip the wait. Cancellation or terminal closure
 stops submission. If identity remains unknown at the deadline, submit the
 original input; the wait is best effort, not a guarantee. A repeat probe saw all
 30 submissions identified and wrapped. Separately, stock VS Code 1.146 can
 associate a wrapped prompt with the wrong execution object at a narrow terminal
 width. Pair retains exact identity checks; an isolated candidate upstream fix
 passed the reproduction, but is not installed or a stock-host release check.
+
+VS Code's Bash integration also reports commands beginning with a parenthesized
+subshell under an execution handle different from the one returned at submission.
+Extend the same encoded submission to commands beginning with an opening
+parenthesis after leading whitespace. This retains the execution identity check
+and avoids correlating unrelated terminal events. It does not change commands
+with a subshell later in the line, such as `true && (printf done)`.
 
 The new command-exit event is a breaking wire-union extension. Bump the
 editor-relay protocol to 6 so older peers reject the connection clearly rather

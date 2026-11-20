@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.51.2
+
+-   Capture output and exit status for Bash commands that start with a
+    parenthesized subshell.
+
 ## 0.51.1
 
 -   Hide the Pair and Worker tabs when split agents are disabled. Turning

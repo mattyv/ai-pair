@@ -183,7 +183,8 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `CommandDelivery.cfg` | queue bounded to two completions | holds | 84 |
 | `ShfmtDownload.cfg` | two sources, three outcomes each | holds | 10 |
 | `CommandTracking.cfg` | one execution, two session identities, late report and replay | holds | 18 |
-| `CommandEncoding.cfg` | two shell types, six abstract character classes | holds | 24 |
+| `CommandEncoding.cfg` | three shell identities, three syntax classes, NUL present or absent, six character classes | holds | 216 |
+| `ShellIdentity.cfg` | three shell identities and syntax classes, NUL, cancellation and closure | holds | 102 |
 | `IntegrationFixture.cfg` | workspace, packaged and companion roots | holds | 15 |
 
 | `CiScheduler.cfg` | three configs, two worker slots | holds | 134 |
@@ -1705,13 +1706,16 @@ Weak fairness of `Report` establishes progress once news exists.
 
 ### `ShellIdentity`: bounded shell identification
 
-`ShellIdentity.tla` models one multiline submission with a known, delayed or
-unavailable shell identity. An unknown identity waits for a change or a bounded
-timeout; cancellation and terminal closure stop submission. The model abstracts
+`ShellIdentity.tla` models one plain, multiline, or leading-subshell submission
+with a known, delayed or unavailable shell identity, with or without a NUL.
+A leading subshell means the first non-whitespace character is `(`. For either
+special syntax, an unknown identity waits for a change or a bounded timeout;
+cancellation and terminal closure stop submission. The model abstracts
 the timer as a fair expiration and does not promise that identity will arrive.
-TLC checked 26 generated states, 18 distinct states and depth 4. Mutations that
-skip waiting, wrap every shell, submit after cancellation, add an invalid shell,
-or remove expiration fairness violate `WaitBeforeUnknown`, `WrapOnlyBash`,
+TLC checked 146 generated states, 102 distinct states and depth 4. Mutations
+that skip the multiline or subshell wait each violate `WaitBeforeUnknown`.
+Mutations that wrap every shell, submit after cancellation, add an invalid
+shell, or remove expiration fairness violate `WrapOnlyBash`,
 `NoSubmitAfterStop`, `TypeOK`, and `EventuallySettled`, respectively.
 
 | Property | Test |
@@ -1722,9 +1726,12 @@ or remove expiration fairness violate `WaitBeforeUnknown`, `WrapOnlyBash`,
 
 ### `CommandEncoding`: scoped Bash submission
 
-This is an abstract contract for one character class and shell choice, not a
-model of Bash parsing or the encoding algorithm. It checks the intended scope,
-payload and approval invariants; the real Bash comparison tests exercise quote,
+This is an abstract contract for one character class, shell identity, syntax
+class and NUL presence, not a model of Bash parsing or the encoding algorithm.
+It checks wrapping of multiline input and commands whose first non-whitespace
+character is `(`; plain commands and NUL-containing input are not wrapped.
+TLC checked 216 generated and distinct states at depth 2. It checks the scope,
+payload and approval invariants. The real Bash comparison tests exercise quote,
 backslash, newline, Unicode, heredoc and exit behavior. The native VS Code
 integration test checks capture and an observed exit for Bash. Bash `eval` may
 change trap, stack and line-number observability. Unknown shells and input with
@@ -1738,14 +1745,15 @@ a NUL are left unchanged. Weak fairness of `Submit` gives progress.
 |---|---|
 | `ExactEncode = FALSE` | `PayloadPreserved` (with `TypeOK` omitted), and `TypeOK` |
 | `ScopeBash = FALSE` | `ScopeBashOnly` |
+| `GuardMultiline = FALSE` or `GuardSubshell = FALSE` | `RequiredWrapping` |
 | Mark the approved command as changed | `ApprovalPreserved` |
 | Remove submit fairness | `EventuallySubmitted` |
 
 | Invariant or property | Test |
 |---|---|
-| `TypeOK`, `PayloadPreserved`, `ScopeBashOnly` | `terminal.test.ts`: encodes Bash multiline input on one physical line and leaves unsupported shells unchanged; `terminal_encoding.e2e.test.ts`: preserves command output and exit |
+| `TypeOK`, `PayloadPreserved`, `ScopeBashOnly`, `RequiredWrapping` | `terminal.test.ts`: encodes Bash multiline and leading-subshell input on one physical line, preserving unsupported shells and NUL input; `terminal_encoding.e2e.test.ts`: preserves command output and exit |
 | `ApprovalPreserved` | `integration_command_delivery.ts`: Bash heredoc and control-character commands retain their original text in the report |
-| `EventuallySubmitted` | `terminal_smoke_integration.ts`: native Bash heredoc captures output and observed exit |
+| `EventuallySubmitted` | `terminal_smoke_integration.ts`: native Bash heredocs and leading subshells capture output and observed exit |
 
 ### `CommandDelivery`: prompt command results
 
