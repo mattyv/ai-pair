@@ -240,6 +240,11 @@ function hover(target: Element | Window['document']): void {
   target.dispatchEvent(new window.PointerEvent('pointerover', { bubbles: true }));
 }
 
+/** Moves the pointer within a settings control. */
+function movePointer(target: Element): void {
+  target.dispatchEvent(new window.PointerEvent('pointermove', { bubbles: true }));
+}
+
 /** Returns the tooltip's text, if it shows. */
 function tip(): string | undefined {
   return element('tip').hidden ? undefined : text('tip');
@@ -1431,7 +1436,7 @@ describe('panel settings', () => {
     expect(dialog.getAttribute('aria-label')).toBe('Settings');
     expect(dialog.hasAttribute('open')).toBe(true);
     const select = element('chat-order');
-    expect(document.activeElement).toBe(select);
+    expect(document.activeElement).toBe(element('settings-conversation').querySelector('summary'));
     if (!(select instanceof window.HTMLSelectElement)) throw new TypeError('Expected a select');
     select.value = 'oldestFirst';
     select.dispatchEvent(new window.Event('change', { bubbles: true }));
@@ -3793,4 +3798,432 @@ describe('shortcuts', () => {
     expect(element('attention').dataset.tip).toBe('Lower hand');
     expect(replyBox().placeholder).toBe(`Reply to the agent${ELLIPSIS}`);
   });
+});
+
+describe('worker activity projection', () => {
+  it('filters inline activity and never restores a live worker from replay', () => {
+    send({ type: 'workerEnabled', value: true });
+    send({ type: 'workerVisibility', value: 'off' });
+    send({ type: 'replay', events: [{ type: 'workerActivity', id: 1, phase: 'started', text: 'Old task' }] });
+    expect(element('worker-running').hidden).toBe(true);
+    expect(text('history')).not.toContain('Old task');
+    send({ type: 'workerVisibility', value: 'everything' });
+    send({ type: 'workerActivity', id: 1, phase: 'started', text: 'New task' });
+    send({ type: 'workerActivity', id: 1, phase: 'progress', text: 'Reading' });
+    expect(text('history')).toContain('Reading');
+    expect(text('worker-history')).not.toContain('Old task');
+    click(element('worker-tab'));
+    expect(element('worker-view').hidden).toBe(false);
+    expect(element('history').hidden).toBe(true);
+    click(element('pair-tab'));
+    expect(element('history').hidden).toBe(false);
+  });
+
+  it('groups activity by worker, shows running state, and requests cancellation', () => {
+    send({ type: 'workerActivity', id: 1, phase: 'started', text: 'Inspect code' });
+    send({ type: 'workerActivity', id: 1, phase: 'progress', text: 'Reading' });
+    send({ type: 'workerOutput', id: 1, text: 'Original output' });
+    expect(text('worker-history')).toContain('Original output');
+    expect(text('worker-history')).not.toContain('Reading');
+    expect(element('worker-running').hidden).toBe(false);
+    click(element('worker-cancel'));
+    expect(posted()).toContainEqual({ type: 'cancelWorker' });
+    send({ type: 'workerActivity', id: 1, phase: 'completed', text: 'Done' });
+    expect(element('worker-running').hidden).toBe(true);
+  });
+});
+
+it('restores a live worker from a current snapshot, not replay alone', () => {
+  send({ type: 'replay', events: [{ type: 'workerActivity', id: 1, phase: 'started', text: 'Working' }] });
+  expect(element('worker-running').hidden).toBe(true);
+  send({ type: 'workerActive', id: 1 });
+  expect(element('worker-running').hidden).toBe(false);
+  expect(element('worker-cancel').hidden).toBe(false);
+  send({ type: 'workerActive' });
+  expect(element('worker-running').hidden).toBe(true);
+});
+
+it('reveals Pair when a command needs confirmation while Worker is selected', () => {
+  send({ type: 'workerEnabled', value: true });
+  click(element('worker-tab'));
+  send({ type: 'run', id: 1, command: 'npm test', phase: 'confirm' });
+  expect(element('worker-view').hidden).toBe(true);
+  expect(element('band').hidden).toBe(false);
+  expect(element('worker-tab')).toHaveProperty('disabled', true);
+  runPhase('running');
+  click(element('worker-tab'));
+  expect(element('worker-view').hidden).toBe(false);
+});
+
+it('sends each worker visibility choice', () => {
+  const select = ui('worker-visibility');
+  if (!(select instanceof window.HTMLSelectElement)) throw new Error('Missing worker visibility');
+  for (const value of ['milestones', 'everything', 'off']) {
+    select.value = value;
+    select.dispatchEvent(new window.Event('change'));
+    expect(posted()).toContainEqual({ type: 'workerVisibility', value });
+  }
+  const option = document.createElement('option');
+  option.value = 'invalid';
+  select.append(option);
+  select.value = 'invalid';
+  const before = posted().length;
+  select.dispatchEvent(new window.Event('change'));
+  expect(posted()).toHaveLength(before);
+});
+
+it('reflects and saves independent background worker model settings', () => {
+  const enabled = ui('worker-enabled');
+  const codex = ui('worker-model-codex');
+  const claude = ui('worker-model-claude');
+  if (
+    !(enabled instanceof window.HTMLInputElement) ||
+    !(codex instanceof window.HTMLInputElement) ||
+    !(claude instanceof window.HTMLInputElement)
+  ) {
+    throw new Error('Missing worker settings');
+  }
+  send({ type: 'workerEnabled', value: true });
+  send({ type: 'workerModel', provider: 'codex', value: 'codex-model' });
+  send({ type: 'workerModel', provider: 'claude', value: 'claude-model' });
+  expect(enabled.checked).toBe(true);
+  expect(codex.value).toBe('codex-model');
+  expect(claude.value).toBe('claude-model');
+  enabled.checked = false;
+  enabled.dispatchEvent(new window.Event('change'));
+  codex.value = '';
+  codex.dispatchEvent(new window.Event('change'));
+  claude.value = 'another-model';
+  claude.dispatchEvent(new window.Event('change'));
+  expect(posted()).toContainEqual({ type: 'workerEnabled', value: false });
+  expect(posted()).toContainEqual({ type: 'workerModel', provider: 'codex', value: '' });
+  expect(posted()).toContainEqual({ type: 'workerModel', provider: 'claude', value: 'another-model' });
+});
+
+it('restores valid settings disclosures and preserves other webview state on toggle', async () => {
+  const state = {
+    value: {
+      unrelated: 42,
+      settingsSections: { conversation: false, playback: true, shortcuts: false, commands: true, speech: false, diagnostics: false },
+    },
+  };
+  await loadPage(post, state);
+  const conversation = element('settings-conversation');
+  const commands = element('settings-commands');
+  expect(conversation.hasAttribute('open')).toBe(false);
+  expect(commands.hasAttribute('open')).toBe(true);
+  commands.removeAttribute('open');
+  commands.dispatchEvent(new window.Event('toggle'));
+  expect(state.value).toMatchObject({ unrelated: 42, settingsSections: { conversation: false, commands: false } });
+});
+
+it('uses disclosure defaults for malformed saved state', async () => {
+  const state = { value: { unrelated: 42, settingsSections: { conversation: 'invalid' } } };
+  await loadPage(post, state);
+  expect(element('settings-conversation').hasAttribute('open')).toBe(true);
+  expect(element('settings-speech').hasAttribute('open')).toBe(false);
+  element('settings-speech').dispatchEvent(new window.Event('toggle'));
+  expect(state.value).toMatchObject({ unrelated: 42, settingsSections: { conversation: true, speech: false } });
+});
+
+it('orders worker groups and event rows with chat order changes', () => {
+  send({ type: 'workerOutput', id: 1, text: 'First' });
+  send({ type: 'workerOutput', id: 1, text: 'Second' });
+  send({ type: 'chatOrder', value: 'oldestFirst' });
+  send({ type: 'workerOutput', id: 1, text: 'Third' });
+  send({ type: 'workerOutput', id: 2, text: 'Fourth' });
+  expect(text('worker-history')).toContain('FirstSecondThird');
+  send({ type: 'chatOrder', value: 'newestFirst' });
+  expect(text('worker-history')).toContain('ThirdSecondFirst');
+});
+
+it('replaces malformed webview state when a settings disclosure changes', async () => {
+  const state: { value: unknown } = { value: undefined };
+  await loadPage(post, state);
+  state.value = 'invalid';
+  element('settings-speech').dispatchEvent(new window.Event('toggle'));
+  expect(state.value).toMatchObject({ settingsSections: { conversation: true, speech: false } });
+});
+
+it('shows Worker tabs only while enabled and retains history after disabling', () => {
+  expect(element('worker-tabs').hidden).toBe(true);
+  expect(element('history').hidden).toBe(false);
+  click(element('worker-tab'));
+  expect(element('history').hidden).toBe(false);
+  send({ type: 'workerEnabled', value: true });
+  expect(element('worker-tabs').hidden).toBe(false);
+  send({ type: 'workerOutput', id: 1, text: 'Retained activity' });
+  click(element('worker-tab'));
+  expect(element('worker-view').hidden).toBe(false);
+  element('worker-tab').focus();
+  send({ type: 'workerEnabled', value: false });
+  expect(element('worker-tabs').hidden).toBe(true);
+  expect(element('worker-view').hidden).toBe(true);
+  expect(element('history').hidden).toBe(false);
+  expect(document.activeElement).toBe(element('settings'));
+  send({ type: 'workerEnabled', value: true });
+  click(element('worker-tab'));
+  expect(text('worker-history')).toContain('Retained activity');
+});
+
+it('moves focus from a Worker action when disabled', () => {
+  send({ type: 'workerEnabled', value: true });
+  send({ type: 'workerActivity', id: 1, phase: 'started', text: 'Working' });
+  click(element('worker-tab'));
+  element('worker-cancel').focus();
+  expect(document.activeElement).toBe(element('worker-cancel'));
+  send({ type: 'workerEnabled', value: false });
+  expect(document.activeElement).toBe(element('settings'));
+});
+
+it('moves the same tooltip into Settings and back for the toolbar, clearing it on close', () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+  start();
+  const settingsButton = element('settings');
+  click(settingsButton);
+  const dialog = element('settings-dialog');
+  const control = element('worker-enabled');
+  control.dataset.tip = 'Enable background work';
+  const tooltip = element('tip');
+  movePointer(control);
+  vi.advanceTimersByTime(TIP_DELAY_MS);
+  expect(tip()).toBe('Enable background work');
+  expect(dialog.contains(tooltip)).toBe(true);
+  const description = control.getAttribute('aria-describedby');
+  expect(description).toBe(tooltip.id);
+  expect(document.querySelector(`#${description ?? ''}`)).toBe(tooltip);
+  click(element('settings-close'));
+  dialog.dispatchEvent(new window.Event('close'));
+  expect(tooltip.hidden).toBe(true);
+  expect(control.hasAttribute('aria-describedby')).toBe(false);
+  hover(element('interrupt'));
+  vi.advanceTimersByTime(TIP_DELAY_MS);
+  expect(tip()).toBe('Interrupt');
+  expect(document.body.contains(tooltip)).toBe(true);
+  expect(dialog.contains(tooltip)).toBe(false);
+  const toolbarDescription = element('interrupt').getAttribute('aria-describedby');
+  expect(toolbarDescription).toBe(tooltip.id);
+  expect(document.querySelector(`#${toolbarDescription ?? ''}`)).toBe(tooltip);
+});
+
+it('clears the hovered control description when keyboard focus moves to another tooltip', () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+  start();
+  click(element('settings'));
+  const dialog = element('settings-dialog');
+  const hovered = element('worker-enabled');
+  const focused = element('settings-code-playback');
+  hovered.dataset.tip = 'Worker setting';
+  focused.dataset.tip = 'Playback setting';
+  movePointer(hovered);
+  vi.advanceTimersByTime(TIP_DELAY_MS);
+  expect(hovered.getAttribute('aria-describedby')).toBe('tip');
+  vi.spyOn(focused, 'matches').mockReturnValue(true);
+  focused.dispatchEvent(new window.FocusEvent('focusin', { bubbles: true }));
+  expect(tip()).toBe('Playback setting');
+  expect(hovered.hasAttribute('aria-describedby')).toBe(false);
+  expect(focused.getAttribute('aria-describedby')).toBe('tip');
+  dialog.dispatchEvent(new window.Event('close'));
+  expect(focused.hasAttribute('aria-describedby')).toBe(false);
+});
+
+describe('settings tooltip scroll', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    start();
+    click(element('settings'));
+    vi.spyOn(element('settings-dialog'), 'getBoundingClientRect').mockReturnValue(new window.DOMRect(0, 100, 300, 200));
+  });
+
+  it('keeps and repositions the focused control tooltip when it remains in view', () => {
+    const control = element('settings-code-playback');
+    control.dataset.tip = 'Playback setting';
+    const bounds = vi.spyOn(control, 'getBoundingClientRect').mockReturnValue(new window.DOMRect(10, 120, 100, 20));
+    vi.spyOn(control, 'matches').mockReturnValue(true);
+    control.focus();
+    expect(tip()).toBe('Playback setting');
+    const before = element('tip').style.top;
+    bounds.mockReturnValue(new window.DOMRect(10, 160, 100, 20));
+    element('settings-dialog').dispatchEvent(new window.Event('scroll'));
+    expect(tip()).toBe('Playback setting');
+    expect(element('tip').style.top).not.toBe(before);
+    expect(control.getAttribute('aria-describedby')).toBe('tip');
+  });
+
+  it('hides the focused control tooltip after it scrolls outside the dialog', () => {
+    const control = element('settings-code-playback');
+    control.dataset.tip = 'Playback setting';
+    const bounds = vi.spyOn(control, 'getBoundingClientRect').mockReturnValue(new window.DOMRect(10, 120, 100, 20));
+    vi.spyOn(control, 'matches').mockReturnValue(true);
+    control.focus();
+    expect(tip()).toBe('Playback setting');
+    bounds.mockReturnValue(new window.DOMRect(10, 310, 100, 20));
+    element('settings-dialog').dispatchEvent(new window.Event('scroll'));
+    expect(tip()).toBeUndefined();
+    expect(control.hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('hides a focused settings tooltip when another surface scrolls', () => {
+    const control = element('settings-code-playback');
+    control.dataset.tip = 'Playback setting';
+    vi.spyOn(control, 'getBoundingClientRect').mockReturnValue(new window.DOMRect(10, 120, 100, 20));
+    vi.spyOn(control, 'matches').mockReturnValue(true);
+    control.focus();
+    expect(tip()).toBe('Playback setting');
+    element('history').dispatchEvent(new window.Event('scroll'));
+    expect(tip()).toBeUndefined();
+    expect(control.hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('hides a hovered settings tooltip on dialog scroll', () => {
+    const control = element('worker-enabled');
+    control.dataset.tip = 'Worker setting';
+    movePointer(control);
+    vi.advanceTimersByTime(TIP_DELAY_MS);
+    expect(tip()).toBe('Worker setting');
+    element('settings-dialog').dispatchEvent(new window.Event('scroll'));
+    expect(tip()).toBeUndefined();
+    expect(control.hasAttribute('aria-describedby')).toBe(false);
+  });
+});
+
+it('keeps keyboard tooltip on stationary-pointer retargeting and follows real pointer movement', () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+  start();
+  click(element('settings'));
+  const focused = element('settings-code-playback');
+  const underPointer = element('worker-enabled');
+  focused.dataset.tip = 'Playback setting';
+  underPointer.dataset.tip = 'Worker setting';
+  vi.spyOn(focused, 'matches').mockReturnValue(true);
+  focused.focus();
+  expect(tip()).toBe('Playback setting');
+  underPointer.dispatchEvent(new window.PointerEvent('pointerover', { bubbles: true }));
+  expect(tip()).toBe('Playback setting');
+  expect(focused.getAttribute('aria-describedby')).toBe('tip');
+  movePointer(underPointer);
+  expect(tip()).toBe('Worker setting');
+  expect(focused.hasAttribute('aria-describedby')).toBe(false);
+  expect(underPointer.getAttribute('aria-describedby')).toBe('tip');
+});
+
+describe('settings label tooltips', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    start();
+    click(element('settings'));
+  });
+
+  it.each(['worker-enabled', 'settings-code-playback'] as const)('shows the %s control tooltip when its label text is hovered', (name) => {
+    const control = element(name);
+    control.dataset.tip = `${name} explanation`;
+    const label = control.closest('label');
+    ok(label);
+    movePointer(label);
+    vi.advanceTimersByTime(TIP_DELAY_MS);
+    expect(tip()).toBe(`${name} explanation`);
+    expect(control.getAttribute('aria-describedby')).toBe(element('tip').id);
+    expect(label.hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('does not invent a tooltip for a label whose control has none', () => {
+    const control = element('chat-order');
+    delete control.dataset.tip;
+    const label = control.closest('label');
+    ok(label);
+    movePointer(label);
+    vi.advanceTimersByTime(TIP_DELAY_MS);
+    expect(tip()).toBeUndefined();
+    expect(control.hasAttribute('aria-describedby')).toBe(false);
+  });
+});
+
+it('renders raw worker output safely and never inserts it in Pair', () => {
+  send({ type: 'workerActivity', id: 1, phase: 'started', text: 'Lifecycle text' });
+  send({ type: 'workerOutput', id: 1, text: '  first\n<script>unsafe</script>\n' });
+  const workerHistory = element('worker-history');
+  expect(workerHistory.textContent).toContain('  first\n<script>unsafe</script>\n');
+  expect(workerHistory.textContent).not.toContain('Lifecycle text');
+  expect(workerHistory.querySelector('script')).toBeNull();
+  expect(text('history')).not.toContain('<script>unsafe</script>');
+});
+
+it('replays worker output grouped in the selected chat order', () => {
+  send({ type: 'chatOrder', value: 'oldestFirst' });
+  send({
+    type: 'replay',
+    events: [
+      { type: 'workerOutput', id: 1, text: 'first' },
+      { type: 'workerOutput', id: 1, text: 'second' },
+      { type: 'workerOutput', id: 2, text: 'third' },
+    ],
+  });
+  const workerHistory = element('worker-history');
+  expect(workerHistory.textContent.indexOf('first')).toBeLessThan(workerHistory.textContent.indexOf('second'));
+  expect(workerHistory.textContent.indexOf('second')).toBeLessThan(workerHistory.textContent.indexOf('third'));
+  send({ type: 'chatOrder', value: 'newestFirst' });
+  expect(workerHistory.textContent.indexOf('third')).toBeLessThan(workerHistory.textContent.indexOf('second'));
+  expect(workerHistory.textContent.indexOf('second')).toBeLessThan(workerHistory.textContent.indexOf('first'));
+});
+
+it('retains worker transcript across suspension and resume without restoring a live grant', () => {
+  send({ type: 'workerActivity', id: 1, phase: 'started', text: 'Starting' });
+  send({ type: 'workerOutput', id: 1, text: 'Earlier output' });
+  send({ type: 'session', active: true, suspended: true });
+  send({ type: 'session', active: true, resumed: true });
+  expect(text('worker-history')).toContain('Earlier output');
+  expect(element('worker-running').hidden).toBe(true);
+  send({ type: 'workerOutput', id: 2, text: 'New output' });
+  expect(text('worker-history')).toContain('Earlier output');
+  expect(text('worker-history')).toContain('New output');
+});
+
+it('updates streamed worker output in place without changing its order', () => {
+  send({ type: 'workerOutput', id: 1, message: 'a', text: '  partial' });
+  send({ type: 'workerOutput', id: 1, text: 'Another response' });
+  send({ type: 'workerOutput', id: 1, message: 'a', text: '  partial\n<em>grown</em>  ' });
+  const rows = element('worker-history').querySelectorAll('p');
+  expect(rows).toHaveLength(2);
+  expect(rows[0]?.textContent).toBe('Another response');
+  expect(rows[1]?.textContent).toBe('  partial\n<em>grown</em>  ');
+  expect(element('worker-history').querySelector('em')).toBeNull();
+  send({ type: 'chatOrder', value: 'oldestFirst' });
+  expect(rows[1]?.textContent).toBe('  partial\n<em>grown</em>  ');
+  expect(element('worker-history').querySelector('p')?.textContent).toBe('  partial\n<em>grown</em>  ');
+});
+
+it('coalesces repeated stream snapshots during replay and after reopen', () => {
+  send({
+    type: 'replay',
+    events: [
+      { type: 'workerOutput', id: 1, message: 'a', text: 'first' },
+      { type: 'workerOutput', id: 1, message: 'a', text: 'first and more' },
+    ],
+  });
+  send({ type: 'workerOutput', id: 1, message: 'a', text: 'first and more again' });
+  const rows = element('worker-history').querySelectorAll('p');
+  expect(rows).toHaveLength(1);
+  expect(rows[0]?.textContent).toBe('first and more again');
+});
+
+it('scopes stream identity to each worker and clears it for a fresh session', () => {
+  send({ type: 'workerOutput', id: 1, message: 'same', text: 'One' });
+  send({ type: 'workerOutput', id: 2, message: 'same', text: 'Two' });
+  send({ type: 'workerOutput', id: 1, message: 'same', text: 'One grown' });
+  expect(element('worker-history').querySelectorAll('p')).toHaveLength(2);
+  expect(text('worker-history')).toContain('One grown');
+  expect(text('worker-history')).toContain('Two');
+  send({ type: 'session', active: true });
+  send({ type: 'workerOutput', id: 1, message: 'same', text: 'Fresh' });
+  expect(element('worker-history').querySelectorAll('p')).toHaveLength(1);
+  expect(text('worker-history')).toContain('Fresh');
+});
+
+it('replaces stale stream identity when a worker ID is reused', () => {
+  send({ type: 'replay', events: [{ type: 'workerOutput', id: 1, message: 'same', text: 'Old' }] });
+  send({ type: 'workerActivity', id: 1, phase: 'started', text: 'New worker' });
+  send({ type: 'workerOutput', id: 1, message: 'same', text: 'New' });
+  expect(element('worker-history').querySelectorAll('p')).toHaveLength(1);
+  expect(text('worker-history')).toContain('New');
+  expect(text('worker-history')).not.toContain('Old');
 });

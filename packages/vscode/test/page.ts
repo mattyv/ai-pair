@@ -19,7 +19,10 @@ const SCRIPT = '../src/webview/panel';
 const FIXTURE = path.join(import.meta.dirname, 'fixtures', 'panel.html');
 
 /** Loads the page. `post`: what the page posts to the extension. */
-export async function loadPage(post: (message: { type: string }) => void = () => {}): Promise<void> {
+export async function loadPage(
+  post: (message: { type: string }) => void = () => {},
+  state: { value: unknown } = { value: undefined },
+): Promise<void> {
   const html = fs.readFileSync(FIXTURE, 'utf8');
   // happy-dom loads no stylesheet unless asked; the tests need none, so the skipped fetch counts as a success.
   window.happyDOM.settings.handleDisabledFileLoadingAsSuccess = true;
@@ -29,7 +32,15 @@ export async function loadPage(post: (message: { type: string }) => void = () =>
     script.remove();
   }
   document.body.replaceChildren(...page.body.childNodes);
-  Object.assign(globalThis, { acquireVsCodeApi: () => ({ postMessage: post }) });
+  Object.assign(globalThis, {
+    acquireVsCodeApi: () => ({
+      postMessage: post,
+      getState: () => state.value,
+      setState: (value: unknown) => {
+        state.value = value;
+      },
+    }),
+  });
   vi.resetModules();
   await import(/* @vite-ignore */ SCRIPT);
 }

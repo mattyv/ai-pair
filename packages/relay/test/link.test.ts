@@ -653,3 +653,26 @@ describe('runtime identity', () => {
     await expect(call).resolves.toEqual(REPORT);
   });
 });
+
+describe('worker window selection', () => {
+  it('uses the granted port even when a different window is more focused', async () => {
+    const selected = window('selected', ['/project'], { lastFocused: 1 });
+    window('focused', ['/project'], { lastFocused: 2 });
+    const link = new EditorLink('/unrelated', DIR);
+    const result = link.callWorker(selected.port, 'worker_done', { capability: 'secret', text: 'done' });
+    const socket = lastSocket();
+    expect(socket.url).toBe(`ws://127.0.0.1:${selected.port}`);
+    welcome(socket);
+    await settle();
+    answer(socket, sentCall(socket).id, { ok: true });
+    expect(await result).toEqual({ ok: true });
+    expect(socket.close).toHaveBeenCalled();
+  });
+
+  it('does not fall back when the granted window is absent', async () => {
+    window('other', ['/project']);
+    const link = new EditorLink('/project', DIR);
+    await expect(link.callWorker(9876, 'worker_done', { capability: 'secret', text: 'done' })).rejects.toMatchObject({ code: 'no_editor' });
+    expect(fakes.FakeSocket.made).toHaveLength(0);
+  });
+});

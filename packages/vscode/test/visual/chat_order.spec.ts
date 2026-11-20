@@ -50,9 +50,18 @@ async function load(page: Page): Promise<(event: object) => Promise<void>> {
   });
   await page.addInitScript(() => {
     const messages: unknown[] = [];
+    const storage = // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      (globalThis as unknown as { sessionStorage: { getItem(key: string): string | null; setItem(key: string, value: string): void } })
+        .sessionStorage;
+    let state: unknown = JSON.parse(storage.getItem('webview-state') ?? '{"unrelated":42}');
     Object.assign(globalThis, {
       messages,
       acquireVsCodeApi: () => ({
+        getState: () => state,
+        setState: (value: unknown) => {
+          state = value;
+          storage.setItem('webview-state', JSON.stringify(value));
+        },
         postMessage: (message: unknown) => {
           messages.push(message);
         },
@@ -85,6 +94,21 @@ async function load(page: Page): Promise<(event: object) => Promise<void>> {
   };
 }
 
+/** Waits for scroll events and layout to settle before pointer movement. */
+async function settleScroll(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const browser = globalThis as unknown as { requestAnimationFrame(callback: () => void): number };
+    return new Promise<void>((resolve) => {
+      browser.requestAnimationFrame(() => {
+        browser.requestAnimationFrame(() => {
+          resolve();
+        });
+      });
+    });
+  });
+}
+
 /** Populates enough history to make the panel scroll. */
 async function populate(post: (event: object) => Promise<void>): Promise<void> {
   await post({ type: 'session', active: true, task: 'Order test' });
@@ -112,7 +136,7 @@ test('settings work with the keyboard and send the chosen order', async ({ page 
   const dialog = page.getByRole('dialog', { name: 'Settings' });
   const order = dialog.getByLabel('Chat order');
   await expect(dialog).toBeVisible();
-  await expect(order).toBeFocused();
+  await expect(dialog.locator('[data-ui="settings-conversation"] > summary')).toBeFocused();
   await expect(order).toHaveValue('newestFirst');
   await order.selectOption('oldestFirst');
   await expect
@@ -460,6 +484,7 @@ test('Your move exposes guidance on keyboard focus and clears it on status chang
 test('terminal controls expose the saved preference and reveal the selected command', async ({ page }) => {
   const post = await load(page);
   await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByText('Commands', { exact: true }).click();
   const automatic = page.getByRole('checkbox', { name: 'Show terminals automatically' });
   await expect(automatic).not.toBeChecked();
   await automatic.check();
@@ -499,6 +524,7 @@ test('terminal controls expose the saved preference and reveal the selected comm
 test('Settings copies diagnostics only on request and suspended status explains recovery', async ({ page }) => {
   const post = await load(page);
   await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByText('Diagnostics', { exact: true }).click();
   const copy = page.getByRole('button', { name: 'Copy diagnostics' });
   await expect(copy).toBeVisible();
   await copy.focus();
@@ -609,6 +635,7 @@ test('real WAV playback pauses, resumes and stops from the speech controls', asy
   await post({ type: 'speechSupport', supported: true });
   await post({ type: 'speechSettings', value: { enabled: false, voice: 'af_heart', speed: 1 } });
   await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByText('Speech', { exact: true }).click();
   await page.getByRole('button', { name: 'Preview voice' }).click();
   await post({ type: 'speechStatus', id: 1, pageId: 1, state: 'preparing' });
   await post({ type: 'speechAudio', id: 1, pageId: 1, wavBase64: toneWav(2), durationMs: 2000 });
@@ -654,6 +681,7 @@ test('real audio completion leaves the reading timer and command decision alone'
   await post({ type: 'speechPage', pageId: 1 });
   await post({ type: 'speechSupport', supported: true });
   await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByText('Speech', { exact: true }).click();
   await page.getByRole('button', { name: 'Preview voice' }).click();
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await post({ type: 'session', active: true });
@@ -698,7 +726,7 @@ test('Settings stays readable and operable in a narrow panel', async ({ page }) 
   const dialog = page.getByRole('dialog', { name: 'Settings' });
   await expect(dialog).toBeVisible();
   for (const title of ['Conversation', 'Playback', 'Commands', 'Speech', 'Diagnostics']) {
-    await expect(dialog.getByRole('heading', { name: title })).toBeAttached();
+    await expect(dialog.getByText(title, { exact: true })).toBeAttached();
   }
   const replyBehavior = dialog.getByRole('combobox', { name: 'When I send a reply' });
   await expect(replyBehavior).toHaveValue('finishAction');
@@ -708,6 +736,7 @@ test('Settings stays readable and operable in a narrow panel', async ({ page }) 
   await expect(replyBehavior).toHaveValue('interrupt');
   await expect(dialog.getByRole('combobox', { name: 'Code display' })).toHaveValue('lines');
   await dialog.getByRole('combobox', { name: 'Code display' }).selectOption('blocks');
+  await dialog.getByText('Diagnostics', { exact: true }).click();
   const copy = dialog.getByRole('button', { name: 'Copy diagnostics' });
   await copy.scrollIntoViewIfNeeded();
   await expect(copy).toBeVisible();
@@ -729,6 +758,7 @@ test('speech provider controls are explicit and render account voices as text', 
   await post({ type: 'speechKeyStatus', hasKey: true });
   await page.getByRole('button', { name: 'Settings' }).click();
   const dialog = page.getByRole('dialog', { name: 'Settings' });
+  await dialog.getByText('Speech', { exact: true }).click();
   await dialog.getByLabel('Speech provider').selectOption('elevenlabs');
   await expect(dialog.getByText('Selected narration and voice previews are sent to ElevenLabs', { exact: false })).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Download Kokoro model' })).toBeHidden();
@@ -759,6 +789,7 @@ test('speech output selection is explicit, independent of provider and never pre
   const post = await load(page);
   await page.getByRole('button', { name: 'Settings' }).click();
   const dialog = page.getByRole('dialog', { name: 'Settings' });
+  await dialog.getByText('Speech', { exact: true }).click();
   const output = dialog.getByLabel('Speech output');
   await post({ type: 'speechOutputCatalog', value: { supported: false, devices: [], selected: { kind: 'default' } } });
   await expect(dialog.getByText('Select Refresh outputs to list available devices.')).toBeVisible();
@@ -805,6 +836,7 @@ test('experimental GPU setup remains readable and explicit in a narrow Settings 
   await post({ type: 'speechComputeState', value: { requestedMode: 'cpu', actualBackend: 'none', gpuCheck: { phase: 'idle' } } });
   await page.getByRole('button', { name: 'Settings' }).click();
   const dialog = page.getByRole('dialog', { name: 'Settings' });
+  await dialog.getByText('Speech', { exact: true }).click();
   const compute = dialog.getByRole('combobox', { name: 'Kokoro compute' });
   await compute.scrollIntoViewIfNeeded();
   await expect(compute).toHaveValue('cpu');
@@ -916,7 +948,7 @@ test('voice status uses cached evidence and Settings opens by keyboard at narrow
     await expect(button).toBeVisible();
     await button.focus();
     await page.keyboard.press('Enter');
-    await expect(page.getByRole('combobox', { name: 'Chat order' })).toBeFocused();
+    await expect(page.locator('[data-ui=settings-conversation] > summary')).toBeFocused();
     await escapeSettings(page);
     await expect(button).toBeFocused();
     const scrollWidth = await page.locator('html').evaluate((element: { scrollWidth: number }) => element.scrollWidth);
@@ -948,4 +980,313 @@ test('voice status uses cached evidence and Settings opens by keyboard at narrow
   await post({ type: 'speechTransport', available: false });
   await post({ type: 'speechReadiness', value: facts });
   await expect(voice).toHaveAttribute('aria-description', 'Voice: unavailable');
+});
+
+test('view selection has a visible indicator that follows the selected button', async ({ page }) => {
+  const post = await load(page);
+  await post({ type: 'workerEnabled', value: true });
+  const pair = page.getByRole('button', { name: 'Pair', exact: true });
+  const worker = page.getByRole('button', { name: 'Worker', exact: true });
+  await expect(pair).toHaveAttribute('aria-pressed', 'true');
+  async function indicator(button: typeof pair): Promise<string> {
+    return button.evaluate((element) => {
+      // The browser supplies getComputedStyle; this test is typed without the DOM library.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      return (globalThis as unknown as { getComputedStyle(element: unknown): { borderBottomColor: string } }).getComputedStyle(element)
+        .borderBottomColor;
+    });
+  }
+  expect(await indicator(pair)).not.toBe(await indicator(worker));
+  await worker.focus();
+  await page.keyboard.press('Enter');
+  await expect(worker).toHaveAttribute('aria-pressed', 'true');
+  expect(await indicator(worker)).not.toBe(await indicator(pair));
+});
+
+test('view buttons show keyboard focus and disabled Worker does not hover', async ({ page }) => {
+  const post = await load(page);
+  await post({ type: 'workerEnabled', value: true });
+  const pair = page.getByRole('button', { name: 'Pair', exact: true });
+  const worker = page.getByRole('button', { name: 'Worker', exact: true });
+  await page.keyboard.press('Tab');
+  await pair.focus();
+  await expect(pair).toBeFocused();
+  await expect(pair).toHaveCSS('outline-style', 'solid');
+  await post({ type: 'run', id: 1, command: 'npm test', phase: 'confirm' });
+  await expect(worker).toBeDisabled();
+  const background = await worker.evaluate((element) => {
+    // The browser supplies getComputedStyle; this test is typed without the DOM library.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    return (globalThis as unknown as { getComputedStyle(element: unknown): { backgroundColor: string } }).getComputedStyle(element)
+      .backgroundColor;
+  });
+  await worker.hover({ force: true });
+  await expect(worker).toHaveCSS('background-color', background);
+});
+
+test('Worker output follows the Pair chat order, including live changes', async ({ page }) => {
+  const post = await load(page);
+  await post({ type: 'workerEnabled', value: true });
+  await post({ type: 'workerOutput', id: 1, text: 'First' });
+  await post({ type: 'workerOutput', id: 1, text: 'Second' });
+  await post({ type: 'workerOutput', id: 2, text: 'Third' });
+  await page.locator('[data-ui=worker-tab]').click();
+  const history = page.locator('[data-ui=worker-history]');
+  await expect(history.locator('h2')).toHaveText(['Worker 2', 'Worker 1']);
+  await expect(history.locator('section').nth(1).locator('p')).toHaveText(['Second', 'First']);
+  await post({ type: 'chatOrder', value: 'oldestFirst' });
+  await expect(history.locator('h2')).toHaveText(['Worker 1', 'Worker 2']);
+  await expect(history.locator('section').first().locator('p')).toHaveText(['First', 'Second']);
+  await post({ type: 'workerOutput', id: 2, text: 'Fourth' });
+  await post({ type: 'workerOutput', id: 3, text: 'Fifth' });
+  await expect(history.locator('h2')).toHaveText(['Worker 1', 'Worker 2', 'Worker 3']);
+  await expect(history.locator('section').nth(1).locator('p')).toHaveText(['Third', 'Fourth']);
+  await post({ type: 'chatOrder', value: 'newestFirst' });
+  await expect(history.locator('h2')).toHaveText(['Worker 3', 'Worker 2', 'Worker 1']);
+  await expect(history.locator('section').nth(1).locator('p')).toHaveText(['Fourth', 'Third']);
+});
+
+test('background worker settings are labeled and keyboard accessible', async ({ page }) => {
+  const post = await load(page);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const enabled = page.getByRole('checkbox', { name: 'Enable background worker' });
+  const model = page.getByRole('textbox', { name: 'Codex model (leave empty to use the main chat model)' });
+  const claude = page.getByRole('textbox', { name: 'Claude model (leave empty to use the main chat model)' });
+  await post({ type: 'workerEnabled', value: true });
+  await post({ type: 'workerModel', provider: 'codex', value: 'model-a' });
+  await post({ type: 'workerModel', provider: 'claude', value: 'model-b' });
+  await expect(enabled).toBeChecked();
+  await expect(model).toHaveValue('model-a');
+  await expect(claude).toHaveValue('model-b');
+  await enabled.focus();
+  await page.keyboard.press('Space');
+  await expect(enabled).not.toBeChecked();
+  await model.focus();
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Tab');
+  await expect(model).toHaveValue('');
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        // The recording host is installed by load; this test is typed without the DOM library.
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return (globalThis as unknown as { messages: unknown[] }).messages;
+      }),
+    )
+    .toContainEqual({ type: 'workerModel', provider: 'codex', value: '' });
+});
+
+test('settings sections start compact and retain their state without losing other webview state', async ({ page }) => {
+  await load(page);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Settings' });
+  const conversation = dialog
+    .locator('details')
+    .filter({ has: page.getByText('Conversation', { exact: true }) })
+    .first();
+  const playback = dialog
+    .locator('details')
+    .filter({ has: page.getByText('Playback', { exact: true }) })
+    .first();
+  const speech = dialog
+    .locator('details')
+    .filter({ has: page.getByText('Speech', { exact: true }) })
+    .first();
+  await expect(conversation).toHaveAttribute('open', '');
+  await expect(playback).toHaveAttribute('open', '');
+  await expect(speech).not.toHaveAttribute('open', '');
+  await conversation.locator('summary').click();
+  await speech.locator('summary').first().click();
+  await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(conversation).not.toHaveAttribute('open', '');
+  await expect(speech).toHaveAttribute('open', '');
+  await expect(dialog.locator('summary').first()).toBeFocused();
+  await page.reload();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(conversation).not.toHaveAttribute('open', '');
+  await expect(speech).toHaveAttribute('open', '');
+  await expect(dialog.locator('summary').first()).toBeFocused();
+  const saved = await page.evaluate(() => {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    return (globalThis as unknown as { sessionStorage: { getItem(key: string): string | null } }).sessionStorage.getItem('webview-state');
+  });
+  expect(JSON.parse(saved ?? '{}')).toMatchObject({ unrelated: 42 });
+});
+
+test('selected speech provider opens its disclosure and hides other provider controls', async ({ page }) => {
+  await load(page);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByText('Speech', { exact: true }).click();
+  const provider = page.getByLabel('Speech provider');
+  await provider.selectOption('openrouter');
+  await expect(page.getByText('Selected narration and previews are sent to OpenRouter')).toBeVisible();
+  await expect(page.getByText('Selected narration and voice previews are sent to ElevenLabs')).toBeHidden();
+  await provider.selectOption('elevenlabs');
+  await expect(page.getByText('Selected narration and voice previews are sent to ElevenLabs')).toBeVisible();
+  await expect(page.getByText('Selected narration and previews are sent to OpenRouter')).toBeHidden();
+});
+
+test('invalid saved disclosure state uses defaults and preserves unrelated state', async ({ page }) => {
+  await page.addInitScript(() => {
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const storage = (globalThis as unknown as { sessionStorage: { setItem(key: string, value: string): void } }).sessionStorage;
+    storage.setItem('webview-state', JSON.stringify({ unrelated: 42, settingsSections: { conversation: 'invalid' } }));
+  });
+  await load(page);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const conversation = page.locator('[data-ui=settings-conversation]');
+  const speech = page.locator('[data-ui=settings-speech]');
+  await expect(conversation).toHaveAttribute('open', '');
+  await expect(speech).not.toHaveAttribute('open', '');
+  await speech.locator('summary').first().click();
+  await expect
+    .poll(async () => {
+      const value = await page.evaluate(() => {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return (globalThis as unknown as { sessionStorage: { getItem(key: string): string | null } }).sessionStorage.getItem(
+          'webview-state',
+        );
+      });
+      const parsed: unknown = JSON.parse(value ?? '{}');
+      return parsed;
+    })
+    .toMatchObject({ unrelated: 42, settingsSections: { conversation: true, speech: true } });
+});
+
+test('worker tabs follow enabled state without losing worker history', async ({ page }) => {
+  const post = await load(page);
+  const tabs = page.getByRole('navigation', { name: 'Panel views', includeHidden: true });
+  await expect(tabs).toBeHidden();
+  await expect(page.locator('[data-ui=history]')).toBeVisible();
+  await post({ type: 'workerEnabled', value: true });
+  await expect(tabs).toBeVisible();
+  await post({ type: 'workerOutput', id: 1, text: 'Retained output' });
+  const worker = page.locator('[data-ui=worker-tab]');
+  await worker.click();
+  await expect(page.locator('[data-ui=worker-view]')).toBeVisible();
+  await worker.focus();
+  await post({ type: 'workerEnabled', value: false });
+  await expect(tabs).toBeHidden();
+  await expect(page.locator('[data-ui=history]')).toBeVisible();
+  await expect(page.locator('[data-ui=worker-view]')).toBeHidden();
+  await expect(page.locator('[data-ui=settings]')).toBeFocused();
+  await post({ type: 'workerEnabled', value: true });
+  await worker.click();
+  await expect(page.locator('[data-ui=worker-history]')).toContainText('Retained output');
+});
+
+test('settings tooltips appear above the modal on hover and keyboard focus, then clear', async ({ page }) => {
+  const post = await load(page);
+  await post({ type: 'timings', tipDelayMs: 0, tipWarmMs: 0 });
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Settings' });
+  const worker = dialog.locator('[data-ui="worker-enabled"]');
+  const tooltip = dialog.getByRole('tooltip');
+  await worker.hover();
+  await expect(tooltip).toBeVisible();
+  const workerTip = await worker.getAttribute('data-tip');
+  expect(workerTip?.trim()).not.toBe('');
+  await expect(tooltip).toHaveText(workerTip ?? '');
+  await page.keyboard.press('Tab');
+  const playback = page.locator('[data-ui="settings-code-playback"]');
+  await playback.focus();
+  await expect(tooltip).toBeVisible();
+  const playbackTip = await playback.getAttribute('data-tip');
+  expect(playbackTip?.trim()).not.toBe('');
+  await expect(tooltip).toHaveText(playbackTip ?? '');
+  await expect(worker).not.toHaveAttribute('aria-describedby');
+  await expect(playback).toHaveAttribute('aria-describedby', 'tip');
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await expect(tooltip).toBeHidden();
+  await expect(playback).not.toHaveAttribute('aria-describedby');
+  const settings = page.getByRole('button', { name: 'Settings' });
+  await settings.hover();
+  await expect(page.getByRole('tooltip')).toContainText('Settings');
+});
+
+test('settings label text shows the associated control tooltip', async ({ page }) => {
+  const post = await load(page);
+  await post({ type: 'timings', tipDelayMs: 0, tipWarmMs: 0 });
+  await page.getByRole('button', { name: 'Settings' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Settings' });
+  const tooltip = dialog.getByRole('tooltip');
+  for (const [name, x] of [
+    ['worker-enabled', 80],
+    ['settings-code-playback', 10],
+  ] as const) {
+    const control = dialog.locator(`[data-ui="${name}"]`);
+    const label = control.locator('xpath=..');
+    await label.scrollIntoViewIfNeeded();
+    await settleScroll(page);
+    await label.hover({ position: { x, y: 8 } });
+    const expected = await control.getAttribute('data-tip');
+    expect(expected?.trim()).not.toBe('');
+    await expect(tooltip).toHaveText(expected ?? '');
+    await expect(control).toHaveAttribute('aria-describedby', 'tip');
+    await expect(label).not.toHaveAttribute('aria-describedby');
+  }
+  const unsupported = dialog.locator('[data-ui="chat-order"]').locator('xpath=..');
+  await unsupported.scrollIntoViewIfNeeded();
+  await settleScroll(page);
+  await unsupported.hover({ position: { x: 10, y: 8 } });
+  await expect(tooltip).toBeHidden();
+});
+
+test('Worker preserves raw text while activity visibility is off', async ({ page }) => {
+  const post = await load(page);
+  const raw = '  first line\n<script>alert(1)</script>\n  last line  ';
+  await post({ type: 'workerEnabled', value: true });
+  await post({ type: 'workerVisibility', value: 'off' });
+  await post({ type: 'workerActivity', id: 1, phase: 'started', text: 'Status only' });
+  await post({ type: 'workerOutput', id: 1, text: raw });
+  await expect(page.locator('[data-ui=history]')).not.toContainText('Status only');
+  await expect(page.locator('[data-ui=history]')).not.toContainText('first line');
+  await page.locator('[data-ui=worker-tab]').click();
+  const transcript = page.locator('[data-ui=worker-history]');
+  await expect(transcript.locator('p')).toHaveCount(1);
+  expect(await transcript.locator('p').textContent()).toBe(raw);
+  await expect(transcript.locator('script')).toHaveCount(0);
+  await expect(transcript).not.toContainText('Status only');
+  await expect(transcript.locator('p')).toHaveCSS('white-space', 'pre-wrap');
+  await expect(transcript.locator('p')).toHaveCSS('overflow-wrap', 'anywhere');
+});
+
+test('Worker replay retains raw transcript across resume without restoring running state', async ({ page }) => {
+  const post = await load(page);
+  const raw = '  saved\n<em>literal</em>\n';
+  await post({ type: 'workerEnabled', value: true });
+  await post({
+    type: 'replay',
+    events: [
+      { type: 'workerActivity', id: 1, phase: 'started', text: 'Starting' },
+      { type: 'workerOutput', id: 1, text: raw },
+      { type: 'session', active: true, resumed: true },
+    ],
+  });
+  await page.locator('[data-ui=worker-tab]').click();
+  const history = page.locator('[data-ui=worker-history]');
+  expect(await history.locator('p').textContent()).toBe(raw);
+  await expect(history.locator('em')).toHaveCount(0);
+  await expect(page.locator('[data-ui=worker-running]')).toBeHidden();
+  await expect(page.locator('[data-ui=worker-cancel]')).toBeHidden();
+});
+
+test('Worker displays streamed growth in one stable paragraph before completion', async ({ page }) => {
+  const post = await load(page);
+  await post({ type: 'workerEnabled', value: true });
+  await post({ type: 'workerActivity', id: 1, phase: 'started', text: 'Working' });
+  await page.locator('[data-ui=worker-tab]').click();
+  await post({ type: 'workerOutput', id: 1, message: 'stream-1', text: '  partial\n' });
+  const rows = page.locator('[data-ui=worker-history] p');
+  await expect(rows).toHaveCount(1);
+  expect(await rows.first().textContent()).toBe('  partial\n');
+  await post({ type: 'workerOutput', id: 1, message: 'stream-1', text: '  partial\n<script>literal</script>  ' });
+  await expect(rows).toHaveCount(1);
+  expect(await rows.first().textContent()).toBe('  partial\n<script>literal</script>  ');
+  await expect(page.locator('[data-ui=worker-history] script')).toHaveCount(0);
+  await expect(page.locator('[data-ui=worker-running]')).toBeVisible();
 });

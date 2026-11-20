@@ -10,6 +10,77 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   GPT-6.1 Terra agents write code and tests; GPT-6 Astra agents review them.
     Resolve findings and verify the resulting changes before reporting completion.
 
+## Background delegation (#134)
+
+-   Delegation is off by default. When enabled, a Codex session delegates to
+    Codex and a Claude session delegates to Claude. The programmer can choose
+    a worker model within the active provider. Reuse the provider's existing
+    sign-in so users do not need to supply a separate API key.
+-   The current direction is for the worker to drive visible edits through
+    Pair while the main agent handles conversation, review, and spoken
+    narration. This keeps the main agent available during edits. Give the
+    worker authority for one task at a time and revoke it on interruption.
+    Coordinate narration with the worker's intended batches. The Worker tab
+    shows its activity, and chat can show milestones, every event, or no
+    worker events.
+-   A worker needs an explicit attachment to its owning session. A Codex
+    subagent with access to the Pair tool could not read from the active main
+    session in the spike. This establishes a limit in the tested Codex setup.
+    Claude attachment and the mechanism for authenticating workers are open.
+-   The Worker tab follows Chat order for task groups and activity within
+    each task. Both views place new activity at the same end. This order
+    preference affects presentation while the source events stay chronological.
+-   Show the Pair and Worker tab row only while split agents are enabled.
+    Turning the setting off returns to Pair and retains the displayed Worker
+    history for later re-enable in the same session.
+-   Save worker model preferences separately for Codex and Claude. Use the
+    preference associated with the current main connection. A blank
+    preference or an unidentified provider supplies no model override,
+    allowing the main agent to use its exact chat model. MCP client identity
+    is a preference hint. Grant authorization still depends on session
+    ownership and the worker capability. Preserve the legacy single value
+    in user settings without assigning it to an unverified provider.
+-   Show original public assistant responses in Worker, with status and
+    Cancel above them. Worker visibility still controls progress and status
+    in Pair chat. The worker grant authorizes forwarding to its own task.
+    Keep the bounded transcript in panel history and redact the grant before
+    display or persistence. Forwarding adds no sound or main-agent report.
+-   Supply a Codex JSON-stream adapter and a generic worker tool for other
+    harnesses. The Codex adapter forwards completed assistant messages, so
+    the available granularity is one message at a time. The agent harness
+    still owns launch, model choice, and sign-in.
+-   Use a local Codex App Server turn for public text updates. Its runner
+    starts an ephemeral child with read-only native access and an explicit
+    model. Pair still owns editor changes through the existing grant. Each
+    bounded snapshot replaces the same response in view and replay. The
+    controller withholds a pending grant prefix until it can redact the
+    full value or confirm the final text. The runner checks the grant
+    before launch and releases it only after the child closes. If it
+    cannot confirm retirement, it reports the blocker and retains the
+    grant for the programmer's session controls.
+
+## Opening externally changed files (#15)
+
+-   Keep the Git diff when VS Code opens a matching tab. VS Code's Git
+    command can complete without showing a tab for an ignored file or a
+    worktree it has not discovered. Open the requested file directly when
+    the command fails or leaves a different tab active.
+
+## Pair Settings sections (#130)
+
+-   Use native disclosures for settings sections. Conversation and Playback
+    start open. The webview saves the programmer's choices, and the footer
+    stays visible outside the sections.
+-   Show the selected speech provider's controls in a disclosure and open it
+    when the programmer switches providers. This keeps provider controls
+    close to the choice that governs them.
+-   Explain selected settings through the existing hover and keyboard-focus
+    tooltip. Place the shared popup inside the modal dialog for settings
+    controls so it remains visible above the modal backdrop, and clear its
+    accessibility reference when focus moves or the dialog closes. A hover
+    on the setting name uses the associated control as the tooltip target,
+    giving pointer and keyboard users the same explanation.
+
 ## CI tool downloads
 
 -   Download pinned shfmt from its direct upstream release first, then the
@@ -1265,14 +1336,22 @@ those diagnostic differences are an explicit limit, not exact equivalence.
 Unknown shells keep their existing behavior and honest completion status.
 Shell identity can arrive after shell integration: a native first-command probe
 observed two unwrapped submissions in 30 fresh Bash terminals. Wait up to 500 ms
-for authoritative identity only for multiline input whose shell is unknown;
-known shells and single-line input do not wait. Cancellation or terminal closure
+for authoritative identity when the command is eligible for Bash encoding
+and the shell is unknown. Known shells and commands that need no encoding
+skip the wait. Cancellation or terminal closure
 stops submission. If identity remains unknown at the deadline, submit the
 original input; the wait is best effort, not a guarantee. A repeat probe saw all
 30 submissions identified and wrapped. Separately, stock VS Code 1.146 can
 associate a wrapped prompt with the wrong execution object at a narrow terminal
 width. Pair retains exact identity checks; an isolated candidate upstream fix
 passed the reproduction, but is not installed or a stock-host release check.
+
+VS Code's Bash integration also reports commands beginning with a parenthesized
+subshell under an execution handle different from the one returned at submission.
+Extend the same encoded submission to commands beginning with an opening
+parenthesis after leading whitespace. This retains the execution identity check
+and avoids correlating unrelated terminal events. It does not change commands
+with a subshell later in the line, such as `true && (printf done)`.
 
 The new command-exit event is a breaking wire-union extension. Bump the
 editor-relay protocol to 6 so older peers reject the connection clearly rather

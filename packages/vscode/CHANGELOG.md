@@ -1,5 +1,65 @@
 # Changelog
 
+## 0.54.0
+
+-   Grow the worker's response in the Worker tab as Codex writes it.
+    The Codex App Server runner forwards visible text during the turn.
+-   Add opt-in background workers, separate Codex and Claude worker models,
+    and controls for worker activity in Pair chat.
+-   Organize Pair Settings into collapsible sections with tooltips. Hide the
+    Pair and Worker tabs when split mode is off.
+-   Open externally changed files when Git has no diff to show, and capture
+    the output and exit status of Bash commands that start with a subshell.
+
+## 0.53.0
+
+-   Show the worker's original responses in the Worker tab. The Codex
+    transcript adapter forwards visible assistant messages from JSON output.
+
+## 0.52.2
+
+- Clarify the worker, code display, and speech context tooltips.
+
+## 0.52.1
+
+- Show Settings tooltips when hovering the setting name as well as its control.
+
+## 0.52.0
+
+-   Add hover and keyboard-focus tooltips for background worker settings,
+    code display, and speech context.
+
+## 0.51.2
+
+-   Capture output and exit status for Bash commands that start with a
+    parenthesized subshell.
+
+## 0.51.1
+
+-   Hide the Pair and Worker tabs when split agents are disabled. Turning
+    split agents off returns the panel to Pair.
+-   Open the file from an external-change notice when VS Code cannot show
+    a Git diff, including for ignored worktree files.
+
+## 0.51.0
+
+-   Save different worker models for Codex and Claude. Pair uses the
+    active chat's preference. Leaving it blank uses that chat's model.
+
+## 0.50.0
+
+-   Distinguish the Pair and Worker tabs with a selected indicator, and
+    display Worker activity in the same order as Pair chat.
+-   Enable split agents and set the worker model in Pair Settings.
+-   Fold Pair Settings into collapsible sections and remember which
+    sections you open. Conversation and Playback start open (#130).
+
+## 0.49.0
+
+-   Add an experimental, default-off background worker mode. The main agent
+    keeps the conversation and speech. A worker can drive one visible editor
+    batch at a time with a grant from the main agent (#134).
+
 ## 0.48.3
 
 -   A reply you send while the agent waits now reaches it without a false

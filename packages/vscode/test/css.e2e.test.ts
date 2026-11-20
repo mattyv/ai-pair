@@ -108,6 +108,7 @@ const SCENARIO: object[] = [
   { type: 'programmer', text: 'Still waiting for the agent.', receipt: 1 },
   { type: 'turn', to: 'agent' },
   { type: 'interrupt' },
+  { type: 'workerOutput', id: 1, text: 'Worker output' },
   { type: 'point', file: 'src/server.ts', line: 12 },
   { type: 'outside', files: ['package.json', 'src/other.ts'] },
   { type: 'run', id: 1, command: 'npm test', phase: 'confirm' },

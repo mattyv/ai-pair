@@ -2,7 +2,7 @@
   "name": "ai-pair",
   "displayName": "AI Pair",
   "description": "Pair program with an AI agent: a second cursor that types at a human pace and narrates what it's doing.",
-  "version": "0.48.3",
+  "version": "0.54.0",
   "publisher": "mattyv",
   "author": {
     "name": "mattyv"
@@ -384,6 +384,44 @@
           ],
           "default": "interrupt",
           "description": "Choose whether replies interrupt immediately or wait for the current action to finish. Stop always interrupts immediately.",
+          "scope": "application"
+        },
+        "aiPair.worker.enabled": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "description": "Enable experimental background worker edits. The main agent speaks and grants a worker permission to drive visible edits."
+        },
+        "aiPair.worker.model": {
+          "type": "string",
+          "default": "",
+          "deprecationMessage": "This legacy setting is ignored. Configure the Codex or Claude worker model instead.",
+          "description": "Legacy worker model setting; retained but ignored.",
+          "scope": "application"
+        },
+        "aiPair.worker.codexModel": {
+          "type": "string",
+          "default": "",
+          "maxLength": 256,
+          "description": "Codex worker model. Empty uses the active chat model.",
+          "scope": "application"
+        },
+        "aiPair.worker.claudeModel": {
+          "type": "string",
+          "default": "",
+          "maxLength": 256,
+          "description": "Claude worker model. Empty uses the active chat model.",
+          "scope": "application"
+        },
+        "aiPair.worker.visibility": {
+          "type": "string",
+          "enum": [
+            "milestones",
+            "everything",
+            "off"
+          ],
+          "default": "milestones",
+          "description": "Which worker activity appears in the Pair conversation.",
           "scope": "application"
         },
         "aiPair.navigatorCommentary": {

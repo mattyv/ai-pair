@@ -36,6 +36,8 @@ import { settingRoundTripPaths } from './integration_setting_roundtrip';
 import { replyReportPaths } from './integration_reply_report';
 import { gapPaths } from './integration_gap_paths';
 import { codePlaybackPaths } from './integration_code_playback';
+import { workerPaths } from './integration_worker';
+import { workerCliPaths } from './integration_worker_cli';
 import { preservedPlaybackPaths } from './integration_preserved_playback';
 import { corePaths } from './integration_core_paths';
 import { playerGapPaths } from './integration_player_gap_paths';
@@ -1182,7 +1184,24 @@ export async function run(): Promise<void> {
   let agent = new Client({ name: 'integration', version: '0' });
   await agent.connect(transport);
   const tools = await agent.listTools();
-  assert.deepEqual(tools.tools.map((t) => t.name).toSorted(), ['calibrate', 'diagnostics', 'end', 'listen', 'read', 'start', 'step']);
+  assert.deepEqual(tools.tools.map((t) => t.name).toSorted(), [
+    'calibrate',
+    'diagnostics',
+    'end',
+    'listen',
+    'read',
+    'start',
+    'step',
+    'worker_done',
+    'worker_grant',
+    'worker_notice',
+    'worker_output',
+    'worker_progress',
+    'worker_read',
+    'worker_say',
+    'worker_status',
+    'worker_step',
+  ]);
   // Every text part of a tool's result, joined.
   async function toolAll(name: string, args: Record<string, unknown> = {}): Promise<string> {
     const result = await agent.callTool({ name, arguments: args });
@@ -1603,6 +1622,8 @@ export async function run(): Promise<void> {
   console.log('Set Up Agent: closed, copied, and configured multiple agents in the isolated profile');
 
   // Last, since they change the playback's settings: the player's and the controller's paths (#176).
+  await workerPaths(api, root);
+  await workerCliPaths(api, root, relayEnv());
   await codePlaybackPaths(api, root);
   await preservedPlaybackPaths(api, root);
   await playerGapPaths(api, root);

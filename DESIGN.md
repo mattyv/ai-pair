@@ -8,6 +8,29 @@ programmer experiences.
 Status: describes 0.2.0. Numbers marked *tunable* are initial guesses to be
 adjusted by feel.
 
+## Background worker preview
+
+Enable the preview in VS Code User Settings. The main agent keeps the
+conversation and speaks. It can grant one background worker permission to
+drive visible edits for the current task. Interrupting or disabling the
+setting revokes that permission. The Worker tab shows the worker's original
+visible responses. When a harness streams updates, each response grows in
+place. Its status and Cancel control sit above the transcript.
+See [Testing background workers](docs/worker-preview.md)
+for the setup and current limits.
+
+## Pair Settings
+
+Conversation and Playback start expanded. Keyboard shortcuts, Commands,
+Speech, and Diagnostics start collapsed. Pair remembers open sections when
+the webview reloads. Choosing a speech provider opens its own controls.
+The version information and Close button sit outside the disclosures.
+
+Conversation contains the split-agent switch, the worker model preference,
+and the amount of Worker activity shown in Pair.
+The Pair and Worker tabs appear only while split agents are enabled.
+Turning the setting off returns the view to the Pair conversation.
+
 ## Agent cursor
 
 Rendered with decorations: a thin vertical bar in the agent's color, plus a

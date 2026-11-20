@@ -58,6 +58,33 @@ diagram was inspected in headless Chromium without page errors.
 
 ## Components
 
+### Background worker preview
+
+The `Worker delegation preview` view shows the experimental owner and worker
+paths. The workspace controller owns the worker grant and the shared playback
+slot. The bridge keeps the main agent's connection ownership while admitting
+only worker calls that present a valid grant to the exact window. The
+controller revokes the grant when the programmer interrupts or disables the
+feature. Playback owns a live batch until it returns that batch's outcome.
+Main-agent speech uses the existing narration port independently of worker
+playback. The agent harness launches the worker and selects its provider.
+The relay passes the chat's provider hint when opening or resuming a session.
+The bridge binds that hint to the owning connection and reads only its saved
+model preference. The hint selects a setting. Session ownership and the
+capability continue to authorize worker operations.
+
+The worker harness can forward public assistant responses through
+`worker_output`. The Codex relay adapter reads completed assistant messages
+from the CLI's JSON event stream, and sends completion after the stream ends.
+It owns the input stream and forwards to the same grant-bound window.
+The App Server runner owns an ephemeral Codex child. It matches the
+thread and turn, accumulates public response updates by item, and forwards
+keyed snapshots. The controller validates the live capability and publishes a
+separate panel event. The existing bounded panel history replaces prior
+snapshots for that worker and message, preserving order on replay. The
+controller saves the next worker display ID so resuming keeps the new
+worker's responses separate from earlier output.
+
 ```text
 ┌──────────────────┐  stdio (MCP)  ┌────────────┐  WebSocket, 127.0.0.1  ┌─────────────────────────────┐
 │  agent harness   │ ────────────▶ │  pair-mcp  │ ─────────────────────▶ │  VS Code extension          │
@@ -729,15 +756,16 @@ and retained on revive. Restore validates this origin before replaying any
 facts or resurrecting a closed session, rather than relying on object identity
 that would be lost at the JSON wire boundary.
 
-For identified Bash only, terminal submission encodes multi-line original text
-as one physical builtin-eval command. It adds no subprocess or temporary-script
-owner. Original command text remains at the approval/report boundary. Other
-shells retain original submission; the exact-ID completion rule never relaxes.
-If shell identity is unknown, multiline submission waits at most 500 ms for
-VS Code's terminal state; interruption or closure stops it. An unresolved
-identity retains the original submission, without guessing a shell.
-The editor-relay wire version is 6 for the new command event. The local audio
-contract remains 6 because no new panel message is introduced.
+For identified Bash only, terminal submission encodes multiline input and
+input beginning with a parenthesized subshell as one physical builtin-eval
+command. It adds no subprocess or temporary-script owner. Original command
+text remains at the approval and report boundary. Other shells retain original
+submission, and completion still requires the exact execution handle.
+When shell identity is unknown, these command forms wait at most 500 ms for
+VS Code's terminal state. Interruption or closure stops submission. If identity
+remains unknown, Pair submits the original command.
+Editor-relay wire version 6 introduced the command event without changing
+the Local Audio contract.
 
 The native integration harness generates each packaged fixture under its
 owning extension root, ensuring framework stubs use that extension's VS Code

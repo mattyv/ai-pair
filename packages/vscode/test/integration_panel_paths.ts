@@ -9,6 +9,9 @@ import type { Api } from '../src/extension';
 
 /** How long the panel's asynchronous handlers get to finish. */
 const SETTLE_MS = 300;
+/** Bounds the wait for VS Code to publish settings writes. */
+const SETTING_POLLS = 100;
+const SETTING_POLL_MS = 50;
 
 /** Page ids to try: the id of the page the panel holds is not part of the Api. */
 const PAGE_IDS = [0, 1, 2, 3];
@@ -19,12 +22,65 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
+/** Waits for VS Code to publish a panel setting in a fresh configuration snapshot. */
+async function waitForSetting(key: string, value: unknown): Promise<void> {
+  for (let attempt = 0; attempt < SETTING_POLLS; attempt++) {
+    if (vscode.workspace.getConfiguration('aiPair').get(key) === value) return;
+    await sleep(SETTING_POLL_MS);
+  }
+  assert.equal(vscode.workspace.getConfiguration('aiPair').get(key), value, `setting ${key} did not settle`);
+}
+
 /** Sends every message in `messages` to the panel, then lets its asynchronous handlers finish. */
 async function sendAll(api: Api, messages: readonly unknown[]): Promise<void> {
   for (const message of messages) {
     api.panelMessage(message);
   }
   await sleep(SETTLE_MS);
+}
+
+/** Checks worker preferences through the real panel and VS Code settings. */
+export async function workerPreferencePaths(api: Api): Promise<void> {
+  const settings = vscode.workspace.getConfiguration('aiPair');
+  const global = vscode.ConfigurationTarget.Global;
+  // Worker preferences travel through the real panel and persist separately for each provider.
+  // Invalid page values leave the settings unchanged.
+  const workerKeys = ['worker.enabled', 'worker.codexModel', 'worker.claudeModel', 'worker.visibility'];
+  const previous = workerKeys.map((key) => settings.inspect<unknown>(key)?.globalValue);
+  try {
+    await sendAll(api, [
+      { type: 'workerEnabled', value: true },
+      { type: 'workerModel', provider: 'codex', value: 'codex-test' },
+      { type: 'workerModel', provider: 'claude', value: 'claude-test' },
+      { type: 'workerVisibility', value: 'everything' },
+    ]);
+    await waitForSetting('worker.enabled', true);
+    await waitForSetting('worker.codexModel', 'codex-test');
+    await waitForSetting('worker.claudeModel', 'claude-test');
+    await waitForSetting('worker.visibility', 'everything');
+    await sendAll(api, [
+      { type: 'workerEnabled', value: 'yes' },
+      { type: 'workerModel', provider: 'other', value: 'invalid' },
+      { type: 'workerModel', provider: 'codex', value: 17 },
+      { type: 'workerModel', provider: 'codex', value: 'x'.repeat(257) },
+      { type: 'workerVisibility', value: 'invalid' },
+    ]);
+    assert.equal(vscode.workspace.getConfiguration('aiPair').get('worker.enabled'), true);
+    assert.equal(vscode.workspace.getConfiguration('aiPair').get('worker.codexModel'), 'codex-test');
+    assert.equal(vscode.workspace.getConfiguration('aiPair').get('worker.visibility'), 'everything');
+    await sendAll(api, [
+      { type: 'workerVisibility', value: 'off' },
+      { type: 'workerVisibility', value: 'milestones' },
+      { type: 'workerEnabled', value: false },
+      { type: 'cancelWorker' },
+    ]);
+    await waitForSetting('worker.enabled', false);
+    await waitForSetting('worker.visibility', 'milestones');
+  } finally {
+    for (const [index, key] of workerKeys.entries()) {
+      await settings.update(key, previous[index], global);
+    }
+  }
 }
 
 /** Sends trusted page-shaped messages, including invalid values that the receiving cases explicitly check. */
@@ -103,6 +159,10 @@ export async function panelPaths(api: Api): Promise<void> {
 
   // Preferences, valid and not.
   await sendAll(api, [
+    { type: 'replyBehavior', value: 'finishAction' },
+    { type: 'replyBehavior', value: 'invalid' },
+    { type: 'navigatorCommentary', value: 'quiet' },
+    { type: 'navigatorCommentary', value: 'invalid' },
     { type: 'chatOrder', value: 'oldestFirst' },
     { type: 'chatOrder', value: 'bogus' },
     { type: 'showTerminals', value: true },
@@ -116,9 +176,19 @@ export async function panelPaths(api: Api): Promise<void> {
     { type: 'codePlayback', value: 'blocks' },
     { type: 'codePlayback', value: 'bogus' },
   ]);
-  for (const key of ['chatOrder', 'showTerminalsAutomatically', 'speed', 'readingSpeed', 'codePlayback']) {
+  for (const key of [
+    'replyBehavior',
+    'navigatorCommentary',
+    'chatOrder',
+    'showTerminalsAutomatically',
+    'speed',
+    'readingSpeed',
+    'codePlayback',
+  ]) {
     await settings.update(key, undefined, global);
   }
+
+  await workerPreferencePaths(api);
 
   // Links: a command the panel may not run, a URL it may not open, and files that are not there.
   await sendAll(api, [
@@ -144,6 +214,9 @@ export async function panelPaths(api: Api): Promise<void> {
     { type: 'skipReading', id: 1 },
     { type: 'skipReading', id: -1 },
     { type: 'runDecision', id: 1, run: false, remember: false },
+    { type: 'runDecision', id: 1, run: true, remember: true },
+    { type: 'runDecision', id: 1, run: true, scope: 'command' },
+    { type: 'runDecision', id: 1, run: true, scope: 'all' },
     { type: 'end' },
   ]);
 

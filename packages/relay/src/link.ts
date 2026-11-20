@@ -73,7 +73,7 @@ function alive(pid: number): boolean {
  * best first: the most closely containing workspace folder, then the most recently focused window.
  * `root` is the best window's workspace folder that holds it, as a real path.
  */
-export function findWindows(folders: string[], dir: string): { folder: string; root: string; windows: [Discovery, ...Discovery[]] } {
+function discoveredWindows(dir: string): Discovery[] {
   const windows: Discovery[] = [];
   let files: string[] = [];
   try {
@@ -92,6 +92,12 @@ export function findWindows(folders: string[], dir: string): { folder: string; r
     }
   }
 
+  return windows;
+}
+
+/** Finds matching live windows by workspace and focus. */
+export function findWindows(folders: string[], dir: string): { folder: string; root: string; windows: [Discovery, ...Discovery[]] } {
+  const windows = discoveredWindows(dir);
   for (const folder of folders) {
     const here = realpath(folder);
     const matches: Array<{ window: Discovery; root: string }> = [];
@@ -132,6 +138,7 @@ export class EditorLink {
     private readonly dir: string,
     private readonly runtime?: { version: string; relayHash: string },
     private readonly diagnosticPeer = false,
+    private readonly exactPort?: number,
   ) {
     this.folder = cwd;
   }
@@ -231,6 +238,16 @@ export class EditorLink {
     }
   }
 
+  /** Calls a worker tool on exactly the granted window, without taking ownership. */
+  async callWorker(port: number, tool: ToolName, args: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
+    const peer = new EditorLink(this.folder, this.dir, this.runtime, /* diagnosticPeer= */ true, port);
+    try {
+      return await peer.call(tool, args, signal);
+    } finally {
+      peer.close();
+    }
+  }
+
   /** Closes the link for good: its socket closes, and it opens no other (specs/Wire.tla, `Shutdown`). */
   close(): void {
     this.closed = true;
@@ -256,7 +273,12 @@ export class EditorLink {
    */
   private async open(): Promise<Connection> {
     let first: unknown;
-    for (const window of findWindows([this.folder], this.dir).windows) {
+    const windows =
+      this.exactPort === undefined
+        ? findWindows([this.folder], this.dir).windows
+        : discoveredWindows(this.dir).filter((window) => window.port === this.exactPort);
+    if (windows.length === 0) throw new RelayError('no_editor', 'The granted editor window is unavailable.');
+    for (const window of windows) {
       // specs/Wire.tla, `OpenSocket` with CloseAfterShutdown: once the link closed, no other window is tried (#220).
       if (this.closed) throw new RelayError('no_editor', LINK_CLOSED);
       try {

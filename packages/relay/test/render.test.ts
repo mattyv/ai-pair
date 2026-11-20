@@ -516,3 +516,8 @@ it('distinguishes pending approval, running work, and closed terminals', () => {
   expect(closed).toContain('terminal closed; exit status unknown');
   expect(closed).not.toContain('exited with 0');
 });
+
+it('shows a completed worker result to the main agent', () => {
+  const result = renderReport(report({ events: [{ kind: 'worker_complete', text: 'review complete' }] }), 'listen');
+  expect(result).toContain('Background worker completed: review complete');
+});

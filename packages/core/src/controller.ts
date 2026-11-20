@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import {
   spokenSay,
   CURSOR_MARKER,
+  WORKER_TEXT_LIMIT,
   ToolError,
   type Action,
   type BatchResult,
@@ -44,6 +45,7 @@ import { defaultTiming, glideDuration, withOverrides } from './timing';
 
 /** Bounds a navigator listen while the programmer is working. */
 const NAVIGATOR_BLOCK_MS = 10_000;
+const WORKER_ACTIVITY_LIMIT = 500;
 
 const UNANCHORED =
   'Your previous batch was interrupted, discarded, or failed, so your cursor is where it stopped, not where that batch would have ended. `read` the file, then start this batch with a `move` or `select` that gives both `file` and `line`.';
@@ -60,6 +62,8 @@ interface Batch {
 /** A batch in the queue: played in memory when it was queued, so it knows where the next batch is rehearsed from. */
 interface QueuedBatch extends Batch {
   after: Rehearsal;
+  workerResolve?: (result: BatchResult) => void;
+  workerReject?: (error: unknown) => void;
 }
 
 /** Like `Event`, but an edit since the last report gets its diff when the report is taken; a restored one has it. */
@@ -102,6 +106,8 @@ export interface SavedSession {
   nextBatchId?: number;
   /** The next message receipt, absent in sessions saved by older versions (#117). */
   nextReceipt?: number;
+  /** The next worker activity ID, absent in sessions saved by older versions. */
+  nextWorkerActivityId?: number;
   events: Receipted[];
 }
 
@@ -181,6 +187,7 @@ interface Call {
 function interrupting(e: PendingEvent): boolean {
   return (
     e.kind !== 'command_exit' &&
+    e.kind !== 'worker_notice' &&
     (e.kind !== 'edit' || ('before' in e ? e.interrupted === true : e.by === 'programmer' || e.interrupted === true))
   );
 }
@@ -222,7 +229,7 @@ function callReady(session: Session, call: Call): boolean {
     default:
       // The last kind, `listen`: a new kind would widen `call.kind` here and fail the `satisfies`.
       call.kind satisfies 'listen';
-      if (session.held.length > 0 || session.events.some((e) => e.kind === 'command_exit')) return true;
+      if (session.held.length > 0 || session.events.some((e) => e.kind === 'command_exit' || e.kind === 'worker_notice')) return true;
       // specs/CommandDelivery.tla, PromptRunReady: command output is actionable even while later batches play.
       if (session.finished.some((r) => r.status !== 'completed' || (r.runs?.length ?? 0) > 0)) return true;
       // Other completed batches and noninterrupting edits stay quiet (specs/ListenGrace.tla, `QuietNews`).
@@ -297,6 +304,14 @@ export class Controller {
   private openCalls = 0;
   private chain: Promise<unknown> = Promise.resolve();
   private nextBatchId = 1;
+  private workerCapability: string | undefined;
+  private workerActivityId: number | undefined;
+  private nextWorkerActivityId = 1;
+  private workerBusy = false;
+  private mainRehearsing = false;
+  private workerSpeech: Promise<void> = Promise.resolve();
+  private workerSpeechGeneration = 0;
+  private workerSpeechPending = 0;
   /** The next receipt for a programmer's message, kept across reloads so a replayed history never shares one (#117). */
   private nextReceipt = 1;
   /** Receipts of messages a report the agent may have seen carried: they stay received (specs/MessageReceipt.tla, `maybe`). */
@@ -332,6 +347,7 @@ export class Controller {
     private readonly panel: PanelPort,
     private config: Config = defaultConfig,
     private readonly narration?: NarrationPort,
+    private readonly options: { workerEnabled?: () => boolean } = {},
   ) {}
 
   /** Sets the preference projected on subsequent reports (specs/NavigatorCommentary.tla, SetMode). */
@@ -497,6 +513,7 @@ export class Controller {
       finished: session.finished,
       nextBatchId: this.nextBatchId,
       nextReceipt: this.nextReceipt,
+      nextWorkerActivityId: this.nextWorkerActivityId,
       // specs/Resume.tla, Store: a queued reply survives reload without changing the live queue.
       events: [...session.events, ...session.deferredMessages].filter((e): e is Receipted => e.kind !== 'edit'),
     };
@@ -530,6 +547,9 @@ export class Controller {
     const next = saved.nextBatchId;
     const reportedNext = Math.max(1, ...saved.finished.map((batch) => batch.id + 1));
     this.nextBatchId = typeof next === 'number' && Number.isSafeInteger(next) && next >= reportedNext ? next : reportedNext;
+    // specs/WorkerOutput.tla, Reload: replayed output retains its identity, not its authority.
+    const nextWorker = saved.nextWorkerActivityId;
+    this.nextWorkerActivityId = typeof nextWorker === 'number' && Number.isSafeInteger(nextWorker) && nextWorker > 0 ? nextWorker : 1;
     session.finished = [...saved.finished];
     session.events = [...saved.events];
     // A receipt is never reused, or a new message would share an old one's bubble; the spec does not model ids.
@@ -545,9 +565,235 @@ export class Controller {
     this.render();
   }
 
+  /** Grants a single worker the ability to use the visible editing tools. */
+  grantWorker(brief?: string): string {
+    const session = this.requireSession();
+    if (
+      this.options.workerEnabled?.() !== true ||
+      session.ended ||
+      session.suspended ||
+      session.scene.turn !== 'agent' ||
+      this.workerCapability !== undefined ||
+      this.workerBusy ||
+      this.mainRehearsing ||
+      session.queue.length > 0 ||
+      session.stale
+    ) {
+      throw new ToolError('invalid_arguments', 'Worker editing is unavailable.');
+    }
+    this.workerCapability = randomUUID();
+    this.workerActivityId = this.nextWorkerActivityId++;
+    this.workerActivity('started', brief ?? 'Worker started.');
+    return this.workerCapability;
+  }
+
+  /** Revokes the worker grant; a playing batch retains its slot until it settles. */
+  revokeWorker(): void {
+    this.clearWorker(true);
+    this.pump();
+  }
+
+  private workerActivity(phase: 'started' | 'progress' | 'editing' | 'batchDone' | 'completed' | 'stopped', text: string): void {
+    if (this.workerActivityId === undefined) return;
+    // A live activity ID is created and cleared with its capability.
+    const safe = text.replaceAll(String(this.workerCapability), '[redacted]');
+    this.panel.post({ type: 'workerActivity', id: this.workerActivityId, phase, text: safe.slice(0, WORKER_ACTIVITY_LIMIT) });
+  }
+
+  private clearWorker(notify: boolean): void {
+    const hadWorker = this.workerCapability !== undefined;
+    if (hadWorker && this.session !== undefined) {
+      this.session.events = this.session.events.filter((event) => event.kind !== 'worker_notice');
+    }
+    if (hadWorker && notify) this.workerActivity('stopped', 'Worker stopped.');
+    this.workerSpeechGeneration++;
+    if (this.workerSpeechPending > 0) this.narration?.cancel();
+    this.workerCapability = undefined;
+    this.workerActivityId = undefined;
+    if (this.workerBusy) this.session?.timeline.interrupt();
+    if (hadWorker && notify && this.session !== undefined) {
+      this.session.events.push({ kind: 'worker_complete', text: 'Worker editing stopped.' });
+    }
+  }
+
+  private requireWorker(capability: string): { session: Session; id: number } {
+    const session = this.requireSession();
+    const id = this.workerActivityId;
+    if (
+      id === undefined ||
+      this.options.workerEnabled?.() !== true ||
+      this.workerCapability !== capability ||
+      session.ended ||
+      session.suspended ||
+      session.scene.turn !== 'agent'
+    ) {
+      throw new ToolError('invalid_arguments', 'Worker authority is no longer valid.');
+    }
+    return { session, id };
+  }
+
+  /** Reads through the current worker grant. */
+  async workerRead(capability: string, file: string, fromLine?: number, toLine?: number): Promise<FileContent> {
+    this.requireWorker(capability);
+    const result = await this.read(file, fromLine, toLine);
+    this.requireWorker(capability);
+    return result;
+  }
+
+  /** Plays a worker batch visibly after rehearsal and returns its actual result. */
+  async workerStep(capability: string, actions: Action[], signal?: AbortSignal): Promise<BatchResult> {
+    const { session } = this.requireWorker(capability);
+    if (
+      this.workerBusy ||
+      session.queue.length > 0 ||
+      this.mainRehearsing ||
+      session.stale ||
+      actions.length === 0 ||
+      actions.some((action) => 'say' in action)
+    ) {
+      throw new ToolError('invalid_arguments', 'Worker batch is unavailable or contains an unsupported action.');
+    }
+    if (signal?.aborted === true) throw cancelled();
+    const anchor = cursorAnchor(actions);
+    if (unnamedEdit(actions) !== undefined || (session.anchorNeeded && anchor && !anchor.anchored)) {
+      throw new ToolError('invalid_arguments', 'Worker edits require an anchored file and line.');
+    }
+    this.workerBusy = true;
+    const abort = () => {
+      this.revokeWorker();
+    };
+    signal?.addEventListener('abort', abort, { once: true });
+    try {
+      const rehearsal = await this.rehearse(session, actions);
+      this.requireWorker(capability);
+      if (session.stale) {
+        throw new ToolError('invalid_arguments', 'Worker batch was interrupted.');
+      }
+      if (rehearsal.failed !== undefined) {
+        throw new ToolError('invalid_arguments', rehearsal.failed.error.message);
+      }
+      const result = await new Promise<BatchResult>((resolve, reject) => {
+        const batch: QueuedBatch = {
+          id: this.nextBatchId++,
+          actions,
+          state: 'queued',
+          after: rehearsal.after,
+          workerResolve: resolve,
+          workerReject: reject,
+        };
+        session.queue.push(batch);
+        this.workerActivity('editing', 'Worker batch started.');
+        if (anchor?.anchored === true) session.anchorNeeded = false;
+        this.kick(session);
+      });
+      return result;
+    } finally {
+      signal?.removeEventListener('abort', abort);
+      this.workerBusy = false;
+    }
+  }
+
+  /** Completes a worker task and wakes a pending main-agent listen. */
+  workerDone(capability: string, text: string): void {
+    const { session } = this.requireWorker(capability);
+    if (this.workerBusy) throw new ToolError('invalid_arguments', 'Worker batch is still active.');
+    const safeText = text.replaceAll(capability, '[redacted]');
+    this.workerActivity('completed', safeText);
+    this.clearWorker(false);
+    session.events.push({ kind: 'worker_complete', text: safeText });
+    this.update();
+  }
+
+  /** Queues the latest actionable worker notice for the main agent. */
+  workerNotice(capability: string, notice: 'question' | 'blocked', text: string): void {
+    const { session, id } = this.requireWorker(capability);
+    session.events = session.events.filter((event) => event.kind !== 'worker_notice');
+    session.events.push({ kind: 'worker_notice', id, notice, text: text.replaceAll(capability, '[redacted]') });
+    this.update();
+  }
+
+  /** Returns the currently granted worker's activity ID without exposing its capability. */
+  activeWorkerId(): number | undefined {
+    return this.workerCapability === undefined ? undefined : this.workerActivityId;
+  }
+
+  /** Returns the current worker's status without exposing its capability. */
+  workerStatus(): { active: boolean; busy: boolean } {
+    return { active: this.workerCapability !== undefined, busy: this.workerBusy };
+  }
+
+  /** Displays worker progress without interrupting the main conversation. */
+  workerProgress(capability: string, text: string): void {
+    this.requireWorker(capability);
+    this.workerActivity('progress', text);
+  }
+
+  /** Posts raw worker output only for the current grant, without changing the conversation. */
+  workerOutput(capability: string, text: string, message?: string, final?: true): void {
+    const { id } = this.requireWorker(capability);
+    if (message?.includes(capability) === true) throw new ToolError('invalid_arguments', 'Invalid worker output message.');
+    let safe = text.replaceAll(capability, '[redacted]');
+    if (message !== undefined && final !== true) {
+      // specs/WorkerSnapshots.tla, Snapshot: withhold a partial capability until it is resolved.
+      for (let length = Math.min(capability.length - 1, safe.length); length > 0; length--) {
+        if (safe.endsWith(capability.slice(0, length))) {
+          safe = safe.slice(0, -length);
+          break;
+        }
+      }
+    }
+    this.panel.post({ type: 'workerOutput', id, text: safe.slice(0, WORKER_TEXT_LIMIT), ...(message === undefined ? {} : { message }) });
+  }
+
+  /** Displays and speaks main-agent narration while worker edits are in progress. */
+  workerSay(text: string): Promise<void> {
+    const capability = this.workerCapability;
+    if (capability === undefined) throw new ToolError('invalid_arguments', 'Worker authority is no longer valid.');
+    const { session } = this.requireWorker(capability);
+    const safeText = text.replaceAll(capability, '[redacted]');
+    const generation = this.workerSpeechGeneration;
+    this.workerSpeechPending++;
+    const speech = this.workerSpeech
+      .then(async () => {
+        await session.player.currentSpeech;
+        if (
+          this.session !== session ||
+          session.ended ||
+          session.suspended ||
+          generation !== this.workerSpeechGeneration ||
+          this.options.workerEnabled?.() !== true ||
+          this.workerCapability !== capability
+        ) {
+          return;
+        }
+        this.panel.post({ type: 'say', text: safeText });
+        try {
+          const available = (await this.narration?.waitForRetirement?.(session.timeline.signal)) ?? true;
+          if (
+            available &&
+            generation === this.workerSpeechGeneration &&
+            this.options.workerEnabled?.() &&
+            this.workerCapability === capability
+          ) {
+            await this.narration?.speak(safeText);
+          }
+        } catch {
+          // Optional narration does not prevent displaying the text.
+        }
+      })
+      .finally(() => {
+        this.workerSpeechPending--;
+      });
+    this.workerSpeech = speech;
+    return speech;
+  }
+
   step(actions: Action[], signal?: AbortSignal): Promise<Report> {
     return this.serialize(async () => {
       const session = this.requireSession();
+      if (actions.length > 0 && (this.workerCapability !== undefined || this.workerBusy || this.workerSpeechPending > 0)) {
+        throw new ToolError('invalid_arguments', 'Worker editing holds the session.');
+      }
       // An empty batch only waits for the queued ones, so it isn't a batch of its own.
       if (actions.length === 0) return this.block('step', session, {}, signal);
       // After a report said a batch stopped short, the first action at the cursor must anchor it (#112,
@@ -565,14 +811,22 @@ export class Controller {
         return this.withCursor(session, report);
       }
       // Played in memory first, so what would fail is reported now, not when the batch plays (specs/Controller.tla, `Submit`).
-      const rehearsal = session.stale || session.ended ? undefined : await this.rehearse(session, actions);
+      this.mainRehearsing = true;
+      let rehearsal: Awaited<ReturnType<typeof rehearse>> | undefined;
+      try {
+        rehearsal = session.stale || session.ended ? undefined : await this.rehearse(session, actions);
+      } finally {
+        this.mainRehearsing = false;
+      }
       // An interruption arriving meanwhile discards it, like any batch planned without knowing about it
       // (specs/Controller.tla: `FailRehearsal`, else `PassRehearsal`).
-      const current = rehearsal && !session.stale && !session.ended;
+      const current = !session.stale && !session.ended;
       // specs/Serialize.tla: `FailRehearsal` answers with the rejection; `Rehearse` queues the batch, or discards it.
-      if (current === true && rehearsal.failed !== undefined) return this.rejectBatch(session, rehearsal.failed, rehearsal);
+      if (current && rehearsal !== undefined && rehearsal.failed !== undefined) {
+        return this.rejectBatch(session, rehearsal.failed, rehearsal);
+      }
       // specs/RecoveryBatchIds.tla, `Allocate`: the next snapshot carries the incremented counter.
-      if (current === true) {
+      if (current && rehearsal !== undefined) {
         const queued: QueuedBatch = { id: this.nextBatchId++, actions, state: 'queued', after: rehearsal.after };
         session.queue.push(queued);
         // specs/SpeechLookahead.tla, Hint: a line speaking now can have this batch's first line prepared.
@@ -598,7 +852,9 @@ export class Controller {
 
   /** Ends the session, the agent's way: specs/Resume.tla, `EndByAgent`. */
   end(summary?: string, signal?: AbortSignal): Promise<Report> {
+    this.revokeWorker();
     return this.serialize(() => {
+      this.revokeWorker();
       return this.block('end', this.requireSession(), { summary }, signal);
     }, signal);
   }
@@ -682,7 +938,10 @@ export class Controller {
       }
     }
     session.finished.unshift(...report.batches);
-    session.events.unshift(...report.events);
+    const hasNotice = session.events.some((event) => event.kind === 'worker_notice');
+    const restoredNotice = report.events.findLast((event) => event.kind === 'worker_notice' && event.id === this.workerActivityId);
+    session.events.unshift(...report.events.filter((event) => event.kind !== 'worker_notice'));
+    if (!hasNotice && restoredNotice !== undefined) session.events.unshift(restoredNotice);
     // specs/MessageReceipt.tla, RestoreUnseen and RestoreRepeat: only a report the agent never saw makes its messages
     // wait again; one it may have seen keeps them received, for good (GuardSticky).
     if (mayRepeat) {
@@ -1581,6 +1840,7 @@ export class Controller {
   }
 
   private close(session: Session): void {
+    this.clearWorker(true);
     this.releaseAttention();
     this.trace?.('session closed');
     this.diagnostic({ kind: 'session', state: 'ended' });
@@ -1615,6 +1875,7 @@ export class Controller {
   }
 
   private interrupt(session: Session): void {
+    this.clearWorker(true);
     this.releaseAttention();
     this.flushDeferred(session);
     this.narration?.cancel();
@@ -1649,8 +1910,24 @@ export class Controller {
         // specs/Controller.tla: `Play`, then `Complete` once it has played.
         this.startHead(session);
         this.render();
-        const { result, sightings, editedFiles } = await session.player.play(batch.id, batch.actions);
-        if (this.session !== session) break;
+        const playback = session.player.play(batch.id, batch.actions);
+        const rejectWorker = batch.workerReject;
+        const played =
+          rejectWorker === undefined
+            ? await playback
+            : await playback.catch((error: unknown) => {
+                session.queue = session.queue.filter((queued) => queued !== batch);
+                this.interrupt(session);
+                rejectWorker(error);
+                this.update();
+                return undefined;
+              });
+        if (played === undefined) continue;
+        const { result, sightings, editedFiles } = played;
+        if (this.session !== session) {
+          batch.workerResolve?.(result);
+          break;
+        }
         if (session.deferredMessages.length > 0) this.interrupt(session);
         // specs/Diagnostics.tla, `Finish`: inspect only files actually edited; checks remain advisory.
         for (const file of editedFiles) {
@@ -1675,7 +1952,10 @@ export class Controller {
             result.warnings = [...(result.warnings ?? []), 'Diagnostics unavailable for an edited file.'];
           }
         }
-        if (this.session !== session) break;
+        if (this.session !== session) {
+          batch.workerResolve?.(result);
+          break;
+        }
         // It played as it did in memory, so the lines it typed are the ones later batches were rehearsed with
         // (specs/Rehearsal.tla, `Play`).
         if (result.status === 'completed') session.lines.adopt(batch.after.lines);
@@ -1687,7 +1967,11 @@ export class Controller {
         batch.result = result;
         this.trace?.(`batch ${batch.id} ${result.status}`);
         session.queue = session.queue.filter((b) => b !== batch);
-        session.finished.push(result);
+        if (batch.workerResolve === undefined) session.finished.push(result);
+        else {
+          if (result.status === 'completed') this.workerActivity('batchDone', 'Worker batch finished.');
+          batch.workerResolve(result);
+        }
         // specs/Rehearsal.tla, `FailPlay`: a batch that didn't complete interrupts the queue behind it.
         if (result.status !== 'completed') this.interrupt(session);
         // specs/Rehearsal.tla, `EndStale`: the batch an interruption left playing has ended, and it was reported (#219).

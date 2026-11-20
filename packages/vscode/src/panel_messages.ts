@@ -8,7 +8,14 @@ import type { SpeechModelStatus } from './speech_setup';
 import type { CatalogView } from './speech_catalog';
 import type { OpenRouterCatalogView } from './speech_openrouter_catalog';
 import type { OutputChoice } from './speech_output_types';
-import type { AudioDiagnostics, LocalAudioStatus, SpeechDecodeFromPage, NavigatorCommentary, ShortcutLabels } from '@ai-pair/protocol';
+import type {
+  AudioDiagnostics,
+  LocalAudioStatus,
+  SpeechDecodeFromPage,
+  NavigatorCommentary,
+  ShortcutLabels,
+  WorkerProvider,
+} from '@ai-pair/protocol';
 import type { OutputPreferenceView } from './speech_output_preferences';
 import type { SessionSpeechCostView } from './session_speech_cost';
 
@@ -19,10 +26,17 @@ export type SpeechAction = 'pause' | 'resume' | 'stop';
 /** The order of the panel history. */
 export type ChatOrder = 'newestFirst' | 'oldestFirst';
 
+/** Visibility of worker events in the Pair conversation. */
+export type WorkerVisibility = 'milestones' | 'everything' | 'off';
+
 /** Messages from the page. */
 export type FromPanel =
   | SpeechDecodeFromPage
   | { type: 'ready' }
+  | { type: 'cancelWorker' }
+  | { type: 'workerEnabled'; value: boolean }
+  | { type: 'workerModel'; provider: WorkerProvider; value: string }
+  | { type: 'workerVisibility'; value: WorkerVisibility }
   | { type: 'copyDiagnostics' }
   | { type: 'reconnectLocalAudio' }
   | { type: 'speechOutputRefresh' }
@@ -109,6 +123,10 @@ export type ToPanel =
   | { type: 'replyBehavior'; value: 'interrupt' | 'finishAction' }
   | { type: 'navigatorCommentary'; value: NavigatorCommentary }
   | { type: 'chatOrder'; value: ChatOrder }
+  | { type: 'workerEnabled'; value: boolean }
+  | { type: 'workerModel'; provider: WorkerProvider; value: string }
+  | { type: 'workerVisibility'; value: WorkerVisibility }
+  | { type: 'workerActive'; id?: number }
   | { type: 'showTerminals'; value: boolean }
   | { type: 'commandApprovalSound'; value: boolean }
   | { type: 'commandApprovals'; all: boolean; count: number; confirmationRequired: boolean }

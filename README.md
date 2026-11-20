@@ -6,13 +6,13 @@ reports the original run ID, exit status and bounded output tail. A timeout
 means completion was not observed; it does not prove the command is still
 alive or succeeded. **Show terminal** opens that run's owned terminal.
 
-For terminals identified as Bash, multi-line commands use a one-line encoded
-submission to avoid a reproduced VS Code shell-integration failure with
-heredocs and pipes. Approval and reports show your original command. Other
-shells keep their original submission behavior. If the shell is not yet known,
-a multi-line command waits up to 500 ms for identification. If it remains
-unknown, Pair submits the original command. Bash trap/debug context and
-error line numbers can differ; normal shell state and exit status are kept.
+For Bash, Pair encodes multi-line commands and commands that start with a
+parenthesized subshell as a single line. This lets VS Code associate the
+output and exit status with the submitted command. Approval and reports show
+your original command. For these forms, Pair waits up to 500 ms to identify an
+unknown shell. It submits the original command if the shell remains unknown
+or is identified as another shell. Bash trap and debugger context and error
+line numbers can differ. Normal shell state and exit status are kept.
 
 A reply shows as an outlined bubble, labeled *waiting*, until the agent
 receives it: when its next `step` or `listen` returns with it. Then the bubble
@@ -73,6 +73,27 @@ Run **AI Pair: Set Up Agent** in the command palette, select your agent, then
 restart it so it reloads its MCP configuration. Open a project in VS Code,
 start the agent in that folder, and ask it to pair. See [Connect your
 agent](#connect-your-agent) for supported agents and configuration details.
+
+## Pair with a background worker
+
+Split agents are an experimental option for Codex and Claude Code. The
+main agent stays available for conversation and narration while a worker
+from the same provider makes visible edits in the editor.
+
+1.  In **Pair Settings**, turn on **Enable background worker**.
+2.  Set **Codex model** or **Claude model** for the provider you
+    use. The fields are saved separately. Leave a field blank to use the
+    exact model of the active chat.
+3.  Start Pair as usual and ask the main agent to delegate an edit. Open
+    **Worker** for the worker's original response text. The Codex App
+    Server runner updates it as the worker writes. **Worker activity in
+    Pair** controls which status and
+    progress updates appear in the conversation.
+
+Split agents are off by default. With the setting off, the panel shows Pair
+without a tab row. Turning it off during a session returns you to Pair and
+cancels the active worker. See the [background worker preview guide](docs/worker-preview.md)
+for a scratch-file walkthrough and current limits.
 
 ## Speech and audio
 
@@ -298,6 +319,7 @@ account. While you pair:
 |---|---|
 | say something to the agent | type in the reply box, press Enter. Typing pauses playback. In Settings, choose **Finish current action first** to wait for the action boundary; long commands can delay replies and Stop remains immediate. |
 | ask about some code | select it in the editor, then reply: the selection goes along (**x** leaves it out) |
+| inspect a file changed outside the editor | click its path in the notice to open the Git diff when available, or the file itself |
 | let it run a command | **Run once**, **Allow this command**, **Allow all for session**, or **Skip**; **Show terminal** reveals the command's terminal |
 | stop it right now | **Interrupt**, or just edit the code: any edit interrupts |
 | look around | scroll or switch files. Playback pauses until you **Resume**, which brings you back to the agent's cursor |
@@ -398,6 +420,11 @@ has it fetch the text and start the calibration with it.
 
 ## Settings
 
+In Pair Settings, hover a setting's name or control for help with **Enable
+background worker**, **Worker activity in Pair**, **Code display**, and
+**Speech context and delivery cues**. Moving keyboard focus to the control
+also shows its explanation.
+
 Commands use quiet terminals by default; **Show terminal** reveals one. If shell
 integration is unavailable, the terminal opens so you can see the command.
 Hidden terminals are not restored when the workspace is reopened.
@@ -411,6 +438,9 @@ and the reply box at the bottom. Your choice is saved across reloads.
 | `aiPair.showTerminalsAutomatically` | Show Pair command terminals automatically (default off); also available in Pair Settings. |
 | `aiPair.codePlayback` | `typing` (default), `lines`, or `blocks`; also in the code display dropdown and Settings. Applies to the next typing action. |
 | `aiPair.chatOrder` | `newestFirst` (default) or `oldestFirst`; also available in the Pair panel settings. |
+| `aiPair.worker.enabled` | Enable experimental split agents (default off). |
+| `aiPair.worker.codexModel`, `aiPair.worker.claudeModel` | Set each provider's worker model independently. Blank uses the active chat's model. |
+| `aiPair.worker.visibility` | Show worker milestones (default), all activity, or no worker activity in the Pair conversation. |
 | `aiPair.speed` | Overall playback speed, the follow scroll's glide included (the panel's speed menu offers 0.4x to 3.0x). |
 | `aiPair.readingSpeed` | Reading speed: divides the reading pauses after narration and grouped code (the panel's reading menu offers 0.4x to 3.0x). |
 | `aiPair.calibrationPassage` | The passage *AI Pair: Calibrate Reading Speed* times you on, as `{ "title": ..., "text": ..., "notice": ... }`; empty, the built-in one. The agent's `calibrate` tool writes it. |

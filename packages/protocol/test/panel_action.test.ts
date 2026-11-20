@@ -72,3 +72,16 @@ describe('cross-host panel actions', () => {
     }
   });
 });
+
+it('accepts worker cancellation and bounded visibility choices', () => {
+  expect(localPanelAction.safeParse({ type: 'cancelWorker' }).success).toBe(true);
+  expect(localPanelAction.safeParse({ type: 'workerVisibility', value: 'milestones' }).success).toBe(true);
+  expect(localPanelAction.safeParse({ type: 'workerVisibility', value: 'unknown' }).success).toBe(false);
+});
+
+it('validates worker settings at the panel boundary', () => {
+  expect(localPanelAction.safeParse({ type: 'workerEnabled', value: false }).success).toBe(true);
+  expect(localPanelAction.safeParse({ type: 'workerModel', provider: 'codex', value: '' }).success).toBe(true);
+  expect(localPanelAction.safeParse({ type: 'workerModel', provider: 'codex', value: 'x'.repeat(257) }).success).toBe(false);
+  expect(localPanelAction.safeParse({ type: 'workerEnabled', value: 'false' }).success).toBe(false);
+});

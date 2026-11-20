@@ -163,7 +163,7 @@ it('offers an optional sound for command approvals, disabled by default', () => 
   expect(cue.type).toBe('checkbox');
   expect(cue.checked).toBe(false);
   expect(cue.closest('label')?.textContent).toContain('Play a sound when command approval is needed');
-  expect(cue.closest('section')?.textContent).toContain('The approval sound uses your system default audio output.');
+  expect(cue.closest('details')?.textContent).toContain('The approval sound uses your system default audio output.');
 });
 
 it('offers one accessible narration toggle in the toolbar, disabled until settings load', () => {
@@ -299,4 +299,18 @@ it('offers an opt-in speech context selector and a capability explanation', () =
   expect(page.querySelector('[data-ui="speech-context"] option[value="off"]')?.textContent).toBe('Off');
   expect(page.querySelector('[data-ui="speech-context"] option[value="on"]')?.textContent).toBe('On');
   expect(page.querySelector('[data-ui="speech-context-capability"]')).not.toBeNull();
+});
+
+it.each([
+  ['worker-enabled', 'Let a worker make the edits while the main agent stays free to answer questions and narrate.'],
+  [
+    'worker-visibility',
+    'Milestones shows starts and results in chat. Everything adds progress and edit updates. Off stops new chat updates.',
+  ],
+  ['settings-code-playback', 'Typing shows each keystroke. Lines and Blocks reveal larger chunks with a pause to read.'],
+  ['speech-context', 'Shares recent narration with supported cloud models for smoother speech and cues like whispering.'],
+])('explains the impact of the %s setting', (control, explanation) => {
+  const html = panelHtml('vscode-resource:', 'panel.css', 'panel.js');
+  const page = new window.DOMParser().parseFromString(html, 'text/html');
+  expect(page.querySelector<HTMLElement>(`[data-ui="${control}"]`)?.dataset.tip).toBe(explanation);
 });

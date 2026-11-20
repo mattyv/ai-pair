@@ -303,6 +303,7 @@ const fakes = vi.hoisted(() => {
     readonly setNavigatorCommentary = vi.fn();
     readonly setTiming = vi.fn();
     readonly setConfirmCommands = vi.fn();
+    readonly revokeWorker = vi.fn();
     readonly pause = vi.fn();
     readonly resume = vi.fn();
     readonly userInterrupt = vi.fn();
@@ -318,6 +319,7 @@ const fakes = vi.hoisted(() => {
       readonly panel: unknown,
       readonly config: unknown,
       readonly narration: import('@ai-pair/core').NarrationPort,
+      readonly options?: { workerEnabled?: () => boolean },
     ) {
       made.controllers.push(this);
     }
@@ -334,6 +336,7 @@ const fakes = vi.hoisted(() => {
     constructor(
       readonly controller: unknown,
       readonly options: {
+        workerModel: (provider: 'codex' | 'claude') => string | undefined;
         workspaceFolders: () => string[];
         trace: (line: string) => void;
         failed: (error: unknown) => void;
@@ -375,6 +378,9 @@ const fakes = vi.hoisted(() => {
     readonly showSpeed = vi.fn();
     readonly showReadingSpeed = vi.fn();
     readonly showChatOrder = vi.fn();
+    readonly showWorkerVisibility = vi.fn();
+    readonly showWorkerEnabled = vi.fn();
+    readonly showWorkerModel = vi.fn();
     readonly showNavigatorCommentary = vi.fn();
     readonly showReplyBehavior = vi.fn();
     readonly showCommandApprovalSound = vi.fn();
@@ -415,6 +421,9 @@ const fakes = vi.hoisted(() => {
       readonly trace: (line: string) => void,
       readonly extensionUri: unknown,
       readonly wiring: {
+        workerEnabled: { get: () => boolean; set: (value: boolean) => void };
+        workerModel: { get: (provider: 'codex' | 'claude') => string; set: (provider: 'codex' | 'claude', value: string) => void };
+        workerVisibility: { get: () => 'milestones' | 'everything' | 'off'; set: (value: 'milestones' | 'everything' | 'off') => void };
         controller: () => unknown;
         calibration: () => unknown;
         starter: unknown;
@@ -952,6 +961,21 @@ describe('activate', () => {
     expect(h.panel.showSelection).toHaveBeenCalledWith('a ref');
   });
 
+  it('defaults background workers off and revokes an active grant when disabled', () => {
+    const { controller } = activated();
+    expect(controller.options?.workerEnabled?.()).toBe(false);
+
+    fakes.settings.set('worker.enabled', true);
+    changed('worker.enabled');
+    expect(controller.options?.workerEnabled?.()).toBe(true);
+    expect(controller.revokeWorker).not.toHaveBeenCalled();
+
+    fakes.settings.set('worker.enabled', false);
+    changed('worker.enabled');
+    expect(controller.options?.workerEnabled?.()).toBe(false);
+    expect(controller.revokeWorker).toHaveBeenCalledOnce();
+  });
+
   it('persists the request to require command approval in global settings', async () => {
     const h = activated();
     await h.panel.wiring.requireCommandApproval();
@@ -1099,6 +1123,46 @@ describe('activate', () => {
         },
         () => {
           expect(h.panel.showReplyBehavior).toHaveBeenLastCalledWith('interrupt');
+        },
+      ],
+      [
+        'worker.enabled',
+        'worker enabled',
+        () => {
+          h.panel.wiring.workerEnabled.set(true);
+        },
+        () => {
+          expect(h.panel.showWorkerEnabled).toHaveBeenLastCalledWith(false);
+        },
+      ],
+      [
+        'worker.codexModel',
+        'Codex worker model',
+        () => {
+          h.panel.wiring.workerModel.set('codex', 'model');
+        },
+        () => {
+          expect(h.panel.showWorkerModel).toHaveBeenLastCalledWith('codex', '');
+        },
+      ],
+      [
+        'worker.claudeModel',
+        'Claude worker model',
+        () => {
+          h.panel.wiring.workerModel.set('claude', 'model');
+        },
+        () => {
+          expect(h.panel.showWorkerModel).toHaveBeenLastCalledWith('claude', '');
+        },
+      ],
+      [
+        'worker.visibility',
+        'worker visibility',
+        () => {
+          h.panel.wiring.workerVisibility.set('everything');
+        },
+        () => {
+          expect(h.panel.showWorkerVisibility).toHaveBeenLastCalledWith('milestones');
         },
       ],
       [
@@ -3373,6 +3437,104 @@ it('applies pending and external context changes immediately and forwards sessio
   expect(speech.setNarrationSession).toHaveBeenCalledWith(9, true);
   changed('speech');
   expect(seen).toEqual([true, false, false]);
+});
+
+it('keeps worker models independent and ignores the legacy setting', () => {
+  const h = activated();
+  const bridge = last(fakes.made.bridges);
+  fakes.settings.set('worker.model', 'legacy');
+  expect(bridge.options.workerModel('codex')).toBeUndefined();
+  expect(bridge.options.workerModel('claude')).toBeUndefined();
+  fakes.settings.set('worker.codexModel', '  codex-model  ');
+  fakes.settings.set('worker.claudeModel', '  claude-model  ');
+  changed('worker.codexModel', 'worker.claudeModel');
+  expect(h.panel.showWorkerModel).toHaveBeenCalledWith('codex', '  codex-model  ');
+  expect(h.panel.showWorkerModel).toHaveBeenCalledWith('claude', '  claude-model  ');
+  expect(bridge.options.workerModel('codex')).toBe('codex-model');
+  expect(bridge.options.workerModel('claude')).toBe('claude-model');
+  fakes.settings.set('worker.codexModel', '   ');
+  expect(bridge.options.workerModel('codex')).toBeUndefined();
+  expect(bridge.options.workerModel('claude')).toBe('claude-model');
+  for (const value of ['everything', 'off', 'invalid']) {
+    fakes.settings.set('worker.visibility', value);
+    changed('worker.visibility');
+    expect(h.panel.showWorkerVisibility).toHaveBeenLastCalledWith(value === 'invalid' ? 'milestones' : value);
+  }
+});
+
+it('applies worker settings immediately and writes them globally', () => {
+  const h = activated();
+  const bridge = last(fakes.made.bridges);
+  h.panel.wiring.workerEnabled.set(true);
+  expect(h.panel.wiring.workerEnabled.get()).toBe(true);
+  expect(h.controller.options?.workerEnabled?.()).toBe(true);
+  h.panel.wiring.workerModel.set('codex', ' codex-model ');
+  h.panel.wiring.workerModel.set('claude', ' claude-model ');
+  expect(h.panel.wiring.workerModel.get('codex')).toBe(' codex-model ');
+  expect(h.panel.wiring.workerModel.get('claude')).toBe(' claude-model ');
+  expect(bridge.options.workerModel('codex')).toBe('codex-model');
+  expect(bridge.options.workerModel('claude')).toBe('claude-model');
+  h.panel.wiring.workerEnabled.set(false);
+  expect(h.controller.options?.workerEnabled?.()).toBe(false);
+  expect(h.controller.revokeWorker).toHaveBeenCalled();
+  expect(fakes.updated).toContainEqual(['worker.enabled', false, 1]);
+  expect(fakes.updated).toContainEqual(['worker.codexModel', ' codex-model ', 1]);
+  expect(fakes.updated).toContainEqual(['worker.claudeModel', ' claude-model ', 1]);
+});
+
+it('keeps model writes independent while one provider save fails', async () => {
+  const gate = Promise.withResolvers<void>();
+  fakes.updateGates.set('worker.codexModel', gate.promise);
+  const h = activated();
+  const bridge = last(fakes.made.bridges);
+  h.panel.wiring.workerModel.set('codex', 'codex-pending');
+  h.panel.wiring.workerModel.set('claude', 'claude-pending');
+  expect(bridge.options.workerModel('codex')).toBe('codex-pending');
+  expect(bridge.options.workerModel('claude')).toBe('claude-pending');
+  gate.reject(new Error('save failed'));
+  await settle();
+  expect(bridge.options.workerModel('codex')).toBeUndefined();
+  expect(bridge.options.workerModel('claude')).toBe('claude-pending');
+  expect(h.panel.showWorkerModel).toHaveBeenCalledWith('codex', '');
+});
+
+it('keeps the requested worker setting authoritative while a write is pending', async () => {
+  const gate = Promise.withResolvers<void>();
+  fakes.settings.set('worker.enabled', true);
+  fakes.updateGates.set('worker.enabled', gate.promise);
+  const h = activated();
+  h.panel.wiring.workerEnabled.set(false);
+  changed('worker.enabled');
+  expect(h.controller.options?.workerEnabled?.()).toBe(false);
+  expect(h.panel.showWorkerEnabled).toHaveBeenLastCalledWith(false);
+  expect(h.controller.revokeWorker).toHaveBeenCalled();
+  gate.resolve();
+  await settle();
+});
+
+it('revokes a grant when a pending enable fails and restores disabled authority', async () => {
+  const gate = Promise.withResolvers<void>();
+  fakes.updateGates.set('worker.enabled', gate.promise);
+  const h = activated();
+  h.panel.wiring.workerEnabled.set(true);
+  expect(h.controller.options?.workerEnabled?.()).toBe(true);
+  expect(h.controller.revokeWorker).not.toHaveBeenCalled();
+  gate.reject(new Error('save failed'));
+  await settle();
+  expect(h.controller.options?.workerEnabled?.()).toBe(false);
+  expect(h.controller.revokeWorker).toHaveBeenCalledOnce();
+  expect(h.panel.showWorkerEnabled).toHaveBeenLastCalledWith(false);
+});
+
+it('restores enabled authority after a failed disable', async () => {
+  fakes.settings.set('worker.enabled', true);
+  fakes.updateGates.set('worker.enabled', Promise.reject(new Error('save failed')));
+  const h = activated();
+  h.panel.wiring.workerEnabled.set(false);
+  await settle();
+  expect(h.panel.wiring.workerEnabled.get()).toBe(true);
+  expect(h.panel.showWorkerEnabled).toHaveBeenLastCalledWith(true);
+  expect(h.controller.revokeWorker).toHaveBeenCalledOnce();
 });
 
 it('handles context disposal rejection and reports it to deactivate', async () => {

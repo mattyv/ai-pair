@@ -12,6 +12,38 @@ built and connected is in [ARCHITECTURE.md](ARCHITECTURE.md).
 Status: describes 0.2.0. Numbers marked *tunable* are initial guesses to be
 adjusted by feel.
 
+## Background worker preview
+
+When the programmer enables delegation, the main connection can request a
+private grant with `worker_grant`. Its result identifies the editor window
+and carries the capability the worker needs for `worker_read`, `worker_step`,
+`worker_progress`, `worker_notice`, `worker_output`, and `worker_done`.
+Workers select that window explicitly. The bridge authenticates the grant
+without transferring ownership of the Pair session.
+
+A grant includes the saved worker model for the active chat provider when
+that preference is set. An omitted model tells the main agent to use its
+exact chat model. The provider hint only selects the preference.
+
+`worker_step` performs one visible batch and returns its own outcome to the
+worker. The main connection can speak with `worker_say` independently of
+typing. `worker_done` posts the completion to the main report stream. A
+question or blocker from `worker_notice` wakes a pending main `listen`.
+`worker_output` takes the grant's port and capability and one visible response
+(up to 16,384 UTF-16 code units). The controller checks the live grant,
+redacts the capability if present, and records the text under the current
+worker ID for panel replay. When the tool includes a nonempty `message` key
+(up to 128 characters), send the full text so far each time. Pair replaces
+that message in place and keeps only its latest text for replay. Use
+`final: true` with a keyed message when all its text has arrived. Until
+then, Pair withholds an unfinished suffix that could be part of the grant.
+Output appears only in the Worker tab. It does not wake `listen`, play
+speech, or enter the main chat. This uses editor-relay wire version 9 and
+Local Audio panel protocol 12.
+The worker activity setting controls whether routine progress appears in
+Pair chat. The main connection can call `worker_status` without draining a
+report. Worker responses do not consume or restore main-agent reports.
+
 ## Goals
 
 -   The programmer can follow everything the agent does, at a pace they can
@@ -396,7 +428,7 @@ a clickable reference instead.
 
 Runs a shell command in an integrated terminal in the agent's working directory.
 The Pair panel shows the command and result; the programmer can reveal its
-terminal. New editor-relay reports use wire version 6 and carry immutable
+terminal. Since editor-relay wire version 6, reports have carried an immutable
 session origin. Canceled reports from another session are rejected before any
 facts are restored. For commands whose outcome the programmer should witness: tests,
 builds, starting the app, a request to it. Purely mechanical

@@ -35,7 +35,8 @@ once the fixes were in.
 
 The TLA+ tools are one jar, `tla2tools.jar`, from the
 [tlaplus/tlaplus releases](https://github.com/tlaplus/tlaplus/releases). CI and
-local runs use 1.8.0, published 2026-10-06 (GitHub marks it a prerelease).
+local runs use 1.8.0 (GitHub marks it a prerelease). Its current replacement
+asset was published on 2026-11-19; CI pins its SHA-256 and asset ID.
 Check a download against the SHA-256 GitHub lists for it:
 
 ```sh
@@ -62,6 +63,15 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | Config | Bounds | Result | Distinct states |
 |---|---|---|---|
 | `AttentionCache.cfg` | two settings changes, one pending completion and cancellation | holds | 52 |
+| `BackgroundWorker.cfg` | proposal, two providers, two session generations, one worker per generation | holds | 180 |
+| `WorkerAttachment.cfg` | proposal, two owner attachments, one job and one grant per attachment | holds | 45 |
+| `WorkerDriver.cfg` | proposal, two worker tasks and three physical batch identities | holds | 68 |
+| `WorkerTabs.cfg` | enabled and disabled, Pair and Worker selections | holds | 3 |
+| `WorkerRunner.cfg` | one grant, preflight, child and turn; retirement failure and retry | holds | 34 |
+| `WorkerSnapshots.cfg` | two grants, two item keys, three text classes and three retained items | holds | 7,949 |
+| `WorkerOutput.cfg` | two grants, two text atoms, two history events and over-limit input | holds | 173 |
+| `WorkerNotice.cfg` | two worker generations, one pending notice, ordinary progress separate | holds | 72 |
+| `WorkerProvider.cfg` | two attachment identities, two providers and an unknown provider | holds | 45 |
 | `Serialize.cfg` | `NumCalls = 2` calls, each empty or not, the session ending, an interrupt, and the socket closing at any point | holds | 3,646 |
 | `Wire.cfg` | `NumSockets = 2` sockets, `NumCalls = 2` calls | holds | 43,426 |
 | `StructuralTyping.cfg` | both operations, closed and opaque field categories, selection and one or two closes | holds | 288 |
@@ -151,6 +161,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `ReadingGesture.cfg` | short and long gestures across two countdown IDs | holds | 170 |
 | `ListeningHint.cfg` | status and session context | holds | 64 |
 | `SettingsAccess.cfg` | idle and active toolbar | holds | 4 |
+| `SettingsSections.cfg` | four sections, two providers, valid and invalid saved state | holds | 32 |
 | `Terminals.cfg` | `NumTerminals = 2` terminals, `MaxRuns = 3`, 2 directories | holds | 3,361 |
 | `QuietTerminals.cfg` | quiet default, fallback and guarded cleanup | holds | 9 |
 | `QuietTerminals_Visible.cfg` | automatic show, fallback and guarded cleanup | holds | 11 |
@@ -176,7 +187,8 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `CommandDelivery.cfg` | queue bounded to two completions | holds | 84 |
 | `ShfmtDownload.cfg` | two sources, three outcomes each | holds | 10 |
 | `CommandTracking.cfg` | one execution, two session identities, late report and replay | holds | 18 |
-| `CommandEncoding.cfg` | two shell types, six abstract character classes | holds | 24 |
+| `CommandEncoding.cfg` | three shell identities, three syntax classes, NUL present or absent, six character classes | holds | 216 |
+| `ShellIdentity.cfg` | three shell identities and syntax classes, NUL, cancellation and closure | holds | 102 |
 | `IntegrationFixture.cfg` | workspace, packaged and companion roots | holds | 15 |
 
 | `CiScheduler.cfg` | three configs, two worker slots | holds | 134 |
@@ -186,6 +198,96 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 
 Each violation TLC found was checked against the code step by step before it was
 reported. The traces are in the issues.
+
+## Background worker proposal (#134)
+
+`BackgroundWorker.tla` models one worker per session across two generations.
+Each session starts with delegation off and can opt in before starting a
+worker. The worker uses the active main agent's provider. A current result
+survives until delivery, arrives once, and wakes a pending `listen`. Weak
+fairness applies to delivering a queued result. The model assumes each worker
+completes once and does not model live setting changes, process retirement,
+transport authentication, or draft playback.
+
+| Property | Mutation | Planned implementation test |
+|---|---|---|
+| `TypeOK` | An initial delivery count of `3` is out of bounds | Nothing yet |
+| `OptIn` | `BypassOptIn = TRUE` allows a worker in a disabled session | Disabled sessions refuse delegation |
+| `SameProvider` | `MatchProvider = FALSE` assigns Codex to a Claude session | Both providers delegate within the active provider |
+| `CurrentQueue` | `CheckGeneration = FALSE` queues a late result for a replaced session | Stale results do not wake the replacement session |
+| `Conservation` | `DropCompletion = TRUE` drops a current completion | Completion survives until the next listen |
+| `AtMostOnce` | `ConsumeResult = FALSE` delivers the result twice | The next listen cannot replay a result |
+| `Wake` | `WakeListen = FALSE` leaves a pending listen waiting indefinitely | Completion wakes an already pending listen |
+
+There are no implementation tests for this proposal yet. A live spike showed
+that a Codex subagent with the Pair tool received `no_session` while the main
+agent was listening. A separate synthetic Codex CLI probe returned lifecycle
+and reply events. It did not produce a command event.
+
+`WorkerAttachment.tla` models publication through a scoped grant. It treats
+tokens as unforgeable and assumes weak fairness of handling a valid attempt
+while its owner stays attached. It tracks admission counts. The result queue
+itself, replay acknowledgements, and edit authority are separate concerns.
+
+| Property | Mutation | Planned implementation test |
+|---|---|---|
+| `TypeOK` | Initialize owner to `3`, outside the two attachments | Nothing yet |
+| `OptIn` | `AllowDisabled = TRUE` issues a grant before opt-in | Disabled sessions refuse grants |
+| `Revoked` | `RevokeGrant = FALSE` keeps the live grant after disconnect | Reattachment invalidates the previous grant |
+| `CorrectGrant` | `CheckToken = FALSE`, with consumption state isolated, admits a mismatched grant | A mismatched job or token cannot publish |
+| `AcceptedMatches` | `CheckToken = FALSE` permits a wrong token or job | Wrong job and wrong token are rejected |
+| `AtMostOnce` | `ConsumeGrant = FALSE` admits a second publication | Retrying a publication queues one result |
+| `OwnerStable` | `KeepOwner = FALSE` transfers ownership on publication | Publishing leaves the main agent in control |
+| `SubmissionHandled` | `HandleSubmission = FALSE` leaves a valid attempt pending | A valid submission reaches the report queue |
+
+`WorkerDriver.tla` models the worker driving visible edits while the main
+agent retains the session. Disabling delegation or interrupting revokes
+worker authority immediately. A batch keeps the playback slot until its own
+retirement arrives. Retirement is weakly fair. The small model assumes
+immediate admission to playback and leaves queued batches, narration,
+command approval, and process retirement to later models and tests.
+
+| Property | Mutation | Planned implementation test |
+|---|---|---|
+| `TypeOK` | Start with `issued` outside the bound | Nothing yet |
+| `Exclusive` | `GuardExclusive = FALSE` allows overlapping playing batches | Only one edit batch can play |
+| `CurrentOnly` | `GuardCurrent = FALSE` admits work without current authority | Stale worker batches cannot start |
+| `DrainBeforeGrant` | `GuardDrain = FALSE` grants before retirement, checking this invariant in isolation | A replacement waits for the interrupted batch to retire |
+| `MainRespectsGrant` | `GuardAuthority = FALSE` allows main edits during a worker grant | The main agent can talk during a grant and cannot start edits |
+| `MatchingRetirement` | `GuardRetire = FALSE` accepts the wrong batch identity | A late completion cannot release a newer batch |
+| `Retirement` | Remove weak fairness of retirement | The slot is released when its interrupted batch settles |
+
+`WorkerNotice.tla` checks the latest pending question or blocker. The newest
+notice replaces the previous one. A current notice wakes a pending main
+`listen` under weak delivery fairness. A session replacement drops stale
+notices. Routine progress stays in the Worker view.
+
+| Property | Mutation | Implementation test |
+|---|---|---|
+| `TypeOK` | Start with an invalid worker generation | Nothing yet |
+| `CurrentNotice` | Allow a stale worker to publish a notice | The previous grant cannot publish into a successor |
+| `NoProgressWake` | Make progress return the listen call | Routine progress stays in the Worker activity lane |
+| `Wake` | Disable notice delivery | A question wakes the owner while a worker batch plays |
+| `Cleared` | Keep the notice pending after delivery | A previously delivered notice is not delivered again |
+
+`WorkerProvider.tla` models provider routing as a hint bound to the successful
+owner attachment. Known client identity takes precedence over a caller's hint;
+an unknown client may provide an explicit hint, or use no model override. The
+owner check is independent of that hint. Disconnect clears the binding, and a
+resumed session starts with its new attachment's evidence. The model checks two
+attachment identities, Codex, Claude and no provider. TLC generated 217 states
+and found 45 distinct states at depth 3. Weak fairness of each grant action is
+assumed; client identity authenticity, real transport and model availability
+are outside the model.
+
+| Property | Mutation | Implementation test |
+|---|---|---|
+| `TypeOK` | Initialize the owner outside the attachment set | Nothing yet |
+| `KnownClientWins` | `PreferClient = FALSE` | `server.test.ts`: known client takes precedence over the hint |
+| `HintForUnknown` | Ignore the hint for an unknown client | `server.test.ts`: unknown client uses the hint |
+| `DetachedHasNoProvider` | `ClearOnDisconnect = FALSE` | `bridge.test.ts`: the next owner without a provider receives no override |
+| `NoForeignGrant` | `AllowForeignGrant = TRUE` | `bridge.test.ts`: non-owner grant is refused |
+| `GrantProgress` | Disable the grant action | `bridge.test.ts`: the current owner receives a grant |
 
 ## Specs and the code they model
 
@@ -1608,13 +1710,16 @@ Weak fairness of `Report` establishes progress once news exists.
 
 ### `ShellIdentity`: bounded shell identification
 
-`ShellIdentity.tla` models one multiline submission with a known, delayed or
-unavailable shell identity. An unknown identity waits for a change or a bounded
-timeout; cancellation and terminal closure stop submission. The model abstracts
+`ShellIdentity.tla` models one plain, multiline, or leading-subshell submission
+with a known, delayed or unavailable shell identity, with or without a NUL.
+A leading subshell means the first non-whitespace character is `(`. For either
+special syntax, an unknown identity waits for a change or a bounded timeout;
+cancellation and terminal closure stop submission. The model abstracts
 the timer as a fair expiration and does not promise that identity will arrive.
-TLC checked 26 generated states, 18 distinct states and depth 4. Mutations that
-skip waiting, wrap every shell, submit after cancellation, add an invalid shell,
-or remove expiration fairness violate `WaitBeforeUnknown`, `WrapOnlyBash`,
+TLC checked 146 generated states, 102 distinct states and depth 4. Mutations
+that skip the multiline or subshell wait each violate `WaitBeforeUnknown`.
+Mutations that wrap every shell, submit after cancellation, add an invalid
+shell, or remove expiration fairness violate `WrapOnlyBash`,
 `NoSubmitAfterStop`, `TypeOK`, and `EventuallySettled`, respectively.
 
 | Property | Test |
@@ -1625,9 +1730,12 @@ or remove expiration fairness violate `WaitBeforeUnknown`, `WrapOnlyBash`,
 
 ### `CommandEncoding`: scoped Bash submission
 
-This is an abstract contract for one character class and shell choice, not a
-model of Bash parsing or the encoding algorithm. It checks the intended scope,
-payload and approval invariants; the real Bash comparison tests exercise quote,
+This is an abstract contract for one character class, shell identity, syntax
+class and NUL presence, not a model of Bash parsing or the encoding algorithm.
+It checks wrapping of multiline input and commands whose first non-whitespace
+character is `(`; plain commands and NUL-containing input are not wrapped.
+TLC checked 216 generated and distinct states at depth 2. It checks the scope,
+payload and approval invariants. The real Bash comparison tests exercise quote,
 backslash, newline, Unicode, heredoc and exit behavior. The native VS Code
 integration test checks capture and an observed exit for Bash. Bash `eval` may
 change trap, stack and line-number observability. Unknown shells and input with
@@ -1641,14 +1749,15 @@ a NUL are left unchanged. Weak fairness of `Submit` gives progress.
 |---|---|
 | `ExactEncode = FALSE` | `PayloadPreserved` (with `TypeOK` omitted), and `TypeOK` |
 | `ScopeBash = FALSE` | `ScopeBashOnly` |
+| `GuardMultiline = FALSE` or `GuardSubshell = FALSE` | `RequiredWrapping` |
 | Mark the approved command as changed | `ApprovalPreserved` |
 | Remove submit fairness | `EventuallySubmitted` |
 
 | Invariant or property | Test |
 |---|---|
-| `TypeOK`, `PayloadPreserved`, `ScopeBashOnly` | `terminal.test.ts`: encodes Bash multiline input on one physical line and leaves unsupported shells unchanged; `terminal_encoding.e2e.test.ts`: preserves command output and exit |
+| `TypeOK`, `PayloadPreserved`, `ScopeBashOnly`, `RequiredWrapping` | `terminal.test.ts`: encodes Bash multiline and leading-subshell input on one physical line, preserving unsupported shells and NUL input; `terminal_encoding.e2e.test.ts`: preserves command output and exit |
 | `ApprovalPreserved` | `integration_command_delivery.ts`: Bash heredoc and control-character commands retain their original text in the report |
-| `EventuallySubmitted` | `terminal_smoke_integration.ts`: native Bash heredoc captures output and observed exit |
+| `EventuallySubmitted` | `terminal_smoke_integration.ts`: native Bash heredocs and leading subshells capture output and observed exit |
 
 ### `CommandDelivery`: prompt command results
 
@@ -2396,6 +2505,31 @@ in idle and active panels. Mutating the hint to ignore context violates
 | `TypeOK` | The TypeScript compiler checks types |
 | `HintMatchesStatus` | `webview/panel.test.ts`: offers a focusable explanation only while the active agent is listening |
 | `SettingsAvailable` | `panel_html.test.ts`: places one icon-only Settings control in the toolbar before End; `visual/chat_order.spec.ts`: the Settings gear remains available while idle, calibrating, and active |
+
+### `SettingsSections`: collapsible Settings
+
+The bounded model has four representative sections, two of them provider
+panels. Conversation and Playback start open. Each summary can be toggled;
+restoration accepts every subset and falls back to those defaults for invalid
+state. Selecting a provider opens its disclosure and displays only its panel.
+The footer and all summaries remain available. The model abstracts actual DOM
+rendering and field values; its representative sections are not an inventory of
+the shipped panel. TLC explored 737 generated and 32 distinct states at depth
+3. In disposable copies, invalid initial `opened` state violates `TypeOK`;
+disabling each of `GuardDefaults`, `GuardSummaries`, `GuardFooter`,
+`GuardRestore`, `GuardProvider`, and `GuardVisibility` violates its respective
+invariant below. The browser regression test for #130 is being implemented and
+must exercise the actual native details elements and webview-state API.
+
+| Invariant | Regression test mapping |
+|---|---|
+| `TypeOK` | TypeScript checks the disclosure state; the browser test checks malformed saved state. |
+| `DefaultOpen` | Settings browser test: Conversation and Playback alone open initially. |
+| `AllSummariesReachable` | Settings browser test: every summary remains reachable after toggles. |
+| `FooterVisible` | Settings browser test: footer remains visible with sections collapsed and expanded. |
+| `RestoresState` | Settings browser test: reload restores valid state and invalid state falls back to defaults. |
+| `SelectedProviderOnly` | Settings browser test: only the selected provider panel is visible. |
+| `SelectionOpens` | Settings browser test: selecting a provider opens its disclosure. |
 
 ### `TerminalPanel`: preference and explicit terminal reveal
 
@@ -4345,3 +4479,125 @@ Each names the test that proves the code obeys it:
 | `NoPrepareWhilePaused` | `speech_service.test.ts`: NoPrepareWhilePaused: prepares nothing while paused, and prepares once resumed |
 | `LineProgress` | `speech_service.test.ts`: a prepared request that never settles frees the slot at the deadline, and fails a line that took it over |
 | `AheadUsed` | `speech_service.test.ts`: AheadUsed cases; `player.test.ts`, `controller.test.ts`: Hint; `remote_narration.test.ts`, `companion_narration.test.ts`: Hint, Cancel; `integration_cloud_service_paths.ts`: SpeechLookahead: the gap between cloud lines (0 ms with look-ahead, 304 ms without) |
+
+## Worker activity projection (#134)
+
+`WorkerActivity.tla` models worker events retained in the Worker view and
+filtered into Pair, with preference changes, a current-owner snapshot after reload,
+and command confirmation visibility.
+It bounds two IDs and three events, and assumes an ordered event stream. TLC
+checked 222,435 distinct states with no fairness assumptions or liveness claim.
+It does not model log truncation, rendering, transport, or physical worker retirement.
+The Worker view renders groups and their event rows in the Pair chat order;
+`Worker activity follows the Pair chat order, including live changes` checks
+this presentation choice without changing the modeled event stream.
+
+| Property | Mutation | Implementation test |
+|---|---|---|
+| `TypeOK` | Initialize an invalid visibility; TLC rejects the initial state | `worker controls call the controller and validate visibility` |
+| `InlineRecorded` | Suppress the history append; TLC finds a counterexample | `filters inline activity and never restores a live worker from replay` |
+| `ActiveRecorded` | Initialize an active worker without a start; TLC rejects the initial state | `groups activity by worker, shows running state, and requests cancellation` |
+| `ActiveOwned` | Restore a worker without owner evidence; TLC rejects the snapshot | `restores a live worker from a current snapshot, not replay alone` |
+| `ConfirmVisible` | Leave Worker selected on confirmation; TLC rejects the transition | `reveals Pair when a command needs confirmation while Worker is selected` |
+
+### `WorkerTabs`: tab visibility and disable
+
+The row is hidden by default and whenever split-agent mode is disabled. The
+Worker tab can be selected only while enabled; disabling selects Pair. TLC
+explored 11 generated and 3 distinct states at depth 3. Separate mutations of
+`GuardDefault`, `GuardVisible`, `GuardSelect`, and `GuardDisable` violate
+`DefaultOff`, `RowMatchesSetting`, `WorkerOnlyEnabled`, and
+`WorkerOnlyEnabled`, respectively. An invalid initial tab violates `TypeOK`.
+The model abstracts DOM rendering and worker authority.
+
+| Invariant | Planned browser regression |
+|---|---|
+| `TypeOK` | TypeScript checks setting and tab values. |
+| `DefaultOff` | Fresh panel has no tab row before split-agent mode is enabled. |
+| `RowMatchesSetting` | Enabling and disabling shows and hides the tab row. |
+| `WorkerOnlyEnabled` | Disabling while Worker is selected reveals Pair and keeps Worker unavailable. |
+
+### `WorkerOutput`: raw worker messages
+
+This bounded model admits one raw text message only for a matching live grant
+and a message within the size limit. Two distinct, non-reused grant identities
+expose late submission after revocation or restart; two abstract text atoms and
+two history events expose replay ordering. An over-limit atom stands for every
+invalid length. Worker view is the ordered output-only projection of history;
+Pair chat, main listen and status receive lifecycle events but no raw output.
+Replay reconstructs that projection without restoring editing authority. It
+does not model transport loss, actual byte length, visual rendering, or the
+contents of lifecycle events. TLC explored 575 generated and 173 distinct
+states at depth 7. The bound is enforced in the actions, not a TLC constraint.
+
+Mutations of `GuardCurrent` and `GuardBound` each violate `OnlyLiveBounded`;
+mutations of `GuardPair`, `GuardListen`, and `GuardStatus` independently
+violate `NoRawMain`; `GuardProjection` and `GuardOrder` each violate
+`WorkerOutputOrder`; and `GuardReplay` violates `ReplayNoAuthority`. An
+invalid initial active grant violates `TypeOK`.
+
+| Invariant | Regression mapping |
+|---|---|
+| `TypeOK` | Protocol schema and TypeScript validate event shapes and bounded text. |
+| `OnlyLiveBounded` | Controller and bridge tests reject oversized output and stale grants, including after restart. |
+| `WorkerOutputOrder` | Worker page tests render only raw messages and preserve order through replay. |
+| `NoRawMain` | Controller and page tests keep raw messages out of main listen, Pair chat and status synthesis. |
+| `ReplayNoAuthority` | Page and controller tests reject stale output after replay or restart and do not restore a live grant. |
+
+### `WorkerSnapshots`: cumulative worker output
+
+Two distinct worker grants, two keyed item identities, anonymous messages,
+three abstract input text classes, and up to three retained items cover
+replacement, first-insertion ordering, replay, and cross-worker key reuse.
+Anonymous output appends; a keyed snapshot replaces the prior text for that
+worker and key. The `final` flag requires a key. A partial grant-token suffix
+may be withheld while streaming; a final snapshot restores an ordinary suffix
+while complete token occurrences are redacted. The panel receives the key and
+sanitized text, and raw output is excluded from Pair, main listen, and voice.
+The model treats text as abstract atoms: it does not verify literal substring
+matching, Unicode lengths, cumulative-prefix behavior of the producer, actual
+transport loss, or DOM rendering. Those need protocol, controller and browser
+regression tests. TLC explored 48,019 generated and 7,949 distinct states at
+depth 8; actions bound retained items rather than using a TLC constraint.
+
+`GuardCurrent` and `GuardBounds` mutations violate `OnlyLiveBounded`;
+`GuardCoalesce`, `GuardScope`, and `GuardRedact` violate `CoalescedInOrder`;
+`GuardReplay` violates `VisibleLatest`; and `GuardPair`, `GuardListen`, and
+`GuardVoice` independently violate `NoRawMain`. A bad initial active grant
+violates `TypeOK`.
+
+| Invariant | Regression mapping |
+|---|---|
+| `TypeOK` | Protocol schemas and TypeScript check optional message ID and final flag. |
+| `OnlyLiveBounded` | Bridge tests reject stale grants, invalid or oversized keys and text, and final without a key. |
+| `CoalescedInOrder` | Controller tests cover cumulative snapshots, anonymous append, cross-worker key reuse and token redaction. |
+| `VisibleLatest` | Worker browser tests check in-place replacement, insertion order and retained replay. |
+| `NoRawMain` | Controller and browser tests keep raw worker text out of Pair, listen and voice. |
+
+### `WorkerRunner`: native child retirement
+
+The bounded model has one grant, preflight, native app-server child and turn.
+Launch requires an accepted preflight while the grant and ownership remain
+live; a rejected preflight cannot launch. Output and turn completion precede
+physical child closure. A failed retirement reports a blocker and retains
+ownership; `worker_done` may release ownership only after confirmed closure.
+Grant revocation and held physical ownership are separate. It abstracts
+message contents, process signals and OS-level close evidence. TLC explored
+44 generated and 34 distinct states at depth 9. Weak fairness of `Close`
+assumes a completed child can eventually be physically retired, even after a
+failed attempt; it is not a guarantee that an uncooperative OS process exits.
+
+Mutating `GuardPreflight`, `GuardRetired`, or `GuardHold` independently violates
+`LaunchAcknowledged`, `ReleaseAfterClose`, or `FailedRetainsOwner`. Removing
+the physical-child guard on output violates `OutputNeedsChild`; removing close
+fairness violates `RetirementProgress`. An invalid initial preflight violates
+`TypeOK`.
+
+| Invariant or property | Regression mapping |
+|---|---|
+| `TypeOK` | TypeScript and wire schemas check lifecycle values. |
+| `LaunchAcknowledged` | Relay runner tests reject missing, stale, and failed preflight before spawn. |
+| `ReleaseAfterClose` | Runner tests hold `worker_done` until the child close event. |
+| `FailedRetainsOwner` | Runner tests report a blocker and keep ownership on close timeout or failed termination. |
+| `OutputNeedsChild` | Runner tests forward output only from the spawned child. |
+| `RetirementProgress` | Runner tests settle after a confirmed physical close, including after a retry. |

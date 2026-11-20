@@ -7,6 +7,9 @@ import type { CodePlayback, Controller, PanelEvent, PanelPort, Ref, SharedSelect
 import {
   AUDIO_DIAGNOSTICS_SCHEMA,
   NAVIGATOR_COMMENTARY_SCHEMA,
+  WORKER_MODEL_LIMIT,
+  WORKER_PROVIDER_SCHEMA,
+  type WorkerProvider,
   type NavigatorCommentary,
   speechAccent,
   speechDecodeFromPage,
@@ -19,7 +22,7 @@ import {
 } from '@ai-pair/protocol';
 import { panelHtml, SPEEDS } from './panel_html';
 import { timings } from './timings';
-import type { ChatOrder, FromPanel, SpeechAction, SpeechEvent, SpeechState, ToPanel } from './panel_messages';
+import type { ChatOrder, FromPanel, SpeechAction, SpeechEvent, SpeechState, ToPanel, WorkerVisibility } from './panel_messages';
 import { ELEVENLABS_SPEEDS, SPEECH_SPEEDS, SPEECH_VOICES, type SpeechSettings, type OpenRouterAudioDecodeLease } from './speech_types';
 import { SPEECH_LISTENING_RATES } from './speech_tempo';
 import type { CatalogView } from './speech_catalog';
@@ -81,6 +84,9 @@ export interface PanelWiring {
   /** Copies the sanitized diagnostics snapshot on explicit request. */
   copyDiagnostics: () => Promise<void>;
   requireCommandApproval: () => Promise<void>;
+  workerEnabled?: { get: () => boolean; set: (value: boolean) => void };
+  workerModel?: { get: (provider: WorkerProvider) => string; set: (provider: WorkerProvider, value: string) => void };
+  workerVisibility?: { get: () => WorkerVisibility; set: (value: WorkerVisibility) => void };
   speech: {
     sessionCost?: Pick<SessionSpeechCost, 'start' | 'restore' | 'end' | 'view'>;
     narrationSession?: (id: number, ongoing: boolean) => void;
@@ -329,6 +335,21 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     this.send({ type: 'navigatorCommentary', value });
   }
 
+  /** Shows whether worker delegation is enabled. */
+  showWorkerEnabled(value: boolean): void {
+    this.send({ type: 'workerEnabled', value });
+  }
+
+  /** Shows the configured worker model. */
+  showWorkerModel(provider: WorkerProvider, value: string): void {
+    this.send({ type: 'workerModel', provider, value });
+  }
+
+  /** Shows the saved worker activity visibility. */
+  showWorkerVisibility(value: WorkerVisibility): void {
+    this.send({ type: 'workerVisibility', value });
+  }
+
   /** Shows the saved history order, including changes made in VS Code settings. */
   showChatOrder(value: ChatOrder): void {
     this.send({ type: 'chatOrder', value });
@@ -379,7 +400,13 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       }
       if (this.remote === undefined) this.costSession(event);
     }
-    this.log.push(event);
+    // specs/WorkerSnapshots.tla, Snapshot: retain the latest value in its original history position.
+    const existing =
+      event.type === 'workerOutput' && event.message !== undefined
+        ? this.log.findIndex((prior) => prior.type === 'workerOutput' && prior.id === event.id && prior.message === event.message)
+        : -1;
+    if (existing >= 0) this.log[existing] = event;
+    else this.log.push(event);
     if (this.log.length > MAX_LOG) {
       const cut = this.log.splice(0, this.log.length - MAX_LOG);
       // A view replays its session state from the last `session` event: keep it, or a view created
@@ -899,6 +926,10 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         controller().resume('reply');
         this.showNavigatorCommentary(this.navigatorCommentary.get());
         this.showChatOrder(this.chatOrder.get());
+        this.showWorkerEnabled(this.wiring.workerEnabled?.get() ?? false);
+        this.showWorkerModel('codex', this.wiring.workerModel?.get('codex') ?? '');
+        this.showWorkerModel('claude', this.wiring.workerModel?.get('claude') ?? '');
+        this.showWorkerVisibility(this.wiring.workerVisibility?.get() ?? 'milestones');
         this.showReplyBehavior(this.replyBehavior.get());
         this.showCommandApprovalSound(this.commandApprovalSound.get());
         this.showCommandApprovals();
@@ -909,6 +940,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
             ? { costSessionGeneration: this.workspaceCostGeneration, costSessionActive: this.workspaceCostActive }
             : {}),
         });
+        // specs/WorkerActivity.tla, Snapshot: the owner, not history, establishes a live worker.
+        const workerId = controller().activeWorkerId();
+        this.send(workerId === undefined ? { type: 'workerActive' } : { type: 'workerActive', id: workerId });
         this.showTerminalPreference(this.terminalSettings.get());
         this.showSpeed(this.speed.get());
         this.showReadingSpeed(this.readingSpeed.get());
@@ -931,6 +965,26 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         if (parsed.success) this.navigatorCommentary.set(parsed.data);
         return;
       }
+      case 'cancelWorker':
+        controller().revokeWorker();
+        return;
+      case 'workerEnabled':
+        if (typeof message.value === 'boolean') this.wiring.workerEnabled?.set(message.value);
+        return;
+      case 'workerModel':
+        if (
+          WORKER_PROVIDER_SCHEMA.safeParse(message.provider).success &&
+          typeof message.value === 'string' &&
+          message.value.length <= WORKER_MODEL_LIMIT
+        ) {
+          this.wiring.workerModel?.set(message.provider, message.value);
+        }
+        return;
+      case 'workerVisibility':
+        if (message.value === 'milestones' || message.value === 'everything' || message.value === 'off') {
+          this.wiring.workerVisibility?.set(message.value);
+        }
+        return;
       case 'chatOrder':
         if (message.value === 'newestFirst' || message.value === 'oldestFirst') this.chatOrder.set(message.value);
         return;
@@ -1086,8 +1140,21 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     const uri = vscode.Uri.file(this.resolvePath(file));
     try {
       await vscode.commands.executeCommand('git.openChange', uri);
+      const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+      const target = uri.toString();
+      if (
+        (input instanceof vscode.TabInputTextDiff && (input.original.toString() === target || input.modified.toString() === target)) ||
+        (input instanceof vscode.TabInputText && input.uri.toString() === target)
+      ) {
+        return;
+      }
     } catch {
+      // Git may be unavailable, or may not know this file.
+    }
+    try {
       await vscode.commands.executeCommand('vscode.open', uri);
+    } catch {
+      void vscode.window.showErrorMessage('Could not open the changed file.');
     }
   }
 

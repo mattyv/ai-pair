@@ -4,6 +4,28 @@
 
 import { z } from 'zod';
 
+/** Supported worker provider routing hints. */
+export const WORKER_PROVIDER_SCHEMA = z.enum(['codex', 'claude']);
+/** A supported worker provider. */
+export type WorkerProvider = z.infer<typeof WORKER_PROVIDER_SCHEMA>;
+
+/** Maximum worker result or narration length. */
+export const WORKER_TEXT_LIMIT = 16_384;
+/** Maximum worker output message identifier length. */
+export const WORKER_MESSAGE_ID_LIMIT = 128;
+/** Maximum worker capability length. */
+export const WORKER_CAPABILITY_LIMIT = 256;
+/** Maximum worker model identifier length. */
+export const WORKER_MODEL_LIMIT = 256;
+/** Maximum worker file path length. */
+export const WORKER_PATH_LIMIT = 4096;
+/** Maximum actions per worker batch. */
+export const WORKER_ACTION_LIMIT = 100;
+/** Maximum serialized worker action size. */
+export const WORKER_ACTION_SIZE_LIMIT = 65_536;
+/** Largest TCP port. */
+export const MAX_PORT = 65_535;
+
 /** Checks a {@link MoveTarget}. */
 export const MOVE_TARGET_SCHEMA = z.object({
   file: z.string().optional(),
@@ -195,6 +217,13 @@ export const EVENT_SCHEMA = z.discriminatedUnion('kind', [
     truncated: z.literal(true).optional(),
     closed: z.literal(true).optional(),
   }),
+  z.object({ kind: z.literal('worker_complete'), text: z.string().max(WORKER_TEXT_LIMIT) }),
+  z.object({
+    kind: z.literal('worker_notice'),
+    id: z.number().int().positive(),
+    notice: z.enum(['question', 'blocked']),
+    text: z.string().max(WORKER_TEXT_LIMIT),
+  }),
   z.object({ kind: z.literal('interrupt') }),
   z.object({
     kind: z.literal('turn'),
@@ -284,7 +313,24 @@ export const DISCOVERY_SCHEMA = z.object({
 });
 
 /** Checks a {@link ToolName}. */
-export const TOOL_NAME_SCHEMA = z.enum(['start', 'step', 'listen', 'end', 'read', 'calibrate', 'diagnostics']);
+export const TOOL_NAME_SCHEMA = z.enum([
+  'start',
+  'step',
+  'listen',
+  'end',
+  'read',
+  'calibrate',
+  'diagnostics',
+  'worker_grant',
+  'worker_say',
+  'worker_read',
+  'worker_step',
+  'worker_done',
+  'worker_progress',
+  'worker_output',
+  'worker_notice',
+  'worker_status',
+]);
 
 /** Checks a {@link RelayMessage}. */
 export const RELAY_MESSAGE_SCHEMA = z.discriminatedUnion('type', [
@@ -398,3 +444,13 @@ export type RelayMessage = z.infer<typeof RELAY_MESSAGE_SCHEMA>;
 
 /** A frame from the editor to the relay: a welcome, a refusal, or a call's result or error. */
 export type EditorMessage = z.infer<typeof EDITOR_MESSAGE_SCHEMA>;
+
+/** Checks a worker's exact-window capability. */
+export const WORKER_GRANT_SCHEMA = z.object({
+  port: z.number().int().min(1).max(MAX_PORT),
+  capability: z.string().min(1).max(WORKER_CAPABILITY_LIMIT),
+  model: z.string().min(1).max(WORKER_MODEL_LIMIT).optional(),
+});
+
+/** Checks a worker's acknowledgement. */
+export const WORKER_ACK_SCHEMA = z.object({ ok: z.literal(true) });

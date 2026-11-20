@@ -25,6 +25,25 @@ Everything below the line is written to the agent.
 
 ## You are pair programming
 
+In the optional background worker mode, the main agent keeps this session and
+speaks. Call `worker_grant` only when the programmer wants to delegate. Give
+the returned grant privately to a worker from your own provider, using the
+model preference in the grant or your exact current chat model when it is
+absent. The worker calls `worker_read`, `worker_step`, `worker_progress`,
+`worker_notice`, and `worker_done` with the grant. To show a response in
+the Worker tab, forward its visible text verbatim with `worker_output`
+before completing the grant.
+For live Codex text, use the Pair launcher's `worker-run codex` command.
+For a Codex CLI JSON transcript, use `worker-transcript codex`. These
+commands send `worker_done` so the final text can arrive first. See
+`docs/worker-preview.md` for their private stdin inputs. The worker requests
+commands through normal Pair approval. The main agent handles speech and
+editor control outside the worker's task.
+Use `worker_say` for main-agent speech while the worker edits. A worker
+question or blocker wakes `listen`, and `worker_status` reports whether the
+worker is active and editing. The programmer can interrupt a worker or turn
+the setting off to revoke it.
+
 You are driving, and the programmer is watching live. Everything you do through
 the pair tools appears in their editor at a human pace, together with your
 narration. They can interrupt you, redirect you, or take over at any moment.

@@ -98,6 +98,7 @@ export async function run(): Promise<void> {
     const commandRun = [first, second].flatMap((report) => report.batches.flatMap((batch) => batch.runs ?? []))[0];
     assert.ok(commandRun, 'heredoc command did not yield a report');
     assert.equal(new TextDecoder().decode(await vscode.workspace.fs.readFile(marker)), 'beta\n');
+    await vscode.workspace.fs.delete(marker);
     if (commandRun.shell === 'bash') {
       assert.equal(commandRun.exit_code, 0, 'Bash heredoc did not report its observed completion');
       const visible = "cat <<'PAIR_END' | tail -n 1\nalpha\nbeta\nPAIR_END";
@@ -106,6 +107,20 @@ export async function run(): Promise<void> {
       const visibleRun = [visibleFirst, visibleSecond].flatMap((report) => report.batches.flatMap((batch) => batch.runs ?? []))[0];
       assert.equal(visibleRun?.exit_code, 0, 'Bash heredoc output run did not end');
       assert.match(visibleRun.output, /beta/, 'Bash heredoc output was not captured');
+      for (const { subshell, exitCode } of [
+        { subshell: '(printf demo-result)', exitCode: 0 },
+        { subshell: '(printf demo-result) && true', exitCode: 0 },
+        { subshell: '(printf demo-result; exit 7)', exitCode: 7 },
+      ]) {
+        const firstSubshell = await bounded(controller.step([{ run: subshell, wait: 5 }]));
+        const secondSubshell = await bounded(controller.step([]));
+        const result = [firstSubshell, secondSubshell].flatMap((report) => report.batches.flatMap((batch) => batch.runs ?? []))[0];
+        assert.ok(result, `Bash subshell did not yield a report: ${subshell}`);
+        assert.equal(result.command, subshell, 'Bash subshell report changed the requested command');
+        assert.equal(result.exit_code, exitCode, `Bash subshell reported the wrong exit status: ${subshell}`);
+        assert.notEqual(result.running, true, `Bash subshell was reported as still running: ${subshell}`);
+        assert.match(result.output, /demo-result/, `Bash subshell output was not captured: ${subshell}`);
+      }
     } else if (commandRun.running === true) {
       assert.equal(commandRun.exit_code, undefined, 'unobserved completion must not claim success');
     } else {
@@ -114,7 +129,6 @@ export async function run(): Promise<void> {
     console.log(
       `Native heredoc pipeline: ${JSON.stringify({ running: commandRun.running, exitCode: commandRun.exit_code, output: commandRun.output })}`,
     );
-    await vscode.workspace.fs.delete(marker);
   } finally {
     console.log(`Native Controller terminal events: ${JSON.stringify(events)}`);
     controller.endSession();

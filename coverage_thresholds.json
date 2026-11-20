@@ -465,6 +465,13 @@
       "functions": 100
     }
   },
+  "packages/relay/src/codex_worker.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/relay/src/guide.ts": {
     "unit": {
       "lines": 100,
@@ -527,6 +534,13 @@
       "functions": 100
     },
     "integration": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/relay/src/worker_output.ts": {
+    "unit": {
       "lines": 100,
       "branches": 100,
       "functions": 100

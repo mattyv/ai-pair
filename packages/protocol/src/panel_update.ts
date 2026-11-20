@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { NAVIGATOR_COMMENTARY_SCHEMA } from './schemas';
+import {
+  NAVIGATOR_COMMENTARY_SCHEMA,
+  WORKER_MESSAGE_ID_LIMIT,
+  WORKER_MODEL_LIMIT,
+  WORKER_PROVIDER_SCHEMA,
+  WORKER_TEXT_LIMIT,
+} from './schemas';
 import { extensionVersion, localAudioStatus } from './local_audio_status';
 
 /** The panel retains up to 400 recent events and one preceding session event. */
@@ -28,6 +34,18 @@ const panelEvent = z.union([
     costSessionGeneration: z.int().positive().optional(),
   }),
   z.strictObject({ type: z.literal('say'), text }),
+  z.strictObject({
+    type: z.literal('workerOutput'),
+    id: z.int().positive(),
+    text: z.string().max(WORKER_TEXT_LIMIT),
+    message: z.string().min(1).max(WORKER_MESSAGE_ID_LIMIT).optional(),
+  }),
+  z.strictObject({
+    type: z.literal('workerActivity'),
+    id: z.int().positive(),
+    phase: z.enum(['started', 'editing', 'batchDone', 'completed', 'stopped', 'progress']),
+    text: z.string().max(WORKER_TEXT_LIMIT),
+  }),
   z.strictObject({ type: z.literal('attention'), state: z.enum(['none', 'requested', 'granted']) }),
   z.strictObject({ type: z.literal('reading'), ms: number, id: number.optional(), owner: z.literal('code').optional() }),
   z.strictObject({
@@ -75,6 +93,10 @@ export const localPanelUpdate = z.union([
   z.strictObject({ type: z.literal('focusReply') }),
   z.strictObject({ type: z.literal('replyBehavior'), value: z.enum(['interrupt', 'finishAction']) }),
   z.strictObject({ type: z.literal('navigatorCommentary'), value: NAVIGATOR_COMMENTARY_SCHEMA }),
+  z.strictObject({ type: z.literal('workerEnabled'), value: z.boolean() }),
+  z.strictObject({ type: z.literal('workerModel'), provider: WORKER_PROVIDER_SCHEMA, value: z.string().max(WORKER_MODEL_LIMIT) }),
+  z.strictObject({ type: z.literal('workerVisibility'), value: z.enum(['milestones', 'everything', 'off']) }),
+  z.strictObject({ type: z.literal('workerActive'), id: z.int().positive().optional() }),
   z.strictObject({ type: z.literal('chatOrder'), value: z.enum(['newestFirst', 'oldestFirst']) }),
   z.strictObject({ type: z.literal('showTerminals'), value: z.boolean() }),
   z.strictObject({ type: z.literal('commandApprovalSound'), value: z.boolean() }),

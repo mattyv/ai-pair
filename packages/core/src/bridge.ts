@@ -7,6 +7,16 @@ import type { AddressInfo } from 'node:net';
 import * as path from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
+  ACTION_SCHEMA,
+  WORKER_ACTION_LIMIT,
+  WORKER_ACTION_SIZE_LIMIT,
+  WORKER_CAPABILITY_LIMIT,
+  WORKER_PATH_LIMIT,
+  WORKER_MODEL_LIMIT,
+  WORKER_MESSAGE_ID_LIMIT,
+  WORKER_TEXT_LIMIT,
+  WORKER_PROVIDER_SCHEMA,
+  type WorkerProvider,
   DIAGNOSTIC_SNAPSHOT_SCHEMA,
   parseRelayMessage,
   PROTOCOL_VERSION,
@@ -30,6 +40,8 @@ export interface BridgeOptions {
   workspaceFolders: () => string[];
   /** Identifies the extension and its shipped relay. */
   runtime: NonNullable<Discovery['runtime']>;
+  /** The configured worker model, if one was selected. */
+  workerModel?: (provider: WorkerProvider) => string | undefined;
   /** Called with a line for each frame sent or received, for diagnosing deliveries (#27). */
   trace?: (line: string) => void;
   /** Receives allowlisted owner-connection and request lifecycle facts. */
@@ -63,7 +75,26 @@ function diagnosticMethod(tool: string): DiagnosticMethod {
 /** What a bridge calls on the controller: the pair tools, and whether a session runs. */
 export type BridgeController = Pick<
   Controller,
-  'isActive' | 'isSuspended' | 'start' | 'step' | 'listen' | 'end' | 'read' | 'calibrate' | 'resolveFile' | 'restore' | 'disconnect'
+  | 'isActive'
+  | 'isSuspended'
+  | 'start'
+  | 'step'
+  | 'listen'
+  | 'end'
+  | 'read'
+  | 'calibrate'
+  | 'resolveFile'
+  | 'restore'
+  | 'disconnect'
+  | 'grantWorker'
+  | 'workerRead'
+  | 'workerStep'
+  | 'workerDone'
+  | 'workerProgress'
+  | 'workerOutput'
+  | 'workerNotice'
+  | 'workerStatus'
+  | 'workerSay'
 >;
 
 /** Returns what a report says, for `trace`: its batches, events, and flags; nothing for a result that is no report. */
@@ -124,6 +155,7 @@ export class Bridge {
   /** The relay connection whose agent started the current (or last) session. */
   private owner: WebSocket | undefined = undefined;
   private ownerConnectionId: number | undefined = undefined;
+  private ownerProvider: WorkerProvider | undefined = undefined;
   /** Sockets accepted so far, to tell them apart in `trace`. */
   private accepted = 0;
 
@@ -187,6 +219,7 @@ export class Bridge {
   }
 
   dispose(): void {
+    this.ownerProvider = undefined;
     // specs/Discovery.tla, `CloseWindow`: the file goes with the window.
     try {
       fs.unlinkSync(this.file);
@@ -288,6 +321,8 @@ export class Bridge {
       }
       if (this.owner === ws) {
         this.owner = undefined;
+        // specs/WorkerProvider.tla, Disconnect: retire the attachment's routing hint.
+        this.ownerProvider = undefined;
         this.ownerConnectionId = undefined;
         this.diagnostic({ kind: 'connection', state: 'disconnected', connectionId: socket });
         this.controller.disconnect();
@@ -325,6 +360,7 @@ export class Bridge {
       // cleared too: a socket that owned an ended session the start replaced must not drive the suspended one.
       if (ws.readyState !== ws.OPEN) {
         this.owner = undefined;
+        this.ownerProvider = undefined;
         const disconnected = this.ownerConnectionId ?? connectionId;
         this.ownerConnectionId = undefined;
         this.diagnostic({ kind: 'connection', state: 'disconnected', connectionId: disconnected });
@@ -335,14 +371,99 @@ export class Bridge {
         this.diagnostic({ kind: 'connection', state: 'disconnected', connectionId: this.ownerConnectionId });
       }
       this.owner = ws;
+      // specs/WorkerProvider.tla, Start: bind routing to this successful owner attachment.
+      const provider = WORKER_PROVIDER_SCHEMA.safeParse(args.provider);
+      this.ownerProvider = provider.success ? provider.data : undefined;
       this.ownerConnectionId = connectionId;
       this.diagnostic({ kind: 'connection', state: 'connected', connectionId });
       return report;
+    }
+    if (
+      tool === 'worker_read' ||
+      tool === 'worker_step' ||
+      tool === 'worker_done' ||
+      tool === 'worker_progress' ||
+      tool === 'worker_output' ||
+      tool === 'worker_notice'
+    ) {
+      if (typeof args.capability !== 'string' || args.capability.length === 0 || args.capability.length > WORKER_CAPABILITY_LIMIT) {
+        throw new ToolError('invalid_arguments', 'Invalid worker capability.');
+      }
+      if (tool === 'worker_read') {
+        if (
+          typeof args.file !== 'string' ||
+          args.file.length === 0 ||
+          args.file.length > WORKER_PATH_LIMIT ||
+          (args.from_line !== undefined && (!Number.isSafeInteger(args.from_line) || Number(args.from_line) < 1)) ||
+          (args.to_line !== undefined && (!Number.isSafeInteger(args.to_line) || Number(args.to_line) < 1))
+        ) {
+          throw new ToolError('invalid_arguments', 'Invalid file or line.');
+        }
+        return controller.workerRead(args.capability, args.file, optionalNumber(args.from_line), optionalNumber(args.to_line));
+      }
+      if (tool === 'worker_step') {
+        if (
+          !Array.isArray(args.actions) ||
+          args.actions.length > WORKER_ACTION_LIMIT ||
+          JSON.stringify(args.actions).length > WORKER_ACTION_SIZE_LIMIT
+        ) {
+          throw new ToolError('invalid_arguments', 'Invalid actions.');
+        }
+        const actions: Action[] = [];
+        for (const action of args.actions) {
+          const parsed = ACTION_SCHEMA.safeParse(action);
+          if (!parsed.success) throw new ToolError('invalid_arguments', 'Invalid actions.');
+          actions.push(parsed.data);
+        }
+        return controller.workerStep(args.capability, actions, signal);
+      }
+      if (typeof args.text !== 'string' || args.text.length === 0 || args.text.length > WORKER_TEXT_LIMIT) {
+        throw new ToolError('invalid_arguments', 'Invalid text.');
+      }
+      if (tool === 'worker_progress') controller.workerProgress(args.capability, args.text);
+      else if (tool === 'worker_output') {
+        if (
+          args.message !== undefined &&
+          (typeof args.message !== 'string' || args.message.length === 0 || args.message.length > WORKER_MESSAGE_ID_LIMIT)
+        ) {
+          throw new ToolError('invalid_arguments', 'Invalid worker output message.');
+        }
+        if (args.final !== undefined && (args.final !== true || args.message === undefined)) {
+          throw new ToolError('invalid_arguments', 'Invalid worker output final flag.');
+        }
+        controller.workerOutput(args.capability, args.text, args.message, args.final);
+      } else if (tool === 'worker_notice') {
+        if (args.notice !== 'question' && args.notice !== 'blocked') throw new ToolError('invalid_arguments', 'Invalid notice.');
+        controller.workerNotice(args.capability, args.notice, args.text);
+      } else controller.workerDone(args.capability, args.text);
+      return { ok: true };
     }
     if (this.owner !== ws) {
       throw new ToolError('no_session', 'No pairing session is active. Call `start` to begin one.');
     }
     switch (tool) {
+      case 'worker_grant': {
+        if (args.brief !== undefined && (typeof args.brief !== 'string' || args.brief.length > WORKER_TEXT_LIMIT)) {
+          throw new ToolError('invalid_arguments', 'Invalid worker brief.');
+        }
+        const model = this.ownerProvider === undefined ? undefined : this.options.workerModel?.(this.ownerProvider);
+        if (model !== undefined && (model.trim() === '' || model.length > WORKER_MODEL_LIMIT)) {
+          throw new ToolError('invalid_arguments', 'Invalid worker model.');
+        }
+        return {
+          port: this.port,
+          capability: controller.grantWorker(optionalString(args.brief)),
+          ...(model === undefined ? {} : { model }),
+        };
+      }
+      case 'worker_status':
+        return controller.workerStatus();
+      case 'worker_say':
+        if (typeof args.text !== 'string' || args.text.length === 0 || args.text.length > WORKER_TEXT_LIMIT) {
+          throw new ToolError('invalid_arguments', 'Invalid text.');
+        }
+        await controller.workerSay(args.text);
+        return { ok: true };
       case 'step':
         if (!Array.isArray(args.actions)) throw new ToolError('invalid_arguments', '`actions` must be an array.');
         // Each action is checked as it's rehearsed and played; the relay's schema checked them too.

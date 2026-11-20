@@ -72,6 +72,15 @@ vi.mock('vscode', () => {
 
   return {
     Uri: FakeUri,
+    TabInputText: class {
+      constructor(readonly uri: FakeUri) {}
+    },
+    TabInputTextDiff: class {
+      constructor(
+        readonly original: FakeUri,
+        readonly modified: FakeUri,
+      ) {}
+    },
     Position: class {
       constructor(
         readonly line: number,
@@ -86,6 +95,7 @@ vi.mock('vscode', () => {
     },
     commands: { executeCommand: vi.fn(() => Promise.resolve()) },
     window: {
+      tabGroups: { activeTabGroup: { activeTab: undefined as unknown } },
       showTextDocument: vi.fn(() => Promise.resolve()),
       showInformationMessage: vi.fn(() => Promise.resolve()),
       showErrorMessage: vi.fn(() => Promise.resolve()),
@@ -129,6 +139,15 @@ const REF: Ref = { file: 'a.ts', line: 1, endLine: 2 };
 /** A panel on fakes, and the parts a test drives or reads. */
 interface Harness {
   panel: NarrationPanel;
+  workerEnabled: { get: ReturnType<typeof vi.fn<() => boolean>>; set: ReturnType<typeof vi.fn<(value: boolean) => void>> };
+  workerModel: {
+    get: ReturnType<typeof vi.fn<(provider: 'codex' | 'claude') => string>>;
+    set: ReturnType<typeof vi.fn<(provider: 'codex' | 'claude', value: string) => void>>;
+  };
+  workerVisibility: {
+    get: ReturnType<typeof vi.fn<() => 'milestones' | 'everything' | 'off'>>;
+    set: ReturnType<typeof vi.fn<(value: 'milestones' | 'everything' | 'off') => void>>;
+  };
   controller: MockProxy<Controller>;
   controllerAccessor: ReturnType<typeof vi.fn<() => MockProxy<Controller>>>;
   calibration: MockProxy<Calibration>;
@@ -215,6 +234,7 @@ function harness(
   readiness?: () => import('@ai-pair/protocol').AudioDiagnostics,
   sessionCost?: PanelWiring['speech']['sessionCost'],
   narrationSession?: PanelWiring['speech']['narrationSession'],
+  omitWorkerSettings = false,
 ): Harness {
   const traced: string[] = [];
   const speed = { get: vi.fn(() => SPEEDS[1] ?? 0), set: vi.fn<(value: number) => void>() };
@@ -299,6 +319,15 @@ function harness(
   const starter = mock<Starter>();
   starter.available.mockResolvedValue(true);
   starter.start.mockResolvedValue();
+  const workerEnabled = { get: vi.fn(() => false), set: vi.fn<(value: boolean) => void>() };
+  const workerModel = {
+    get: vi.fn<(provider: 'codex' | 'claude') => string>(() => ''),
+    set: vi.fn<(provider: 'codex' | 'claude', value: string) => void>(),
+  };
+  const workerVisibility = {
+    get: vi.fn<() => 'milestones' | 'everything' | 'off'>(() => 'milestones'),
+    set: vi.fn<(value: 'milestones' | 'everything' | 'off') => void>(),
+  };
   const panel = new NarrationPanel(
     (file) => `${ROOT}/${file}`,
     speed,
@@ -314,6 +343,7 @@ function harness(
       starter,
       copyDiagnostics,
       requireCommandApproval,
+      ...(omitWorkerSettings ? {} : { workerVisibility, workerEnabled, workerModel }),
       speech,
     },
     chatOrder,
@@ -329,6 +359,9 @@ function harness(
   panel.onPost = onPost;
   return {
     panel,
+    workerVisibility,
+    workerEnabled,
+    workerModel,
     controller,
     controllerAccessor,
     requireCommandApproval,
@@ -412,6 +445,7 @@ function postedOf(view: FakeView, type: ToPanel['type']): ToPanel[] {
 
 afterEach(() => {
   fakes.pick = undefined;
+  Object.assign(vscode.window.tabGroups.activeTabGroup, { activeTab: undefined });
   vi.resetAllMocks();
 });
 
@@ -622,6 +656,26 @@ describe('cursor navigation', () => {
 });
 
 describe('post', () => {
+  it('replaces cumulative worker snapshots in history while delivering every live update', () => {
+    const { panel } = harness();
+    const view = open(panel);
+    panel.post({ type: 'workerOutput', id: 1, message: 'm1', text: 'a' });
+    panel.post({ type: 'say', text: 'middle' });
+    panel.post({ type: 'workerOutput', id: 1, message: 'm1', text: 'abc' });
+    panel.post({ type: 'workerOutput', id: 1, message: 'm2', text: 'other' });
+    panel.post({ type: 'workerOutput', id: 2, message: 'm1', text: 'new worker' });
+    panel.post({ type: 'workerOutput', id: 1, text: 'complete' });
+    expect(panel.history).toEqual([
+      { type: 'workerOutput', id: 1, message: 'm1', text: 'abc' },
+      { type: 'say', text: 'middle' },
+      { type: 'workerOutput', id: 1, message: 'm2', text: 'other' },
+      { type: 'workerOutput', id: 2, message: 'm1', text: 'new worker' },
+      { type: 'workerOutput', id: 1, text: 'complete' },
+    ]);
+    expect(view.posted.filter((event) => event.type === 'workerOutput')).toHaveLength(5);
+    expect(replayed(panel)).toEqual(panel.history);
+  });
+
   it('LogsPosts: a posted event is on the log a new view replays', () => {
     const panel = harness().panel;
     panel.post({ type: 'say', text: 'hello' });
@@ -875,10 +929,15 @@ describe('receive', () => {
       { type: 'speechSupport', supported: true, gpu: false },
       { type: 'navigatorCommentary', value: 'helpful' },
       { type: 'chatOrder', value: 'newestFirst' },
+      { type: 'workerEnabled', value: false },
+      { type: 'workerModel', provider: 'codex', value: '' },
+      { type: 'workerModel', provider: 'claude', value: '' },
+      { type: 'workerVisibility', value: 'milestones' },
       { type: 'replyBehavior', value: 'interrupt' },
       { type: 'commandApprovalSound', value: false },
       { type: 'commandApprovals', all: false, count: 0, confirmationRequired: true },
       { type: 'replay', events: [{ type: 'say', text: 'hi' }] },
+      { type: 'workerActive' },
       { type: 'showTerminals', value: false },
       { type: 'speed', value: SPEEDS[1] },
       { type: 'readingSpeed', value: SPEEDS[2] },
@@ -931,12 +990,17 @@ describe('receive', () => {
     chatOrder.get.mockReturnValue('oldestFirst');
     const view = open(panel);
     view.send({ type: 'ready' });
-    expect(view.posted.slice(8, 13)).toEqual([
+    expect(view.posted.slice(8, 18)).toEqual([
       { type: 'chatOrder', value: 'oldestFirst' },
+      { type: 'workerEnabled', value: false },
+      { type: 'workerModel', provider: 'codex', value: '' },
+      { type: 'workerModel', provider: 'claude', value: '' },
+      { type: 'workerVisibility', value: 'milestones' },
       { type: 'replyBehavior', value: 'interrupt' },
       { type: 'commandApprovalSound', value: false },
       { type: 'commandApprovals', all: false, count: 0, confirmationRequired: true },
       { type: 'replay', events: [] },
+      { type: 'workerActive' },
     ]);
     view.send({ type: 'chatOrder', value: 'newestFirst' });
     expect(chatOrder.set).toHaveBeenCalledWith('newestFirst');
@@ -1219,9 +1283,20 @@ describe('receive', () => {
     ]);
   });
 
-  it('openChange: opens the diff against git, or the file itself when git cannot', async () => {
+  it('openChange: preserves a matching Git diff or text tab', async () => {
     const view = open(harness().panel);
-    vi.mocked(vscode.commands.executeCommand).mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('No git.'));
+    const active = vi.mocked(vscode.window.tabGroups.activeTabGroup);
+    vi.mocked(vscode.commands.executeCommand)
+      .mockImplementationOnce(() => {
+        Object.assign(active, {
+          activeTab: { input: new vscode.TabInputTextDiff(vscode.Uri.parse('git:/root/a.ts'), vscode.Uri.file('/root/a.ts')) },
+        });
+        return Promise.resolve();
+      })
+      .mockImplementationOnce(() => {
+        Object.assign(active, { activeTab: { input: new vscode.TabInputText(vscode.Uri.file('/root/b.ts')) } });
+        return Promise.resolve();
+      });
     view.send({ type: 'openChange', file: 'a.ts' });
     await flush();
     view.send({ type: 'openChange', file: 'b.ts' });
@@ -1229,8 +1304,54 @@ describe('receive', () => {
     expect(vi.mocked(vscode.commands.executeCommand).mock.calls).toEqual([
       ['git.openChange', vscode.Uri.file('/root/a.ts')],
       ['git.openChange', vscode.Uri.file('/root/b.ts')],
+    ]);
+  });
+
+  it('openChange: opens the file when Git silently does nothing or rejects', async () => {
+    const view = open(harness().panel);
+    vi.mocked(vscode.commands.executeCommand)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('No git.'))
+      .mockResolvedValueOnce(undefined);
+    view.send({ type: 'openChange', file: 'a.ts' });
+    await flush();
+    view.send({ type: 'openChange', file: 'b.ts' });
+    await flush();
+    expect(vi.mocked(vscode.commands.executeCommand).mock.calls).toEqual([
+      ['git.openChange', vscode.Uri.file('/root/a.ts')],
+      ['vscode.open', vscode.Uri.file('/root/a.ts')],
+      ['git.openChange', vscode.Uri.file('/root/b.ts')],
       ['vscode.open', vscode.Uri.file('/root/b.ts')],
     ]);
+  });
+
+  it('openChange: checks either diff side and rejects an unrelated active tab', async () => {
+    const view = open(harness().panel);
+    const active = vscode.window.tabGroups.activeTabGroup;
+    Object.assign(active, {
+      activeTab: { input: new vscode.TabInputTextDiff(vscode.Uri.file('/root/a.ts'), vscode.Uri.parse('git:/root/a.ts')) },
+    });
+    view.send({ type: 'openChange', file: 'a.ts' });
+    await flush();
+    Object.assign(active, { activeTab: { input: new vscode.TabInputText(vscode.Uri.file('/root/other.ts')) } });
+    view.send({ type: 'openChange', file: 'b.ts' });
+    await flush();
+    expect(vi.mocked(vscode.commands.executeCommand).mock.calls).toEqual([
+      ['git.openChange', vscode.Uri.file('/root/a.ts')],
+      ['git.openChange', vscode.Uri.file('/root/b.ts')],
+      ['vscode.open', vscode.Uri.file('/root/b.ts')],
+    ]);
+  });
+
+  it('openChange: reports a fallback failure without exposing the error', async () => {
+    const view = open(harness().panel);
+    vi.mocked(vscode.commands.executeCommand)
+      .mockRejectedValueOnce(new Error('No git.'))
+      .mockRejectedValueOnce(new Error('private details'));
+    view.send({ type: 'openChange', file: 'a.ts' });
+    await flush();
+    expect(vscode.window.showErrorMessage).toHaveBeenCalledWith('Could not open the changed file.');
   });
 
   it('ignores a message of a type it does not know', () => {
@@ -2163,4 +2284,60 @@ describe('showShortcuts', () => {
     panel.receiveRemote(1, { type: 'ready' });
     expect(send.mock.calls.map(([message]) => message.type)).not.toContain('shortcuts');
   });
+});
+
+it('worker controls call the controller and validate visibility', () => {
+  const { panel, controller, workerVisibility } = harness();
+  const view = open(panel);
+  view.send({ type: 'cancelWorker' });
+  expect(controller.revokeWorker.mock.calls).toHaveLength(1);
+  view.send({ type: 'workerVisibility', value: 'everything' });
+  expect(workerVisibility.set).toHaveBeenCalledWith('everything');
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  view.send({ type: 'workerVisibility', value: 'invalid' } as unknown as FromPanel);
+  expect(workerVisibility.set).toHaveBeenCalledOnce();
+});
+
+it('sends the current worker snapshot after replay', () => {
+  const { panel, controller } = harness();
+  controller.activeWorkerId.mockReturnValue(17);
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  const replay = view.posted.findIndex((message) => message.type === 'replay');
+  expect(view.posted[replay + 1]).toEqual({ type: 'workerActive', id: 17 });
+});
+
+it('validates worker setting actions and sends current settings', () => {
+  const { panel, workerEnabled, workerModel } = harness();
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  expect(view.posted).toContainEqual({ type: 'workerEnabled', value: false });
+  expect(view.posted).toContainEqual({ type: 'workerModel', provider: 'codex', value: '' });
+  expect(view.posted).toContainEqual({ type: 'workerModel', provider: 'claude', value: '' });
+  view.send({ type: 'workerEnabled', value: true });
+  view.send({ type: 'workerModel', provider: 'codex', value: 'model' });
+  view.send({ type: 'workerModel', provider: 'claude', value: 'other' });
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  view.send({ type: 'workerEnabled', value: 'true' } as unknown as FromPanel);
+  view.send({ type: 'workerModel', provider: 'codex', value: 'x'.repeat(257) });
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  view.send({ type: 'workerModel', provider: 'unknown', value: 'model' } as unknown as FromPanel);
+  expect(workerEnabled.set).toHaveBeenCalledExactlyOnceWith(true);
+  expect(workerModel.set).toHaveBeenCalledTimes(2);
+  expect(workerModel.set).toHaveBeenCalledWith('codex', 'model');
+  expect(workerModel.set).toHaveBeenCalledWith('claude', 'other');
+  panel.showWorkerEnabled(true);
+  panel.showWorkerModel('codex', 'model');
+  expect(view.posted).toContainEqual({ type: 'workerEnabled', value: true });
+  expect(view.posted).toContainEqual({ type: 'workerModel', provider: 'codex', value: 'model' });
+});
+
+it('shows default worker settings when wiring is absent', () => {
+  const { panel } = harness('agent', undefined, undefined, undefined, undefined, true);
+  const view = open(panel);
+  view.send({ type: 'ready' });
+  expect(view.posted).toContainEqual({ type: 'workerEnabled', value: false });
+  expect(view.posted).toContainEqual({ type: 'workerModel', provider: 'codex', value: '' });
+  expect(view.posted).toContainEqual({ type: 'workerModel', provider: 'claude', value: '' });
+  expect(view.posted).toContainEqual({ type: 'workerVisibility', value: 'milestones' });
 });

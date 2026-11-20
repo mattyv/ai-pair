@@ -639,6 +639,7 @@ describe('a session the agent leaves, and comes back to', () => {
       finished: [],
       nextBatchId: 1,
       nextReceipt: 1,
+      nextWorkerActivityId: 1,
       events: [{ kind: 'interrupt' }],
     });
     h.controller.endSession();
@@ -2122,7 +2123,7 @@ describe('pause and resume', () => {
     h.controller.resume();
     expect(h.controller.isPaused).toBe(false);
     expect(h.controller.isAttentionGranted).toBe(false);
-    expect(narration.cancel).toHaveBeenCalled();
+    expect(vi.mocked(narration.cancel)).toHaveBeenCalled();
   });
 
   it('Attention: cancel and disconnect fence a pending speech completion', async () => {
@@ -2315,7 +2316,7 @@ describe('pause and resume', () => {
     h.controller.resume('programmer');
     expect(narration.resume).toHaveBeenCalledOnce();
     h.controller.userMessage('Stop.');
-    expect(narration.cancel).toHaveBeenCalled();
+    expect(vi.mocked(narration.cancel)).toHaveBeenCalled();
   });
 
   it('PausedMatchesReasons, NoTimerWhilePaused, ResumeContinues: holds playback until the last pause reason is gone', async () => {
@@ -3258,4 +3259,482 @@ it('retains report origin across saved-session revive and rejects a missing orig
   await report(idle);
   second.controller.restore(observed);
   expect((await report(second.controller.listen())).events).toContainEqual(expect.objectContaining({ kind: 'command_exit', id: 85 }));
+});
+
+describe('worker edit authority', () => {
+  it('defaults off and rejects an idle main edit while a worker grant is live', async () => {
+    const disabled = harness();
+    await disabled.controller.start();
+    expect(() => disabled.controller.grantWorker()).toThrow();
+    const enabled = harness();
+    const controller = new Controller(enabled.editor, enabled.panel, CONFIG, undefined, { workerEnabled: () => true });
+    await controller.start();
+    const capability = controller.grantWorker();
+    expect(capability).toBeTruthy();
+    await expect(controller.step([{ move: { file: 'a.ts', line: 1 } }])).rejects.toThrow();
+    controller.revokeWorker();
+    await expect(controller.workerRead(capability, 'a.ts')).rejects.toThrow();
+  });
+});
+
+describe('worker playback', () => {
+  it('returns its batch without consuming main events and waits for retirement after revoke', async () => {
+    const h = harness();
+    const controller = new Controller(h.editor, h.panel, CONFIG, undefined, { workerEnabled: () => true });
+    await controller.start();
+    const capability = controller.grantWorker();
+    let finish: ((value: { result: BatchResult; sightings: Sighting[]; editedFiles: string[] }) => void) | undefined;
+    player().play.mockImplementationOnce(
+      (id) =>
+        new Promise((resolve) => {
+          finish = () => {
+            resolve({ result: { id, status: 'interrupted' }, sightings: [], editedFiles: [] });
+          };
+        }),
+    );
+    const workerCall = controller.workerStep(capability, [{ move: { file: 'a.ts', line: 1 } }]);
+    await Promise.resolve();
+    await Promise.resolve();
+    controller.revokeWorker();
+    expect(() => controller.grantWorker()).toThrow();
+    await expect(controller.step([{ move: { file: 'a.ts', line: 1 } }])).rejects.toThrow();
+    expect(finish).toBeDefined();
+    finish?.({ result: { id: 1, status: 'interrupted' }, sightings: [], editedFiles: [] });
+    expect((await workerCall).status).toBe('interrupted');
+    const listening = controller.listen();
+    await vi.advanceTimersByTimeAsync(CONFIG.maxBlockMs);
+    const workerReport = await listening;
+    expect(workerReport.batches).toEqual([]);
+  });
+
+  it('drops a worker submission revoked during rehearsal', async () => {
+    const h = harness();
+    const controller = new Controller(h.editor, h.panel, CONFIG, undefined, { workerEnabled: () => true });
+    await controller.start();
+    const capability = controller.grantWorker();
+    let finish: (() => void) | undefined;
+    const lines = fakes.fakeLines();
+    vi.mocked(rehearse).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () => {
+            resolve({
+              result: { id: 0, status: 'completed' },
+              sightings: [],
+              after: { scene: scene(), texts: new Map(), lines: asLines(lines), edits: new Set() },
+            });
+          };
+        }),
+    );
+    const workerCall = controller.workerStep(capability, [{ move: { file: 'a.ts', line: 1 } }]);
+    controller.revokeWorker();
+    finish?.();
+    await expect(workerCall).rejects.toThrow();
+    expect(player().play).not.toHaveBeenCalled();
+  });
+});
+
+describe('worker completion and narration', () => {
+  it('wakes a pending listen and leaves main able to continue', async () => {
+    const h = harness();
+    const controller = new Controller(h.editor, h.panel, CONFIG, undefined, { workerEnabled: () => true });
+    await controller.start();
+    const capability = controller.grantWorker();
+    const listening = controller.listen();
+    await Promise.resolve();
+    controller.workerDone(capability, 'finished');
+    const workerReport = await listening;
+    expect(workerReport.events).toContainEqual({ kind: 'worker_complete', text: 'finished' });
+    await expect(controller.workerRead(capability, 'a.ts')).rejects.toThrow();
+  });
+
+  it('serializes main speech independently of worker edits', async () => {
+    const narration = mock<NarrationPort>();
+    let finish: (() => void) | undefined;
+    narration.speak.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    narration.speak.mockResolvedValueOnce();
+    const h = harness();
+    const controller = new Controller(h.editor, h.panel, CONFIG, narration, { workerEnabled: () => true });
+    await controller.start();
+    controller.grantWorker();
+    const first = controller.workerSay('first');
+    const second = controller.workerSay('second');
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(narration.speak).toHaveBeenCalledTimes(1);
+    finish?.();
+    await Promise.all([first, second]);
+    expect(narration.speak.mock.calls.map(([text]) => text)).toEqual(['first', 'second']);
+  });
+});
+
+describe('worker speech authority', () => {
+  it('rejects disabled speech and drops queued speech after revocation', async () => {
+    const narration = mock<NarrationPort>();
+    let finish: (() => void) | undefined;
+    narration.speak.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const h = harness();
+    const controller = new Controller(h.editor, h.panel, CONFIG, narration, { workerEnabled: () => true });
+    await controller.start();
+    expect(() => controller.workerSay('ungranted')).toThrow();
+    controller.grantWorker();
+    const first = controller.workerSay('first');
+    const second = controller.workerSay('late');
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    controller.revokeWorker();
+    finish?.();
+    await Promise.all([first, second]);
+    expect(vi.mocked(narration.cancel)).toHaveBeenCalled();
+    expect(narration.speak).toHaveBeenCalledTimes(1);
+    expect(h.panel.post.mock.calls).not.toContainEqual([{ type: 'say', text: 'late' }]);
+  });
+});
+
+describe('worker termination notification', () => {
+  it('wakes a pending listen once on revocation', async () => {
+    const h = harness();
+    const controller = new Controller(h.editor, h.panel, CONFIG, undefined, { workerEnabled: () => true });
+    await controller.start();
+    controller.grantWorker();
+    const listening = controller.listen();
+    await Promise.resolve();
+    controller.revokeWorker();
+    controller.revokeWorker();
+    const workerReport = await listening;
+    expect(workerReport.events).toEqual([{ kind: 'worker_complete', text: 'Worker editing stopped.' }]);
+  });
+});
+
+describe('worker admission and failure', () => {
+  it('reads files and rejects unsupported, unanchored and cancelled submissions', async () => {
+    const h = harness({}, { 'a.ts': 'hello\n' });
+    const controller = new Controller(h.editor, h.panel, CONFIG, undefined, { workerEnabled: () => true });
+    await controller.start();
+    const capability = controller.grantWorker();
+    expect((await controller.workerRead(capability, 'a.ts')).lines).toEqual([{ number: 1, text: 'hello' }]);
+    await expect(controller.workerStep(capability, [])).rejects.toThrow();
+    await expect(controller.workerStep(capability, [{ say: 'hello' }])).rejects.toThrow();
+    await expect(controller.workerStep(capability, [{ type: 'hello' }])).rejects.toThrow();
+    const abort = new AbortController();
+    abort.abort();
+    await expect(controller.workerStep(capability, [{ move: { file: 'a.ts', line: 1 } }], abort.signal)).rejects.toThrow();
+  });
+
+  it('rejects rehearsal failures and reports playback exceptions to the main agent', async () => {
+    const h = harness();
+    const controller = new Controller(h.editor, h.panel, CONFIG, undefined, { workerEnabled: () => true });
+    await controller.start();
+    const capability = controller.grantWorker();
+    rehearsed({}, {}, [], { index: 1, action: { move: { file: 'a.ts', line: 1 } }, error: { kind: 'invalid_action', message: 'bad' } });
+    await expect(controller.workerStep(capability, [{ move: { file: 'a.ts', line: 1 } }])).rejects.toThrow('bad');
+    player().play.mockRejectedValueOnce(new Error('play failed'));
+    await expect(controller.workerStep(capability, [{ move: { file: 'a.ts', line: 1 } }])).rejects.toThrow('play failed');
+    const workerReport = await controller.listen();
+    expect(workerReport.events).toContainEqual({ kind: 'worker_complete', text: 'Worker editing stopped.' });
+  });
+
+  it('revokes on cancellation during rehearsal and rejects a concurrent batch', async () => {
+    const h = harness();
+    const controller = new Controller(h.editor, h.panel, CONFIG, undefined, { workerEnabled: () => true });
+    await controller.start();
+    const capability = controller.grantWorker();
+    let finish: (() => void) | undefined;
+    const lines = fakes.fakeLines();
+    vi.mocked(rehearse).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () => {
+            resolve({
+              result: { id: 0, status: 'completed' },
+              sightings: [],
+              after: { scene: scene(), texts: new Map(), lines: asLines(lines), edits: new Set() },
+            });
+          };
+        }),
+    );
+    const abort = new AbortController();
+    const workerCall = controller.workerStep(capability, [{ move: { file: 'a.ts', line: 1 } }], abort.signal);
+    await expect(controller.workerStep(capability, [{ move: { file: 'a.ts', line: 1 } }])).rejects.toThrow();
+    expect(() => {
+      controller.workerDone(capability, 'early');
+    }).toThrow();
+    abort.abort();
+    finish?.();
+    await expect(workerCall).rejects.toThrow();
+  });
+});
+
+describe('worker rehearsal races', () => {
+  it('rejects an interruption restored while the worker rehearses', async () => {
+    const h = harness();
+    const controller = new Controller(h.editor, h.panel, CONFIG, undefined, { workerEnabled: () => true });
+    const startReport = await controller.start();
+    const capability = controller.grantWorker();
+    let finish: (() => void) | undefined;
+    const lines = fakes.fakeLines();
+    vi.mocked(rehearse).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () => {
+            resolve({
+              result: { id: 0, status: 'completed' },
+              sightings: [],
+              after: { scene: scene(), texts: new Map(), lines: asLines(lines), edits: new Set() },
+            });
+          };
+        }),
+    );
+    const workerCall = controller.workerStep(capability, [{ move: { file: 'a.ts', line: 1 } }]);
+    controller.restore({ batches: [{ id: 4, status: 'interrupted' }], events: [], turn: 'agent', sessionId: startReport.sessionId });
+    finish?.();
+    await expect(workerCall).rejects.toThrow('interrupted');
+    expect(player().play).not.toHaveBeenCalled();
+  });
+
+  it('requires a fresh anchor after an interruption, but permits an action without a cursor', async () => {
+    const h = harness();
+    const controller = new Controller(h.editor, h.panel, CONFIG, undefined, { workerEnabled: () => true });
+    const startReport = await controller.start();
+    controller.restore({ batches: [{ id: 4, status: 'interrupted' }], events: [], turn: 'agent', sessionId: startReport.sessionId });
+    await controller.listen();
+    const capability = controller.grantWorker();
+    await expect(controller.workerStep(capability, [{ move: { line: 1 } }])).rejects.toThrow('anchored');
+    const result = await controller.workerStep(capability, [{ point: { file: 'a.ts', line: 1, text: 'x' } }]);
+    expect(result.status).toBe('completed');
+  });
+});
+
+describe('worker activity', () => {
+  it('posts a bounded task, progress, batch and completion without exposing authority', async () => {
+    const h = harness();
+    const controller = new Controller(h.editor, h.panel, CONFIG, undefined, { workerEnabled: () => true });
+    await controller.start();
+    expect(controller.activeWorkerId()).toBeUndefined();
+    const capability = controller.grantWorker('inspect the test');
+    expect(controller.activeWorkerId()).toBe(1);
+    controller.workerProgress(capability, 'checking');
+    await controller.workerStep(capability, [{ run: 'npm test' }]);
+    controller.workerDone(capability, 'done');
+    expect(controller.activeWorkerId()).toBeUndefined();
+    const activity = h.panel.post.mock.calls.flatMap(([event]) => (event.type === 'workerActivity' ? [event] : []));
+    expect(activity.map((event) => event.phase)).toEqual(['started', 'progress', 'editing', 'batchDone', 'completed']);
+    expect(activity.map((event) => event.id)).toEqual([1, 1, 1, 1, 1]);
+    expect(JSON.stringify(activity)).not.toContain(capability);
+    expect(activity[0]?.text).toBe('inspect the test');
+    expect(activity.at(-1)?.text).toBe('done');
+  });
+
+  it('posts stopped only once on revocation', async () => {
+    const h = harness();
+    const controller = new Controller(h.editor, h.panel, CONFIG, undefined, { workerEnabled: () => true });
+    await controller.start();
+    controller.grantWorker();
+    controller.revokeWorker();
+    controller.revokeWorker();
+    const activity = h.panel.post.mock.calls.flatMap(([event]) => (event.type === 'workerActivity' ? [event] : []));
+    expect(activity.map((event) => event.phase)).toEqual(['started', 'stopped']);
+  });
+});
+
+describe('worker activity bounds', () => {
+  it('bounds and redacts worker progress and rejects a stale reporter', async () => {
+    const h = harness();
+    const controller = new Controller(h.editor, h.panel, CONFIG, undefined, { workerEnabled: () => true });
+    await controller.start();
+    const capability = controller.grantWorker();
+    controller.workerProgress(capability, `${capability}${'x'.repeat(1000)}`);
+    const progress = h.panel.post.mock.calls.flatMap(([event]) =>
+      event.type === 'workerActivity' && event.phase === 'progress' ? [event] : [],
+    );
+    expect(progress[0]?.text).not.toContain(capability);
+    expect(progress[0]?.text.length).toBe(500);
+    controller.revokeWorker();
+    expect(() => {
+      controller.workerProgress(capability, 'late');
+    }).toThrow();
+  });
+});
+
+describe('raw worker output', () => {
+  it('preserves text, redacts the grant and rejects stale output without conversation effects', async () => {
+    const h = harness();
+    const controller = new Controller(h.editor, h.panel, CONFIG, undefined, { workerEnabled: () => true });
+    await controller.start();
+    const capability = controller.grantWorker();
+    const text = `  first\n${capability}\n${'x'.repeat(1000)}`;
+    h.panel.post.mockClear();
+    const eventsBefore = structuredClone(controller.saved?.events);
+    controller.workerOutput(capability, text);
+    expect(controller.saved?.events).toEqual(eventsBefore);
+    expect(h.panel.post.mock.calls).toEqual([[{ type: 'workerOutput', id: 1, text: text.replaceAll(capability, '[redacted]') }]]);
+    const maximum = 'x'.repeat(16_384);
+    controller.workerOutput(capability, maximum);
+    expect(h.panel.post.mock.calls.at(-1)).toEqual([{ type: 'workerOutput', id: 1, text: maximum }]);
+    controller.revokeWorker();
+    expect(() => {
+      controller.workerOutput(capability, 'late');
+    }).toThrow();
+  });
+});
+
+it('withholds a trailing capability prefix only on unfinished snapshots', async () => {
+  const h = harness();
+  const controller = new Controller(h.editor, h.panel, CONFIG, undefined, { workerEnabled: () => true });
+  await controller.start();
+  const capability = controller.grantWorker();
+  const prefix = capability.slice(0, 5);
+  expect(() => {
+    controller.workerOutput(capability, 'text', `id-${capability}`);
+  }).toThrow();
+  controller.workerOutput(capability, `hello ${prefix}`, 'm1');
+  expect(h.panel.post.mock.calls.at(-1)).toEqual([{ type: 'workerOutput', id: 1, message: 'm1', text: 'hello ' }]);
+  controller.workerOutput(capability, prefix, 'm1');
+  expect(h.panel.post.mock.calls.at(-1)).toEqual([{ type: 'workerOutput', id: 1, message: 'm1', text: '' }]);
+  controller.workerOutput(capability, `hello ${prefix}`, 'm1', true);
+  expect(h.panel.post.mock.calls.at(-1)).toEqual([{ type: 'workerOutput', id: 1, message: 'm1', text: `hello ${prefix}` }]);
+  controller.workerOutput(capability, prefix);
+  expect(h.panel.post.mock.calls.at(-1)).toEqual([{ type: 'workerOutput', id: 1, text: prefix }]);
+  controller.workerOutput(capability, `before ${capability} after`, 'm1', true);
+  expect(h.panel.post.mock.calls.at(-1)).toEqual([{ type: 'workerOutput', id: 1, message: 'm1', text: 'before [redacted] after' }]);
+});
+
+describe('worker output identity across reload', () => {
+  it('does not reuse an activity ID after saving and reviving a session', async () => {
+    const first = harness();
+    const original = new Controller(first.editor, first.panel, CONFIG, undefined, { workerEnabled: () => true });
+    await original.start();
+    const capability = original.grantWorker();
+    original.workerOutput(capability, 'before reload');
+    const saved = original.saved;
+    expect(saved?.nextWorkerActivityId).toBe(2);
+    if (saved === undefined) throw new Error('missing session');
+    const next = harness();
+    const revived = new Controller(next.editor, next.panel, CONFIG, undefined, { workerEnabled: () => true });
+    revived.revive(saved);
+    await revived.start();
+    const nextCapability = revived.grantWorker();
+    revived.workerOutput(nextCapability, 'after reload');
+    expect(next.panel.post.mock.calls).toContainEqual([{ type: 'workerOutput', id: 2, text: 'after reload' }]);
+  });
+
+  it.each([undefined, 0, -1, 1.5, 'bad', Number.MAX_SAFE_INTEGER + 1])('accepts legacy or invalid counter %s', (nextWorkerActivityId) => {
+    const h = harness();
+    const saved = { scene: { turn: 'agent', allowedCommands: [] }, finished: [], events: [], nextWorkerActivityId };
+    if (!isSavedSession(saved)) throw new Error('missing session');
+    h.controller.revive(saved);
+    expect(h.controller.saved?.nextWorkerActivityId).toBe(1);
+  });
+});
+
+describe('worker retirement activity', () => {
+  it('does not post a batch completion after the grant has stopped', async () => {
+    const h = harness();
+    const controller = new Controller(h.editor, h.panel, CONFIG, undefined, { workerEnabled: () => true });
+    await controller.start();
+    const capability = controller.grantWorker();
+    let finish: (() => void) | undefined;
+    player().play.mockImplementationOnce(
+      (id) =>
+        new Promise((resolve) => {
+          finish = () => {
+            resolve({ result: { id, status: 'completed' }, sightings: [], editedFiles: [] });
+          };
+        }),
+    );
+    const workerCall = controller.workerStep(capability, [{ move: { file: 'a.ts', line: 1 } }]);
+    await Promise.resolve();
+    await Promise.resolve();
+    controller.revokeWorker();
+    finish?.();
+    await workerCall;
+    const activity = h.panel.post.mock.calls.flatMap(([event]) => (event.type === 'workerActivity' ? [event.phase] : []));
+    expect(activity).toEqual(['started', 'editing', 'stopped']);
+  });
+});
+
+describe('worker notices', () => {
+  it('wakes a pending listen with a coalesced question without ending the grant', async () => {
+    const h = await started();
+    const controller = new Controller(h.editor, h.panel, CONFIG, undefined, { workerEnabled: () => true });
+    await controller.start();
+    const capability = controller.grantWorker();
+    controller.workerNotice(capability, 'question', 'first');
+    controller.workerNotice(capability, 'blocked', 'latest');
+    const result = await controller.listen();
+    expect(result.events).toContainEqual(expect.objectContaining({ kind: 'worker_notice', notice: 'blocked', text: 'latest' }));
+    expect(result.events.filter((event) => event.kind === 'worker_notice')).toHaveLength(1);
+    controller.workerNotice(capability, 'question', 'newer');
+    controller.restore(result);
+    const restored = await controller.listen();
+    expect(restored.events.filter((event) => event.kind === 'worker_notice')).toEqual([
+      expect.objectContaining({ kind: 'worker_notice', text: 'newer' }),
+    ]);
+    const pendingNotice = controller.listen();
+    expect(await pending(pendingNotice)).toBe(true);
+    controller.workerNotice(capability, 'question', 'Need input');
+    expect((await pendingNotice).events).toContainEqual(expect.objectContaining({ kind: 'worker_notice', text: 'Need input' }));
+    controller.workerDone(capability, 'done');
+  });
+});
+
+describe('worker capability redaction', () => {
+  it('redacts completion in reports and activity and clears the active ID', async () => {
+    const h = harness();
+    const controller = new Controller(h.editor, h.panel, CONFIG, undefined, { workerEnabled: () => true });
+    await controller.start();
+    expect(controller.activeWorkerId()).toBeUndefined();
+    const capability = controller.grantWorker();
+    expect(controller.activeWorkerId()).toBe(1);
+    controller.workerDone(capability, `finished ${capability}`);
+    expect(controller.activeWorkerId()).toBeUndefined();
+    const result = await controller.listen();
+    expect(JSON.stringify(result)).not.toContain(capability);
+    expect(JSON.stringify(h.panel.post.mock.calls)).not.toContain(capability);
+    expect(result.events).toContainEqual({ kind: 'worker_complete', text: 'finished [redacted]' });
+  });
+
+  it('redacts narration before displaying or speaking it', async () => {
+    const narration = mock<NarrationPort>();
+    narration.speak.mockResolvedValue();
+    const h = harness();
+    const controller = new Controller(h.editor, h.panel, CONFIG, narration, { workerEnabled: () => true });
+    await controller.start();
+    const capability = controller.grantWorker();
+    await controller.workerSay(`spoken ${capability}`);
+    expect(narration.speak.mock.calls).toEqual([['spoken [redacted]']]);
+    expect(h.panel.post.mock.calls).toContainEqual([{ type: 'say', text: 'spoken [redacted]' }]);
+  });
+});
+
+describe('worker notice lifecycle', () => {
+  it('restores a notice for its current grant and clears pending notices on revoke', async () => {
+    const h = harness();
+    const controller = new Controller(h.editor, h.panel, CONFIG, undefined, { workerEnabled: () => true });
+    await controller.start();
+    expect(controller.workerStatus()).toEqual({ active: false, busy: false });
+    const capability = controller.grantWorker();
+    expect(controller.workerStatus()).toEqual({ active: true, busy: false });
+    controller.workerNotice(capability, 'question', 'Need an answer');
+    const noticeReport = await controller.listen();
+    controller.restore(noticeReport);
+    const restored = await controller.listen();
+    expect(restored.events).toContainEqual({ kind: 'worker_notice', id: 1, notice: 'question', text: 'Need an answer' });
+    controller.workerNotice(capability, 'blocked', 'blocked');
+    controller.revokeWorker();
+    const revoked = await controller.listen();
+    expect(revoked.events.some((event) => event.kind === 'worker_notice')).toBe(false);
+  });
 });

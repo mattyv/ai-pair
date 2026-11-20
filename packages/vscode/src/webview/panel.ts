@@ -8,7 +8,7 @@ import { SPEECH_LISTENING_RATES } from '../speech_tempo';
 // styles are in panel_html.ts; the messages in panel_messages.ts.
 
 import type { AgentState, CodePlayback, PanelEvent, Ref } from '@ai-pair/core';
-import type { ChatOrder, FromPanel, SpeechState, ToPanel } from '../panel_messages';
+import type { ChatOrder, FromPanel, SpeechState, ToPanel, WorkerVisibility } from '../panel_messages';
 import { SpeechAudio, decodeWav } from './speech_audio';
 import { ApprovalSound } from './approval_sound';
 import { localSpeechDecoder } from './speech_decode';
@@ -19,7 +19,7 @@ import type { OutputChoice } from '../speech_output_types';
 import type { SessionSpeechCostView } from '../session_speech_cost';
 import { ELLIPSIS, LABEL_SEPARATOR, RANGE_DASH, RIGHT_ARROW, SPEED_SUFFIX } from '@ai-pair/core/constants';
 
-declare function acquireVsCodeApi(): { postMessage(message: FromPanel): void };
+declare function acquireVsCodeApi(): { postMessage(message: FromPanel): void; getState(): unknown; setState(state: unknown): void };
 
 const vscode = acquireVsCodeApi();
 
@@ -82,9 +82,22 @@ function $<T extends HTMLElement>(name: string, type: abstract new () => T): T {
 
 const ui = {
   band: $('band', HTMLElement),
+  workerTabs: $('worker-tabs', HTMLElement),
+  pairTab: $('pair-tab', HTMLButtonElement),
+  workerTab: $('worker-tab', HTMLButtonElement),
+  workerView: $('worker-view', HTMLElement),
+  workerHistory: $('worker-history', HTMLElement),
+  workerRunning: $('worker-running', HTMLElement),
+  workerCancel: $('worker-cancel', HTMLButtonElement),
+  workerVisibility: $('worker-visibility', HTMLSelectElement),
+  workerEnabled: $('worker-enabled', HTMLInputElement),
+  workerModelCodex: $('worker-model-codex', HTMLInputElement),
+  workerModelClaude: $('worker-model-claude', HTMLInputElement),
   settings: $('settings', HTMLButtonElement),
   voiceStatus: $('voice-status', HTMLButtonElement),
   settingsDialog: $('settings-dialog', HTMLDialogElement),
+  providerDetails: $('speech-provider-details', HTMLDetailsElement),
+  providerSummary: $('speech-provider-summary', HTMLElement),
   settingsClose: $('settings-close', HTMLButtonElement),
   configureShortcuts: $('configure-shortcuts', HTMLButtonElement),
   chatOrder: $('chat-order', HTMLSelectElement),
@@ -190,8 +203,13 @@ const ui = {
   history: $('history', HTMLElement),
   tip: $('tip', HTMLElement),
 };
+ui.tip.id = 'tip';
 
 let chatOrder: ChatOrder = 'newestFirst';
+let workerVisibility: WorkerVisibility = 'milestones';
+const workerGroups = new Map<number, HTMLElement>();
+const workerMessages = new Map<number, Map<string, HTMLElement>>();
+const activeWorkers = new Set<number>();
 let voiceFacts: AudioDiagnostics | undefined;
 let voiceCompute: SpeechComputeState | undefined;
 let voiceTransport = false;
@@ -739,6 +757,9 @@ function showTip(el: HTMLElement): void {
   ) {
     return;
   }
+  tipTarget?.removeAttribute('aria-describedby');
+  const parent = ui.settingsDialog.contains(el) ? ui.settingsDialog : document.body;
+  parent.append(ui.tip);
   tipTarget = el;
   ui.tip.textContent = el.dataset.tip ?? '';
   ui.tip.hidden = false;
@@ -770,6 +791,24 @@ function syncTip(): void {
   } else {
     placeTip(tipTarget);
   }
+}
+
+/** Keeps a keyboard tooltip visible while Settings scrolls its focused control into view. */
+function handleTipScroll(event: Event): void {
+  if (
+    event.target === ui.settingsDialog &&
+    tipTarget !== undefined &&
+    document.activeElement === tipTarget &&
+    tipTarget.matches(':focus-visible')
+  ) {
+    const anchor = tipTarget.getBoundingClientRect();
+    const dialog = ui.settingsDialog.getBoundingClientRect();
+    if (Math.max(anchor.top, dialog.top) < Math.min(anchor.bottom, dialog.bottom)) {
+      placeTip(tipTarget);
+      return;
+    }
+  }
+  hideTip();
 }
 
 /** Returns the element an event happened on, if it is one. */
@@ -808,6 +847,8 @@ function setState(e: Extract<PanelEvent, { type: 'state' }>): void {
 function clearRun(): void {
   runId = undefined;
   runConfirming = false;
+  ui.workerTab.disabled = false;
+  ui.workerTab.removeAttribute('title');
   ui.run.classList.remove('on', 'confirm');
   ui.run.removeAttribute('role');
 }
@@ -961,6 +1002,10 @@ function setChatOrder(value: ChatOrder): void {
   ui.history.classList.add('reordering');
   document.body.classList.toggle('oldest-first', value === 'oldestFirst');
   ui.history.replaceChildren(...entries.toReversed());
+  for (const group of workerGroups.values()) {
+    group.append(...[...group.querySelectorAll('p')].toReversed());
+  }
+  ui.workerHistory.replaceChildren(...[...ui.workerHistory.children].toReversed());
   if (value === 'oldestFirst') {
     ui.band.before(ui.history);
   } else {
@@ -1121,6 +1166,37 @@ function syncVoiceStatus(): void {
   if (tipTarget === ui.voiceStatus) showTip(ui.voiceStatus);
 }
 
+// specs/SettingsSections.tla, Restore and Toggle: retain only valid disclosure state.
+const settingsSections = ['conversation', 'playback', 'shortcuts', 'commands', 'speech', 'diagnostics'] as const;
+const savedPageState = vscode.getState();
+const pageState = typeof savedPageState === 'object' && savedPageState !== null && !Array.isArray(savedPageState) ? savedPageState : {};
+const savedSections: unknown = 'settingsSections' in pageState ? pageState.settingsSections : undefined;
+const validSections =
+  typeof savedSections === 'object' &&
+  savedSections !== null &&
+  !Array.isArray(savedSections) &&
+  Object.entries(savedSections).length === settingsSections.length &&
+  settingsSections.every(
+    (name) => name in savedSections && typeof Object.getOwnPropertyDescriptor(savedSections, name)?.value === 'boolean',
+  );
+const disclosures = settingsSections.map((name) => ({ name, element: $(`settings-${name}`, HTMLDetailsElement) }));
+if (validSections) {
+  for (const { name, element } of disclosures) {
+    element.open = Object.getOwnPropertyDescriptor(savedSections, name)?.value === true;
+  }
+}
+for (const { element } of disclosures) {
+  element.addEventListener('toggle', () => {
+    const currentPageState = vscode.getState();
+    const preservedState =
+      typeof currentPageState === 'object' && currentPageState !== null && !Array.isArray(currentPageState) ? currentPageState : {};
+    vscode.setState({
+      ...preservedState,
+      settingsSections: Object.fromEntries(disclosures.map(({ name, element: section }) => [name, section.open])),
+    });
+  });
+}
+
 // specs/Panel.tla, `OpenSettings` and `CloseSettings`.
 let focusReplyAfterSettings = false;
 function focusReplyBox(): void {
@@ -1133,7 +1209,7 @@ function focusReplyBox(): void {
 }
 ui.settings.addEventListener('click', () => {
   ui.settingsDialog.showModal();
-  ui.chatOrder.focus();
+  $('settings-conversation', HTMLDetailsElement).querySelector('summary')?.focus();
 });
 ui.settingsClose.addEventListener('click', () => {
   ui.settingsDialog.close();
@@ -1142,6 +1218,7 @@ ui.configureShortcuts.addEventListener('click', () => {
   vscode.postMessage({ type: 'command', command: 'aiPair.configureShortcuts' });
 });
 ui.settingsDialog.addEventListener('close', () => {
+  hideTip();
   if (focusReplyAfterSettings) {
     focusReplyAfterSettings = false;
     ui.reply.focus();
@@ -1238,6 +1315,7 @@ function syncSpeechProvider(): void {
   ui.openRouterAccentStatus.textContent = capabilities.tags
     ? 'Sent as an audio tag, such as [Australian accent], before each line. Accent tags are experimental; a voice may not follow one.'
     : 'This model does not take audio tags, so no accent is sent. Eleven v3 and v4 models do.';
+  ui.providerSummary.textContent = `${speechProvider === 'kokoro' ? 'Kokoro' : speechProvider === 'elevenlabs' ? 'ElevenLabs' : 'OpenRouter'} settings`;
   const cloud = speechProvider === 'elevenlabs';
   ui.speechLocal.hidden = speechProvider !== 'kokoro';
   ui.speechLocalModel.hidden = speechProvider !== 'kokoro';
@@ -1290,6 +1368,7 @@ ui.speechProvider.addEventListener('change', () => {
   if (!isSpeechVoice(ui.speechVoice.value)) ui.speechVoice.value = 'af_heart';
   if (!SPEECH_SPEEDS.some((speed) => speed === Number(ui.speechSpeed.value))) ui.speechSpeed.value = '1';
   speechProvider = selected;
+  ui.providerDetails.open = true;
   syncSpeechProvider();
   saveSpeechSettings();
 });
@@ -1530,8 +1609,118 @@ function showSpeechCost(value: SessionSpeechCostView): void {
   if (tipTarget === ui.speechCost) showTip(ui.speechCost);
 }
 
+function showPair(): void {
+  ui.workerView.hidden = true;
+  ui.band.hidden = false;
+  ui.history.hidden = false;
+  ui.pairTab.setAttribute('aria-pressed', 'true');
+  ui.workerTab.setAttribute('aria-pressed', 'false');
+}
+ui.pairTab.addEventListener('click', showPair);
+ui.workerTab.addEventListener('click', () => {
+  if (ui.workerTabs.hidden !== false) return;
+  ui.workerView.hidden = false;
+  ui.band.hidden = true;
+  ui.history.hidden = true;
+  ui.pairTab.setAttribute('aria-pressed', 'false');
+  ui.workerTab.setAttribute('aria-pressed', 'true');
+});
+ui.workerCancel.addEventListener('click', () => {
+  vscode.postMessage({ type: 'cancelWorker' });
+});
+ui.workerEnabled.addEventListener('change', () => {
+  vscode.postMessage({ type: 'workerEnabled', value: ui.workerEnabled.checked });
+});
+ui.workerModelCodex.addEventListener('change', () => {
+  vscode.postMessage({ type: 'workerModel', provider: 'codex', value: ui.workerModelCodex.value });
+});
+ui.workerModelClaude.addEventListener('change', () => {
+  vscode.postMessage({ type: 'workerModel', provider: 'claude', value: ui.workerModelClaude.value });
+});
+ui.workerVisibility.addEventListener('change', () => {
+  const value = ui.workerVisibility.value;
+  if (value === 'milestones' || value === 'everything' || value === 'off') {
+    vscode.postMessage({ type: 'workerVisibility', value });
+  }
+});
+
 function handle(message: ToPanel): void {
   switch (message.type) {
+    case 'workerActive':
+      // specs/WorkerActivity.tla, Snapshot: replay cannot establish a live grant.
+      activeWorkers.clear();
+      if (message.id !== undefined) activeWorkers.add(message.id);
+      ui.workerRunning.hidden = activeWorkers.size === 0;
+      ui.workerCancel.hidden = activeWorkers.size === 0;
+      return;
+    case 'workerEnabled': {
+      // specs/WorkerTabs.tla, SetEnabled: disabling returns to Pair without clearing history.
+      const focusHidden =
+        !message.value && (ui.workerTabs.contains(document.activeElement) || ui.workerView.contains(document.activeElement));
+      if (!message.value) showPair();
+      ui.workerTabs.hidden = !message.value;
+      if (focusHidden) ui.settings.focus();
+      ui.workerEnabled.checked = message.value;
+      return;
+    }
+    case 'workerModel':
+      if (message.provider === 'codex') ui.workerModelCodex.value = message.value;
+      else ui.workerModelClaude.value = message.value;
+      return;
+    case 'workerVisibility':
+      workerVisibility = message.value;
+      ui.workerVisibility.value = message.value;
+      return;
+    case 'workerOutput': {
+      // specs/WorkerOutput.tla, Output: show the original text only in Worker.
+      let group = workerGroups.get(message.id);
+      if (group === undefined) {
+        group = document.createElement('section');
+        const heading = document.createElement('h2');
+        heading.textContent = `Worker ${message.id}`;
+        group.append(heading);
+        workerGroups.set(message.id, group);
+        if (chatOrder === 'newestFirst') ui.workerHistory.prepend(group);
+        else ui.workerHistory.append(group);
+      }
+      // specs/WorkerSnapshots.tla: replace a cumulative snapshot in its first position.
+      const messages = workerMessages.get(message.id) ?? new Map<string, HTMLElement>();
+      if (message.message !== undefined) {
+        const existing = messages.get(message.message);
+        if (existing !== undefined) {
+          existing.textContent = message.text;
+          return;
+        }
+      }
+      const line = document.createElement('p');
+      line.textContent = message.text;
+      if (message.message !== undefined) {
+        messages.set(message.message, line);
+        workerMessages.set(message.id, messages);
+      }
+      if (chatOrder === 'newestFirst') group.querySelector('h2')?.after(line);
+      else group.append(line);
+      return;
+    }
+    case 'workerActivity': {
+      // specs/WorkerActivity.tla, Publish: history is grouped by worker ID.
+      if (!replaying && message.phase === 'started' && !activeWorkers.has(message.id)) {
+        workerGroups.get(message.id)?.remove();
+        workerGroups.delete(message.id);
+        workerMessages.delete(message.id);
+      }
+      if (!replaying && message.phase === 'started') activeWorkers.add(message.id);
+      if (message.phase === 'completed' || message.phase === 'stopped') activeWorkers.delete(message.id);
+      ui.workerRunning.hidden = activeWorkers.size === 0;
+      ui.workerCancel.hidden = activeWorkers.size === 0;
+      if (
+        workerVisibility === 'everything' ||
+        (workerVisibility === 'milestones' && message.phase !== 'editing' && message.phase !== 'progress')
+      ) {
+        add(entry('worker')).textContent = `Worker: ${message.text}`;
+      }
+      return;
+    }
     case 'speechCost':
       showSpeechCost(message.value);
       return;
@@ -1902,6 +2091,16 @@ function handle(message: ToPanel): void {
       ui.starting.hidden = true;
       return;
     case 'session':
+      if (message.active) {
+        if (!message.suspended && !message.resumed) {
+          workerGroups.clear();
+          workerMessages.clear();
+          ui.workerHistory.replaceChildren();
+        }
+        activeWorkers.clear();
+        ui.workerRunning.hidden = true;
+        ui.workerCancel.hidden = true;
+      }
       // specs/Panel.tla, `ChangeSession`: the band is filed and a divider is added.
       if (message.active) {
         // specs/Start.tla, `StartSession`: a session clears the note (NoteUntilSession).
@@ -1986,12 +2185,17 @@ function handle(message: ToPanel): void {
       if (message.phase === 'confirm' || message.phase === 'running') {
         // specs/CommandCue.tla, Handle: replay and repeated IDs never sound.
         if (message.phase === 'confirm') {
+          // specs/WorkerActivity.tla, Confirm: reveal the command decision.
+          showPair();
           const first = !shownApprovals.has(message.id);
           shownApprovals.add(message.id);
           if (first && !replaying && ui.commandApprovalSound.checked) approvalSound.play();
         }
         runId = message.id;
         runConfirming = message.phase === 'confirm';
+        ui.workerTab.disabled = runConfirming;
+        if (runConfirming) ui.workerTab.title = 'Decide the pending command first';
+        else ui.workerTab.removeAttribute('title');
         ui.showTerminal.hidden = runConfirming;
         ui.run.classList.add('on');
         ui.run.classList.toggle('confirm', runConfirming);
@@ -2205,10 +2409,18 @@ ui.end.addEventListener('click', () => {
   vscode.postMessage({ type: 'end' });
 });
 
-// From any element under the pointer: over a button's icon, it's an SVG one.
-document.addEventListener('pointerover', (e) => {
-  hoverTip(e.target instanceof Element ? (e.target.closest<HTMLElement>('[data-tip]') ?? undefined) : undefined);
+/** Finds the tooltip target under the pointer, including over nested icons. */
+function hoverTipFromEvent(event: PointerEvent): void {
+  const element = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-tip], label') : undefined;
+  const control = element instanceof HTMLLabelElement ? element.control : element;
+  hoverTip(control?.dataset.tip !== undefined ? control : undefined);
+}
+
+// Scrolling can move a Settings control under a stationary pointer.
+document.addEventListener('pointerover', (event) => {
+  if (!event.composedPath().includes(ui.settingsDialog)) hoverTipFromEvent(event);
 });
+ui.settingsDialog.addEventListener('pointermove', hoverTipFromEvent);
 document.documentElement.addEventListener('pointerleave', () => {
   hoverTip(undefined);
 });
@@ -2227,7 +2439,7 @@ document.addEventListener(
   },
   /* useCapture= */ true,
 );
-document.addEventListener('scroll', hideTip, /* useCapture= */ true);
+document.addEventListener('scroll', handleTipScroll, /* useCapture= */ true);
 window.addEventListener('blur', hideTip);
 
 // Space pauses and resumes, anywhere in the panel but the reply box. It doesn't press the focused

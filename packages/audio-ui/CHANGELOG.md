@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.54.0
+
+- Version aligned with live Worker transcript updates.
+
+## 0.53.0
+
+- Version aligned with the Worker transcript update.
+
+## 0.52.2
+
+- Version aligned with the Settings tooltip wording update.
+
+## 0.52.1
+
+- Version aligned with the Settings tooltip fix.
+
+## 0.52.0
+
+- Version aligned with the Pair Settings tooltip update.
+
+## 0.51.2
+
+- Version aligned with the Bash command reporting fix.
+
+## 0.51.1
+
+- Version aligned with the conditional Pair and Worker tabs.
+
+## 0.51.0
+
+- Version aligned with the provider-specific worker model settings.
+
+## 0.50.0
+
+- Version aligned with the Pair Settings and Worker tab updates.
+
+## 0.49.0
+
+- Version aligned with AI Pair's experimental worker build (#134).
+
 ## 0.48.3
 
 -   Version aligned with AI Pair, whose replies no longer reach a waiting

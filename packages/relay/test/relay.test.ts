@@ -13,10 +13,11 @@ import { WebSocket } from 'ws';
 import { z } from 'zod';
 import { Bridge, Controller, type BridgeOptions } from '@ai-pair/core';
 import { LEFT_ARROW, RIGHT_ARROW } from '@ai-pair/core/constants';
-import { CURSOR_MARKER, DISCOVERY_SCHEMA, PROTOCOL_VERSION } from '@ai-pair/protocol';
+import { CURSOR_MARKER, DISCOVERY_SCHEMA, PROTOCOL_VERSION, WORKER_GRANT_SCHEMA } from '@ai-pair/protocol';
 import { FakeEditor, FakePanel, testConfig } from '../../core/test/fake';
 import { EditorLink, findWindows } from '../src/link';
 import { createServer, serve } from '../src/server';
+import { forwardCodexWorkerTranscript } from '../src/worker_output';
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs')>();
@@ -41,6 +42,7 @@ let panel: FakePanel;
 let controller: Controller;
 let bridge: Bridge;
 let traced: string[];
+let workerEnabled: boolean;
 /** The editor's calibration, as the bridge is given it: each test sets what it answers. */
 let arm: BridgeOptions['calibrate'];
 const clients: Client[] = [];
@@ -50,7 +52,8 @@ beforeEach(async () => {
   editor = new FakeEditor();
   panel = new FakePanel();
   editor.files.set(editor.resolvePath('src/a.ts'), '');
-  controller = new Controller(editor, panel, fast);
+  workerEnabled = false;
+  controller = new Controller(editor, panel, fast, undefined, { workerEnabled: () => workerEnabled });
   editor.controller = controller;
   // Its own, since the last test's bridge may still see its socket close.
   const lines: string[] = [];
@@ -77,11 +80,16 @@ afterEach(async () => {
 });
 
 /** Connects a client to a new relay server over an in-memory transport; `roots`: the harness's roots, as file URLs, if it has them. */
-async function connect(cwd = '/project/src', roots?: string[], runtime?: { version: string; relayHash: string }): Promise<Client> {
+async function connect(
+  cwd = '/project/src',
+  roots?: string[],
+  runtime?: { version: string; relayHash: string },
+  name = 'test',
+): Promise<Client> {
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   const server = createServer(new EditorLink(cwd, dir, runtime), 'THE GUIDE', cwd);
   await server.connect(serverSide);
-  const client = new Client({ name: 'test', version: '0' }, { capabilities: roots === undefined ? {} : { roots: {} } });
+  const client = new Client({ name, version: '0' }, { capabilities: roots === undefined ? {} : { roots: {} } });
   if (roots !== undefined) client.setRequestHandler(ListRootsRequestSchema, () => ({ roots: roots.map((uri) => ({ uri })) }));
   await client.connect(clientSide);
   clients.push(client);
@@ -152,12 +160,54 @@ describe('relay', () => {
   it('lists the tools and the prompt, with short instructions', async () => {
     const client = await connect();
     const tools = await client.listTools();
-    expect(tools.tools.map((t) => t.name).toSorted()).toEqual(['calibrate', 'diagnostics', 'end', 'listen', 'read', 'start', 'step']);
+    expect(tools.tools.map((t) => t.name).toSorted()).toEqual([
+      'calibrate',
+      'diagnostics',
+      'end',
+      'listen',
+      'read',
+      'start',
+      'step',
+      'worker_done',
+      'worker_grant',
+      'worker_notice',
+      'worker_output',
+      'worker_progress',
+      'worker_read',
+      'worker_say',
+      'worker_status',
+      'worker_step',
+    ]);
     expect(client.getInstructions()).toContain('`start`');
     const prompt = await client.getPrompt({ name: 'start', arguments: { task: 'add a todos API' } });
     expect(JSON.stringify(prompt.messages)).toContain('The task: add a todos API');
     expect(JSON.stringify((await client.getPrompt({ name: 'demo' })).messages)).toContain('# Demonstrate AI Pair');
     expect(JSON.stringify((await client.getPrompt({ name: 'diagnose' })).messages)).toContain('# Diagnose AI Pair');
+  });
+
+  it('composes MCP worker output and the transcript adapter on the exact worker grant', async () => {
+    workerEnabled = true;
+    const main = await connect('/project/src', undefined, undefined, 'codex');
+    const worker = await connect();
+    await call(main, 'start');
+    const granted = await call(main, 'worker_grant');
+    expect(granted.error).toBe(false);
+    const decoded: unknown = JSON.parse(granted.text);
+    const grant = WORKER_GRANT_SCHEMA.parse(decoded);
+    expect(await call(worker, 'worker_output', { ...grant, text: 'MCP output' })).toMatchObject({ error: false, text: '{"ok":true}' });
+
+    const output = '  Codex output\n\n';
+    const link = new EditorLink('/unrelated', dir);
+    const ignored = { type: 'item.completed', item: { type: 'reasoning', text: 'private' } };
+    const message = { type: 'item.completed', item: { type: 'agent_message', text: output } };
+    const input = Buffer.from([grant, ignored, message, { type: 'turn.completed' }].map((record) => JSON.stringify(record)).join('\n'));
+    const listening = call(main, 'listen');
+    expect(await forwardCodexWorkerTranscript([input], link)).toBe(true);
+    expect(panel.events.filter((event) => event.type === 'workerOutput').map((event) => event.text)).toEqual(['MCP output', output]);
+    const completion = await listening;
+    expect(completion.text).toContain('Codex worker finished.');
+    expect(completion.text).not.toContain('Codex output');
+    expect((await call(worker, 'worker_output', { ...grant, text: 'stale' })).error).toBe(true);
   });
 
   it('publishes and accepts narration fields through MCP without speech setup', async () => {
@@ -720,5 +770,30 @@ describe('discovery', () => {
     } finally {
       registered.mockRestore();
     }
+  });
+});
+
+describe('worker provider routing', () => {
+  it.each([
+    ['codex-mcp-client', 'claude', 'codex-model'],
+    ['claude-code', 'codex', 'claude-model'],
+    ['generic', 'codex', 'codex-model'],
+  ])('uses the selected provider for %s', async (name, hint, expected) => {
+    bridge.dispose();
+    controller = new Controller(editor, panel, fast, undefined, { workerEnabled: () => true });
+    editor.controller = controller;
+    bridge = new Bridge(controller, {
+      dir,
+      workspaceFolders: () => ['/project'],
+      runtime: { version: 'test', build: 'build-one', relayHash: 'abc' },
+      calibrate: () => true,
+      workerModel: (provider) => `${provider}-model`,
+    });
+    await bridge.start();
+    const client = await connect('/project/src', undefined, undefined, name);
+    expect((await call(client, 'start', { provider: hint })).error).toBe(false);
+    const grant = await call(client, 'worker_grant');
+    expect(grant.error).toBe(false);
+    expect(JSON.parse(grant.text)).toMatchObject({ model: expected });
   });
 });
