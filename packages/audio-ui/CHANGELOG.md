@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.51.1
+
+- Version aligned with the conditional Pair and Worker tabs.
+
 ## 0.51.0
 
 - Version aligned with the provider-specific worker model settings.

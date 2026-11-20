@@ -65,6 +65,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `BackgroundWorker.cfg` | proposal, two providers, two session generations, one worker per generation | holds | 180 |
 | `WorkerAttachment.cfg` | proposal, two owner attachments, one job and one grant per attachment | holds | 45 |
 | `WorkerDriver.cfg` | proposal, two worker tasks and three physical batch identities | holds | 68 |
+| `WorkerTabs.cfg` | enabled and disabled, Pair and Worker selections | holds | 3 |
 | `WorkerNotice.cfg` | two worker generations, one pending notice, ordinary progress separate | holds | 72 |
 | `WorkerProvider.cfg` | two attachment identities, two providers and an unknown provider | holds | 45 |
 | `Serialize.cfg` | `NumCalls = 2` calls, each empty or not, the session ending, an interrupt, and the socket closing at any point | holds | 3,646 |
@@ -4486,3 +4487,20 @@ this presentation choice without changing the modeled event stream.
 | `ActiveRecorded` | Initialize an active worker without a start; TLC rejects the initial state | `groups activity by worker, shows running state, and requests cancellation` |
 | `ActiveOwned` | Restore a worker without owner evidence; TLC rejects the snapshot | `restores a live worker from a current snapshot, not replay alone` |
 | `ConfirmVisible` | Leave Worker selected on confirmation; TLC rejects the transition | `reveals Pair when a command needs confirmation while Worker is selected` |
+
+### `WorkerTabs`: tab visibility and disable
+
+The row is hidden by default and whenever split-agent mode is disabled. The
+Worker tab can be selected only while enabled; disabling selects Pair. TLC
+explored 11 generated and 3 distinct states at depth 3. Separate mutations of
+`GuardDefault`, `GuardVisible`, `GuardSelect`, and `GuardDisable` violate
+`DefaultOff`, `RowMatchesSetting`, `WorkerOnlyEnabled`, and
+`WorkerOnlyEnabled`, respectively. An invalid initial tab violates `TypeOK`.
+The model abstracts DOM rendering and worker authority.
+
+| Invariant | Planned browser regression |
+|---|---|
+| `TypeOK` | TypeScript checks setting and tab values. |
+| `DefaultOff` | Fresh panel has no tab row before split-agent mode is enabled. |
+| `RowMatchesSetting` | Enabling and disabling shows and hides the tab row. |
+| `WorkerOnlyEnabled` | Disabling while Worker is selected reveals Pair and keeps Worker unavailable. |

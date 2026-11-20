@@ -25,6 +25,8 @@ The version information and Close button sit outside the disclosures.
 
 Conversation contains the split-agent switch, the worker model preference,
 and the amount of Worker activity shown in Pair.
+The Pair and Worker tabs appear only while split agents are enabled.
+Turning the setting off returns the view to the Pair conversation.
 
 ## Agent cursor
 

@@ -82,6 +82,7 @@ function $<T extends HTMLElement>(name: string, type: abstract new () => T): T {
 
 const ui = {
   band: $('band', HTMLElement),
+  workerTabs: $('worker-tabs', HTMLElement),
   pairTab: $('pair-tab', HTMLButtonElement),
   workerTab: $('worker-tab', HTMLButtonElement),
   workerView: $('worker-view', HTMLElement),
@@ -1593,6 +1594,7 @@ function showPair(): void {
 }
 ui.pairTab.addEventListener('click', showPair);
 ui.workerTab.addEventListener('click', () => {
+  if (ui.workerTabs.hidden !== false) return;
   ui.workerView.hidden = false;
   ui.band.hidden = true;
   ui.history.hidden = true;
@@ -1627,9 +1629,16 @@ function handle(message: ToPanel): void {
       ui.workerRunning.hidden = activeWorkers.size === 0;
       ui.workerCancel.hidden = activeWorkers.size === 0;
       return;
-    case 'workerEnabled':
+    case 'workerEnabled': {
+      // specs/WorkerTabs.tla, SetEnabled: disabling returns to Pair without clearing history.
+      const focusHidden =
+        !message.value && (ui.workerTabs.contains(document.activeElement) || ui.workerView.contains(document.activeElement));
+      if (!message.value) showPair();
+      ui.workerTabs.hidden = !message.value;
+      if (focusHidden) ui.settings.focus();
       ui.workerEnabled.checked = message.value;
       return;
+    }
     case 'workerModel':
       if (message.provider === 'codex') ui.workerModelCodex.value = message.value;
       else ui.workerModelClaude.value = message.value;

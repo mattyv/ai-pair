@@ -91,6 +91,10 @@ body {
   border-bottom-color: var(--vscode-focusBorder, var(--fg));
 }
 
+.worker-tabs[hidden] {
+  display: none;
+}
+
 .worker-view {
   flex: 1;
   overflow-y: auto;

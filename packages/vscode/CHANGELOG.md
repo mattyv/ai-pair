@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.51.1
+
+-   Hide the Pair and Worker tabs when split agents are disabled. Turning
+    split agents off returns the panel to Pair.
+-   Open the file from an external-change notice when VS Code cannot show
+    a Git diff, including for ignored worktree files.
+
 ## 0.51.0
 
 -   Save different worker models for Codex and Claude. Pair uses the

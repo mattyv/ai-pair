@@ -30,6 +30,9 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   The Worker tab follows Chat order for task groups and activity within
     each task. Both views place new activity at the same end. This order
     preference affects presentation while the source events stay chronological.
+-   Show the Pair and Worker tab row only while split agents are enabled.
+    Turning the setting off returns to Pair and retains the displayed Worker
+    history for later re-enable in the same session.
 -   Save worker model preferences separately for Codex and Claude. Use the
     preference associated with the current main connection. A blank
     preference or an unidentified provider supplies no model override,
@@ -37,6 +40,13 @@ Issue discussions and working notes hold the detailed evidence and history.
     is a preference hint. Grant authorization still depends on session
     ownership and the worker capability. Preserve the legacy single value
     in user settings without assigning it to an unverified provider.
+
+## Opening externally changed files (#15)
+
+-   Keep the Git diff when VS Code opens a matching tab. VS Code's Git
+    command can complete without showing a tab for an ignored file or a
+    worktree it has not discovered. Open the requested file directly when
+    the command fails or leaves a different tab active.
 
 ## Pair Settings sections (#130)
 

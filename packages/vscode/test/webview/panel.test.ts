@@ -3797,6 +3797,7 @@ describe('shortcuts', () => {
 
 describe('worker activity projection', () => {
   it('filters inline activity and never restores a live worker from replay', () => {
+    send({ type: 'workerEnabled', value: true });
     send({ type: 'workerVisibility', value: 'off' });
     send({ type: 'replay', events: [{ type: 'workerActivity', id: 1, phase: 'started', text: 'Old task' }] });
     expect(element('worker-running').hidden).toBe(true);
@@ -3837,6 +3838,7 @@ it('restores a live worker from a current snapshot, not replay alone', () => {
 });
 
 it('reveals Pair when a command needs confirmation while Worker is selected', () => {
+  send({ type: 'workerEnabled', value: true });
   click(element('worker-tab'));
   send({ type: 'run', id: 1, command: 'npm test', phase: 'confirm' });
   expect(element('worker-view').hidden).toBe(true);
@@ -3935,4 +3937,35 @@ it('replaces malformed webview state when a settings disclosure changes', async 
   state.value = 'invalid';
   element('settings-speech').dispatchEvent(new window.Event('toggle'));
   expect(state.value).toMatchObject({ settingsSections: { conversation: true, speech: false } });
+});
+
+it('shows Worker tabs only while enabled and retains history after disabling', () => {
+  expect(element('worker-tabs').hidden).toBe(true);
+  expect(element('history').hidden).toBe(false);
+  click(element('worker-tab'));
+  expect(element('history').hidden).toBe(false);
+  send({ type: 'workerEnabled', value: true });
+  expect(element('worker-tabs').hidden).toBe(false);
+  send({ type: 'workerActivity', id: 1, phase: 'started', text: 'Retained activity' });
+  click(element('worker-tab'));
+  expect(element('worker-view').hidden).toBe(false);
+  element('worker-tab').focus();
+  send({ type: 'workerEnabled', value: false });
+  expect(element('worker-tabs').hidden).toBe(true);
+  expect(element('worker-view').hidden).toBe(true);
+  expect(element('history').hidden).toBe(false);
+  expect(document.activeElement).toBe(element('settings'));
+  send({ type: 'workerEnabled', value: true });
+  click(element('worker-tab'));
+  expect(text('worker-history')).toContain('Retained activity');
+});
+
+it('moves focus from a Worker action when disabled', () => {
+  send({ type: 'workerEnabled', value: true });
+  send({ type: 'workerActivity', id: 1, phase: 'started', text: 'Working' });
+  click(element('worker-tab'));
+  element('worker-cancel').focus();
+  expect(document.activeElement).toBe(element('worker-cancel'));
+  send({ type: 'workerEnabled', value: false });
+  expect(document.activeElement).toBe(element('settings'));
 });

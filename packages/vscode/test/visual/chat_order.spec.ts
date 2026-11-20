@@ -968,7 +968,8 @@ test('voice status uses cached evidence and Settings opens by keyboard at narrow
 });
 
 test('view selection has a visible indicator that follows the selected button', async ({ page }) => {
-  await load(page);
+  const post = await load(page);
+  await post({ type: 'workerEnabled', value: true });
   const pair = page.getByRole('button', { name: 'Pair', exact: true });
   const worker = page.getByRole('button', { name: 'Worker', exact: true });
   await expect(pair).toHaveAttribute('aria-pressed', 'true');
@@ -989,6 +990,7 @@ test('view selection has a visible indicator that follows the selected button', 
 
 test('view buttons show keyboard focus and disabled Worker does not hover', async ({ page }) => {
   const post = await load(page);
+  await post({ type: 'workerEnabled', value: true });
   const pair = page.getByRole('button', { name: 'Pair', exact: true });
   const worker = page.getByRole('button', { name: 'Worker', exact: true });
   await page.keyboard.press('Tab');
@@ -1009,6 +1011,7 @@ test('view buttons show keyboard focus and disabled Worker does not hover', asyn
 
 test('Worker activity follows the Pair chat order, including live changes', async ({ page }) => {
   const post = await load(page);
+  await post({ type: 'workerEnabled', value: true });
   await post({ type: 'workerActivity', id: 1, phase: 'started', text: 'First' });
   await post({ type: 'workerActivity', id: 1, phase: 'progress', text: 'Second' });
   await post({ type: 'workerActivity', id: 2, phase: 'started', text: 'Third' });
@@ -1136,4 +1139,26 @@ test('invalid saved disclosure state uses defaults and preserves unrelated state
       return parsed;
     })
     .toMatchObject({ unrelated: 42, settingsSections: { conversation: true, speech: true } });
+});
+
+test('worker tabs follow enabled state without losing worker history', async ({ page }) => {
+  const post = await load(page);
+  const tabs = page.getByRole('navigation', { name: 'Panel views', includeHidden: true });
+  await expect(tabs).toBeHidden();
+  await expect(page.locator('[data-ui=history]')).toBeVisible();
+  await post({ type: 'workerEnabled', value: true });
+  await expect(tabs).toBeVisible();
+  await post({ type: 'workerActivity', id: 1, phase: 'started', text: 'Retained activity' });
+  const worker = page.locator('[data-ui=worker-tab]');
+  await worker.click();
+  await expect(page.locator('[data-ui=worker-view]')).toBeVisible();
+  await worker.focus();
+  await post({ type: 'workerEnabled', value: false });
+  await expect(tabs).toBeHidden();
+  await expect(page.locator('[data-ui=history]')).toBeVisible();
+  await expect(page.locator('[data-ui=worker-view]')).toBeHidden();
+  await expect(page.locator('[data-ui=settings]')).toBeFocused();
+  await post({ type: 'workerEnabled', value: true });
+  await worker.click();
+  await expect(page.locator('[data-ui=worker-history]')).toContainText('Retained activity');
 });

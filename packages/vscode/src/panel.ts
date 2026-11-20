@@ -1134,8 +1134,21 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     const uri = vscode.Uri.file(this.resolvePath(file));
     try {
       await vscode.commands.executeCommand('git.openChange', uri);
+      const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+      const target = uri.toString();
+      if (
+        (input instanceof vscode.TabInputTextDiff && (input.original.toString() === target || input.modified.toString() === target)) ||
+        (input instanceof vscode.TabInputText && input.uri.toString() === target)
+      ) {
+        return;
+      }
     } catch {
+      // Git may be unavailable, or may not know this file.
+    }
+    try {
       await vscode.commands.executeCommand('vscode.open', uri);
+    } catch {
+      void vscode.window.showErrorMessage('Could not open the changed file.');
     }
   }
 

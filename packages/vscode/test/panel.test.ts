@@ -72,6 +72,15 @@ vi.mock('vscode', () => {
 
   return {
     Uri: FakeUri,
+    TabInputText: class {
+      constructor(readonly uri: FakeUri) {}
+    },
+    TabInputTextDiff: class {
+      constructor(
+        readonly original: FakeUri,
+        readonly modified: FakeUri,
+      ) {}
+    },
     Position: class {
       constructor(
         readonly line: number,
@@ -86,6 +95,7 @@ vi.mock('vscode', () => {
     },
     commands: { executeCommand: vi.fn(() => Promise.resolve()) },
     window: {
+      tabGroups: { activeTabGroup: { activeTab: undefined as unknown } },
       showTextDocument: vi.fn(() => Promise.resolve()),
       showInformationMessage: vi.fn(() => Promise.resolve()),
       showErrorMessage: vi.fn(() => Promise.resolve()),
@@ -435,6 +445,7 @@ function postedOf(view: FakeView, type: ToPanel['type']): ToPanel[] {
 
 afterEach(() => {
   fakes.pick = undefined;
+  Object.assign(vscode.window.tabGroups.activeTabGroup, { activeTab: undefined });
   vi.resetAllMocks();
 });
 
@@ -1252,9 +1263,20 @@ describe('receive', () => {
     ]);
   });
 
-  it('openChange: opens the diff against git, or the file itself when git cannot', async () => {
+  it('openChange: preserves a matching Git diff or text tab', async () => {
     const view = open(harness().panel);
-    vi.mocked(vscode.commands.executeCommand).mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('No git.'));
+    const active = vi.mocked(vscode.window.tabGroups.activeTabGroup);
+    vi.mocked(vscode.commands.executeCommand)
+      .mockImplementationOnce(() => {
+        Object.assign(active, {
+          activeTab: { input: new vscode.TabInputTextDiff(vscode.Uri.parse('git:/root/a.ts'), vscode.Uri.file('/root/a.ts')) },
+        });
+        return Promise.resolve();
+      })
+      .mockImplementationOnce(() => {
+        Object.assign(active, { activeTab: { input: new vscode.TabInputText(vscode.Uri.file('/root/b.ts')) } });
+        return Promise.resolve();
+      });
     view.send({ type: 'openChange', file: 'a.ts' });
     await flush();
     view.send({ type: 'openChange', file: 'b.ts' });
@@ -1262,8 +1284,54 @@ describe('receive', () => {
     expect(vi.mocked(vscode.commands.executeCommand).mock.calls).toEqual([
       ['git.openChange', vscode.Uri.file('/root/a.ts')],
       ['git.openChange', vscode.Uri.file('/root/b.ts')],
+    ]);
+  });
+
+  it('openChange: opens the file when Git silently does nothing or rejects', async () => {
+    const view = open(harness().panel);
+    vi.mocked(vscode.commands.executeCommand)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('No git.'))
+      .mockResolvedValueOnce(undefined);
+    view.send({ type: 'openChange', file: 'a.ts' });
+    await flush();
+    view.send({ type: 'openChange', file: 'b.ts' });
+    await flush();
+    expect(vi.mocked(vscode.commands.executeCommand).mock.calls).toEqual([
+      ['git.openChange', vscode.Uri.file('/root/a.ts')],
+      ['vscode.open', vscode.Uri.file('/root/a.ts')],
+      ['git.openChange', vscode.Uri.file('/root/b.ts')],
       ['vscode.open', vscode.Uri.file('/root/b.ts')],
     ]);
+  });
+
+  it('openChange: checks either diff side and rejects an unrelated active tab', async () => {
+    const view = open(harness().panel);
+    const active = vscode.window.tabGroups.activeTabGroup;
+    Object.assign(active, {
+      activeTab: { input: new vscode.TabInputTextDiff(vscode.Uri.file('/root/a.ts'), vscode.Uri.parse('git:/root/a.ts')) },
+    });
+    view.send({ type: 'openChange', file: 'a.ts' });
+    await flush();
+    Object.assign(active, { activeTab: { input: new vscode.TabInputText(vscode.Uri.file('/root/other.ts')) } });
+    view.send({ type: 'openChange', file: 'b.ts' });
+    await flush();
+    expect(vi.mocked(vscode.commands.executeCommand).mock.calls).toEqual([
+      ['git.openChange', vscode.Uri.file('/root/a.ts')],
+      ['git.openChange', vscode.Uri.file('/root/b.ts')],
+      ['vscode.open', vscode.Uri.file('/root/b.ts')],
+    ]);
+  });
+
+  it('openChange: reports a fallback failure without exposing the error', async () => {
+    const view = open(harness().panel);
+    vi.mocked(vscode.commands.executeCommand)
+      .mockRejectedValueOnce(new Error('No git.'))
+      .mockRejectedValueOnce(new Error('private details'));
+    view.send({ type: 'openChange', file: 'a.ts' });
+    await flush();
+    expect(vscode.window.showErrorMessage).toHaveBeenCalledWith('Could not open the changed file.');
   });
 
   it('ignores a message of a type it does not know', () => {

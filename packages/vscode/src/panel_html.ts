@@ -314,7 +314,7 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
       <button type="button" data-ui="settings-close" class="primary">Close</button>
     </div>
   </dialog>
-  <nav class="worker-tabs" aria-label="Panel views">
+  <nav data-ui="worker-tabs" class="worker-tabs" aria-label="Panel views" hidden>
     <button type="button" data-ui="pair-tab" aria-pressed="true">Pair</button>
     <button type="button" data-ui="worker-tab" aria-pressed="false">Worker <span data-ui="worker-running" hidden>Running</span></button>
   </nav>

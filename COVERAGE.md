@@ -309,7 +309,7 @@ Last updated: css, 2026-11-20.
 | `packages/vscode/src/voice_indicator.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/voice_language.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/approval_sound.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 179 of 179 rules matched |
+| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 180 of 180 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/speech_audio.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/speech_decode.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -843,6 +843,8 @@ Last updated: css, 2026-11-20.
 | `specs/WorkerNotice.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/WorkerProvider.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/WorkerProvider.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/WorkerTabs.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/WorkerTabs.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/check.sh` | Shell | - | - | - | - | L 100.0% (59 of 59) | - |
 | `specs/run_configs.sh` | Shell | - | - | - | - | L 100.0% (40 of 40) | - |
 | `vitest.config.ts` | TypeScript | - | - | - | - | - | - |
