@@ -40,6 +40,7 @@ import { workerPaths } from './integration_worker';
 import { workerCliPaths } from './integration_worker_cli';
 import { preservedPlaybackPaths } from './integration_preserved_playback';
 import { corePaths } from './integration_core_paths';
+import { facepalmPaths } from './integration_facepalm_paths';
 import { playerGapPaths } from './integration_player_gap_paths';
 import { runLegacySpeechPaths } from './integration_legacy_speech_paths';
 import { installTerminalCleanup } from './integration_terminal_cleanup';
@@ -1632,6 +1633,7 @@ export async function run(): Promise<void> {
   await controllerPaths(api, root);
   await deferredSettlementPaths(api, root);
   await corePaths(api, root);
+  await facepalmPaths(api, root);
   await extensionPaths(api, root);
   await panelPaths(api);
   await invalidCalibration(api);

@@ -23,6 +23,7 @@ import {
 } from '@ai-pair/protocol';
 import { playDemo } from './demo';
 import { VsCodeEditor } from './editor';
+import { FacepalmClient } from './facepalm_client';
 import { Diagnostics } from './diagnostics';
 import { collectDiagnostics } from './diagnostics_collector';
 import { SpeechService, type SpeechAudioEvent, type SpeechOutput } from './speech_service';
@@ -195,6 +196,9 @@ let stopSpeech: (() => Promise<void>) | undefined;
 
 /** Waits, during deactivation, for panel settings still being saved (#119). */
 let flushSettings: (() => Promise<void>) | undefined;
+
+/** This window's local subscription to Facepalm, retired on deactivation (#83). */
+let facepalmClient: FacepalmClient | undefined;
 
 /** Starts the extension: the controller, the editor, the panel, the bridge, and the commands; returns the API the integration test drives. */
 export function activate(context: vscode.ExtensionContext): Api {
@@ -1101,7 +1105,11 @@ export function activate(context: vscode.ExtensionContext): Api {
       selectedNarration?.cancel();
     },
   };
-  controller = new Controller(editor, panel, undefined, narration, { workerEnabled: () => workerEnabledSetting.get() });
+  facepalmClient = new FacepalmClient();
+  controller = new Controller(editor, panel, undefined, narration, {
+    workerEnabled: () => workerEnabledSetting.get(),
+    facepalm: facepalmClient,
+  });
   controller.onDiagnostic = record;
   controller.trace = (line) => {
     log.info(line);
@@ -1587,5 +1595,6 @@ export function activate(context: vscode.ExtensionContext): Api {
 /** Waits for the speech lifecycle to retire its resources. */
 export function deactivate(): Promise<void> {
   // specs/SettingRoundTrip.tla, Reload: settings still being saved are given a bounded wait.
+  facepalmClient?.retire();
   return Promise.all([stopSpeech?.() ?? Promise.resolve(), flushSettings?.() ?? Promise.resolve()]).then(() => {});
 }

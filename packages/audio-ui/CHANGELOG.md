@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.55.0
+
+- Version aligned with the Facepalm subscription update.
+
 ## 0.54.0
 
 - Version aligned with live Worker transcript updates.

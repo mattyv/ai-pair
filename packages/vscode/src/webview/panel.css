@@ -830,6 +830,30 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
+/* facepalm: a feeling the programmer can correct, from a camera beat (#83). */
+.facepalm {
+  background: var(--soft);
+  border-radius: 5px;
+  padding: 8px 9px;
+}
+
+.facepalm-prompt {
+  color: var(--fg);
+  font-size: 12px;
+  margin: 0 0 6px;
+}
+
+.facepalm-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.facepalm-feeling {
+  box-shadow: inset 0 0 0 1px var(--border);
+  padding: 0 9px;
+}
+
 /* divider: a note across the history, such as Session started, with a line on each side. */
 .divider {
   align-items: center;

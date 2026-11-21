@@ -369,6 +369,12 @@ type_fast ";▌"
 -   **Check the code in each report.** It shows what each batch produced, with
     your cursor marked `▌`. If it isn't what you meant, or not where you meant
     it, fix it before you go on.
+-   **A Facepalm line, when a report has one, is a possible read of the
+    programmer's camera at a question or a proposal, never a measurement.** It
+    might say a possible agreement, disagreement, interest, annoyance,
+    confusion, or that it can't tell. Use it, if at all, only to decide whether
+    to check in or slow down; it never answers a question, approves a command,
+    or overrides what the programmer actually said.
 -   **Prefer `type`.** Use `type_fast` only for text the programmer doesn't need
     to read. It changes the speed, never the order: the same typing rules apply.
 -   **Edit visibly.** `select` before replacing or deleting, so the programmer

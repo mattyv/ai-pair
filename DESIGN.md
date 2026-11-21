@@ -100,8 +100,13 @@ bottom:
     keeping the line breaks they typed, outlined and labeled *waiting* until a
     report carries them to the agent (#117); commands are soft terminal rows
     with their outcomes; turn changes, interrupts and session boundaries are
-    faint dividers. The Settings dialog also offers oldest first: history then
-    appears above the band, with the current message and reply at the bottom.
+    faint dividers. When Facepalm (a standalone local service) read the
+    programmer's reaction to a question or a proposed change, a card asks "How
+    were you feeling just then?" with one button per feeling, its own read
+    already picked; a click sends the pick and the card replies with thanks,
+    never showing the reading's ID. The Settings dialog also offers oldest
+    first: history then appears above the band, with the current message and
+    reply at the bottom.
     Sending a message reveals the newest edge; incoming entries follow it when
     already there and preserve the reader's place when reading older history. A
     message moves out of the band when filed, with its code link, so it appears

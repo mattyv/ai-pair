@@ -127,6 +127,35 @@ Issue discussions and working notes hold the detailed evidence and history.
     probabilities. Camera retirement, report replay and model-use rights are
     explicit gates; bringing a noncommercial model does not grant commercial use.
 
+## Facepalm subscription (#83, item 14 of facepalm#61)
+
+-   AI Pair subscribes to Facepalm, a standalone local service outside this
+    repository; it does not build a camera, a model, or calibration of its
+    own. `FacepalmPort` is the only contract the controller sees, and every
+    call resolves to nothing when Facepalm is absent or has not approved this
+    extension's name, `ai-pair`: nothing then changes in a report or the
+    panel, and nothing throws.
+-   The first version attaches a beat's read to the normal `listen` and
+    `step` delivery, inside the batch loop that marked it: no wake of a
+    pending `listen`. Waking one for a reaction mid-wait is still an open
+    question for later, as the original design noted.
+-   Facepalm now approves several named clients at once (facepalm#89): AI
+    Pair and a standalone MCP client, such as Claude Desktop's, can run
+    concurrently without coordinating, each under its own name and token.
+    An earlier note here assumed one client at a time; that no longer holds.
+-   A batch marks a beat from the actions it actually played, not from ones
+    an interruption left unplayed: a `say` ending in a question mark marks
+    `question`; an edit (`type`, `type_fast`, `delete`, `newline`) with no
+    such `say` marks `proposal`; a question in the same batch as an edit
+    takes priority, since asking is the bigger interrupt point.
+-   The reading's ID never reaches the panel or the agent's report: the
+    panel shows only the feeling's name and a thank-you, and the agent's
+    report only a hedged, advisory line, never a score or a claim the
+    programmer feels something.
+-   Only the main pairing batches mark a beat; a background worker's batches
+    do not, since a worker's edits are not what the programmer is reacting
+    to live in the panel.
+
 ## Speech continuity and delivery
 
 -   Context is opt-in and session-local: retain at most three completed agent

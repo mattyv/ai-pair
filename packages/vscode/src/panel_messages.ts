@@ -10,6 +10,7 @@ import type { OpenRouterCatalogView } from './speech_openrouter_catalog';
 import type { OutputChoice } from './speech_output_types';
 import type {
   AudioDiagnostics,
+  FacepalmCue,
   LocalAudioStatus,
   SpeechDecodeFromPage,
   NavigatorCommentary,
@@ -88,7 +89,9 @@ export type FromPanel =
   | { type: 'speed'; value: number }
   | { type: 'readingSpeed'; value: number }
   | { type: 'codePlayback'; value: CodePlayback }
-  | { type: 'runDecision'; id: number; run: boolean; scope?: 'once' | 'command' | 'all'; remember?: boolean };
+  | { type: 'runDecision'; id: number; run: boolean; scope?: 'once' | 'command' | 'all'; remember?: boolean }
+  /** The programmer picked how they felt at a Facepalm cue (#83): one click, no confirmation round trip. */
+  | { type: 'facepalmFeel'; id: number; feeling: FacepalmCue['feeling'] };
 
 /** Messages to the page: the session's events, and the panel's own. */
 export type ToPanel =

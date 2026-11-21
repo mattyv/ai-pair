@@ -4601,3 +4601,46 @@ fairness violates `RetirementProgress`. An invalid initial preflight violates
 | `FailedRetainsOwner` | Runner tests report a blocker and keep ownership on close timeout or failed termination. |
 | `OutputNeedsChild` | Runner tests forward output only from the spawned child. |
 | `RetirementProgress` | Runner tests settle after a confirmed physical close, including after a retry. |
+
+### `FacepalmSubscription`: AI Pair's side of the Facepalm subscription
+
+AI Pair's local subscription to Facepalm (github.com/mattyv/facepalm, #83,
+item 14 of facepalm#61), a standalone camera reaction service outside this
+repository, which owns the camera and physical retirement itself. The model
+covers only AI Pair's side: one subscription, opened and closed, with at
+most one beat open on it at a time, and a beat still open discarded, never
+delivered, once retirement starts. `FacepalmClient`
+(`packages/vscode/src/facepalm_client.ts`) implements it; the controller
+marks a beat (`packages/core/src/facepalm_cue.ts`,
+`packages/core/src/controller.ts`, `markFacepalmBeat`). `FacepalmSubscription.cfg`
+is fully determined by the model's own bounded counters, with no further
+constants. TLC explored 49 generated and 30 distinct states at depth 13.
+
+| Spec | Code |
+|---|---|
+| `Enable` | `FacepalmClient.connect()`, called lazily from `markBeat` or `feel`, only once no connection is open or opening |
+| `Approve` | `FacepalmClient.open()`'s hello handshake succeeding |
+| `Refuse` | `open()` finding no approved token, a refused connection, or a refused `hello` |
+| `MarkBeat` | `markFacepalmBeat`, for a batch whose played actions ask a question or edit code |
+| `Answer` | `FacepalmClient.markBeat()`'s reply carrying an interpretation, attached to the batch's report and the panel |
+| `Retire` | `FacepalmClient.retire()`, and a request that times out or errors, discarding any beat it had open |
+| `ConfirmRetired` | the closed connection's promise clearing, so a later call reopens one |
+
+Each invariant and property was proved to bite with a mutation of a copy of
+the model, run in TLC and then reverted:
+
+| Mutation | Breaks |
+|---|---|
+| `Enable` allowed from `open` or `beating`, not only `closed` | `AtMostOneOpen` |
+| `MarkBeat` allowed a second time while already `beating` | `OneBeatAtATime` |
+| `Retire` left a beat still open instead of discarding it | `PendingClearedOnRetire` |
+| no fairness on `Answer` | `PendingAnswered` |
+| `Approve` writes a phase outside the enum | `TypeOK` |
+
+| Invariant or property | Proved by |
+|---|---|
+| `TypeOK` | Nothing: the TypeScript compiler and the protocol's zod schemas check these types |
+| `AtMostOneOpen` | `facepalm_client.test.ts`: reuses one open connection for a later beat; retries connecting after a failed attempt, instead of staying absent |
+| `OneBeatAtATime` | `facepalm_client.test.ts`: answers two overlapping requests in order, never interleaved |
+| `PendingClearedOnRetire` | `facepalm_client.test.ts`: retires the connection, and resolves undefined, when a beat never answers; `controller.test.ts`: discards Facepalm's read if the programmer ends the session, or the session is replaced, before the beat answers |
+| `PendingAnswered` | `facepalm_integration.e2e.test.ts`: a beat at a question reaches the pair report with its feeling, against a real Unix domain socket |

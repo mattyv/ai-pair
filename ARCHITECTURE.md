@@ -791,16 +791,41 @@ reads its own machine's file; the workspace panel sends nothing. A profile with
 its own keybindings is not followed: the extension API does not name the
 active profile.
 
+## Facepalm subscription
+
+AI Pair's extension host can subscribe to
+[Facepalm](https://github.com/mattyv/facepalm) (#83, item 14 of facepalm#61),
+a standalone local service outside this repository that owns a camera and
+reads the programmer's reaction, over its own per-user Unix domain socket.
+`FacepalmPort` (`packages/core/src/ports.ts`) is the only contract the
+controller sees: `markBeat` and `feel`, each resolving to nothing when
+Facepalm is absent or has not approved this extension's name, `ai-pair`
+(`facepalm-daemon approve ai-pair`). `FacepalmClient`
+(`packages/vscode/src/facepalm_client.ts`) implements it: it connects lazily
+on first use, serializes every request on the one connection it keeps open,
+and reopens a fresh connection on any failure or close
+(specs/FacepalmSubscription.tla). The controller marks a beat
+(`packages/core/src/facepalm_cue.ts`, `facepalmBeatKind`) when a batch's
+played actions ask a question or edit code, attaching Facepalm's read to
+that batch's own report, for the agent, and to a `facepalmCue` panel event.
+The panel's card, "How were you feeling just then?", offers one button per
+feeling Facepalm names, its own read already picked; one click sends `feel`
+through the controller, and the panel never shows the reading's ID. This
+subscription opens no camera, reads no frame, and runs no model of its
+own: perception stays entirely in Facepalm.
+
 ## Proposed nonverbal feedback architecture
 
 The proposed `PROPOSED: Nonverbal feedback ownership` Archi view is a design,
-not implemented behavior. It separates local camera and calibration owners,
-known editor/layout facts, session-scoped observations and the existing relay.
-Raw frames remain local; consented derived cues alone may reach the agent and
-its model. Independent camera and voice controls preserve speech independence.
+not implemented behavior, for a camera AI Pair would have owned itself. That
+plan is superseded for the camera and its models: perception moved into the
+standalone Facepalm service above, decided with the user on 2026-11-15 (see
+[Decisions](DECISIONS.md)). What the view still proposes, unbuilt, is editor
+activity reported with no camera at all, and the richer per-reaction signals
+(gaze, expression, calibration) Facepalm may someday offer a subscriber.
 Physical retirement, calibrated estimates, report replay and platform support
-are implementation gates rather than established guarantees. The full design,
-uncertainties and prospective spec gates are in
+remain implementation gates rather than established guarantees for that part.
+The full design, uncertainties and prospective spec gates are in
 [the nonverbal design](blueprints/ideas/nonverbal-pairing-feedback-design.md).
 
 Archi-Techture 1.5.1 validated the source and generated the normalized HTML
