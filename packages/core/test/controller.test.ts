@@ -3873,14 +3873,11 @@ describe('facepalm beats', () => {
     expect(posted(h).some((event) => event.type === 'facepalmCue')).toBe(false);
   });
 
-  it('tells Facepalm how the programmer felt, through the controller, and does nothing with no FacepalmPort', async () => {
+  it('tells Facepalm how the programmer felt, through the controller', async () => {
     const facepalm = mock<FacepalmPort>();
     facepalm.feel.mockResolvedValueOnce();
     const h = harness({}, {}, undefined, facepalm);
     await h.controller.feelFacepalm(7, 'engagement');
     expect(facepalm.feel).toHaveBeenCalledWith(7, 'engagement');
-
-    const bare = harness();
-    await expect(bare.controller.feelFacepalm(7, 'engagement')).resolves.toBeUndefined();
   });
 });

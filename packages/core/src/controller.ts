@@ -366,9 +366,14 @@ export class Controller {
     this.pump();
   }
 
-  /** Tells Facepalm how the programmer says they felt at a beat the panel offered them (#83). A no-op with no `FacepalmPort`. */
+  /**
+   * Tells Facepalm how the programmer says they felt at a beat the panel offered them (#83). The
+   * panel can only have offered one once `markFacepalmBeat` posted a cue, which it only does with a
+   * `FacepalmPort` configured, so this is never called without one.
+   */
   feelFacepalm(id: number, feeling: FacepalmCue['feeling']): Promise<void> {
-    return this.options.facepalm?.feel(id, feeling) ?? Promise.resolve();
+    // oxlint-disable-next-line typescript/no-non-null-assertion -- see the invariant above
+    return this.options.facepalm!.feel(id, feeling);
   }
 
   // ---- Tools -------------------------------------------------------------
