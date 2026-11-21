@@ -218,6 +218,13 @@
       "functions": 100
     }
   },
+  "packages/core/src/facepalm_cue.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/core/src/lines.ts": {
     "unit": {
       "lines": 100,
@@ -341,6 +348,13 @@
     }
   },
   "packages/protocol/src/diagnostics.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/protocol/src/facepalm.ts": {
     "unit": {
       "lines": 100,
       "branches": 100,
@@ -651,6 +665,13 @@
       "lines": 96,
       "branches": 92,
       "functions": 94
+    }
+  },
+  "packages/vscode/src/facepalm_client.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
     }
   },
   "packages/vscode/src/old_extension.ts": {

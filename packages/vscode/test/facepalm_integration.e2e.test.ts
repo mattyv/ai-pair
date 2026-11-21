@@ -1,0 +1,154 @@
+// Composed FacepalmClient, a real Unix domain socket standing in for Facepalm's daemon, and the real
+// Controller: a beat at a question reaches the pair report with its feeling (#83), and the panel's
+// pick of a feeling sends `feel` to the socket. specs/FacepalmSubscription.tla models the lifecycle.
+
+import { randomBytes } from 'node:crypto';
+import * as fs from 'node:fs';
+import * as net from 'node:net';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Controller } from '@ai-pair/core';
+import type { FacepalmCue } from '@ai-pair/protocol';
+import { FakeEditor, FakePanel, testConfig, until } from '../../core/test/fake';
+import { FacepalmClient } from '../src/facepalm_client';
+
+/** The per-user home directory FacepalmClient looks under; real otherwise, so `net` and `fs` stay real. */
+const fakes = vi.hoisted(() => ({ home: '' }));
+vi.mock('node:os', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('node:os')>()),
+  homedir: () => fakes.home,
+}));
+
+/** A real Unix domain socket standing in for Facepalm's daemon, answering just enough of its
+ * protocol (`src/protocol.h`, facepalm#61) for this test: `hello`, `beat`, and `feel`. */
+class FakeFacepalmSocket {
+  readonly directory: string;
+  readonly lines: string[] = [];
+  readonly token = randomBytes(32).toString('hex');
+  private readonly server: net.Server;
+  private readonly connections = new Set<net.Socket>();
+
+  constructor(homeDirectory: string) {
+    this.directory = path.join(homeDirectory, '.local', 'state', 'facepalm');
+    fs.mkdirSync(path.join(this.directory, 'clients'), { recursive: true });
+    fs.writeFileSync(path.join(this.directory, 'clients', 'ai-pair'), this.token, { mode: 0o600 });
+    this.server = net.createServer((socket) => {
+      this.connections.add(socket);
+      socket.on('close', () => {
+        this.connections.delete(socket);
+      });
+      socket.setEncoding('utf8');
+      let buffer = '';
+      socket.on('data', (chunk: string) => {
+        buffer += chunk;
+        let newline = buffer.indexOf('\n');
+        while (newline >= 0) {
+          const line = buffer.slice(0, newline);
+          buffer = buffer.slice(newline + 1);
+          this.lines.push(line);
+          socket.write(`${this.answer(line)}\n`);
+          newline = buffer.indexOf('\n');
+        }
+      });
+    });
+  }
+
+  /** Facepalm's reply to one request line, as its daemon would answer it. */
+  private answer(line: string): string {
+    const words = line.split(' ');
+    if (words[0] === 'hello') return words[2] === this.token ? '{"ok":true}' : '{"error":"a stranger"}';
+    if (words[0] === 'beat') {
+      const kind = words[1];
+      return JSON.stringify({
+        readings: [],
+        missed: 0,
+        interpretation: { id: 1, feeling: 'agreement', beat: kind, feelings: ['agreement', 'disagreement', 'unknown'] },
+      });
+    }
+    if (words[0] === 'feel') return '{"ok":true}';
+    return '{"error":"unknown request"}';
+  }
+
+  listen(): Promise<void> {
+    return new Promise((resolve) => {
+      this.server.listen(path.join(this.directory, 'service.sock'), resolve);
+    });
+  }
+
+  close(): Promise<void> {
+    for (const socket of this.connections) socket.destroy();
+    return new Promise((resolve) => {
+      this.server.close(() => {
+        resolve();
+      });
+    });
+  }
+}
+
+let home: string;
+let socket: FakeFacepalmSocket;
+
+const realPlatform = process.platform;
+
+beforeEach(async () => {
+  vi.useFakeTimers();
+  home = fs.mkdtempSync(path.join(os.tmpdir(), 'facepalm-'));
+  Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+  fakes.home = home;
+  socket = new FakeFacepalmSocket(home);
+  await socket.listen();
+});
+
+afterEach(async () => {
+  vi.useRealTimers();
+  Object.defineProperty(process, 'platform', { value: realPlatform, configurable: true });
+  await socket.close();
+  fs.rmSync(home, { recursive: true, force: true });
+});
+
+describe('a beat during a pairing session', () => {
+  it('reaches the pair report with the feeling Facepalm sent, then sends feel for the pick made in the panel', async () => {
+    const editor = new FakeEditor();
+    const panel = new FakePanel();
+    const facepalm = new FacepalmClient();
+    const controller = new Controller(editor, panel, testConfig, undefined, { facepalm });
+    editor.controller = controller;
+
+    await until(controller.start());
+    await until(controller.step([{ say: 'Shall I rename this helper?' }]));
+    const report = await until(controller.listen());
+
+    expect(socket.lines[0]).toBe(`hello ai-pair ${socket.token}`);
+    expect(socket.lines[1]).toBe('beat question 1500');
+    const cue = report.batches.find((batch) => batch.facepalm !== undefined)?.facepalm;
+    expect(cue).toEqual({ id: 1, feeling: 'agreement', feelings: ['agreement', 'disagreement', 'unknown'] });
+    expect(panel.events).toContainEqual({
+      type: 'facepalmCue',
+      id: 1,
+      feeling: 'agreement',
+      feelings: ['agreement', 'disagreement', 'unknown'],
+    });
+
+    const picked: FacepalmCue['feeling'] = 'disagreement';
+    await until(controller.feelFacepalm(cue?.id ?? 0, picked));
+    expect(socket.lines.at(-1)).toBe('feel 1 disagreement');
+  });
+
+  it('changes nothing, and never connects, when Facepalm has not approved this name', async () => {
+    fs.rmSync(path.join(socket.directory, 'clients', 'ai-pair'));
+    const editor = new FakeEditor();
+    const panel = new FakePanel();
+    const facepalm = new FacepalmClient();
+    const controller = new Controller(editor, panel, testConfig, undefined, { facepalm });
+    editor.controller = controller;
+
+    await until(controller.start());
+    await until(controller.step([{ say: 'Shall I rename this helper?' }]));
+    const report = await until(controller.listen());
+
+    expect(socket.lines).toHaveLength(0);
+    expect(report.batches.every((batch) => batch.facepalm === undefined)).toBe(true);
+    expect(panel.events.some((event) => event.type === 'facepalmCue')).toBe(false);
+  });
+});

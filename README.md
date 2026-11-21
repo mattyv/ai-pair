@@ -242,6 +242,35 @@ The demo follows your speech setting, demonstrates raising a hand, and cleans up
 verified temporary files when it ends unless you ask to keep them. If cleanup
 cannot run, it reports the retained paths. Diagnostics do not run a paid preview.
 
+## Facepalm camera feedback
+
+AI Pair can read the programmer's reaction to a question or a proposed change
+from [Facepalm](https://github.com/mattyv/facepalm), a standalone local service
+that reads a camera on this machine and never sends frames or images anywhere.
+Nothing changes when Facepalm is not installed or has not approved this
+extension: there is no error, no indicator, and no setting to find.
+
+To turn it on, install and run Facepalm, then approve this extension under its
+own name:
+
+```shell
+facepalm-daemon approve ai-pair
+```
+
+With that done, right after the agent asks a question or proposes a change in
+a pairing session, Facepalm reads a few seconds of the programmer's reaction
+and sends back a feeling: agreeing, disagreeing, interested, annoyed, confused,
+or not sure. The agent sees this as an advisory line in its report, never as an
+answer or an approval. The panel shows "How were you feeling just then?" with
+one button per feeling, Facepalm's read already picked; one click tells
+Facepalm how it actually went, which tunes its later reads, and the panel
+replies "Thanks — Facepalm will learn from this." No technical detail, such as
+the reading's ID, appears anywhere in the panel.
+
+This only works when Facepalm's socket is reachable from the extension host:
+over a remote connection (SSH), where the extension host and Facepalm's
+camera are on different machines, Facepalm stays unavailable.
+
 ## Original project README
 
 The following introduction is from the [original AI Pair project](https://github.com/faiface/ai-pair).

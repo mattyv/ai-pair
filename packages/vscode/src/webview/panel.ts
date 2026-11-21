@@ -1,6 +1,6 @@
 import { speechContextCapabilities } from '../speech_context_capabilities';
 import { voiceIndicator } from '../voice_indicator';
-import type { AudioDiagnostics, ShortcutLabels } from '@ai-pair/protocol';
+import type { AudioDiagnostics, FacepalmCue, ShortcutLabels } from '@ai-pair/protocol';
 import { speechAccent, type SpeechAccent } from '@ai-pair/protocol/speech_accents';
 import type { SpeechComputeState } from '../speech_compute_types';
 import { SPEECH_LISTENING_RATES } from '../speech_tempo';
@@ -518,6 +518,45 @@ function setOutcome(el: Element, outcome: Element, phase: RunPhase, exitCode: nu
     outcome.classList.add('fail');
     outcome.textContent = `exit ${exitCode}`;
   }
+}
+
+/** How the panel names each feeling Facepalm can read a beat as (#83); never its own wire name. */
+const FACEPALM_FEELING_LABELS: Record<FacepalmCue['feeling'], string> = {
+  agreement: 'Agreeing',
+  disagreement: 'Disagreeing',
+  engagement: 'Interested',
+  annoyance: 'Annoyed',
+  confused: 'Confused',
+  unknown: 'Not sure',
+};
+
+/**
+ * Adds "How were you feeling just then?" with one button per feeling Facepalm offers, `feeling`
+ * pre-highlighted. One click sends it and replaces the buttons with a thank-you; no ID or technical
+ * text ever shows (#83, item 14 of facepalm#61).
+ */
+function addFacepalmCue(id: number, feeling: FacepalmCue['feeling'], feelings: Array<FacepalmCue['feeling']>): void {
+  const el = entry('facepalm');
+  const prompt = document.createElement('p');
+  prompt.className = 'facepalm-prompt';
+  prompt.textContent = 'How were you feeling just then?';
+  const buttons = document.createElement('div');
+  buttons.className = 'facepalm-buttons';
+  for (const option of feelings) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'quiet facepalm-feeling';
+    button.textContent = FACEPALM_FEELING_LABELS[option];
+    button.classList.toggle('on', option === feeling);
+    button.addEventListener('click', () => {
+      vscode.postMessage({ type: 'facepalmFeel', id, feeling: option });
+      buttons.remove();
+      prompt.textContent = 'Thanks - Facepalm will learn from this.';
+    });
+    buttons.append(button);
+  }
+  el.append(prompt, buttons);
+  add(el);
 }
 
 function addRun(id: number, command: string, phase: RunPhase, exitCode: number | undefined): void {
@@ -2170,6 +2209,9 @@ function handle(message: ToPanel): void {
       return;
     case 'outside':
       addOutside(message.files);
+      return;
+    case 'facepalmCue':
+      addFacepalmCue(message.id, message.feeling, message.feelings);
       return;
     case 'turn':
       addDivider(message.to === 'programmer' ? 'You took the turn' : 'You handed the turn back');

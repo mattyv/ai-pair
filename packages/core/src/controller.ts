@@ -6,12 +6,14 @@ import { randomUUID } from 'node:crypto';
 import {
   spokenSay,
   CURSOR_MARKER,
+  FACEPALM_DEFAULT_BEAT_MS,
   WORKER_TEXT_LIMIT,
   ToolError,
   type Action,
   type BatchResult,
   type Event,
   type Excerpt,
+  type FacepalmCue,
   type FileContent,
   type Passage,
   type PauseReason,
@@ -22,6 +24,7 @@ import {
 import { DIAGNOSTIC_SNAPSHOT_WARNING } from './constants';
 import { reportDiagnostic } from './diagnostic_delivery';
 import { lineChanges, numberedDiff } from './diff';
+import { facepalmBeatKind } from './facepalm_cue';
 import { LineIds, type Sighting } from './lines';
 import { agentPath, displayPath, Player, type Failure, type Scene } from './player';
 import {
@@ -31,6 +34,7 @@ import {
   type CursorView,
   type DiagnosticEvent,
   type EditorPort,
+  type FacepalmPort,
   type NarrationPort,
   type PanelPort,
   type Ref,
@@ -347,7 +351,7 @@ export class Controller {
     private readonly panel: PanelPort,
     private config: Config = defaultConfig,
     private readonly narration?: NarrationPort,
-    private readonly options: { workerEnabled?: () => boolean } = {},
+    private readonly options: { workerEnabled?: () => boolean; facepalm?: FacepalmPort } = {},
   ) {}
 
   /** Sets the preference projected on subsequent reports (specs/NavigatorCommentary.tla, SetMode). */
@@ -360,6 +364,16 @@ export class Controller {
     session.commentaryPending = true;
     session.commentaryGeneration = ++this.noticeGeneration;
     this.pump();
+  }
+
+  /**
+   * Tells Facepalm how the programmer says they felt at a beat the panel offered them (#83). The
+   * panel can only have offered one once `markFacepalmBeat` posted a cue, which it only does with a
+   * `FacepalmPort` configured, so this is never called without one.
+   */
+  feelFacepalm(id: number, feeling: FacepalmCue['feeling']): Promise<void> {
+    // oxlint-disable-next-line typescript/no-non-null-assertion -- see the invariant above
+    return this.options.facepalm!.feel(id, feeling);
   }
 
   // ---- Tools -------------------------------------------------------------
@@ -1967,8 +1981,10 @@ export class Controller {
         batch.result = result;
         this.trace?.(`batch ${batch.id} ${result.status}`);
         session.queue = session.queue.filter((b) => b !== batch);
-        if (batch.workerResolve === undefined) session.finished.push(result);
-        else {
+        if (batch.workerResolve === undefined) {
+          await this.markFacepalmBeat(session, batch, result);
+          session.finished.push(result);
+        } else {
           if (result.status === 'completed') this.workerActivity('batchDone', 'Worker batch finished.');
           batch.workerResolve(result);
         }
@@ -1989,6 +2005,24 @@ export class Controller {
         void this.attentionBoundary(session, session.player.currentSpeech);
       }
     }
+  }
+
+  /**
+   * Marks a Facepalm beat for a batch that asked a question or proposed a change, and attaches its
+   * read to the batch's own report and to the panel (specs/FacepalmSubscription.tla, `MarkBeat`,
+   * `Answer`; #83). A no-op with no `FacepalmPort`, with neither action, or once the session this
+   * batch played on has ended or been replaced while the beat's window played out.
+   */
+  private async markFacepalmBeat(session: Session, batch: Batch, result: BatchResult): Promise<void> {
+    const facepalm = this.options.facepalm;
+    if (facepalm === undefined) return;
+    const played = result.unplayed === undefined ? batch.actions : batch.actions.slice(0, batch.actions.length - result.unplayed.length);
+    const kind = facepalmBeatKind(played);
+    if (kind === undefined) return;
+    const cue = await facepalm.markBeat(kind, FACEPALM_DEFAULT_BEAT_MS);
+    if (cue === undefined || this.session !== session || session.ended) return;
+    result.facepalm = cue;
+    this.panel.post({ type: 'facepalmCue', id: cue.id, feeling: cue.feeling, feelings: cue.feelings });
   }
 
   /** Starts the next batch, with the timeline reset: specs/Turns.tla, `StartHead`. */

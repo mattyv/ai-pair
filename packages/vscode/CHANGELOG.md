@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.55.0
+
+-   Subscribe to [Facepalm](https://github.com/mattyv/facepalm), a standalone
+    local service that reads the programmer's reaction to a question or a
+    proposed change from a camera, once it is installed and has approved
+    this extension (`facepalm-daemon approve ai-pair`). The agent's report
+    gets a hedged, advisory line; the panel asks "How were you feeling just
+    then?" with one button per feeling, Facepalm's read already picked, and
+    replies with thanks once picked. Nothing changes when Facepalm is absent
+    or has not approved this extension (#83).
+
 ## 0.54.0
 
 -   Grow the worker's response in the Worker tab as Codex writes it.

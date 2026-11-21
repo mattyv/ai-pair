@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: css, 2026-11-20.
+Last updated: css, 2026-11-21.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -97,6 +97,7 @@ Last updated: css, 2026-11-20.
 | `packages/core/src/controller.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/diagnostic_delivery.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/diff.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.5% F 100.0% | - | - | - | - |
+| `packages/core/src/facepalm_cue.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/core/src/index.ts` | TypeScript | - | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/lines.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.7% F 100.0% | - | - | - | - |
 | `packages/core/src/paths.ts` | TypeScript | - | L 100.0% B 100.0% F 100.0% | - | - | - | - |
@@ -116,6 +117,7 @@ Last updated: css, 2026-11-20.
 | `packages/core/test/diagnostic_delivery.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/core/test/diagnostics_bridge.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/core/test/diff.test.ts` | TypeScript | test | test | test | test | test | test |
+| `packages/core/test/facepalm_cue.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/core/test/fake.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/lines.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/places.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -131,6 +133,7 @@ Last updated: css, 2026-11-20.
 | `packages/core/test/typing.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/protocol/src/command_channel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.5% B 77.3% F 100.0% | - | - | - | - |
 | `packages/protocol/src/diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
+| `packages/protocol/src/facepalm.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/protocol/src/gpu_diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/index.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/keybindings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -148,6 +151,7 @@ Last updated: css, 2026-11-20.
 | `packages/protocol/src/wire.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/test/command_channel.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/protocol/test/facepalm.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/protocol/test/gpu_diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/index.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/protocol/test/keybindings.test.ts` | TypeScript | test | - | test | - | - | test |
@@ -209,11 +213,12 @@ Last updated: css, 2026-11-20.
 | `packages/vscode/src/diagnostics_collector.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.3% B 90.5% F 100.0% | - | - | - | - |
 | `packages/vscode/src/editor.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.1% B 88.7% F 100.0% | - | - | - | - |
 | `packages/vscode/src/extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.3% B 92.3% F 94.5% | - | - | - | - |
+| `packages/vscode/src/facepalm_client.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/old_extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/outside.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.5% F 100.0% | - | - | - | - |
 | `packages/vscode/src/outside_watch.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 96.5% F 100.0% | - | - | - | - |
-| `packages/vscode/src/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.3% B 84.9% F 94.6% | - | - | - | - |
+| `packages/vscode/src/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.8% B 84.1% F 95.2% | - | - | - | - |
 | `packages/vscode/src/panel_html.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 80.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/panel_messages.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
 | `packages/vscode/src/panel_placement.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 90.9% B 67.6% F 100.0% | - | - | - | - |
@@ -313,7 +318,7 @@ Last updated: css, 2026-11-20.
 | `packages/vscode/src/voice_indicator.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/voice_language.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/approval_sound.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 181 of 181 rules matched |
+| `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 185 of 185 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/speech_audio.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/speech_decode.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -332,6 +337,8 @@ Last updated: css, 2026-11-20.
 | `packages/vscode/test/diagnostics_collector.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/editor.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/extension.test.ts` | TypeScript | test | test | test | test | - | test |
+| `packages/vscode/test/facepalm_client.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/facepalm_integration.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/fixtures/packaged_mcp_check.mts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/fixtures/tempo_schema_fake.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration.ts` | TypeScript | test | test | test | test | test | test |
@@ -348,6 +355,7 @@ Last updated: css, 2026-11-20.
 | `packages/vscode/test/integration_core_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_deferred_settlement.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_diagnostic_coverage_paths.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_facepalm_paths.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/integration_flow_gate.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_gap_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_gpu_process.ts` | TypeScript | test | test | test | - | - | test |
@@ -380,6 +388,7 @@ Last updated: css, 2026-11-20.
 | `packages/vscode/test/integration_terminal_cleanup.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_vscode_coverage_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_worker.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/integration_worker_cli.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/integration_workspace_incompatible.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/launcher.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/navigator_editor.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -622,6 +631,8 @@ Last updated: css, 2026-11-20.
 | `specs/EditEvents.tla` | TLA+ | - | - | 4 of 4 actions | - | - | - |
 | `specs/EditorAdapter.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/EditorAdapter.tla` | TLA+ | - | - | 14 of 14 actions | - | - | - |
+| `specs/FacepalmSubscription.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/FacepalmSubscription.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/FileText.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/FileText.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
 | `specs/FollowMode.cfg` | TLC config | - | - | - | - | - | - |

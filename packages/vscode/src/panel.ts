@@ -1131,6 +1131,9 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       case 'openUrl':
         if (/^https?:\/\//.test(message.url)) void vscode.env.openExternal(vscode.Uri.parse(message.url));
         return;
+      case 'facepalmFeel':
+        void controller().feelFacepalm(message.id, message.feeling);
+        return;
       // no default
     }
   }

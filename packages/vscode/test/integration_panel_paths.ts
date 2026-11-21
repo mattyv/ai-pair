@@ -217,6 +217,8 @@ export async function panelPaths(api: Api): Promise<void> {
     { type: 'runDecision', id: 1, run: true, remember: true },
     { type: 'runDecision', id: 1, run: true, scope: 'command' },
     { type: 'runDecision', id: 1, run: true, scope: 'all' },
+    // Forwarded to Facepalm (#83): with no approved token file here, it resolves to nothing, opening no socket.
+    { type: 'facepalmFeel', id: 1, feeling: 'confused' },
     { type: 'end' },
   ]);
 
