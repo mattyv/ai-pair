@@ -469,11 +469,11 @@ describe('the history (specs/Panel.tla, specs/PanelScroll.tla)', () => {
     click(picked);
     expect(posted().at(-1)).toEqual({ type: 'facepalmFeel', id: 7, feeling: 'disagreement' });
     expect(card.querySelector('.facepalm-buttons')).toBeNull();
-    expect(card.querySelector('.facepalm-prompt')?.textContent).toBe('Thanks — Facepalm will learn from this.');
+    expect(card.querySelector('.facepalm-prompt')?.textContent).toBe('Thanks - Facepalm will learn from this.');
     expect(card.textContent).not.toContain('7');
   });
 
-  it('shows only the feelings Facepalm offers for a cue, named as the panel does, never Facepalm’s wire names', () => {
+  it('shows only the feelings Facepalm offers for a cue, named as the panel does, never the wire names Facepalm uses', () => {
     start();
     send({ type: 'facepalmCue', id: 1, feeling: 'confused', feelings: ['confused', 'engagement', 'annoyance'] });
     const card = element('history').querySelector('.facepalm');

@@ -36,7 +36,7 @@ it('builds the feel line with the interpretation id and the picked feeling', () 
   expect(facepalmFeel(7, 'agreement')).toBe('feel 7 agreement');
 });
 
-it('builds the beat line, bounded to facepalm’s 1 to 10000 millisecond window', () => {
+it('builds the beat line, bounded to the 1 to 10000 millisecond window facepalm allows', () => {
   expect(facepalmBeat('question', 1500)).toBe('beat question 1500');
   expect(facepalmBeat('proposal', 1500.4)).toBe('beat proposal 1500');
   expect(facepalmBeat('question', 0)).toBe(`beat question ${FACEPALM_MIN_BEAT_MS}`);

@@ -646,7 +646,7 @@ describe('attention', () => {
 });
 
 describe('facepalm', () => {
-  it('forwards the programmer’s picked feeling to the controller, as sent, with nothing else forwarded (#83)', () => {
+  it('forwards the feeling the programmer picked to the controller, as sent, with nothing else forwarded (#83)', () => {
     const { panel, controller } = harness();
     panel.receiveFromPage({ type: 'facepalmFeel', id: 7, feeling: 'confused' });
     expect(controller.feelFacepalm.mock.calls).toEqual([[7, 'confused']]);

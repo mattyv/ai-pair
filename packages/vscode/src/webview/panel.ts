@@ -551,7 +551,7 @@ function addFacepalmCue(id: number, feeling: FacepalmCue['feeling'], feelings: A
     button.addEventListener('click', () => {
       vscode.postMessage({ type: 'facepalmFeel', id, feeling: option });
       buttons.remove();
-      prompt.textContent = 'Thanks — Facepalm will learn from this.';
+      prompt.textContent = 'Thanks - Facepalm will learn from this.';
     });
     buttons.append(button);
   }

@@ -108,7 +108,7 @@ afterEach(async () => {
 });
 
 describe('a beat during a pairing session', () => {
-  it('reaches the pair report with Facepalm’s feeling, then sends feel for the panel’s pick', async () => {
+  it('reaches the pair report with the feeling Facepalm sent, then sends feel for the pick made in the panel', async () => {
     const editor = new FakeEditor();
     const panel = new FakePanel();
     const facepalm = new FacepalmClient();

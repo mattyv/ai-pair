@@ -3832,7 +3832,7 @@ describe('facepalm beats', () => {
     expect(posted(h).some((event) => event.type === 'facepalmCue')).toBe(false);
   });
 
-  it('discards Facepalm’s read if the programmer ends the session before the beat answers', async () => {
+  it('discards the read Facepalm sent if the programmer ends the session before the beat answers', async () => {
     const facepalm = mock<FacepalmPort>();
     let resolve: (read: FacepalmCue | undefined) => void = notArmed;
     facepalm.markBeat.mockImplementationOnce(
@@ -3852,7 +3852,7 @@ describe('facepalm beats', () => {
     expect(posted(h).some((event) => event.type === 'facepalmCue')).toBe(false);
   });
 
-  it('discards Facepalm’s read if the session is replaced before the beat answers', async () => {
+  it('discards the read Facepalm sent if the session is replaced before the beat answers', async () => {
     const facepalm = mock<FacepalmPort>();
     let resolve: (read: FacepalmCue | undefined) => void = notArmed;
     facepalm.markBeat.mockImplementationOnce(
