@@ -16,12 +16,20 @@ class FakeFacepalmDaemon {
   private readonly directory: string;
   private readonly token = randomBytes(32).toString('hex');
   private readonly server: net.Server;
+  /** Every socket accepted: `FacepalmClient` keeps its own open for reuse, so `stop` destroys these
+   * itself, rather than waiting for `server.close`'s callback, which an open connection would leave
+   * forever unfired. */
+  private readonly connections = new Set<net.Socket>();
 
   constructor(directory: string) {
     this.directory = directory;
     fs.mkdirSync(path.join(directory, 'clients'), { recursive: true });
     fs.writeFileSync(path.join(directory, 'clients', 'ai-pair'), this.token, { mode: 0o600 });
     this.server = net.createServer((socket) => {
+      this.connections.add(socket);
+      socket.on('close', () => {
+        this.connections.delete(socket);
+      });
       socket.setEncoding('utf8');
       let buffer = '';
       socket.on('data', (chunk: string) => {
@@ -56,8 +64,10 @@ class FakeFacepalmDaemon {
     });
   }
 
-  /** Closes the socket and removes its directory, so a later batch's beat finds no token, fast. */
+  /** Destroys every connection, closes the socket, and removes its directory, so a later batch's
+   * beat finds no token, fast. */
   stop(): Promise<void> {
+    for (const socket of this.connections) socket.destroy();
     return new Promise((resolve) => {
       this.server.close(() => {
         fs.rmSync(this.directory, { recursive: true, force: true });
