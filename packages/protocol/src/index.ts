@@ -233,3 +233,5 @@ export * from './diagnostics';
 export * from './openrouter';
 export * from './speech_accents';
 export * from './speech_decode';
+
+export * from './facepalm';

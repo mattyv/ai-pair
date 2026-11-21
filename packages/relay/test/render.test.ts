@@ -472,6 +472,17 @@ it('reports advisory warnings and error diagnostics without claiming the batch f
   expect(text).toContain('Python');
 });
 
+it('reports a Facepalm cue as advisory, never an answer or approval, with no technical ID (#83)', () => {
+  const text = renderReport(
+    report({ batches: [{ id: 1, status: 'completed', facepalm: { id: 7, feeling: 'confused', feelings: ['confused', 'unknown'] } }] }),
+    'step',
+  );
+  expect(text).toContain('Facepalm');
+  expect(text).toContain('possible confused');
+  expect(text).toContain('never an answer or approval');
+  expect(text).not.toContain('7');
+});
+
 it('renders a single-line diagnostic without a provider name', () => {
   const text = renderReport(
     report({ batches: [{ id: 2, status: 'completed', diagnostics: [{ file: 'a.py', line: 3, endLine: 3, message: 'Invalid syntax' }] }] }),

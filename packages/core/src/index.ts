@@ -12,6 +12,7 @@ export type {
   EditorDiagnostic,
   EditOptions,
   EditorPort,
+  FacepalmPort,
   Focus,
   NarrationPort,
   PanelEvent,

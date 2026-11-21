@@ -1,6 +1,6 @@
 // What the core needs from the editor and the narration panel.
 
-import type { Excerpt, PauseReason, SpeechDelivery, Turn } from '@ai-pair/protocol';
+import type { Excerpt, FacepalmBeatKind, FacepalmCue, PauseReason, SpeechDelivery, Turn } from '@ai-pair/protocol';
 
 /** Controls one optional live narration without owning reading or command decisions. */
 export interface NarrationPort {
@@ -23,6 +23,22 @@ export interface NarrationPort {
   resume: () => void;
   /** Stops current audio and invalidates its pending generation. */
   cancel: () => void;
+}
+
+/**
+ * An optional local subscription to Facepalm (github.com/mattyv/facepalm), a camera reaction
+ * service outside this extension (#83, item 14 of facepalm#61): specs/FacepalmSubscription.tla.
+ * Absent, or every call resolving to `undefined`, when Facepalm isn't installed or hasn't approved
+ * this extension (`facepalm-daemon approve ai-pair`): nothing then changes in a report or the panel.
+ */
+export interface FacepalmPort {
+  /**
+   * Marks a beat right after the agent asked a question or proposed a change, and waits out its
+   * window for Facepalm's read. `undefined` when Facepalm is unavailable, unapproved, or gave none.
+   */
+  markBeat: (kind: FacepalmBeatKind, windowMs: number) => Promise<FacepalmCue | undefined>;
+  /** Tells Facepalm how the programmer says they felt at a beat the panel offered them. */
+  feel: (id: number, feeling: FacepalmCue['feeling']) => Promise<void>;
 }
 
 /** What the agent is doing, as the panel shows it. */
@@ -203,7 +219,9 @@ export type PanelEvent =
       /** `exited`: a command left running in the background has ended since. */
       phase: 'confirm' | 'running' | 'done' | 'declined' | 'background' | 'exited';
       exitCode?: number;
-    };
+    }
+  /** Facepalm's read of a beat the programmer can correct: `id` names it for `feelFacepalm` (#83). */
+  | { type: 'facepalmCue'; id: number; feeling: FacepalmCue['feeling']; feelings: Array<FacepalmCue['feeling']> };
 
 /** The narration panel, as the controller sees it. */
 export interface PanelPort {

@@ -454,6 +454,35 @@ describe('the history (specs/Panel.tla, specs/PanelScroll.tla)', () => {
     expect(posted().at(-1)).toEqual({ type: 'openChange', file: 'b.ts' });
   });
 
+  it('shows a Facepalm cue with its read pre-highlighted, and sends feel with no ID or technical text on a click (#83)', () => {
+    start();
+    send({ type: 'facepalmCue', id: 7, feeling: 'agreement', feelings: ['agreement', 'disagreement', 'unknown'] });
+    const card = element('history').querySelector('.facepalm');
+    ok(card);
+    expect(card.querySelector('.facepalm-prompt')?.textContent).toBe('How were you feeling just then?');
+    const buttons = [...card.querySelectorAll('.facepalm-feeling')];
+    expect(buttons.map((b) => b.textContent)).toEqual(['Agreeing', 'Disagreeing', 'Not sure']);
+    expect(buttons[0]?.classList.contains('on')).toBe(true);
+    expect(buttons[1]?.classList.contains('on')).toBe(false);
+    const picked = buttons[1];
+    ok(picked);
+    click(picked);
+    expect(posted().at(-1)).toEqual({ type: 'facepalmFeel', id: 7, feeling: 'disagreement' });
+    expect(card.querySelector('.facepalm-buttons')).toBeNull();
+    expect(card.querySelector('.facepalm-prompt')?.textContent).toBe('Thanks — Facepalm will learn from this.');
+    expect(card.textContent).not.toContain('7');
+  });
+
+  it('shows only the feelings Facepalm offers for a cue, named as the panel does, never Facepalm’s wire names', () => {
+    start();
+    send({ type: 'facepalmCue', id: 1, feeling: 'confused', feelings: ['confused', 'engagement', 'annoyance'] });
+    const card = element('history').querySelector('.facepalm');
+    ok(card);
+    expect([...card.querySelectorAll('.facepalm-feeling')].map((b) => b.textContent)).toEqual(['Confused', 'Interested', 'Annoyed']);
+    expect(card.textContent).not.toContain('engagement');
+    expect(card.textContent).not.toContain('annoyance');
+  });
+
   it('Send, Report, RestoreUnseen: shows your message waiting until the agent receives it, and waiting again if put back (#117)', () => {
     start();
     send({ type: 'programmer', text: 'Old history.' });

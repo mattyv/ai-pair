@@ -10,14 +10,14 @@ import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mock } from 'vitest-mock-extended';
-import { CURSOR_MARKER, REPORT_SCHEMA, type Action, type BatchResult, type Report } from '@ai-pair/protocol';
+import { CURSOR_MARKER, REPORT_SCHEMA, type Action, type BatchResult, type FacepalmCue, type Report } from '@ai-pair/protocol';
 import { defaultConfig, type Config } from '../src/config';
 import { Controller, isSavedSession, type SavedSession } from '../src/controller';
 import { numberedDiff, lineChanges } from '../src/diff';
 import { followChange, rehearse } from '../src/rehearsal';
 import type { LineIds, Sighting } from '../src/lines';
 import type { Failure, Scene, Stage } from '../src/player';
-import type { DiagnosticEvent, EditorPort, NarrationPort, PanelEvent, PanelPort, SharedSelection } from '../src/ports';
+import type { DiagnosticEvent, EditorPort, FacepalmPort, NarrationPort, PanelEvent, PanelPort, SharedSelection } from '../src/ports';
 import { glideDuration, withOverrides } from '../src/timing';
 
 vi.mock('node:crypto', () => {
@@ -234,7 +234,12 @@ type FakePlayer = InstanceType<typeof fakes.FakePlayer>;
 type FakeTimeline = InstanceType<typeof fakes.FakeTimeline>;
 
 /** Returns a controller on mocks, with `config` over CONFIG and `files` in its editor. */
-function harness(config: Partial<Config> = {}, files: Record<string, string> = {}, narration?: NarrationPort): Harness {
+function harness(
+  config: Partial<Config> = {},
+  files: Record<string, string> = {},
+  narration?: NarrationPort,
+  facepalm?: FacepalmPort,
+): Harness {
   const texts = new Map(Object.entries(files).map(([name, text]) => [path.join(ROOT, name), text]));
   const editor = mock<EditorPort>();
   editor.resolvePath.mockImplementation((file) => path.resolve(ROOT, file));
@@ -245,7 +250,7 @@ function harness(config: Partial<Config> = {}, files: Record<string, string> = {
   });
   editor.isDirty.mockResolvedValue(false);
   const panel = mock<PanelPort>();
-  const controller = new Controller(editor, panel, { ...CONFIG, ...config }, narration);
+  const controller = new Controller(editor, panel, { ...CONFIG, ...config }, narration, facepalm ? { facepalm } : {});
   const traced: string[] = [];
   controller.trace = (line) => {
     traced.push(line);
@@ -3736,5 +3741,146 @@ describe('worker notice lifecycle', () => {
     controller.revokeWorker();
     const revoked = await controller.listen();
     expect(revoked.events.some((event) => event.kind === 'worker_notice')).toBe(false);
+  });
+});
+
+/** Placeholder for a `resolve` not yet armed with a real `Promise` resolver. */
+function notArmed(): never {
+  throw new Error('not armed');
+}
+
+/** A Facepalm cue, Facepalm's read of one beat, for the tests below. */
+function cue(overrides: Partial<FacepalmCue> = {}): FacepalmCue {
+  return {
+    id: 1,
+    feeling: 'agreement',
+    feelings: ['agreement', 'disagreement', 'engagement', 'annoyance', 'confused', 'unknown'],
+    ...overrides,
+  };
+}
+
+describe('facepalm beats', () => {
+  it('marks a question beat for a say ending in a question mark, and attaches the read to the batch and the panel', async () => {
+    const facepalm = mock<FacepalmPort>();
+    const read = cue();
+    facepalm.markBeat.mockResolvedValueOnce(read);
+    const h = harness({}, {}, undefined, facepalm);
+    await h.controller.start();
+    await report(h.controller.step([{ say: 'Shall I rename this?' }]));
+    await settle();
+    const result = await report(h.controller.listen());
+    expect(facepalm.markBeat).toHaveBeenCalledWith('question', 1500);
+    expect(result.batches[0]?.facepalm).toEqual(read);
+    expect(posted(h)).toContainEqual({ type: 'facepalmCue', id: read.id, feeling: read.feeling, feelings: read.feelings });
+  });
+
+  it('marks a proposal beat for a batch that edits code with no question', async () => {
+    const facepalm = mock<FacepalmPort>();
+    facepalm.markBeat.mockResolvedValueOnce(cue({ feeling: 'confused' }));
+    const h = harness({}, {}, undefined, facepalm);
+    await h.controller.start();
+    await report(h.controller.step([ANCHORED, { type: 'x' }]));
+    expect(facepalm.markBeat).toHaveBeenCalledWith('proposal', 1500);
+  });
+
+  it('marks a beat from only the actions a batch actually played, not an interrupted suffix', async () => {
+    const facepalm = mock<FacepalmPort>();
+    facepalm.markBeat.mockResolvedValueOnce(cue());
+    const h = harness({}, {}, undefined, facepalm);
+    await h.controller.start();
+    player().play.mockResolvedValueOnce({
+      result: { id: 1, status: 'interrupted', unplayed: [{ type: 'x' }] },
+      sightings: [],
+      editedFiles: [],
+    });
+    await report(h.controller.step([ANCHORED, { say: 'Shall I rename this?' }, { type: 'x' }]));
+    await settle();
+    await report(h.controller.listen());
+    expect(facepalm.markBeat).toHaveBeenCalledWith('question', 1500);
+  });
+
+  it('marks no beat, and never calls Facepalm, for a batch that neither asks nor edits', async () => {
+    const facepalm = mock<FacepalmPort>();
+    const h = harness({}, {}, undefined, facepalm);
+    await h.controller.start();
+    await report(h.controller.step([ANCHORED]));
+    await settle();
+    const result = await report(h.controller.listen());
+    expect(facepalm.markBeat).not.toHaveBeenCalled();
+    expect(result.batches[0]?.facepalm).toBeUndefined();
+  });
+
+  it('changes nothing with no FacepalmPort configured', async () => {
+    const h = harness();
+    await h.controller.start();
+    await report(h.controller.step([{ say: 'Shall I rename this?' }]));
+    await settle();
+    const result = await report(h.controller.listen());
+    expect(result.batches[0]?.facepalm).toBeUndefined();
+    expect(posted(h).some((event) => event.type === 'facepalmCue')).toBe(false);
+  });
+
+  it('attaches nothing when Facepalm is unavailable, unapproved, or gave no read', async () => {
+    const facepalm = mock<FacepalmPort>();
+    facepalm.markBeat.mockResolvedValueOnce(undefined);
+    const h = harness({}, {}, undefined, facepalm);
+    await h.controller.start();
+    await report(h.controller.step([{ say: 'Shall I rename this?' }]));
+    await settle();
+    const result = await report(h.controller.listen());
+    expect(result.batches[0]?.facepalm).toBeUndefined();
+    expect(posted(h).some((event) => event.type === 'facepalmCue')).toBe(false);
+  });
+
+  it('discards Facepalm’s read if the programmer ends the session before the beat answers', async () => {
+    const facepalm = mock<FacepalmPort>();
+    let resolve: (read: FacepalmCue | undefined) => void = notArmed;
+    facepalm.markBeat.mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          resolve = r;
+        }),
+    );
+    const h = harness({}, {}, undefined, facepalm);
+    await h.controller.start();
+    const stepPromise = h.controller.step([{ say: 'Shall I rename this?' }]);
+    await settle(10);
+    h.controller.endSession();
+    resolve(cue());
+    const result = await report(stepPromise);
+    expect(result.batches[0]?.facepalm).toBeUndefined();
+    expect(posted(h).some((event) => event.type === 'facepalmCue')).toBe(false);
+  });
+
+  it('discards Facepalm’s read if the session is replaced before the beat answers', async () => {
+    const facepalm = mock<FacepalmPort>();
+    let resolve: (read: FacepalmCue | undefined) => void = notArmed;
+    facepalm.markBeat.mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          resolve = r;
+        }),
+    );
+    const h = harness({}, {}, undefined, facepalm);
+    await h.controller.start();
+    void h.controller.step([{ say: 'Shall I rename this?' }]).catch(() => undefined);
+    await settle(10);
+    expect(facepalm.markBeat).toHaveBeenCalledTimes(1);
+    h.controller.disconnect();
+    await h.controller.start(undefined, path.join(ROOT, 'other'));
+    resolve(cue());
+    await settle(10);
+    expect(posted(h).some((event) => event.type === 'facepalmCue')).toBe(false);
+  });
+
+  it('tells Facepalm how the programmer felt, through the controller, and does nothing with no FacepalmPort', async () => {
+    const facepalm = mock<FacepalmPort>();
+    facepalm.feel.mockResolvedValueOnce();
+    const h = harness({}, {}, undefined, facepalm);
+    await h.controller.feelFacepalm(7, 'engagement');
+    expect(facepalm.feel).toHaveBeenCalledWith(7, 'engagement');
+
+    const bare = harness();
+    await expect(bare.controller.feelFacepalm(7, 'engagement')).resolves.toBeUndefined();
   });
 });

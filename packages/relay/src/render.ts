@@ -116,6 +116,11 @@ function renderBatch(batch: BatchResult): string {
   for (const run of batch.runs ?? []) {
     parts.push(renderRun(run));
   }
+  if (batch.facepalm) {
+    parts.push(
+      `Facepalm, from the programmer's camera, read a possible ${batch.facepalm.feeling}: advisory only, never an answer or approval.`,
+    );
+  }
   for (const u of batch.unsaved ?? []) {
     parts.push(
       `Couldn't save ${u.file} (${u.error}): the editor has your edits, the file on disk doesn't, so commands and your file tools see the old file. Ask the programmer to resolve it in the editor, which offers to compare or overwrite.`,

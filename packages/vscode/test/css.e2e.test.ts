@@ -111,6 +111,7 @@ const SCENARIO: object[] = [
   { type: 'workerOutput', id: 1, text: 'Worker output' },
   { type: 'point', file: 'src/server.ts', line: 12 },
   { type: 'outside', files: ['package.json', 'src/other.ts'] },
+  { type: 'facepalmCue', id: 1, feeling: 'agreement', feelings: ['agreement', 'disagreement', 'unknown'] },
   { type: 'run', id: 1, command: 'npm test', phase: 'confirm' },
   { type: 'run', id: 1, command: 'npm test', phase: 'running' },
   { type: 'run', id: 1, command: 'npm test', phase: 'done', exitCode: 0 },

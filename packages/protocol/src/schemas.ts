@@ -147,6 +147,26 @@ export const BATCH_ERROR_SCHEMA = z.object({
   candidates: z.array(CANDIDATE_SCHEMA).optional(),
 });
 
+/**
+ * How Facepalm (github.com/mattyv/facepalm, ai-pair#83) read a beat, named as its one list does
+ * (`src/feelings.h`): agreement, disagreement, engagement, annoyance, confused, or unknown. The
+ * panel shows these as Agreeing, Disagreeing, Interested, Annoyed, Confused, and Not sure.
+ */
+export const FACEPALM_FEELING_SCHEMA = z.enum(['agreement', 'disagreement', 'engagement', 'annoyance', 'confused', 'unknown']);
+
+/** What the agent just did, which opens a beat Facepalm reads: a question, or a proposed change. */
+export const FACEPALM_BEAT_KIND_SCHEMA = z.enum(['question', 'proposal']);
+
+/**
+ * Facepalm's read of one beat: `id` names the interpretation for a later `feel`; `feelings` lists
+ * every feeling the programmer could pick instead, in Facepalm's order.
+ */
+export const FACEPALM_CUE_SCHEMA = z.strictObject({
+  id: z.number().int().positive(),
+  feeling: FACEPALM_FEELING_SCHEMA,
+  feelings: z.array(FACEPALM_FEELING_SCHEMA).min(1),
+});
+
 /** Checks a {@link BatchResult}. */
 export const BATCH_RESULT_SCHEMA = z.object({
   id: z.number(),
@@ -169,6 +189,8 @@ export const BATCH_RESULT_SCHEMA = z.object({
     .optional(),
   /** Files the batch edited that couldn't be saved: the buffer has the edits, the file on disk doesn't. */
   unsaved: z.array(z.object({ file: z.string(), error: z.string() })).optional(),
+  /** Facepalm's read of a beat this batch marked, by asking a question or proposing a change (ai-pair#83). */
+  facepalm: FACEPALM_CUE_SCHEMA.optional(),
 });
 
 /** Checks a {@link LineColumn}. */
@@ -408,6 +430,15 @@ export type BatchError = z.infer<typeof BATCH_ERROR_SCHEMA>;
 
 /** A finished batch as a report describes it: its status, its code, and what was left unplayed. */
 export type BatchResult = z.infer<typeof BATCH_RESULT_SCHEMA>;
+
+/** How Facepalm read a beat: agreement, disagreement, engagement, annoyance, confused, or unknown. */
+export type FacepalmFeeling = z.infer<typeof FACEPALM_FEELING_SCHEMA>;
+
+/** What opened the beat Facepalm read: a question, or a proposed change. */
+export type FacepalmBeatKind = z.infer<typeof FACEPALM_BEAT_KIND_SCHEMA>;
+
+/** The cue a pair report or the panel carries from one beat Facepalm read. */
+export type FacepalmCue = z.infer<typeof FACEPALM_CUE_SCHEMA>;
 
 /** A position in a file, by line and column, both from 1. */
 export type LineColumn = z.infer<typeof LINE_COLUMN_SCHEMA>;
