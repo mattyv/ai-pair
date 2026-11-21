@@ -33,11 +33,14 @@ const fakes = vi.hoisted(() => ({
   /** The token file's content and stat, or `undefined` for one that doesn't exist. */
   tokenFile: undefined as { content: string; mode: number; uid: number } | undefined,
   sockets: [] as Array<ReturnType<typeof makeSocket>>,
+  /** The socket path each `net.createConnection` call asked for, in order. */
+  socketPaths: [] as string[],
 }));
 
 vi.mock('node:os', () => ({ homedir: () => fakes.homedir }));
 vi.mock('node:net', () => ({
-  createConnection: vi.fn(() => {
+  createConnection: vi.fn((socketPath: string) => {
+    fakes.socketPaths.push(socketPath);
     const socket = makeSocket();
     fakes.sockets.push(socket);
     return socket;
@@ -91,6 +94,7 @@ beforeEach(() => {
   Object.defineProperty(process, 'getuid', { value: () => 1000, configurable: true });
   fakes.tokenFile = undefined;
   fakes.sockets.length = 0;
+  fakes.socketPaths.length = 0;
 });
 
 afterEach(() => {
@@ -101,6 +105,7 @@ afterEach(() => {
   } else {
     Object.defineProperty(process, 'getuid', { value: realGetuid, configurable: true });
   }
+  delete process.env.AI_PAIR_FACEPALM_HOME;
   vi.clearAllMocks();
 });
 
@@ -374,6 +379,19 @@ describe('a beat', () => {
     lastSocket().emit('data', `${JSON.stringify({ readings: [], missed: 0 })}\n`);
     await beat;
     expect(fakes.sockets).toHaveLength(1);
+  });
+
+  it('looks under AI_PAIR_FACEPALM_HOME instead of the real per-user directory when it is set', async () => {
+    process.env.AI_PAIR_FACEPALM_HOME = '/sandbox/facepalm';
+    approve();
+    const client = new FacepalmClient();
+    const beat = client.markBeat('question', 1500);
+    await vi.advanceTimersByTimeAsync(0);
+    await connectAndApprove();
+    await vi.advanceTimersByTimeAsync(0);
+    lastSocket().emit('data', `${JSON.stringify({ readings: [], missed: 0 })}\n`);
+    await beat;
+    expect(fakes.socketPaths).toEqual(['/sandbox/facepalm/service.sock']);
   });
 });
 

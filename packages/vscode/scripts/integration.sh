@@ -35,6 +35,9 @@ trap 'rm -rf "${TMP}" "${TMP_FILES}" "${TEST_DIR}"' EXIT
 mkdir -p "${TMP}/workspace" "${TMP}/agents/codex"
 # Keep discovery files and the launcher out of the real ~/.ai-pair.
 export AI_PAIR_HOME="${TMP}/home"
+# Keep a Facepalm test double's socket off the real per-user path (#83); short,
+# for its length limit.
+export AI_PAIR_FACEPALM_HOME="${TMP_FILES}/facepalm"
 if [[ -z "${EXTENSION_PATH}" ]]; then
   npm run build --silent
   EXTENSION_PATH="${PWD}"

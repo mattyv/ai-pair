@@ -38,8 +38,14 @@ interface Open {
   reader: LineReader;
 }
 
-/** Facepalm's fixed per-user directory: `src/user_paths.cc` and `mcp/main.js` compute the same one. */
+/**
+ * Facepalm's fixed per-user directory: `src/user_paths.cc` and `mcp/main.js` compute the same one.
+ * `AI_PAIR_FACEPALM_HOME` overrides it, for a real socket a test stands up without touching the real
+ * one at this fixed path; Facepalm itself knows nothing of this variable.
+ */
 function userDirectory(): string {
+  const override = process.env.AI_PAIR_FACEPALM_HOME;
+  if (override !== undefined) return override;
   return process.platform === 'darwin'
     ? path.join(os.homedir(), 'Library', 'Application Support', 'Facepalm')
     : path.join(os.homedir(), '.local', 'state', 'facepalm');
