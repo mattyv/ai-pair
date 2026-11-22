@@ -1,5 +1,6 @@
-// FacepalmClient's local subscription to Facepalm (#83). Solitary: node:net, node:fs/promises, and
-// node:os are mocked; the socket is a real EventEmitter standing in for net.Socket, driven by hand.
+// FacepalmClient's local subscription to Facepalm (#83). Solitary: node:net, node:fs/promises,
+// node:os, and node:crypto are mocked; the socket is a real EventEmitter standing in for
+// net.Socket, driven by hand.
 
 import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -35,9 +36,12 @@ const fakes = vi.hoisted(() => ({
   sockets: [] as Array<ReturnType<typeof makeSocket>>,
   /** The socket path each `net.createConnection` call asked for, in order. */
   socketPaths: [] as string[],
+  /** How many `randomUUID()` calls this test has made so far, for a deterministic per-instance name. */
+  nextUuid: 0,
 }));
 
 vi.mock('node:os', () => ({ homedir: () => fakes.homedir }));
+vi.mock('node:crypto', () => ({ randomUUID: () => `uuid-${++fakes.nextUuid}` }));
 vi.mock('node:net', () => ({
   createConnection: vi.fn((socketPath: string) => {
     fakes.socketPaths.push(socketPath);
@@ -95,6 +99,7 @@ beforeEach(() => {
   fakes.tokenFile = undefined;
   fakes.sockets.length = 0;
   fakes.socketPaths.length = 0;
+  fakes.nextUuid = 0;
 });
 
 afterEach(() => {
@@ -207,7 +212,7 @@ describe('a beat', () => {
       `${JSON.stringify({ readings: [], missed: 0, interpretation: { id: 7, feeling: 'agreement', beat: 'question', feelings: ['agreement', 'unknown'] } })}\n`,
     );
     await expect(beat).resolves.toEqual({ id: 7, feeling: 'agreement', feelings: ['agreement', 'unknown'] });
-    expect(lastSocket().written).toEqual([`hello ai-pair ${VALID_TOKEN}\n`, 'beat question 1500\n']);
+    expect(lastSocket().written).toEqual([`hello ai-pair-uuid-1 ${VALID_TOKEN}\n`, 'beat question 1500\n']);
   });
 
   it('resolves undefined for a reply with no interpretation, without closing the connection', async () => {
@@ -405,7 +410,7 @@ describe('feel', () => {
     await vi.advanceTimersByTimeAsync(0);
     lastSocket().emit('data', `${JSON.stringify({ ok: true })}\n`);
     await expect(felt).resolves.toBeUndefined();
-    expect(lastSocket().written).toEqual([`hello ai-pair ${VALID_TOKEN}\n`, 'feel 3 confused\n']);
+    expect(lastSocket().written).toEqual([`hello ai-pair-uuid-1 ${VALID_TOKEN}\n`, 'feel 3 confused\n']);
   });
 
   it('resolves without throwing when Facepalm refuses the feeling', async () => {
@@ -484,5 +489,41 @@ describe('retire', () => {
     expect(fakes.sockets).toHaveLength(2);
     reopened.emit('data', `${JSON.stringify({ ok: true })}\n`);
     await third;
+  });
+});
+
+describe('connection name', () => {
+  it('connects under its own per-instance name, built from the approved name and a UUID (#138)', async () => {
+    approve();
+    const client = new FacepalmClient();
+    const beat = client.markBeat('question', 1500);
+    await vi.advanceTimersByTimeAsync(0);
+    await connectAndApprove();
+    await vi.advanceTimersByTimeAsync(0);
+    lastSocket().emit('data', `${JSON.stringify({ readings: [], missed: 0 })}\n`);
+    await beat;
+    expect(lastSocket().written[0]).toBe(`hello ai-pair-uuid-1 ${VALID_TOKEN}\n`);
+  });
+
+  it('gives a second window its own distinct name, so Facepalm never refuses it as a name already connected', async () => {
+    approve();
+    const first = new FacepalmClient();
+    const second = new FacepalmClient();
+    const firstBeat = first.markBeat('question', 1500);
+    await vi.advanceTimersByTimeAsync(0);
+    const firstSocket = lastSocket();
+    await connectAndApprove(firstSocket);
+    await vi.advanceTimersByTimeAsync(0);
+    firstSocket.emit('data', `${JSON.stringify({ readings: [], missed: 0 })}\n`);
+    await firstBeat;
+    const secondBeat = second.markBeat('question', 1500);
+    await vi.advanceTimersByTimeAsync(0);
+    const secondSocket = lastSocket();
+    await connectAndApprove(secondSocket);
+    await vi.advanceTimersByTimeAsync(0);
+    secondSocket.emit('data', `${JSON.stringify({ readings: [], missed: 0 })}\n`);
+    await secondBeat;
+    expect(firstSocket.written[0]).toBe(`hello ai-pair-uuid-1 ${VALID_TOKEN}\n`);
+    expect(secondSocket.written[0]).toBe(`hello ai-pair-uuid-2 ${VALID_TOKEN}\n`);
   });
 });

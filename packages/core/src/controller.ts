@@ -1860,6 +1860,9 @@ export class Controller {
     this.diagnostic({ kind: 'session', state: 'ended' });
     this.session = undefined;
     this.narration?.cancel();
+    // specs/FacepalmSubscription.tla, `Retire`: ending the session, the agent's own end, or a
+    // session replacement all close here, the one place a session's resources are torn down (#138).
+    this.options.facepalm?.retire();
     session.timeline.interrupt();
     this.editor.cleanupIdleTerminals();
     clearTimeout(session.navigatorTimer);

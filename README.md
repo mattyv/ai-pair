@@ -271,6 +271,11 @@ This only works when Facepalm's socket is reachable from the extension host:
 over a remote connection (SSH), where the extension host and Facepalm's
 camera are on different machines, Facepalm stays unavailable.
 
+The subscription closes, so the camera is not read, once a pairing session
+ends, the agent ends it, or it is replaced by another — not only when the VS
+Code window itself closes. Each VS Code window connects to Facepalm under
+its own name, so opening more than one window still gets each its own cues.
+
 ## Original project README
 
 The following introduction is from the [original AI Pair project](https://github.com/faiface/ai-pair).
