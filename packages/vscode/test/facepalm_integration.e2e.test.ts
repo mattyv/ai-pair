@@ -21,20 +21,23 @@ vi.mock('node:os', async (importOriginal) => ({
 }));
 
 /** A real Unix domain socket standing in for Facepalm's daemon, answering just enough of its
- * protocol (`src/protocol.h`, facepalm#61) for this test: `hello`, `beat`, and `feel`. */
+ * protocol (`src/protocol.h`, facepalm#61) for this test: `hello`, `beat`, and `feel`. Refuses a
+ * `hello` under a name another live connection already holds, as Facepalm's daemon does, while
+ * matching the token independently of the name (#138). */
 class FakeFacepalmSocket {
   readonly directory: string;
   readonly lines: string[] = [];
   readonly token = randomBytes(32).toString('hex');
   private readonly server: net.Server;
-  private readonly connections = new Set<net.Socket>();
+  /** Every live connection, keyed by socket, to its `hello` name once helloed. */
+  private readonly connections = new Map<net.Socket, string | undefined>();
 
   constructor(homeDirectory: string) {
     this.directory = path.join(homeDirectory, '.local', 'state', 'facepalm');
     fs.mkdirSync(path.join(this.directory, 'clients'), { recursive: true });
     fs.writeFileSync(path.join(this.directory, 'clients', 'ai-pair'), this.token, { mode: 0o600 });
     this.server = net.createServer((socket) => {
-      this.connections.add(socket);
+      this.connections.set(socket, undefined);
       socket.on('close', () => {
         this.connections.delete(socket);
       });
@@ -47,7 +50,7 @@ class FakeFacepalmSocket {
           const line = buffer.slice(0, newline);
           buffer = buffer.slice(newline + 1);
           this.lines.push(line);
-          socket.write(`${this.answer(line)}\n`);
+          socket.write(`${this.answer(socket, line)}\n`);
           newline = buffer.indexOf('\n');
         }
       });
@@ -55,9 +58,15 @@ class FakeFacepalmSocket {
   }
 
   /** Facepalm's reply to one request line, as its daemon would answer it. */
-  private answer(line: string): string {
+  private answer(socket: net.Socket, line: string): string {
     const words = line.split(' ');
-    if (words[0] === 'hello') return words[2] === this.token ? '{"ok":true}' : '{"error":"a stranger"}';
+    if (words[0] === 'hello') {
+      const [, name, token] = words;
+      if (token !== this.token) return '{"error":"a stranger"}';
+      if (name !== undefined && [...this.connections.values()].includes(name)) return '{"error":"name already connected"}';
+      this.connections.set(socket, name);
+      return '{"ok":true}';
+    }
     if (words[0] === 'beat') {
       const kind = words[1];
       return JSON.stringify({
@@ -70,6 +79,11 @@ class FakeFacepalmSocket {
     return '{"error":"unknown request"}';
   }
 
+  /** How many connections are live right now, for a test to confirm one closed. */
+  get openConnections(): number {
+    return this.connections.size;
+  }
+
   listen(): Promise<void> {
     return new Promise((resolve) => {
       this.server.listen(path.join(this.directory, 'service.sock'), resolve);
@@ -77,7 +91,7 @@ class FakeFacepalmSocket {
   }
 
   close(): Promise<void> {
-    for (const socket of this.connections) socket.destroy();
+    for (const socket of this.connections.keys()) socket.destroy();
     return new Promise((resolve) => {
       this.server.close(() => {
         resolve();
@@ -119,7 +133,7 @@ describe('a beat during a pairing session', () => {
     await until(controller.step([{ say: 'Shall I rename this helper?' }]));
     const report = await until(controller.listen());
 
-    expect(socket.lines[0]).toBe(`hello ai-pair ${socket.token}`);
+    expect(socket.lines[0]).toMatch(new RegExp(`^hello ai-pair-\\S+ ${socket.token}$`));
     expect(socket.lines[1]).toBe('beat question 1500');
     const cue = report.batches.find((batch) => batch.facepalm !== undefined)?.facepalm;
     expect(cue).toEqual({ id: 1, feeling: 'agreement', feelings: ['agreement', 'disagreement', 'unknown'] });
@@ -150,5 +164,46 @@ describe('a beat during a pairing session', () => {
     expect(socket.lines).toHaveLength(0);
     expect(report.batches.every((batch) => batch.facepalm === undefined)).toBe(true);
     expect(panel.events.some((event) => event.type === 'facepalmCue')).toBe(false);
+  });
+});
+
+describe('a second VS Code window', () => {
+  it('connects at the same time under its own name, instead of being refused as a name already connected (#138)', async () => {
+    const first = new FacepalmClient();
+    const second = new FacepalmClient();
+
+    const [firstCue, secondCue] = await Promise.all([first.markBeat('question', 1500), second.markBeat('question', 1500)]);
+
+    expect(firstCue?.feeling).toBe('agreement');
+    expect(secondCue?.feeling).toBe('agreement');
+    const names = socket.lines.filter((line) => line.startsWith('hello ')).map((line) => line.split(' ')[1]);
+    expect(names).toHaveLength(2);
+    expect(new Set(names).size).toBe(2);
+  });
+});
+
+describe('retiring a subscription', () => {
+  it('closes the real connection once the programmer ends the session, instead of leaving the camera on (#138)', async () => {
+    const editor = new FakeEditor();
+    const panel = new FakePanel();
+    const facepalm = new FacepalmClient();
+    const controller = new Controller(editor, panel, testConfig, undefined, { facepalm });
+    editor.controller = controller;
+
+    await until(controller.start());
+    await until(controller.step([{ say: 'Shall I rename this helper?' }]));
+    await until(controller.listen());
+    expect(socket.openConnections).toBe(1);
+
+    // specs/FacepalmSubscription.tla, `Retire`: ending the session closes the subscription, so the
+    // camera connection does not outlive it.
+    controller.endSession();
+    await until(controller.listen());
+    // Real timers are faked in this file (`until`'s own trick): advance them so the socket's real
+    // close, which runs on the real event loop, gets a turn to be observed.
+    for (let elapsed = 0; socket.openConnections > 0 && elapsed < 2000; elapsed += 20) {
+      await vi.advanceTimersByTimeAsync(20);
+    }
+    expect(socket.openConnections).toBe(0);
   });
 });

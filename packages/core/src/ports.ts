@@ -37,6 +37,12 @@ export interface FacepalmPort {
    * window for Facepalm's read. `undefined` when Facepalm is unavailable, unapproved, or gave none.
    */
   markBeat: (kind: FacepalmBeatKind, windowMs: number) => Promise<FacepalmCue | undefined>;
+  /**
+   * Closes the subscription, discarding any beat left open (specs/FacepalmSubscription.tla,
+   * `Retire`): on ending the session, the agent's own end, or a session replacement. A later beat
+   * reopens it.
+   */
+  retire: () => void;
   /** Tells Facepalm how the programmer says they felt at a beat the panel offered them. */
   feel: (id: number, feeling: FacepalmCue['feeling']) => Promise<void>;
 }

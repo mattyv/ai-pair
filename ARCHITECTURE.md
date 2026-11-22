@@ -798,21 +798,29 @@ AI Pair's extension host can subscribe to
 a standalone local service outside this repository that owns a camera and
 reads the programmer's reaction, over its own per-user Unix domain socket.
 `FacepalmPort` (`packages/core/src/ports.ts`) is the only contract the
-controller sees: `markBeat` and `feel`, each resolving to nothing when
-Facepalm is absent or has not approved this extension's name, `ai-pair`
-(`facepalm-daemon approve ai-pair`). `FacepalmClient`
-(`packages/vscode/src/facepalm_client.ts`) implements it: it connects lazily
-on first use, serializes every request on the one connection it keeps open,
-and reopens a fresh connection on any failure or close
-(specs/FacepalmSubscription.tla). The controller marks a beat
+controller sees: `markBeat`, `feel`, and `retire`, each resolving to nothing
+(or, for `retire`, doing nothing) when Facepalm is absent or has not approved
+this extension's approved name, `ai-pair` (`facepalm-daemon approve
+ai-pair`). `FacepalmClient` (`packages/vscode/src/facepalm_client.ts`)
+implements it: it connects lazily on first use, serializes every request on
+the one connection it keeps open, and reopens a fresh connection on any
+failure or close (specs/FacepalmSubscription.tla). Each `FacepalmClient`
+instance, one per VS Code window, shows the approved token under its own
+per-instance connection name (`ai-pair-<uuid>`), so a second window is never
+refused as a name already connected; Facepalm matches the token
+independently of the name (#138). The controller marks a beat
 (`packages/core/src/facepalm_cue.ts`, `facepalmBeatKind`) when a batch's
 played actions ask a question or edit code, attaching Facepalm's read to
 that batch's own report, for the agent, and to a `facepalmCue` panel event.
 The panel's card, "How were you feeling just then?", offers one button per
 feeling Facepalm names, its own read already picked; one click sends `feel`
-through the controller, and the panel never shows the reading's ID. This
-subscription opens no camera, reads no frame, and runs no model of its
-own: perception stays entirely in Facepalm.
+through the controller, and the panel never shows the reading's ID. The
+controller's one session-teardown point, `close()`, retires the subscription
+whenever a session ends, by the programmer, by the agent's own end, or by a
+session replacement, so the camera does not stay on past any of them
+(#138); the extension also retires it on deactivation. This subscription
+opens no camera, reads no frame, and runs no model of its own: perception
+stays entirely in Facepalm.
 
 ## Proposed nonverbal feedback architecture
 

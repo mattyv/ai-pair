@@ -3881,3 +3881,58 @@ describe('facepalm beats', () => {
     expect(facepalm.feel).toHaveBeenCalledWith(7, 'engagement');
   });
 });
+
+describe('retiring Facepalm', () => {
+  // specs/FacepalmSubscription.tla, `Retire`: ending the session, the agent's own end, or a session
+  // replacement all close through the controller's one session-teardown point (#138), so the camera
+  // does not stay on past any of them.
+  it('retires Facepalm once the programmer ends an active session', async () => {
+    const facepalm = mock<FacepalmPort>();
+    const h = harness({}, {}, undefined, facepalm);
+    await h.controller.start();
+    h.controller.endSession();
+    expect(facepalm.retire).not.toHaveBeenCalled();
+    await report(h.controller.listen());
+    expect(facepalm.retire).toHaveBeenCalledTimes(1);
+  });
+
+  it('retires Facepalm at once when the programmer ends a suspended session', async () => {
+    const facepalm = mock<FacepalmPort>();
+    const h = harness({}, {}, undefined, facepalm);
+    await h.controller.start('Kept.', ROOT);
+    h.controller.disconnect();
+    h.controller.endSession();
+    expect(facepalm.retire).toHaveBeenCalledTimes(1);
+  });
+
+  it('retires Facepalm once the agent ends the session and its batches have played', async () => {
+    const facepalm = mock<FacepalmPort>();
+    const h = harness({}, {}, undefined, facepalm);
+    await h.controller.start();
+    const finish = holdPlay();
+    await report(h.controller.step(SAY));
+    const end = h.controller.end();
+    expect(await pending(end)).toBe(true);
+    expect(facepalm.retire).not.toHaveBeenCalled();
+    finish();
+    await report(end);
+    expect(facepalm.retire).toHaveBeenCalledTimes(1);
+  });
+
+  it('retires Facepalm when a session is replaced by one from another directory', async () => {
+    const facepalm = mock<FacepalmPort>();
+    const h = harness({}, {}, undefined, facepalm);
+    await h.controller.start(undefined, ROOT);
+    h.controller.disconnect();
+    expect(facepalm.retire).not.toHaveBeenCalled();
+    await h.controller.start(undefined, path.join(ROOT, 'other'));
+    expect(facepalm.retire).toHaveBeenCalledTimes(1);
+  });
+
+  it('does nothing, and never throws, with no FacepalmPort configured', async () => {
+    const h = await started();
+    expect(() => {
+      h.controller.endSession();
+    }).not.toThrow();
+  });
+});

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.55.1
+
+-   Close the Facepalm subscription, so the camera turns off, once a pairing
+    session ends, the agent ends it, or a session is replaced, instead of
+    holding it open until the window closes. Each window now connects under
+    its own name, so a second window gets Facepalm's cues instead of being
+    silently refused as a name already connected (#138).
+
 ## 0.55.0
 
 -   Subscribe to [Facepalm](https://github.com/mattyv/facepalm), a standalone

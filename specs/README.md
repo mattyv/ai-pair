@@ -4623,7 +4623,7 @@ constants. TLC explored 49 generated and 30 distinct states at depth 13.
 | `Refuse` | `open()` finding no approved token, a refused connection, or a refused `hello` |
 | `MarkBeat` | `markFacepalmBeat`, for a batch whose played actions ask a question or edit code |
 | `Answer` | `FacepalmClient.markBeat()`'s reply carrying an interpretation, attached to the batch's report and the panel |
-| `Retire` | `FacepalmClient.retire()`, and a request that times out or errors, discarding any beat it had open |
+| `Retire` | `FacepalmClient.retire()`: a request that times out or errors, discarding any beat it had open, and `Controller.close()` (`packages/core/src/controller.ts`), the one session-teardown point ending the session, the agent's own end, and a session replacement all go through (#138) |
 | `ConfirmRetired` | the closed connection's promise clearing, so a later call reopens one |
 
 Each invariant and property was proved to bite with a mutation of a copy of
@@ -4642,5 +4642,5 @@ the model, run in TLC and then reverted:
 | `TypeOK` | Nothing: the TypeScript compiler and the protocol's zod schemas check these types |
 | `AtMostOneOpen` | `facepalm_client.test.ts`: reuses one open connection for a later beat; retries connecting after a failed attempt, instead of staying absent |
 | `OneBeatAtATime` | `facepalm_client.test.ts`: answers two overlapping requests in order, never interleaved |
-| `PendingClearedOnRetire` | `facepalm_client.test.ts`: retires the connection, and resolves undefined, when a beat never answers; `controller.test.ts`: discards Facepalm's read if the programmer ends the session, or the session is replaced, before the beat answers |
+| `PendingClearedOnRetire` | `facepalm_client.test.ts`: retires the connection, and resolves undefined, when a beat never answers; `controller.test.ts`: discards Facepalm's read, and retires Facepalm, if the programmer ends the session, the agent ends it, or the session is replaced, before the beat answers; `facepalm_integration.e2e.test.ts`: the real connection closes once the programmer ends the session |
 | `PendingAnswered` | `facepalm_integration.e2e.test.ts`: a beat at a question reaches the pair report with its feeling, against a real Unix domain socket |

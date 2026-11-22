@@ -1,9 +1,13 @@
 // A local subscription to Facepalm (github.com/mattyv/facepalm), a camera reaction service outside
 // this extension (#83, item 14 of facepalm#61): specs/FacepalmSubscription.tla. Connects to its
-// per-user socket under the name this extension approves itself as, "ai-pair"
-// (`facepalm-daemon approve ai-pair`), and implements `FacepalmPort` for the controller. Facepalm
-// absent, or this name not approved: every call resolves to `undefined`, and never throws.
+// per-user socket, showing the token approved under "ai-pair" (`facepalm-daemon approve ai-pair`),
+// but under its own per-instance connection name (one `FacepalmClient` per VS Code window), so a
+// second window's connection is never refused as a name already connected (#138). Facepalm matches
+// the token independently of the name (its `mcp/session.js` does the same with `mcp-<uuid>`).
+// Implements `FacepalmPort` for the controller. Facepalm absent, or the token's name not approved:
+// every call resolves to `undefined`, and never throws.
 
+import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as net from 'node:net';
 import * as os from 'node:os';
@@ -141,6 +145,11 @@ export class FacepalmClient implements FacepalmPort {
   private connection: Promise<Open | undefined> | undefined;
   /** Serializes every exchange on the connection: it answers one line at a time, in order. */
   private tail: Promise<unknown> = Promise.resolve();
+  /**
+   * This instance's own connection name, distinct from every other window's (#138): the approved
+   * token is still read from the fixed `FACEPALM_CLIENT_NAME`, which `hello` never sends.
+   */
+  private readonly name = `${FACEPALM_CLIENT_NAME}-${randomUUID()}`;
 
   /**
    * Sends `command` and returns its reply line, racing `timeoutMs`; `undefined` closes the
@@ -195,7 +204,7 @@ export class FacepalmClient implements FacepalmPort {
       return undefined;
     }
     const reader = new LineReader(socket);
-    socket.write(`${facepalmHello(FACEPALM_CLIENT_NAME, token)}\n`);
+    socket.write(`${facepalmHello(this.name, token)}\n`);
     const hello = await withTimeout(reader.next(), SHORT_TIMEOUT_MS);
     if (hello === undefined || !FACEPALM_OK_SCHEMA.safeParse(parseJson(hello)).success) {
       socket.destroy();
