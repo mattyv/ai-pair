@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.55.2
+
+- Version aligned with the Facepalm card-after-end fix.
+
 ## 0.55.1
 
 - Version aligned with the Facepalm retire fix.

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.55.2
+
+-   Clicking a Facepalm feeling card left over from a session that already
+    ended no longer reconnects Facepalm's camera or thanks the person for a
+    feeling Facepalm refuses: the panel closes the card instead, and the
+    controller and `FacepalmClient` both refuse to reconnect for it (#140).
+
 ## 0.55.1
 
 -   Close the Facepalm subscription, so the camera turns off, once a pairing

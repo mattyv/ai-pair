@@ -137,9 +137,10 @@ class LineReader {
 
 /**
  * One local subscription to Facepalm, over its per-user socket (`FacepalmPort`). Connects lazily, on
- * the first beat or feeling, and stays open afterwards for later ones. `retire()` closes it, for the
- * extension's own shutdown; a later call reopens it (specs/FacepalmSubscription.tla, `Enable`, only
- * from `closed`, which a failed or closed connection returns to at once).
+ * the first beat, and stays open afterwards for later ones. `retire()` closes it, for a session's own
+ * end or replacement; only a later beat reopens it (specs/FacepalmSubscription.tla, `Enable`, only
+ * from `closed`, which a failed or closed connection returns to at once) - a feeling sent once retired
+ * is refused outright, never reconnecting (`Feel`, #140).
  */
 export class FacepalmClient implements FacepalmPort {
   private connection: Promise<Open | undefined> | undefined;
@@ -150,6 +151,12 @@ export class FacepalmClient implements FacepalmPort {
    * token is still read from the fixed `FACEPALM_CLIENT_NAME`, which `hello` never sends.
    */
   private readonly name = `${FACEPALM_CLIENT_NAME}-${randomUUID()}`;
+  /**
+   * Set by `retire()`, cleared by `markBeat()`: specs/FacepalmSubscription.tla's `retired`. Guards
+   * `feel()` against reconnecting a retired subscription just to carry a feeling for a card the
+   * panel should already have disabled (#140); only a new beat may reconnect it.
+   */
+  private retired = false;
 
   /**
    * Sends `command` and returns its reply line, racing `timeoutMs`; `undefined` closes the
@@ -219,13 +226,21 @@ export class FacepalmClient implements FacepalmPort {
     return open;
   }
 
-  /** Closes the connection, discarding any beat it left unanswered. A later call reopens it. */
+  /**
+   * Closes the connection, discarding any beat it left unanswered, and marks this subscription
+   * retired (specs/FacepalmSubscription.tla, `Retire`): a later `feel()` is refused until `markBeat()`
+   * reconnects it (#140).
+   */
   retire(): void {
     void this.connection?.then((open) => open?.socket.destroy());
     this.connection = undefined;
+    this.retired = true;
   }
 
   async markBeat(kind: FacepalmBeatKind, windowMs: number): Promise<FacepalmCue | undefined> {
+    // specs/FacepalmSubscription.tla, `Enable`: a new beat always may reconnect a retired
+    // subscription (#140), unlike `feel()` below.
+    this.retired = false;
     const reply = await this.request(facepalmBeat(kind, windowMs), windowMs + SHORT_TIMEOUT_MS);
     if (reply === undefined) return undefined;
     const parsed = FACEPALM_DELIVERY_SCHEMA.safeParse(parseJson(reply));
@@ -234,7 +249,14 @@ export class FacepalmClient implements FacepalmPort {
     return { id, feeling, feelings };
   }
 
+  /**
+   * Tells Facepalm how the programmer felt at a beat it already delivered (#83). Refused outright,
+   * without connecting, once this subscription is retired (specs/FacepalmSubscription.tla, `Feel`):
+   * only a new beat reconnects a retired subscription, never a feeling for a card the panel should
+   * already have disabled (#140).
+   */
   async feel(id: number, feeling: FacepalmCue['feeling']): Promise<void> {
+    if (this.retired) return;
     await this.request(facepalmFeel(id, feeling), SHORT_TIMEOUT_MS);
   }
 }

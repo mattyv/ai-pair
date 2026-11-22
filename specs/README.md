@@ -190,9 +190,9 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `CommandEncoding.cfg` | three shell identities, three syntax classes, NUL present or absent, six character classes | holds | 216 |
 | `ShellIdentity.cfg` | three shell identities and syntax classes, NUL, cancellation and closure | holds | 102 |
 | `IntegrationFixture.cfg` | workspace, packaged and companion roots | holds | 15 |
-
 | `CiScheduler.cfg` | three configs, two worker slots | holds | 134 |
 | `CiConcurrency.cfg` | two PR runs, one push, two manual runs | holds | 324 |
+| `FacepalmSubscription.cfg` | one subscription's lifecycle, a beat, a feeling live or refused once retired, and reconnection | holds | 36 |
 
 `Controller.tla` also passes at `NumBatches = 3, MaxCancels = 2` (570,008 states).
 
@@ -4608,22 +4608,25 @@ AI Pair's local subscription to Facepalm (github.com/mattyv/facepalm, #83,
 item 14 of facepalm#61), a standalone camera reaction service outside this
 repository, which owns the camera and physical retirement itself. The model
 covers only AI Pair's side: one subscription, opened and closed, with at
-most one beat open on it at a time, and a beat still open discarded, never
-delivered, once retirement starts. `FacepalmClient`
+most one beat open on it at a time, a beat still open discarded, never
+delivered, once retirement starts, and a feeling refused outright, never
+reconnecting, once retired - only a new beat may do that (#140). `FacepalmClient`
 (`packages/vscode/src/facepalm_client.ts`) implements it; the controller
 marks a beat (`packages/core/src/facepalm_cue.ts`,
-`packages/core/src/controller.ts`, `markFacepalmBeat`). `FacepalmSubscription.cfg`
+`packages/core/src/controller.ts`, `markFacepalmBeat`) and carries a feeling
+back to it (`Controller.feelFacepalm`). `FacepalmSubscription.cfg`
 is fully determined by the model's own bounded counters, with no further
-constants. TLC explored 49 generated and 30 distinct states at depth 13.
+constants. TLC explored 91 generated and 36 distinct states at depth 13.
 
 | Spec | Code |
 |---|---|
-| `Enable` | `FacepalmClient.connect()`, called lazily from `markBeat` or `feel`, only once no connection is open or opening |
+| `Enable` | `FacepalmClient.connect()`, called lazily from `markBeat`'s own attempt to reconnect, clearing `retired`; `feel` never calls it once retired (#140) |
 | `Approve` | `FacepalmClient.open()`'s hello handshake succeeding |
 | `Refuse` | `open()` finding no approved token, a refused connection, or a refused `hello` |
 | `MarkBeat` | `markFacepalmBeat`, for a batch whose played actions ask a question or edit code |
 | `Answer` | `FacepalmClient.markBeat()`'s reply carrying an interpretation, attached to the batch's report and the panel |
-| `Retire` | `FacepalmClient.retire()`: a request that times out or errors, discarding any beat it had open, and `Controller.close()` (`packages/core/src/controller.ts`), the one session-teardown point ending the session, the agent's own end, and a session replacement all go through (#138) |
+| `Feel` | `Controller.feelFacepalm`, guarded on a live session, and `FacepalmClient.feel`: refused, with no connection attempt, once `retired`; otherwise handed to Facepalm (#140) |
+| `Retire` | `FacepalmClient.retire()`: a request that times out or errors, discarding any beat it had open, and `Controller.close()` (`packages/core/src/controller.ts`), the one session-teardown point ending the session, the agent's own end, and a session replacement all go through (#138); marks `retired` |
 | `ConfirmRetired` | the closed connection's promise clearing, so a later call reopens one |
 
 Each invariant and property was proved to bite with a mutation of a copy of
@@ -4636,6 +4639,8 @@ the model, run in TLC and then reverted:
 | `Retire` left a beat still open instead of discarding it | `PendingClearedOnRetire` |
 | no fairness on `Answer` | `PendingAnswered` |
 | `Approve` writes a phase outside the enum | `TypeOK` |
+| `Feel`, retired, reconnects (`phase' = "connecting"`) instead of refusing | `RetiredNeverConnects` |
+| `Enable` no longer clears `retired` on reconnecting | `RetiredNeverConnects` |
 
 | Invariant or property | Proved by |
 |---|---|
@@ -4644,3 +4649,4 @@ the model, run in TLC and then reverted:
 | `OneBeatAtATime` | `facepalm_client.test.ts`: answers two overlapping requests in order, never interleaved |
 | `PendingClearedOnRetire` | `facepalm_client.test.ts`: retires the connection, and resolves undefined, when a beat never answers; `controller.test.ts`: discards Facepalm's read, and retires Facepalm, if the programmer ends the session, the agent ends it, or the session is replaced, before the beat answers; `facepalm_integration.e2e.test.ts`: the real connection closes once the programmer ends the session |
 | `PendingAnswered` | `facepalm_integration.e2e.test.ts`: a beat at a question reaches the pair report with its feeling, against a real Unix domain socket |
+| `RetiredNeverConnects` | `facepalm_client.test.ts`: refuses, and never connects, once retired, instead of reconnecting for a card the panel should have closed; refuses a feel sent after retiring an open connection, without opening a new one; `controller.test.ts`: does nothing, and never calls Facepalm, once the session that posted the card has ended; `panel.test.ts` (webview): closes a Facepalm card left unanswered once the session ends, instead of thanking a click it would refuse; `facepalm_integration.e2e.test.ts`: refuses a feel sent after the session has ended, instead of reconnecting the camera for a card the panel should have closed |

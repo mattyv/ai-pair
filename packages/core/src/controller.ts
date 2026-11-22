@@ -369,9 +369,13 @@ export class Controller {
   /**
    * Tells Facepalm how the programmer says they felt at a beat the panel offered them (#83). The
    * panel can only have offered one once `markFacepalmBeat` posted a cue, which it only does with a
-   * `FacepalmPort` configured, so this is never called without one.
+   * `FacepalmPort` configured, so this is never called without one. A no-op once the session that
+   * could carry it has ended: the panel should already have disabled the card by then (#140), and
+   * without this guard `FacepalmClient.feel` would otherwise be the only thing stopping a stale
+   * click from reconnecting Facepalm's camera for a feeling it refuses.
    */
   feelFacepalm(id: number, feeling: FacepalmCue['feeling']): Promise<void> {
+    if (this.activeSession() === undefined) return Promise.resolve();
     // oxlint-disable-next-line typescript/no-non-null-assertion -- see the invariant above
     return this.options.facepalm!.feel(id, feeling);
   }

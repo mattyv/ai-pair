@@ -217,7 +217,7 @@ export async function panelPaths(api: Api): Promise<void> {
     { type: 'runDecision', id: 1, run: true, remember: true },
     { type: 'runDecision', id: 1, run: true, scope: 'command' },
     { type: 'runDecision', id: 1, run: true, scope: 'all' },
-    // Forwarded to Facepalm (#83): with no approved token file here, it resolves to nothing, opening no socket.
+    // Refused by the controller, with no session to carry it (#140): never reaches Facepalm at all.
     { type: 'facepalmFeel', id: 1, feeling: 'confused' },
     { type: 'end' },
   ]);
@@ -275,6 +275,9 @@ export async function panelPaths(api: Api): Promise<void> {
   assert.equal(controller.turn, 'programmer');
   await sendAll(api, [{ type: 'turn', message: 'back to you', attach: false }]);
   assert.equal(controller.turn, 'agent');
+  // Forwarded to Facepalm (#83) with a live session to carry it, unlike the refusal above (#140):
+  // with no approved token file here, it still resolves to nothing, opening no socket.
+  await sendAll(api, [{ type: 'facepalmFeel', id: 1, feeling: 'confused' }]);
   await sendAll(api, [{ type: 'end' }]);
   assert.equal(controller.isActive, false);
   console.log('the panel: each message its page posts, valid and not, through the webview handler');
