@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.55.1
+
+- Version aligned with the Facepalm retire fix.
+
 ## 0.55.0
 
 - Version aligned with the Facepalm subscription update.
