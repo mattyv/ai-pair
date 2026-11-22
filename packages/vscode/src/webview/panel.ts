@@ -530,10 +530,35 @@ const FACEPALM_FEELING_LABELS: Record<FacepalmCue['feeling'], string> = {
   unknown: 'Not sure',
 };
 
+/** A Facepalm card still waiting for the programmer's pick, open to `closeFacepalmCards` below. */
+interface OpenFacepalmCard {
+  prompt: HTMLElement;
+  buttons: HTMLElement;
+}
+
+/**
+ * Facepalm cards still waiting for a pick, closed without thanking once the session ends (#140):
+ * clicking a stale one would otherwise reconnect Facepalm's camera for a feeling it refuses.
+ */
+const openFacepalmCards = new Set<OpenFacepalmCard>();
+
+/**
+ * Closes every Facepalm card still waiting for a pick, without thanking: the session that could have
+ * carried its pick to Facepalm has ended (#140, specs/FacepalmSubscription.tla, `Retire`).
+ */
+function closeFacepalmCards(): void {
+  for (const card of openFacepalmCards) {
+    card.buttons.remove();
+    card.prompt.textContent = 'The session ended before you answered.';
+  }
+  openFacepalmCards.clear();
+}
+
 /**
  * Adds "How were you feeling just then?" with one button per feeling Facepalm offers, `feeling`
  * pre-highlighted. One click sends it and replaces the buttons with a thank-you; no ID or technical
- * text ever shows (#83, item 14 of facepalm#61).
+ * text ever shows (#83, item 14 of facepalm#61). Closed instead, by `closeFacepalmCards`, once the
+ * session ends before a pick is made (#140).
  */
 function addFacepalmCue(id: number, feeling: FacepalmCue['feeling'], feelings: Array<FacepalmCue['feeling']>): void {
   const el = entry('facepalm');
@@ -542,6 +567,8 @@ function addFacepalmCue(id: number, feeling: FacepalmCue['feeling'], feelings: A
   prompt.textContent = 'How were you feeling just then?';
   const buttons = document.createElement('div');
   buttons.className = 'facepalm-buttons';
+  const card: OpenFacepalmCard = { prompt, buttons };
+  openFacepalmCards.add(card);
   for (const option of feelings) {
     const button = document.createElement('button');
     button.type = 'button';
@@ -550,6 +577,7 @@ function addFacepalmCue(id: number, feeling: FacepalmCue['feeling'], feelings: A
     button.classList.toggle('on', option === feeling);
     button.addEventListener('click', () => {
       vscode.postMessage({ type: 'facepalmFeel', id, feeling: option });
+      openFacepalmCards.delete(card);
       buttons.remove();
       prompt.textContent = 'Thanks - Facepalm will learn from this.';
     });
@@ -1007,6 +1035,9 @@ function setActive(on: boolean): void {
     reading = undefined;
     // specs/RunBox.tla, `EndSession`: the session ending clears the box.
     clearRun();
+    // specs/FacepalmSubscription.tla, `Retire`: a card the session ending leaves unanswered closes,
+    // instead of staying clickable for a feeling Facepalm now refuses (#140).
+    closeFacepalmCards();
     closeSpeedMenu();
     closeCodeModeMenu();
     closeReadingMenu();

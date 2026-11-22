@@ -483,6 +483,29 @@ describe('the history (specs/Panel.tla, specs/PanelScroll.tla)', () => {
     expect(card.textContent).not.toContain('annoyance');
   });
 
+  it('closes a Facepalm card left unanswered once the session ends, instead of thanking a click it would refuse (#140)', () => {
+    start();
+    send({ type: 'facepalmCue', id: 7, feeling: 'agreement', feelings: ['agreement', 'disagreement', 'unknown'] });
+    const card = element('history').querySelector('.facepalm');
+    ok(card);
+    send({ type: 'session', active: false, reason: 'agent' });
+    expect(card.querySelector('.facepalm-buttons')).toBeNull();
+    expect(card.querySelector('.facepalm-prompt')?.textContent).toBe('The session ended before you answered.');
+    expect(posted().some((message) => message.type === 'facepalmFeel')).toBe(false);
+  });
+
+  it('leaves an already-answered Facepalm card thanking, when the session ends afterwards (#140)', () => {
+    start();
+    send({ type: 'facepalmCue', id: 7, feeling: 'agreement', feelings: ['agreement', 'disagreement', 'unknown'] });
+    const card = element('history').querySelector('.facepalm');
+    ok(card);
+    const picked = card.querySelector('.facepalm-feeling');
+    ok(picked);
+    click(picked);
+    send({ type: 'session', active: false, reason: 'agent' });
+    expect(card.querySelector('.facepalm-prompt')?.textContent).toBe('Thanks - Facepalm will learn from this.');
+  });
+
   it('Send, Report, RestoreUnseen: shows your message waiting until the agent receives it, and waiting again if put back (#117)', () => {
     start();
     send({ type: 'programmer', text: 'Old history.' });

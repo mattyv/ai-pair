@@ -3873,12 +3873,33 @@ describe('facepalm beats', () => {
     expect(posted(h).some((event) => event.type === 'facepalmCue')).toBe(false);
   });
 
-  it('tells Facepalm how the programmer felt, through the controller', async () => {
+  it('tells Facepalm how the programmer felt, through the controller, during a live session', async () => {
     const facepalm = mock<FacepalmPort>();
     facepalm.feel.mockResolvedValueOnce();
     const h = harness({}, {}, undefined, facepalm);
+    await h.controller.start();
     await h.controller.feelFacepalm(7, 'engagement');
     expect(facepalm.feel).toHaveBeenCalledWith(7, 'engagement');
+  });
+
+  // #140: the panel should already have disabled a card left over from an ended session, but a
+  // stale click still must not reconnect Facepalm's camera for a feeling it refuses.
+  it('does nothing, and never calls Facepalm, once the session that posted the card has ended', async () => {
+    const facepalm = mock<FacepalmPort>();
+    const h = harness({}, {}, undefined, facepalm);
+    await h.controller.start();
+    h.controller.endSession();
+    await report(h.controller.listen());
+    expect(facepalm.retire).toHaveBeenCalledTimes(1);
+    await expect(h.controller.feelFacepalm(7, 'engagement')).resolves.toBeUndefined();
+    expect(facepalm.feel).not.toHaveBeenCalled();
+  });
+
+  it('does nothing, and never calls Facepalm, with no session ever started', async () => {
+    const facepalm = mock<FacepalmPort>();
+    const h = harness({}, {}, undefined, facepalm);
+    await expect(h.controller.feelFacepalm(7, 'engagement')).resolves.toBeUndefined();
+    expect(facepalm.feel).not.toHaveBeenCalled();
   });
 });
 

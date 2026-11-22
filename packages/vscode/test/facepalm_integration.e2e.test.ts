@@ -206,4 +206,34 @@ describe('retiring a subscription', () => {
     }
     expect(socket.openConnections).toBe(0);
   });
+
+  it('refuses a feel sent after the session has ended, instead of reconnecting the camera for a card the panel should have closed (#140)', async () => {
+    const editor = new FakeEditor();
+    const panel = new FakePanel();
+    const facepalm = new FacepalmClient();
+    const controller = new Controller(editor, panel, testConfig, undefined, { facepalm });
+    editor.controller = controller;
+
+    await until(controller.start());
+    await until(controller.step([{ say: 'Shall I rename this helper?' }]));
+    const played = await until(controller.listen());
+    const cue = played.batches.find((batch) => batch.facepalm !== undefined)?.facepalm;
+    expect(cue).toBeDefined();
+    expect(socket.openConnections).toBe(1);
+
+    // specs/FacepalmSubscription.tla, `Retire`: ending the session closes the real connection.
+    controller.endSession();
+    await until(controller.listen());
+    for (let elapsed = 0; socket.openConnections > 0 && elapsed < 2000; elapsed += 20) {
+      await vi.advanceTimersByTimeAsync(20);
+    }
+    expect(socket.openConnections).toBe(0);
+    const linesBeforeFeel = socket.lines.length;
+
+    // `Controller.feelFacepalm` is guarded on a live session, and `FacepalmClient.feel` refuses a
+    // retired subscription (`Feel`): neither opens a new connection, nor sends `feel` at all.
+    await until(controller.feelFacepalm(cue?.id ?? 0, 'disagreement'));
+    expect(socket.openConnections).toBe(0);
+    expect(socket.lines).toHaveLength(linesBeforeFeel);
+  });
 });

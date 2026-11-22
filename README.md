@@ -276,6 +276,10 @@ ends, the agent ends it, or it is replaced by another — not only when the VS
 Code window itself closes. Each VS Code window connects to Facepalm under
 its own name, so opening more than one window still gets each its own cues.
 
+A card left unanswered when the session ends is closed, not thanked: it would
+otherwise reconnect Facepalm's camera for a feeling it refuses, once the
+session that could have carried it to Facepalm is already gone.
+
 ## Original project README
 
 The following introduction is from the [original AI Pair project](https://github.com/faiface/ai-pair).

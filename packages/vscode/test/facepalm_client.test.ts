@@ -429,6 +429,30 @@ describe('feel', () => {
     await expect(client.feel(3, 'confused')).resolves.toBeUndefined();
     expect(fakes.sockets).toHaveLength(0);
   });
+
+  it('refuses, and never connects, once retired, instead of reconnecting for a card the panel should have closed (#140)', async () => {
+    approve();
+    const client = new FacepalmClient();
+    client.retire();
+    await expect(client.feel(3, 'confused')).resolves.toBeUndefined();
+    expect(fakes.sockets).toHaveLength(0);
+  });
+
+  it('refuses a feel sent after retiring an open connection, without opening a new one (#140)', async () => {
+    approve();
+    const client = new FacepalmClient();
+    const beat = client.markBeat('question', 1500);
+    await vi.advanceTimersByTimeAsync(0);
+    await connectAndApprove();
+    await vi.advanceTimersByTimeAsync(0);
+    lastSocket().emit('data', `${JSON.stringify({ readings: [], missed: 0 })}\n`);
+    await beat;
+    const opened = lastSocket();
+    client.retire();
+    await expect(client.feel(1, 'agreement')).resolves.toBeUndefined();
+    expect(fakes.sockets).toHaveLength(1);
+    expect(opened.written).toHaveLength(2);
+  });
 });
 
 describe('retire', () => {
