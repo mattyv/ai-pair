@@ -749,6 +749,8 @@ Last updated: css, 2026-11-23.
 | `specs/RemoteCue.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
 | `specs/ReplayBatching.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ReplayBatching.tla` | TLA+ | - | - | 1 of 1 actions | - | - | - |
+| `specs/ReplyHistory.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/ReplyHistory.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
 | `specs/ReplyReport.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ReplyReport.tla` | TLA+ | - | - | 4 of 5 actions (never: ResumeAfter) | - | - | - |
 | `specs/Resume.cfg` | TLC config | - | - | - | - | - | - |

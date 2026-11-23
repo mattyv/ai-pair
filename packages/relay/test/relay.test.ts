@@ -328,6 +328,11 @@ describe('relay', () => {
     expect(second.text).toMatch(new RegExp(`1 +hi${CURSOR_MARKER}`));
     expect(editor.text('src/a.ts')).toBe('hi');
 
+    controller.userMessage('Please explain');
+    const message = await call(client, 'step', { actions: [] });
+    expect(message.text).toContain('Please explain');
+    expect(message.text).toContain('Answer what the programmer said first');
+
     const read = await call(client, 'read', { file: 'a.ts' });
     expect(read.text).toMatch(/a\.ts/);
     expect(read.text).toMatch(/1 +hi/);

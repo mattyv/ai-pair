@@ -1,8 +1,16 @@
 # Changelog
 
+## 0.56.1
+
+- Version aligned with the combined reply history and Facepalm gaze update.
+
 ## 0.56.0
 
-- Version aligned with the Facepalm beat gaze update.
+- Match the AI Pair extension release.
+
+## 0.55.3
+
+- Version aligned with the message-answer reminder.
 
 ## 0.55.2
 

@@ -2231,7 +2231,7 @@ above (#163); this contract holds the relay's schema and the player to them.
 | Contract | Test |
 |---|---|
 | The relay's schema and the player's checks accept the same actions (#45) | `relay/test/validation.test.ts`: every action in its table through both, malformed ones above all |
-| Every field of a `Report` appears in its rendered text | `relay/test/render.test.ts`: renders every field of a report |
+| Every field of a `Report` appears in its rendered text | `relay/test/render.test.ts`: renders every field of a report. Message reports include answer guidance, covered by its #128 test and the session trace in `relay/test/relay.test.ts`; the contract does not model model compliance or concurrent calls. |
 | Setting up an agent changes only its `pair` entry, and twice equals once | `vscode/test/agents.test.ts`: AgentSetup, for the TOML and JSON configs |
 
 ### Attention cue cache
@@ -4657,3 +4657,22 @@ the model, run in TLC and then reverted:
 | `PendingClearedOnRetire` | `facepalm_client.test.ts`: retires the connection, and resolves undefined, when a beat never answers; `controller.test.ts`: discards Facepalm's read, and retires Facepalm, if the programmer ends the session, the agent ends it, or the session is replaced, before the beat answers; `facepalm_integration.e2e.test.ts`: the real connection closes once the programmer ends the session |
 | `PendingAnswered` | `facepalm_integration.e2e.test.ts`: a beat at a question reaches the pair report with its feeling, against a real Unix domain socket |
 | `RetiredNeverConnects` | `facepalm_client.test.ts`: refuses, and never connects, once retired, instead of reconnecting for a card the panel should have closed; refuses a feel sent after retiring an open connection, without opening a new one; `controller.test.ts`: does nothing, and never calls Facepalm, once the session that posted the card has ended; `panel.test.ts` (webview): closes a Facepalm card left unanswered once the session ends, instead of thanking a click it would refuse; `facepalm_integration.e2e.test.ts`: refuses a feel sent after the session has ended, instead of reconnecting the camera for a card the panel should have closed |
+
+## Reply history
+
+`ReplyHistory.tla` models the page's bounded sent-message history, saved draft,
+recall and restore. It omits keyboard eligibility, caret position, attachments,
+and message delivery, which the page and browser tests exercise separately.
+`ReplyHistory.cfg` checks two message values and a limit of two; TLC explored
+105 distinct states with no violation. No fairness assumption is made.
+
+| Property | Test |
+|---|---|
+| `TypeOK` | `bounds history and ignores transcript events` |
+| `EnabledNavigation` | `RecallNewest and RestoreDraft: browses sent replies and restores the unsent draft` |
+| `RecallNewest` | `RecallNewest and RestoreDraft: browses sent replies and restores the unsent draft` |
+| `RestoreDraft` | `RecallNewest and RestoreDraft: browses sent replies and restores the unsent draft` |
+
+Mutations checked separately: incrementing the Up index violates `TypeOK`;
+disabling Up violates `EnabledNavigation`; restoring an empty string violates
+`RestoreDraft`; returning empty on Up violates `RecallNewest`.

@@ -150,6 +150,51 @@ describe('reports', () => {
     expect(missing).toMatch(/\(end of file, with no newline after the last line\)$/);
   });
 
+  it('tells the agent to answer a message before it listens, and only when the programmer said something (#128)', () => {
+    const answer = 'Answer what the programmer said first';
+    const said = renderReport(
+      report({ events: [{ kind: 'message', text: 'Yeah, draft it' }], batches: [{ id: 6, status: 'discarded' }] }),
+      'step',
+    );
+    expect(said).toContain(answer);
+    expect(said.lastIndexOf(answer)).toBeGreaterThan(said.indexOf('Batch 6'));
+    expect(renderReport(report({ events: [{ kind: 'turn', to: 'agent', message: 'Over to you' }] }), 'listen')).toContain(answer);
+    expect(renderReport(report({ events: [{ kind: 'turn', to: 'agent' }] }), 'listen')).not.toContain(answer);
+    expect(renderReport(report({ events: [{ kind: 'turn', to: 'programmer' }] }), 'listen')).not.toContain(answer);
+    expect(renderReport(report({ events: [{ kind: 'message', text: 'bye' }, { kind: 'end' }] }), 'listen')).not.toContain(answer);
+    expect(renderReport(report({ events: [{ kind: 'message', text: 'bye' }] }), 'end')).not.toContain(answer);
+    expect(
+      renderReport(
+        report({
+          events: [
+            {
+              kind: 'turn',
+              to: 'agent',
+              selection: { file: 'a', from: { line: 1, column: 1 }, to: { line: 1, column: 2 }, text: 'x', truncated: true },
+            },
+          ],
+        }),
+        'listen',
+      ),
+    ).toContain(answer);
+    const waiting = renderReport(report({ waiting: true, events: [{ kind: 'message', text: 'Why?' }] }), 'listen');
+    expect(waiting).toContain(answer);
+    expect(waiting).not.toContain('Call `listen` again');
+    const navigator = renderReport(
+      report({
+        turn: 'programmer',
+        waiting: true,
+        commentaryChanged: { noticeId: 1 },
+        events: [{ kind: 'message', text: 'Why?' }],
+        navigator: { wakeReason: 'message', elapsedMs: 5 },
+      }),
+      'listen',
+    );
+    expect(navigator).toContain(answer);
+    expect(navigator).not.toContain('call `listen` again');
+    expect(navigator).not.toContain('Call `listen` again');
+  });
+
   it('shows gaps in long code', () => {
     const lines = [1, 2, 58, 59].map((number) => ({ number, text: `line ${number}` }));
     const text = renderReport(report({ batches: [{ id: 1, status: 'completed', code: { file: 'a.ts', lines } }] }), 'step');
@@ -444,7 +489,7 @@ describe('every field', () => {
       "programmer's turn",
       'cursor.ts',
       'code-16',
-      'Call `listen` again',
+      'Answer what the programmer said first',
     ]) {
       expect(text, value).toContain(value);
     }

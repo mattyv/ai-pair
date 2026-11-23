@@ -10,6 +10,14 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   GPT-6.1 Terra agents write code and tests; GPT-6 Astra agents review them.
     Resolve findings and verify the resulting changes before reporting completion.
 
+## Answering programmer messages (#128)
+
+-   Repeat the instruction to answer alongside a delivered message or a handoff
+    with words or a selection. Suppress conflicting listen guidance and omit the
+    reminder after the session ends. This is guidance to the model, not an
+    enforced acknowledgement: it cannot stop a listen already dispatched, and
+    model compliance is not guaranteed.
+
 ## Background delegation (#134)
 
 -   Delegation is off by default. When enabled, a Codex session delegates to
@@ -1445,3 +1453,24 @@ began after a full provider round trip.
     settings change, is still charged; at most one line each time. The README
     says so, and the OpenRouter subtotal includes such lines.
 -   The `aiPair.speech.lookahead` setting, on by default, turns it off.
+
+## Reply history
+
+The panel page keeps the last 100 text replies sent from that page, including
+messages handed back with the turn. Up at the start recalls them; Down at the
+end returns toward the saved unsent draft, and pressing Down immediately after Up
+also works. Editing and Enter sends normally with the current reply setting.
+History is transient and excludes replayed transcript, attachments, and
+calibration responses. This avoids storing extra conversation data and leaves
+ordinary caret movement, selections, modifiers and composition to the browser.
+History is lost when the page reloads and does not recover earlier sessions.
+
+## Combined Facepalm gaze and reply history test build (0.56.1)
+
+The test build combines the existing reply history work with the existing
+Facepalm gaze branch. Facepalm now sends gaze on each interpretation, so the
+strict older schema rejects its replies. The upstream gaze parser remains
+optional for compatibility with older Facepalm releases. Version 0.56.1
+distinguishes this combination from both branches' independent 0.56.0 builds.
+This candidate is for testing; hardware and platform verification remain
+separate from protocol and automated test evidence.

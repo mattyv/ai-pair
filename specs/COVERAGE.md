@@ -296,3 +296,9 @@ Code goes without a spec for one of these reasons:
 Shortcut command dispatch, deferred focus and settings customization are
 modeled by `PairShortcuts`; extension, panel and webview tests exercise their
 actual boundaries. Native integration covers session command dispatch.
+
+### Reply history in `webview/panel.ts`
+
+`rememberReply` and `recallReply` implement `ReplyHistory` Send, Up and Down;
+the keyboard and caret eligibility checks are exercised by page and browser
+tests rather than modeled.
