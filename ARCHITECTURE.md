@@ -812,6 +812,17 @@ independently of the name (#138). The controller marks a beat
 (`packages/core/src/facepalm_cue.ts`, `facepalmBeatKind`) when a batch's
 played actions ask a question or edit code, attaching Facepalm's read to
 that batch's own report, for the agent, and to a `facepalmCue` panel event.
+Facepalm's own interpretation also carries `gaze` (`on_content`, `averted`,
+`away`, or `unknown`; facepalm#142), threaded onto `FacepalmCue` and rendered
+as a parenthetical next to the feeling for the agent
+(`packages/relay/src/render.ts`); it never changes `feeling`, except that
+Facepalm itself reads a question beat that ends `averted` as `unknown` (the
+thinking guard), which the agent should read as "still deciding", not "no
+reaction" (#143). Facepalm's reply can also carry whether that gaze landed
+inside a content rectangle the beat gave it (`content`), but only when the
+beat carried one; AI Pair never does, having found no reliable way to place
+its own content's screen coordinates from a VS Code extension or its panel
+webview (#143).
 The panel's card, "How were you feeling just then?", offers one button per
 feeling Facepalm names, its own read already picked; one click sends `feel`
 through the controller, and the panel never shows the reading's ID. The

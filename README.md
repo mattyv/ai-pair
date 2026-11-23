@@ -261,11 +261,13 @@ With that done, right after the agent asks a question or proposes a change in
 a pairing session, Facepalm reads a few seconds of the programmer's reaction
 and sends back a feeling: agreeing, disagreeing, interested, annoyed, confused,
 or not sure. The agent sees this as an advisory line in its report, never as an
-answer or an approval. The panel shows "How were you feeling just then?" with
-one button per feeling, Facepalm's read already picked; one click tells
-Facepalm how it actually went, which tunes its later reads, and the panel
-replies "Thanks — Facepalm will learn from this." No technical detail, such as
-the reading's ID, appears anywhere in the panel.
+answer or an approval; that line may also say where the programmer was
+looking, e.g. "confused (looking away)" — context only, never something that
+changes the feeling itself (facepalm#142). The panel shows "How were you
+feeling just then?" with one button per feeling, Facepalm's read already
+picked; one click tells Facepalm how it actually went, which tunes its later
+reads, and the panel replies "Thanks — Facepalm will learn from this." No
+technical detail, such as the reading's ID, appears anywhere in the panel.
 
 This only works when Facepalm's socket is reachable from the extension host:
 over a remote connection (SSH), where the extension host and Facepalm's

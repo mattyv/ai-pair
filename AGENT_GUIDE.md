@@ -375,6 +375,13 @@ type_fast ";▌"
     confusion, or that it can't tell. Use it, if at all, only to decide whether
     to check in or slow down; it never answers a question, approves a command,
     or overrides what the programmer actually said.
+-   **A Facepalm line may add where they were looking, in parentheses: "looking
+    away" or "glancing away".** This is context, never a reading of its own,
+    and it never changes the feeling it follows. The one case worth noticing:
+    a question that comes back unsure while they were glancing or looking
+    away may mean they're still thinking it over, not that they tuned out
+    (Facepalm's own "thinking guard", facepalm#142). Treat that as a reason to
+    wait a beat rather than one to repeat or rephrase the question.
 -   **Prefer `type`.** Use `type_fast` only for text the programmer doesn't need
     to read. It changes the speed, never the order: the same typing rules apply.
 -   **Edit visibly.** `select` before replacing or deleting, so the programmer

@@ -67,6 +67,32 @@ it('parses a beat delivery with no interpretation yet, and one with one', () => 
   expect(read.success && read.data.interpretation?.feeling).toBe('agreement');
 });
 
+it('parses an interpretation that carries gaze, and still parses one from an older Facepalm that never sends it (#143)', () => {
+  const withGaze = FACEPALM_DELIVERY_SCHEMA.safeParse({
+    readings: [],
+    missed: 0,
+    interpretation: { id: 1, feeling: 'confused', beat: 'question', feelings: ['confused'], gaze: 'away' },
+  });
+  expect(withGaze.success && withGaze.data.interpretation?.gaze).toBe('away');
+
+  const withoutGaze = FACEPALM_DELIVERY_SCHEMA.safeParse({
+    readings: [],
+    missed: 0,
+    interpretation: { id: 1, feeling: 'confused', beat: 'question', feelings: ['confused'] },
+  });
+  expect(withoutGaze.success && withoutGaze.data.interpretation?.gaze).toBeUndefined();
+});
+
+it('rejects an interpretation that names an unknown gaze', () => {
+  expect(
+    FACEPALM_DELIVERY_SCHEMA.safeParse({
+      readings: [],
+      missed: 0,
+      interpretation: { id: 1, feeling: 'confused', beat: 'question', feelings: ['confused'], gaze: 'sideways' },
+    }).success,
+  ).toBe(false);
+});
+
 it('rejects a delivery whose interpretation names an unknown feeling or beat kind', () => {
   expect(
     FACEPALM_DELIVERY_SCHEMA.safeParse({

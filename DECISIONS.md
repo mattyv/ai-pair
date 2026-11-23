@@ -1464,3 +1464,13 @@ History is transient and excludes replayed transcript, attachments, and
 calibration responses. This avoids storing extra conversation data and leaves
 ordinary caret movement, selections, modifiers and composition to the browser.
 History is lost when the page reloads and does not recover earlier sessions.
+
+## Combined Facepalm gaze and reply history test build (0.56.1)
+
+The test build combines the existing reply history work with the existing
+Facepalm gaze branch. Facepalm now sends gaze on each interpretation, so the
+strict older schema rejects its replies. The upstream gaze parser remains
+optional for compatibility with older Facepalm releases. Version 0.56.1
+distinguishes this combination from both branches' independent 0.56.0 builds.
+This candidate is for testing; hardware and platform verification remain
+separate from protocol and automated test evidence.

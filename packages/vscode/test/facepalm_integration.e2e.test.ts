@@ -72,7 +72,8 @@ class FakeFacepalmSocket {
       return JSON.stringify({
         readings: [],
         missed: 0,
-        interpretation: { id: 1, feeling: 'agreement', beat: kind, feelings: ['agreement', 'disagreement', 'unknown'] },
+        // gaze (facepalm#142) rides along on every interpretation now; ai-pair#143 is this reaching the report.
+        interpretation: { id: 1, feeling: 'agreement', beat: kind, feelings: ['agreement', 'disagreement', 'unknown'], gaze: 'on_content' },
       });
     }
     if (words[0] === 'feel') return '{"ok":true}';
@@ -136,7 +137,7 @@ describe('a beat during a pairing session', () => {
     expect(socket.lines[0]).toMatch(new RegExp(`^hello ai-pair-\\S+ ${socket.token}$`));
     expect(socket.lines[1]).toBe('beat question 1500');
     const cue = report.batches.find((batch) => batch.facepalm !== undefined)?.facepalm;
-    expect(cue).toEqual({ id: 1, feeling: 'agreement', feelings: ['agreement', 'disagreement', 'unknown'] });
+    expect(cue).toEqual({ id: 1, feeling: 'agreement', feelings: ['agreement', 'disagreement', 'unknown'], gaze: 'on_content' });
     expect(panel.events).toContainEqual({
       type: 'facepalmCue',
       id: 1,

@@ -1,7 +1,18 @@
 // What the agent reads: reports and files as text, with code as numbered lines instead of JSON
 // strings full of escapes. See "Reports" in PROTOCOL.md.
 
-import type { BatchError, BatchResult, Code, Event, Excerpt, FileContent, PauseReason, Report, RunResult } from '@ai-pair/protocol';
+import type {
+  BatchError,
+  BatchResult,
+  Code,
+  Event,
+  Excerpt,
+  FacepalmCue,
+  FileContent,
+  PauseReason,
+  Report,
+  RunResult,
+} from '@ai-pair/protocol';
 import { ELLIPSIS, RANGE_DASH } from '@ai-pair/core/constants';
 
 /** What holds playback, for each pause reason, as the agent reads it (#149). */
@@ -102,6 +113,23 @@ function renderRejected(r: NonNullable<Report['rejected']>): string {
   return parts.join('\n');
 }
 
+/**
+ * Returns the parenthetical that follows a Facepalm feeling, naming where the programmer was
+ * looking (facepalm#142) when it's worth a word: "looking away" well off the content, "glancing
+ * away" for a briefer or more ambiguous turn. Empty for `on_content`, `unknown`, or a cue from a
+ * Facepalm built before #142, which never sends `gaze` at all.
+ */
+function facepalmGazeNote(gaze: FacepalmCue['gaze']): string {
+  switch (gaze) {
+    case 'away':
+      return ' (looking away)';
+    case 'averted':
+      return ' (glancing away)';
+    default:
+      return '';
+  }
+}
+
 function renderBatch(batch: BatchResult): string {
   const parts = [batch.code ? `Batch ${batch.id} ${batch.status}, in ${batch.code.file}:` : `Batch ${batch.id} ${batch.status}.`];
   if (batch.code) parts.push(renderCode(batch.code));
@@ -118,7 +146,7 @@ function renderBatch(batch: BatchResult): string {
   }
   if (batch.facepalm) {
     parts.push(
-      `Facepalm, from the programmer's camera, read a possible ${batch.facepalm.feeling}: advisory only, never an answer or approval.`,
+      `Facepalm, from the programmer's camera, read a possible ${batch.facepalm.feeling}${facepalmGazeNote(batch.facepalm.gaze)}: advisory only, never an answer or approval.`,
     );
   }
   for (const u of batch.unsaved ?? []) {
