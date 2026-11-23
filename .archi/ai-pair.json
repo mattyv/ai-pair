@@ -37,7 +37,10 @@
             "id": "relay",
             "label": "Relay\nMCP tools forwarded to editor",
             "step": 2,
-            "files": ["packages/relay/src/main.ts", "packages/relay/src/server.ts"],
+            "files": [
+              "packages/relay/src/main.ts",
+              "packages/relay/src/server.ts"
+            ],
             "group": "core",
             "x": 442,
             "y": 203
@@ -46,7 +49,9 @@
             "id": "proto",
             "label": "Shared Protocol\nSchemas validating every boundary",
             "step": 3,
-            "files": ["packages/protocol/src/index.ts"],
+            "files": [
+              "packages/protocol/src/index.ts"
+            ],
             "group": "core",
             "x": 343.5,
             "y": 384
@@ -55,7 +60,9 @@
             "id": "bridge",
             "label": "Bridge\nAuthenticated local editor connection",
             "step": 4,
-            "files": ["packages/core/src/bridge.ts"],
+            "files": [
+              "packages/core/src/bridge.ts"
+            ],
             "group": "editor",
             "x": 1239,
             "y": 384
@@ -64,7 +71,10 @@
             "id": "ctrl",
             "label": "Session Controller\nOwns session, queue and reports",
             "step": 5,
-            "files": ["packages/core/src/controller.ts", "packages/core/src/index.ts"],
+            "files": [
+              "packages/core/src/controller.ts",
+              "packages/core/src/index.ts"
+            ],
             "group": "editor",
             "x": 1239,
             "y": 565
@@ -73,7 +83,11 @@
             "id": "host",
             "label": "Editor Host\nPlays edits, panel, terminals",
             "step": 6,
-            "files": ["packages/vscode/src/editor.ts", "packages/vscode/src/panel.ts", "packages/vscode/src/extension.ts"],
+            "files": [
+              "packages/vscode/src/editor.ts",
+              "packages/vscode/src/panel.ts",
+              "packages/vscode/src/extension.ts"
+            ],
             "group": "editor",
             "x": 948,
             "y": 746
@@ -82,7 +96,10 @@
             "id": "speech",
             "label": "Speech Service\nSynthesizes narration, tracks readiness",
             "step": 8,
-            "files": ["packages/vscode/src/speech_service.ts", "packages/vscode/src/speech_lifecycle.ts"],
+            "files": [
+              "packages/vscode/src/speech_service.ts",
+              "packages/vscode/src/speech_lifecycle.ts"
+            ],
             "group": "audio",
             "x": 1729,
             "y": 746
@@ -493,7 +510,10 @@
           {
             "id": "bridge",
             "label": "Editor Bridge\nAuthenticated WebSocket, session owner socket",
-            "files": ["packages/core/src/bridge.ts", "packages/core/src/diagnostic_delivery.ts"],
+            "files": [
+              "packages/core/src/bridge.ts",
+              "packages/core/src/diagnostic_delivery.ts"
+            ],
             "group": "session",
             "x": 743.5,
             "y": 249
@@ -1081,7 +1101,7 @@
       "type": "flow",
       "origin": "llm",
       "generation": {
-        "focus": "Pairing Session Lifecycle \u2014 The agent's MCP tools (start, step, listen, end, read, calibrate) go through the relay's EditorLink and the WebSocket Bridge to the editor Controller, which handles discovery, token/version handshake, turn-taking, session resume and end, and returns Reports to the agent."
+        "focus": "Pairing Session Lifecycle — The agent's MCP tools (start, step, listen, end, read, calibrate) go through the relay's EditorLink and the WebSocket Bridge to the editor Controller, which handles discovery, token/version handshake, turn-taking, session resume and end, and returns Reports to the agent."
       },
       "doc": {
         "type": "flow",
@@ -1091,7 +1111,10 @@
             "id": "call",
             "label": "Agent calls a tool (start, step, listen, end, read, calibrate)",
             "step": 1,
-            "files": ["packages/relay/src/server.ts", "packages/relay/src/tools.ts"],
+            "files": [
+              "packages/relay/src/server.ts",
+              "packages/relay/src/tools.ts"
+            ],
             "group": "relay",
             "x": 593.5,
             "y": 42
@@ -1100,7 +1123,9 @@
             "id": "cwd",
             "label": "Working directory valid? (start only)",
             "step": 2,
-            "files": ["packages/relay/src/server.ts"],
+            "files": [
+              "packages/relay/src/server.ts"
+            ],
             "group": "relay",
             "x": 619.5,
             "y": 170,
@@ -1110,7 +1135,11 @@
             "id": "disc",
             "label": "Find editor window from discovery files",
             "step": 3,
-            "files": ["packages/relay/src/link.ts", "packages/protocol/src/wire.ts", "packages/protocol/src/schemas.ts"],
+            "files": [
+              "packages/relay/src/link.ts",
+              "packages/protocol/src/wire.ts",
+              "packages/protocol/src/schemas.ts"
+            ],
             "group": "handshake",
             "x": 909.5,
             "y": 357
@@ -1118,7 +1147,10 @@
           {
             "id": "hello",
             "label": "Connect WebSocket, send hello with token and version",
-            "files": ["packages/relay/src/link.ts", "packages/protocol/src/wire.ts"],
+            "files": [
+              "packages/relay/src/link.ts",
+              "packages/protocol/src/wire.ts"
+            ],
             "group": "handshake",
             "x": 891.5,
             "y": 492
@@ -1127,7 +1159,10 @@
             "id": "auth",
             "label": "Token and protocol version match?",
             "step": 4,
-            "files": ["packages/core/src/bridge.ts", "packages/protocol/src/schemas.ts"],
+            "files": [
+              "packages/core/src/bridge.ts",
+              "packages/protocol/src/schemas.ts"
+            ],
             "group": "handshake",
             "x": 933.5,
             "y": 620,
@@ -1136,7 +1171,10 @@
           {
             "id": "fail",
             "label": "Close socket, return error to agent",
-            "files": ["packages/core/src/bridge.ts", "packages/relay/src/link.ts"],
+            "files": [
+              "packages/core/src/bridge.ts",
+              "packages/relay/src/link.ts"
+            ],
             "group": "handshake",
             "x": 1272,
             "y": 755
@@ -1144,7 +1182,10 @@
           {
             "id": "fwd",
             "label": "Send call frame after welcome",
-            "files": ["packages/relay/src/link.ts", "packages/core/src/bridge.ts"],
+            "files": [
+              "packages/relay/src/link.ts",
+              "packages/core/src/bridge.ts"
+            ],
             "group": "handshake",
             "x": 608,
             "y": 755
@@ -1152,7 +1193,10 @@
           {
             "id": "sess",
             "label": "Session exists for start?",
-            "files": ["packages/core/src/controller.ts", "packages/protocol/src/schemas.ts"],
+            "files": [
+              "packages/core/src/controller.ts",
+              "packages/protocol/src/schemas.ts"
+            ],
             "group": "controller",
             "x": 624,
             "y": 915,
@@ -1162,7 +1206,9 @@
             "id": "begin",
             "label": "Begin new session or resume saved one",
             "step": 5,
-            "files": ["packages/core/src/controller.ts"],
+            "files": [
+              "packages/core/src/controller.ts"
+            ],
             "group": "controller",
             "x": 190,
             "y": 1060
@@ -1171,7 +1217,9 @@
             "id": "turn",
             "label": "Whose turn? Play batches or wait for programmer",
             "step": 6,
-            "files": ["packages/core/src/controller.ts"],
+            "files": [
+              "packages/core/src/controller.ts"
+            ],
             "group": "controller",
             "x": 550,
             "y": 1050,
@@ -1180,7 +1228,9 @@
           {
             "id": "end",
             "label": "End session on agent or programmer request",
-            "files": ["packages/core/src/controller.ts"],
+            "files": [
+              "packages/core/src/controller.ts"
+            ],
             "group": "controller",
             "x": 962,
             "y": 1060
@@ -1189,7 +1239,11 @@
             "id": "report",
             "label": "Build Report and send result frame",
             "step": 7,
-            "files": ["packages/core/src/controller.ts", "packages/core/src/bridge.ts", "packages/protocol/src/schemas.ts"],
+            "files": [
+              "packages/core/src/controller.ts",
+              "packages/core/src/bridge.ts",
+              "packages/protocol/src/schemas.ts"
+            ],
             "group": "reply",
             "x": 630,
             "y": 1257
@@ -1197,7 +1251,10 @@
           {
             "id": "render",
             "label": "Validate and render report text for agent",
-            "files": ["packages/relay/src/server.ts", "packages/relay/src/render.ts"],
+            "files": [
+              "packages/relay/src/server.ts",
+              "packages/relay/src/render.ts"
+            ],
             "group": "reply",
             "x": 602,
             "y": 1365
@@ -1721,7 +1778,7 @@
       "type": "flow",
       "origin": "llm",
       "generation": {
-        "focus": "Action Batch Playback \u2014 A batch of actions (say, move, select, type, delete, point, run) is validated, rehearsed in memory, queued, and played by the Player at human pace with line identity tracking, programmer interrupts and outside edits, and a BatchResult for each batch."
+        "focus": "Action Batch Playback — A batch of actions (say, move, select, type, delete, point, run) is validated, rehearsed in memory, queued, and played by the Player at human pace with line identity tracking, programmer interrupts and outside edits, and a BatchResult for each batch."
       },
       "doc": {
         "type": "flow",
@@ -1730,7 +1787,10 @@
             "id": "submit",
             "label": "Agent submits step batch",
             "step": 1,
-            "files": ["packages/relay/src/server.ts", "packages/relay/src/tools.ts"],
+            "files": [
+              "packages/relay/src/server.ts",
+              "packages/relay/src/tools.ts"
+            ],
             "group": "intake",
             "x": 841,
             "y": 26
@@ -1739,7 +1799,11 @@
             "id": "schema",
             "label": "Actions pass schema checks?",
             "step": 2,
-            "files": ["packages/relay/src/tools.ts", "packages/protocol/src/index.ts", "packages/protocol/src/schemas.ts"],
+            "files": [
+              "packages/relay/src/tools.ts",
+              "packages/protocol/src/index.ts",
+              "packages/protocol/src/schemas.ts"
+            ],
             "group": "intake",
             "x": 829,
             "y": 134,
@@ -1749,7 +1813,11 @@
             "id": "rehearse",
             "label": "Rehearse batch in memory on forked line ids",
             "step": 3,
-            "files": ["packages/core/src/controller.ts", "packages/core/src/rehearsal.ts", "packages/core/src/lines.ts"],
+            "files": [
+              "packages/core/src/controller.ts",
+              "packages/core/src/rehearsal.ts",
+              "packages/core/src/lines.ts"
+            ],
             "group": "intake",
             "x": 580.5,
             "y": 269
@@ -1757,7 +1825,10 @@
           {
             "id": "ok",
             "label": "Rehearsal succeeds?",
-            "files": ["packages/core/src/rehearsal.ts", "packages/core/src/controller.ts"],
+            "files": [
+              "packages/core/src/rehearsal.ts",
+              "packages/core/src/controller.ts"
+            ],
             "group": "intake",
             "x": 676.5,
             "y": 404,
@@ -1766,7 +1837,10 @@
           {
             "id": "reject",
             "label": "Reject batch with error and code",
-            "files": ["packages/core/src/controller.ts", "packages/protocol/src/schemas.ts"],
+            "files": [
+              "packages/core/src/controller.ts",
+              "packages/protocol/src/schemas.ts"
+            ],
             "group": "intake",
             "x": 920,
             "y": 565
@@ -1775,7 +1849,9 @@
             "id": "queue",
             "label": "Queue batch",
             "step": 4,
-            "files": ["packages/core/src/controller.ts"],
+            "files": [
+              "packages/core/src/controller.ts"
+            ],
             "group": "queue",
             "x": 249.5,
             "y": 565
@@ -1783,7 +1859,9 @@
           {
             "id": "paused",
             "label": "Playback paused or not agent's turn?",
-            "files": ["packages/core/src/controller.ts"],
+            "files": [
+              "packages/core/src/controller.ts"
+            ],
             "group": "queue",
             "x": 174.5,
             "y": 726,
@@ -1793,7 +1871,11 @@
             "id": "play",
             "label": "Player performs next action at human pace",
             "step": 5,
-            "files": ["packages/core/src/player.ts", "packages/core/src/timeline.ts", "packages/core/src/typing.ts"],
+            "files": [
+              "packages/core/src/player.ts",
+              "packages/core/src/timeline.ts",
+              "packages/core/src/typing.ts"
+            ],
             "group": "play",
             "x": 154.5,
             "y": 913
@@ -1801,7 +1883,10 @@
           {
             "id": "track",
             "label": "Track line identities through each edit",
-            "files": ["packages/core/src/player.ts", "packages/core/src/lines.ts"],
+            "files": [
+              "packages/core/src/player.ts",
+              "packages/core/src/lines.ts"
+            ],
             "group": "play",
             "x": 30,
             "y": 1048
@@ -1810,7 +1895,11 @@
             "id": "interrupt",
             "label": "Programmer interrupt or outside edit?",
             "step": 6,
-            "files": ["packages/core/src/controller.ts", "packages/vscode/src/outside.ts", "packages/vscode/src/outside_watch.ts"],
+            "files": [
+              "packages/core/src/controller.ts",
+              "packages/vscode/src/outside.ts",
+              "packages/vscode/src/outside_watch.ts"
+            ],
             "group": "play",
             "x": 170.5,
             "y": 1183,
@@ -1820,7 +1909,10 @@
             "id": "result",
             "label": "Build BatchResult with status and unplayed",
             "step": 7,
-            "files": ["packages/core/src/player.ts", "packages/protocol/src/schemas.ts"],
+            "files": [
+              "packages/core/src/player.ts",
+              "packages/protocol/src/schemas.ts"
+            ],
             "group": "outcome",
             "x": 166,
             "y": 1370
@@ -1828,7 +1920,11 @@
           {
             "id": "follow",
             "label": "Adopt identities, mark later batches stale",
-            "files": ["packages/core/src/controller.ts", "packages/core/src/rehearsal.ts", "packages/core/src/lines.ts"],
+            "files": [
+              "packages/core/src/controller.ts",
+              "packages/core/src/rehearsal.ts",
+              "packages/core/src/lines.ts"
+            ],
             "group": "outcome",
             "x": 166,
             "y": 1478
@@ -1837,7 +1933,10 @@
             "id": "report",
             "label": "Deliver Report to agent",
             "step": 8,
-            "files": ["packages/core/src/controller.ts", "packages/relay/src/render.ts"],
+            "files": [
+              "packages/core/src/controller.ts",
+              "packages/relay/src/render.ts"
+            ],
             "group": "outcome",
             "x": 599,
             "y": 1586
@@ -2015,7 +2114,7 @@
       "type": "flow",
       "origin": "llm",
       "generation": {
-        "focus": "Narration Speech Synthesis \u2014 A spoken `say` is segmented and synthesized through the Kokoro CPU or GPU worker, ElevenLabs or OpenRouter, then tempo-adjusted and sent to an output, with speech-context history, reminders and readiness checks."
+        "focus": "Narration Speech Synthesis — A spoken `say` is segmented and synthesized through the Kokoro CPU or GPU worker, ElevenLabs or OpenRouter, then tempo-adjusted and sent to an output, with speech-context history, reminders and readiness checks."
       },
       "doc": {
         "type": "flow",
@@ -2024,7 +2123,9 @@
             "id": "batch",
             "label": "Count batch, check reminder due",
             "step": 1,
-            "files": ["packages/core/src/speech_reminder.ts"],
+            "files": [
+              "packages/core/src/speech_reminder.ts"
+            ],
             "group": "intake",
             "x": 398,
             "y": 26
@@ -2032,7 +2133,10 @@
           {
             "id": "ready",
             "label": "Speech ready?",
-            "files": ["packages/vscode/src/speech_readiness.ts", "packages/audio-ui/src/speech_host.ts"],
+            "files": [
+              "packages/vscode/src/speech_readiness.ts",
+              "packages/audio-ui/src/speech_host.ts"
+            ],
             "group": "intake",
             "x": 453,
             "y": 134,
@@ -2042,7 +2146,9 @@
             "id": "remind",
             "label": "Remind agent to select speech",
             "step": 2,
-            "files": ["packages/core/src/speech_reminder.ts"],
+            "files": [
+              "packages/core/src/speech_reminder.ts"
+            ],
             "group": "intake",
             "x": 433.5,
             "y": 269
@@ -2051,7 +2157,10 @@
             "id": "recv",
             "label": "Receive spoken say",
             "step": 3,
-            "files": ["packages/audio-ui/src/companion_narration.ts", "packages/vscode/src/speech_service.ts"],
+            "files": [
+              "packages/audio-ui/src/companion_narration.ts",
+              "packages/vscode/src/speech_service.ts"
+            ],
             "group": "intake",
             "x": 450,
             "y": 404
@@ -2059,7 +2168,9 @@
           {
             "id": "ctx",
             "label": "Capture speech context history",
-            "files": ["packages/core/src/speech_context.ts"],
+            "files": [
+              "packages/core/src/speech_context.ts"
+            ],
             "group": "synth",
             "x": 402,
             "y": 564
@@ -2068,7 +2179,10 @@
             "id": "route",
             "label": "Reserve output route",
             "step": 4,
-            "files": ["packages/audio-ui/src/companion_output.ts", "packages/audio-native/src/native_adapter.ts"],
+            "files": [
+              "packages/audio-ui/src/companion_output.ts",
+              "packages/audio-native/src/native_adapter.ts"
+            ],
             "group": "synth",
             "x": 442,
             "y": 672
@@ -2077,7 +2191,10 @@
             "id": "seg",
             "label": "Split text into sentence segments",
             "step": 5,
-            "files": ["packages/vscode/src/speech_segments.ts", "packages/vscode/src/speech_service.ts"],
+            "files": [
+              "packages/vscode/src/speech_segments.ts",
+              "packages/vscode/src/speech_service.ts"
+            ],
             "group": "synth",
             "x": 390,
             "y": 807
@@ -2086,7 +2203,9 @@
             "id": "prov",
             "label": "Which provider?",
             "step": 6,
-            "files": ["packages/vscode/src/speech_service.ts"],
+            "files": [
+              "packages/vscode/src/speech_service.ts"
+            ],
             "group": "synth",
             "x": 453,
             "y": 915,
@@ -2110,7 +2229,10 @@
           {
             "id": "cloud",
             "label": "ElevenLabs or OpenRouter synthesizes",
-            "files": ["packages/vscode/src/speech_elevenlabs.ts", "packages/vscode/src/speech_openrouter.ts"],
+            "files": [
+              "packages/vscode/src/speech_elevenlabs.ts",
+              "packages/vscode/src/speech_openrouter.ts"
+            ],
             "group": "synth",
             "x": 378,
             "y": 1050
@@ -2118,7 +2240,10 @@
           {
             "id": "tempo",
             "label": "Listening rate not 1x?",
-            "files": ["packages/vscode/src/speech_tempo_client.ts", "packages/vscode/src/speech_tempo_pcm.ts"],
+            "files": [
+              "packages/vscode/src/speech_tempo_client.ts",
+              "packages/vscode/src/speech_tempo_pcm.ts"
+            ],
             "group": "deliver",
             "x": 258,
             "y": 1237,
@@ -2127,7 +2252,10 @@
           {
             "id": "stretch",
             "label": "Tempo worker stretches audio",
-            "files": ["packages/vscode/src/speech_tempo_client.ts", "packages/vscode/src/speech_tempo_pcm.ts"],
+            "files": [
+              "packages/vscode/src/speech_tempo_client.ts",
+              "packages/vscode/src/speech_tempo_pcm.ts"
+            ],
             "group": "deliver",
             "x": 426,
             "y": 1372
@@ -2136,7 +2264,10 @@
             "id": "play",
             "label": "Play part, hold slot until close",
             "step": 7,
-            "files": ["packages/audio-ui/src/companion_output.ts", "packages/audio-native/src/native_adapter.ts"],
+            "files": [
+              "packages/audio-ui/src/companion_output.ts",
+              "packages/audio-native/src/native_adapter.ts"
+            ],
             "group": "deliver",
             "x": 218,
             "y": 1480
@@ -2144,7 +2275,9 @@
           {
             "id": "more",
             "label": "More segments?",
-            "files": ["packages/vscode/src/speech_service.ts"],
+            "files": [
+              "packages/vscode/src/speech_service.ts"
+            ],
             "group": "deliver",
             "x": 370,
             "y": 1615,
@@ -2153,7 +2286,9 @@
           {
             "id": "commit",
             "label": "Commit completed speech to history",
-            "files": ["packages/core/src/speech_context.ts"],
+            "files": [
+              "packages/core/src/speech_context.ts"
+            ],
             "group": "deliver",
             "x": 303,
             "y": 1750
@@ -2326,7 +2461,7 @@
       "type": "flow",
       "origin": "llm",
       "generation": {
-        "focus": "GPU Capability Verification \u2014 The GPU compute path is gated by a check that the Vulkan loader, driver and assets are trusted, a probe in a worker process (negative, tiny and model proofs), a model download and a launch capability before GPU synthesis is admitted."
+        "focus": "GPU Capability Verification — The GPU compute path is gated by a check that the Vulkan loader, driver and assets are trusted, a probe in a worker process (negative, tiny and model proofs), a model download and a launch capability before GPU synthesis is admitted."
       },
       "doc": {
         "type": "flow",
@@ -2346,7 +2481,10 @@
           {
             "id": "slot",
             "label": "GPU process slot free?",
-            "files": ["packages/vscode/src/speech_gpu_slot.ts", "packages/vscode/src/speech_gpu_preflight.ts"],
+            "files": [
+              "packages/vscode/src/speech_gpu_slot.ts",
+              "packages/vscode/src/speech_gpu_preflight.ts"
+            ],
             "group": "pre",
             "x": 232,
             "y": 134,
@@ -2371,7 +2509,10 @@
           {
             "id": "hasmodel",
             "label": "GPU model installed and verified?",
-            "files": ["packages/vscode/src/speech_gpu_model.ts", "packages/vscode/src/speech_gpu_model_manifest.ts"],
+            "files": [
+              "packages/vscode/src/speech_gpu_model.ts",
+              "packages/vscode/src/speech_gpu_model_manifest.ts"
+            ],
             "group": "model",
             "x": 377.5,
             "y": 456,
@@ -2404,7 +2545,10 @@
           {
             "id": "neg",
             "label": "Negative proof: no adapter without driver",
-            "files": ["packages/vscode/src/speech_gpu_proof_worker.ts", "packages/vscode/src/speech_gpu_negative.ts"],
+            "files": [
+              "packages/vscode/src/speech_gpu_proof_worker.ts",
+              "packages/vscode/src/speech_gpu_negative.ts"
+            ],
             "group": "proof",
             "x": 345.5,
             "y": 913
@@ -2412,7 +2556,10 @@
           {
             "id": "tiny",
             "label": "Tiny proof: small graph runs on GPU",
-            "files": ["packages/vscode/src/speech_gpu_tiny.ts", "packages/vscode/src/speech_gpu_proof_worker.ts"],
+            "files": [
+              "packages/vscode/src/speech_gpu_tiny.ts",
+              "packages/vscode/src/speech_gpu_proof_worker.ts"
+            ],
             "group": "proof",
             "x": 369.5,
             "y": 1021
@@ -2420,7 +2567,10 @@
           {
             "id": "modelproof",
             "label": "Model proof: self-test shows GPU work",
-            "files": ["packages/vscode/src/speech_gpu_selftest.ts", "packages/vscode/src/speech_gpu_profile.ts"],
+            "files": [
+              "packages/vscode/src/speech_gpu_selftest.ts",
+              "packages/vscode/src/speech_gpu_profile.ts"
+            ],
             "group": "proof",
             "x": 361.5,
             "y": 1129
@@ -2428,7 +2578,10 @@
           {
             "id": "passed",
             "label": "All proofs passed?",
-            "files": ["packages/vscode/src/speech_gpu_check.ts", "packages/vscode/src/speech_gpu_setup.ts"],
+            "files": [
+              "packages/vscode/src/speech_gpu_check.ts",
+              "packages/vscode/src/speech_gpu_setup.ts"
+            ],
             "group": "proof",
             "x": 437.5,
             "y": 1237,
@@ -2437,7 +2590,10 @@
           {
             "id": "cap",
             "label": "Issue launch capability",
-            "files": ["packages/vscode/src/speech_gpu_capability.ts", "packages/vscode/src/speech_gpu_client.ts"],
+            "files": [
+              "packages/vscode/src/speech_gpu_capability.ts",
+              "packages/vscode/src/speech_gpu_client.ts"
+            ],
             "group": "admit",
             "x": 494.5,
             "y": 1424
@@ -2445,7 +2601,10 @@
           {
             "id": "admit",
             "label": "Admit GPU synthesis in lifecycle",
-            "files": ["packages/vscode/src/speech_lifecycle.ts", "packages/vscode/src/speech_service.ts"],
+            "files": [
+              "packages/vscode/src/speech_lifecycle.ts",
+              "packages/vscode/src/speech_service.ts"
+            ],
             "group": "admit",
             "x": 458.5,
             "y": 1559
@@ -2453,7 +2612,10 @@
           {
             "id": "unavail",
             "label": "GPU unavailable, reason recorded",
-            "files": ["packages/vscode/src/speech_compute_types.ts", "packages/protocol/src/gpu_diagnostics.ts"],
+            "files": [
+              "packages/vscode/src/speech_compute_types.ts",
+              "packages/protocol/src/gpu_diagnostics.ts"
+            ],
             "group": "admit",
             "x": 50,
             "y": 1424
@@ -2558,7 +2720,7 @@
       "type": "flow",
       "origin": "llm",
       "generation": {
-        "focus": "Local Companion Audio Handoff \u2014 A UI-side companion extension attaches to the workspace extension via a prepare/commit handshake and a heartbeat lease, receives speak/pause/resume/cancel frames and panel chunks, plays audio through native adapter admission and ownership, and returns terminal outcomes."
+        "focus": "Local Companion Audio Handoff — A UI-side companion extension attaches to the workspace extension via a prepare/commit handshake and a heartbeat lease, receives speak/pause/resume/cancel frames and panel chunks, plays audio through native adapter admission and ownership, and returns terminal outcomes."
       },
       "doc": {
         "type": "flow",
@@ -2566,7 +2728,10 @@
           {
             "id": "prep",
             "label": "Prepare attachment token",
-            "files": ["packages/audio-ui/src/attachment_gate.ts", "packages/audio-ui/src/extension.ts"],
+            "files": [
+              "packages/audio-ui/src/attachment_gate.ts",
+              "packages/audio-ui/src/extension.ts"
+            ],
             "group": "attach",
             "x": 1135.5,
             "y": 26
@@ -2574,7 +2739,9 @@
           {
             "id": "commit",
             "label": "Token matches and unexpired?",
-            "files": ["packages/audio-ui/src/attachment_gate.ts"],
+            "files": [
+              "packages/audio-ui/src/attachment_gate.ts"
+            ],
             "group": "attach",
             "x": 1119.5,
             "y": 161,
@@ -2583,7 +2750,10 @@
           {
             "id": "start",
             "label": "Create companion session and attach",
-            "files": ["packages/audio-ui/src/extension.ts", "packages/audio-ui/src/companion_session.ts"],
+            "files": [
+              "packages/audio-ui/src/extension.ts",
+              "packages/audio-ui/src/companion_session.ts"
+            ],
             "group": "attach",
             "x": 1091.5,
             "y": 296
@@ -2591,7 +2761,9 @@
           {
             "id": "recv",
             "label": "Frame current and newer?",
-            "files": ["packages/audio-ui/src/local_connection.ts"],
+            "files": [
+              "packages/audio-ui/src/local_connection.ts"
+            ],
             "group": "lease",
             "x": 1135.5,
             "y": 483,
@@ -2600,7 +2772,9 @@
           {
             "id": "hb",
             "label": "Heartbeat renews lease",
-            "files": ["packages/audio-ui/src/local_connection.ts"],
+            "files": [
+              "packages/audio-ui/src/local_connection.ts"
+            ],
             "group": "lease",
             "x": 968,
             "y": 644
@@ -2608,7 +2782,10 @@
           {
             "id": "lost",
             "label": "Lease expired: shut down session",
-            "files": ["packages/audio-ui/src/local_connection.ts", "packages/audio-ui/src/companion_session.ts"],
+            "files": [
+              "packages/audio-ui/src/local_connection.ts",
+              "packages/audio-ui/src/companion_session.ts"
+            ],
             "group": "lease",
             "x": 1746,
             "y": 644
@@ -2616,7 +2793,10 @@
           {
             "id": "chunk",
             "label": "Reassemble panel chunks for page",
-            "files": ["packages/audio-ui/src/companion_session.ts", "packages/protocol/src/panel_chunks.ts"],
+            "files": [
+              "packages/audio-ui/src/companion_session.ts",
+              "packages/protocol/src/panel_chunks.ts"
+            ],
             "group": "lease",
             "x": 1426,
             "y": 644
@@ -2624,7 +2804,9 @@
           {
             "id": "speak",
             "label": "Speak frame for current page?",
-            "files": ["packages/audio-ui/src/companion_narration.ts"],
+            "files": [
+              "packages/audio-ui/src/companion_narration.ts"
+            ],
             "group": "play",
             "x": 97.5,
             "y": 644,
@@ -2646,7 +2828,10 @@
           {
             "id": "play",
             "label": "Play audio and forward ordered events",
-            "files": ["packages/audio-ui/src/companion_output.ts", "packages/audio-native/src/native_adapter.ts"],
+            "files": [
+              "packages/audio-ui/src/companion_output.ts",
+              "packages/audio-native/src/native_adapter.ts"
+            ],
             "group": "play",
             "x": 370,
             "y": 940
@@ -2654,7 +2839,10 @@
           {
             "id": "ctl",
             "label": "Apply pause, resume or cancel",
-            "files": ["packages/audio-ui/src/companion_narration.ts", "packages/audio-ui/src/companion_output.ts"],
+            "files": [
+              "packages/audio-ui/src/companion_narration.ts",
+              "packages/audio-ui/src/companion_output.ts"
+            ],
             "group": "play",
             "x": 548,
             "y": 805
@@ -2662,7 +2850,10 @@
           {
             "id": "retire",
             "label": "Wait for process close to release slot",
-            "files": ["packages/audio-native/src/playback.ts", "packages/audio-native/src/native_adapter.ts"],
+            "files": [
+              "packages/audio-native/src/playback.ts",
+              "packages/audio-native/src/native_adapter.ts"
+            ],
             "group": "outcome",
             "x": 1009.5,
             "y": 1127
@@ -2670,7 +2861,10 @@
           {
             "id": "term",
             "label": "Send terminal outcome to workspace",
-            "files": ["packages/audio-ui/src/companion_narration.ts", "packages/vscode/src/workspace_session.ts"],
+            "files": [
+              "packages/audio-ui/src/companion_narration.ts",
+              "packages/vscode/src/workspace_session.ts"
+            ],
             "group": "outcome",
             "x": 867,
             "y": 1262
@@ -2789,7 +2983,7 @@
       "type": "flow",
       "origin": "llm",
       "generation": {
-        "focus": "Native Audio Playback \u2014 The native adapter admits an output route, verifies and spawns the PipeWire, CoreAudio or WASAPI helper, and drives multi-part playback with pause, resume and stop until the OS closes the process."
+        "focus": "Native Audio Playback — The native adapter admits an output route, verifies and spawns the PipeWire, CoreAudio or WASAPI helper, and drives multi-part playback with pause, resume and stop until the OS closes the process."
       },
       "doc": {
         "type": "flow",
@@ -2797,7 +2991,10 @@
           {
             "id": "admit",
             "label": "Admit output route",
-            "files": ["packages/audio-ui/src/companion_output.ts", "packages/audio-native/src/native_adapter.ts"],
+            "files": [
+              "packages/audio-ui/src/companion_output.ts",
+              "packages/audio-native/src/native_adapter.ts"
+            ],
             "group": "admission",
             "x": 225,
             "y": 26
@@ -2805,7 +3002,10 @@
           {
             "id": "reserve",
             "label": "Reserve exclusive lease",
-            "files": ["packages/audio-native/src/admission.ts", "packages/audio-native/src/ownership.ts"],
+            "files": [
+              "packages/audio-native/src/admission.ts",
+              "packages/audio-native/src/ownership.ts"
+            ],
             "group": "admission",
             "x": 205,
             "y": 134
@@ -2813,7 +3013,9 @@
           {
             "id": "routeok",
             "label": "Route listed and free?",
-            "files": ["packages/audio-native/src/admission.ts"],
+            "files": [
+              "packages/audio-native/src/admission.ts"
+            ],
             "group": "admission",
             "x": 209,
             "y": 242,
@@ -2822,7 +3024,10 @@
           {
             "id": "recheck",
             "label": "Recheck route before each part",
-            "files": ["packages/audio-native/src/native_adapter.ts", "packages/audio-native/src/admission.ts"],
+            "files": [
+              "packages/audio-native/src/native_adapter.ts",
+              "packages/audio-native/src/admission.ts"
+            ],
             "group": "launch",
             "x": 400.5,
             "y": 429
@@ -2830,7 +3035,9 @@
           {
             "id": "paused",
             "label": "Paused before start?",
-            "files": ["packages/audio-native/src/native_adapter.ts"],
+            "files": [
+              "packages/audio-native/src/native_adapter.ts"
+            ],
             "group": "launch",
             "x": 351.5,
             "y": 564,
@@ -2839,7 +3046,10 @@
           {
             "id": "verify",
             "label": "Verify helper digest (macOS/Windows)",
-            "files": ["packages/audio-native/src/verified_backend.ts", "packages/audio-native/src/helper_manifest.ts"],
+            "files": [
+              "packages/audio-native/src/verified_backend.ts",
+              "packages/audio-native/src/helper_manifest.ts"
+            ],
             "group": "launch",
             "x": 287.5,
             "y": 699
@@ -2847,7 +3057,10 @@
           {
             "id": "spawn",
             "label": "Spawn helper and send open/play",
-            "files": ["packages/audio-native/src/helper_backend.ts", "packages/audio-native/src/linux_backend.ts"],
+            "files": [
+              "packages/audio-native/src/helper_backend.ts",
+              "packages/audio-native/src/linux_backend.ts"
+            ],
             "group": "launch",
             "x": 307.5,
             "y": 834
@@ -2855,7 +3068,10 @@
           {
             "id": "attach",
             "label": "Attach process to output slot",
-            "files": ["packages/audio-native/src/playback.ts", "packages/audio-native/src/native_adapter.ts"],
+            "files": [
+              "packages/audio-native/src/playback.ts",
+              "packages/audio-native/src/native_adapter.ts"
+            ],
             "group": "launch",
             "x": 315.5,
             "y": 969
@@ -2876,7 +3092,10 @@
           {
             "id": "ctl",
             "label": "Pause, resume or stop requested?",
-            "files": ["packages/audio-native/src/native_adapter.ts", "packages/audio-native/src/helper_backend.ts"],
+            "files": [
+              "packages/audio-native/src/native_adapter.ts",
+              "packages/audio-native/src/helper_backend.ts"
+            ],
             "group": "playback",
             "x": 420,
             "y": 1291,
@@ -2885,7 +3104,9 @@
           {
             "id": "outcome",
             "label": "Part ended OK?",
-            "files": ["packages/audio-native/src/native_adapter.ts"],
+            "files": [
+              "packages/audio-native/src/native_adapter.ts"
+            ],
             "group": "playback",
             "x": 639,
             "y": 1426,
@@ -2894,7 +3115,10 @@
           {
             "id": "close",
             "label": "OS closes process, slot released",
-            "files": ["packages/audio-native/src/playback.ts", "packages/audio-native/src/helper_backend.ts"],
+            "files": [
+              "packages/audio-native/src/playback.ts",
+              "packages/audio-native/src/helper_backend.ts"
+            ],
             "group": "retirement",
             "x": 513,
             "y": 1613
@@ -2902,7 +3126,10 @@
           {
             "id": "fail",
             "label": "Emit failed or canceled, retire lease",
-            "files": ["packages/audio-native/src/native_adapter.ts", "packages/audio-ui/src/companion_output.ts"],
+            "files": [
+              "packages/audio-native/src/native_adapter.ts",
+              "packages/audio-ui/src/companion_output.ts"
+            ],
             "group": "retirement",
             "x": 167,
             "y": 1748
@@ -3022,7 +3249,7 @@
       "type": "dataflow",
       "origin": "llm",
       "generation": {
-        "focus": "Agent Tool Call Relay \u2014 An agent's MCP tool call (start/step/listen/end/read/calibrate/diagnostics) enters the relay, is routed by EditorLink over a discovered local WebSocket to the editor's Bridge, and a Report or FileContent is validated, rendered to text and returned to the agent."
+        "focus": "Agent Tool Call Relay — An agent's MCP tool call (start/step/listen/end/read/calibrate/diagnostics) enters the relay, is routed by EditorLink over a discovered local WebSocket to the editor's Bridge, and a Report or FileContent is validated, rendered to text and returned to the agent."
       },
       "doc": {
         "type": "dataflow",
@@ -3031,7 +3258,9 @@
           {
             "id": "agent",
             "label": "Agent Harness\nissues MCP tool calls",
-            "files": ["packages/relay/src/main.ts"],
+            "files": [
+              "packages/relay/src/main.ts"
+            ],
             "group": "relay",
             "x": 251,
             "y": 42
@@ -3039,7 +3268,10 @@
           {
             "id": "server",
             "label": "MCP Server\nroutes tools, validates answers",
-            "files": ["packages/relay/src/server.ts", "packages/relay/src/tools.ts"],
+            "files": [
+              "packages/relay/src/server.ts",
+              "packages/relay/src/tools.ts"
+            ],
             "group": "relay",
             "x": 521,
             "y": 261
@@ -3047,7 +3279,9 @@
           {
             "id": "render",
             "label": "Report Renderer\nturns results into text",
-            "files": ["packages/relay/src/render.ts"],
+            "files": [
+              "packages/relay/src/render.ts"
+            ],
             "group": "relay",
             "x": 84,
             "y": 416
@@ -3055,7 +3289,9 @@
           {
             "id": "link",
             "label": "Editor Link\nfinds window, relays calls",
-            "files": ["packages/relay/src/link.ts"],
+            "files": [
+              "packages/relay/src/link.ts"
+            ],
             "group": "relay",
             "x": 930,
             "y": 416
@@ -3063,7 +3299,9 @@
           {
             "id": "disc",
             "label": "Discovery Files\nwindow port and token",
-            "files": ["packages/protocol/src/wire.ts"],
+            "files": [
+              "packages/protocol/src/wire.ts"
+            ],
             "group": "wire",
             "x": 1750,
             "y": 42
@@ -3071,7 +3309,10 @@
           {
             "id": "schemas",
             "label": "Protocol Schemas\nframe, Report, FileContent shapes",
-            "files": ["packages/protocol/src/schemas.ts", "packages/protocol/src/index.ts"],
+            "files": [
+              "packages/protocol/src/schemas.ts",
+              "packages/protocol/src/index.ts"
+            ],
             "group": "wire",
             "x": 1338,
             "y": 42
@@ -3079,7 +3320,9 @@
           {
             "id": "bridge",
             "label": "Bridge\nauthenticates socket, dispatches calls",
-            "files": ["packages/core/src/bridge.ts"],
+            "files": [
+              "packages/core/src/bridge.ts"
+            ],
             "group": "editor",
             "x": 908,
             "y": 623
@@ -3087,7 +3330,9 @@
           {
             "id": "ctrl",
             "label": "Controller\nplays steps, builds Reports",
-            "files": ["packages/core/src/controller.ts"],
+            "files": [
+              "packages/core/src/controller.ts"
+            ],
             "group": "editor",
             "x": 930,
             "y": 778
@@ -3376,7 +3621,7 @@
       "type": "state",
       "origin": "llm",
       "generation": {
-        "focus": "Pairing Session Lifecycle \u2014 Session ownership across the relay/editor bridge: unauthenticated, authenticated, owner, suspended on disconnect, resumed by start, and ended, with turn changes and pause reasons."
+        "focus": "Pairing Session Lifecycle — Session ownership across the relay/editor bridge: unauthenticated, authenticated, owner, suspended on disconnect, resumed by start, and ended, with turn changes and pause reasons."
       },
       "doc": {
         "type": "state",
@@ -3385,63 +3630,91 @@
           {
             "id": "unauth",
             "label": "Unauthenticated Socket",
-            "files": ["packages/core/src/bridge.ts"],
+            "files": [
+              "packages/core/src/bridge.ts"
+            ],
             "x": 286,
             "y": 16
           },
           {
             "id": "auth",
             "label": "Authenticated (no session)",
-            "files": ["packages/core/src/bridge.ts", "packages/protocol/src/wire.ts"],
+            "files": [
+              "packages/core/src/bridge.ts",
+              "packages/protocol/src/wire.ts"
+            ],
             "x": 416.5,
             "y": 170
           },
           {
             "id": "rejected",
             "label": "Rejected / Closed",
-            "files": ["packages/core/src/bridge.ts"],
+            "files": [
+              "packages/core/src/bridge.ts"
+            ],
             "x": 190,
             "y": 305
           },
           {
             "id": "owner",
             "label": "Owner (session active)",
-            "files": ["packages/core/src/bridge.ts", "packages/core/src/controller.ts"],
+            "files": [
+              "packages/core/src/bridge.ts",
+              "packages/core/src/controller.ts"
+            ],
             "x": 547.5,
             "y": 305
           },
           {
             "id": "agentTurn",
             "label": "Agent Turn",
-            "files": ["packages/core/src/controller.ts", "packages/protocol/src/schemas.ts"],
+            "files": [
+              "packages/core/src/controller.ts",
+              "packages/protocol/src/schemas.ts"
+            ],
             "x": 798.5,
             "y": 440
           },
           {
             "id": "progTurn",
             "label": "Programmer Turn",
-            "files": ["packages/core/src/controller.ts", "packages/protocol/src/schemas.ts"],
+            "files": [
+              "packages/core/src/controller.ts",
+              "packages/protocol/src/schemas.ts"
+            ],
             "x": 689.5,
             "y": 575
           },
           {
             "id": "paused",
             "label": "Paused (pause reasons)",
-            "files": ["packages/core/src/controller.ts", "packages/protocol/src/schemas.ts", "packages/core/src/ports.ts"],
+            "files": [
+              "packages/core/src/controller.ts",
+              "packages/protocol/src/schemas.ts",
+              "packages/core/src/ports.ts"
+            ],
             "x": 1133,
             "y": 710
           },
           {
             "id": "suspended",
             "label": "Suspended (owner disconnected)",
-            "files": ["packages/core/src/bridge.ts", "packages/core/src/controller.ts", "packages/vscode/src/diagnostics.ts"],
+            "files": [
+              "packages/core/src/bridge.ts",
+              "packages/core/src/controller.ts",
+              "packages/vscode/src/diagnostics.ts"
+            ],
             "x": 811,
             "y": 845
           },
           {
             "id": "ended",
             "label": "Ended",
-            "files": ["packages/core/src/bridge.ts", "packages/core/src/controller.ts", "packages/vscode/src/diagnostics.ts"],
+            "files": [
+              "packages/core/src/bridge.ts",
+              "packages/core/src/controller.ts",
+              "packages/vscode/src/diagnostics.ts"
+            ],
             "x": 328.5,
             "y": 980
           }
@@ -3968,7 +4241,7 @@
       "type": "state",
       "origin": "llm",
       "generation": {
-        "focus": "Batch Playback \u2014 A batch of agent actions moves from queued through rehearsal and playing to completed, interrupted, failed or discarded, with pauses and holds from the timeline."
+        "focus": "Batch Playback — A batch of agent actions moves from queued through rehearsal and playing to completed, interrupted, failed or discarded, with pauses and holds from the timeline."
       },
       "doc": {
         "type": "state",
@@ -3976,28 +4249,42 @@
           {
             "id": "rehearsal",
             "label": "Rehearsal",
-            "files": ["packages/core/src/controller.ts", "packages/core/src/rehearsal.ts"],
+            "files": [
+              "packages/core/src/controller.ts",
+              "packages/core/src/rehearsal.ts"
+            ],
             "x": 694.5,
             "y": 0
           },
           {
             "id": "rejected",
             "label": "Rejected",
-            "files": ["packages/core/src/controller.ts", "packages/core/src/rehearsal.ts", "packages/protocol/src/schemas.ts"],
+            "files": [
+              "packages/core/src/controller.ts",
+              "packages/core/src/rehearsal.ts",
+              "packages/protocol/src/schemas.ts"
+            ],
             "x": 420.5,
             "y": 135
           },
           {
             "id": "queued",
             "label": "Queued",
-            "files": ["packages/core/src/controller.ts", "packages/protocol/src/schemas.ts"],
+            "files": [
+              "packages/core/src/controller.ts",
+              "packages/protocol/src/schemas.ts"
+            ],
             "x": 1086,
             "y": 135
           },
           {
             "id": "playing",
             "label": "Playing",
-            "files": ["packages/core/src/controller.ts", "packages/core/src/player.ts", "packages/protocol/src/schemas.ts"],
+            "files": [
+              "packages/core/src/controller.ts",
+              "packages/core/src/player.ts",
+              "packages/protocol/src/schemas.ts"
+            ],
             "x": 788,
             "y": 270
           },
@@ -4016,14 +4303,21 @@
           {
             "id": "held",
             "label": "Held (reading)",
-            "files": ["packages/core/src/timeline.ts", "packages/core/src/controller.ts"],
+            "files": [
+              "packages/core/src/timeline.ts",
+              "packages/core/src/controller.ts"
+            ],
             "x": 701,
             "y": 424
           },
           {
             "id": "completed",
             "label": "Completed",
-            "files": ["packages/protocol/src/schemas.ts", "packages/core/src/player.ts", "packages/core/src/controller.ts"],
+            "files": [
+              "packages/protocol/src/schemas.ts",
+              "packages/core/src/player.ts",
+              "packages/core/src/controller.ts"
+            ],
             "x": 988,
             "y": 424
           },
@@ -4042,14 +4336,21 @@
           {
             "id": "failed",
             "label": "Failed",
-            "files": ["packages/protocol/src/schemas.ts", "packages/core/src/player.ts", "packages/core/src/controller.ts"],
+            "files": [
+              "packages/protocol/src/schemas.ts",
+              "packages/core/src/player.ts",
+              "packages/core/src/controller.ts"
+            ],
             "x": 1190,
             "y": 424
           },
           {
             "id": "discarded",
             "label": "Discarded",
-            "files": ["packages/protocol/src/schemas.ts", "packages/core/src/controller.ts"],
+            "files": [
+              "packages/protocol/src/schemas.ts",
+              "packages/core/src/controller.ts"
+            ],
             "x": 1247,
             "y": 270
           }
@@ -4136,7 +4437,7 @@
       "type": "state",
       "origin": "llm",
       "generation": {
-        "focus": "Agent Status \u2014 The panel's agent state (typing, read, running, thinking, absent, paused, listening, navigator) as driven by actions, pauses, listen calls and idle timeouts."
+        "focus": "Agent Status — The panel's agent state (typing, read, running, thinking, absent, paused, listening, navigator) as driven by actions, pauses, listen calls and idle timeouts."
       },
       "doc": {
         "type": "state",
@@ -4144,56 +4445,86 @@
           {
             "id": "thinking",
             "label": "Thinking",
-            "files": ["packages/core/src/controller.ts", "packages/core/src/ports.ts"],
+            "files": [
+              "packages/core/src/controller.ts",
+              "packages/core/src/ports.ts"
+            ],
             "x": 1824.5,
             "y": 0
           },
           {
             "id": "typing",
             "label": "Typing",
-            "files": ["packages/core/src/controller.ts", "packages/core/src/player.ts", "packages/core/src/ports.ts"],
+            "files": [
+              "packages/core/src/controller.ts",
+              "packages/core/src/player.ts",
+              "packages/core/src/ports.ts"
+            ],
             "x": 2069.5,
             "y": 154
           },
           {
             "id": "read",
             "label": "Read",
-            "files": ["packages/core/src/player.ts", "packages/core/src/ports.ts", "packages/core/src/typing.ts"],
+            "files": [
+              "packages/core/src/player.ts",
+              "packages/core/src/ports.ts",
+              "packages/core/src/typing.ts"
+            ],
             "x": 2075,
             "y": 308
           },
           {
             "id": "running",
             "label": "Running",
-            "files": ["packages/core/src/player.ts", "packages/core/src/ports.ts"],
+            "files": [
+              "packages/core/src/player.ts",
+              "packages/core/src/ports.ts"
+            ],
             "x": 1465.5,
             "y": 443
           },
           {
             "id": "listening",
             "label": "Listening",
-            "files": ["packages/core/src/controller.ts", "packages/core/src/config.ts", "packages/core/src/ports.ts"],
+            "files": [
+              "packages/core/src/controller.ts",
+              "packages/core/src/config.ts",
+              "packages/core/src/ports.ts"
+            ],
             "x": 389,
             "y": 154
           },
           {
             "id": "navigator",
             "label": "Navigator",
-            "files": ["packages/core/src/controller.ts", "packages/core/src/config.ts", "packages/core/src/ports.ts"],
+            "files": [
+              "packages/core/src/controller.ts",
+              "packages/core/src/config.ts",
+              "packages/core/src/ports.ts"
+            ],
             "x": 508.5,
             "y": 308
           },
           {
             "id": "absent",
             "label": "Absent",
-            "files": ["packages/core/src/controller.ts", "packages/core/src/config.ts", "packages/core/src/ports.ts"],
+            "files": [
+              "packages/core/src/controller.ts",
+              "packages/core/src/config.ts",
+              "packages/core/src/ports.ts"
+            ],
             "x": 1190,
             "y": 308
           },
           {
             "id": "paused",
             "label": "Paused",
-            "files": ["packages/core/src/controller.ts", "packages/core/src/timeline.ts", "packages/core/src/ports.ts"],
+            "files": [
+              "packages/core/src/controller.ts",
+              "packages/core/src/timeline.ts",
+              "packages/core/src/ports.ts"
+            ],
             "x": 2851.5,
             "y": 443
           }
@@ -4325,7 +4656,7 @@
       "type": "state",
       "origin": "llm",
       "generation": {
-        "focus": "Native Audio Playback \u2014 One audio job's life in the native helper: admit and lease, open, ready, play, started, paused, resumed, then ended, canceled or failed, and retired."
+        "focus": "Native Audio Playback — One audio job's life in the native helper: admit and lease, open, ready, play, started, paused, resumed, then ended, canceled or failed, and retired."
       },
       "doc": {
         "type": "state",
@@ -4367,7 +4698,10 @@
           {
             "id": "playing",
             "label": "Play sent",
-            "files": ["packages/audio-native/src/helper_backend.ts", "packages/audio-native/native/macos/main.swift"],
+            "files": [
+              "packages/audio-native/src/helper_backend.ts",
+              "packages/audio-native/native/macos/main.swift"
+            ],
             "x": 858,
             "y": 424
           },
@@ -4385,28 +4719,40 @@
           {
             "id": "paused",
             "label": "Paused",
-            "files": ["packages/audio-native/src/helper_backend.ts", "packages/audio-native/native/macos/main.swift"],
+            "files": [
+              "packages/audio-native/src/helper_backend.ts",
+              "packages/audio-native/native/macos/main.swift"
+            ],
             "x": 270.5,
             "y": 694
           },
           {
             "id": "ended",
             "label": "Ended",
-            "files": ["packages/audio-native/src/helper_backend.ts", "packages/audio-native/native/macos/main.swift"],
+            "files": [
+              "packages/audio-native/src/helper_backend.ts",
+              "packages/audio-native/native/macos/main.swift"
+            ],
             "x": 93,
             "y": 829
           },
           {
             "id": "canceled",
             "label": "Canceled",
-            "files": ["packages/audio-native/src/helper_backend.ts", "packages/audio-native/native/macos/main.swift"],
+            "files": [
+              "packages/audio-native/src/helper_backend.ts",
+              "packages/audio-native/native/macos/main.swift"
+            ],
             "x": 601.5,
             "y": 829
           },
           {
             "id": "failed",
             "label": "Failed",
-            "files": ["packages/audio-native/src/helper_backend.ts", "packages/audio-native/native/macos/main.swift"],
+            "files": [
+              "packages/audio-native/src/helper_backend.ts",
+              "packages/audio-native/native/macos/main.swift"
+            ],
             "x": 1013,
             "y": 829
           },
@@ -4530,7 +4876,7 @@
       "type": "state",
       "origin": "llm",
       "generation": {
-        "focus": "Local Speech Synthesis \u2014 The speech worker's lifecycle (cold, loading, ready, retiring) and the speech lifecycle's CPU or GPU backend choice, including the GPU capability check."
+        "focus": "Local Speech Synthesis — The speech worker's lifecycle (cold, loading, ready, retiring) and the speech lifecycle's CPU or GPU backend choice, including the GPU capability check."
       },
       "doc": {
         "type": "state",
@@ -4538,7 +4884,9 @@
           {
             "id": "cold",
             "label": "Worker Cold (no worker)",
-            "files": ["packages/vscode/src/speech_local_client.ts"],
+            "files": [
+              "packages/vscode/src/speech_local_client.ts"
+            ],
             "x": 283,
             "y": 0
           },
@@ -4556,14 +4904,19 @@
           {
             "id": "ready",
             "label": "Worker Ready",
-            "files": ["packages/vscode/src/speech_local_client.ts", "packages/vscode/src/speech_worker_host.ts"],
+            "files": [
+              "packages/vscode/src/speech_local_client.ts",
+              "packages/vscode/src/speech_worker_host.ts"
+            ],
             "x": 288,
             "y": 289
           },
           {
             "id": "retiring",
             "label": "Worker Retiring",
-            "files": ["packages/vscode/src/speech_local_client.ts"],
+            "files": [
+              "packages/vscode/src/speech_local_client.ts"
+            ],
             "x": 288,
             "y": 443
           },
@@ -4758,7 +5111,7 @@
       "type": "state",
       "origin": "llm",
       "generation": {
-        "focus": "Companion Attachment and Command Channel \u2014 The workspace to companion link: panel placement and attach handshake, heartbeats, ordered command frames with acknowledgement timeouts, and loss of connection."
+        "focus": "Companion Attachment and Command Channel — The workspace to companion link: panel placement and attach handshake, heartbeats, ordered command frames with acknowledgement timeouts, and loss of connection."
       },
       "doc": {
         "type": "state",
@@ -4766,7 +5119,10 @@
           {
             "id": "unplaced",
             "label": "Panel Unplaced",
-            "files": ["packages/vscode/src/panel_placement.ts", "packages/vscode/src/extension.ts"],
+            "files": [
+              "packages/vscode/src/panel_placement.ts",
+              "packages/vscode/src/extension.ts"
+            ],
             "x": 331,
             "y": 0
           },
@@ -4854,14 +5210,21 @@
           {
             "id": "fallback",
             "label": "Legacy or Remote-Text Placement",
-            "files": ["packages/vscode/src/panel_placement.ts", "packages/vscode/src/extension.ts"],
+            "files": [
+              "packages/vscode/src/panel_placement.ts",
+              "packages/vscode/src/extension.ts"
+            ],
             "x": 14,
             "y": 1099
           },
           {
             "id": "incompatible",
             "label": "Incompatible Companion",
-            "files": ["packages/vscode/src/panel_placement.ts", "packages/protocol/src/local_audio.ts", "packages/vscode/src/extension.ts"],
+            "files": [
+              "packages/vscode/src/panel_placement.ts",
+              "packages/protocol/src/local_audio.ts",
+              "packages/vscode/src/extension.ts"
+            ],
             "x": 174.5,
             "y": 289
           },
@@ -4990,7 +5353,7 @@
       "type": "sequence",
       "origin": "llm",
       "generation": {
-        "focus": "Relay Tool Call Dispatch \u2014 An agent's MCP tool call (start, step, listen, end, read) goes from the relay server through EditorLink over an authenticated WebSocket to the editor Bridge, which dispatches it to the Controller. The Report returns and is rendered for the agent, with cancel and hand-back handling."
+        "focus": "Relay Tool Call Dispatch — An agent's MCP tool call (start, step, listen, end, read) goes from the relay server through EditorLink over an authenticated WebSocket to the editor Bridge, which dispatches it to the Controller. The Report returns and is rendered for the agent, with cancel and hand-back handling."
       },
       "doc": {
         "type": "sequence",
@@ -5005,42 +5368,58 @@
           {
             "id": "server",
             "label": "Relay MCP Server",
-            "files": ["packages/relay/src/server.ts", "packages/relay/src/main.ts", "packages/relay/src/tools.ts"],
+            "files": [
+              "packages/relay/src/server.ts",
+              "packages/relay/src/main.ts",
+              "packages/relay/src/tools.ts"
+            ],
             "x": 514,
             "y": 20
           },
           {
             "id": "render",
             "label": "Report Renderer",
-            "files": ["packages/relay/src/render.ts"],
+            "files": [
+              "packages/relay/src/render.ts"
+            ],
             "x": 819,
             "y": 20
           },
           {
             "id": "link",
             "label": "EditorLink",
-            "files": ["packages/relay/src/link.ts", "packages/relay/src/timings.ts"],
+            "files": [
+              "packages/relay/src/link.ts",
+              "packages/relay/src/timings.ts"
+            ],
             "x": 1083.5,
             "y": 20
           },
           {
             "id": "wire",
             "label": "Wire Protocol Schemas",
-            "files": ["packages/protocol/src/wire.ts", "packages/protocol/src/schemas.ts"],
+            "files": [
+              "packages/protocol/src/wire.ts",
+              "packages/protocol/src/schemas.ts"
+            ],
             "x": 1442.5,
             "y": 20
           },
           {
             "id": "bridge",
             "label": "Editor Bridge",
-            "files": ["packages/core/src/bridge.ts"],
+            "files": [
+              "packages/core/src/bridge.ts"
+            ],
             "x": 1801.5,
             "y": 20
           },
           {
             "id": "controller",
             "label": "Controller",
-            "files": ["packages/core/src/controller.ts"],
+            "files": [
+              "packages/core/src/controller.ts"
+            ],
             "x": 2498.5,
             "y": 20
           }
@@ -5137,7 +5516,7 @@
       "type": "sequence",
       "origin": "llm",
       "generation": {
-        "focus": "Editor Discovery and Handshake \u2014 The Bridge writes a discovery file with its port and token. The relay finds the matching window by workspace folder, then connects and sends a hello. The Bridge checks the token and protocol version and replies welcome or rejected. The socket that calls start becomes the session owner, and a closed owner socket suspends the session."
+        "focus": "Editor Discovery and Handshake — The Bridge writes a discovery file with its port and token. The relay finds the matching window by workspace folder, then connects and sends a hello. The Bridge checks the token and protocol version and replies welcome or rejected. The socket that calls start becomes the session owner, and a closed owner socket suspends the session."
       },
       "doc": {
         "type": "sequence",
@@ -5145,35 +5524,47 @@
           {
             "id": "bridge",
             "label": "Bridge (editor)",
-            "files": ["packages/core/src/bridge.ts"],
+            "files": [
+              "packages/core/src/bridge.ts"
+            ],
             "x": 160,
             "y": 20
           },
           {
             "id": "disc",
             "label": "Discovery file",
-            "files": ["packages/protocol/src/wire.ts", "packages/protocol/src/schemas.ts"],
+            "files": [
+              "packages/protocol/src/wire.ts",
+              "packages/protocol/src/schemas.ts"
+            ],
             "x": 759,
             "y": 20
           },
           {
             "id": "relay",
             "label": "Relay (pair-mcp)",
-            "files": ["packages/relay/src/server.ts", "packages/relay/src/main.ts"],
+            "files": [
+              "packages/relay/src/server.ts",
+              "packages/relay/src/main.ts"
+            ],
             "x": 1027,
             "y": 20
           },
           {
             "id": "link",
             "label": "Relay editor link",
-            "files": ["packages/relay/src/link.ts"],
+            "files": [
+              "packages/relay/src/link.ts"
+            ],
             "x": 1318,
             "y": 20
           },
           {
             "id": "ctrl",
             "label": "Controller (session)",
-            "files": ["packages/core/src/controller.ts"],
+            "files": [
+              "packages/core/src/controller.ts"
+            ],
             "x": 1578,
             "y": 20
           }
@@ -5255,7 +5646,7 @@
       "type": "sequence",
       "origin": "llm",
       "generation": {
-        "focus": "Pairing Batch Playback \u2014 A step call's actions are rehearsed and validated, then queued and played by the Player at human pace. The Player drives the editor and panel and narrates. Programmer interrupts, pauses, replies and edits end the batch early. The Controller assembles the batches and events into a Report."
+        "focus": "Pairing Batch Playback — A step call's actions are rehearsed and validated, then queued and played by the Player at human pace. The Player drives the editor and panel and narrates. Programmer interrupts, pauses, replies and edits end the batch early. The Controller assembles the batches and events into a Report."
       },
       "doc": {
         "type": "sequence",
@@ -5263,63 +5654,83 @@
           {
             "id": "relay",
             "label": "Relay (MCP server)",
-            "files": ["packages/relay/src/server.ts", "packages/relay/src/link.ts"],
+            "files": [
+              "packages/relay/src/server.ts",
+              "packages/relay/src/link.ts"
+            ],
             "x": 160,
             "y": 20
           },
           {
             "id": "bridge",
             "label": "Bridge",
-            "files": ["packages/core/src/bridge.ts"],
+            "files": [
+              "packages/core/src/bridge.ts"
+            ],
             "x": 521,
             "y": 20
           },
           {
             "id": "controller",
             "label": "Controller",
-            "files": ["packages/core/src/controller.ts"],
+            "files": [
+              "packages/core/src/controller.ts"
+            ],
             "x": 819,
             "y": 20
           },
           {
             "id": "rehearsal",
             "label": "Rehearsal",
-            "files": ["packages/core/src/rehearsal.ts"],
+            "files": [
+              "packages/core/src/rehearsal.ts"
+            ],
             "x": 1313,
             "y": 20
           },
           {
             "id": "timeline",
             "label": "Timeline (pacing)",
-            "files": ["packages/core/src/timeline.ts"],
+            "files": [
+              "packages/core/src/timeline.ts"
+            ],
             "x": 1573,
             "y": 20
           },
           {
             "id": "player",
             "label": "Player",
-            "files": ["packages/core/src/player.ts"],
+            "files": [
+              "packages/core/src/player.ts"
+            ],
             "x": 1927,
             "y": 20
           },
           {
             "id": "editor",
             "label": "Editor",
-            "files": ["packages/vscode/src/editor.ts"],
+            "files": [
+              "packages/vscode/src/editor.ts"
+            ],
             "x": 2260,
             "y": 20
           },
           {
             "id": "panel",
             "label": "Panel",
-            "files": ["packages/vscode/src/panel.ts"],
+            "files": [
+              "packages/vscode/src/panel.ts"
+            ],
             "x": 2520,
             "y": 20
           },
           {
             "id": "narration",
             "label": "Narration (speech)",
-            "files": ["packages/vscode/src/speech_service.ts", "packages/core/src/ports.ts"],
+            "files": [
+              "packages/vscode/src/speech_service.ts",
+              "packages/core/src/ports.ts"
+            ],
             "x": 2780,
             "y": 20
           },
@@ -5413,7 +5824,7 @@
       "type": "sequence",
       "origin": "llm",
       "generation": {
-        "focus": "Companion Attachment and Local Audio Link \u2014 The workspace extension and the UI-side companion attach through a prepare/commit gate with an epoch and token. They then exchange sequenced, validated frames over a command channel with heartbeat leases. The frames carry panel chunks, panel actions and speak, pause, resume, cancel and terminal messages. A lost lease or lost acknowledgement shuts the companion down."
+        "focus": "Companion Attachment and Local Audio Link — The workspace extension and the UI-side companion attach through a prepare/commit gate with an epoch and token. They then exchange sequenced, validated frames over a command channel with heartbeat leases. The frames carry panel chunks, panel actions and speak, pause, resume, cancel and terminal messages. A lost lease or lost acknowledgement shuts the companion down."
       },
       "doc": {
         "type": "sequence",
@@ -5446,42 +5857,54 @@
           {
             "id": "chan",
             "label": "Command Channel (serial, ack timeout)",
-            "files": ["packages/protocol/src/command_channel.ts"],
+            "files": [
+              "packages/protocol/src/command_channel.ts"
+            ],
             "x": 1124,
             "y": 20
           },
           {
             "id": "ext",
             "label": "Companion Extension (UI side)",
-            "files": ["packages/audio-ui/src/extension.ts"],
+            "files": [
+              "packages/audio-ui/src/extension.ts"
+            ],
             "x": 1384,
             "y": 20
           },
           {
             "id": "gate",
             "label": "Attachment Gate",
-            "files": ["packages/audio-ui/src/attachment_gate.ts"],
+            "files": [
+              "packages/audio-ui/src/attachment_gate.ts"
+            ],
             "x": 1731,
             "y": 20
           },
           {
             "id": "session",
             "label": "Companion Session",
-            "files": ["packages/audio-ui/src/companion_session.ts"],
+            "files": [
+              "packages/audio-ui/src/companion_session.ts"
+            ],
             "x": 1991,
             "y": 20
           },
           {
             "id": "conn",
             "label": "Local Connection (heartbeat lease)",
-            "files": ["packages/audio-ui/src/local_connection.ts"],
+            "files": [
+              "packages/audio-ui/src/local_connection.ts"
+            ],
             "x": 2324,
             "y": 20
           },
           {
             "id": "narr",
             "label": "Companion Narration",
-            "files": ["packages/audio-ui/src/companion_narration.ts"],
+            "files": [
+              "packages/audio-ui/src/companion_narration.ts"
+            ],
             "x": 2584,
             "y": 20
           }
@@ -5583,7 +6006,7 @@
       "type": "sequence",
       "origin": "llm",
       "generation": {
-        "focus": "Spoken Narration Playback \u2014 A say action becomes a speak frame. The companion's SpeechService synthesizes the audio (Kokoro CPU or GPU worker, ElevenLabs or OpenRouter) and can adjust its tempo. CompanionOutput admits an audio route lease and the NativeAdapter plays each part through a native helper process (CoreAudio, WASAPI or PipeWire). Ordered started, ended and failed events flow back as a terminal acknowledgement."
+        "focus": "Spoken Narration Playback — A say action becomes a speak frame. The companion's SpeechService synthesizes the audio (Kokoro CPU or GPU worker, ElevenLabs or OpenRouter) and can adjust its tempo. CompanionOutput admits an audio route lease and the NativeAdapter plays each part through a native helper process (CoreAudio, WASAPI or PipeWire). Ordered started, ended and failed events flow back as a terminal acknowledgement."
       },
       "doc": {
         "type": "sequence",
@@ -5591,14 +6014,21 @@
           {
             "id": "agent",
             "label": "Agent (say action)",
-            "files": ["packages/protocol/src/schemas.ts", "packages/protocol/src/index.ts"],
+            "files": [
+              "packages/protocol/src/schemas.ts",
+              "packages/protocol/src/index.ts"
+            ],
             "x": 160,
             "y": 20
           },
           {
             "id": "ws",
             "label": "Workspace Narration (RemoteNarration)",
-            "files": ["packages/vscode/src/remote_narration.ts", "packages/vscode/src/workspace_session.ts", "packages/core/src/ports.ts"],
+            "files": [
+              "packages/vscode/src/remote_narration.ts",
+              "packages/vscode/src/workspace_session.ts",
+              "packages/core/src/ports.ts"
+            ],
             "x": 584,
             "y": 20
           },
@@ -5616,7 +6046,9 @@
           {
             "id": "narr",
             "label": "CompanionNarration",
-            "files": ["packages/audio-ui/src/companion_narration.ts"],
+            "files": [
+              "packages/audio-ui/src/companion_narration.ts"
+            ],
             "x": 1516,
             "y": 20
           },
@@ -5650,7 +6082,9 @@
           {
             "id": "output",
             "label": "CompanionOutput",
-            "files": ["packages/audio-ui/src/companion_output.ts"],
+            "files": [
+              "packages/audio-ui/src/companion_output.ts"
+            ],
             "x": 2299,
             "y": 20
           },
@@ -5781,7 +6215,9 @@
           {
             "id": "controller",
             "label": "Controller",
-            "files": ["packages/core/src/controller.ts"],
+            "files": [
+              "packages/core/src/controller.ts"
+            ],
             "x": 861,
             "y": 468,
             "members": [
@@ -5798,7 +6234,9 @@
           {
             "id": "bridge",
             "label": "Bridge",
-            "files": ["packages/core/src/bridge.ts"],
+            "files": [
+              "packages/core/src/bridge.ts"
+            ],
             "x": 1385.5,
             "y": 258,
             "members": [
@@ -5814,7 +6252,9 @@
           {
             "id": "player",
             "label": "Player",
-            "files": ["packages/core/src/player.ts"],
+            "files": [
+              "packages/core/src/player.ts"
+            ],
             "x": 894,
             "y": 816,
             "members": [
@@ -5827,7 +6267,9 @@
           {
             "id": "rehearsal",
             "label": "Rehearsal / MemoryEditor",
-            "files": ["packages/core/src/rehearsal.ts"],
+            "files": [
+              "packages/core/src/rehearsal.ts"
+            ],
             "x": 996.5,
             "y": 687,
             "members": [
@@ -5838,7 +6280,9 @@
           {
             "id": "lineids",
             "label": "LineIds",
-            "files": ["packages/core/src/lines.ts"],
+            "files": [
+              "packages/core/src/lines.ts"
+            ],
             "x": 0,
             "y": 972,
             "members": [
@@ -5852,7 +6296,9 @@
           {
             "id": "timeline",
             "label": "Timeline",
-            "files": ["packages/core/src/timeline.ts"],
+            "files": [
+              "packages/core/src/timeline.ts"
+            ],
             "x": 245,
             "y": 963,
             "members": [
@@ -5867,7 +6313,9 @@
           {
             "id": "speechctx",
             "label": "SpeechContext",
-            "files": ["packages/core/src/speech_context.ts"],
+            "files": [
+              "packages/core/src/speech_context.ts"
+            ],
             "x": 263.5,
             "y": 1404,
             "members": [
@@ -5882,15 +6330,24 @@
           {
             "id": "speechreminder",
             "label": "SpeechReminder",
-            "files": ["packages/core/src/speech_reminder.ts"],
+            "files": [
+              "packages/core/src/speech_reminder.ts"
+            ],
             "x": 131,
             "y": 678,
-            "members": ["- count: number", "+ batch(spoken): void", "+ due(): boolean", "+ report(ready): boolean"]
+            "members": [
+              "- count: number",
+              "+ batch(spoken): void",
+              "+ due(): boolean",
+              "+ report(ready): boolean"
+            ]
           },
           {
             "id": "ports",
             "label": "Ports (EditorPort, PanelPort, NarrationPort)",
-            "files": ["packages/core/src/ports.ts"],
+            "files": [
+              "packages/core/src/ports.ts"
+            ],
             "x": 2114.25,
             "y": 954,
             "members": [
@@ -5904,7 +6361,9 @@
           {
             "id": "vseditor",
             "label": "VsCodeEditor",
-            "files": ["packages/vscode/src/editor.ts"],
+            "files": [
+              "packages/vscode/src/editor.ts"
+            ],
             "x": 617.5,
             "y": 1248,
             "members": [
@@ -5916,23 +6375,33 @@
           {
             "id": "panel",
             "label": "NarrationPanel",
-            "files": ["packages/vscode/src/panel.ts"],
+            "files": [
+              "packages/vscode/src/panel.ts"
+            ],
             "x": 1931,
             "y": 1275,
-            "members": ["+ post(event): void"]
+            "members": [
+              "+ post(event): void"
+            ]
           },
           {
             "id": "pairterminals",
             "label": "PairTerminals",
-            "files": ["packages/vscode/src/terminal.ts"],
+            "files": [
+              "packages/vscode/src/terminal.ts"
+            ],
             "x": 650.5,
             "y": 1449,
-            "members": ["+ run(command, options): Promise<CommandOutcome>"]
+            "members": [
+              "+ run(command, options): Promise<CommandOutcome>"
+            ]
           },
           {
             "id": "speechservice",
             "label": "SpeechService",
-            "files": ["packages/vscode/src/speech_service.ts"],
+            "files": [
+              "packages/vscode/src/speech_service.ts"
+            ],
             "x": 2357.5,
             "y": 1230,
             "members": [
@@ -5947,63 +6416,100 @@
           {
             "id": "speechlifecycle",
             "label": "SpeechLifecycle",
-            "files": ["packages/vscode/src/speech_lifecycle.ts"],
+            "files": [
+              "packages/vscode/src/speech_lifecycle.ts"
+            ],
             "x": 2390.75,
             "y": 1440,
-            "members": ["+ snapshot(): SpeechLifecycleSnapshot", "+ acquire(): Promise<SpeechLifecycleResult>"]
+            "members": [
+              "+ snapshot(): SpeechLifecycleSnapshot",
+              "+ acquire(): Promise<SpeechLifecycleResult>"
+            ]
           },
           {
             "id": "localclient",
             "label": "LocalSynthesisClient",
-            "files": ["packages/vscode/src/speech_local_client.ts"],
+            "files": [
+              "packages/vscode/src/speech_local_client.ts"
+            ],
             "x": 1492.5,
             "y": 1578,
-            "members": ["- state: LocalClientState", "+ synthesize(request): Promise<LocalSynthesisOutcome>", "+ cancel(): void"]
+            "members": [
+              "- state: LocalClientState",
+              "+ synthesize(request): Promise<LocalSynthesisOutcome>",
+              "+ cancel(): void"
+            ]
           },
           {
             "id": "gpuslot",
             "label": "GpuProcessSlot",
-            "files": ["packages/vscode/src/speech_gpu_slot.ts"],
+            "files": [
+              "packages/vscode/src/speech_gpu_slot.ts"
+            ],
             "x": 2371.25,
             "y": 1587,
-            "members": ["+ tryAcquireGpuProcessSlot(): release | undefined", "+ withGpuProcessSlot(op): Promise<T>"]
+            "members": [
+              "+ tryAcquireGpuProcessSlot(): release | undefined",
+              "+ withGpuProcessSlot(op): Promise<T>"
+            ]
           },
           {
             "id": "gpuclient",
             "label": "GpuSynthesisClient",
-            "files": ["packages/vscode/src/speech_gpu_client.ts"],
+            "files": [
+              "packages/vscode/src/speech_gpu_client.ts"
+            ],
             "x": 1479.5,
             "y": 1449,
-            "members": ["+ createGpuSynthesisClient(options): LocalSynthesisClient"]
+            "members": [
+              "+ createGpuSynthesisClient(options): LocalSynthesisClient"
+            ]
           },
           {
             "id": "speechout",
             "label": "SpeechOutput",
-            "files": ["packages/vscode/src/speech_service.ts"],
+            "files": [
+              "packages/vscode/src/speech_service.ts"
+            ],
             "x": 3681.25,
             "y": 1440,
-            "members": ["+ play(...): Promise<void>", "+ stop(): void"]
+            "members": [
+              "+ play(...): Promise<void>",
+              "+ stop(): void"
+            ]
           },
           {
             "id": "companionout",
             "label": "CompanionOutput",
-            "files": ["packages/audio-ui/src/companion_output.ts"],
+            "files": [
+              "packages/audio-ui/src/companion_output.ts"
+            ],
             "x": 3455.25,
             "y": 1698,
-            "members": ["+ play(...): Promise<void>", "+ stop(): void"]
+            "members": [
+              "+ play(...): Promise<void>",
+              "+ stop(): void"
+            ]
           },
           {
             "id": "outputrouter",
             "label": "SpeechOutputRouter",
-            "files": ["packages/vscode/src/speech_output_router.ts"],
+            "files": [
+              "packages/vscode/src/speech_output_router.ts"
+            ],
             "x": 3691.25,
             "y": 1698,
-            "members": ["+ play(...): Promise<void>", "+ stop(): void"]
+            "members": [
+              "+ play(...): Promise<void>",
+              "+ stop(): void"
+            ]
           },
           {
             "id": "audioadapter",
             "label": "AudioAdapter",
-            "files": ["packages/audio-native/src/index.ts"],
+            "files": [
+              "packages/audio-native/src/index.ts"
+            ],
             "x": 3361.5,
             "y": 1800,
             "members": [
@@ -6018,7 +6524,9 @@
           {
             "id": "nativeadapter",
             "label": "NativeAdapter",
-            "files": ["packages/audio-native/src/native_adapter.ts"],
+            "files": [
+              "packages/audio-native/src/native_adapter.ts"
+            ],
             "x": 3361.5,
             "y": 2004,
             "members": [
@@ -6030,135 +6538,207 @@
           {
             "id": "admission",
             "label": "AudioAdmission",
-            "files": ["packages/audio-native/src/admission.ts"],
+            "files": [
+              "packages/audio-native/src/admission.ts"
+            ],
             "x": 2800.25,
             "y": 2133,
-            "members": ["+ admit(owner, choice): Promise<AudioLease>"]
+            "members": [
+              "+ admit(owner, choice): Promise<AudioLease>"
+            ]
           },
           {
             "id": "ownership",
             "label": "Ownership",
-            "files": ["packages/audio-native/src/ownership.ts"],
+            "files": [
+              "packages/audio-native/src/ownership.ts"
+            ],
             "x": 2856.25,
             "y": 2226,
-            "members": ["+ issue(owner): AudioLease", "+ release(lease): void"]
+            "members": [
+              "+ issue(owner): AudioLease",
+              "+ release(lease): void"
+            ]
           },
           {
             "id": "physplayback",
             "label": "PhysicalPlayback",
-            "files": ["packages/audio-native/src/playback.ts"],
+            "files": [
+              "packages/audio-native/src/playback.ts"
+            ],
             "x": 3148.25,
             "y": 2124,
-            "members": ["+ start(job): void", "+ retire(owner): Promise<void>"]
+            "members": [
+              "+ start(job): void",
+              "+ retire(owner): Promise<void>"
+            ]
           },
           {
             "id": "helperbackend",
             "label": "HelperBackend",
-            "files": ["packages/audio-native/src/helper_backend.ts"],
+            "files": [
+              "packages/audio-native/src/helper_backend.ts"
+            ],
             "x": 3370.75,
             "y": 2226,
-            "members": ["+ list(): Promise<AudioDevice[]>", "+ capabilities(): Promise<AudioCapabilities>"]
+            "members": [
+              "+ list(): Promise<AudioDevice[]>",
+              "+ capabilities(): Promise<AudioCapabilities>"
+            ]
           },
           {
             "id": "verifiedbackend",
             "label": "VerifiedBackend",
-            "files": ["packages/audio-native/src/verified_backend.ts"],
+            "files": [
+              "packages/audio-native/src/verified_backend.ts"
+            ],
             "x": 3410.25,
             "y": 2133,
-            "members": ["+ list(): Promise<AudioDevice[]>"]
+            "members": [
+              "+ list(): Promise<AudioDevice[]>"
+            ]
           },
           {
             "id": "linuxbackend",
             "label": "LinuxBackend",
-            "files": ["packages/audio-native/src/linux_backend.ts"],
+            "files": [
+              "packages/audio-native/src/linux_backend.ts"
+            ],
             "x": 3819.25,
             "y": 2133,
-            "members": ["+ list(): Promise<AudioDevice[]>"]
+            "members": [
+              "+ list(): Promise<AudioDevice[]>"
+            ]
           },
           {
             "id": "nativeoutdriver",
             "label": "NativeOutputDriver",
-            "files": ["packages/vscode/src/speech_native_output.ts"],
+            "files": [
+              "packages/vscode/src/speech_native_output.ts"
+            ],
             "x": 3809,
             "y": 2226,
-            "members": ["+ play(...): void", "+ stop(): void"]
+            "members": [
+              "+ play(...): void",
+              "+ stop(): void"
+            ]
           },
           {
             "id": "companionsession",
             "label": "CompanionSession",
-            "files": ["packages/audio-ui/src/companion_session.ts"],
+            "files": [
+              "packages/audio-ui/src/companion_session.ts"
+            ],
             "x": 2071,
             "y": 705,
-            "members": ["+ createCompanionSession(context, epoch): CompanionSession"]
+            "members": [
+              "+ createCompanionSession(context, epoch): CompanionSession"
+            ]
           },
           {
             "id": "speechhost",
             "label": "SpeechHost",
-            "files": ["packages/audio-ui/src/speech_host.ts"],
+            "files": [
+              "packages/audio-ui/src/speech_host.ts"
+            ],
             "x": 3338.75,
             "y": 1146,
-            "members": ["+ createSpeechHost(options): SpeechHost"]
+            "members": [
+              "+ createSpeechHost(options): SpeechHost"
+            ]
           },
           {
             "id": "companionnarration",
             "label": "CompanionNarration",
-            "files": ["packages/audio-ui/src/companion_narration.ts"],
+            "files": [
+              "packages/audio-ui/src/companion_narration.ts"
+            ],
             "x": 1730,
             "y": 834,
-            "members": ["+ speak(text, delivery?): Promise<void>", "+ cancel(): void"]
+            "members": [
+              "+ speak(text, delivery?): Promise<void>",
+              "+ cancel(): void"
+            ]
           },
           {
             "id": "localconn",
             "label": "LocalConnection",
-            "files": ["packages/audio-ui/src/local_connection.ts"],
+            "files": [
+              "packages/audio-ui/src/local_connection.ts"
+            ],
             "x": 1096,
             "y": 1008,
-            "members": ["+ send(frame): boolean"]
+            "members": [
+              "+ send(frame): boolean"
+            ]
           },
           {
             "id": "attachgate",
             "label": "AttachmentGate",
-            "files": ["packages/audio-ui/src/attachment_gate.ts"],
+            "files": [
+              "packages/audio-ui/src/attachment_gate.ts"
+            ],
             "x": 493,
             "y": 531,
-            "members": ["+ prepare(...): Promise<LocalAudioPrepared>"]
+            "members": [
+              "+ prepare(...): Promise<LocalAudioPrepared>"
+            ]
           },
           {
             "id": "workspacesession",
             "label": "WorkspaceSession",
-            "files": ["packages/vscode/src/workspace_session.ts"],
+            "files": [
+              "packages/vscode/src/workspace_session.ts"
+            ],
             "x": 3077.25,
             "y": 1146,
-            "members": ["+ handle(frame): void"]
+            "members": [
+              "+ handle(frame): void"
+            ]
           },
           {
             "id": "remotenarration",
             "label": "RemoteNarration",
-            "files": ["packages/vscode/src/remote_narration.ts"],
+            "files": [
+              "packages/vscode/src/remote_narration.ts"
+            ],
             "x": 2745.25,
             "y": 1266,
-            "members": ["+ speak(text, delivery?): Promise<void>", "+ cancel(): void"]
+            "members": [
+              "+ speak(text, delivery?): Promise<void>",
+              "+ cancel(): void"
+            ]
           },
           {
             "id": "panelplacement",
             "label": "PanelPlacement",
-            "files": ["packages/vscode/src/panel_placement.ts"],
+            "files": [
+              "packages/vscode/src/panel_placement.ts"
+            ],
             "x": 529.5,
             "y": 321,
-            "members": ["+ prepare(): Promise<PanelOwner>"]
+            "members": [
+              "+ prepare(): Promise<PanelOwner>"
+            ]
           },
           {
             "id": "commandchannel",
             "label": "CommandChannel",
-            "files": ["packages/protocol/src/command_channel.ts"],
+            "files": [
+              "packages/protocol/src/command_channel.ts"
+            ],
             "x": 3066.25,
             "y": 1275,
-            "members": ["+ send(command): Promise<T>"]
+            "members": [
+              "+ send(command): Promise<T>"
+            ]
           },
           {
             "id": "editorlink",
             "label": "EditorLink",
-            "files": ["packages/relay/src/link.ts"],
+            "files": [
+              "packages/relay/src/link.ts"
+            ],
             "x": 1356,
             "y": 102,
             "members": [
@@ -6172,10 +6752,16 @@
           {
             "id": "relayserver",
             "label": "Relay MCP Server",
-            "files": ["packages/relay/src/server.ts", "packages/relay/src/main.ts"],
+            "files": [
+              "packages/relay/src/server.ts",
+              "packages/relay/src/main.ts"
+            ],
             "x": 1359,
             "y": 0,
-            "members": ["+ createServer(link, guide, cwd): McpServer", "+ serve(options): Promise<void>"]
+            "members": [
+              "+ createServer(link, guide, cwd): McpServer",
+              "+ serve(options): Promise<void>"
+            ]
           },
           {
             "id": "protocol",
@@ -6199,18 +6785,27 @@
           {
             "id": "vsext",
             "label": "VS Code extension (activate)",
-            "files": ["packages/vscode/src/extension.ts"],
+            "files": [
+              "packages/vscode/src/extension.ts"
+            ],
             "x": 797,
             "y": 129,
-            "members": ["+ activate(context): Api", "+ deactivate(): Promise<void>"]
+            "members": [
+              "+ activate(context): Api",
+              "+ deactivate(): Promise<void>"
+            ]
           },
           {
             "id": "diagnostics",
             "label": "Diagnostics",
-            "files": ["packages/vscode/src/diagnostics.ts"],
+            "files": [
+              "packages/vscode/src/diagnostics.ts"
+            ],
             "x": 373,
             "y": 705,
-            "members": ["+ record(event): void"]
+            "members": [
+              "+ record(event): void"
+            ]
           }
         ],
         "edges": [
@@ -6585,7 +7180,11 @@
           {
             "id": "discovery",
             "label": "Discovery",
-            "files": ["packages/core/src/bridge.ts", "packages/protocol/src/schemas.ts", "packages/relay/src/link.ts"],
+            "files": [
+              "packages/core/src/bridge.ts",
+              "packages/protocol/src/schemas.ts",
+              "packages/relay/src/link.ts"
+            ],
             "x": 69.5,
             "y": 264,
             "members": [
@@ -6623,7 +7222,11 @@
           {
             "id": "editormsg",
             "label": "EditorMessage",
-            "files": ["packages/protocol/src/schemas.ts", "packages/protocol/src/wire.ts", "packages/core/src/bridge.ts"],
+            "files": [
+              "packages/protocol/src/schemas.ts",
+              "packages/protocol/src/wire.ts",
+              "packages/core/src/bridge.ts"
+            ],
             "x": 1160,
             "y": 18,
             "members": [
@@ -6638,7 +7241,9 @@
           {
             "id": "session",
             "label": "SavedSession",
-            "files": ["packages/core/src/controller.ts"],
+            "files": [
+              "packages/core/src/controller.ts"
+            ],
             "x": 371.5,
             "y": 273,
             "members": [
@@ -6653,7 +7258,11 @@
           {
             "id": "scene",
             "label": "Scene",
-            "files": ["packages/core/src/controller.ts", "packages/core/src/player.ts", "packages/core/src/ports.ts"],
+            "files": [
+              "packages/core/src/controller.ts",
+              "packages/core/src/player.ts",
+              "packages/core/src/ports.ts"
+            ],
             "x": 220,
             "y": 519,
             "members": [
@@ -6668,7 +7277,11 @@
           {
             "id": "report",
             "label": "Report",
-            "files": ["packages/protocol/src/schemas.ts", "packages/core/src/controller.ts", "packages/relay/src/render.ts"],
+            "files": [
+              "packages/protocol/src/schemas.ts",
+              "packages/core/src/controller.ts",
+              "packages/relay/src/render.ts"
+            ],
             "x": 772,
             "y": 210,
             "members": [
@@ -6690,15 +7303,26 @@
           {
             "id": "batch",
             "label": "Batch",
-            "files": ["packages/core/src/controller.ts"],
+            "files": [
+              "packages/core/src/controller.ts"
+            ],
             "x": 1380.25,
             "y": 291,
-            "members": ["id: int", "actions: Action[]", "state: queued|playing|done", "result: BatchResult"]
+            "members": [
+              "id: int",
+              "actions: Action[]",
+              "state: queued|playing|done",
+              "result: BatchResult"
+            ]
           },
           {
             "id": "batchresult",
             "label": "BatchResult",
-            "files": ["packages/protocol/src/schemas.ts", "packages/core/src/controller.ts", "packages/relay/src/render.ts"],
+            "files": [
+              "packages/protocol/src/schemas.ts",
+              "packages/core/src/controller.ts",
+              "packages/relay/src/render.ts"
+            ],
             "x": 981.75,
             "y": 510,
             "members": [
@@ -6714,7 +7338,11 @@
           {
             "id": "action",
             "label": "Action",
-            "files": ["packages/protocol/src/index.ts", "packages/protocol/src/schemas.ts", "packages/relay/src/tools.ts"],
+            "files": [
+              "packages/protocol/src/index.ts",
+              "packages/protocol/src/schemas.ts",
+              "packages/relay/src/tools.ts"
+            ],
             "x": 1421.75,
             "y": 537,
             "members": [
@@ -6727,7 +7355,11 @@
           {
             "id": "event",
             "label": "Event",
-            "files": ["packages/protocol/src/schemas.ts", "packages/core/src/controller.ts", "packages/relay/src/render.ts"],
+            "files": [
+              "packages/protocol/src/schemas.ts",
+              "packages/core/src/controller.ts",
+              "packages/relay/src/render.ts"
+            ],
             "x": 449,
             "y": 519,
             "members": [
@@ -6742,34 +7374,65 @@
           {
             "id": "excerpt",
             "label": "Excerpt",
-            "files": ["packages/protocol/src/schemas.ts", "packages/core/src/ports.ts"],
+            "files": [
+              "packages/protocol/src/schemas.ts",
+              "packages/core/src/ports.ts"
+            ],
             "x": 536,
             "y": 711,
-            "members": ["file: string", "from: LineColumn", "to: LineColumn", "text: string"]
+            "members": [
+              "file: string",
+              "from: LineColumn",
+              "to: LineColumn",
+              "text: string"
+            ]
           },
           {
             "id": "filecontent",
             "label": "FileContent",
-            "files": ["packages/protocol/src/schemas.ts", "packages/relay/src/render.ts"],
+            "files": [
+              "packages/protocol/src/schemas.ts",
+              "packages/relay/src/render.ts"
+            ],
             "x": 1721.25,
             "y": 291,
-            "members": ["file: string", "dirty: bool", "lines: {number, text}[]", "end: final_newline"]
+            "members": [
+              "file: string",
+              "dirty: bool",
+              "lines: {number, text}[]",
+              "end: final_newline"
+            ]
           },
           {
             "id": "code",
             "label": "Code",
-            "files": ["packages/protocol/src/schemas.ts", "packages/relay/src/render.ts"],
+            "files": [
+              "packages/protocol/src/schemas.ts",
+              "packages/relay/src/render.ts"
+            ],
             "x": 844.75,
             "y": 720,
-            "members": ["file: string", "lines: {number, text}[]", "end: object"]
+            "members": [
+              "file: string",
+              "lines: {number, text}[]",
+              "end: object"
+            ]
           },
           {
             "id": "passage",
             "label": "Passage",
-            "files": ["packages/protocol/src/schemas.ts", "packages/vscode/src/passage.ts", "packages/core/src/bridge.ts"],
+            "files": [
+              "packages/protocol/src/schemas.ts",
+              "packages/vscode/src/passage.ts",
+              "packages/core/src/bridge.ts"
+            ],
             "x": 368,
             "y": 1309,
-            "members": ["title: string", "text: string", "notice: string"]
+            "members": [
+              "title: string",
+              "text: string",
+              "notice: string"
+            ]
           },
           {
             "id": "diagsnap",
@@ -6792,7 +7455,10 @@
           {
             "id": "gpudiag",
             "label": "GpuDiagnostics",
-            "files": ["packages/protocol/src/gpu_diagnostics.ts", "packages/protocol/src/diagnostics.ts"],
+            "files": [
+              "packages/protocol/src/gpu_diagnostics.ts",
+              "packages/protocol/src/diagnostics.ts"
+            ],
             "x": 63,
             "y": 1474,
             "members": [
@@ -6806,10 +7472,18 @@
           {
             "id": "diagevent",
             "label": "DiagnosticEvent",
-            "files": ["packages/core/src/ports.ts", "packages/vscode/src/diagnostics.ts"],
+            "files": [
+              "packages/core/src/ports.ts",
+              "packages/vscode/src/diagnostics.ts"
+            ],
             "x": 0,
             "y": 1180,
-            "members": ["kind: session|connection|pause|request|command", "state: string", "connectionId: int", "phase: string"]
+            "members": [
+              "kind: session|connection|pause|request|command",
+              "state: string",
+              "connectionId: int",
+              "phase: string"
+            ]
           },
           {
             "id": "audioframe",
@@ -6821,7 +7495,12 @@
             ],
             "x": 832.5,
             "y": 1180,
-            "members": ["version: int", "sequence: int", "kind: string", "payload: object"]
+            "members": [
+              "version: int",
+              "sequence: int",
+              "kind: string",
+              "payload: object"
+            ]
           },
           {
             "id": "panelupdate",
@@ -6833,31 +7512,56 @@
             ],
             "x": 808,
             "y": 1318,
-            "members": ["action: LocalPanelAction", "chunks: LocalPanelChunk[]", "commentary: NavigatorCommentary"]
+            "members": [
+              "action: LocalPanelAction",
+              "chunks: LocalPanelChunk[]",
+              "commentary: NavigatorCommentary"
+            ]
           },
           {
             "id": "audiowner",
             "label": "AudioOwner",
-            "files": ["packages/audio-native/src/index.ts", "packages/audio-native/src/ownership.ts"],
+            "files": [
+              "packages/audio-native/src/index.ts",
+              "packages/audio-native/src/ownership.ts"
+            ],
             "x": 1956.25,
             "y": 720,
-            "members": ["connectionEpoch: string", "jobId: string", "pageEpoch: int"]
+            "members": [
+              "connectionEpoch: string",
+              "jobId: string",
+              "pageEpoch: int"
+            ]
           },
           {
             "id": "audioevent",
             "label": "AudioEvent",
-            "files": ["packages/audio-native/src/index.ts", "packages/audio-native/src/protocol.ts"],
+            "files": [
+              "packages/audio-native/src/index.ts",
+              "packages/audio-native/src/protocol.ts"
+            ],
             "x": 2023.75,
             "y": 537,
-            "members": ["owner: AudioOwner", "sequence: int", "part: int", "type: started|ended|canceled|failed"]
+            "members": [
+              "owner: AudioOwner",
+              "sequence: int",
+              "part: int",
+              "type: started|ended|canceled|failed"
+            ]
           },
           {
             "id": "audiodevice",
             "label": "AudioDevice",
-            "files": ["packages/audio-native/src/index.ts", "packages/audio-native/src/helper_catalog.ts"],
+            "files": [
+              "packages/audio-native/src/index.ts",
+              "packages/audio-native/src/helper_catalog.ts"
+            ],
             "x": 2176.25,
             "y": 1050,
-            "members": ["id: string", "label: string"]
+            "members": [
+              "id: string",
+              "label: string"
+            ]
           },
           {
             "id": "audiolease",
@@ -6869,12 +7573,17 @@
             ],
             "x": 1201.75,
             "y": 564,
-            "members": ["lease: string"]
+            "members": [
+              "lease: string"
+            ]
           },
           {
             "id": "settings",
             "label": "SpeechSettings",
-            "files": ["packages/vscode/src/speech_types.ts", "packages/vscode/src/speech_readiness.ts"],
+            "files": [
+              "packages/vscode/src/speech_types.ts",
+              "packages/vscode/src/speech_readiness.ts"
+            ],
             "x": 1340.75,
             "y": 702,
             "members": [
@@ -6895,7 +7604,10 @@
             ],
             "x": 1956.25,
             "y": 894,
-            "members": ["kind: default|device", "id: string"]
+            "members": [
+              "kind: default|device",
+              "id: string"
+            ]
           },
           {
             "id": "localreq",
@@ -6907,7 +7619,14 @@
             ],
             "x": 1498.25,
             "y": 858,
-            "members": ["version: int", "id: int", "part: int", "epoch: int", "wav: bytes", "error: reason"]
+            "members": [
+              "version: int",
+              "id: int",
+              "part: int",
+              "epoch: int",
+              "wav: bytes",
+              "error: reason"
+            ]
           },
           {
             "id": "gpuasset",
@@ -6919,7 +7638,10 @@
             ],
             "x": 1278.25,
             "y": 894,
-            "members": ["path: string", "sha256: string"]
+            "members": [
+              "path: string",
+              "sha256: string"
+            ]
           },
           {
             "id": "modelasset",
@@ -6931,15 +7653,28 @@
             ],
             "x": 1058.25,
             "y": 876,
-            "members": ["name: string", "sha256: string", "revision: string", "url: string"]
+            "members": [
+              "name: string",
+              "sha256: string",
+              "revision: string",
+              "url: string"
+            ]
           },
           {
             "id": "orreq",
             "label": "OpenRouterSpeechRequest",
-            "files": ["packages/protocol/src/openrouter.ts", "packages/vscode/src/speech_openrouter.ts"],
+            "files": [
+              "packages/protocol/src/openrouter.ts",
+              "packages/vscode/src/speech_openrouter.ts"
+            ],
             "x": 838.25,
             "y": 876,
-            "members": ["model: string", "input: string", "voice: string", "format: pcm|mp3"]
+            "members": [
+              "model: string",
+              "input: string",
+              "voice: string",
+              "format: pcm|mp3"
+            ]
           },
           {
             "id": "decode",
@@ -6951,7 +7686,12 @@
             ],
             "x": 995,
             "y": 1032,
-            "members": ["id: int", "format: string", "bytes: data", "samples: float[]"]
+            "members": [
+              "id: int",
+              "format: string",
+              "bytes: data",
+              "samples: float[]"
+            ]
           },
           {
             "id": "tempo",
@@ -6963,12 +7703,19 @@
             ],
             "x": 1498.25,
             "y": 1041,
-            "members": ["rate: SpeechTempoRate", "pcm: Int16Array", "final: bool"]
+            "members": [
+              "rate: SpeechTempoRate",
+              "pcm: Int16Array",
+              "final: bool"
+            ]
           },
           {
             "id": "timing",
             "label": "Timing/Config",
-            "files": ["packages/core/src/timing.ts", "packages/core/src/config.ts"],
+            "files": [
+              "packages/core/src/timing.ts",
+              "packages/core/src/config.ts"
+            ],
             "x": 588,
             "y": 1282,
             "members": [
@@ -6983,34 +7730,59 @@
           {
             "id": "change",
             "label": "Change",
-            "files": ["packages/core/src/ports.ts", "packages/core/src/lines.ts"],
+            "files": [
+              "packages/core/src/ports.ts",
+              "packages/core/src/lines.ts"
+            ],
             "x": 224.5,
             "y": 720,
-            "members": ["offset: int", "deleteLength: int", "text: string"]
+            "members": [
+              "offset: int",
+              "deleteLength: int",
+              "text: string"
+            ]
           },
           {
             "id": "sighting",
             "label": "Sighting",
-            "files": ["packages/core/src/lines.ts"],
+            "files": [
+              "packages/core/src/lines.ts"
+            ],
             "x": 0,
             "y": 546,
-            "members": ["file: string", "text: string", "lines: int[]"]
+            "members": [
+              "file: string",
+              "text: string",
+              "lines: int[]"
+            ]
           },
           {
             "id": "calibration",
             "label": "Calibration",
-            "files": ["packages/vscode/src/calibration.ts"],
+            "files": [
+              "packages/vscode/src/calibration.ts"
+            ],
             "x": 447,
             "y": 1180,
-            "members": ["phase: idle|armed|reading|storing", "wordsPerMinute: float"]
+            "members": [
+              "phase: idle|armed|reading|storing",
+              "wordsPerMinute: float"
+            ]
           },
           {
             "id": "cost",
             "label": "SessionSpeechCost",
-            "files": ["packages/vscode/src/session_speech_cost.ts", "packages/vscode/src/speech_openrouter_usage.ts"],
+            "files": [
+              "packages/vscode/src/session_speech_cost.ts",
+              "packages/vscode/src/speech_openrouter_usage.ts"
+            ],
             "x": 663.5,
             "y": 1041,
-            "members": ["generationId: string", "cost: number", "reason: SpeechCostReason"]
+            "members": [
+              "generationId: string",
+              "cost: number",
+              "reason: SpeechCostReason"
+            ]
           },
           {
             "id": "helperevent",
@@ -7022,7 +7794,11 @@
             ],
             "x": 1941.25,
             "y": 291,
-            "members": ["version: int", "sequence: int", "type: ready|started|paused|resumed|ended|canceled|failed|retired"]
+            "members": [
+              "version: int",
+              "sequence: int",
+              "type: ready|started|paused|resumed|ended|canceled|failed|retired"
+            ]
           },
           {
             "id": "helpercatalog",
@@ -7034,7 +7810,11 @@
             ],
             "x": 2176.25,
             "y": 885,
-            "members": ["version: int", "devices: AudioDevice[]", "defaultId: string"]
+            "members": [
+              "version: int",
+              "devices: AudioDevice[]",
+              "defaultId: string"
+            ]
           }
         ],
         "edges": [
@@ -7270,7 +8050,11 @@
           {
             "id": "relay",
             "label": "Agent Relay\nMCP process forwarding agent tools",
-            "files": ["packages/relay/src/main.ts", "packages/relay/src/server.ts", "packages/relay/src/link.ts"],
+            "files": [
+              "packages/relay/src/main.ts",
+              "packages/relay/src/server.ts",
+              "packages/relay/src/link.ts"
+            ],
             "x": 16,
             "y": 25,
             "kind": "process"
@@ -7278,7 +8062,9 @@
           {
             "id": "bridge",
             "label": "Editor Bridge\nlocalhost WebSocket, auth, dispatch",
-            "files": ["packages/core/src/bridge.ts"],
+            "files": [
+              "packages/core/src/bridge.ts"
+            ],
             "x": 670,
             "y": 25,
             "kind": "resource"
@@ -7286,7 +8072,9 @@
           {
             "id": "edloop",
             "label": "Editor Host Loop\nextension host event loop",
-            "files": ["packages/vscode/src/extension.ts"],
+            "files": [
+              "packages/vscode/src/extension.ts"
+            ],
             "x": 676,
             "y": 153,
             "kind": "loop"
@@ -7294,7 +8082,9 @@
           {
             "id": "ctrl",
             "label": "Session Controller\nowns session state, serializes calls",
-            "files": ["packages/core/src/controller.ts"],
+            "files": [
+              "packages/core/src/controller.ts"
+            ],
             "group": "edloop",
             "x": 1214,
             "y": 89,
@@ -7303,7 +8093,10 @@
           {
             "id": "player",
             "label": "Batch Player\nplays actions at human pace",
-            "files": ["packages/core/src/player.ts", "packages/core/src/timeline.ts"],
+            "files": [
+              "packages/core/src/player.ts",
+              "packages/core/src/timeline.ts"
+            ],
             "group": "edloop",
             "x": 1914,
             "y": 42,
@@ -7325,7 +8118,10 @@
           {
             "id": "comploop",
             "label": "Companion Host Loop\ncompanion extension event loop",
-            "files": ["packages/audio-ui/src/extension.ts", "packages/audio-ui/src/companion_session.ts"],
+            "files": [
+              "packages/audio-ui/src/extension.ts",
+              "packages/audio-ui/src/companion_session.ts"
+            ],
             "x": 670,
             "y": 708,
             "kind": "loop"
@@ -7346,7 +8142,9 @@
           {
             "id": "out",
             "label": "Companion Output\nadmits and plays audio jobs",
-            "files": ["packages/audio-ui/src/companion_output.ts"],
+            "files": [
+              "packages/audio-ui/src/companion_output.ts"
+            ],
             "group": "comploop",
             "x": 1900,
             "y": 778.5,
@@ -7686,7 +8484,7 @@
     },
     {
       "id": "proposed-nonverbal-feedback",
-      "name": "Proposed \u2014 Nonverbal feedback ownership",
+      "name": "Proposed — Nonverbal feedback ownership",
       "type": "architecture",
       "origin": "llm",
       "generation": {
@@ -7800,7 +8598,10 @@
           {
             "id": "bridge",
             "label": "Editor Bridge\nCarries the report",
-            "files": ["packages/core/src/bridge.ts", "packages/core/src/diagnostic_delivery.ts"],
+            "files": [
+              "packages/core/src/bridge.ts",
+              "packages/core/src/diagnostic_delivery.ts"
+            ],
             "group": "session",
             "x": 1780,
             "y": 1076
@@ -8197,7 +8998,7 @@
     },
     {
       "id": "proposed-nonverbal-cue-flow",
-      "name": "Proposed \u2014 Nonverbal cue report flow",
+      "name": "Proposed — Nonverbal cue report flow",
       "type": "flow",
       "origin": "llm",
       "generation": {
@@ -8685,7 +9486,7 @@
     {
       "id": "tour-thread-relay-start",
       "file": "packages/relay/src/server.ts",
-      "line": 121,
+      "line": 120,
       "node": "relay",
       "diagramType": "overview",
       "anchored": true,
@@ -8753,7 +9554,10 @@
       "name": "Nonverbal feedback during pairing",
       "goal": "Let Pair notice conversational feedback such as a nod or head shake from a local camera, without requiring typed or spoken replies.",
       "status": "draft",
-      "diagramIds": ["proposed-nonverbal-feedback", "proposed-nonverbal-cue-flow"],
+      "diagramIds": [
+        "proposed-nonverbal-feedback",
+        "proposed-nonverbal-cue-flow"
+      ],
       "views": [
         {
           "diagramId": "proposed-nonverbal-feedback",
@@ -8796,7 +9600,9 @@
           "rationale": "Most emotion and action-unit weights are research-licensed only"
         }
       ],
-      "assumptions": ["MediaPipe weights permit the intended use; two model cards still need reading"],
+      "assumptions": [
+        "MediaPipe weights permit the intended use; two model cards still need reading"
+      ],
       "openQuestions": [
         "Does mute carry over between sessions or reset at start?",
         "Is local-only acceptable for the first version?",
