@@ -15,7 +15,7 @@
 
 ## 0.55.3
 
-- Remind the agent to answer the programmer’s message before listening again (#128).
+- Remind the agent to answer the programmer's message before listening again (#128).
 
 ## 0.55.2
 
