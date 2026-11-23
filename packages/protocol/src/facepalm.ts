@@ -24,7 +24,11 @@ export const FACEPALM_ERROR_SCHEMA = z.strictObject({ error: z.string() });
 
 /**
  * A `beat`'s reply: the readings since this client last looked, which AI Pair doesn't use, and,
- * once the window ends, Facepalm's read of it.
+ * once the window ends, Facepalm's read of it: a feeling, and where the programmer was looking
+ * over the window (`gaze`, facepalm#142), carried as context alongside it. Facepalm's own reply can
+ * also carry `content`, whether that gaze landed inside a rectangle the beat gave it, but only when
+ * the beat carried one; AI Pair never does (#143's own finding: no reliable way for it to place a
+ * rectangle on screen), so this schema has no field for it.
  */
 export const FACEPALM_DELIVERY_SCHEMA = z.object({
   readings: z.array(z.unknown()),

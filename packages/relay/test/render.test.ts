@@ -1,7 +1,7 @@
 // How reports read. These check what a report says, not its exact layout, so the wording can keep improving.
 
 import { describe, expect, it } from 'vitest';
-import { CURSOR_MARKER, type Report } from '@ai-pair/protocol';
+import { CURSOR_MARKER, type FacepalmGaze, type Report } from '@ai-pair/protocol';
 import { ELLIPSIS, RANGE_DASH } from '@ai-pair/core/constants';
 import { renderFile, renderReport } from '../src/render';
 
@@ -481,6 +481,29 @@ it('reports a Facepalm cue as advisory, never an answer or approval, with no tec
   expect(text).toContain('possible confused');
   expect(text).toContain('never an answer or approval');
   expect(text).not.toContain('7');
+});
+
+it.each<[FacepalmGaze, string]>([
+  ['away', 'confused (looking away)'],
+  ['averted', 'confused (glancing away)'],
+  ['on_content', 'confused:'],
+  ['unknown', 'confused:'],
+])('notes gaze %s next to the feeling (#143)', (gaze, expected) => {
+  const text = renderReport(
+    report({ batches: [{ id: 1, status: 'completed', facepalm: { id: 7, feeling: 'confused', feelings: ['confused'], gaze } }] }),
+    'step',
+  );
+  expect(text).toContain(expected);
+});
+
+it('adds no gaze note for a cue from an older Facepalm that never sends one (#143)', () => {
+  const text = renderReport(
+    report({ batches: [{ id: 1, status: 'completed', facepalm: { id: 7, feeling: 'confused', feelings: ['confused'] } }] }),
+    'step',
+  );
+  expect(text).toContain('possible confused:');
+  expect(text).not.toContain('looking away');
+  expect(text).not.toContain('glancing away');
 });
 
 it('renders a single-line diagnostic without a provider name', () => {

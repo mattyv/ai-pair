@@ -4617,6 +4617,13 @@ marks a beat (`packages/core/src/facepalm_cue.ts`,
 back to it (`Controller.feelFacepalm`). `FacepalmSubscription.cfg`
 is fully determined by the model's own bounded counters, with no further
 constants. TLC explored 91 generated and 36 distinct states at depth 13.
+Facepalm's interpretation also carries `gaze`, and, only when a beat gave it
+a content rectangle, `content` (facepalm#142, facepalm#144); like `feeling`
+itself, these are the delivered interpretation's own payload, not a lifecycle
+the model tracks, so `Answer` is unchanged (#143). AI Pair never sends a
+content rectangle (ai-pair#143's own finding: no reliable way to place one on
+screen from the editor or the panel webview), so `content` has no code path
+at all, only `gaze`.
 
 | Spec | Code |
 |---|---|
@@ -4624,7 +4631,7 @@ constants. TLC explored 91 generated and 36 distinct states at depth 13.
 | `Approve` | `FacepalmClient.open()`'s hello handshake succeeding |
 | `Refuse` | `open()` finding no approved token, a refused connection, or a refused `hello` |
 | `MarkBeat` | `markFacepalmBeat`, for a batch whose played actions ask a question or edit code |
-| `Answer` | `FacepalmClient.markBeat()`'s reply carrying an interpretation, attached to the batch's report and the panel |
+| `Answer` | `FacepalmClient.markBeat()`'s reply carrying an interpretation, attached to the batch's report and the panel; `gaze` rides along as the interpretation's own data (#143), rendered next to the feeling in `packages/relay/src/render.ts` |
 | `Feel` | `Controller.feelFacepalm`, guarded on a live session, and `FacepalmClient.feel`: refused, with no connection attempt, once `retired`; otherwise handed to Facepalm (#140) |
 | `Retire` | `FacepalmClient.retire()`: a request that times out or errors, discarding any beat it had open, and `Controller.close()` (`packages/core/src/controller.ts`), the one session-teardown point ending the session, the agent's own end, and a session replacement all go through (#138); marks `retired` |
 | `ConfirmRetired` | the closed connection's promise clearing, so a later call reopens one |

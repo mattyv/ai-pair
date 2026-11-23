@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.56.0
+
+-   Show where the programmer was looking next to a Facepalm feeling, e.g.
+    "confused (looking away)", and explain in AGENT_GUIDE.md that a question
+    Facepalm reads as unsure while they were looking away may mean they are
+    still thinking it over, not that they tuned out (facepalm#142). This also
+    fixes a reply from an upgraded Facepalm being silently rejected, which had
+    stopped every feeling from reaching the agent's report (#143).
+
 ## 0.55.2
 
 -   Clicking a Facepalm feeling card left over from a session that already
