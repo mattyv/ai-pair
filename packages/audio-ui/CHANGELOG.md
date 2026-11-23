@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.56.0
+
+- Version aligned with the Facepalm beat gaze update.
+
 ## 0.55.2
 
 - Version aligned with the Facepalm card-after-end fix.

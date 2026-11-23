@@ -52,7 +52,8 @@ class FakeFacepalmDaemon {
       return JSON.stringify({
         readings: [],
         missed: 0,
-        interpretation: { id: 1, feeling: 'confused', beat: words[1], feelings: ['confused', 'engagement'] },
+        // gaze (facepalm#142) rides along on every interpretation now; ai-pair#143 is this reaching the report.
+        interpretation: { id: 1, feeling: 'confused', beat: words[1], feelings: ['confused', 'engagement'], gaze: 'away' },
       });
     }
     return '{"error":"unknown request"}';
@@ -92,6 +93,7 @@ export async function facepalmPaths(api: Api, root: string): Promise<void> {
     await controller.step([{ say: 'Shall I continue?' }]);
     const report = await controller.step([]);
     assert.equal(report.batches.at(-1)?.facepalm?.feeling, 'confused', `beat did not reach the report: ${JSON.stringify(report)}`);
+    assert.equal(report.batches.at(-1)?.facepalm?.gaze, 'away', `gaze did not reach the report: ${JSON.stringify(report)}`);
     await controller.end();
   } finally {
     await daemon.stop();

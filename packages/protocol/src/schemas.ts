@@ -158,13 +158,30 @@ export const FACEPALM_FEELING_SCHEMA = z.enum(['agreement', 'disagreement', 'eng
 export const FACEPALM_BEAT_KIND_SCHEMA = z.enum(['question', 'proposal']);
 
 /**
+ * Where the programmer was looking over a beat's window (facepalm#142, its `BeatGazeName`):
+ * `on_content` (at the screen, where the beat's own content would be), `averted` (turned enough to
+ * read as elsewhere, but briefly or ambiguously so), `away` (well off their resting pose), or
+ * `unknown` (no resting pose yet to read it against). Context alongside `feeling` in
+ * {@link FacepalmCue}, never a rule's input for it.
+ */
+export const FACEPALM_GAZE_SCHEMA = z.enum(['on_content', 'averted', 'away', 'unknown']);
+
+/** Where the programmer was looking over a beat's window, as {@link FACEPALM_GAZE_SCHEMA} checks it. */
+export type FacepalmGaze = z.infer<typeof FACEPALM_GAZE_SCHEMA>;
+
+/**
  * Facepalm's read of one beat: `id` names the interpretation for a later `feel`; `feelings` lists
- * every feeling the programmer could pick instead, in Facepalm's order.
+ * every feeling the programmer could pick instead, in Facepalm's order; `gaze` is where the
+ * programmer was looking over the beat's window (facepalm#142), context only, never a rule's input
+ * for `feeling` - except that Facepalm itself reads a question beat that ends `averted` as
+ * `feeling: 'unknown'` (the thinking guard), so a client should read that as "still deciding", not
+ * "no reaction". Absent only from a Facepalm built before facepalm#142, which never sends it.
  */
 export const FACEPALM_CUE_SCHEMA = z.strictObject({
   id: z.number().int().positive(),
   feeling: FACEPALM_FEELING_SCHEMA,
   feelings: z.array(FACEPALM_FEELING_SCHEMA).min(1),
+  gaze: FACEPALM_GAZE_SCHEMA.optional(),
 });
 
 /** Checks a {@link BatchResult}. */

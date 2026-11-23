@@ -215,6 +215,35 @@ describe('a beat', () => {
     expect(lastSocket().written).toEqual([`hello ai-pair-uuid-1 ${VALID_TOKEN}\n`, 'beat question 1500\n']);
   });
 
+  it('carries gaze through when Facepalm sends it (#143)', async () => {
+    approve();
+    const client = new FacepalmClient();
+    const beat = client.markBeat('question', 1500);
+    await vi.advanceTimersByTimeAsync(0);
+    await connectAndApprove();
+    await vi.advanceTimersByTimeAsync(0);
+    lastSocket().emit(
+      'data',
+      `${JSON.stringify({ readings: [], missed: 0, interpretation: { id: 1, feeling: 'confused', beat: 'question', feelings: ['confused'], gaze: 'away' } })}\n`,
+    );
+    await expect(beat).resolves.toEqual({ id: 1, feeling: 'confused', feelings: ['confused'], gaze: 'away' });
+  });
+
+  it('omits gaze for a reply from an older Facepalm that never sends it (#143)', async () => {
+    approve();
+    const client = new FacepalmClient();
+    const beat = client.markBeat('question', 1500);
+    await vi.advanceTimersByTimeAsync(0);
+    await connectAndApprove();
+    await vi.advanceTimersByTimeAsync(0);
+    lastSocket().emit(
+      'data',
+      `${JSON.stringify({ readings: [], missed: 0, interpretation: { id: 1, feeling: 'confused', beat: 'question', feelings: ['confused'] } })}\n`,
+    );
+    const resolved = await beat;
+    expect(resolved?.gaze).toBeUndefined();
+  });
+
   it('resolves undefined for a reply with no interpretation, without closing the connection', async () => {
     approve();
     const client = new FacepalmClient();

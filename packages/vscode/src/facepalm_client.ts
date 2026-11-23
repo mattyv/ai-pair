@@ -245,8 +245,8 @@ export class FacepalmClient implements FacepalmPort {
     if (reply === undefined) return undefined;
     const parsed = FACEPALM_DELIVERY_SCHEMA.safeParse(parseJson(reply));
     if (!parsed.success || parsed.data.interpretation === undefined) return undefined;
-    const { id, feeling, feelings } = parsed.data.interpretation;
-    return { id, feeling, feelings };
+    const { id, feeling, feelings, gaze } = parsed.data.interpretation;
+    return { id, feeling, feelings, gaze };
   }
 
   /**
