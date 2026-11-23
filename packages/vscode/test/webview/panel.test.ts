@@ -990,6 +990,97 @@ describe('the reply box (specs/Draft.tla)', () => {
     expect(posted()).toEqual([{ type: 'draft', empty: false }]);
   });
 
+  it('RecallNewest and RestoreDraft: browses sent replies and restores the unsent draft', () => {
+    typeReply('first');
+    press(replyBox(), 'Enter');
+    typeReply('second');
+    press(replyBox(), 'Enter');
+    typeReply('draft');
+    replyBox().setSelectionRange(0, 0);
+    press(replyBox(), 'ArrowUp');
+    expect(replyBox().value).toBe('second');
+    press(replyBox(), 'ArrowUp');
+    expect(replyBox().value).toBe('first');
+    press(replyBox(), 'ArrowUp');
+    expect(replyBox().value).toBe('first');
+    replyBox().setSelectionRange(5, 5);
+    press(replyBox(), 'ArrowDown');
+    expect(replyBox().value).toBe('second');
+    replyBox().setSelectionRange(6, 6);
+    press(replyBox(), 'ArrowDown');
+    expect(replyBox().value).toBe('draft');
+  });
+
+  it('leaves selection, modifiers, composition and interior caret movement to the browser', () => {
+    typeReply('sent');
+    press(replyBox(), 'Enter');
+    typeReply('one\ntwo');
+    replyBox().setSelectionRange(2, 2);
+    press(replyBox(), 'ArrowUp');
+    expect(replyBox().value).toBe('one\ntwo');
+    replyBox().setSelectionRange(0, 1);
+    press(replyBox(), 'ArrowUp');
+    expect(replyBox().value).toBe('one\ntwo');
+    replyBox().setSelectionRange(0, 0);
+    press(replyBox(), 'ArrowUp', { shiftKey: true });
+    press(replyBox(), 'ArrowUp', { isComposing: true });
+    expect(replyBox().value).toBe('one\ntwo');
+  });
+
+  it('resends edited recalls with the current deferred setting', () => {
+    typeReply('old');
+    press(replyBox(), 'Enter');
+    press(replyBox(), 'ArrowUp');
+    typeReply('edited');
+    send({ type: 'replyBehavior', value: 'finishAction' });
+    press(replyBox(), 'Enter');
+    expect(posted().at(-1)).toEqual({ type: 'reply', text: 'edited', attach: false, defer: true });
+    press(replyBox(), 'ArrowUp');
+    expect(replyBox().value).toBe('edited');
+  });
+
+  it('bounds history and ignores transcript events', () => {
+    for (let index = 0; index < 101; index++) {
+      typeReply(`message ${index}`);
+      press(replyBox(), 'Enter');
+    }
+    send({ type: 'programmer', text: 'replayed' });
+    for (let index = 0; index < 101; index++) press(replyBox(), 'ArrowUp');
+    expect(replyBox().value).toBe('message 1');
+  });
+
+  it('recalls a reply handed back with the turn', () => {
+    send({ type: 'turn', to: 'programmer' });
+    typeReply('hand back');
+    click(element('turn'));
+    press(replyBox(), 'ArrowUp');
+    expect(replyBox().value).toBe('hand back');
+  });
+
+  it('leaves Down to the browser away from a history boundary and after pointer input', () => {
+    typeReply('sent');
+    press(replyBox(), 'Enter');
+    press(replyBox(), 'ArrowUp');
+    replyBox().setSelectionRange(1, 1);
+    press(replyBox(), 'ArrowDown');
+    expect(replyBox().value).toBe('sent');
+    replyBox().setSelectionRange(4, 4);
+    press(replyBox(), 'ArrowDown');
+    press(replyBox(), 'ArrowUp');
+    replyBox().dispatchEvent(new window.Event('pointerdown', { bubbles: true }));
+    press(replyBox(), 'ArrowDown');
+    expect(replyBox().value).toBe('sent');
+  });
+
+  it('does not retain calibration responses', () => {
+    send({ type: 'calibration', view: { phase: 'armed', title: 'Sample' } });
+    typeReply('calibration');
+    press(replyBox(), 'Enter');
+    send({ type: 'calibration', view: { phase: 'idle' } });
+    press(replyBox(), 'ArrowUp');
+    expect(replyBox().value).toBe('');
+  });
+
   it('lets go of the box on Escape, and takes it on focusReply', () => {
     send({ type: 'focusReply' });
     expect(document.activeElement).toBe(replyBox());
@@ -1252,7 +1343,7 @@ describe('the tooltips', () => {
     element('send').focus();
     expect(tip()).toBe('Send (Enter)');
     replyBox().focus();
-    expect(tip()).toBeUndefined();
+    expect(tip()).toBe('Press Up at the start to recall a sent reply');
     element('end').focus();
     element('end').blur();
     expect(tip()).toBeUndefined();

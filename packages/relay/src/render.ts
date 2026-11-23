@@ -215,6 +215,12 @@ export function renderFile(content: FileContent): string {
 /** Renders a report as the agent reads it: what the programmer did first, then each batch, in sections. */
 export function renderReport(report: Report, tool: ReportingTool): string {
   const sections: string[] = [];
+  const ended = tool === 'end' || report.events.some((event) => event.kind === 'end');
+  const said = report.events.some(
+    (event) =>
+      event.kind === 'message' ||
+      (event.kind === 'turn' && event.to === 'agent' && (event.message !== undefined || event.selection !== undefined)),
+  );
   if (tool === 'start') {
     sections.push(
       report.resumed
@@ -243,7 +249,7 @@ export function renderReport(report: Report, tool: ReportingTool): string {
   }
   if (report.commentaryChanged !== undefined) {
     sections.push(
-      'The navigator commentary preference changed. This report only updates settings; queued work and speech are unchanged. Continue the current turn and call `listen` again.',
+      `The navigator commentary preference changed. This report only updates settings; queued work and speech are unchanged.${said || ended ? '' : ' Continue the current turn and call `listen` again.'}`,
     );
   }
   if (report.repeated) {
@@ -279,7 +285,6 @@ export function renderReport(report: Report, tool: ReportingTool): string {
     const why = report.paused.map((r) => PAUSE_REASONS[r]).join('; ');
     sections.push(`Playback is paused: ${why}. Your batches wait until the programmer resumes.`);
   }
-  const ended = report.events.some((e) => e.kind === 'end');
   if (report.navigator) {
     const reasons = {
       typing_pause: 'typing paused',
@@ -293,10 +298,10 @@ export function renderReport(report: Report, tool: ReportingTool): string {
     if (programmerCursor) {
       sections.push(`Programmer's cursor: ${programmerCursor.file}, line ${programmerCursor.line}, column ${programmerCursor.column}.`);
     }
-    if (!ended) sections.push('Comment if useful, then call `listen` again.');
-  } else if (report.waiting && report.commands !== undefined) {
+    if (!ended && !said) sections.push('Comment if useful, then call `listen` again.');
+  } else if (!said && !ended && report.waiting && report.commands !== undefined) {
     sections.push(tool === 'listen' ? 'Call `listen` again.' : 'Carry on as usual.');
-  } else if (report.waiting) {
+  } else if (!said && !ended && report.waiting) {
     const activity = report.events.length > 0 || report.batches.length > 0;
     sections.push(
       tool === 'listen'
@@ -308,10 +313,16 @@ export function renderReport(report: Report, tool: ReportingTool): string {
           : 'Nothing has finished yet. Carry on as usual.',
     );
   }
-  if (tool === 'end' && !ended) {
+  if (tool === 'end' && !report.events.some((event) => event.kind === 'end')) {
     sections.push('The session has ended.');
   } else if (report.turn === 'programmer' && !ended) {
     sections.push("It's the programmer's turn: you're the navigator. Only `say` and `point` work, and `listen` follows along.");
+  }
+  // #128: the guide reaches the agent once, at `start`; this rule travels with each message, last, so it is read last.
+  if (said && !ended) {
+    sections.push(
+      'Answer what the programmer said first: in your next `step`, reply with a `say` or do what they asked using an action available on this turn. Do not call `listen` before you have.',
+    );
   }
   return sections.length > 0 ? sections.join('\n\n') : 'Nothing to report.';
 }

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.56.0
+## 0.56.1
 
 -   Show where the programmer was looking next to a Facepalm feeling, e.g.
     "confused (looking away)", and explain in AGENT_GUIDE.md that a question
@@ -8,6 +8,14 @@
     still thinking it over, not that they tuned out (facepalm#142). This also
     fixes a reply from an upgraded Facepalm being silently rejected, which had
     stopped every feeling from reaching the agent's report (#143).
+
+## 0.56.0
+
+- Recall recent sent replies with Up, edit them, and send again.
+
+## 0.55.3
+
+- Remind the agent to answer the programmer’s message before listening again (#128).
 
 ## 0.55.2
 

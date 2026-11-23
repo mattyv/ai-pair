@@ -31,6 +31,10 @@ it again while waiting to lower your hand; once the floor is yours, press it
 to focus Reply. The panel shows "What's up?" and, when speech is available,
 plays the same cue. Other pauses still apply.
 
+To recall a recent sent reply, put the caret at the start of Reply and press
+Up. Down returns toward your unsent draft. Edit a recalled reply and press Enter
+to send it; history lasts until the panel page reloads.
+
 The fixed voice prompt is generated on first use and cached in memory, without
 conversation history. Relevant voice, synthesis, privacy or credential changes
 invalidate it; the next use creates a new clip. Replays make no new synthesis
