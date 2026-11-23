@@ -10,6 +10,14 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   GPT-6.1 Terra agents write code and tests; GPT-6 Astra agents review them.
     Resolve findings and verify the resulting changes before reporting completion.
 
+## Answering programmer messages (#128)
+
+-   Repeat the instruction to answer alongside a delivered message or a handoff
+    with words or a selection. Suppress conflicting listen guidance and omit the
+    reminder after the session ends. This is guidance to the model, not an
+    enforced acknowledgement: it cannot stop a listen already dispatched, and
+    model compliance is not guaranteed.
+
 ## Background delegation (#134)
 
 -   Delegation is off by default. When enabled, a Codex session delegates to

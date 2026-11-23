@@ -2231,7 +2231,7 @@ above (#163); this contract holds the relay's schema and the player to them.
 | Contract | Test |
 |---|---|
 | The relay's schema and the player's checks accept the same actions (#45) | `relay/test/validation.test.ts`: every action in its table through both, malformed ones above all |
-| Every field of a `Report` appears in its rendered text | `relay/test/render.test.ts`: renders every field of a report |
+| Every field of a `Report` appears in its rendered text | `relay/test/render.test.ts`: renders every field of a report. Message reports include answer guidance, covered by its #128 test and the session trace in `relay/test/relay.test.ts`; the contract does not model model compliance or concurrent calls. |
 | Setting up an agent changes only its `pair` entry, and twice equals once | `vscode/test/agents.test.ts`: AgentSetup, for the TOML and JSON configs |
 
 ### Attention cue cache

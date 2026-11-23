@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.55.3
+
+- Remind the agent to answer the programmer’s message before listening again (#128).
+
 ## 0.55.2
 
 -   Clicking a Facepalm feeling card left over from a session that already

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.55.3
+
+- Version aligned with the message-answer reminder.
+
 ## 0.55.2
 
 - Version aligned with the Facepalm card-after-end fix.
