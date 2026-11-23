@@ -1,5 +1,7 @@
 // Facepalm's subscription (#83, item 14 of facepalm#61), over a real Unix domain socket standing in
-// for its daemon, through the real `FacepalmClient` extension.ts wires into the controller. The
+// for its daemon, through the real `FacepalmClient` extension.ts wires into the controller, and
+// through the bundled relay so the agent's report is the real rendered text (packages/relay/src/
+// render.ts), the same way `integration_render_diagnostic.ts` exercises it for a diagnostic. The
 // socket sits under `AI_PAIR_FACEPALM_HOME` (scripts/integration.sh), never the real per-user path,
 // so this never touches a real Facepalm a developer running this suite might have installed.
 // specs/FacepalmSubscription.tla models the lifecycle this exercises end to end.
@@ -8,10 +10,12 @@ import { randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as net from 'node:net';
 import * as path from 'node:path';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import type { Api } from '../src/extension';
 
 /** A real Unix domain socket, answering just enough of Facepalm's protocol (`src/protocol.h`,
- * facepalm#61) for one `beat`: `hello`, then `beat` with a fixed feeling. */
+ * facepalm#61) for three `beat`s: `hello`, then `beat` with a fixed feeling, varying gaze (#143). */
 class FakeFacepalmDaemon {
   private readonly directory: string;
   private readonly token = randomBytes(32).toString('hex');
@@ -20,6 +24,8 @@ class FakeFacepalmDaemon {
    * itself, rather than waiting for `server.close`'s callback, which an open connection would leave
    * forever unfired. */
   private readonly connections = new Set<net.Socket>();
+  /** How many `beat`s this daemon has answered, so each can differ (#143). */
+  private beats = 0;
 
   constructor(directory: string) {
     this.directory = directory;
@@ -49,12 +55,14 @@ class FakeFacepalmDaemon {
     const words = line.split(' ');
     if (words[0] === 'hello') return words[2] === this.token ? '{"ok":true}' : '{"error":"a stranger"}';
     if (words[0] === 'beat') {
-      return JSON.stringify({
-        readings: [],
-        missed: 0,
-        // gaze (facepalm#142) rides along on every interpretation now; ai-pair#143 is this reaching the report.
-        interpretation: { id: 1, feeling: 'confused', beat: words[1], feelings: ['confused', 'engagement'], gaze: 'away' },
-      });
+      this.beats += 1;
+      // gaze (facepalm#142) rides along on every interpretation now; ai-pair#143 is this reaching
+      // the agent's rendered report. The three beats carry, in turn: a gaze facepalmGazeNote words,
+      // none at all (as an older Facepalm would send), and the other gaze it words - every outcome
+      // that function can reach.
+      const base = { id: this.beats, feeling: 'confused', beat: words[1], feelings: ['confused', 'engagement'] } as const;
+      const interpretation = this.beats === 1 ? { ...base, gaze: 'away' } : this.beats === 3 ? { ...base, gaze: 'averted' } : base;
+      return JSON.stringify({ readings: [], missed: 0, interpretation });
     }
     return '{"error":"unknown request"}';
   }
@@ -78,24 +86,65 @@ class FakeFacepalmDaemon {
   }
 }
 
-/** Plays a question's beat against a real Facepalm-shaped socket, through the real controller and
- * extension wiring, and checks it reaches the pair report with its feeling. */
+/** Plays three question beats against a real Facepalm-shaped socket, through the real controller,
+ * the real `FacepalmClient`, and the bundled relay, and checks the agent's actual rendered report
+ * says the feeling and, when Facepalm sends it, where the programmer was looking (#143). */
 export async function facepalmPaths(api: Api, root: string): Promise<void> {
   const directory = process.env.AI_PAIR_FACEPALM_HOME;
   assert.ok(directory !== undefined, 'AI_PAIR_FACEPALM_HOME is not set for this run');
-  const { controller } = api;
   const daemon = new FakeFacepalmDaemon(directory);
   await daemon.listen();
+  const client = new Client({ name: 'integration-facepalm', version: '1' });
+  const env = Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined));
+  let started = false;
   try {
     fs.writeFileSync(path.join(root, 'facepalm.txt'), 'a\n');
-    await controller.start('facepalm');
-    await controller.read('facepalm.txt');
-    await controller.step([{ say: 'Shall I continue?' }]);
-    const report = await controller.step([]);
-    assert.equal(report.batches.at(-1)?.facepalm?.feeling, 'confused', `beat did not reach the report: ${JSON.stringify(report)}`);
-    assert.equal(report.batches.at(-1)?.facepalm?.gaze, 'away', `gaze did not reach the report: ${JSON.stringify(report)}`);
-    await controller.end();
+    await client.connect(new StdioClientTransport({ command: api.launcher, cwd: root, env }));
+    async function call(name: string, args: Record<string, unknown>): Promise<string> {
+      const result = await client.callTool({ name, arguments: args });
+      assert.notEqual(result.isError, true, JSON.stringify(result.content));
+      assert.ok(Array.isArray(result.content));
+      return result.content
+        .map((part: unknown) => {
+          assert.ok(typeof part === 'object' && part !== null && 'text' in part && typeof part.text === 'string');
+          return part.text;
+        })
+        .join('\n');
+    }
+    await call('start', { cwd: root, task: 'facepalm' });
+    started = true;
+    await call('read', { file: 'facepalm.txt' });
+    await call('step', { actions: [{ say: 'Shall I continue?' }] });
+    const first = await call('step', { actions: [] });
+    assert.match(
+      first,
+      /Facepalm, from the programmer's camera, read a possible confused \(looking away\): advisory only, never an answer or approval\./,
+      `gaze did not reach the agent's rendered report: ${first}`,
+    );
+    // The daemon's second beat omits gaze, as an older Facepalm would: the agent's report should
+    // read exactly as it did before #143, with no parenthetical at all.
+    await call('step', { actions: [{ say: 'Shall I continue again?' }] });
+    const second = await call('step', { actions: [] });
+    assert.match(
+      second,
+      /Facepalm, from the programmer's camera, read a possible confused: advisory only, never an answer or approval\./,
+      `an older Facepalm's reply, with no gaze, should render with no parenthetical: ${second}`,
+    );
+    assert.doesNotMatch(second, /looking away|glancing away/);
+    // The daemon's third beat carries the other gaze facepalmGazeNote words: `averted`.
+    await call('step', { actions: [{ say: 'Shall I continue once more?' }] });
+    const third = await call('step', { actions: [] });
+    assert.match(
+      third,
+      /Facepalm, from the programmer's camera, read a possible confused \(glancing away\): advisory only, never an answer or approval\./,
+      `an averted gaze should render as glancing away: ${third}`,
+    );
+    await call('end', {});
+    started = false;
+    console.log('Facepalm: every gaze outcome reaches the agent through the real relay (#143)');
   } finally {
+    if (started) api.controller.endSession();
+    await client.close();
     await daemon.stop();
   }
 }
