@@ -9,6 +9,7 @@
 
 import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs/promises';
+import { constants } from 'node:fs';
 import * as net from 'node:net';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -21,6 +22,7 @@ import {
   facepalmHello,
   type FacepalmBeatKind,
   type FacepalmCue,
+  type FacepalmSnapshot,
 } from '@ai-pair/protocol';
 import type { FacepalmPort } from '@ai-pair/core';
 
@@ -65,6 +67,16 @@ async function readToken(tokenPath: string): Promise<string | undefined> {
     return TOKEN_PATTERN.test(text) ? text : undefined;
   } catch {
     return undefined;
+  }
+}
+
+/** Inspects a fixed path without opening the service. */
+async function inspect(file: string, socket = false): Promise<'present' | 'absent' | 'unknown'> {
+  try {
+    const info = await fs.stat(file);
+    return socket && !info.isSocket() ? 'unknown' : 'present';
+  } catch (error: unknown) {
+    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT' ? 'absent' : 'unknown';
   }
 }
 
@@ -144,6 +156,108 @@ class LineReader {
  */
 export class FacepalmClient implements FacepalmPort {
   private connection: Promise<Open | undefined> | undefined;
+  private activeOpen: Open | undefined;
+  private pendingSocket: net.Socket | undefined;
+  private socketClosed: Promise<void> = Promise.resolve();
+  private generation = 0;
+  private nextCard = 0;
+  private readonly cards = new Map<number, number>();
+  private enabled = true;
+  private status: FacepalmSnapshot['status'] = 'unchecked';
+  private available = true;
+  private canOpenSettings = false;
+  private remote = false;
+  private refreshGeneration = 0;
+  /** Receives current snapshots after changes. */
+  onStatus: ((snapshot: FacepalmSnapshot) => void) | undefined;
+
+  /** Returns the current observed state without opening a connection. */
+  snapshot(): FacepalmSnapshot {
+    return { enabled: this.enabled, status: this.status, available: this.available, canOpenSettings: this.canOpenSettings };
+  }
+
+  /** Inspects local files without connecting to Facepalm or starting its camera. */
+  async refresh(remote: boolean, remoteHost = remote): Promise<void> {
+    this.remote = remote;
+    const generation = this.generation;
+    const refreshGeneration = ++this.refreshGeneration;
+    const directory = userDirectory();
+    const appPaths =
+      process.platform === 'darwin'
+        ? [path.join(os.homedir(), 'Applications', 'Facepalm.app')]
+        : process.platform === 'linux'
+          ? ['/usr/bin/facepalm-menu', path.join(os.homedir(), '.local', 'facepalm', 'bin', 'facepalm-menu')]
+          : [];
+    const [socket, token, ...apps] = await Promise.all([
+      inspect(path.join(directory, 'service.sock'), true),
+      inspect(path.join(directory, 'clients', FACEPALM_CLIENT_NAME)),
+      ...appPaths.map((file) => inspect(file)),
+    ]);
+    if (generation !== this.generation || refreshGeneration !== this.refreshGeneration || remote !== this.remote) return;
+    const executables = appPaths.map((candidate) =>
+      process.platform === 'darwin' ? path.join(candidate, 'Contents', 'MacOS', 'facepalm-menu') : candidate,
+    );
+    const launchable = await Promise.all(
+      executables.map(async (file) => {
+        try {
+          const info = await fs.stat(file);
+          if (!info.isFile()) return false;
+          await fs.access(file, constants.X_OK);
+          return true;
+        } catch {
+          return false;
+        }
+      }),
+    );
+    if (generation !== this.generation || refreshGeneration !== this.refreshGeneration || remote !== this.remote) return;
+    this.canOpenSettings = !remoteHost && launchable.includes(true);
+    this.available = remoteHost || appPaths.length === 0 || [socket, token, ...apps].some((value) => value !== 'absent');
+    if (!this.enabled) {
+      this.publish('off');
+      return;
+    }
+    if (this.status === 'connected') {
+      this.available = true;
+      this.publish('connected');
+      return;
+    }
+    if (socket === 'absent') this.publish(remote ? 'unavailableSsh' : 'notRunning');
+    else if (socket === 'present' && token === 'absent') this.publish('approvalNeeded');
+    else if (socket === 'present' && token === 'present') {
+      const approved = await readToken(path.join(directory, 'clients', FACEPALM_CLIENT_NAME));
+      if (
+        generation === this.generation &&
+        refreshGeneration === this.refreshGeneration &&
+        remote === this.remote &&
+        this.enabled &&
+        this.snapshot().status !== 'connected'
+      ) {
+        this.publish(approved === undefined ? 'unchecked' : 'idle');
+      }
+    } else this.publish('unchecked');
+  }
+
+  /** Publishes an observed status to the panel. */
+  private publish(status: FacepalmSnapshot['status']): void {
+    this.status = status;
+    try {
+      this.onStatus?.(this.snapshot());
+    } catch {
+      /* Observers cannot interrupt ownership. */
+    }
+  }
+
+  /** Changes whether new Facepalm work is admitted. */
+  setEnabled(enabled: boolean): void {
+    // specs/FacepalmSettings.tla, Enable and Disable: change desired admission.
+    if (this.enabled === enabled) return;
+    this.enabled = enabled;
+    if (!enabled) {
+      this.retire();
+      this.publish('off');
+    } else this.publish('unchecked');
+  }
+
   /** Serializes every exchange on the connection: it answers one line at a time, in order. */
   private tail: Promise<unknown> = Promise.resolve();
   /**
@@ -163,13 +277,16 @@ export class FacepalmClient implements FacepalmPort {
    * connection. Never rejects, including on the one before it in the queue: a write that throws,
    * on an unlucky socket, answers this request with `undefined` and still lets the next one through.
    */
-  private request(command: string, timeoutMs: number): Promise<string | undefined> {
+  private request(command: string, timeoutMs: number, generation: number, allowConnect = true): Promise<string | undefined> {
     const turn = this.tail
       .then(async () => {
-        const open = await this.connect();
-        if (open === undefined) return undefined;
+        if (!this.enabled || generation !== this.generation) return undefined;
+        const open = await (allowConnect ? this.connect(generation) : this.connection);
+
+        if (open === undefined || !this.enabled || generation !== this.generation) return undefined;
         open.socket.write(`${command}\n`);
         const reply = await withTimeout(open.reader.next(), timeoutMs);
+        if (generation !== this.generation || !this.enabled) return undefined;
         if (reply === undefined) this.retire();
         return reply;
       })
@@ -179,9 +296,12 @@ export class FacepalmClient implements FacepalmPort {
   }
 
   /** Opens the connection if it isn't already open or opening; a failed attempt may be retried later. */
-  private connect(): Promise<Open | undefined> {
+  private connect(generation: number): Promise<Open | undefined> {
     if (this.connection === undefined) {
-      const opening = this.open();
+      const opening = this.open(generation).catch(() => {
+        if (generation === this.generation) this.pendingSocket?.destroy();
+        return undefined;
+      });
       this.connection = opening;
       void opening.then((open) => {
         if (open === undefined && this.connection === opening) this.connection = undefined;
@@ -190,11 +310,20 @@ export class FacepalmClient implements FacepalmPort {
     return this.connection;
   }
 
-  private async open(): Promise<Open | undefined> {
+  private async open(generation: number): Promise<Open | undefined> {
     const directory = userDirectory();
     const token = await readToken(path.join(directory, 'clients', FACEPALM_CLIENT_NAME));
-    if (token === undefined) return undefined;
+    if (token === undefined || !this.enabled || generation !== this.generation) return undefined;
+    // specs/FacepalmSettings.tla, Close: retain the physical slot until close is observed.
+    await this.socketClosed;
+    if (!this.enabled || generation !== this.generation) return undefined;
     const socket = net.createConnection(path.join(directory, 'service.sock'));
+    this.pendingSocket = socket;
+    this.socketClosed = new Promise((resolve) => {
+      socket.once('close', () => {
+        resolve();
+      });
+    });
     const connected = await withTimeout(
       new Promise<boolean>((resolve) => {
         socket.once('connect', () => {
@@ -206,23 +335,27 @@ export class FacepalmClient implements FacepalmPort {
       }),
       SHORT_TIMEOUT_MS,
     );
-    if (connected !== true) {
+    if (connected !== true || !this.enabled || generation !== this.generation) {
       socket.destroy();
+      if (this.pendingSocket === socket) this.pendingSocket = undefined;
       return undefined;
     }
     const reader = new LineReader(socket);
     socket.write(`${facepalmHello(this.name, token)}\n`);
     const hello = await withTimeout(reader.next(), SHORT_TIMEOUT_MS);
-    if (hello === undefined || !FACEPALM_OK_SCHEMA.safeParse(parseJson(hello)).success) {
+    if (hello === undefined || !this.enabled || generation !== this.generation || !FACEPALM_OK_SCHEMA.safeParse(parseJson(hello)).success) {
       socket.destroy();
+      if (this.pendingSocket === socket) this.pendingSocket = undefined;
       return undefined;
     }
+    this.pendingSocket = undefined;
+    // specs/FacepalmSettings.tla, Connect: accept only this generation's hello.
     const open: Open = { socket, reader };
+    this.activeOpen = open;
     socket.once('close', () => {
-      void this.connection?.then((current) => {
-        if (current === open) this.connection = undefined;
-      });
+      if (this.activeOpen === open) this.retire();
     });
+    this.publish('connected');
     return open;
   }
 
@@ -232,21 +365,33 @@ export class FacepalmClient implements FacepalmPort {
    * reconnects it (#140).
    */
   retire(): void {
+    // specs/FacepalmSettings.tla, Retire: invalidate cards and pending work.
+    this.generation++;
+    this.activeOpen = undefined;
+    this.cards.clear();
+    this.pendingSocket?.destroy();
+    this.pendingSocket = undefined;
     void this.connection?.then((open) => open?.socket.destroy());
     this.connection = undefined;
     this.retired = true;
+    if (this.enabled) this.publish('unchecked');
   }
 
   async markBeat(kind: FacepalmBeatKind, windowMs: number): Promise<FacepalmCue | undefined> {
     // specs/FacepalmSubscription.tla, `Enable`: a new beat always may reconnect a retired
     // subscription (#140), unlike `feel()` below.
+    if (!this.enabled) return undefined;
     this.retired = false;
-    const reply = await this.request(facepalmBeat(kind, windowMs), windowMs + SHORT_TIMEOUT_MS);
-    if (reply === undefined) return undefined;
+    // specs/FacepalmSettings.tla, Beat and Answer: accept only current replies.
+    const generation = this.generation;
+    const reply = await this.request(facepalmBeat(kind, windowMs), windowMs + SHORT_TIMEOUT_MS, generation);
+    if (reply === undefined || generation !== this.generation || !this.enabled) return undefined;
     const parsed = FACEPALM_DELIVERY_SCHEMA.safeParse(parseJson(reply));
     if (!parsed.success || parsed.data.interpretation === undefined) return undefined;
     const { id, feeling, feelings, gaze } = parsed.data.interpretation;
-    return { id, feeling, feelings, gaze };
+    const card = ++this.nextCard;
+    this.cards.set(card, id);
+    return { id: card, feeling, feelings, gaze };
   }
 
   /**
@@ -256,7 +401,9 @@ export class FacepalmClient implements FacepalmPort {
    * already have disabled (#140).
    */
   async feel(id: number, feeling: FacepalmCue['feeling']): Promise<void> {
-    if (this.retired) return;
-    await this.request(facepalmFeel(id, feeling), SHORT_TIMEOUT_MS);
+    const daemonId = this.cards.get(id);
+    if (this.retired || !this.enabled || daemonId === undefined) return;
+    this.cards.delete(id);
+    await this.request(facepalmFeel(daemonId, feeling), SHORT_TIMEOUT_MS, this.generation, false);
   }
 }

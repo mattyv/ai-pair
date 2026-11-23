@@ -24,6 +24,7 @@ import {
 import { playDemo } from './demo';
 import { VsCodeEditor } from './editor';
 import { FacepalmClient } from './facepalm_client';
+import { openFacepalmSettings } from './facepalm_settings_launcher';
 import { Diagnostics } from './diagnostics';
 import { collectDiagnostics } from './diagnostics_collector';
 import { SpeechService, type SpeechAudioEvent, type SpeechOutput } from './speech_service';
@@ -746,6 +747,9 @@ export function activate(context: vscode.ExtensionContext): Api {
     }
   }
 
+  const localFacepalm = new FacepalmClient();
+  facepalmClient = localFacepalm;
+  let facepalmSave: PromiseLike<void> = Promise.resolve();
   panel = new NarrationPanel(
     (file) => editor.resolvePath(file),
     speed,
@@ -758,6 +762,24 @@ export function activate(context: vscode.ExtensionContext): Api {
     context.extensionUri,
     {
       controller: () => controller,
+      facepalm: {
+        snapshot: () => localFacepalm.snapshot(),
+        enabled: (value) => {
+          localFacepalm.setEnabled(value);
+          facepalmSave = Promise.resolve(facepalmSave)
+            .then(() => context.globalState.update('facepalmEnabled', value))
+            .catch(() => {});
+          if (value) void localFacepalm.refresh(vscode.env.remoteName === 'ssh-remote', vscode.env.remoteName !== undefined);
+        },
+        refresh: () => {
+          void localFacepalm.refresh(vscode.env.remoteName === 'ssh-remote', vscode.env.remoteName !== undefined);
+        },
+        openSettings: () => {
+          void openFacepalmSettings(process.platform, vscode.env.remoteName !== undefined).then((opened) => {
+            if (!opened) void vscode.window.showWarningMessage('Could not open Facepalm settings.');
+          });
+        },
+      },
       workerVisibility,
       workerEnabled: {
         get: () => workerEnabledSetting.get(),
@@ -1105,10 +1127,14 @@ export function activate(context: vscode.ExtensionContext): Api {
       selectedNarration?.cancel();
     },
   };
-  facepalmClient = new FacepalmClient();
+  localFacepalm.onStatus = (snapshot) => {
+    panel.showFacepalmStatus(snapshot);
+  };
+  localFacepalm.setEnabled(context.globalState.get<unknown>('facepalmEnabled') !== false);
+  void localFacepalm.refresh(vscode.env.remoteName === 'ssh-remote', vscode.env.remoteName !== undefined);
   controller = new Controller(editor, panel, undefined, narration, {
     workerEnabled: () => workerEnabledSetting.get(),
-    facepalm: facepalmClient,
+    facepalm: localFacepalm,
   });
   controller.onDiagnostic = record;
   controller.trace = (line) => {

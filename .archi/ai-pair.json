@@ -2,9 +2,9 @@
   "version": 1,
   "bundleId": "0ded5bcb-a6f0-47d4-a3b0-468f4a47c302",
   "revision": {
-    "number": 4,
+    "number": 5,
     "updatedAt": "2026-11-20T00:00:00.000Z",
-    "summary": "Stream public worker text from the Codex App Server"
+    "summary": "Facepalm settings and subscription ownership"
   },
   "diagrams": [
     {
@@ -618,6 +618,21 @@
             "group": "audio",
             "x": 2250,
             "y": 1148
+          },
+          {
+            "id": "facepalm-client",
+            "label": "Facepalm Client\nOwns intent, status, socket and card generations",
+            "files": ["packages/vscode/src/facepalm_client.ts", "packages/vscode/src/facepalm_settings_launcher.ts"],
+            "group": "editor",
+            "x": 1100,
+            "y": 580
+          },
+          {
+            "id": "facepalm-service",
+            "label": "Facepalm service\nExternal camera and consent owner",
+            "files": [],
+            "x": 1370,
+            "y": 580
           }
         ],
         "edges": [
@@ -1028,6 +1043,21 @@
                 "y": 0
               }
             }
+          },
+          {
+            "from": "panel",
+            "to": "facepalm-client",
+            "label": "settings intent and status snapshots"
+          },
+          {
+            "from": "ctrl",
+            "to": "facepalm-client",
+            "label": "beats, feelings, retirement"
+          },
+          {
+            "from": "facepalm-client",
+            "to": "facepalm-service",
+            "label": "lazy socket subscription; explicit settings launch"
           }
         ],
         "groups": [

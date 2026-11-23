@@ -96,6 +96,10 @@ const ui = {
   settings: $('settings', HTMLButtonElement),
   voiceStatus: $('voice-status', HTMLButtonElement),
   settingsDialog: $('settings-dialog', HTMLDialogElement),
+  settingsFacepalm: $('settings-facepalm', HTMLDetailsElement),
+  facepalmEnabled: $('facepalm-enabled', HTMLInputElement),
+  facepalmStatus: $('facepalm-status', HTMLElement),
+  facepalmOpenSettings: $('facepalm-open-settings', HTMLButtonElement),
   providerDetails: $('speech-provider-details', HTMLDetailsElement),
   providerSummary: $('speech-provider-summary', HTMLElement),
   settingsClose: $('settings-close', HTMLButtonElement),
@@ -576,6 +580,7 @@ function addFacepalmCue(id: number, feeling: FacepalmCue['feeling'], feelings: A
     button.textContent = FACEPALM_FEELING_LABELS[option];
     button.classList.toggle('on', option === feeling);
     button.addEventListener('click', () => {
+      if (!openFacepalmCards.has(card)) return;
       vscode.postMessage({ type: 'facepalmFeel', id, feeling: option });
       openFacepalmCards.delete(card);
       buttons.remove();
@@ -1278,8 +1283,15 @@ function focusReplyBox(): void {
   }
 }
 ui.settings.addEventListener('click', () => {
+  vscode.postMessage({ type: 'facepalmRefresh' });
   ui.settingsDialog.showModal();
   $('settings-conversation', HTMLDetailsElement).querySelector('summary')?.focus();
+});
+ui.facepalmEnabled.addEventListener('change', () => {
+  vscode.postMessage({ type: 'facepalmEnabled', value: ui.facepalmEnabled.checked });
+});
+ui.facepalmOpenSettings.addEventListener('click', () => {
+  vscode.postMessage({ type: 'facepalmOpenSettings' });
 });
 ui.settingsClose.addEventListener('click', () => {
   ui.settingsDialog.close();
@@ -2139,6 +2151,23 @@ function handle(message: ToPanel): void {
     case 'replyBehavior':
       ui.replyBehavior.value = message.value;
       return;
+    case 'facepalmStatus': {
+      const labels = {
+        off: 'Off',
+        unchecked: 'Unchecked',
+        idle: 'Available (not connected)',
+        connected: 'Connected',
+        notRunning: 'Not running',
+        approvalNeeded: 'Approval needed',
+        unavailableSsh: 'Unavailable over SSH',
+      };
+      if (message.status !== 'connected') closeFacepalmCards();
+      ui.settingsFacepalm.hidden = !message.available;
+      ui.facepalmEnabled.checked = message.enabled;
+      ui.facepalmStatus.textContent = labels[message.status];
+      ui.facepalmOpenSettings.disabled = !message.canOpenSettings;
+      break;
+    }
     case 'navigatorCommentary':
       ui.navigatorCommentary.value = message.value;
       break;

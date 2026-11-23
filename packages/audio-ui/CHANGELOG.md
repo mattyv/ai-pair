@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.57.0
+
+- Match the AI Pair extension release.
+
 ## 0.56.1
 
 - Version aligned with the combined reply history and Facepalm gaze update.

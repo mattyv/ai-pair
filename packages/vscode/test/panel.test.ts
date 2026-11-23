@@ -235,6 +235,7 @@ function harness(
   sessionCost?: PanelWiring['speech']['sessionCost'],
   narrationSession?: PanelWiring['speech']['narrationSession'],
   omitWorkerSettings = false,
+  facepalm?: PanelWiring['facepalm'],
 ): Harness {
   const traced: string[] = [];
   const speed = { get: vi.fn(() => SPEEDS[1] ?? 0), set: vi.fn<(value: number) => void>() };
@@ -339,6 +340,7 @@ function harness(
     vscode.Uri.file(EXTENSION),
     {
       controller: controllerAccessor,
+      facepalm,
       calibration: () => calibration,
       starter,
       copyDiagnostics,
@@ -646,6 +648,22 @@ describe('attention', () => {
 });
 
 describe('facepalm', () => {
+  it('forwards settings actions and publishes the current snapshot on ready', () => {
+    const snapshot = { enabled: true, status: 'idle', available: true, canOpenSettings: true } as const;
+    const wiring = { snapshot: vi.fn(() => snapshot), enabled: vi.fn(), refresh: vi.fn(), openSettings: vi.fn() };
+    const { panel } = harness('agent', undefined, undefined, undefined, undefined, false, wiring);
+    const view = open(panel);
+    view.send({ type: 'ready' });
+    expect(view.posted).toContainEqual({ type: 'facepalmStatus', ...snapshot });
+    panel.receiveFromPage({ type: 'facepalmEnabled', value: false });
+    panel.receiveFromPage({ type: 'facepalmEnabled', value: 'false' });
+    panel.receiveFromPage({ type: 'facepalmRefresh' });
+    panel.receiveFromPage({ type: 'facepalmOpenSettings' });
+    expect(wiring.enabled.mock.calls).toEqual([[false]]);
+    expect(wiring.refresh).toHaveBeenCalledOnce();
+    expect(wiring.openSettings).toHaveBeenCalledOnce();
+  });
+
   it('forwards the feeling the programmer picked to the controller, as sent, with nothing else forwarded (#83)', () => {
     const { panel, controller } = harness();
     panel.receiveFromPage({ type: 'facepalmFeel', id: 7, feeling: 'confused' });

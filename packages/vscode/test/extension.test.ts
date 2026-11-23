@@ -4,6 +4,24 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const tempoPaths = vi.hoisted(() => [] as string[]);
+const facepalmFake = vi.hoisted(() => {
+  class Client {
+    readonly setEnabled = vi.fn<(value: boolean) => void>();
+    readonly refresh = vi.fn<(ssh: boolean, remote: boolean) => Promise<void>>().mockResolvedValue(undefined);
+    readonly retire = vi.fn();
+    readonly snapshot = vi.fn(() => ({ enabled: true, status: 'unchecked' as const, available: true, canOpenSettings: true }));
+    onStatus?: (snapshot: ReturnType<Client['snapshot']>) => void;
+    constructor() {
+      // The registry is initialized before any client is constructed.
+      // oxlint-disable-next-line eslint/no-use-before-define
+      clients.push(this);
+    }
+  }
+  const clients: Client[] = [];
+  return { Client, clients, open: vi.fn<(platform: NodeJS.Platform, remote: boolean) => Promise<boolean>>().mockResolvedValue(true) };
+});
+vi.mock('../src/facepalm_client', () => ({ FacepalmClient: facepalmFake.Client }));
+vi.mock('../src/facepalm_settings_launcher', () => ({ openFacepalmSettings: facepalmFake.open }));
 const costFake = vi.hoisted(() => ({
   publish: undefined as ((value: import('../src/session_speech_cost').SessionSpeechCostView) => void) | undefined,
   capture: vi.fn<() => (() => ((cost: number | undefined) => void) | undefined) | undefined>(),
@@ -397,6 +415,7 @@ const fakes = vi.hoisted(() => {
     readonly showOpenRouterKeyStatus = vi.fn();
     readonly showSpeechOutputCatalog = vi.fn();
     readonly speechReadyPageId = vi.fn(() => 7);
+    readonly showFacepalmStatus = vi.fn();
     readonly showSpeechStatus = vi.fn();
     readonly showSpeechCost = vi.fn();
     readonly playSpeech = vi.fn(() => 7);
@@ -421,6 +440,7 @@ const fakes = vi.hoisted(() => {
       readonly trace: (line: string) => void,
       readonly extensionUri: unknown,
       readonly wiring: {
+        facepalm: NonNullable<PanelWiring['facepalm']>;
         workerEnabled: { get: () => boolean; set: (value: boolean) => void };
         workerModel: { get: (provider: 'codex' | 'claude') => string; set: (provider: 'codex' | 'claude', value: string) => void };
         workerVisibility: { get: () => 'milestones' | 'everything' | 'off'; set: (value: 'milestones' | 'everything' | 'off') => void };
@@ -1553,6 +1573,44 @@ describe('activate', () => {
     fakes.settings.set('speech.enabled', false);
     changed('speech', 'speech.enabled');
     expect(speech.cancel).toHaveBeenCalledOnce();
+  });
+
+  it('routes Facepalm choices, persists them, refreshes remotely and warns on launch failure', async () => {
+    const h = activated();
+    const client = last(facepalmFake.clients);
+    const wiring = h.panel.wiring.facepalm;
+    expect(wiring.snapshot()).toEqual(client.snapshot());
+    client.onStatus?.(client.snapshot());
+    expect(h.panel.showFacepalmStatus).toHaveBeenCalledWith(client.snapshot());
+    wiring.enabled(false);
+    await settle();
+    expect(client.setEnabled).toHaveBeenLastCalledWith(false);
+    expect(h.context.globalState.get('facepalmEnabled')).toBe(false);
+    fakes.remoteName = 'ssh-remote';
+    wiring.enabled(true);
+    await settle();
+    expect(h.context.globalState.get('facepalmEnabled')).toBe(true);
+    expect(client.refresh).toHaveBeenLastCalledWith(true, true);
+    fakes.remoteName = 'remote';
+    wiring.refresh();
+    expect(client.refresh).toHaveBeenLastCalledWith(false, true);
+    facepalmFake.open.mockResolvedValueOnce(false);
+    wiring.openSettings();
+    await settle();
+    expect(facepalmFake.open).toHaveBeenLastCalledWith(process.platform, true);
+    expect(fakes.infos).toContain('Could not open Facepalm settings.');
+    facepalmFake.open.mockResolvedValueOnce(true);
+    wiring.openSettings();
+    await settle();
+  });
+
+  it('continues after the Facepalm preference cannot be saved', async () => {
+    const given = context();
+    given.globalState.update = () => Promise.reject(new Error('save failed'));
+    const h = activated(given);
+    h.panel.wiring.facepalm.enabled(false);
+    await settle();
+    expect(last(facepalmFake.clients).setEnabled).toHaveBeenLastCalledWith(false);
   });
 
   it('routes settings, setup, page events and audio through the speech wiring', async () => {

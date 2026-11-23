@@ -15,6 +15,7 @@ import {
   speechDecodeFromPage,
   localPanelAction,
   localPanelUpdate,
+  type FacepalmSnapshot,
   type AudioDiagnostics,
   type LocalAudioStatus,
   type LocalPanelAction,
@@ -77,6 +78,12 @@ export interface Starter {
  */
 export interface PanelWiring {
   controller: () => Controller;
+  facepalm?: {
+    snapshot: () => FacepalmSnapshot;
+    enabled: (value: boolean) => void;
+    refresh: () => void;
+    openSettings: () => void;
+  };
   /** The reading speed calibration; the programmer's replies go to it while one is under way (#109). */
   calibration: () => Calibration;
   /** Starts a session from the idle view, when an agent that can be started from here is set up (#107). */
@@ -216,6 +223,11 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   private send(message: ToPanel): void {
     if (this.remote !== undefined) this.remote.send(message);
     else void this.view?.webview.postMessage(message);
+  }
+
+  /** Sends the Facepalm owner's current snapshot to the page. */
+  showFacepalmStatus(value: FacepalmSnapshot): void {
+    this.send({ type: 'facepalmStatus', ...value });
   }
 
   /** Sends validated cached readiness facts to the current page. */
@@ -919,7 +931,17 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
           () => vscode.window.showErrorMessage('Could not copy AI Pair diagnostics.'),
         );
         return;
+      case 'facepalmEnabled':
+        if (typeof message.value === 'boolean') this.wiring.facepalm?.enabled(message.value);
+        return;
+      case 'facepalmRefresh':
+        this.wiring.facepalm?.refresh();
+        return;
+      case 'facepalmOpenSettings':
+        this.wiring.facepalm?.openSettings();
+        return;
       case 'ready':
+        if (this.wiring.facepalm !== undefined) this.showFacepalmStatus(this.wiring.facepalm.snapshot());
         this.replyPageReady = true;
         if (this.remote === undefined) this.readyLocal(pageId);
         // A new page has an empty draft (#69): specs/Draft.tla, `LoadPage`.

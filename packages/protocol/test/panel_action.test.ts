@@ -5,6 +5,9 @@ describe('cross-host panel actions', () => {
   it('allows only the panel actions used by the workspace controller', () => {
     for (const action of [
       { type: 'ready' },
+      { type: 'facepalmEnabled', value: false },
+      { type: 'facepalmRefresh' },
+      { type: 'facepalmOpenSettings' },
       { type: 'pageClosed' },
       { type: 'reply', text: 'Hello.', attach: true },
       { type: 'reply', text: 'Wait.', defer: true },

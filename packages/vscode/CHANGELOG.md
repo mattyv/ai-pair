@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.57.0
+
+- Add Facepalm feedback controls and passive connection status in Settings (#146).
+
 ## 0.56.1
 
 -   Show where the programmer was looking next to a Facepalm feeling, e.g.
