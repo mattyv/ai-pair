@@ -505,6 +505,7 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
           class="reply"
           rows="1"
           aria-label="Reply to the agent"
+          data-tip="Press Up at the start to recall a sent reply"
           placeholder="Reply to the agent${ELLIPSIS}"
         ></textarea>
         <button type="button" data-ui="send" class="quiet" aria-label="Send" data-tip="Send (Enter)">${ICONS.send}</button>

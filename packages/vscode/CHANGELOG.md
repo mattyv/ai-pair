@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.56.0
+
+- Recall recent sent replies with Up, edit them, and send again.
+
 ## 0.55.3
 
 - Remind the agent to answer the programmer’s message before listening again (#128).

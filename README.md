@@ -356,6 +356,7 @@ account. While you pair:
 | To... | Do this |
 |---|---|
 | say something to the agent | type in the reply box, press Enter. Typing pauses playback. In Settings, choose **Finish current action first** to wait for the action boundary; long commands can delay replies and Stop remains immediate. |
+| recall a sent reply | put the caret at the start of the reply box and press Up; Down returns toward the unsent draft. Edit and press Enter to send. |
 | ask about some code | select it in the editor, then reply: the selection goes along (**x** leaves it out) |
 | inspect a file changed outside the editor | click its path in the notice to open the Git diff when available, or the file itself |
 | let it run a command | **Run once**, **Allow this command**, **Allow all for session**, or **Skip**; **Show terminal** reveals the command's terminal |

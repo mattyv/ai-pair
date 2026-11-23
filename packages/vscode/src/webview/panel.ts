@@ -2353,6 +2353,24 @@ function handle(message: ToPanel): void {
 
 // ---- The reply box ---------------------------------------------------------
 
+// ReplyHistory.tla: this page owns a bounded history of messages it sends.
+const REPLY_HISTORY_LIMIT = 100;
+const replyHistory: string[] = [];
+let replyHistoryIndex = 0;
+let replyHistoryDraft = '';
+let recalledAtStart = false;
+
+/** Records a sent message and returns to the unsent draft position. */
+function rememberReply(text: string): void {
+  if (text === '') return;
+  // specs/ReplyHistory.tla, Send.
+  replyHistory.push(text);
+  if (replyHistory.length > REPLY_HISTORY_LIMIT) replyHistory.shift();
+  replyHistoryIndex = replyHistory.length;
+  replyHistoryDraft = '';
+  recalledAtStart = false;
+}
+
 // specs/Draft.tla, `TypeDraft` and `Clear`: posts `draft` when the box's emptiness changes.
 function syncDraft(): void {
   const empty = ui.reply.value.trim() === '';
@@ -2362,6 +2380,43 @@ function syncDraft(): void {
     draftEmpty = empty;
     vscode.postMessage({ type: 'draft', empty });
   }
+}
+
+/** Recalls a reply only at the edge of the text, leaving caret movement alone. */
+function recallReply(event: KeyboardEvent): void {
+  if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+    recalledAtStart = false;
+    return;
+  }
+  const { selectionStart, selectionEnd, value } = ui.reply;
+  if (selectionStart !== selectionEnd) return;
+  if (event.key === 'ArrowUp' && selectionStart === 0 && replyHistoryIndex > 0) {
+    // specs/ReplyHistory.tla, Up.
+    if (replyHistoryIndex === replyHistory.length) replyHistoryDraft = value;
+    replyHistoryIndex--;
+    // The index is below the length and nonnegative by the Up guard.
+    // oxlint-disable-next-line typescript/no-non-null-assertion
+    ui.reply.value = replyHistory[replyHistoryIndex]!;
+    ui.reply.setSelectionRange(0, 0);
+    recalledAtStart = true;
+  } else if (
+    event.key === 'ArrowDown' &&
+    (selectionEnd === value.length || (recalledAtStart && selectionEnd === 0)) &&
+    replyHistoryIndex < replyHistory.length
+  ) {
+    // specs/ReplyHistory.tla, Down.
+    replyHistoryIndex++;
+    // The non-draft index is below the length by the Down guard.
+    // oxlint-disable-next-line typescript/no-non-null-assertion
+    ui.reply.value = replyHistoryIndex === replyHistory.length ? replyHistoryDraft : replyHistory[replyHistoryIndex]!;
+    ui.reply.setSelectionRange(ui.reply.value.length, ui.reply.value.length);
+    recalledAtStart = false;
+  } else {
+    if (event.key !== 'ArrowUp' || selectionStart !== 0) recalledAtStart = false;
+    return;
+  }
+  event.preventDefault();
+  syncDraft();
 }
 
 function takeDraft(): string {
@@ -2384,6 +2439,7 @@ function takeAttach(): boolean {
 function sendReply(): void {
   const text = takeDraft();
   if (text) {
+    if (!calibrating) rememberReply(text);
     const defer = ui.replyBehavior.value === 'finishAction';
     if (!defer) stopSpeechLocally();
     vscode.postMessage({ type: 'reply', text, attach: takeAttach(), ...(defer ? { defer: true } : {}) });
@@ -2420,7 +2476,14 @@ window.addEventListener('message', (m: MessageEvent) => {
   }
 });
 
+ui.reply.addEventListener('pointerdown', () => {
+  recalledAtStart = false;
+});
+ui.reply.addEventListener('blur', () => {
+  recalledAtStart = false;
+});
 ui.reply.addEventListener('input', () => {
+  recalledAtStart = false;
   const follow = chatOrder === 'oldestFirst' && followsHistory();
   if (chatOrder === 'oldestFirst') followingLatest = follow;
   syncDraft();
@@ -2431,6 +2494,7 @@ ui.reply.addEventListener('input', () => {
   }
 });
 ui.reply.addEventListener('keydown', (e) => {
+  recallReply(e);
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
     sendReply();
@@ -2457,6 +2521,7 @@ ui.interrupt.addEventListener('click', () => {
 ui.turn.addEventListener('click', () => {
   const handingBack = turn === 'programmer';
   const message = handingBack ? takeDraft() : '';
+  if (handingBack) rememberReply(message);
   const attach = handingBack && takeAttach();
   if (message !== '' || attach) stopSpeechLocally();
   vscode.postMessage({ type: 'turn', ...(message ? { message } : {}), ...(attach ? { attach } : {}) });

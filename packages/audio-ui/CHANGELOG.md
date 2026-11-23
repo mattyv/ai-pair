@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.56.0
+
+- Match the AI Pair extension release.
+
 ## 0.55.3
 
 - Version aligned with the message-answer reminder.

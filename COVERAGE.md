@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: css, 2026-11-22.
+Last updated: css, 2026-11-23.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -749,6 +749,8 @@ Last updated: css, 2026-11-22.
 | `specs/RemoteCue.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
 | `specs/ReplayBatching.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ReplayBatching.tla` | TLA+ | - | - | 1 of 1 actions | - | - | - |
+| `specs/ReplyHistory.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/ReplyHistory.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
 | `specs/ReplyReport.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ReplyReport.tla` | TLA+ | - | - | 4 of 5 actions (never: ResumeAfter) | - | - | - |
 | `specs/Resume.cfg` | TLC config | - | - | - | - | - | - |

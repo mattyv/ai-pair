@@ -1290,3 +1290,49 @@ test('Worker displays streamed growth in one stable paragraph before completion'
   await expect(page.locator('[data-ui=worker-history] script')).toHaveCount(0);
   await expect(page.locator('[data-ui=worker-running]')).toBeVisible();
 });
+
+test('reply history recalls, edits and preserves multiline caret navigation', async ({ page }) => {
+  const send = await load(page);
+  await send({ type: 'session', active: true });
+  const reply = page.locator('[data-ui="reply"]');
+  await reply.fill('first');
+  await reply.press('Enter');
+  await send({ type: 'programmer', text: 'first' });
+  await reply.fill('draft');
+  await reply.press('Home');
+  await reply.press('ArrowUp');
+  await expect(reply).toHaveValue('first');
+  expect(
+    await page.evaluate(
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      () => (globalThis as unknown as { messages: Array<{ type: string }> }).messages.filter((m) => m.type === 'reply').length,
+    ),
+  ).toBe(1);
+  await reply.press('ArrowDown');
+  await expect(reply).toHaveValue('draft');
+  await reply.fill('first line\nsecond line');
+  await reply.press('ArrowUp');
+  await expect(reply).toHaveValue('first line\nsecond line');
+  await reply.fill('');
+  await reply.press('ArrowUp');
+  await reply.fill('edited');
+  await reply.press('Enter');
+  await reply.press('ArrowUp');
+  await expect(reply).toHaveValue('edited');
+  expect(
+    await page.evaluate(() =>
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      (globalThis as unknown as { messages: Array<{ type: string; text?: string }> }).messages
+        .filter((m) => m.type === 'reply')
+        .map((m) => m.text),
+    ),
+  ).toEqual(['first', 'edited']);
+  await reply.fill('a long line '.repeat(80));
+  await reply.press('End');
+  const before = await reply.evaluate((el: { selectionStart: number }) => el.selectionStart);
+  await reply.press('ArrowUp');
+  await expect(reply).toHaveValue('a long line '.repeat(80));
+  const after = await reply.evaluate((el: { selectionStart: number }) => el.selectionStart);
+  expect(after).toBeGreaterThan(0);
+  expect(after).toBeLessThan(before);
+});

@@ -1453,3 +1453,14 @@ began after a full provider round trip.
     settings change, is still charged; at most one line each time. The README
     says so, and the OpenRouter subtotal includes such lines.
 -   The `aiPair.speech.lookahead` setting, on by default, turns it off.
+
+## Reply history
+
+The panel page keeps the last 100 text replies sent from that page, including
+messages handed back with the turn. Up at the start recalls them; Down at the
+end returns toward the saved unsent draft, and pressing Down immediately after Up
+also works. Editing and Enter sends normally with the current reply setting.
+History is transient and excludes replayed transcript, attachments, and
+calibration responses. This avoids storing extra conversation data and leaves
+ordinary caret movement, selections, modifiers and composition to the browser.
+History is lost when the page reloads and does not recover earlier sessions.
