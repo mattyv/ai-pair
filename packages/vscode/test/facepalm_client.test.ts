@@ -628,7 +628,7 @@ describe('connection name', () => {
 });
 
 describe('Facepalm settings lifecycle', () => {
-  it('refuses beats while disabled and retires pending connections', async () => {
+  it('DisabledNoDemand: refuses beats while disabled and retires pending connections', async () => {
     approve();
     const client = new FacepalmClient();
     const beat = client.markBeat('question', 100);
@@ -644,7 +644,27 @@ describe('Facepalm settings lifecycle', () => {
     expect(fakes.sockets).toHaveLength(1);
   });
 
-  it('waits for the old socket to close before a successor connects', async () => {
+  it('NoOverlap: disposal waits for the physical socket close', async () => {
+    approve();
+    const client = new FacepalmClient();
+    const beat = client.markBeat('question', 100);
+    await vi.advanceTimersByTimeAsync(0);
+    const socket = lastSocket();
+    socket.autoClose = false;
+    let disposed = false;
+    const closing = client.dispose().then(() => {
+      disposed = true;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(disposed).toBe(false);
+    socket.emit('close');
+    await closing;
+    expect(disposed).toBe(true);
+    await vi.advanceTimersByTimeAsync(3000);
+    await beat;
+  });
+
+  it('NoOverlap: waits for the old socket to close before a successor connects', async () => {
     approve();
     const client = new FacepalmClient();
     const first = client.markBeat('question', 100);

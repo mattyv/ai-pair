@@ -7,13 +7,13 @@ beforeEach(() => {
   fake.problem.mockReset();
 });
 
-const base = { version: 12, connectionEpoch: 'connection-1', sequence: 1 };
+const base = { version: 13, connectionEpoch: 'connection-1', sequence: 1 };
 const owner = { jobId: 'job-1', pageEpoch: 1 };
 
 describe('local audio command frames', () => {
-  it('accepts version 12 and rejects version 11 companion frames', () => {
-    expect(localAudioFrame.safeParse({ ...base, version: 12, type: 'attach' }).success).toBe(true);
-    expect(localAudioFrame.safeParse({ ...base, version: 11, type: 'attach' }).success).toBe(false);
+  it('accepts version 13 and rejects version 12 companion frames', () => {
+    expect(localAudioFrame.safeParse({ ...base, version: 13, type: 'attach' }).success).toBe(true);
+    expect(localAudioFrame.safeParse({ ...base, version: 12, type: 'attach' }).success).toBe(false);
   });
   it('accepts the bounded commands and terminal acknowledgements', () => {
     for (const frame of [
@@ -76,5 +76,45 @@ describe('look-ahead frames (#108)', () => {
     expect(localAudioFrame.safeParse({ ...base, type: 'unprepare' }).success).toBe(false);
     fake.problem.mockReturnValueOnce('empty');
     expect(localAudioFrame.safeParse({ ...base, type: 'prepareNext', pageEpoch: 1, text: '' }).success).toBe(false);
+  });
+});
+
+describe('local Facepalm frames', () => {
+  it('accepts bounded asynchronous beat, retirement, feedback, settings and result frames', () => {
+    const facepalmOwner = { pageEpoch: 1, generation: 1 };
+    for (const frame of [
+      { ...base, ...facepalmOwner, type: 'facepalmBeat', requestId: 1, kind: 'question', windowMs: 1500 },
+      { ...base, ...facepalmOwner, type: 'facepalmRetire' },
+      { ...base, ...facepalmOwner, type: 'facepalmFeel', id: 1, feeling: 'agreement' },
+      { ...base, type: 'facepalmEnabled', enabled: false },
+      { ...base, type: 'facepalmRefresh' },
+      { ...base, type: 'facepalmOpenSettings' },
+      { ...base, ...facepalmOwner, type: 'facepalmResult', requestId: 1, cue: { id: 1, feeling: 'agreement', feelings: ['agreement'] } },
+      { ...base, ...facepalmOwner, type: 'facepalmResult', requestId: 1 },
+      { ...base, type: 'facepalmStatus', snapshot: { enabled: true, status: 'idle', available: true, canOpenSettings: true } },
+    ]) {
+      expect(localAudioFrame.safeParse(frame).success).toBe(true);
+    }
+  });
+
+  it('TypeOK: rejects unbounded, malformed and credential-bearing frames', () => {
+    const beat = { ...base, pageEpoch: 1, generation: 1, type: 'facepalmBeat', requestId: 1, kind: 'question', windowMs: 1500 };
+    for (const frame of [
+      { ...beat, windowMs: 10_001 },
+      { ...beat, requestId: 0 },
+      { ...beat, generation: -1 },
+      { ...beat, token: 'secret' },
+      { ...beat, kind: 'other' },
+      {
+        ...base,
+        type: 'facepalmResult',
+        pageEpoch: 1,
+        generation: 1,
+        requestId: 1,
+        cue: { id: 1, feeling: 'unknown', feelings: Array.from({ length: 100 }, () => 'unknown') },
+      },
+    ]) {
+      expect(localAudioFrame.safeParse(frame).success).toBe(false);
+    }
   });
 });

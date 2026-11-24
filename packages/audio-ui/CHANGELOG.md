@@ -2,7 +2,9 @@
 
 ## 0.57.0
 
-- Match the AI Pair extension release.
+-   Host Facepalm locally for Remote SSH, independently of speech selection; wait
+  for its socket to close before replacing the companion (#148).
+-   Match the AI Pair extension release.
 
 ## 0.56.1
 

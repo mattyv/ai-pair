@@ -10,6 +10,29 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   GPT-6.1 Terra agents write code and tests; GPT-6 Astra agents review them.
     Resolve findings and verify the resulting changes before reporting completion.
 
+## Local Facepalm in Remote SSH (#148, 2026-11-24)
+
+-   Keep the camera service, consent, token and settings launcher on the UI
+    machine. Reuse Local Audio's existing attachment for requests and interpreted
+    feedback, independently of speech selection. Remote workspaces use a proxy;
+    direct client fallback is limited to local legacy placement.
+-   Preserve the existing subscription client and upstream settings history.
+    Add awaitable disposal because replacement across client instances otherwise
+    admits a new socket before the previous socket closes. Await speech and
+    Facepalm cleanup together, even when one fails.
+-   Separate request identity, live card capabilities and retirement identity.
+    A later request does not revoke unrelated cards. Reloaded history is read-only
+    because a new client can reuse a numeric card ID. Isolate status observers so
+    their exceptions cannot tear down the audio connection.
+-   Acknowledge commands before asynchronous Facepalm results so camera reads do
+    not block audio heartbeats. Protocol version 13 requires matching companion
+    and workspace extensions. Passive detection never starts camera use.
+-   Linux tests exercise the installed companion and real Unix sockets in one
+    headless VS Code instance. This does not verify two physical SSH hosts.
+    Native coverage remains a required verification gate; composed or unit
+    coverage does not replace it. Models are bounded, separately checked
+    abstractions rather than a formal composition of every lifecycle model.
+
 ## Facepalm settings (#146)
 
 -   Preserve the existing enabled default. The AI Pair toggle controls only its

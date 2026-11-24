@@ -128,10 +128,11 @@ describe('companion session integration', () => {
     if (!isRouting(routing)) throw new Error('No routing');
     routing.closed(1);
     routing.forward({ type: 'ready' }, 2);
-    expect(fake.execute).not.toHaveBeenCalled();
+    expect(fake.execute.mock.calls.map((call) => call[1])).toMatchObject([{ type: 'facepalmStatus' }]);
     retirement.resolve();
     for (let index = 0; index < 6; index++) await Promise.resolve();
     expect(fake.execute.mock.calls.map((call) => call[1])).toMatchObject([
+      { type: 'facepalmStatus' },
       { type: 'panelAction', pageEpoch: 1, action: { type: 'pageClosed' } },
       { type: 'panelAction', pageEpoch: 2, action: { type: 'ready' } },
     ]);

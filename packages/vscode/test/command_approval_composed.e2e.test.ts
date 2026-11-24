@@ -55,6 +55,7 @@ it('Revoke: a current companion page clears grants, stale pages cannot revoke, a
       panel.receiveRemote(page, action);
     },
     terminal: () => {},
+    facepalm: () => {},
     pageChanged: () => {},
   });
   let sequence = 0;

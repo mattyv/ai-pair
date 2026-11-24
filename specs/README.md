@@ -4695,3 +4695,51 @@ permits the bounded model to remain idle.
 | `CurrentConnection` | `facepalm_client.test.ts`: waits for the old socket to close before a successor connects. Mutating retirement to retain its active phase violates it. |
 | `CardCurrent` | `facepalm_client.test.ts`: invalidates a card on spontaneous close and never reconnects for its feeling. Mutating disable to retain its card violates it. |
 | `Progress` | `facepalm_client.test.ts`: sends hello with the approved token, then the beat. Mutating answer to leave delivery false violates the temporal property. |
+
+## Local Facepalm bridge
+
+`LocalFacepalm` abstracts and complements `FacepalmSettings`: `generation`
+abstracts the attachment, page, session and retirement identity, and `serial`
+identifies a beat within that owner. The bounds permit one generation
+replacement and two beat serials in total. A card remains valid across a
+second beat in the same generation and is consumed once. `physical` records
+the socket owner until `Close`; a successor admitted while retiring waits for
+that close. `Accept` models immediate command admission;
+`Answer` and `Deliver` model the later service result. `Timeout` models both a
+service timeout and a bridge deadline after an answer: each retires the owner,
+clears cards, and leaves an already received reply stale until `Drop`. A new
+request can queue before that stale reply is dropped. The model omits transport
+payloads and actual operating-system socket closure; integration tests must
+establish those assumptions. `ServiceSpec` assumes a stable owner and a
+responsive service, with weak fairness of opening, answering and delivery. The
+main spec additionally allows timeout and retirement and assumes weak fairness
+of their settlement actions.
+
+| Config | Bounds | Result | Distinct states |
+|---|---|---|---|
+| `LocalFacepalm.cfg` | Two generations and two beat serials | holds | 104 |
+| `LocalFacepalm_Service.cfg` | The same, stable owner and responsive service | holds | 14 |
+
+| Property | Mutation witness | Named implementation test |
+|---|---|---|
+| `TypeOK` | Start with serial 3 | `TypeOK: rejects unbounded, malformed and credential-bearing frames` |
+| `CardsCurrent` | Permit stale reply delivery | `CardsCurrent: rejects old replies after retirement even with a new beat`; `CardsCurrent: drops a late answer after retirement and allows the successor` |
+| `NoOverlap` | Start replacement before close | `NoOverlap: waits for the old socket to close before a successor connects` |
+| `OneFeel` | Keep a consumed card | `nativeClientPaths` verifies repeated feedback reaches the real socket once |
+| `DisabledNoDemand` | Keep pending demand on disable | `DisabledNoDemand: refuses beats while disabled and retires pending connections` |
+| `Settlement` | Timeout leaves result waiting | `Settlement: timeout retires the generation and resolves the request` |
+| `Success` | Drop every successful result as timeout | `Success: moves a beat and feedback through the selected channel and retires on page close` |
+
+## Facepalm replay
+
+`FacepalmReplay` models one historical card, one fresh card with a potentially
+reused numeric ID, and up to two historical clicks. A replayed card cannot send
+feedback. Weak fairness of `ClickFresh` assumes a user eventually chooses the
+fresh card when demonstrating progress; it is not an assumption about real
+user behavior. The bounded config has 12 distinct states and passes.
+
+| Property | Mutation witness | Named implementation test |
+|---|---|---|
+| `TypeOK` | Start with three clicks | `HistoryNeverSends: replayed card stays inactive when a new client reuses its ID` |
+| `HistoryNeverSends` | Send feedback from `ClickHistory` | `HistoryNeverSends: replayed card stays inactive when a new client reuses its ID` |
+| `FreshProgress` | Disable `ClickFresh` | `HistoryNeverSends: replayed card stays inactive when a new client reuses its ID` |

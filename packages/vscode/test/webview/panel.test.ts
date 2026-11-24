@@ -454,6 +454,23 @@ describe('the history (specs/Panel.tla, specs/PanelScroll.tla)', () => {
     expect(posted().at(-1)).toEqual({ type: 'openChange', file: 'b.ts' });
   });
 
+  it('HistoryNeverSends: replayed card stays inactive when a new client reuses its ID', () => {
+    start();
+    const cue = { type: 'facepalmCue' as const, id: 1, feeling: 'agreement' as const, feelings: ['agreement' as const] };
+    send({ type: 'replay', events: [cue] });
+    const historical = element('history').querySelector('.facepalm');
+    ok(historical);
+    expect(historical.querySelector('.facepalm-feeling')).toBeNull();
+    send(cue);
+    const cards = [...element('history').querySelectorAll('.facepalm')];
+    const live = cards.find((card) => card.querySelector('.facepalm-feeling') !== null);
+    ok(live);
+    const button = live.querySelector('.facepalm-feeling');
+    ok(button);
+    click(button);
+    expect(posted().filter((message) => message.type === 'facepalmFeel')).toEqual([{ type: 'facepalmFeel', id: 1, feeling: 'agreement' }]);
+  });
+
   it('shows a Facepalm cue with its read pre-highlighted, and sends feel with no ID or technical text on a click (#83)', () => {
     start();
     send({ type: 'facepalmCue', id: 7, feeling: 'agreement', feelings: ['agreement', 'disagreement', 'unknown'] });

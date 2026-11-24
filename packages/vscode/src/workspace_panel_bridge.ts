@@ -6,6 +6,7 @@ export interface WorkspacePanelBridgeOptions {
   action: (action: LocalPanelAction) => void;
   terminal: (frame: Extract<LocalAudioFrame, { type: 'terminal' }>) => void;
   pageChanged: () => void;
+  facepalm: (frame: LocalAudioFrame) => void;
 }
 
 /** Rejects stale companion actions and acknowledgements before workspace dispatch. */
@@ -30,11 +31,15 @@ export class WorkspacePanelBridge {
     if (
       frame.connectionEpoch !== this.options.epoch ||
       frame.sequence <= this.lastSequence ||
-      (frame.type !== 'terminal' && frame.type !== 'panelAction')
+      (frame.type !== 'terminal' && frame.type !== 'panelAction' && frame.type !== 'facepalmResult' && frame.type !== 'facepalmStatus')
     ) {
       return false;
     }
     this.lastSequence = frame.sequence;
+    if (frame.type === 'facepalmResult' || frame.type === 'facepalmStatus') {
+      this.options.facepalm(frame);
+      return true;
+    }
     // specs/LocalAudioOwnership.tla, Retired: the exact old job may retire after a page change.
     if (frame.type === 'terminal') {
       this.options.terminal(frame);

@@ -793,6 +793,25 @@ active profile.
 
 ## Facepalm subscription
 
+With the UI companion attached, the workspace controller uses
+`RemoteFacepalm` (`packages/vscode/src/remote_facepalm.ts`).
+`CompanionFacepalm` (`packages/audio-ui/src/companion_facepalm.ts`) owns the
+local client and settings launcher. Strict protocol version 13 frames reuse
+the existing command channel, attachment epoch, sequence and heartbeat lease.
+Only requests, status and interpreted feedback cross the attachment; socket
+paths, approval tokens and camera frames stay on the UI machine. This route
+is independent of the speech provider. A missing remote companion uses text
+mode; the direct client fallback is restricted to local legacy placement.
+
+Beat commands acknowledge receipt before the asynchronous result. Request,
+page and retirement identities reject stale results without invalidating
+other live cards. Replacement waits for both speech teardown and physical
+Facepalm socket close. Status observer errors cannot close the shared audio
+channel. Saved history cards are read-only because their old capabilities
+cannot safely be reconstructed after a reload. The LocalFacepalm and
+FacepalmReplay models cover these bounded lifecycle and replay properties;
+they do not constitute a formal composition of all subscription models.
+
 AI Pair's extension host can subscribe to
 [Facepalm](https://github.com/mattyv/facepalm) (#83, item 14 of facepalm#61),
 a standalone local service outside this repository that owns a camera and
@@ -833,8 +852,9 @@ feeling Facepalm names, its own read already picked; one click sends `feel`
 through the controller, and the panel never shows the reading's ID. The
 controller's one session-teardown point, `close()`, retires the subscription
 whenever a session ends, by the programmer, by the agent's own end, or by a
-session replacement, so the camera does not stay on past any of them
-(#138); the extension also retires it on deactivation. This subscription
+session replacement, releasing AI Pair's camera demand (#138); another
+client or preview may still keep capture active. The extension also retires
+it on deactivation. This subscription
 opens no camera, reads no frame, and runs no model of its own: perception
 stays entirely in Facepalm.
 

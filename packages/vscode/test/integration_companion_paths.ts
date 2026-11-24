@@ -6,6 +6,7 @@ import { localSpeechReport } from '@ai-pair/protocol';
 import type { Api } from '../src/extension';
 import { prepareRecovery, verifyRecovery } from './integration_recovery_restart';
 import { unavailableSpeechReminder } from './integration_speech_reminder';
+import { facepalmPaths } from './integration_facepalm_paths';
 
 async function until(condition: () => boolean, description: string): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt++) {
@@ -46,6 +47,9 @@ export async function run(): Promise<void> {
     return;
   }
 
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  assert.ok(root !== undefined, 'the companion integration workspace is missing');
+  await facepalmPaths(api, root);
   await api.controller.start('companion integration');
   if (process.env.AI_PAIR_COMPANION_RESTART === 'prepare') await prepareRecovery(api);
   api.panelMessage({ type: 'reply', text: 'retained companion reply', attach: false });

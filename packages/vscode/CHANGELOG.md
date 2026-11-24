@@ -2,7 +2,9 @@
 
 ## 0.57.0
 
-- Add Facepalm feedback controls and passive connection status in Settings (#146).
+-   Use local Facepalm through the UI companion in Remote SSH, with local settings
+  and read-only restored feedback cards (#148).
+-   Add Facepalm feedback controls and passive connection status in Settings (#146).
 
 ## 0.56.1
 

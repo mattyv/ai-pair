@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: css, 2026-11-23.
+Last updated: css, 2026-11-24.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -67,6 +67,7 @@ Last updated: css, 2026-11-23.
 | `packages/audio-ui/scripts/speech_runtime.mts` | TypeScript | - | - | - | - | - | - |
 | `packages/audio-ui/scripts/speech_runtime.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/src/attachment_gate.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.1% B 75.0% F 100.0% | - | - | - | - |
+| `packages/audio-ui/src/companion_facepalm.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/audio-ui/src/companion_narration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 73.1% B 29.4% F 81.8% | - | - | - | - |
 | `packages/audio-ui/src/companion_output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 46.4% B 63.6% F 53.8% | - | - | - | - |
 | `packages/audio-ui/src/companion_session.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 82.2% B 87.5% F 54.2% | - | - | - | - |
@@ -76,8 +77,10 @@ Last updated: css, 2026-11-23.
 | `packages/audio-ui/test/attachment_gate.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/bridge.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/build_identity.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/companion_facepalm.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/audio-ui/test/companion_narration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/companion_output.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/companion_retirement.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/audio-ui/test/companion_session.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/companion_session.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/extension.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -226,6 +229,7 @@ Last updated: css, 2026-11-23.
 | `packages/vscode/src/panel_update_sender.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 91.5% B 82.6% F 100.0% | - | - | - | - |
 | `packages/vscode/src/passage.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/python_diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.3% B 62.5% F 100.0% | - | - | - | - |
+| `packages/vscode/src/remote_facepalm.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/remote_narration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 78.6% B 39.4% F 86.7% | - | - | - | - |
 | `packages/vscode/src/session_speech_cost.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 66.3% B 90.9% F 66.7% | - | - | - | - |
 | `packages/vscode/src/setting_store.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -340,6 +344,7 @@ Last updated: css, 2026-11-23.
 | `packages/vscode/test/extension.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/facepalm_client.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/facepalm_integration.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/facepalm_replay_composed.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/facepalm_settings_launcher.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/fixtures/packaged_mcp_check.mts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/fixtures/tempo_schema_fake.ts` | TypeScript | test | test | test | - | - | test |
@@ -393,6 +398,7 @@ Last updated: css, 2026-11-23.
 | `packages/vscode/test/integration_worker_cli.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/integration_workspace_incompatible.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/launcher.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
+| `packages/vscode/test/local_facepalm_composed.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/navigator_editor.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/old_extension.test.ts` | TypeScript | test | - | test | - | - | test |
 | `packages/vscode/test/output.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -408,6 +414,7 @@ Last updated: css, 2026-11-23.
 | `packages/vscode/test/passage.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/python_diagnostics.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/python_diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/remote_facepalm.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/remote_narration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/session_speech_cost.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/setting_store.test.ts` | TypeScript | test | - | - | - | - | test |
@@ -633,6 +640,8 @@ Last updated: css, 2026-11-23.
 | `specs/EditEvents.tla` | TLA+ | - | - | 4 of 4 actions | - | - | - |
 | `specs/EditorAdapter.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/EditorAdapter.tla` | TLA+ | - | - | 14 of 14 actions | - | - | - |
+| `specs/FacepalmReplay.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/FacepalmReplay.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/FacepalmSettings.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/FacepalmSettings.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/FacepalmSubscription.cfg` | TLC config | - | - | - | - | - | - |
@@ -665,6 +674,9 @@ Last updated: css, 2026-11-23.
 | `specs/LocalAudioAdmission.tla` | TLA+ | - | - | 13 of 13 actions | - | - | - |
 | `specs/LocalAudioOwnership.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/LocalAudioOwnership.tla` | TLA+ | - | - | 14 of 14 actions | - | - | - |
+| `specs/LocalFacepalm.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/LocalFacepalm.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/LocalFacepalm_Service.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/LocalPanelReplay.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/LocalPanelReplay.tla` | TLA+ | - | - | 7 of 7 actions | - | - | - |
 | `specs/LocalPanelReplay_Delivery.cfg` | TLC config | - | - | - | - | - | - |

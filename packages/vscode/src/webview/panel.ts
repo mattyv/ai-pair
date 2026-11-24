@@ -568,6 +568,13 @@ function addFacepalmCue(id: number, feeling: FacepalmCue['feeling'], feelings: A
   const el = entry('facepalm');
   const prompt = document.createElement('p');
   prompt.className = 'facepalm-prompt';
+  // specs/FacepalmReplay.tla, Replay: historical IDs are never feedback capabilities.
+  if (replaying) {
+    prompt.textContent = 'This feedback is no longer available.';
+    el.append(prompt);
+    add(el);
+    return;
+  }
   prompt.textContent = 'How were you feeling just then?';
   const buttons = document.createElement('div');
   buttons.className = 'facepalm-buttons';

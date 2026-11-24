@@ -278,17 +278,24 @@ picked; one click tells Facepalm how it actually went, which tunes its later
 reads, and the panel replies "Thanks — Facepalm will learn from this." No
 technical detail, such as the reading's ID, appears anywhere in the panel.
 
-This works only when Facepalm's socket is reachable from the extension host.
-An SSH host cannot use a socket on the local machine without a separate
-connection, though a Facepalm service on the SSH host can be used. AI Pair
-does not launch a settings GUI on a remote host.
+For Remote SSH, install AI Pair 0.57.0 on the remote host and AI Pair Local
+Audio 0.57.0 on your local machine. Install Facepalm only on the local machine,
+and run the approval command there. Local Audio carries Facepalm feedback and
+settings over Pair's existing companion connection, including when speech is
+disabled or uses a cloud provider. Camera frames and the approval token stay
+local. Facepalm Settings opens on your local desktop.
 
-The subscription closes, so the camera is not read, once a pairing session
-ends, the agent ends it, or it is replaced by another — not only when the VS
-Code window itself closes. Each VS Code window connects to Facepalm under
+The two Pair extensions must use matching versions. No socket forwarding or
+Facepalm installation on the SSH host is needed. In a local VS Code window,
+Pair can also use its existing direct connection when the companion is absent.
+
+AI Pair releases its camera demand when a pairing session ends, the agent ends
+it, or another session replaces it. Another client, window or preview can
+keep Facepalm capture active. Each VS Code window connects to Facepalm under
 its own name, so opening more than one window still gets each its own cues.
 
-A card left unanswered when the session ends is closed, not thanked: it would
+Cards restored from saved history are read-only. A card left unanswered when
+the session ends is closed, not thanked: it would
 otherwise reconnect Facepalm's camera for a feeling it refuses, once the
 session that could have carried it to Facepalm is already gone.
 

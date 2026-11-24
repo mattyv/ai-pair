@@ -10,6 +10,7 @@ import {
   type PanelEvent,
   type SavedSession,
   type NarrationPort,
+  type FacepalmPort,
 } from '@ai-pair/core';
 import {
   discoveryDir,
@@ -25,6 +26,7 @@ import { playDemo } from './demo';
 import { VsCodeEditor } from './editor';
 import { FacepalmClient } from './facepalm_client';
 import { openFacepalmSettings } from './facepalm_settings_launcher';
+import { RemoteFacepalm } from './remote_facepalm';
 import { Diagnostics } from './diagnostics';
 import { collectDiagnostics } from './diagnostics_collector';
 import { SpeechService, type SpeechAudioEvent, type SpeechOutput } from './speech_service';
@@ -747,8 +749,19 @@ export function activate(context: vscode.ExtensionContext): Api {
     }
   }
 
-  const localFacepalm = new FacepalmClient();
-  facepalmClient = localFacepalm;
+  let selectedFacepalm: FacepalmClient | RemoteFacepalm | undefined;
+  let facepalmEnabled = context.globalState.get<unknown>('facepalmEnabled') !== false;
+  const facepalm: FacepalmPort = {
+    markBeat: (kind, windowMs) => selectedFacepalm?.markBeat(kind, windowMs) ?? Promise.resolve(undefined),
+    feel: (id, feeling) => selectedFacepalm?.feel(id, feeling) ?? Promise.resolve(),
+    retire: () => {
+      selectedFacepalm?.retire();
+    },
+  };
+  function refreshFacepalm(): void {
+    if (selectedFacepalm instanceof FacepalmClient) void selectedFacepalm.refresh(false, false);
+    else selectedFacepalm?.refresh();
+  }
   let facepalmSave: PromiseLike<void> = Promise.resolve();
   panel = new NarrationPanel(
     (file) => editor.resolvePath(file),
@@ -763,21 +776,26 @@ export function activate(context: vscode.ExtensionContext): Api {
     {
       controller: () => controller,
       facepalm: {
-        snapshot: () => localFacepalm.snapshot(),
+        snapshot: () =>
+          selectedFacepalm?.snapshot() ?? { enabled: facepalmEnabled, status: 'unchecked', available: true, canOpenSettings: false },
         enabled: (value) => {
-          localFacepalm.setEnabled(value);
+          facepalmEnabled = value;
+          selectedFacepalm?.setEnabled(value);
           facepalmSave = Promise.resolve(facepalmSave)
             .then(() => context.globalState.update('facepalmEnabled', value))
             .catch(() => {});
-          if (value) void localFacepalm.refresh(vscode.env.remoteName === 'ssh-remote', vscode.env.remoteName !== undefined);
+          if (value) refreshFacepalm();
         },
         refresh: () => {
-          void localFacepalm.refresh(vscode.env.remoteName === 'ssh-remote', vscode.env.remoteName !== undefined);
+          refreshFacepalm();
         },
         openSettings: () => {
-          void openFacepalmSettings(process.platform, vscode.env.remoteName !== undefined).then((opened) => {
-            if (!opened) void vscode.window.showWarningMessage('Could not open Facepalm settings.');
-          });
+          if (selectedFacepalm instanceof RemoteFacepalm) selectedFacepalm.openSettings();
+          else if (selectedFacepalm !== undefined) {
+            void openFacepalmSettings(process.platform, false).then((opened) => {
+              if (!opened) void vscode.window.showWarningMessage('Could not open Facepalm settings.');
+            });
+          }
         },
       },
       workerVisibility,
@@ -1127,14 +1145,9 @@ export function activate(context: vscode.ExtensionContext): Api {
       selectedNarration?.cancel();
     },
   };
-  localFacepalm.onStatus = (snapshot) => {
-    panel.showFacepalmStatus(snapshot);
-  };
-  localFacepalm.setEnabled(context.globalState.get<unknown>('facepalmEnabled') !== false);
-  void localFacepalm.refresh(vscode.env.remoteName === 'ssh-remote', vscode.env.remoteName !== undefined);
   controller = new Controller(editor, panel, undefined, narration, {
     workerEnabled: () => workerEnabledSetting.get(),
-    facepalm: localFacepalm,
+    facepalm,
   });
   controller.onDiagnostic = record;
   controller.trace = (line) => {
@@ -1517,6 +1530,12 @@ export function activate(context: vscode.ExtensionContext): Api {
         },
       });
       selectedNarration = workspaceSession.narration;
+      selectedFacepalm = workspaceSession.facepalm;
+      selectedFacepalm.onStatus = (snapshot) => {
+        panel.showFacepalmStatus(snapshot);
+      };
+      selectedFacepalm.setEnabled(facepalmEnabled);
+      selectedFacepalm.refresh();
       context.subscriptions.push(workspaceSession);
     },
     commitFailed: () => {
@@ -1563,6 +1582,14 @@ export function activate(context: vscode.ExtensionContext): Api {
       panel.showSpeechTransport(chosen === 'legacy');
       panel.showLocalAudio(localAudio);
       if (chosen === 'legacy') {
+        const localFacepalm = new FacepalmClient();
+        facepalmClient = localFacepalm;
+        selectedFacepalm = localFacepalm;
+        localFacepalm.onStatus = (snapshot) => {
+          panel.showFacepalmStatus(snapshot);
+        };
+        localFacepalm.setEnabled(facepalmEnabled);
+        void localFacepalm.refresh(false, false);
         selectedNarration = speech;
         speech.prepare();
         publishReadiness();

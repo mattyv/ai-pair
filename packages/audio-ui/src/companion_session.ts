@@ -16,6 +16,9 @@ import { shortcutPlatform } from '../../vscode/src/shortcut_labels';
 import { Diagnostics } from '../../vscode/src/diagnostics';
 import { createGpuProofRunner } from '../../vscode/src/speech_gpu_proof_runner';
 import { CompanionNarration } from './companion_narration';
+import { CompanionFacepalm } from './companion_facepalm';
+import { FacepalmClient } from '../../vscode/src/facepalm_client';
+import { openFacepalmSettings } from '../../vscode/src/facepalm_settings_launcher';
 import { LocalConnection } from './local_connection';
 import { createSpeechHost, type LocalSpeechObservation, type SpeechHost } from './speech_host';
 
@@ -70,8 +73,11 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
   let connection: LocalConnection;
   let narration: CompanionNarration;
   let pageClose: Promise<boolean> = Promise.resolve(true);
+  let readyPage: number | undefined;
   let host: SpeechHost;
   let channel: CommandChannel<LocalAudioFrame>;
+  const localFacepalm = new FacepalmClient();
+  let facepalm: CompanionFacepalm;
   const assembler = new PanelChunkAssembler();
   const diagnostics = new Diagnostics({ version: AI_PAIR_VERSION, build: AI_PAIR_BUILD_ID });
   function nextSequence(): number {
@@ -80,16 +86,55 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
   /** Retires the session once; a lost connection is reported with the reason this side gave up (#115). */
   function shutdown(lost?: string): Promise<void> {
     if (shutdownPromise !== undefined) return shutdownPromise;
+    // Install the barrier before observers or disposal can synchronously reenter shutdown.
+    const completion = Promise.withResolvers<void>();
+    shutdownPromise = completion.promise;
     closed = true;
-    panel?.showSpeechTransport(false);
-    assembler.setPage(undefined);
-    narration.dispose();
-    shutdownPromise = Promise.resolve(host.dispose());
-    connection.dispose();
-    channel.dispose();
-    if (lost !== undefined) {
-      void vscode.window.showWarningMessage(`AI Pair Local Audio lost its workspace connection: ${lost}. Reload the window to reconnect.`);
+    const failures: unknown[] = [];
+    function attempt(effect: () => void): void {
+      try {
+        effect();
+      } catch (error) {
+        failures.push(error);
+      }
     }
+    let facepalmStopped = Promise.resolve();
+    let speechStopped = Promise.resolve();
+    attempt(() => {
+      panel?.showSpeechTransport(false);
+    });
+    attempt(() => {
+      assembler.setPage(undefined);
+    });
+    attempt(() => {
+      narration.dispose();
+    });
+    attempt(() => {
+      facepalmStopped = facepalm.dispose();
+    });
+    attempt(() => {
+      speechStopped = Promise.resolve(host.dispose());
+    });
+    attempt(() => {
+      connection.dispose();
+    });
+    attempt(() => {
+      channel.dispose();
+    });
+    if (lost !== undefined) {
+      attempt(() => {
+        void vscode.window.showWarningMessage(
+          `AI Pair Local Audio lost its workspace connection: ${lost}. Reload the window to reconnect.`,
+        );
+      });
+    }
+    void Promise.allSettled([facepalmStopped, speechStopped]).then((results) => {
+      for (const result of results) {
+        if (result.status === 'rejected') failures.push(result.reason);
+      }
+      if (failures.length > 0) completion.reject(failures[0]);
+      else completion.resolve();
+    });
     return shutdownPromise;
   }
   channel = new CommandChannel<LocalAudioFrame>({
@@ -114,6 +159,23 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
       diagnostics.record(event);
     },
   });
+  facepalm = new CompanionFacepalm({
+    client: localFacepalm,
+    epoch,
+    page: () => panel?.speechReadyPageId(),
+    nextSequence,
+    send: (frame) => {
+      void channel.send(frame);
+    },
+    openSettings: () => {
+      void openFacepalmSettings(process.platform, false).then((opened) => {
+        if (!opened) void vscode.window.showWarningMessage('Could not open Facepalm settings.');
+      });
+    },
+  });
+  localFacepalm.onStatus = (snapshot) => {
+    void channel.send({ version: LOCAL_AUDIO_VERSION, connectionEpoch: epoch, sequence: nextSequence(), type: 'facepalmStatus', snapshot });
+  };
   narration = new CompanionNarration({
     epoch,
     speech: host.speech,
@@ -140,6 +202,8 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
           data: frame.data,
         });
         if (update !== undefined) panel?.showRemoteUpdate(update);
+      } else if (frame.type.startsWith('facepalm')) {
+        facepalm.accept(frame);
       } else if (frame.type !== 'heartbeat') {
         narration.receive(frame);
       }
@@ -184,6 +248,8 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
   panel.useCompanion({
     forward: (action, page) => {
       if (action.type === 'ready') {
+        if (readyPage !== undefined && readyPage !== page) facepalm.retire();
+        readyPage = page;
         assembler.setPage(page);
         void pageClose.then((retired) => {
           if (retired && !closed) sendAction(action, page);
@@ -219,6 +285,8 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
       }
     },
     closed: (page) => {
+      if (readyPage === page) readyPage = undefined;
+      facepalm.retire();
       assembler.setPage(undefined);
       pageClose = narration
         .interruptThen(() => {

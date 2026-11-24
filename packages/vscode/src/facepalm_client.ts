@@ -377,6 +377,13 @@ export class FacepalmClient implements FacepalmPort {
     if (this.enabled) this.publish('unchecked');
   }
 
+  /** Retires this client and waits for its last physical socket to close. */
+  dispose(): Promise<void> {
+    // specs/LocalFacepalm.tla, Close: replacement ownership waits for actual socket closure.
+    this.retire();
+    return this.socketClosed;
+  }
+
   async markBeat(kind: FacepalmBeatKind, windowMs: number): Promise<FacepalmCue | undefined> {
     // specs/FacepalmSubscription.tla, `Enable`: a new beat always may reconnect a retired
     // subscription (#140), unlike `feel()` below.
