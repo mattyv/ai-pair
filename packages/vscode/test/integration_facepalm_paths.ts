@@ -60,6 +60,7 @@ class FakeFacepalmDaemon {
   private answer(line: string): string {
     const words = line.split(' ');
     if (words[0] === 'hello') return words[2] === this.token ? '{"ok":true}' : '{"error":"a stranger"}';
+    if (words[0] === 'feel') return '{"ok":true}';
     if (words[0] === 'beat') {
       this.beats += 1;
       // gaze (facepalm#142) rides along on every interpretation now; ai-pair#143 is this reaching
@@ -111,7 +112,7 @@ export async function facepalmPaths(api: Api, root: string): Promise<void> {
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 300);
     });
-    assert.deepEqual(daemon.lines, [], 'refreshing settings joined Facepalm');
+    assert.equal(daemon.lines.length, 0, 'refreshing settings joined Facepalm');
     assert.equal(daemon.openConnections, 0);
     await client.connect(new StdioClientTransport({ command: api.launcher, cwd: root, env }));
     async function call(name: string, args: Record<string, unknown>): Promise<string> {
@@ -145,6 +146,15 @@ export async function facepalmPaths(api: Api, root: string): Promise<void> {
       `an older Facepalm's reply, with no gaze, should render with no parenthetical: ${second}`,
     );
     assert.doesNotMatch(second, /looking away|glancing away/);
+    const cue = api.history().findLast((event) => event.type === 'facepalmCue');
+    assert.ok(cue !== undefined && cue.type === 'facepalmCue', 'the panel did not receive the feedback card');
+    api.panelMessage({ type: 'facepalmFeel', id: cue.id, feeling: 'engagement' });
+    for (let attempt = 0; !daemon.lines.includes('feel 2 engagement') && attempt < 100; attempt++) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 50);
+      });
+    }
+    assert.ok(daemon.lines.includes('feel 2 engagement'), 'the selected feeling did not reach Facepalm');
     // The daemon's third beat carries the other gaze facepalmGazeNote words: `averted`.
     await call('step', { actions: [{ say: 'Shall I continue once more?' }] });
     const third = await call('step', { actions: [] });
