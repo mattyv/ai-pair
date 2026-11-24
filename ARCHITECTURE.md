@@ -804,7 +804,12 @@ this extension's approved name, `ai-pair` (`facepalm-daemon approve
 ai-pair`). `FacepalmClient` (`packages/vscode/src/facepalm_client.ts`)
 implements it: it connects lazily on first use, serializes every request on
 the one connection it keeps open, and reopens a fresh connection on any
-failure or close (specs/FacepalmSubscription.tla). Each `FacepalmClient`
+failure or close (specs/FacepalmSubscription.tla). Its settings state and
+connection generation are owned by the client; disabling invalidates pending
+work and cards, destroys the socket, and waits for close before a successor
+(specs/FacepalmSettings.tla). Passive file inspection reports evidence without
+connecting. The explicit launcher invokes the installed Facepalm settings UI;
+it never starts the daemon or grants consent. Each `FacepalmClient`
 instance, one per VS Code window, shows the approved token under its own
 per-instance connection name (`ai-pair-<uuid>`), so a second window is never
 refused as a name already connected; Facepalm matches the token

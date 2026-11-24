@@ -247,8 +247,11 @@ cannot run, it reports the retained paths. Diagnostics do not run a paid preview
 AI Pair can read the programmer's reaction to a question or a proposed change
 from [Facepalm](https://github.com/mattyv/facepalm), a standalone local service
 that reads a camera on this machine and never sends frames or images anywhere.
-Nothing changes when Facepalm is not installed or has not approved this
-extension: there is no error, no indicator, and no setting to find.
+AI Pair Settings offers a feedback toggle, status, and a button to open
+Facepalm Settings when a supported installation is found. The toggle is on by
+default, preserving existing behavior. AI Pair hides the section only when it
+can establish that the supported installation paths and local service are
+absent.
 
 To turn it on, install and run Facepalm, then approve this extension under its
 own name:
@@ -256,6 +259,12 @@ own name:
 ```shell
 facepalm-daemon approve ai-pair
 ```
+
+Turn Facepalm on and approve AI Pair first. The AI Pair toggle does not start
+Facepalm or grant approval. Opening Settings checks local files without
+connecting or activating a camera; "Available (not connected)" is file
+evidence, while "Connected" follows a successful handshake. Choose the camera,
+calibration, and sensitivity in Facepalm itself.
 
 With that done, right after the agent asks a question or proposes a change in
 a pairing session, Facepalm reads a few seconds of the programmer's reaction
@@ -269,9 +278,10 @@ picked; one click tells Facepalm how it actually went, which tunes its later
 reads, and the panel replies "Thanks — Facepalm will learn from this." No
 technical detail, such as the reading's ID, appears anywhere in the panel.
 
-This only works when Facepalm's socket is reachable from the extension host:
-over a remote connection (SSH), where the extension host and Facepalm's
-camera are on different machines, Facepalm stays unavailable.
+This works only when Facepalm's socket is reachable from the extension host.
+An SSH host cannot use a socket on the local machine without a separate
+connection, though a Facepalm service on the SSH host can be used. AI Pair
+does not launch a settings GUI on a remote host.
 
 The subscription closes, so the camera is not read, once a pairing session
 ends, the agent ends it, or it is replaced by another — not only when the VS

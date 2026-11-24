@@ -214,6 +214,7 @@ Last updated: css, 2026-11-23.
 | `packages/vscode/src/editor.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.1% B 88.7% F 100.0% | - | - | - | - |
 | `packages/vscode/src/extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.3% B 92.3% F 94.5% | - | - | - | - |
 | `packages/vscode/src/facepalm_client.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/facepalm_settings_launcher.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/old_extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/outside.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.5% F 100.0% | - | - | - | - |
@@ -339,6 +340,7 @@ Last updated: css, 2026-11-23.
 | `packages/vscode/test/extension.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/facepalm_client.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/facepalm_integration.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/facepalm_settings_launcher.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/fixtures/packaged_mcp_check.mts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/fixtures/tempo_schema_fake.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration.ts` | TypeScript | test | test | test | test | test | test |
@@ -631,6 +633,8 @@ Last updated: css, 2026-11-23.
 | `specs/EditEvents.tla` | TLA+ | - | - | 4 of 4 actions | - | - | - |
 | `specs/EditorAdapter.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/EditorAdapter.tla` | TLA+ | - | - | 14 of 14 actions | - | - | - |
+| `specs/FacepalmSettings.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/FacepalmSettings.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/FacepalmSubscription.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/FacepalmSubscription.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/FileText.cfg` | TLC config | - | - | - | - | - | - |

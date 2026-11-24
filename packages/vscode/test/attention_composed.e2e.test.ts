@@ -14,6 +14,7 @@ it('delivers a draft reply at the granted floor before releasing queued editing'
   const { controller, editor, panel: events } = setup({ 'a.ts': '' });
   await controller.start();
   const wiring = mock<PanelWiring>();
+  wiring.facepalm = undefined;
   wiring.controller.mockReturnValue(controller);
   wiring.calibration.mockReturnValue(mock());
   wiring.speech = mock();
@@ -59,6 +60,7 @@ it.each([
     trace.push(line);
   };
   const wiring = mock<PanelWiring>();
+  wiring.facepalm = undefined;
   wiring.controller.mockReturnValue(controller);
   wiring.calibration.mockReturnValue(mock());
   wiring.speech = mock();

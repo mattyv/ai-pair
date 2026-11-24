@@ -35283,6 +35283,15 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                   x: 2250,
                   y: 1148,
                 },
+                {
+                  id: "facepalm-client",
+                  label: "Facepalm Client\nOwns intent, status, socket and card generations",
+                  files: ["packages/vscode/src/facepalm_client.ts", "packages/vscode/src/facepalm_settings_launcher.ts"],
+                  group: "editor",
+                  x: 1100,
+                  y: 580,
+                },
+                { id: "facepalm-service", label: "Facepalm service\nExternal camera and consent owner", files: [], x: 1370, y: 580 },
               ],
               edges: [
                 {
@@ -35455,6 +35464,9 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                   ],
                   labelPosition: { distance: 0.5463832332237034, offset: { x: 0, y: 0 } },
                 },
+                { from: "panel", to: "facepalm-client", label: "settings intent and status snapshots" },
+                { from: "ctrl", to: "facepalm-client", label: "beats, feelings, retirement" },
+                { from: "facepalm-client", to: "facepalm-service", label: "lazy socket subscription; explicit settings launch" },
               ],
               groups: [
                 { id: "agent", label: "Agent side", labelPosition: { x: 14, y: 6 } },

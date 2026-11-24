@@ -337,3 +337,84 @@ test('reply focus closes the modal settings dialog without sending a draft', asy
   });
   expect(messages.some((message) => message.type === 'reply')).toBe(false);
 });
+
+test('Facepalm settings remain usable by keyboard and reflect live status', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 240, height: 640 });
+  const post = await load(page);
+  await page.locator('[data-ui="settings"]').focus();
+  await page.keyboard.press('Enter');
+  const section = page.locator('[data-ui="settings-facepalm"]');
+  await section.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  const toggle = page.locator('[data-ui="facepalm-enabled"]');
+  const status = page.locator('[data-ui="facepalm-status"]');
+  const openSettings = page.locator('[data-ui="facepalm-open-settings"]');
+  await post({ type: 'facepalmStatus', available: true, enabled: false, canOpenSettings: true, status: 'off' });
+  await expect(status).toContainText('Off');
+  await toggle.focus();
+  await page.keyboard.press('Space');
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return (globalThis as unknown as { messages: unknown[] }).messages;
+      }),
+    )
+    .toContainEqual({ type: 'facepalmEnabled', value: true });
+  for (const [value, label] of [
+    ['unchecked', 'Unchecked'],
+    ['idle', 'Available (not connected)'],
+    ['connected', 'Connected'],
+    ['notRunning', 'Not running'],
+    ['approvalNeeded', 'Approval needed'],
+    ['unavailableSsh', 'Unavailable over SSH'],
+  ] as const) {
+    await post({ type: 'facepalmStatus', available: true, enabled: true, canOpenSettings: value !== 'unavailableSsh', status: value });
+    await expect(status).toContainText(label);
+  }
+  await expect(openSettings).toBeDisabled();
+  await post({ type: 'facepalmStatus', available: true, enabled: true, canOpenSettings: true, status: 'idle' });
+  await expect(openSettings).toBeEnabled();
+  await openSettings.focus();
+  await page.keyboard.press('Enter');
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return (globalThis as unknown as { messages: unknown[] }).messages;
+      }),
+    )
+    .toContainEqual({ type: 'facepalmOpenSettings' });
+  expect(
+    await page.evaluate(() => {
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      const root = (globalThis as unknown as { document: { documentElement: { scrollWidth: number; clientWidth: number } } }).document
+        .documentElement;
+      return root.scrollWidth <= root.clientWidth;
+    }),
+  ).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('facepalm-settings-narrow.png'), fullPage: true });
+});
+
+test('Facepalm settings hide only when absence is known', async ({ page }) => {
+  const post = await load(page);
+  await page.locator('[data-ui="settings"]').click();
+  const section = page.locator('[data-ui="settings-facepalm"]');
+  await post({ type: 'facepalmStatus', available: false, enabled: true, canOpenSettings: true, status: 'notRunning' });
+  await expect(section).not.toBeVisible();
+  for (const status of ['notRunning', 'approvalNeeded', 'unavailableSsh', 'unchecked']) {
+    await post({ type: 'facepalmStatus', available: true, enabled: true, canOpenSettings: status !== 'unavailableSsh', status });
+    await expect(section).toBeVisible();
+  }
+});
+
+test('disabling Facepalm closes an unanswered feedback card', async ({ page }) => {
+  const post = await load(page);
+  await post({ type: 'session', active: true, task: 'Feedback' });
+  await post({ type: 'facepalmCue', id: 7, feeling: 'agreement', feelings: ['agreement'] });
+  const card = page.locator('.facepalm');
+  await expect(card.getByRole('button', { name: 'Agreeing' })).toBeVisible();
+  await post({ type: 'facepalmStatus', available: true, enabled: false, status: 'off', canOpenSettings: true });
+  await expect(card.getByRole('button')).toHaveCount(0);
+  await expect(card).not.toContainText('Thanks');
+});

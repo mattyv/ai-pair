@@ -192,6 +192,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `IntegrationFixture.cfg` | workspace, packaged and companion roots | holds | 15 |
 | `CiScheduler.cfg` | three configs, two worker slots | holds | 134 |
 | `CiConcurrency.cfg` | two PR runs, one push, two manual runs | holds | 324 |
+| `FacepalmSettings.cfg` | enabled intent, socket retirement, and current card evidence | holds | 19 |
 | `FacepalmSubscription.cfg` | one subscription's lifecycle, a beat, a feeling live or refused once retired, and reconnection | holds | 36 |
 
 `Controller.tla` also passes at `NumBatches = 3, MaxCancels = 2` (570,008 states).
@@ -4676,3 +4677,21 @@ and message delivery, which the page and browser tests exercise separately.
 Mutations checked separately: incrementing the Up index violates `TypeOK`;
 disabling Up violates `EnabledNavigation`; restoring an empty string violates
 `RestoreDraft`; returning empty on Up violates `RecallNewest`.
+
+### `FacepalmSettings`: subscription settings and retirement
+
+The bounded model checks two generations of one subscription. `Close` models
+the observed socket close, and weak fairness for `Connect`, `Answer`, and
+`Close` assumes these operations eventually settle. The model omits file
+inspection, process launch, and operating-system behavior; tests cover those
+boundaries separately. `FacepalmSettings.cfg` passes TLC with 19 distinct
+states. The `Next` stuttering disjunct never fires as a distinct state; it
+permits the bounded model to remain idle.
+
+| Property | Test and mutation evidence |
+| --- | --- |
+| `TypeOK` | `facepalm_client.test.ts`: checks installation and approval without opening a socket. Mutating the initial phase outside the finite set violates it. |
+| `DisabledIdle` | `facepalm_client.test.ts`: refuses beats while disabled and retires pending connections. Mutating disable to leave a connected phase violates it. |
+| `CurrentConnection` | `facepalm_client.test.ts`: waits for the old socket to close before a successor connects. Mutating retirement to retain its active phase violates it. |
+| `CardCurrent` | `facepalm_client.test.ts`: invalidates a card on spontaneous close and never reconnects for its feeling. Mutating disable to retain its card violates it. |
+| `Progress` | `facepalm_client.test.ts`: sends hello with the approved token, then the beat. Mutating answer to leave delivery false violates the temporal property. |
