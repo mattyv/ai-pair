@@ -16,6 +16,9 @@ const speed = z.number().positive().max(MAX_PANEL_SPEED);
 /** Validates the fixed workspace-action subset of webview messages. */
 export const localPanelAction = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('ready') }),
+  z.strictObject({ type: z.literal('facepalmEnabled'), value: z.boolean() }),
+  z.strictObject({ type: z.literal('facepalmRefresh') }),
+  z.strictObject({ type: z.literal('facepalmOpenSettings') }),
   z.strictObject({ type: z.literal('pageClosed') }),
   z.strictObject({ type: z.literal('copyDiagnostics') }),
   z.strictObject({ type: z.literal('reply'), text, attach: z.boolean().optional(), defer: z.boolean().optional() }),

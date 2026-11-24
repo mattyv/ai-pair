@@ -1544,6 +1544,62 @@ describe('chat order', () => {
 });
 
 describe('panel settings', () => {
+  it('projects Facepalm availability and sends only explicit choices', () => {
+    click(element('settings'));
+    expect(posted()).toContainEqual({ type: 'facepalmRefresh' });
+    function publish(status: string, available: boolean, enabled: boolean, canOpenSettings: boolean): void {
+      window.dispatchEvent(
+        new window.MessageEvent('message', {
+          data: { type: 'facepalmStatus', status, available, enabled, canOpenSettings },
+        }),
+      );
+    }
+    const section = element('settings-facepalm');
+    const toggle = element('facepalm-enabled');
+    const button = element('facepalm-open-settings');
+    if (!(toggle instanceof window.HTMLInputElement) || !(button instanceof window.HTMLButtonElement)) {
+      throw new TypeError('Expected Facepalm controls');
+    }
+    publish('off', true, false, true);
+    expect(text('facepalm-status')).toBe('Off');
+    expect(toggle.checked).toBe(false);
+    toggle.checked = true;
+    toggle.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect(posted()).toContainEqual({ type: 'facepalmEnabled', value: true });
+    for (const [status, label] of [
+      ['unchecked', 'Unchecked'],
+      ['idle', 'Available (not connected)'],
+      ['connected', 'Connected'],
+      ['notRunning', 'Not running'],
+      ['approvalNeeded', 'Approval needed'],
+      ['unavailableSsh', 'Unavailable over SSH'],
+    ] as const) {
+      publish(status, true, true, status !== 'unavailableSsh');
+      expect(text('facepalm-status')).toBe(label);
+    }
+    expect(button.disabled).toBe(true);
+    publish('idle', false, true, true);
+    expect(section.hidden).toBe(true);
+    publish('idle', true, true, true);
+    expect(section.hidden).toBe(false);
+    click(button);
+    expect(posted()).toContainEqual({ type: 'facepalmOpenSettings' });
+  });
+
+  it('closes unanswered Facepalm cards when its subscription is no longer connected', () => {
+    send({ type: 'session', active: true, task: 'Test' });
+    send({ type: 'facepalmCue', id: 7, feeling: 'agreement', feelings: ['agreement'] });
+    const card = element('history').querySelector('.facepalm');
+    ok(card);
+    const staleButton = card.querySelector('.facepalm-feeling');
+    ok(staleButton);
+    send({ type: 'facepalmStatus', available: true, enabled: false, status: 'off', canOpenSettings: true });
+    click(staleButton);
+    expect(card.querySelector('.facepalm-buttons')).toBeNull();
+    expect(card.textContent).not.toContain('Thanks');
+    expect(posted().some((message) => message.type === 'facepalmFeel')).toBe(false);
+  });
+
   it('opens shortcut customization from Pair settings', () => {
     click(element('settings'));
     click(element('configure-shortcuts'));

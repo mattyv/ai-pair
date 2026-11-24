@@ -15,6 +15,7 @@ function makeSocket() {
   const socket = Object.assign(new EventEmitter(), {
     written: [] as string[],
     destroyed: false,
+    autoClose: true,
     setEncoding: vi.fn(),
     write: vi.fn(),
     destroy: vi.fn(),
@@ -25,6 +26,11 @@ function makeSocket() {
   });
   socket.destroy.mockImplementation(() => {
     socket.destroyed = true;
+    if (socket.autoClose) {
+      queueMicrotask(() => {
+        socket.emit('close');
+      });
+    }
   });
   return socket;
 }
@@ -34,6 +40,9 @@ const fakes = vi.hoisted(() => ({
   /** The token file's content and stat, or `undefined` for one that doesn't exist. */
   tokenFile: undefined as { content: string; mode: number; uid: number } | undefined,
   sockets: [] as Array<ReturnType<typeof makeSocket>>,
+  paths: new Map<string, 'present' | 'denied' | 'nonfile' | 'nonsocket'>(),
+  readGate: undefined as Promise<void> | undefined,
+  statGate: undefined as { path: string; promise: Promise<void>; skip?: number } | undefined,
   /** The socket path each `net.createConnection` call asked for, in order. */
   socketPaths: [] as string[],
   /** How many `randomUUID()` calls this test has made so far, for a deterministic per-instance name. */
@@ -51,13 +60,31 @@ vi.mock('node:net', () => ({
   }),
 }));
 vi.mock('node:fs/promises', () => ({
-  stat: vi.fn((file: string) => {
-    if (fakes.tokenFile === undefined || !file.endsWith('/clients/ai-pair')) {
-      return Promise.reject(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+  access: vi.fn(() => Promise.resolve()),
+  stat: vi.fn(async (file: string) => {
+    if (fakes.statGate?.path === file) {
+      const gate = fakes.statGate;
+      if (gate.skip !== undefined && gate.skip > 0) gate.skip--;
+      else {
+        fakes.statGate = undefined;
+        await gate.promise;
+      }
     }
-    return Promise.resolve({ isFile: () => true, mode: fakes.tokenFile.mode, uid: fakes.tokenFile.uid });
+    if (file.endsWith('/clients/ai-pair') && fakes.tokenFile !== undefined) {
+      return Promise.resolve({ isFile: () => true, mode: fakes.tokenFile.mode, uid: fakes.tokenFile.uid });
+    }
+    const state = fakes.paths.get(file);
+    if (state === 'present' || state === 'nonfile' || state === 'nonsocket') {
+      return { isFile: () => state !== 'nonfile', isSocket: () => state !== 'nonsocket' };
+    }
+    throw Object.assign(new Error('unavailable'), { code: state === 'denied' ? 'EACCES' : 'ENOENT' });
   }),
-  readFile: vi.fn((file: string) => {
+  readFile: vi.fn(async (file: string) => {
+    if (fakes.readGate !== undefined) {
+      const gate = fakes.readGate;
+      fakes.readGate = undefined;
+      await gate;
+    }
     if (fakes.tokenFile === undefined || !file.endsWith('/clients/ai-pair')) {
       return Promise.reject(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
     }
@@ -97,6 +124,9 @@ beforeEach(() => {
   onPlatform('linux');
   Object.defineProperty(process, 'getuid', { value: () => 1000, configurable: true });
   fakes.tokenFile = undefined;
+  fakes.paths.clear();
+  fakes.statGate = undefined;
+  fakes.readGate = undefined;
   fakes.sockets.length = 0;
   fakes.socketPaths.length = 0;
   fakes.nextUuid = 0;
@@ -211,7 +241,7 @@ describe('a beat', () => {
       'data',
       `${JSON.stringify({ readings: [], missed: 0, interpretation: { id: 7, feeling: 'agreement', beat: 'question', feelings: ['agreement', 'unknown'] } })}\n`,
     );
-    await expect(beat).resolves.toEqual({ id: 7, feeling: 'agreement', feelings: ['agreement', 'unknown'] });
+    await expect(beat).resolves.toEqual({ id: 1, feeling: 'agreement', feelings: ['agreement', 'unknown'] });
     expect(lastSocket().written).toEqual([`hello ai-pair-uuid-1 ${VALID_TOKEN}\n`, 'beat question 1500\n']);
   });
 
@@ -288,7 +318,6 @@ describe('a beat', () => {
     approve();
     const client = new FacepalmClient();
     const first = client.markBeat('question', 1500);
-    const second = client.feel(1, 'agreement');
     await vi.advanceTimersByTimeAsync(0);
     await connectAndApprove();
     await vi.advanceTimersByTimeAsync(0);
@@ -297,6 +326,7 @@ describe('a beat', () => {
       `${JSON.stringify({ readings: [], missed: 0, interpretation: { id: 1, feeling: 'agreement', beat: 'question', feelings: ['agreement'] } })}\n`,
     );
     await first;
+    const second = client.feel(1, 'agreement');
     await vi.advanceTimersByTimeAsync(0);
     lastSocket().emit('data', `${JSON.stringify({ ok: true })}\n`);
     await second;
@@ -433,21 +463,37 @@ describe('feel', () => {
   it('tells Facepalm the picked feeling, and resolves on an ok reply', async () => {
     approve();
     const client = new FacepalmClient();
-    const felt = client.feel(3, 'confused');
+    const beat = client.markBeat('question', 100);
     await vi.advanceTimersByTimeAsync(0);
     await connectAndApprove();
     await vi.advanceTimersByTimeAsync(0);
+    lastSocket().emit(
+      'data',
+      `${JSON.stringify({ readings: [], missed: 0, interpretation: { id: 3, feeling: 'confused', beat: 'question', feelings: ['confused'] } })}\n`,
+    );
+    const cue = await beat;
+    if (cue === undefined) throw new Error('Missing cue');
+    const felt = client.feel(cue.id, 'confused');
+    await vi.advanceTimersByTimeAsync(0);
     lastSocket().emit('data', `${JSON.stringify({ ok: true })}\n`);
     await expect(felt).resolves.toBeUndefined();
-    expect(lastSocket().written).toEqual([`hello ai-pair-uuid-1 ${VALID_TOKEN}\n`, 'feel 3 confused\n']);
+    expect(lastSocket().written).toEqual([`hello ai-pair-uuid-1 ${VALID_TOKEN}\n`, 'beat question 100\n', 'feel 3 confused\n']);
   });
 
   it('resolves without throwing when Facepalm refuses the feeling', async () => {
     approve();
     const client = new FacepalmClient();
-    const felt = client.feel(3, 'confused');
+    const beat = client.markBeat('question', 100);
     await vi.advanceTimersByTimeAsync(0);
     await connectAndApprove();
+    await vi.advanceTimersByTimeAsync(0);
+    lastSocket().emit(
+      'data',
+      `${JSON.stringify({ readings: [], missed: 0, interpretation: { id: 3, feeling: 'confused', beat: 'question', feelings: ['confused'] } })}\n`,
+    );
+    const cue = await beat;
+    if (cue === undefined) throw new Error('Missing cue');
+    const felt = client.feel(cue.id, 'confused');
     await vi.advanceTimersByTimeAsync(0);
     lastSocket().emit('data', `${JSON.stringify({ error: 'too late' })}\n`);
     await expect(felt).resolves.toBeUndefined();
@@ -578,5 +624,294 @@ describe('connection name', () => {
     await secondBeat;
     expect(firstSocket.written[0]).toBe(`hello ai-pair-uuid-1 ${VALID_TOKEN}\n`);
     expect(secondSocket.written[0]).toBe(`hello ai-pair-uuid-2 ${VALID_TOKEN}\n`);
+  });
+});
+
+describe('Facepalm settings lifecycle', () => {
+  it('refuses beats while disabled and retires pending connections', async () => {
+    approve();
+    const client = new FacepalmClient();
+    const beat = client.markBeat('question', 100);
+    await vi.advanceTimersByTimeAsync(0);
+    const socket = lastSocket();
+    client.setEnabled(false);
+    expect(socket.destroyed).toBe(true);
+    socket.emit('connect');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(socket.written).toEqual([]);
+    expect(await beat).toBeUndefined();
+    await client.markBeat('question', 100);
+    expect(fakes.sockets).toHaveLength(1);
+  });
+
+  it('waits for the old socket to close before a successor connects', async () => {
+    approve();
+    const client = new FacepalmClient();
+    const first = client.markBeat('question', 100);
+    await vi.advanceTimersByTimeAsync(0);
+    const socket = lastSocket();
+    socket.autoClose = false;
+    client.setEnabled(false);
+    client.setEnabled(true);
+    const second = client.markBeat('question', 100);
+    socket.emit('connect');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fakes.sockets).toHaveLength(1);
+    socket.emit('close');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fakes.sockets).toHaveLength(2);
+    client.retire();
+    await vi.advanceTimersByTimeAsync(3000);
+    await Promise.all([first, second]);
+  });
+
+  it('rejects a stale card even after a new session reuses the daemon ID', async () => {
+    approve();
+    const client = new FacepalmClient();
+    const first = client.markBeat('question', 100);
+    await vi.advanceTimersByTimeAsync(0);
+    await connectAndApprove();
+    await vi.advanceTimersByTimeAsync(0);
+    lastSocket().emit(
+      'data',
+      `${JSON.stringify({ readings: [], missed: 0, interpretation: { id: 7, feeling: 'agreement', beat: 'question', feelings: ['agreement'] } })}\n`,
+    );
+    const cue = await first;
+    expect(cue).toBeDefined();
+    client.retire();
+    await vi.advanceTimersByTimeAsync(0);
+    const second = client.markBeat('question', 100);
+    await vi.advanceTimersByTimeAsync(0);
+    await connectAndApprove();
+    await vi.advanceTimersByTimeAsync(0);
+    lastSocket().emit(
+      'data',
+      `${JSON.stringify({ readings: [], missed: 0, interpretation: { id: 7, feeling: 'agreement', beat: 'question', feelings: ['agreement'] } })}\n`,
+    );
+    const nextCue = await second;
+    expect(nextCue).toBeDefined();
+    expect(nextCue?.id).not.toBe(cue?.id);
+  });
+
+  it('checks installation and approval without opening a socket', async () => {
+    const client = new FacepalmClient();
+    await client.refresh(false);
+    expect(client.snapshot()).toEqual({ enabled: true, status: 'notRunning', available: false, canOpenSettings: false });
+    fakes.paths.set('/home/user/.local/state/facepalm/service.sock', 'present');
+    await client.refresh(false);
+    expect(client.snapshot().status).toBe('approvalNeeded');
+    approve();
+    await client.refresh(false);
+    expect(client.snapshot().status).toBe('idle');
+    expect(fakes.sockets).toHaveLength(0);
+  });
+
+  it('keeps uncertain installations visible and distinguishes an unavailable SSH service', async () => {
+    const client = new FacepalmClient();
+    fakes.paths.set('/usr/bin/facepalm-menu', 'denied');
+    await client.refresh(false);
+    expect(client.snapshot().available).toBe(true);
+    await client.refresh(true);
+    expect(client.snapshot()).toMatchObject({ available: true, status: 'unavailableSsh', canOpenSettings: false });
+  });
+
+  it('invalidates a card on spontaneous close and never reconnects for its feeling', async () => {
+    approve();
+    const client = new FacepalmClient();
+    const beat = client.markBeat('question', 100);
+    await vi.advanceTimersByTimeAsync(0);
+    await connectAndApprove();
+    await vi.advanceTimersByTimeAsync(0);
+    lastSocket().emit(
+      'data',
+      `${JSON.stringify({ readings: [], missed: 0, interpretation: { id: 7, feeling: 'agreement', beat: 'question', feelings: ['agreement'] } })}\n`,
+    );
+    const cue = await beat;
+    if (cue === undefined) throw new Error('Missing cue');
+    lastSocket().emit('close');
+    await client.feel(cue.id, 'agreement');
+    expect(fakes.sockets).toHaveLength(1);
+    expect(lastSocket().written).not.toContain('feel 7 agreement\n');
+  });
+  it('reports unchecked after re-enabling until a fresh SSH probe', async () => {
+    const client = new FacepalmClient();
+    await client.refresh(true);
+    expect(client.snapshot().status).toBe('unavailableSsh');
+    client.setEnabled(false);
+    client.setEnabled(true);
+    expect(client.snapshot().status).toBe('unchecked');
+  });
+  it('reports installed menu, disabled state, and connected state from current evidence', async () => {
+    const client = new FacepalmClient();
+    fakes.paths.set('/usr/bin/facepalm-menu', 'present');
+    await client.refresh(false);
+    expect(client.snapshot()).toMatchObject({ available: true, canOpenSettings: true });
+    client.setEnabled(false);
+    client.setEnabled(false);
+    await client.refresh(false);
+    expect(client.snapshot().status).toBe('off');
+    client.setEnabled(true);
+    approve();
+    const beat = client.markBeat('question', 100);
+    await vi.advanceTimersByTimeAsync(0);
+    await connectAndApprove();
+    await vi.advanceTimersByTimeAsync(0);
+    await client.refresh(false);
+    expect(client.snapshot().status).toBe('connected');
+    client.retire();
+    await vi.advanceTimersByTimeAsync(3000);
+    await beat;
+  });
+  it('does not let an observer prevent cleanup', () => {
+    const client = new FacepalmClient();
+    client.onStatus = () => {
+      throw new Error('observer');
+    };
+    client.setEnabled(false);
+    expect(client.snapshot().status).toBe('off');
+  });
+  it('shows unchecked when socket evidence is unreadable', async () => {
+    const client = new FacepalmClient();
+    fakes.paths.set('/home/user/.local/state/facepalm/service.sock', 'denied');
+    await client.refresh(false);
+    expect(client.snapshot().status).toBe('unchecked');
+  });
+  it('inspects macOS and unsupported platforms without opening the socket', async () => {
+    const client = new FacepalmClient();
+    onPlatform('darwin');
+    fakes.paths.set('/home/user/Applications/Facepalm.app', 'present');
+    fakes.paths.set('/home/user/Applications/Facepalm.app/Contents/MacOS/facepalm-menu', 'present');
+    await client.refresh(false);
+    expect(client.snapshot()).toMatchObject({ available: true, canOpenSettings: true });
+    onPlatform('win32');
+    await client.refresh(false);
+    expect(client.snapshot().available).toBe(true);
+    expect(fakes.sockets).toHaveLength(0);
+  });
+  it('destroys a socket when writing the handshake throws', async () => {
+    approve();
+    const client = new FacepalmClient();
+    const beat = client.markBeat('question', 100);
+    await vi.advanceTimersByTimeAsync(0);
+    const socket = lastSocket();
+    socket.write.mockImplementationOnce(() => {
+      throw new Error('failed');
+    });
+    socket.emit('connect');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await beat).toBeUndefined();
+    expect(socket.destroyed).toBe(true);
+  });
+  it('ignores an older refresh after a newer snapshot', async () => {
+    const client = new FacepalmClient();
+    const gate = Promise.withResolvers<void>();
+    fakes.statGate = { path: '/home/user/.local/state/facepalm/service.sock', promise: gate.promise };
+    const old = client.refresh(false);
+    fakes.paths.set('/usr/bin/facepalm-menu', 'present');
+    await client.refresh(false);
+    gate.resolve();
+    await old;
+    expect(client.snapshot()).toMatchObject({ available: true, canOpenSettings: true });
+  });
+  it('does not mistake an ordinary file for a socket or an executable', async () => {
+    const client = new FacepalmClient();
+    fakes.paths.set('/home/user/.local/state/facepalm/service.sock', 'nonsocket');
+    fakes.paths.set('/usr/bin/facepalm-menu', 'nonfile');
+    await client.refresh(false);
+    expect(client.snapshot()).toMatchObject({ status: 'unchecked', available: true, canOpenSettings: false });
+  });
+  it('keeps an unsafe approval token unchecked', async () => {
+    const client = new FacepalmClient();
+    fakes.paths.set('/home/user/.local/state/facepalm/service.sock', 'present');
+    approve({ mode: 0o644 });
+    await client.refresh(false);
+    expect(client.snapshot().status).toBe('unchecked');
+  });
+  it('discards queued predecessor work before it can connect', async () => {
+    approve();
+    const client = new FacepalmClient();
+    const first = client.markBeat('question', 100);
+    const queued = client.markBeat('question', 100);
+    await vi.advanceTimersByTimeAsync(0);
+    client.setEnabled(false);
+    client.setEnabled(true);
+    lastSocket().emit('connect');
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(await first).toBeUndefined();
+    expect(await queued).toBeUndefined();
+    expect(fakes.sockets).toHaveLength(1);
+  });
+  it('drops an in-flight handshake after disable', async () => {
+    approve();
+    const client = new FacepalmClient();
+    const beat = client.markBeat('question', 100);
+    await vi.advanceTimersByTimeAsync(0);
+    const socket = lastSocket();
+    socket.emit('connect');
+    await vi.advanceTimersByTimeAsync(0);
+    client.setEnabled(false);
+    socket.emit('data', '{"ok":true}\n');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await beat).toBeUndefined();
+    expect(socket.written).toHaveLength(1);
+  });
+  it('ignores an older executable check after a newer refresh', async () => {
+    const client = new FacepalmClient();
+    const gate = Promise.withResolvers<void>();
+    fakes.paths.set('/usr/bin/facepalm-menu', 'present');
+    fakes.statGate = { path: '/usr/bin/facepalm-menu', promise: gate.promise, skip: 1 };
+    const old = client.refresh(false);
+    await vi.advanceTimersByTimeAsync(0);
+    fakes.paths.delete('/usr/bin/facepalm-menu');
+    await client.refresh(false);
+    gate.resolve();
+    await old;
+    expect(client.snapshot()).toMatchObject({ available: false, canOpenSettings: false });
+  });
+  it('drops a late token read after feedback is disabled', async () => {
+    approve();
+    fakes.paths.set('/home/user/.local/state/facepalm/service.sock', 'present');
+    const gate = Promise.withResolvers<void>();
+    fakes.readGate = gate.promise;
+    const client = new FacepalmClient();
+    const refresh = client.refresh(false);
+    await vi.advanceTimersByTimeAsync(0);
+    client.setEnabled(false);
+    gate.resolve();
+    await refresh;
+    expect(client.snapshot().status).toBe('off');
+  });
+  it('abandons a successor disabled while waiting for the prior close', async () => {
+    approve();
+    const client = new FacepalmClient();
+    const first = client.markBeat('question', 100);
+    await vi.advanceTimersByTimeAsync(0);
+    const socket = lastSocket();
+    socket.autoClose = false;
+    client.retire();
+    const second = client.markBeat('question', 100);
+    socket.emit('connect');
+    await vi.advanceTimersByTimeAsync(0);
+    client.setEnabled(false);
+    socket.emit('close');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await first).toBeUndefined();
+    expect(await second).toBeUndefined();
+    expect(fakes.sockets).toHaveLength(1);
+  });
+  it('does not act on a successor when a reentrant handshake write retires and throws', async () => {
+    approve();
+    const client = new FacepalmClient();
+    const beat = client.markBeat('question', 100);
+    await vi.advanceTimersByTimeAsync(0);
+    const socket = lastSocket();
+    socket.write.mockImplementationOnce(() => {
+      client.retire();
+      throw new Error('failed');
+    });
+    socket.emit('connect');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await beat).toBeUndefined();
+    expect(socket.destroyed).toBe(true);
   });
 });

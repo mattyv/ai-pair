@@ -17,6 +17,7 @@ it('Revoke: a current companion page clears grants, stale pages cannot revoke, a
   const { controller, editor, panel: events } = setup();
   await controller.start();
   const wiring = mock<PanelWiring>();
+  wiring.facepalm = undefined;
   wiring.workerVisibility = { get: () => 'milestones', set: () => {} };
   wiring.workerEnabled = { get: () => true, set: () => {} };
   wiring.workerModel = { get: () => 'worker-model', set: () => {} };
@@ -105,6 +106,7 @@ it('Revoke: a current companion page clears grants, stale pages cannot revoke, a
 it('routes commentary through the production workspace session and projects its snapshot', async () => {
   const { controller } = setup();
   const wiring = mock<PanelWiring>();
+  wiring.facepalm = undefined;
   wiring.workerVisibility = { get: () => 'milestones', set: () => {} };
   wiring.workerEnabled = { get: () => true, set: () => {} };
   wiring.workerModel = { get: () => 'worker-model', set: () => {} };

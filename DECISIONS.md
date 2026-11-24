@@ -10,6 +10,27 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   GPT-6.1 Terra agents write code and tests; GPT-6 Astra agents review them.
     Resolve findings and verify the resulting changes before reporting completion.
 
+## Facepalm settings (#146)
+
+-   Preserve the existing enabled default. The AI Pair toggle controls only its
+    subscription; Facepalm must already be running and approve AI Pair. Opening
+    Settings and checking status inspect files and never perform the handshake.
+-   The client owns desired state, connection generations, card capabilities,
+    and status snapshots. Retiring invalidates work immediately and a new
+    socket waits for the previous close. Passive file evidence is not a verified
+    connection. Missing supported installation paths hide the section only when
+    socket and token evidence are also absent; unknown evidence stays visible.
+-   The explicit settings action uses Facepalm's public `--settings` command
+    line, independently implemented from the documented interface rather than
+    copying GPL source into this MIT repository. Supported paths are
+    `~/Applications/Facepalm.app`, `/usr/bin/facepalm-menu`, and
+    `~/.local/facepalm/bin/facepalm-menu`. Custom installations are not located.
+    Remote hosts cannot launch a local GUI. A remote Facepalm service can still
+    be used if its socket and approval are present on that host.
+-   The Archi source and generated interactive export were checked with the
+    Archi 1.5.1 validator and by regenerating and comparing the normalized
+    HTML. The validator reports an existing unrelated long-label warning.
+
 ## Answering programmer messages (#128)
 
 -   Repeat the instruction to answer alongside a delivered message or a handoff

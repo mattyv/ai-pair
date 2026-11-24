@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { LocalAudioFrame } from '@ai-pair/protocol';
+import { LOCAL_AUDIO_VERSION, localAudioFrame, PanelChunkAssembler, type LocalAudioFrame } from '@ai-pair/protocol';
 import { PanelUpdateSender } from '../src/panel_update_sender';
 
 describe('workspace panel update sender', () => {
@@ -95,4 +95,34 @@ describe('workspace panel update sender', () => {
     await expect(sender.post({ type: 'say', text: 'first' })).rejects.toThrow('private');
     expect(await sender.post({ type: 'say', text: 'second' })).toBe(true);
   });
+});
+
+it('transports Facepalm settings actions and status through the companion protocol', async () => {
+  for (const action of [{ type: 'facepalmRefresh' }, { type: 'facepalmEnabled', value: false }, { type: 'facepalmOpenSettings' }]) {
+    const frame = { version: LOCAL_AUDIO_VERSION, connectionEpoch: 'epoch', sequence: 1, type: 'panelAction', pageEpoch: 1, action };
+    // A companion transmits JSON, so exercise the serialized wire representation.
+    // oxlint-disable-next-line unicorn/prefer-structured-clone
+    expect(localAudioFrame.parse(JSON.parse(JSON.stringify(frame)))).toEqual(frame);
+  }
+  const frames: LocalAudioFrame[] = [];
+  const sender = new PanelUpdateSender({
+    epoch: 'epoch',
+    page: () => 1,
+    nextSequence: () => 1,
+    send: (frame) => {
+      frames.push(frame);
+      return Promise.resolve(true);
+    },
+    unavailable: vi.fn<() => void>(),
+  });
+  const status = { type: 'facepalmStatus', available: true, enabled: true, status: 'idle', canOpenSettings: false } as const;
+  expect(await sender.post(status)).toBe(true);
+  const assembler = new PanelChunkAssembler();
+  assembler.setPage(1);
+  // oxlint-disable-next-line unicorn/prefer-structured-clone
+  const frame = localAudioFrame.parse(JSON.parse(JSON.stringify(frames[0])));
+  expect(frame.type).toBe('panelChunk');
+  if (frame.type !== 'panelChunk') throw new TypeError('Expected panel chunk');
+  const { pageEpoch, messageId, index, count, data } = frame;
+  expect(assembler.accept({ pageEpoch, messageId, index, count, data })).toEqual(status);
 });

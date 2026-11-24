@@ -26,6 +26,11 @@ class FakeFacepalmDaemon {
   private readonly connections = new Set<net.Socket>();
   /** How many `beat`s this daemon has answered, so each can differ (#143). */
   private beats = 0;
+  readonly lines: string[] = [];
+
+  get openConnections(): number {
+    return this.connections.size;
+  }
 
   constructor(directory: string) {
     this.directory = directory;
@@ -44,6 +49,7 @@ class FakeFacepalmDaemon {
         while (newline >= 0) {
           const line = buffer.slice(0, newline);
           buffer = buffer.slice(newline + 1);
+          this.lines.push(line);
           socket.write(`${this.answer(line)}\n`);
           newline = buffer.indexOf('\n');
         }
@@ -54,6 +60,7 @@ class FakeFacepalmDaemon {
   private answer(line: string): string {
     const words = line.split(' ');
     if (words[0] === 'hello') return words[2] === this.token ? '{"ok":true}' : '{"error":"a stranger"}';
+    if (words[0] === 'feel') return '{"ok":true}';
     if (words[0] === 'beat') {
       this.beats += 1;
       // gaze (facepalm#142) rides along on every interpretation now; ai-pair#143 is this reaching
@@ -99,6 +106,14 @@ export async function facepalmPaths(api: Api, root: string): Promise<void> {
   let started = false;
   try {
     fs.writeFileSync(path.join(root, 'facepalm.txt'), 'a\n');
+    // Refreshing the settings view only checks availability. It must not send hello,
+    // which would join Facepalm and could activate its camera.
+    api.panelMessage({ type: 'facepalmRefresh' });
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 300);
+    });
+    assert.equal(daemon.lines.length, 0, 'refreshing settings joined Facepalm');
+    assert.equal(daemon.openConnections, 0);
     await client.connect(new StdioClientTransport({ command: api.launcher, cwd: root, env }));
     async function call(name: string, args: Record<string, unknown>): Promise<string> {
       const result = await client.callTool({ name, arguments: args });
@@ -131,6 +146,15 @@ export async function facepalmPaths(api: Api, root: string): Promise<void> {
       `an older Facepalm's reply, with no gaze, should render with no parenthetical: ${second}`,
     );
     assert.doesNotMatch(second, /looking away|glancing away/);
+    const cue = api.history().findLast((event) => event.type === 'facepalmCue');
+    assert.ok(cue !== undefined && cue.type === 'facepalmCue', 'the panel did not receive the feedback card');
+    api.panelMessage({ type: 'facepalmFeel', id: cue.id, feeling: 'engagement' });
+    for (let attempt = 0; !daemon.lines.includes('feel 2 engagement') && attempt < 100; attempt++) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 50);
+      });
+    }
+    assert.ok(daemon.lines.includes('feel 2 engagement'), 'the selected feeling did not reach Facepalm');
     // The daemon's third beat carries the other gaze facepalmGazeNote words: `averted`.
     await call('step', { actions: [{ say: 'Shall I continue once more?' }] });
     const third = await call('step', { actions: [] });
@@ -139,10 +163,23 @@ export async function facepalmPaths(api: Api, root: string): Promise<void> {
       /Facepalm, from the programmer's camera, read a possible confused \(glancing away\): advisory only, never an answer or approval\./,
       `an averted gaze should render as glancing away: ${third}`,
     );
+    assert.equal(daemon.openConnections, 1, 'the active session did not join Facepalm');
+    api.panelMessage({ type: 'facepalmEnabled', value: false });
+    for (let attempt = 0; daemon.openConnections > 0 && attempt < 100; attempt++) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 50);
+      });
+    }
+    assert.equal(daemon.openConnections, 0, 'disabling Facepalm did not close its subscription');
+    const linesBeforeDisabledBeat = daemon.lines.length;
+    await call('step', { actions: [{ say: 'Continue without Facepalm?' }] });
+    await call('step', { actions: [] });
+    assert.equal(daemon.lines.length, linesBeforeDisabledBeat, 'a disabled session rejoined Facepalm');
     await call('end', {});
     started = false;
     console.log('Facepalm: every gaze outcome reaches the agent through the real relay (#143)');
   } finally {
+    api.panelMessage({ type: 'facepalmEnabled', value: true });
     if (started) api.controller.endSession();
     await client.close();
     await daemon.stop();
