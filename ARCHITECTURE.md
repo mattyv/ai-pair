@@ -793,6 +793,35 @@ active profile.
 
 ## Facepalm subscription
 
+With the UI companion attached, the workspace controller uses
+`RemoteFacepalm` (`packages/vscode/src/remote_facepalm.ts`).
+`CompanionFacepalm` (`packages/audio-ui/src/companion_facepalm.ts`) owns the
+local client and settings launcher. Strict protocol version 14 frames reuse
+the existing command channel, attachment epoch, sequence and heartbeat lease.
+Only requests, status and interpreted feedback cross the attachment; socket
+paths, approval tokens and camera frames stay on the UI machine. This route
+is independent of the speech provider. A missing remote companion uses text
+mode; the direct client fallback is restricted to local legacy placement.
+
+Settings launch and passive recheck also use bounded, page- and request-scoped
+results. Exactly one control request is admitted at a time. Timeout, page
+replacement and attachment loss settle or invalidate the request; stale
+results and late launcher notices cannot publish onto a successor page.
+The local launcher reports process admission, not compositor-visible window
+placement, and retains sanitized late failure reporting. Recheck only inspects
+files and creates no camera demand. The FacepalmSettingsControl and
+FacepalmSettingsLaunch models check these bounded abstractions;
+FacepalmSettingsNotice separately checks late diagnostic authority.
+
+Beat commands acknowledge receipt before the asynchronous result. Request,
+page and retirement identities reject stale results without invalidating
+other live cards. Replacement waits for both speech teardown and physical
+Facepalm socket close. Status observer errors cannot close the shared audio
+channel. Saved history cards are read-only because their old capabilities
+cannot safely be reconstructed after a reload. The LocalFacepalm and
+FacepalmReplay models cover these bounded lifecycle and replay properties;
+they do not constitute a formal composition of all subscription models.
+
 AI Pair's extension host can subscribe to
 [Facepalm](https://github.com/mattyv/facepalm) (#83, item 14 of facepalm#61),
 a standalone local service outside this repository that owns a camera and
@@ -804,7 +833,12 @@ this extension's approved name, `ai-pair` (`facepalm-daemon approve
 ai-pair`). `FacepalmClient` (`packages/vscode/src/facepalm_client.ts`)
 implements it: it connects lazily on first use, serializes every request on
 the one connection it keeps open, and reopens a fresh connection on any
-failure or close (specs/FacepalmSubscription.tla). Each `FacepalmClient`
+failure or close (specs/FacepalmSubscription.tla). Its settings state and
+connection generation are owned by the client; disabling invalidates pending
+work and cards, destroys the socket, and waits for close before a successor
+(specs/FacepalmSettings.tla). Passive file inspection reports evidence without
+connecting. The explicit launcher invokes the installed Facepalm settings UI;
+it never starts the daemon or grants consent. Each `FacepalmClient`
 instance, one per VS Code window, shows the approved token under its own
 per-instance connection name (`ai-pair-<uuid>`), so a second window is never
 refused as a name already connected; Facepalm matches the token
@@ -828,8 +862,9 @@ feeling Facepalm names, its own read already picked; one click sends `feel`
 through the controller, and the panel never shows the reading's ID. The
 controller's one session-teardown point, `close()`, retires the subscription
 whenever a session ends, by the programmer, by the agent's own end, or by a
-session replacement, so the camera does not stay on past any of them
-(#138); the extension also retires it on deactivation. This subscription
+session replacement, releasing AI Pair's camera demand (#138); another
+client or preview may still keep capture active. The extension also retires
+it on deactivation. This subscription
 opens no camera, reads no frame, and runs no model of its own: perception
 stays entirely in Facepalm.
 

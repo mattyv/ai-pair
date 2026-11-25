@@ -192,6 +192,7 @@ inside `<< >>` and `{ }`), so the specs are not run through it.
 | `IntegrationFixture.cfg` | workspace, packaged and companion roots | holds | 15 |
 | `CiScheduler.cfg` | three configs, two worker slots | holds | 134 |
 | `CiConcurrency.cfg` | two PR runs, one push, two manual runs | holds | 324 |
+| `FacepalmSettings.cfg` | enabled intent, socket retirement, and current card evidence | holds | 19 |
 | `FacepalmSubscription.cfg` | one subscription's lifecycle, a beat, a feeling live or refused once retired, and reconnection | holds | 36 |
 
 `Controller.tla` also passes at `NumBatches = 3, MaxCancels = 2` (570,008 states).
@@ -4676,3 +4677,124 @@ and message delivery, which the page and browser tests exercise separately.
 Mutations checked separately: incrementing the Up index violates `TypeOK`;
 disabling Up violates `EnabledNavigation`; restoring an empty string violates
 `RestoreDraft`; returning empty on Up violates `RecallNewest`.
+
+### `FacepalmSettings`: subscription settings and retirement
+
+The bounded model checks two generations of one subscription. `Close` models
+the observed socket close, and weak fairness for `Connect`, `Answer`, and
+`Close` assumes these operations eventually settle. The model omits file
+inspection, process launch, and operating-system behavior; tests cover those
+boundaries separately. `FacepalmSettings.cfg` passes TLC with 19 distinct
+states. The `Next` stuttering disjunct never fires as a distinct state; it
+permits the bounded model to remain idle.
+
+| Property | Test and mutation evidence |
+| --- | --- |
+| `TypeOK` | `facepalm_client.test.ts`: checks installation and approval without opening a socket. Mutating the initial phase outside the finite set violates it. |
+| `DisabledIdle` | `facepalm_client.test.ts`: refuses beats while disabled and retires pending connections. Mutating disable to leave a connected phase violates it. |
+| `CurrentConnection` | `facepalm_client.test.ts`: waits for the old socket to close before a successor connects. Mutating retirement to retain its active phase violates it. |
+| `CardCurrent` | `facepalm_client.test.ts`: invalidates a card on spontaneous close and never reconnects for its feeling. Mutating disable to retain its card violates it. |
+| `Progress` | `facepalm_client.test.ts`: sends hello with the approved token, then the beat. Mutating answer to leave delivery false violates the temporal property. |
+
+## Local Facepalm bridge
+
+`LocalFacepalm` abstracts and complements `FacepalmSettings`: `generation`
+abstracts the attachment, page, session and retirement identity, and `serial`
+identifies a beat within that owner. The bounds permit one generation
+replacement and two beat serials in total. A card remains valid across a
+second beat in the same generation and is consumed once. `physical` records
+the socket owner until `Close`; a successor admitted while retiring waits for
+that close. `Accept` models immediate command admission;
+`Answer` and `Deliver` model the later service result. `Timeout` models both a
+service timeout and a bridge deadline after an answer: each retires the owner,
+clears cards, and leaves an already received reply stale until `Drop`. A new
+request can queue before that stale reply is dropped. The model omits transport
+payloads and actual operating-system socket closure; integration tests must
+establish those assumptions. `ServiceSpec` assumes a stable owner and a
+responsive service, with weak fairness of opening, answering and delivery. The
+main spec additionally allows timeout and retirement and assumes weak fairness
+of their settlement actions.
+
+| Config | Bounds | Result | Distinct states |
+|---|---|---|---|
+| `LocalFacepalm.cfg` | Two generations and two beat serials | holds | 104 |
+| `LocalFacepalm_Service.cfg` | The same, stable owner and responsive service | holds | 14 |
+
+| Property | Mutation witness | Named implementation test |
+|---|---|---|
+| `TypeOK` | Start with serial 3 | `TypeOK: rejects unbounded, malformed and credential-bearing frames` |
+| `CardsCurrent` | Permit stale reply delivery | `CardsCurrent: rejects old replies after retirement even with a new beat`; `CardsCurrent: drops a late answer after retirement and allows the successor` |
+| `NoOverlap` | Start replacement before close | `NoOverlap: waits for the old socket to close before a successor connects` |
+| `OneFeel` | Keep a consumed card | `nativeClientPaths` verifies repeated feedback reaches the real socket once |
+| `DisabledNoDemand` | Keep pending demand on disable | `DisabledNoDemand: refuses beats while disabled and retires pending connections` |
+| `Settlement` | Timeout leaves result waiting | `Settlement: timeout retires the generation and resolves the request` |
+| `Success` | Drop every successful result as timeout | `Success: moves a beat and feedback through the selected channel and retires on page close` |
+
+## Facepalm replay
+
+`FacepalmReplay` models one historical card, one fresh card with a potentially
+reused numeric ID, and up to two historical clicks. A replayed card cannot send
+feedback. Weak fairness of `ClickFresh` assumes a user eventually chooses the
+fresh card when demonstrating progress; it is not an assumption about real
+user behavior. The bounded config has 12 distinct states and passes.
+
+| Property | Mutation witness | Named implementation test |
+|---|---|---|
+| `TypeOK` | Start with three clicks | `HistoryNeverSends: replayed card stays inactive when a new client reuses its ID` |
+| `HistoryNeverSends` | Send feedback from `ClickHistory` | `HistoryNeverSends: replayed card stays inactive when a new client reuses its ID` |
+| `FreshProgress` | Disable `ClickFresh` | `HistoryNeverSends: replayed card stays inactive when a new client reuses its ID` |
+
+## Facepalm settings control
+
+`FacepalmSettingsControl` abstracts the attachment and page as one owner. It
+bounds the owner and request serial to two each, with one outstanding open or
+recheck. Recheck inspects local files without camera demand; its snapshot is
+published only through the matching result. The normal config uses weak fairness
+for answer, delivery, dropping stale replies, and timeout. The service config
+assumes a stable owner and responsive local host and uses weak fairness for
+answer, delivery, and stale reply dropping.
+
+| Config | Bounds | Result | Distinct states |
+|---|---|---|---|
+| `FacepalmSettingsControl.cfg` | Two owners, two serials, both operations | holds | 120 |
+| `FacepalmSettingsControl_Service.cfg` | Same bounds, stable responsive service | holds | 26 |
+
+| Property | Mutation witness | Named implementation test |
+|---|---|---|
+| `TypeOK` | Start outside owner bounds | `TypeOK: rejects unbounded, malformed and credential-bearing frames` |
+| `PassiveInspection` | Start camera demand with a control request | `PassiveInspection: approval recheck stays disconnected and a later beat reconnects after service restart` |
+| `CurrentRequest` | Preserve pending request on owner replacement | `CurrentPublication: page replacement drops old results and late diagnostics` |
+| `CurrentPublication` | Deliver a reply without matching the pending request | `CurrentPublication: sends only the current page correlated launch outcome` |
+| `Settles` | Disable delivery and timeout | `Settles: controls fail on timeout, refused send, disconnect and concurrent work` |
+| `Success` | Clear a successful request without publication | `routes the rendered settings button to the local companion after session retirement` |
+
+## Facepalm settings launch
+
+`FacepalmSettingsLaunch` models one process launch, the spawn deadline, the
+Linux startup grace, a clean forwarder exit, and early failure. Weak fairness
+of `Grace` and `Deadline` assumes timers run. Acceptance records process
+admission only; it does not prove that a window was displayed. Local-only
+diagnostics classify a failed close without changing modeled transitions or
+sending process details across the companion protocol. The config has seven
+distinct states and passes TLC.
+
+| Property | Mutation witness | Named implementation test |
+|---|---|---|
+| `TypeOK` | Start in an invalid phase | `refuses a remote GUI or unavailable menu` |
+| `AcceptedEvidence` | Accept immediately on spawn | `AcceptedEvidence: accepts a still-running Linux menu only after the grace period` |
+| `Settles` | Disable the grace transition | `Settles: a failed timeout kill still reports the timeout` |
+
+## Facepalm settings notice
+
+`FacepalmSettingsNotice` bounds the owner and request serial to two each. A new
+control clears the previous accepted launch before its own result; owner
+replacement does the same. The normal config uses weak fairness of `Notice`
+and `Drop`. It has 44 distinct states and passes TLC. A recheck cannot
+authorize a launch notice.
+
+| Property | Mutation witness | Named implementation test |
+|---|---|---|
+| `TypeOK` | Start outside owner bounds | `TypeOK: rejects unbounded, malformed and credential-bearing frames` |
+| `RecheckNoAuthority` | Retain acceptance when a recheck starts | `CurrentNotice: starting a recheck immediately revokes the previous launch notice` |
+| `CurrentNotice` | Drop notice identity | `CurrentNotice: starting a recheck immediately revokes the previous launch notice` |
+| `Progress` | Disable both notice and drop | `scopes late launch diagnostics and an asynchronous recheck to their page` |

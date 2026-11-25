@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.57.1
+
+-   Explain local Facepalm approval and on-demand connection, add passive status
+    recheck, and report Settings launch failures across the companion (#148).
+
+-   Host Facepalm locally for Remote SSH, independently of speech selection; wait
+  for its socket to close before replacing the companion (#148).
+-   Match the AI Pair extension release.
+
 ## 0.56.1
 
 - Version aligned with the combined reply history and Facepalm gaze update.

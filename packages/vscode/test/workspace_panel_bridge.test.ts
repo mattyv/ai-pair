@@ -9,7 +9,7 @@ describe('workspace panel bridge', () => {
     const action = vi.fn<(_: unknown) => void>();
     const terminal = vi.fn<(_: unknown) => void>();
     const pageChanged = vi.fn<() => void>();
-    const bridge = new WorkspacePanelBridge({ epoch: 'epoch', action, terminal, pageChanged });
+    const bridge = new WorkspacePanelBridge({ epoch: 'epoch', action, terminal, pageChanged, facepalm: () => {} });
     expect(bridge.accept({ ...base, sequence: 1, type: 'panelAction', pageEpoch: 1, action: { type: 'ready' } })).toBe(true);
     expect(bridge.page()).toBe(1);
     expect(bridge.accept({ ...base, sequence: 2, type: 'panelAction', pageEpoch: 1, action: { type: 'reply', text: 'Hello.' } })).toBe(
@@ -32,11 +32,27 @@ describe('workspace panel bridge', () => {
     expect(bridge.accept({ ...base, sequence: 9, type: 'panelAction', pageEpoch: 3, action: { type: 'ready' } })).toBe(true);
   });
 
+  it('routes Facepalm results and status only from the attached epoch', () => {
+    const facepalm = vi.fn<(frame: import('@ai-pair/protocol').LocalAudioFrame) => void>();
+    const bridge = new WorkspacePanelBridge({ epoch: 'epoch', action: () => {}, terminal: () => {}, pageChanged: () => {}, facepalm });
+    const status = {
+      ...base,
+      sequence: 1,
+      type: 'facepalmStatus',
+      pageEpoch: 0,
+      snapshot: { enabled: true, status: 'idle', available: true, canOpenSettings: true },
+    };
+    expect(bridge.accept(status)).toBe(true);
+    expect(facepalm).toHaveBeenCalledWith(status);
+    expect(bridge.accept({ ...status, sequence: 2, connectionEpoch: 'stale' })).toBe(false);
+  });
+
   it('rejects malformed, wrong-epoch, wrong-direction and unready-page messages', () => {
     const bridge = new WorkspacePanelBridge({
       epoch: 'epoch',
       action: vi.fn<(_: unknown) => void>(),
       terminal: vi.fn<(_: unknown) => void>(),
+      facepalm: () => {},
       pageChanged: vi.fn<() => void>(),
     });
     expect(bridge.page()).toBeUndefined();

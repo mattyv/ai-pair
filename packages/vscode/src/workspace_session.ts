@@ -1,6 +1,7 @@
 import { CommandChannel, LOCAL_AUDIO_VERSION, type ChannelLoss, type LocalAudioFrame, type LocalPanelAction } from '@ai-pair/protocol';
 import { PanelUpdateSender } from './panel_update_sender';
 import { RemoteNarration } from './remote_narration';
+import { RemoteFacepalm } from './remote_facepalm';
 import { WorkspacePanelBridge } from './workspace_panel_bridge';
 import { SPEECH_TEMPO_TIMEOUT_MS } from './speech_tempo_client';
 
@@ -63,6 +64,7 @@ export interface WorkspaceSessionOptions {
 /** Connects workspace panel events and narration to the selected local companion. */
 export class WorkspaceSession {
   readonly narration: RemoteNarration;
+  readonly facepalm: RemoteFacepalm;
   private readonly channel: CommandChannel<LocalAudioFrame>;
   private readonly bridge: WorkspacePanelBridge;
   private readonly updates: PanelUpdateSender;
@@ -91,6 +93,12 @@ export class WorkspaceSession {
       lost: (reason) => {
         this.stop(reason);
       },
+    });
+    this.facepalm = new RemoteFacepalm({
+      epoch: options.epoch,
+      page: () => this.bridge.page(),
+      nextSequence,
+      send: (frame) => this.channel.send(frame),
     });
     this.narration = new RemoteNarration({
       epoch: options.epoch,
@@ -125,7 +133,12 @@ export class WorkspaceSession {
       terminal: (frame) => {
         this.narration.ack(frame);
       },
+      facepalm: (frame) => {
+        this.facepalm.accept(frame);
+      },
       pageChanged: () => {
+        this.facepalm.pageChanged();
+        this.facepalm.retire();
         this.narration.cancel();
       },
     });
@@ -155,6 +168,7 @@ export class WorkspaceSession {
     this.closed = true;
     clearInterval(this.heartbeat);
     const page = this.bridge.page();
+    this.facepalm.dispose();
     this.narration.dispose();
     this.bridge.dispose();
     if (page !== undefined) this.options.panel.closeRemote(page);

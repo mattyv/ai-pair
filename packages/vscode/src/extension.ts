@@ -10,6 +10,7 @@ import {
   type PanelEvent,
   type SavedSession,
   type NarrationPort,
+  type FacepalmPort,
 } from '@ai-pair/core';
 import {
   discoveryDir,
@@ -24,6 +25,8 @@ import {
 import { playDemo } from './demo';
 import { VsCodeEditor } from './editor';
 import { FacepalmClient } from './facepalm_client';
+import { facepalmSettingsWarning, openFacepalmSettings } from './facepalm_settings_launcher';
+import { RemoteFacepalm } from './remote_facepalm';
 import { Diagnostics } from './diagnostics';
 import { collectDiagnostics } from './diagnostics_collector';
 import { SpeechService, type SpeechAudioEvent, type SpeechOutput } from './speech_service';
@@ -746,6 +749,56 @@ export function activate(context: vscode.ExtensionContext): Api {
     }
   }
 
+  let selectedFacepalm: FacepalmClient | RemoteFacepalm | undefined;
+  let facepalmEnabled = context.globalState.get<unknown>('facepalmEnabled') !== false;
+  const facepalm: FacepalmPort = {
+    markBeat: (kind, windowMs) => selectedFacepalm?.markBeat(kind, windowMs) ?? Promise.resolve(undefined),
+    feel: (id, feeling) => selectedFacepalm?.feel(id, feeling) ?? Promise.resolve(),
+    retire: () => {
+      selectedFacepalm?.retire();
+    },
+  };
+  let localControlSerial = 0;
+  let localControlPending: { target: FacepalmClient; page: number | undefined; serial: number } | undefined;
+  function startLocalControl(target: FacepalmClient): number | undefined {
+    const page = panel.speechReadyPageId();
+    if (localControlPending?.target === target && localControlPending.page === page) return undefined;
+    const serial = ++localControlSerial;
+    localControlPending = { target, page, serial };
+    return serial;
+  }
+  function finishLocalControl(serial: number): void {
+    if (localControlPending?.serial === serial) localControlPending = undefined;
+  }
+  function refreshFacepalm(): void {
+    if (selectedFacepalm instanceof FacepalmClient) {
+      const target = selectedFacepalm;
+      const serial = startLocalControl(target);
+      const page = panel.speechReadyPageId();
+      if (serial !== undefined) {
+        void target.refresh(false, false, false).then(
+          () => {
+            finishLocalControl(serial);
+            if (selectedFacepalm === target && panel.speechReadyPageId() === page && localControlSerial === serial) {
+              panel.showFacepalmStatus(target.snapshot());
+            }
+          },
+          () => {
+            finishLocalControl(serial);
+          },
+        );
+      }
+    } else if (selectedFacepalm !== undefined) {
+      const target = selectedFacepalm;
+      const page = target.currentPage();
+      void target.refresh().then((result) => {
+        if (selectedFacepalm === target && target.currentPage() === page && result?.state === 'failed') {
+          void vscode.window.showWarningMessage(facepalmSettingsWarning(result, 'recheck'));
+        }
+      });
+    }
+  }
+  let facepalmSave: PromiseLike<void> = Promise.resolve();
   panel = new NarrationPanel(
     (file) => editor.resolvePath(file),
     speed,
@@ -758,6 +811,68 @@ export function activate(context: vscode.ExtensionContext): Api {
     context.extensionUri,
     {
       controller: () => controller,
+      facepalm: {
+        snapshot: () =>
+          selectedFacepalm?.snapshot() ?? { enabled: facepalmEnabled, status: 'unchecked', available: true, canOpenSettings: false },
+        enabled: (value) => {
+          facepalmEnabled = value;
+          selectedFacepalm?.setEnabled(value);
+          facepalmSave = Promise.resolve(facepalmSave)
+            .then(() => context.globalState.update('facepalmEnabled', value))
+            .catch(() => {});
+          if (value) refreshFacepalm();
+        },
+        refresh: () => {
+          refreshFacepalm();
+        },
+        openSettings: () => {
+          const target = selectedFacepalm;
+          if (target instanceof RemoteFacepalm) {
+            const page = target.currentPage();
+            void target.openSettings().then((result) => {
+              if (selectedFacepalm !== target || target.currentPage() !== page) return;
+              if (result?.state === 'failed') void vscode.window.showWarningMessage(facepalmSettingsWarning(result));
+              else if (result?.state === 'accepted') {
+                void vscode.window.showInformationMessage('Facepalm settings requested. Check behind this window if it does not appear.');
+              }
+            });
+          } else if (target !== undefined) {
+            const page = panel.speechReadyPageId();
+            const serial = startLocalControl(target);
+            if (serial === undefined) {
+              void vscode.window.showWarningMessage(facepalmSettingsWarning({ state: 'failed', reason: 'busy' }));
+              return;
+            }
+            function current(): boolean {
+              return selectedFacepalm === target && panel.speechReadyPageId() === page && localControlSerial === serial;
+            }
+            void openFacepalmSettings(
+              process.platform,
+              false,
+              (failure) => {
+                if (current()) void vscode.window.showWarningMessage(facepalmSettingsWarning(failure));
+              },
+              (diagnostic) => {
+                log.warn(`Facepalm settings process: reason=${diagnostic.reason}, signal=${diagnostic.signal}`);
+              },
+            ).then(
+              (result) => {
+                finishLocalControl(serial);
+                if (!current()) return;
+                if (result.state === 'failed') void vscode.window.showWarningMessage(facepalmSettingsWarning(result));
+                else {
+                  void vscode.window.showInformationMessage('Facepalm settings requested. Check behind this window if it does not appear.');
+                }
+              },
+              () => {
+                finishLocalControl(serial);
+              },
+            );
+          } else {
+            void vscode.window.showWarningMessage('Facepalm settings are unavailable. Reload the window and try again.');
+          }
+        },
+      },
       workerVisibility,
       workerEnabled: {
         get: () => workerEnabledSetting.get(),
@@ -1105,10 +1220,9 @@ export function activate(context: vscode.ExtensionContext): Api {
       selectedNarration?.cancel();
     },
   };
-  facepalmClient = new FacepalmClient();
   controller = new Controller(editor, panel, undefined, narration, {
     workerEnabled: () => workerEnabledSetting.get(),
-    facepalm: facepalmClient,
+    facepalm,
   });
   controller.onDiagnostic = record;
   controller.trace = (line) => {
@@ -1491,6 +1605,14 @@ export function activate(context: vscode.ExtensionContext): Api {
         },
       });
       selectedNarration = workspaceSession.narration;
+      selectedFacepalm = workspaceSession.facepalm;
+      selectedFacepalm.onStatus = (snapshot) => {
+        panel.showFacepalmStatus(snapshot);
+      };
+      selectedFacepalm.onSettingsFailure = (failure) => {
+        void vscode.window.showWarningMessage(facepalmSettingsWarning(failure));
+      };
+      selectedFacepalm.setEnabled(facepalmEnabled);
       context.subscriptions.push(workspaceSession);
     },
     commitFailed: () => {
@@ -1537,6 +1659,14 @@ export function activate(context: vscode.ExtensionContext): Api {
       panel.showSpeechTransport(chosen === 'legacy');
       panel.showLocalAudio(localAudio);
       if (chosen === 'legacy') {
+        const localFacepalm = new FacepalmClient();
+        facepalmClient = localFacepalm;
+        selectedFacepalm = localFacepalm;
+        localFacepalm.onStatus = (snapshot) => {
+          panel.showFacepalmStatus(snapshot);
+        };
+        localFacepalm.setEnabled(facepalmEnabled);
+        void localFacepalm.refresh(false, false);
         selectedNarration = speech;
         speech.prepare();
         publishReadiness();

@@ -57,7 +57,18 @@ const fake = vi.hoisted(() => ({
   acceptChunk: vi.fn(),
   showUpdate: vi.fn(),
   showSpeechTransport: vi.fn(),
+  showFacepalmStatus: vi.fn(),
   receiveNarration: vi.fn(),
+  retireFacepalm: vi.fn(),
+  localLog: vi.fn<(message: string) => void>(),
+  localLogDispose: vi.fn<() => void>(),
+  earlyFacepalmStatus: false,
+  disposeFacepalm: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+  facepalmOptions: undefined as import('../src/companion_facepalm').CompanionFacepalmOptions | undefined,
+  facepalmClient: undefined as { onStatus?: (snapshot: import('@ai-pair/protocol').FacepalmSnapshot) => void } | undefined,
+  openSettings: vi
+    .fn<typeof import('../../vscode/src/facepalm_settings_launcher').openFacepalmSettings>()
+    .mockResolvedValue({ state: 'accepted' }),
   attach: vi.fn(),
   accept: vi.fn(),
   setPause: vi.fn(),
@@ -76,7 +87,11 @@ const fake = vi.hoisted(() => ({
 vi.mock('vscode', () => ({
   Uri: { joinPath: (base: { path: string }, ...parts: string[]) => ({ path: [base.path, ...parts].join('/') }) },
   commands: { executeCommand: fake.execute },
-  window: { registerWebviewViewProvider: fake.register, showWarningMessage: fake.warning },
+  window: {
+    registerWebviewViewProvider: fake.register,
+    showWarningMessage: fake.warning,
+    createOutputChannel: () => ({ info: fake.localLog, warn: fake.localLog, dispose: fake.localLogDispose }),
+  },
 }));
 vi.mock('@ai-pair/protocol', async () => ({
   ...(await vi.importActual<typeof import('@ai-pair/protocol')>('@ai-pair/protocol')),
@@ -91,6 +106,24 @@ vi.mock('@ai-pair/protocol', async () => ({
     setPage = fake.setPage;
     accept = fake.acceptChunk;
   },
+}));
+vi.mock('../../vscode/src/facepalm_client', () => ({
+  FacepalmClient: class {
+    constructor() {
+      fake.facepalmClient = this;
+    }
+    onStatus?: (snapshot: import('@ai-pair/protocol').FacepalmSnapshot) => void;
+    snapshot = () => ({ enabled: true, status: 'unchecked' as const, available: true, canOpenSettings: false });
+    retire = fake.retireFacepalm;
+    setEnabled() {}
+    refresh() {
+      return Promise.resolve();
+    }
+  },
+}));
+vi.mock('../../vscode/src/facepalm_settings_launcher', () => ({
+  openFacepalmSettings: fake.openSettings,
+  facepalmSettingsWarning: () => 'safe Facepalm warning',
 }));
 vi.mock('../../audio-native/src/factory', () => ({ createLocalAudioAdapter: vi.fn(() => ({})) }));
 vi.mock('../../vscode/src/diagnostics', () => ({
@@ -113,6 +146,7 @@ vi.mock('../../vscode/src/panel', () => ({
     }
     showRemoteUpdate = fake.showUpdate;
     showSpeechTransport = fake.showSpeechTransport;
+    showFacepalmStatus = fake.showFacepalmStatus;
     showShortcuts = fake.showShortcuts;
   },
 }));
@@ -158,6 +192,16 @@ vi.mock('../src/speech_host', () => ({
     };
   },
 }));
+vi.mock('../src/companion_facepalm', () => ({
+  CompanionFacepalm: class {
+    constructor(options: typeof fake.facepalmOptions) {
+      fake.facepalmOptions = options;
+    }
+    accept = vi.fn();
+    retire = fake.retireFacepalm;
+    dispose = fake.disposeFacepalm;
+  },
+}));
 vi.mock('../src/companion_narration', () => ({
   CompanionNarration: class {
     constructor(options: NarrationOptions) {
@@ -174,6 +218,9 @@ vi.mock('../src/local_connection', () => ({
   LocalConnection: class {
     constructor(options: ConnectionOptions) {
       fake.connectionOptions = options;
+      if (fake.earlyFacepalmStatus) {
+        fake.facepalmClient?.onStatus?.({ enabled: true, status: 'unchecked', available: true, canOpenSettings: false });
+      }
     }
     attach = fake.attach;
     accept = fake.accept;
@@ -183,6 +230,7 @@ vi.mock('../src/local_connection', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  fake.earlyFacepalmStatus = false;
   fake.routing = undefined;
   fake.connectionOptions = undefined;
   fake.channelOptions = undefined;
@@ -409,6 +457,25 @@ it('stops locally on connection loss and handles repeated shutdown safely', () =
   void current.dispose();
 });
 
+it('replaces the retained page connected status when the command channel is lost', () => {
+  session();
+  fake.showFacepalmStatus({ enabled: true, status: 'connected', available: true, canOpenSettings: true });
+  fake.channelOptions?.lost('closed');
+  expect(fake.showFacepalmStatus).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'unchecked' }));
+});
+
+it('continues retiring all resources if the retained page rejects its final status', async () => {
+  const current = session();
+  fake.showFacepalmStatus.mockImplementationOnce(() => {
+    throw new Error('panel failed');
+  });
+  await expect(current.dispose()).rejects.toThrow('panel failed');
+  expect(fake.disposeFacepalm).toHaveBeenCalledOnce();
+  expect(fake.hostDispose).toHaveBeenCalledOnce();
+  expect(fake.connectionDispose).toHaveBeenCalledOnce();
+  expect(fake.channelDispose).toHaveBeenCalledOnce();
+});
+
 it('drops replacement-ready delivery after the session closes', async () => {
   const current = session();
   routing().forward({ type: 'ready' }, 7);
@@ -522,4 +589,135 @@ it("Converges: reads this machine's keybindings.json for the page it owns, and s
   expect(fake.showShortcuts).toHaveBeenCalledWith({ pause: `${MAC_MODIFIERS.control}${MAC_MODIFIERS.shift}Q` });
   void current.dispose();
   expect(fake.watcherDispose).toHaveBeenCalledOnce();
+});
+
+it('routes Facepalm commands to the local owner', () => {
+  const current = session();
+  const frame: LocalAudioFrame = {
+    version: LOCAL_AUDIO_VERSION,
+    connectionEpoch: 'epoch',
+    sequence: 2,
+    type: 'facepalmRefresh',
+    pageEpoch: 7,
+    requestId: 1,
+  };
+  fake.connectionOptions?.receive(frame);
+  expect(fake.receiveNarration).not.toHaveBeenCalledWith(frame);
+  void current.dispose();
+});
+
+it('retires local Facepalm before a replacement page is ready', () => {
+  const current = session();
+  routing().forward({ type: 'ready' }, 7);
+  routing().forward({ type: 'ready' }, 8);
+  expect(fake.retireFacepalm).toHaveBeenCalledOnce();
+  routing().closed(8);
+  void current.dispose();
+});
+
+it('connects local Facepalm status, page, settings and ordered result output', async () => {
+  const current = session();
+  const frame: LocalAudioFrame = {
+    version: LOCAL_AUDIO_VERSION,
+    connectionEpoch: 'epoch',
+    sequence: 4,
+    type: 'facepalmRefresh',
+    pageEpoch: 7,
+    requestId: 1,
+  };
+  expect(fake.facepalmOptions?.page()).toBe(7);
+  fake.facepalmOptions?.diagnostic?.('Facepalm settings request received.');
+  expect(fake.localLog).toHaveBeenCalledWith('Facepalm settings request received.');
+  fake.facepalmOptions?.send(frame);
+  expect(fake.send).toHaveBeenCalledWith(frame);
+  fake.openSettings.mockResolvedValueOnce({ state: 'failed', reason: 'display' });
+  await expect(fake.facepalmOptions?.openSettings(() => {})).resolves.toEqual({ state: 'failed', reason: 'display' });
+  fake.openSettings.mock.lastCall?.[3]?.({ reason: 'exit', signal: 'SIGTERM' });
+  expect(fake.localLog).toHaveBeenCalledWith('Facepalm settings process: reason=exit, signal=SIGTERM');
+  await expect(fake.facepalmOptions?.openSettings(() => {})).resolves.toEqual({ state: 'accepted' });
+  const snapshot = { enabled: true, status: 'idle' as const, available: true, canOpenSettings: true };
+  fake.facepalmClient?.onStatus?.(snapshot);
+  expect(fake.send).toHaveBeenCalledWith(expect.objectContaining({ type: 'facepalmStatus', snapshot }));
+  await current.dispose();
+});
+
+it('NoOverlap: shutdown waits for physical Facepalm close and tolerates reentrant channel loss', async () => {
+  const close = Promise.withResolvers<void>();
+  fake.disposeFacepalm.mockImplementationOnce(() => {
+    fake.channelOptions?.lost('closed');
+    return close.promise;
+  });
+  const current = session();
+  let done = false;
+  const stopped = current.dispose().then(() => {
+    done = true;
+  });
+  await Promise.resolve();
+  expect(fake.disposeFacepalm).toHaveBeenCalledOnce();
+  expect(fake.hostDispose).toHaveBeenCalledOnce();
+  expect(done).toBe(false);
+  close.resolve();
+  await stopped;
+  expect(done).toBe(true);
+});
+
+it('reports synchronous retirement failure through the shutdown promise', async () => {
+  fake.disposeFacepalm.mockImplementationOnce(() => {
+    throw new Error('retirement failed');
+  });
+  const current = session();
+  await expect(current.dispose()).rejects.toThrow('retirement failed');
+  expect(fake.hostDispose).toHaveBeenCalledOnce();
+  expect(fake.connectionDispose).toHaveBeenCalledOnce();
+  expect(fake.channelDispose).toHaveBeenCalledOnce();
+});
+
+it('waits for both resources and reports asynchronous retirement failure', async () => {
+  const close = Promise.withResolvers<void>();
+  fake.disposeFacepalm.mockReturnValueOnce(close.promise);
+  fake.hostDispose.mockRejectedValueOnce(new Error('speech failed'));
+  const current = session();
+  let done = false;
+  const stopped = current.dispose().catch((error: unknown) => {
+    done = true;
+    throw error;
+  });
+  await Promise.resolve();
+  expect(done).toBe(false);
+  close.resolve();
+  await expect(stopped).rejects.toThrow('speech failed');
+});
+
+it('reports a startup status before a page exists without inventing a page identity', async () => {
+  fake.earlyFacepalmStatus = true;
+  const current = session();
+  expect(fake.send).toHaveBeenCalledWith(expect.objectContaining({ type: 'facepalmStatus', pageEpoch: 0 }));
+  await current.dispose();
+});
+
+it('retires its log once on channel loss and still disposes other resources if the log fails', async () => {
+  fake.localLogDispose.mockImplementationOnce(() => {
+    throw new Error('log failure');
+  });
+  const current = session();
+  fake.channelOptions?.lost('closed');
+  await expect(current.dispose()).resolves.toBeUndefined();
+  await expect(current.dispose()).resolves.toBeUndefined();
+  expect(fake.localLogDispose).toHaveBeenCalledOnce();
+  expect(fake.hostDispose).toHaveBeenCalledOnce();
+  expect(fake.connectionDispose).toHaveBeenCalledOnce();
+  expect(fake.channelDispose).toHaveBeenCalledOnce();
+});
+
+it('reports disconnected Facepalm controls instead of silently dropping the action', async () => {
+  const current = session();
+  fake.channelOptions?.lost('closed');
+  fake.warning.mockClear();
+  routing().forward({ type: 'facepalmOpenSettings' }, 7);
+  routing().forward({ type: 'facepalmRefresh' }, 7);
+  routing().forward({ type: 'facepalmEnabled', value: false }, 7);
+  routing().forward({ type: 'pause' }, 7);
+  expect(fake.warning).toHaveBeenCalledTimes(3);
+  expect(fake.warning).toHaveBeenCalledWith('AI Pair Local Audio is disconnected. Reload the window to use Facepalm.');
+  await current.dispose();
 });

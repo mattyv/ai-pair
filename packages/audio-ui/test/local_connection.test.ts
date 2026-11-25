@@ -21,6 +21,26 @@ describe('local audio connection lease', () => {
     expect(connection.accept(heartbeat)).toBe(false);
     expect(connection.accept({ ...heartbeat, sequence: 3, type: 'panelAction', pageEpoch: 1, action: { type: 'ready' } })).toBe(false);
     expect(connection.accept({ ...heartbeat, sequence: 3, type: 'terminal', jobId: 'job', pageEpoch: 1, outcome: 'ended' })).toBe(false);
+    expect(
+      connection.accept({
+        ...heartbeat,
+        sequence: 3,
+        type: 'facepalmControlResult',
+        pageEpoch: 1,
+        requestId: 1,
+        result: { operation: 'open', outcome: { state: 'accepted' } },
+      }),
+    ).toBe(false);
+    expect(
+      connection.accept({
+        ...heartbeat,
+        sequence: 3,
+        type: 'facepalmSettingsNotice',
+        pageEpoch: 1,
+        requestId: 1,
+        failure: { state: 'failed', reason: 'handoff' },
+      }),
+    ).toBe(false);
     expect(connection.accept({ ...heartbeat, sequence: 3, type: 'pause', jobId: 'job', pageEpoch: 1 })).toBe(true);
     expect(connection.accept({ ...heartbeat, sequence: 3, connectionEpoch: 'old' })).toBe(false);
     expect(connection.accept({ ...heartbeat, sequence: 3, secret: 'bad' })).toBe(false);

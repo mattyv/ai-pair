@@ -131,21 +131,23 @@ export async function run(): Promise<void> {
     },
   });
   try {
-    // Restore Auto while disabled, then choose CPU before requesting warmup.
+    // Restore GPU while disabled, then choose CPU before requesting warmup.
     await settings.update('speech.enabled', false, target);
-    await settings.update('speech.computeMode', 'auto', target);
+    await settings.update('speech.computeMode', 'gpu', target);
     const first = await extension.activate();
     cached.exports = originalExports;
     assert.ok(actualContext, 'VS Code must provide its real extension context');
     savedOutput = actualContext.globalState.get('speechOutput');
     await first.ready;
     assert.ok(restorePanel, 'the real panel provider must be observed');
-    computeStates.length = 0;
-    await settings.update('speech.computeMode', 'gpu', target);
-    await until(() => computeStates.some((state) => state.requestedMode === 'gpu'), 'the GPU preference to reach the lifecycle owner');
+    first.panelMessage({ type: 'ready' });
+    await until(() => computeStates.some((state) => state.requestedMode === 'gpu'), 'the restored GPU preference');
     computeStates.length = 0;
     await settings.update('speech.computeMode', 'auto', target);
     await until(() => computeStates.some((state) => state.requestedMode === 'auto'), 'the Auto preference to reach the lifecycle owner');
+    computeStates.length = 0;
+    await settings.update('speech.computeMode', 'gpu', target);
+    await until(() => computeStates.some((state) => state.requestedMode === 'gpu'), 'the GPU preference to reach the lifecycle owner');
     assert.equal(vscode.workspace.getConfiguration('aiPair').get('speech.enabled'), false);
     restorePanel();
     restorePanel = undefined;

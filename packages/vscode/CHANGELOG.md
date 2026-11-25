@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.57.2
+
+- Log bounded local Facepalm settings process failure diagnostics (#148).
+- Clarify the question format and timing for Facepalm smoke tests (#148).
+
+## 0.57.1
+
+-   Explain local Facepalm approval and on-demand connection, add passive status
+    recheck, and report Settings launch failures across the companion (#148).
+
+-   Use local Facepalm through the UI companion in Remote SSH, with local settings
+  and read-only restored feedback cards (#148).
+-   Add Facepalm feedback controls and passive connection status in Settings (#146).
+
 ## 0.56.1
 
 -   Show where the programmer was looking next to a Facepalm feeling, e.g.

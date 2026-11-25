@@ -5,6 +5,7 @@ describe('cross-host panel updates', () => {
   it('accepts the visible session, replay, and workspace UI updates', () => {
     for (const update of [
       { type: 'say', text: 'Hello.' },
+      { type: 'facepalmStatus', enabled: true, status: 'idle', available: true, canOpenSettings: false },
       { type: 'attention', state: 'granted' },
       { type: 'state', state: 'paused', turn: 'agent', paused: true, speechPaused: false },
       { type: 'replay', events: [{ type: 'session', active: true, task: 'Pair' }] },

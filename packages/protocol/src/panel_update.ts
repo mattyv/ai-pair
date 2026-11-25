@@ -78,9 +78,21 @@ const calibration = z.union([
   z.strictObject({ phase: z.literal('done'), msPerChar: number, wordsPerMinute: number }),
 ]);
 
+/** Validates a Facepalm owner's bounded status snapshot. */
+export const facepalmSnapshot = z.strictObject({
+  enabled: z.boolean(),
+  status: z.enum(['off', 'unchecked', 'idle', 'connected', 'notRunning', 'approvalNeeded', 'unavailableSsh']),
+  available: z.boolean(),
+  canOpenSettings: z.boolean(),
+});
+
+/** The Facepalm status shown by the panel. */
+export type FacepalmSnapshot = z.infer<typeof facepalmSnapshot>;
+
 /** Validates visible workspace updates, excluding speech settings, secrets, and audio. */
 export const localPanelUpdate = z.union([
   ...panelEvent.options,
+  facepalmSnapshot.extend({ type: z.literal('facepalmStatus') }),
   z
     .strictObject({
       type: z.literal('replay'),

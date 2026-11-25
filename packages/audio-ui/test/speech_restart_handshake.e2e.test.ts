@@ -42,6 +42,7 @@ vi.mock('vscode', () => ({
     onDidChangeConfiguration: () => ({ dispose: () => {} }),
   },
   window: {
+    createOutputChannel: () => ({ info: vi.fn(), dispose: vi.fn() }),
     registerWebviewViewProvider: () => {
       fake.providers++;
       return {
@@ -65,6 +66,7 @@ vi.mock('../../vscode/src/panel', () => ({
       return 7;
     }
     showSpeechTransport() {}
+    showFacepalmStatus() {}
     showSpeechReadiness() {}
     showSpeechKeyStatus() {}
     showSpeechOutputCatalog() {}

@@ -7,6 +7,8 @@ const fake = vi.hoisted(() => ({
   channelOptions: undefined as import('@ai-pair/protocol').CommandChannelOptions<import('@ai-pair/protocol').LocalAudioFrame> | undefined,
   narrationOptions: undefined as import('../src/remote_narration').RemoteNarrationOptions | undefined,
   updatesOptions: undefined as import('../src/panel_update_sender').PanelUpdateSenderOptions | undefined,
+  facepalmOptions: undefined as import('../src/remote_facepalm').RemoteFacepalmOptions | undefined,
+  facepalmAccept: vi.fn(),
   bridgeOptions: undefined as import('../src/workspace_panel_bridge').WorkspacePanelBridgeOptions | undefined,
   page: undefined as number | undefined,
   send: vi.fn<(frame: import('@ai-pair/protocol').LocalAudioFrame) => Promise<boolean>>().mockResolvedValue(true),
@@ -26,6 +28,17 @@ vi.mock('@ai-pair/protocol', async (original) => ({
     }
     send = fake.send;
     dispose = fake.channelDispose;
+  },
+}));
+vi.mock('../src/remote_facepalm', () => ({
+  RemoteFacepalm: class {
+    constructor(options: typeof fake.facepalmOptions) {
+      fake.facepalmOptions = options;
+    }
+    retire = vi.fn();
+    pageChanged = vi.fn();
+    dispose = vi.fn();
+    accept = fake.facepalmAccept;
   },
 }));
 vi.mock('../src/remote_narration', () => ({
@@ -186,5 +199,34 @@ it('allows all four bounded synthesis, transform and playback stages before the 
   });
   const worstCaseMs = 5000 + 20_000 + 4 * 20_000 + 4 * SPEECH_TEMPO_TIMEOUT_MS + 4 * 20_000 + 40_600 + 4 * 5000;
   expect(fake.narrationOptions?.timeoutMs).toBeGreaterThanOrEqual(worstCaseMs + 10_000);
+  session.dispose();
+});
+
+it('retires Facepalm on page replacement', () => {
+  const session = new WorkspaceSession({
+    epoch: 'epoch',
+    panel: { attachRemote: () => {}, receiveRemote: () => {}, closeRemote: () => {} },
+    send: vi.fn().mockResolvedValue(undefined),
+    lost: () => {},
+  });
+  const retire = vi.spyOn(session.facepalm, 'retire');
+  fake.bridgeOptions?.pageChanged();
+  expect(retire).toHaveBeenCalled();
+  session.dispose();
+});
+
+it('connects the Facepalm proxy to the ordered channel and receiver', () => {
+  const session = new WorkspaceSession({
+    epoch: 'epoch',
+    panel: { attachRemote: () => {}, receiveRemote: () => {}, closeRemote: () => {} },
+    send: vi.fn().mockResolvedValue(undefined),
+    lost: () => {},
+  });
+  fake.page = 3;
+  expect(fake.facepalmOptions?.page()).toBe(3);
+  void fake.facepalmOptions?.send(frame);
+  expect(fake.send).toHaveBeenCalledWith(frame);
+  fake.bridgeOptions?.facepalm(frame);
+  expect(fake.facepalmAccept).toHaveBeenCalledWith(frame);
   session.dispose();
 });

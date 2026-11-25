@@ -18,7 +18,11 @@ const fake = vi.hoisted(() => ({
 vi.mock('vscode', () => ({
   Uri: { file: (value: string) => ({ fsPath: value }), joinPath: (base: unknown) => base },
   commands: { executeCommand: fake.execute },
-  window: { registerWebviewViewProvider: fake.register, showWarningMessage: fake.warning },
+  window: {
+    registerWebviewViewProvider: fake.register,
+    showWarningMessage: fake.warning,
+    createOutputChannel: () => ({ info: () => {}, dispose: () => {} }),
+  },
 }));
 // The shortcut labels have their own tests; here the companion only needs a watcher to make and dispose.
 vi.mock('../../vscode/src/shortcut_watcher', () => ({
@@ -51,6 +55,7 @@ vi.mock('../../vscode/src/panel', () => ({
     }
     showRemoteUpdate = vi.fn();
     showSpeechTransport = fake.showSpeechTransport;
+    showFacepalmStatus = vi.fn();
   },
 }));
 
@@ -128,10 +133,11 @@ describe('companion session integration', () => {
     if (!isRouting(routing)) throw new Error('No routing');
     routing.closed(1);
     routing.forward({ type: 'ready' }, 2);
-    expect(fake.execute).not.toHaveBeenCalled();
+    expect(fake.execute.mock.calls.map((call) => call[1])).toMatchObject([{ type: 'facepalmStatus' }]);
     retirement.resolve();
     for (let index = 0; index < 6; index++) await Promise.resolve();
     expect(fake.execute.mock.calls.map((call) => call[1])).toMatchObject([
+      { type: 'facepalmStatus' },
       { type: 'panelAction', pageEpoch: 1, action: { type: 'pageClosed' } },
       { type: 'panelAction', pageEpoch: 2, action: { type: 'ready' } },
     ]);

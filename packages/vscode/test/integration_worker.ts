@@ -495,6 +495,13 @@ export async function workerPaths(api: Api, root: string): Promise<void> {
     await assert.rejects(owner.call('worker_grant', { brief: 'edit scratch file' }));
     await setting.update('worker.enabled', true, vscode.ConfigurationTarget.Global);
     await assert.rejects(owner.call('worker_grant', { brief: 'x'.repeat(WORKER_TEXT_LIMIT + 1) }));
+    await setting.update('worker.codexModel', '   ', vscode.ConfigurationTarget.Global);
+    const blankModel: unknown = await owner.call('worker_grant', { brief: 'use the provider default' });
+    assert.equal(z.object({ model: z.string().optional() }).parse(blankModel).model, undefined);
+    const defaultGrant = GRANT.parse(blankModel);
+    await owner.callWorker(defaultGrant.port, 'worker_done', { capability: defaultGrant.capability, text: 'finished' });
+    await owner.call('listen', {});
+    await setting.update('worker.codexModel', MODEL, vscode.ConfigurationTarget.Global);
     const granted: unknown = await owner.call('worker_grant', { brief: 'edit scratch file' });
     assert.equal(z.object({ model: z.string() }).parse(granted).model, MODEL);
     const grant = GRANT.parse(granted);

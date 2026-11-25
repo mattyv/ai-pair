@@ -11,6 +11,7 @@ import type { OutputChoice } from './speech_output_types';
 import type {
   AudioDiagnostics,
   FacepalmCue,
+  FacepalmSnapshot,
   LocalAudioStatus,
   SpeechDecodeFromPage,
   NavigatorCommentary,
@@ -34,6 +35,8 @@ export type WorkerVisibility = 'milestones' | 'everything' | 'off';
 export type FromPanel =
   | SpeechDecodeFromPage
   | { type: 'ready' }
+  | { type: 'facepalmEnabled'; value: boolean }
+  | { type: 'facepalmRefresh' | 'facepalmOpenSettings' }
   | { type: 'cancelWorker' }
   | { type: 'workerEnabled'; value: boolean }
   | { type: 'workerModel'; provider: WorkerProvider; value: string }
@@ -96,6 +99,7 @@ export type FromPanel =
 /** Messages to the page: the session's events, and the panel's own. */
 export type ToPanel =
   | PanelEvent
+  | ({ type: 'facepalmStatus' } & FacepalmSnapshot)
   /** The log, for a page that just loaded. */
   | { type: 'replay'; events: PanelEvent[]; costSessionGeneration?: number; costSessionActive?: boolean }
   /** The programmer's selection, offered with a reply. */

@@ -1,5 +1,17 @@
 # AI Pair
 
+With Remote SSH, install AI Pair 0.57.1 on the remote host and AI Pair Local
+Audio 0.57.1 locally. Install and turn on Facepalm on the local machine, then
+run `facepalm-daemon approve ai-pair` there. Pair Settings shows the local
+Facepalm status and opens its local settings. This works with speech disabled,
+cloud speech, or local speech. Camera frames and approval tokens stay local;
+Facepalm does not need to be installed on the remote host. Both Pair extensions
+must come from the same build bundle; install both and run **Developer:
+Reload Window**. Recheck status inspects local approval and installation files
+without starting Facepalm or activating the camera. An approval found is
+distinct from a connection, which starts when a reading is requested. Settings
+launch requests report failures; an accepted request may open behind VS Code.
+
 Command reports distinguish approval from waiting for completion, and retain
 commands left in the background after the wait limit. A later observed finish
 reports the original run ID, exit status and bounded output tail. A timeout

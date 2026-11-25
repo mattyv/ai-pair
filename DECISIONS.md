@@ -10,6 +10,85 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   GPT-6.1 Terra agents write code and tests; GPT-6 Astra agents review them.
     Resolve findings and verify the resulting changes before reporting completion.
 
+## Local Facepalm settings diagnostics (#148, 2026-11-25)
+
+-   Record only an allowlisted process signal and the existing coarse failure
+    category in the local host output channel. Never record raw stderr or send
+    process details over the companion protocol. The cause of the reported
+    immediate failure remains unconfirmed; these facts support investigation
+    without changing the launch environment or claiming window visibility.
+
+## Facepalm settings feedback and passive recheck (#148, 2026-11-25)
+
+-   Keep a single feedback toggle and local Settings action. Add conditional
+    **Recheck status** for uncertain, unavailable or missing-approval evidence.
+    It inspects files, not a camera or live service handshake. Distinguish an
+    approval found on this device from a verified connection, and explain that
+    the reading triggers the connection. Approval guidance names `ai-pair` and
+    the local machine, independently of camera consent or `mcp` approval.
+-   Bump both extensions to 0.57.1 so the new protocol-14 installers are an
+    identifiable upgrade from the shared 0.57.0 development candidate. Install
+    the matching workspace and UI companion from the same bundle.
+-   Protocol 14 adds bounded settings control results scoped to attachment,
+    page and request identity. One pending control request settles on a result,
+    timeout or disconnect; an old page cannot consume a successor's result.
+    Both extensions must come from the same bundle. This replaces protocol 13's
+    fire-and-forget settings and recheck actions without changing beat ownership.
+-   Treat spawning a GUI process as admission, not proof that a window became
+    visible. Observe early exit and startup errors and report sanitized failure
+    categories. Keep late failure callbacks scoped to the accepted request.
+    Window managers may keep Settings behind the current window; do not claim
+    success at foreground placement or bypass their focus policy.
+-   Actual cause of the user's Settings no-op is still unconfirmed: the local
+    terminal command opens Settings, while the composed button-to-channel trace
+    after session retirement passes. Source-confirmed gaps in error visibility
+    are fixed independently of that diagnosis. Native per-file coverage and
+    actual two-host/desktop confirmation remain separate verification gates.
+
+## Local Facepalm in Remote SSH (#148, 2026-11-24)
+
+-   Keep the camera service, consent, token and settings launcher on the UI
+    machine. Reuse Local Audio's existing attachment for requests and interpreted
+    feedback, independently of speech selection. Remote workspaces use a proxy;
+    direct client fallback is limited to local legacy placement.
+-   Preserve the existing subscription client and upstream settings history.
+    Add awaitable disposal because replacement across client instances otherwise
+    admits a new socket before the previous socket closes. Await speech and
+    Facepalm cleanup together, even when one fails.
+-   Separate request identity, live card capabilities and retirement identity.
+    A later request does not revoke unrelated cards. Reloaded history is read-only
+    because a new client can reuse a numeric card ID. Isolate status observers so
+    their exceptions cannot tear down the audio connection.
+-   Acknowledge commands before asynchronous Facepalm results so camera reads do
+    not block audio heartbeats. Protocol version 13 requires matching companion
+    and workspace extensions. Passive detection never starts camera use.
+-   Linux tests exercise the installed companion and real Unix sockets in one
+    headless VS Code instance. This does not verify two physical SSH hosts.
+    Native coverage remains a required verification gate; composed or unit
+    coverage does not replace it. Models are bounded, separately checked
+    abstractions rather than a formal composition of every lifecycle model.
+
+## Facepalm settings (#146)
+
+-   Preserve the existing enabled default. The AI Pair toggle controls only its
+    subscription; Facepalm must already be running and approve AI Pair. Opening
+    Settings and checking status inspect files and never perform the handshake.
+-   The client owns desired state, connection generations, card capabilities,
+    and status snapshots. Retiring invalidates work immediately and a new
+    socket waits for the previous close. Passive file evidence is not a verified
+    connection. Missing supported installation paths hide the section only when
+    socket and token evidence are also absent; unknown evidence stays visible.
+-   The explicit settings action uses Facepalm's public `--settings` command
+    line, independently implemented from the documented interface rather than
+    copying GPL source into this MIT repository. Supported paths are
+    `~/Applications/Facepalm.app`, `/usr/bin/facepalm-menu`, and
+    `~/.local/facepalm/bin/facepalm-menu`. Custom installations are not located.
+    Remote hosts cannot launch a local GUI. A remote Facepalm service can still
+    be used if its socket and approval are present on that host.
+-   The Archi source and generated interactive export were checked with the
+    Archi 1.5.1 validator and by regenerating and comparing the normalized
+    HTML. The validator reports an existing unrelated long-label warning.
+
 ## Answering programmer messages (#128)
 
 -   Repeat the instruction to answer alongside a delivered message or a handoff

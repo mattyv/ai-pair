@@ -109,6 +109,13 @@
       "functions": 100
     }
   },
+  "packages/audio-ui/src/companion_facepalm.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/audio-ui/src/companion_narration.ts": {
     "unit": {
       "lines": 100,
@@ -774,6 +781,13 @@
       "functions": 100
     },
     "integration": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/remote_facepalm.ts": {
+    "unit": {
       "lines": 100,
       "branches": 100,
       "functions": 100

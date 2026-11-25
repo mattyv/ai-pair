@@ -4,6 +4,56 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const tempoPaths = vi.hoisted(() => [] as string[]);
+const facepalmFake = vi.hoisted(() => {
+  class Client {
+    readonly setEnabled = vi.fn<(value: boolean) => void>();
+    readonly refresh = vi.fn<(ssh: boolean, remote: boolean, notify?: boolean) => Promise<void>>().mockResolvedValue(undefined);
+    readonly retire = vi.fn();
+    readonly markBeat = vi.fn().mockResolvedValue(undefined);
+    readonly feel = vi.fn().mockResolvedValue(undefined);
+    readonly snapshot = vi.fn(() => ({ enabled: true, status: 'unchecked' as const, available: true, canOpenSettings: true }));
+    onStatus?: (snapshot: ReturnType<Client['snapshot']>) => void;
+    constructor() {
+      // The registry is initialized before any client is constructed.
+      // oxlint-disable-next-line eslint/no-use-before-define
+      clients.push(this);
+    }
+  }
+  const clients: Client[] = [];
+  class Remote {
+    onStatus?: (snapshot: ReturnType<Client['snapshot']>) => void;
+    onSettingsFailure?: (failure: Extract<import('@ai-pair/protocol').FacepalmSettingsLaunch, { state: 'failed' }>) => void;
+    snapshot = vi.fn(() => ({ enabled: true, status: 'unchecked' as const, available: true, canOpenSettings: true }));
+    currentPage = vi.fn(() => 1);
+    setEnabled = vi.fn();
+    refresh = vi.fn().mockResolvedValue(undefined);
+    openSettings = vi.fn().mockResolvedValue({ state: 'accepted' });
+    retire = vi.fn();
+    markBeat = vi.fn().mockResolvedValue(undefined);
+    feel = vi.fn().mockResolvedValue(undefined);
+  }
+  return {
+    Client,
+    Remote,
+    clients,
+    open: vi
+      .fn<
+        (
+          platform: NodeJS.Platform,
+          remote: boolean,
+          late?: (failure: Extract<import('@ai-pair/protocol').FacepalmSettingsLaunch, { state: 'failed' }>) => void,
+          diagnostic?: (event: import('../src/facepalm_settings_launcher').FacepalmSettingsDiagnostic) => void,
+        ) => Promise<import('@ai-pair/protocol').FacepalmSettingsLaunch>
+      >()
+      .mockResolvedValue({ state: 'accepted' }),
+  };
+});
+vi.mock('../src/facepalm_client', () => ({ FacepalmClient: facepalmFake.Client }));
+vi.mock('../src/remote_facepalm', () => ({ RemoteFacepalm: facepalmFake.Remote }));
+vi.mock('../src/facepalm_settings_launcher', () => ({
+  openFacepalmSettings: facepalmFake.open,
+  facepalmSettingsWarning: () => 'safe Facepalm warning',
+}));
 const costFake = vi.hoisted(() => ({
   publish: undefined as ((value: import('../src/session_speech_cost').SessionSpeechCostView) => void) | undefined,
   capture: vi.fn<() => (() => ((cost: number | undefined) => void) | undefined) | undefined>(),
@@ -319,7 +369,7 @@ const fakes = vi.hoisted(() => {
       readonly panel: unknown,
       readonly config: unknown,
       readonly narration: import('@ai-pair/core').NarrationPort,
-      readonly options?: { workerEnabled?: () => boolean },
+      readonly options?: { workerEnabled?: () => boolean; facepalm?: import('@ai-pair/core').FacepalmPort },
     ) {
       made.controllers.push(this);
     }
@@ -397,6 +447,7 @@ const fakes = vi.hoisted(() => {
     readonly showOpenRouterKeyStatus = vi.fn();
     readonly showSpeechOutputCatalog = vi.fn();
     readonly speechReadyPageId = vi.fn(() => 7);
+    readonly showFacepalmStatus = vi.fn();
     readonly showSpeechStatus = vi.fn();
     readonly showSpeechCost = vi.fn();
     readonly playSpeech = vi.fn(() => 7);
@@ -421,6 +472,7 @@ const fakes = vi.hoisted(() => {
       readonly trace: (line: string) => void,
       readonly extensionUri: unknown,
       readonly wiring: {
+        facepalm: NonNullable<PanelWiring['facepalm']>;
         workerEnabled: { get: () => boolean; set: (value: boolean) => void };
         workerModel: { get: (provider: 'codex' | 'claude') => string; set: (provider: 'codex' | 'claude', value: string) => void };
         workerVisibility: { get: () => 'milestones' | 'everything' | 'off'; set: (value: 'milestones' | 'everything' | 'off') => void };
@@ -530,6 +582,7 @@ const fakes = vi.hoisted(() => {
     placementChoose: vi.fn(),
     session: undefined as
       | {
+          facepalm: InstanceType<typeof facepalmFake.Remote>;
           narration: {
             speak: ReturnType<typeof vi.fn>;
             prepareNext: ReturnType<typeof vi.fn>;
@@ -719,6 +772,7 @@ vi.mock('../src/panel_placement', () => ({
 vi.mock('../src/old_extension', () => ({ warnOldExtension: vi.fn(() => Promise.resolve()) }));
 vi.mock('../src/workspace_session', () => ({
   WorkspaceSession: class {
+    facepalm = new facepalmFake.Remote();
     narration = {
       speak: vi.fn(() => Promise.resolve()),
       prepareNext: vi.fn(),
@@ -1553,6 +1607,48 @@ describe('activate', () => {
     fakes.settings.set('speech.enabled', false);
     changed('speech', 'speech.enabled');
     expect(speech.cancel).toHaveBeenCalledOnce();
+  });
+
+  it('routes Facepalm choices, persists them, refreshes remotely and warns on launch failure', async () => {
+    const h = activated();
+    await settle();
+    const client = last(facepalmFake.clients);
+    const wiring = h.panel.wiring.facepalm;
+    expect(wiring.snapshot()).toEqual(client.snapshot());
+    client.onStatus?.(client.snapshot());
+    expect(h.panel.showFacepalmStatus).toHaveBeenCalledWith(client.snapshot());
+    wiring.enabled(false);
+    await settle();
+    expect(client.setEnabled).toHaveBeenLastCalledWith(false);
+    expect(h.context.globalState.get('facepalmEnabled')).toBe(false);
+    fakes.remoteName = 'ssh-remote';
+    wiring.enabled(true);
+    await settle();
+    expect(h.context.globalState.get('facepalmEnabled')).toBe(true);
+    expect(client.refresh).toHaveBeenLastCalledWith(false, false, false);
+    fakes.remoteName = 'remote';
+    wiring.refresh();
+    expect(client.refresh).toHaveBeenLastCalledWith(false, false, false);
+    await settle();
+    facepalmFake.open.mockResolvedValueOnce({ state: 'failed', reason: 'display' });
+    wiring.openSettings();
+    await settle();
+    expect(facepalmFake.open).toHaveBeenLastCalledWith(process.platform, false, expect.any(Function), expect.any(Function));
+    facepalmFake.open.mock.lastCall?.[3]?.({ reason: 'exit', signal: 'SIGABRT' });
+    expect(fakes.logged).toContainEqual(['warn', 'Facepalm settings process: reason=exit, signal=SIGABRT']);
+    expect(fakes.infos).toContain('safe Facepalm warning');
+    facepalmFake.open.mockResolvedValueOnce({ state: 'accepted' });
+    wiring.openSettings();
+    await settle();
+  });
+
+  it('continues after the Facepalm preference cannot be saved', async () => {
+    const given = context();
+    given.globalState.update = () => Promise.reject(new Error('save failed'));
+    const h = activated(given);
+    h.panel.wiring.facepalm.enabled(false);
+    await settle();
+    expect(last(facepalmFake.clients).setEnabled).toHaveBeenLastCalledWith(false);
   });
 
   it('routes settings, setup, page events and audio through the speech wiring', async () => {
@@ -3535,6 +3631,152 @@ it('restores enabled authority after a failed disable', async () => {
   expect(h.panel.wiring.workerEnabled.get()).toBe(true);
   expect(h.panel.showWorkerEnabled).toHaveBeenLastCalledWith(true);
   expect(h.controller.revokeWorker).toHaveBeenCalledOnce();
+});
+
+it('does not construct a Facepalm client in an SSH workspace with a missing companion', async () => {
+  fakes.remoteName = 'ssh-remote';
+  fakes.companionAvailable = false;
+  const before = facepalmFake.clients.length;
+  activated();
+  await settle();
+  expect(facepalmFake.clients.length).toBe(before);
+});
+
+it('routes Facepalm through the selected owner and publishes companion status', async () => {
+  fakes.companionAvailable = true;
+  const h = activated();
+  const port = h.controller.options?.facepalm;
+  expect(h.panel.wiring.facepalm.snapshot().status).toBe('unchecked');
+  h.panel.wiring.facepalm.refresh();
+  h.panel.wiring.facepalm.openSettings();
+  expect(await port?.markBeat('question', 1)).toBeUndefined();
+  await port?.feel(1, 'agreement');
+  port?.retire();
+  await settle();
+  const remote = fakes.session?.facepalm;
+  if (remote === undefined) throw new Error('Missing companion');
+  await port?.markBeat('question', 1);
+  await port?.feel(1, 'agreement');
+  port?.retire();
+  expect(remote.markBeat).toHaveBeenCalled();
+  expect(remote.feel).toHaveBeenCalled();
+  expect(remote.retire).toHaveBeenCalled();
+  h.panel.wiring.facepalm.refresh();
+  h.panel.wiring.facepalm.openSettings();
+  expect(remote.openSettings).toHaveBeenCalledOnce();
+  const snapshot = remote.snapshot();
+  remote.onStatus?.(snapshot);
+  expect(h.panel.showFacepalmStatus).toHaveBeenCalledWith(snapshot);
+});
+
+it('reports current Facepalm control failures and drops old-page completions', async () => {
+  fakes.companionAvailable = true;
+  const h = activated();
+  await settle();
+  const remote = fakes.session?.facepalm;
+  if (remote === undefined) throw new Error('Missing companion');
+  remote.refresh.mockResolvedValueOnce({ state: 'failed', reason: 'inspection' });
+  h.panel.wiring.facepalm.refresh();
+  await settle();
+  expect(fakes.infos).toContain('safe Facepalm warning');
+  remote.openSettings.mockResolvedValueOnce({ state: 'failed', reason: 'display' });
+  h.panel.wiring.facepalm.openSettings();
+  await settle();
+  remote.openSettings.mockResolvedValueOnce(undefined);
+  h.panel.wiring.facepalm.openSettings();
+  await settle();
+  remote.onSettingsFailure?.({ state: 'failed', reason: 'qt' });
+  const before = fakes.infos.length;
+  const pending = Promise.withResolvers<import('@ai-pair/protocol').FacepalmSettingsLaunch | undefined>();
+  remote.openSettings.mockReturnValueOnce(pending.promise);
+  h.panel.wiring.facepalm.openSettings();
+  remote.currentPage.mockReturnValue(2);
+  pending.resolve({ state: 'failed', reason: 'display' });
+  await settle();
+  expect(fakes.infos).toHaveLength(before);
+});
+
+it('drops local settings warnings after its originating page is replaced', async () => {
+  const h = activated();
+  await settle();
+  h.panel.wiring.facepalm.openSettings();
+  const late = facepalmFake.open.mock.lastCall?.[2];
+  if (late === undefined) throw new Error('Missing late failure callback');
+  late({ state: 'failed', reason: 'qt' });
+  const before = fakes.infos.length;
+  h.panel.speechReadyPageId.mockReturnValue(8);
+  late({ state: 'failed', reason: 'qt' });
+  await settle();
+  expect(fakes.infos).toHaveLength(before);
+});
+
+it('revokes a local launch notice as soon as a same-page recheck starts', async () => {
+  const h = activated();
+  await settle();
+  h.panel.wiring.facepalm.openSettings();
+  await settle();
+  const late = facepalmFake.open.mock.lastCall?.[2];
+  if (late === undefined) throw new Error('Missing late failure callback');
+  h.panel.wiring.facepalm.refresh();
+  const before = fakes.infos.length;
+  late({ state: 'failed', reason: 'qt' });
+  expect(fakes.infos).toHaveLength(before);
+});
+
+it('bounds overlapping local controls without invalidating the admitted completion', async () => {
+  const h = activated();
+  await settle();
+  const pending = Promise.withResolvers<import('@ai-pair/protocol').FacepalmSettingsLaunch>();
+  facepalmFake.open.mockReturnValueOnce(pending.promise);
+  facepalmFake.open.mockClear();
+  h.panel.wiring.facepalm.openSettings();
+  h.panel.wiring.facepalm.openSettings();
+  h.panel.wiring.facepalm.refresh();
+  expect(facepalmFake.open).toHaveBeenCalledOnce();
+  const before = fakes.infos.length;
+  pending.resolve({ state: 'accepted' });
+  await settle();
+  expect(fakes.infos).toHaveLength(before + 1);
+});
+
+it('releases local control after failures and ignores an old page completion', async () => {
+  const h = activated();
+  await settle();
+  const client = last(facepalmFake.clients);
+  client.refresh.mockRejectedValueOnce(new Error('inspection failed'));
+  h.panel.wiring.facepalm.refresh();
+  await settle();
+  facepalmFake.open.mockRejectedValueOnce(new Error('launch failed'));
+  h.panel.wiring.facepalm.openSettings();
+  await settle();
+  const old = Promise.withResolvers<import('@ai-pair/protocol').FacepalmSettingsLaunch>();
+  facepalmFake.open.mockReturnValueOnce(old.promise);
+  h.panel.wiring.facepalm.openSettings();
+  h.panel.speechReadyPageId.mockReturnValue(8);
+  const successor = Promise.withResolvers<void>();
+  client.refresh.mockReturnValueOnce(successor.promise);
+  h.panel.wiring.facepalm.refresh();
+  old.resolve({ state: 'accepted' });
+  await settle();
+  h.panel.wiring.facepalm.openSettings();
+  expect(facepalmFake.open).toHaveBeenCalledTimes(2);
+  successor.resolve();
+  await settle();
+});
+
+it('does not publish an old local recheck after a page replacement', async () => {
+  const h = activated();
+  await settle();
+  const client = last(facepalmFake.clients);
+  const old = Promise.withResolvers<void>();
+  client.refresh.mockReturnValueOnce(old.promise);
+  h.panel.wiring.facepalm.refresh();
+  expect(client.refresh).toHaveBeenLastCalledWith(false, false, false);
+  const before = h.panel.showFacepalmStatus.mock.calls.length;
+  h.panel.speechReadyPageId.mockReturnValue(8);
+  old.resolve();
+  await settle();
+  expect(h.panel.showFacepalmStatus).toHaveBeenCalledTimes(before);
 });
 
 it('handles context disposal rejection and reports it to deactivate', async () => {

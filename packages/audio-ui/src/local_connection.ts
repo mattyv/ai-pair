@@ -36,7 +36,11 @@ export class LocalConnection {
       frame.sequence <= this.sequence ||
       frame.type === 'attach' ||
       frame.type === 'terminal' ||
-      frame.type === 'panelAction'
+      frame.type === 'panelAction' ||
+      frame.type === 'facepalmResult' ||
+      frame.type === 'facepalmStatus' ||
+      frame.type === 'facepalmControlResult' ||
+      frame.type === 'facepalmSettingsNotice'
     ) {
       return false;
     }

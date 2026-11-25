@@ -247,8 +247,11 @@ cannot run, it reports the retained paths. Diagnostics do not run a paid preview
 AI Pair can read the programmer's reaction to a question or a proposed change
 from [Facepalm](https://github.com/mattyv/facepalm), a standalone local service
 that reads a camera on this machine and never sends frames or images anywhere.
-Nothing changes when Facepalm is not installed or has not approved this
-extension: there is no error, no indicator, and no setting to find.
+AI Pair Settings offers a feedback toggle, status, and a button to open
+Facepalm Settings when a supported installation is found. The toggle is on by
+default, preserving existing behavior. AI Pair hides the section only when it
+can establish that the supported installation paths and local service are
+absent.
 
 To turn it on, install and run Facepalm, then approve this extension under its
 own name:
@@ -256,6 +259,21 @@ own name:
 ```shell
 facepalm-daemon approve ai-pair
 ```
+
+Turn Facepalm on and approve AI Pair first. The AI Pair toggle does not start
+Facepalm or grant approval. Opening Settings and choosing **Recheck status**
+inspect local files without connecting or activating a camera. Finding an
+approval file is evidence that AI Pair can try to connect; **Connected**
+follows a successful handshake when a reading is requested. Camera consent
+and approval for another client such as `mcp` do not approve `ai-pair`. Run
+the approval command on your local laptop, as your usual user, without
+`sudo`. Choose the camera, calibration, and sensitivity in Facepalm itself.
+
+Opening Facepalm Settings reports whether the local launch request was
+accepted or failed. Acceptance does not prove the window is in front; check
+Facepalm if the window manager keeps it behind VS Code. Startup failures and
+lost or timed-out companion requests show a reason. Diagnostics use bounded
+failure categories rather than arbitrary process output.
 
 With that done, right after the agent asks a question or proposes a change in
 a pairing session, Facepalm reads a few seconds of the programmer's reaction
@@ -269,16 +287,26 @@ picked; one click tells Facepalm how it actually went, which tunes its later
 reads, and the panel replies "Thanks — Facepalm will learn from this." No
 technical detail, such as the reading's ID, appears anywhere in the panel.
 
-This only works when Facepalm's socket is reachable from the extension host:
-over a remote connection (SSH), where the extension host and Facepalm's
-camera are on different machines, Facepalm stays unavailable.
+For Remote SSH, install AI Pair 0.57.1 on the remote host and AI Pair Local
+Audio 0.57.1 on your local machine. Install Facepalm only on the local machine,
+and run the approval command there. Local Audio carries Facepalm feedback and
+settings over Pair's existing companion connection, including when speech is
+disabled or uses a cloud provider. Camera frames and the approval token stay
+local. Facepalm Settings opens on your local desktop.
 
-The subscription closes, so the camera is not read, once a pairing session
-ends, the agent ends it, or it is replaced by another — not only when the VS
-Code window itself closes. Each VS Code window connects to Facepalm under
+Install both Pair extensions from the same build bundle, then run
+**Developer: Reload Window**. Their versions and connection protocol must
+match. No socket forwarding or
+Facepalm installation on the SSH host is needed. In a local VS Code window,
+Pair can also use its existing direct connection when the companion is absent.
+
+AI Pair releases its camera demand when a pairing session ends, the agent ends
+it, or another session replaces it. Another client, window or preview can
+keep Facepalm capture active. Each VS Code window connects to Facepalm under
 its own name, so opening more than one window still gets each its own cues.
 
-A card left unanswered when the session ends is closed, not thanked: it would
+Cards restored from saved history are read-only. A card left unanswered when
+the session ends is closed, not thanked: it would
 otherwise reconnect Facepalm's camera for a feeling it refuses, once the
 session that could have carried it to Facepalm is already gone.
 
