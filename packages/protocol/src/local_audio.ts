@@ -7,7 +7,7 @@ import { localPanelChunk } from './panel_chunks';
 import { extensionIdentity } from './local_audio_status';
 
 /** The supported workspace-to-companion protocol version. */
-export const LOCAL_AUDIO_VERSION = 13;
+export const LOCAL_AUDIO_VERSION = 14;
 
 /** Lists the `<platform>-<arch>` hosts the bundled Kokoro runtime is built for (#39). */
 export const KOKORO_HOSTS: readonly string[] = ['linux-x64', 'darwin-x64', 'darwin-arm64'];
@@ -15,6 +15,7 @@ export const KOKORO_HOSTS: readonly string[] = ['linux-x64', 'darwin-x64', 'darw
 const MAX_IDENTITY_LENGTH = 128;
 const MAX_FACEPALM_FEELINGS = 6;
 const MAX_FACEPALM_WINDOW_MS = 10_000;
+const MAX_EXIT_CODE = 255;
 const identity = z.string().min(1).max(MAX_IDENTITY_LENGTH);
 const envelope = {
   version: z.literal(LOCAL_AUDIO_VERSION),
@@ -24,6 +25,20 @@ const envelope = {
 const owner = { jobId: identity, pageEpoch: z.int().nonnegative() };
 const facepalmOwner = { pageEpoch: z.int().positive(), generation: z.int().positive() };
 const facepalmCue = FACEPALM_CUE_SCHEMA.safeExtend({ feelings: z.array(FACEPALM_FEELING_SCHEMA).min(1).max(MAX_FACEPALM_FEELINGS) });
+
+/** Bounded settings launch admission or a sanitized failure category. */
+const facepalmSettingsFailure = z.strictObject({
+  state: z.literal('failed'),
+  reason: z.enum(['unavailable', 'start', 'timeout', 'display', 'qt', 'handoff', 'exit', 'disconnected', 'busy', 'inspection']),
+  code: z.int().min(0).max(MAX_EXIT_CODE).optional(),
+});
+export const facepalmSettingsLaunch = z.discriminatedUnion('state', [
+  z.strictObject({ state: z.literal('accepted') }),
+  facepalmSettingsFailure,
+]);
+
+/** A validated result without raw launcher diagnostics. */
+export type FacepalmSettingsLaunch = z.infer<typeof facepalmSettingsLaunch>;
 
 /** Validates the allowlisted, bounded local-audio control and acknowledgement frames. */
 export const localAudioFrame = z.discriminatedUnion('type', [
@@ -44,8 +59,31 @@ export const localAudioFrame = z.discriminatedUnion('type', [
     feeling: FACEPALM_FEELING_SCHEMA,
   }),
   z.strictObject({ ...envelope, type: z.literal('facepalmEnabled'), enabled: z.boolean() }),
-  z.strictObject({ ...envelope, type: z.literal('facepalmRefresh') }),
-  z.strictObject({ ...envelope, type: z.literal('facepalmOpenSettings') }),
+  z.strictObject({ ...envelope, type: z.literal('facepalmRefresh'), pageEpoch: z.int().positive(), requestId: z.int().positive() }),
+  z.strictObject({ ...envelope, type: z.literal('facepalmOpenSettings'), pageEpoch: z.int().positive(), requestId: z.int().positive() }),
+  z.strictObject({
+    ...envelope,
+    type: z.literal('facepalmControlResult'),
+    pageEpoch: z.int().positive(),
+    requestId: z.int().positive(),
+    result: z.discriminatedUnion('operation', [
+      z.strictObject({ operation: z.literal('open'), outcome: facepalmSettingsLaunch }),
+      z.strictObject({
+        operation: z.literal('recheck'),
+        outcome: z.discriminatedUnion('state', [
+          z.strictObject({ state: z.literal('checked'), snapshot: facepalmSnapshot }),
+          facepalmSettingsFailure,
+        ]),
+      }),
+    ]),
+  }),
+  z.strictObject({
+    ...envelope,
+    type: z.literal('facepalmSettingsNotice'),
+    pageEpoch: z.int().positive(),
+    requestId: z.int().positive(),
+    failure: facepalmSettingsFailure,
+  }),
   z.strictObject({
     ...envelope,
     ...facepalmOwner,
@@ -53,7 +91,7 @@ export const localAudioFrame = z.discriminatedUnion('type', [
     requestId: z.int().positive(),
     cue: facepalmCue.optional(),
   }),
-  z.strictObject({ ...envelope, type: z.literal('facepalmStatus'), snapshot: facepalmSnapshot }),
+  z.strictObject({ ...envelope, type: z.literal('facepalmStatus'), pageEpoch: z.int().nonnegative(), snapshot: facepalmSnapshot }),
   z.strictObject({ ...envelope, type: z.literal('attach') }),
   z.strictObject({ ...envelope, type: z.literal('heartbeat') }),
   localPanelChunk.safeExtend({ ...envelope, type: z.literal('panelChunk') }),

@@ -171,6 +171,7 @@ export function panelHtml(cspSource: string, styleUri: string, scriptUri: string
       <div class="settings-section-content">
       <label class="settings-check"><input type="checkbox" data-ui="facepalm-enabled"> Use Facepalm feedback</label>
       <p>Status: <span data-ui="facepalm-status" role="status">Unchecked</span></p>
+      <button type="button" data-ui="facepalm-recheck" hidden>Recheck status</button>
       <button type="button" data-ui="facepalm-open-settings">Open Facepalm Settings</button>
       </div>
     </details>

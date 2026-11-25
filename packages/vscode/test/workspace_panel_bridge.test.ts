@@ -39,6 +39,7 @@ describe('workspace panel bridge', () => {
       ...base,
       sequence: 1,
       type: 'facepalmStatus',
+      pageEpoch: 0,
       snapshot: { enabled: true, status: 'idle', available: true, canOpenSettings: true },
     };
     expect(bridge.accept(status)).toBe(true);

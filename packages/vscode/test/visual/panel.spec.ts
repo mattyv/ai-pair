@@ -349,6 +349,7 @@ test('Facepalm settings remain usable by keyboard and reflect live status', asyn
   const toggle = page.locator('[data-ui="facepalm-enabled"]');
   const status = page.locator('[data-ui="facepalm-status"]');
   const openSettings = page.locator('[data-ui="facepalm-open-settings"]');
+  const recheck = page.locator('[data-ui="facepalm-recheck"]');
   await post({ type: 'facepalmStatus', available: true, enabled: false, canOpenSettings: true, status: 'off' });
   await expect(status).toContainText('Off');
   await toggle.focus();
@@ -363,7 +364,7 @@ test('Facepalm settings remain usable by keyboard and reflect live status', asyn
     .toContainEqual({ type: 'facepalmEnabled', value: true });
   for (const [value, label] of [
     ['unchecked', 'Unchecked'],
-    ['idle', 'Available (not connected)'],
+    ['idle', 'Approval found on this device. Connects when a reading is requested.'],
     ['connected', 'Connected'],
     ['notRunning', 'Not running'],
     ['approvalNeeded', 'Approval needed'],
@@ -373,7 +374,21 @@ test('Facepalm settings remain usable by keyboard and reflect live status', asyn
     await expect(status).toContainText(label);
   }
   await expect(openSettings).toBeDisabled();
+  await post({ type: 'facepalmStatus', available: true, enabled: true, canOpenSettings: true, status: 'approvalNeeded' });
+  await expect(recheck).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('facepalm-recheck-narrow.png'), fullPage: true });
+  await recheck.focus();
+  await page.keyboard.press('Enter');
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return (globalThis as unknown as { messages: unknown[] }).messages;
+      }),
+    )
+    .toContainEqual({ type: 'facepalmRefresh' });
   await post({ type: 'facepalmStatus', available: true, enabled: true, canOpenSettings: true, status: 'idle' });
+  await expect(recheck).toBeHidden();
   await expect(openSettings).toBeEnabled();
   await openSettings.focus();
   await page.keyboard.press('Enter');

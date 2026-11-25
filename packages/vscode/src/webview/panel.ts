@@ -100,6 +100,7 @@ const ui = {
   facepalmEnabled: $('facepalm-enabled', HTMLInputElement),
   facepalmStatus: $('facepalm-status', HTMLElement),
   facepalmOpenSettings: $('facepalm-open-settings', HTMLButtonElement),
+  facepalmRecheck: $('facepalm-recheck', HTMLButtonElement),
   providerDetails: $('speech-provider-details', HTMLDetailsElement),
   providerSummary: $('speech-provider-summary', HTMLElement),
   settingsClose: $('settings-close', HTMLButtonElement),
@@ -1297,6 +1298,9 @@ ui.settings.addEventListener('click', () => {
 ui.facepalmEnabled.addEventListener('change', () => {
   vscode.postMessage({ type: 'facepalmEnabled', value: ui.facepalmEnabled.checked });
 });
+ui.facepalmRecheck.addEventListener('click', () => {
+  vscode.postMessage({ type: 'facepalmRefresh' });
+});
 ui.facepalmOpenSettings.addEventListener('click', () => {
   vscode.postMessage({ type: 'facepalmOpenSettings' });
 });
@@ -2162,10 +2166,10 @@ function handle(message: ToPanel): void {
       const labels = {
         off: 'Off',
         unchecked: 'Unchecked',
-        idle: 'Available (not connected)',
+        idle: 'Approval found on this device. Connects when a reading is requested.',
         connected: 'Connected',
         notRunning: 'Not running',
-        approvalNeeded: 'Approval needed',
+        approvalNeeded: 'Approval needed for ai-pair on this computer. Run facepalm-daemon approve ai-pair.',
         unavailableSsh: 'Unavailable over SSH',
       };
       if (message.status !== 'connected') closeFacepalmCards();
@@ -2173,6 +2177,7 @@ function handle(message: ToPanel): void {
       ui.facepalmEnabled.checked = message.enabled;
       ui.facepalmStatus.textContent = labels[message.status];
       ui.facepalmOpenSettings.disabled = !message.canOpenSettings;
+      ui.facepalmRecheck.hidden = !message.enabled || !['unchecked', 'notRunning', 'approvalNeeded'].includes(message.status);
       break;
     }
     case 'navigatorCommentary':

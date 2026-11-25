@@ -1,6 +1,9 @@
 # Changelog
 
-## 0.57.0
+## 0.57.1
+
+-   Explain local Facepalm approval and on-demand connection, add passive status
+    recheck, and report Settings launch failures across the companion (#148).
 
 -   Use local Facepalm through the UI companion in Remote SSH, with local settings
   and read-only restored feedback cards (#148).

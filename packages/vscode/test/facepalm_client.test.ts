@@ -726,6 +726,18 @@ describe('Facepalm settings lifecycle', () => {
     expect(fakes.sockets).toHaveLength(0);
   });
 
+  it('PassiveInspection: a correlated recheck returns local evidence without broadcasting or connecting', async () => {
+    approve();
+    fakes.paths.set('/home/user/.local/state/facepalm/service.sock', 'present');
+    const client = new FacepalmClient();
+    const onStatus = vi.fn<(snapshot: import('@ai-pair/protocol').FacepalmSnapshot) => void>();
+    client.onStatus = onStatus;
+    await client.refresh(false, false, false);
+    expect(client.snapshot().status).toBe('idle');
+    expect(onStatus).not.toHaveBeenCalled();
+    expect(fakes.sockets).toHaveLength(0);
+  });
+
   it('keeps uncertain installations visible and distinguishes an unavailable SSH service', async () => {
     const client = new FacepalmClient();
     fakes.paths.set('/usr/bin/facepalm-menu', 'denied');

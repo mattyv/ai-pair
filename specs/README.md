@@ -4743,3 +4743,56 @@ user behavior. The bounded config has 12 distinct states and passes.
 | `TypeOK` | Start with three clicks | `HistoryNeverSends: replayed card stays inactive when a new client reuses its ID` |
 | `HistoryNeverSends` | Send feedback from `ClickHistory` | `HistoryNeverSends: replayed card stays inactive when a new client reuses its ID` |
 | `FreshProgress` | Disable `ClickFresh` | `HistoryNeverSends: replayed card stays inactive when a new client reuses its ID` |
+
+## Facepalm settings control
+
+`FacepalmSettingsControl` abstracts the attachment and page as one owner. It
+bounds the owner and request serial to two each, with one outstanding open or
+recheck. Recheck inspects local files without camera demand; its snapshot is
+published only through the matching result. The normal config uses weak fairness
+for answer, delivery, dropping stale replies, and timeout. The service config
+assumes a stable owner and responsive local host and uses weak fairness for
+answer, delivery, and stale reply dropping.
+
+| Config | Bounds | Result | Distinct states |
+|---|---|---|---|
+| `FacepalmSettingsControl.cfg` | Two owners, two serials, both operations | holds | 120 |
+| `FacepalmSettingsControl_Service.cfg` | Same bounds, stable responsive service | holds | 26 |
+
+| Property | Mutation witness | Named implementation test |
+|---|---|---|
+| `TypeOK` | Start outside owner bounds | `TypeOK: rejects unbounded, malformed and credential-bearing frames` |
+| `PassiveInspection` | Start camera demand with a control request | `PassiveInspection: approval recheck stays disconnected and a later beat reconnects after service restart` |
+| `CurrentRequest` | Preserve pending request on owner replacement | `CurrentPublication: page replacement drops old results and late diagnostics` |
+| `CurrentPublication` | Deliver a reply without matching the pending request | `CurrentPublication: sends only the current page correlated launch outcome` |
+| `Settles` | Disable delivery and timeout | `Settles: controls fail on timeout, refused send, disconnect and concurrent work` |
+| `Success` | Clear a successful request without publication | `routes the rendered settings button to the local companion after session retirement` |
+
+## Facepalm settings launch
+
+`FacepalmSettingsLaunch` models one process launch, the spawn deadline, the
+Linux startup grace, a clean forwarder exit, and early failure. Weak fairness
+of `Grace` and `Deadline` assumes timers run. Acceptance records process
+admission only; it does not prove that a window was displayed. The config has
+seven distinct states and passes TLC.
+
+| Property | Mutation witness | Named implementation test |
+|---|---|---|
+| `TypeOK` | Start in an invalid phase | `refuses a remote GUI or unavailable menu` |
+| `AcceptedEvidence` | Accept immediately on spawn | `AcceptedEvidence: accepts a still-running Linux menu only after the grace period` |
+| `Settles` | Disable the grace transition | `Settles: a failed timeout kill still reports the timeout` |
+
+## Facepalm settings notice
+
+`FacepalmSettingsNotice` bounds the owner and request serial to two each. A new
+control clears the previous accepted launch before its own result; owner
+replacement does the same. The normal config uses weak fairness of `Notice`
+and `Drop`. It has 44 distinct states and passes TLC. A recheck cannot
+authorize a launch notice.
+
+| Property | Mutation witness | Named implementation test |
+|---|---|---|
+| `TypeOK` | Start outside owner bounds | `TypeOK: rejects unbounded, malformed and credential-bearing frames` |
+| `RecheckNoAuthority` | Retain acceptance when a recheck starts | `CurrentNotice: starting a recheck immediately revokes the previous launch notice` |
+| `CurrentNotice` | Drop notice identity | `CurrentNotice: starting a recheck immediately revokes the previous launch notice` |
+| `Progress` | Disable both notice and drop | `scopes late launch diagnostics and an asynchronous recheck to their page` |

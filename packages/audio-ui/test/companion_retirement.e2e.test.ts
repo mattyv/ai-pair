@@ -62,7 +62,7 @@ const fake = vi.hoisted(() => ({
   disposeFacepalm: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
   facepalmOptions: undefined as import('../src/companion_facepalm').CompanionFacepalmOptions | undefined,
   facepalmClient: undefined as { onStatus?: (snapshot: import('@ai-pair/protocol').FacepalmSnapshot) => void } | undefined,
-  openSettings: vi.fn().mockResolvedValue(true),
+  openSettings: vi.fn().mockResolvedValue({ state: 'accepted' }),
   attach: vi.fn(),
   accept: vi.fn(),
   setPause: vi.fn(),
@@ -87,7 +87,11 @@ vi.mock('vscode', () => ({
       return { dispose() {} };
     },
   },
-  window: { registerWebviewViewProvider: fake.register, showWarningMessage: fake.warning },
+  window: {
+    registerWebviewViewProvider: fake.register,
+    showWarningMessage: fake.warning,
+    createOutputChannel: () => ({ info: () => {}, dispose: () => {} }),
+  },
 }));
 vi.mock('@ai-pair/protocol', async () => ({
   ...(await vi.importActual<typeof import('@ai-pair/protocol')>('@ai-pair/protocol')),
@@ -109,6 +113,7 @@ vi.mock('../../vscode/src/facepalm_client', () => ({
       fake.facepalmClient = this;
     }
     onStatus?: (snapshot: import('@ai-pair/protocol').FacepalmSnapshot) => void;
+    snapshot = () => ({ enabled: true, status: 'unchecked' as const, available: true, canOpenSettings: false });
     retire = fake.retireFacepalm;
     dispose = fake.disposeFacepalm;
     setEnabled() {}
@@ -117,7 +122,10 @@ vi.mock('../../vscode/src/facepalm_client', () => ({
     }
   },
 }));
-vi.mock('../../vscode/src/facepalm_settings_launcher', () => ({ openFacepalmSettings: fake.openSettings }));
+vi.mock('../../vscode/src/facepalm_settings_launcher', () => ({
+  openFacepalmSettings: fake.openSettings,
+  facepalmSettingsWarning: () => 'safe Facepalm warning',
+}));
 vi.mock('../../audio-native/src/factory', () => ({ createLocalAudioAdapter: vi.fn(() => ({})) }));
 vi.mock('../../vscode/src/diagnostics', () => ({
   Diagnostics: class {
@@ -139,6 +147,7 @@ vi.mock('../../vscode/src/panel', () => ({
     }
     showRemoteUpdate = fake.showUpdate;
     showSpeechTransport = fake.showSpeechTransport;
+    showFacepalmStatus = vi.fn();
     showShortcuts = fake.showShortcuts;
   },
 }));

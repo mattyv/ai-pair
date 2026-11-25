@@ -796,12 +796,22 @@ active profile.
 With the UI companion attached, the workspace controller uses
 `RemoteFacepalm` (`packages/vscode/src/remote_facepalm.ts`).
 `CompanionFacepalm` (`packages/audio-ui/src/companion_facepalm.ts`) owns the
-local client and settings launcher. Strict protocol version 13 frames reuse
+local client and settings launcher. Strict protocol version 14 frames reuse
 the existing command channel, attachment epoch, sequence and heartbeat lease.
 Only requests, status and interpreted feedback cross the attachment; socket
 paths, approval tokens and camera frames stay on the UI machine. This route
 is independent of the speech provider. A missing remote companion uses text
 mode; the direct client fallback is restricted to local legacy placement.
+
+Settings launch and passive recheck also use bounded, page- and request-scoped
+results. Exactly one control request is admitted at a time. Timeout, page
+replacement and attachment loss settle or invalidate the request; stale
+results and late launcher notices cannot publish onto a successor page.
+The local launcher reports process admission, not compositor-visible window
+placement, and retains sanitized late failure reporting. Recheck only inspects
+files and creates no camera demand. The FacepalmSettingsControl and
+FacepalmSettingsLaunch models check these bounded abstractions;
+FacepalmSettingsNotice separately checks late diagnostic authority.
 
 Beat commands acknowledge receipt before the asynchronous result. Request,
 page and retirement identities reject stale results without invalidating

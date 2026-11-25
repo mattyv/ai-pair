@@ -36,6 +36,7 @@ vi.mock('../src/remote_facepalm', () => ({
       fake.facepalmOptions = options;
     }
     retire = vi.fn();
+    pageChanged = vi.fn();
     dispose = vi.fn();
     accept = fake.facepalmAccept;
   },
@@ -223,7 +224,7 @@ it('connects the Facepalm proxy to the ordered channel and receiver', () => {
   });
   fake.page = 3;
   expect(fake.facepalmOptions?.page()).toBe(3);
-  fake.facepalmOptions?.send(frame);
+  void fake.facepalmOptions?.send(frame);
   expect(fake.send).toHaveBeenCalledWith(frame);
   fake.bridgeOptions?.facepalm(frame);
   expect(fake.facepalmAccept).toHaveBeenCalledWith(frame);

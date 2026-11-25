@@ -1,11 +1,7 @@
 {
   "version": 1,
   "bundleId": "0ded5bcb-a6f0-47d4-a3b0-468f4a47c302",
-  "revision": {
-    "number": 6,
-    "updatedAt": "2026-11-24T13:31:37.793Z",
-    "summary": "UI-local Facepalm ownership over the companion attachment"
-  },
+  "revision": { "number": 7, "updatedAt": "2026-11-25T03:16:31.701Z", "summary": "Scoped Facepalm settings results and passive recheck" },
   "diagrams": [
     {
       "id": "overview",
@@ -5452,7 +5448,7 @@
           },
           {
             "id": "fp-settings",
-            "label": "Local Settings Launcher\nOpens installed Facepalm settings",
+            "label": "Local Settings Launcher\nLaunch admission and bounded failure reporting",
             "files": ["packages/vscode/src/facepalm_settings_launcher.ts"],
             "group": "fp-local",
             "x": 1320,
@@ -5495,7 +5491,7 @@
           { "from": "fp-controller", "to": "fp-proxy", "label": "beat, feedback and session retirement" },
           { "from": "fp-proxy", "to": "fp-channel", "label": "bounded intent; command ACK does not await a beat" },
           { "from": "fp-channel", "to": "fp-owner", "label": "current epoch, page, generation and request ID" },
-          { "from": "fp-owner", "to": "fp-channel", "label": "asynchronous results and status; no video or token" },
+          { "from": "fp-owner", "to": "fp-channel", "label": "scoped results and status; sanitized launch failures" },
           { "from": "fp-channel", "to": "fp-proxy", "label": "matching replies; stale results rejected" },
           { "from": "fp-owner", "to": "fp-client", "label": "local subscription and retirement" },
           { "from": "fp-client", "to": "fp-service", "label": "local Unix socket with local approval" },
@@ -5510,7 +5506,8 @@
           { "id": "fp-workspace", "label": "Workspace host (remote over SSH)", "labelPosition": { "x": 12, "y": 7 } },
           { "id": "fp-local", "label": "Local machine", "labelPosition": { "x": 12, "y": 7 } }
         ],
-        "comments": {}
+        "comments": {},
+        "focus": "The UI host owns Facepalm credentials and resources. Settings and passive recheck have page-scoped results, deadlines and sanitized failures; physical close gates replacement. Camera frames and tokens stay local."
       }
     }
   ],

@@ -1561,6 +1561,17 @@ describe('chat order', () => {
 });
 
 describe('panel settings', () => {
+  it('rechecks local Facepalm status without requesting a reading', () => {
+    start();
+    send({ type: 'facepalmStatus', enabled: true, status: 'approvalNeeded', available: true, canOpenSettings: true });
+    const recheck = element('facepalm-recheck');
+    expect(recheck.hidden).toBe(false);
+    click(recheck);
+    expect(posted().at(-1)).toEqual({ type: 'facepalmRefresh' });
+    send({ type: 'facepalmStatus', enabled: true, status: 'idle', available: true, canOpenSettings: true });
+    expect(recheck.hidden).toBe(true);
+  });
+
   it('projects Facepalm availability and sends only explicit choices', () => {
     click(element('settings'));
     expect(posted()).toContainEqual({ type: 'facepalmRefresh' });
@@ -1585,10 +1596,10 @@ describe('panel settings', () => {
     expect(posted()).toContainEqual({ type: 'facepalmEnabled', value: true });
     for (const [status, label] of [
       ['unchecked', 'Unchecked'],
-      ['idle', 'Available (not connected)'],
+      ['idle', 'Approval found on this device. Connects when a reading is requested.'],
       ['connected', 'Connected'],
       ['notRunning', 'Not running'],
-      ['approvalNeeded', 'Approval needed'],
+      ['approvalNeeded', 'Approval needed for ai-pair on this computer. Run facepalm-daemon approve ai-pair.'],
       ['unavailableSsh', 'Unavailable over SSH'],
     ] as const) {
       publish(status, true, true, status !== 'unavailableSsh');

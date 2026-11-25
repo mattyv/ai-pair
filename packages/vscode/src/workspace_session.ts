@@ -98,9 +98,7 @@ export class WorkspaceSession {
       epoch: options.epoch,
       page: () => this.bridge.page(),
       nextSequence,
-      send: (frame) => {
-        void this.channel.send(frame);
-      },
+      send: (frame) => this.channel.send(frame),
     });
     this.narration = new RemoteNarration({
       epoch: options.epoch,
@@ -139,6 +137,7 @@ export class WorkspaceSession {
         this.facepalm.accept(frame);
       },
       pageChanged: () => {
+        this.facepalm.pageChanged();
         this.facepalm.retire();
         this.narration.cancel();
       },

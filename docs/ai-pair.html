@@ -40279,7 +40279,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 },
                 {
                   id: "fp-settings",
-                  label: "Local Settings Launcher\nOpens installed Facepalm settings",
+                  label: "Local Settings Launcher\nLaunch admission and bounded failure reporting",
                   files: ["packages/vscode/src/facepalm_settings_launcher.ts"],
                   group: "fp-local",
                   x: 1320,
@@ -40322,7 +40322,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 { from: "fp-controller", to: "fp-proxy", label: "beat, feedback and session retirement" },
                 { from: "fp-proxy", to: "fp-channel", label: "bounded intent; command ACK does not await a beat" },
                 { from: "fp-channel", to: "fp-owner", label: "current epoch, page, generation and request ID" },
-                { from: "fp-owner", to: "fp-channel", label: "asynchronous results and status; no video or token" },
+                { from: "fp-owner", to: "fp-channel", label: "scoped results and status; sanitized launch failures" },
                 { from: "fp-channel", to: "fp-proxy", label: "matching replies; stale results rejected" },
                 { from: "fp-owner", to: "fp-client", label: "local subscription and retirement" },
                 { from: "fp-client", to: "fp-service", label: "local Unix socket with local approval" },
@@ -40338,6 +40338,8 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
                 { id: "fp-local", label: "Local machine", labelPosition: { x: 12, y: 7 } },
               ],
               comments: {},
+              focus:
+                "The UI host owns Facepalm credentials and resources. Settings and passive recheck have page-scoped results, deadlines and sanitized failures; physical close gates replacement. Camera frames and tokens stay local.",
             },
           },
         ],

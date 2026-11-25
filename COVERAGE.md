@@ -16,7 +16,7 @@ L, B, R, and F are lines, branches, regions, and functions covered. `-` is a
 file no tool measures; `test` is a test. Which spec covers which source file
 is in [specs/COVERAGE.md](specs/COVERAGE.md).
 
-Last updated: css, 2026-11-24.
+Last updated: css, 2026-11-25.
 
 | File | Type | Unit | Integration | TLC | Swift | Shell | CSS |
 |---|---|---|---|---|---|---|---|
@@ -80,6 +80,7 @@ Last updated: css, 2026-11-24.
 | `packages/audio-ui/test/companion_facepalm.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/audio-ui/test/companion_narration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/companion_output.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/companion_retained_widget.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/audio-ui/test/companion_retirement.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/audio-ui/test/companion_session.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/companion_session.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -346,6 +347,7 @@ Last updated: css, 2026-11-24.
 | `packages/vscode/test/facepalm_integration.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/test/facepalm_replay_composed.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/test/facepalm_settings_launcher.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/facepalm_settings_process.integration.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/fixtures/packaged_mcp_check.mts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/fixtures/tempo_schema_fake.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration.ts` | TypeScript | test | test | test | test | test | test |
@@ -399,6 +401,7 @@ Last updated: css, 2026-11-24.
 | `packages/vscode/test/integration_workspace_incompatible.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/launcher.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/local_facepalm_composed.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/local_facepalm_widget.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
 | `packages/vscode/test/navigator_editor.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/old_extension.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/output.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -644,6 +647,13 @@ Last updated: css, 2026-11-24.
 | `specs/FacepalmReplay.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/FacepalmSettings.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/FacepalmSettings.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/FacepalmSettingsControl.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/FacepalmSettingsControl.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/FacepalmSettingsControl_Service.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/FacepalmSettingsLaunch.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/FacepalmSettingsLaunch.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/FacepalmSettingsNotice.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/FacepalmSettingsNotice.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/FacepalmSubscription.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/FacepalmSubscription.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/FileText.cfg` | TLC config | - | - | - | - | - | - |

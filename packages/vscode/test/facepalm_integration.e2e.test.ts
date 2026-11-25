@@ -150,6 +150,30 @@ describe('a beat during a pairing session', () => {
     expect(socket.lines.at(-1)).toBe('feel 1 disagreement');
   });
 
+  it('PassiveInspection: approval recheck stays disconnected and a later beat reconnects after service restart', async () => {
+    const client = new FacepalmClient();
+    const token = path.join(socket.directory, 'clients', 'ai-pair');
+    fs.rmSync(token);
+    await until(client.refresh(false));
+    expect(client.snapshot().status).toBe('approvalNeeded');
+    expect(socket.openConnections).toBe(0);
+    fs.writeFileSync(token, socket.token, { mode: 0o600 });
+    await until(client.refresh(false));
+    expect(client.snapshot().status).toBe('idle');
+    expect(socket.openConnections).toBe(0);
+    expect(await until(client.markBeat('question', 1))).toMatchObject({ id: 1 });
+    const retired = Promise.withResolvers<void>();
+    client.onStatus = (snapshot) => {
+      if (snapshot.status === 'unchecked') retired.resolve();
+    };
+    await socket.close();
+    await until(retired.promise);
+    socket = new FakeFacepalmSocket(home);
+    await socket.listen();
+    expect(await until(client.markBeat('question', 1))).toMatchObject({ id: 2 });
+    await client.dispose();
+  });
+
   it('changes nothing, and never connects, when Facepalm has not approved this name', async () => {
     fs.rmSync(path.join(socket.directory, 'clients', 'ai-pair'));
     const editor = new FakeEditor();

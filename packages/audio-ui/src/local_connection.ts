@@ -38,7 +38,9 @@ export class LocalConnection {
       frame.type === 'terminal' ||
       frame.type === 'panelAction' ||
       frame.type === 'facepalmResult' ||
-      frame.type === 'facepalmStatus'
+      frame.type === 'facepalmStatus' ||
+      frame.type === 'facepalmControlResult' ||
+      frame.type === 'facepalmSettingsNotice'
     ) {
       return false;
     }

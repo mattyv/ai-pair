@@ -9,6 +9,7 @@ import * as assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as net from 'node:net';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -237,11 +238,34 @@ export async function facepalmPaths(api: Api, root: string): Promise<void> {
     // Refreshing the settings view only checks availability. It must not send hello,
     // which would join Facepalm and could activate its camera.
     api.panelMessage({ type: 'facepalmRefresh' });
+    api.panelMessage({ type: 'facepalmRefresh' });
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 300);
     });
     assert.equal(daemon.lines.length, 0, 'refreshing settings joined Facepalm');
     assert.equal(daemon.openConnections, 0);
+    // Exercise a stale settings action only when neither supported local menu exists.
+    // Never launch a developer's real app during an integration run.
+    const localMenus =
+      process.platform === 'darwin'
+        ? [path.join(os.homedir(), 'Applications', 'Facepalm.app', 'Contents', 'MacOS', 'facepalm-menu')]
+        : process.platform === 'linux'
+          ? ['/usr/bin/facepalm-menu', path.join(os.homedir(), '.local', 'facepalm', 'bin', 'facepalm-menu')]
+          : [];
+    if (localMenus.every((menu) => !fs.existsSync(menu))) {
+      api.panelMessage({ type: 'facepalmOpenSettings' });
+      api.panelMessage({ type: 'facepalmOpenSettings' });
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 300);
+      });
+      assert.equal(daemon.lines.length, 0, 'opening unavailable settings joined Facepalm');
+      assert.equal(daemon.openConnections, 0);
+      api.panelMessage({ type: 'facepalmRefresh' });
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 300);
+      });
+      assert.equal(daemon.lines.length, 0, 'rechecking after an unavailable menu joined Facepalm');
+    }
     await client.connect(new StdioClientTransport({ command: api.launcher, cwd: root, env }));
     async function call(name: string, args: Record<string, unknown>): Promise<string> {
       const result = await client.callTool({ name, arguments: args });

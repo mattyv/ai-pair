@@ -31,12 +31,22 @@ export class WorkspacePanelBridge {
     if (
       frame.connectionEpoch !== this.options.epoch ||
       frame.sequence <= this.lastSequence ||
-      (frame.type !== 'terminal' && frame.type !== 'panelAction' && frame.type !== 'facepalmResult' && frame.type !== 'facepalmStatus')
+      (frame.type !== 'terminal' &&
+        frame.type !== 'panelAction' &&
+        frame.type !== 'facepalmResult' &&
+        frame.type !== 'facepalmStatus' &&
+        frame.type !== 'facepalmControlResult' &&
+        frame.type !== 'facepalmSettingsNotice')
     ) {
       return false;
     }
     this.lastSequence = frame.sequence;
-    if (frame.type === 'facepalmResult' || frame.type === 'facepalmStatus') {
+    if (
+      frame.type === 'facepalmResult' ||
+      frame.type === 'facepalmStatus' ||
+      frame.type === 'facepalmControlResult' ||
+      frame.type === 'facepalmSettingsNotice'
+    ) {
       this.options.facepalm(frame);
       return true;
     }

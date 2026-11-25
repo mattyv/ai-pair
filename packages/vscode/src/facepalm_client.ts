@@ -177,7 +177,7 @@ export class FacepalmClient implements FacepalmPort {
   }
 
   /** Inspects local files without connecting to Facepalm or starting its camera. */
-  async refresh(remote: boolean, remoteHost = remote): Promise<void> {
+  async refresh(remote: boolean, remoteHost = remote, notify = true): Promise<void> {
     this.remote = remote;
     const generation = this.generation;
     const refreshGeneration = ++this.refreshGeneration;
@@ -213,16 +213,16 @@ export class FacepalmClient implements FacepalmPort {
     this.canOpenSettings = !remoteHost && launchable.includes(true);
     this.available = remoteHost || appPaths.length === 0 || [socket, token, ...apps].some((value) => value !== 'absent');
     if (!this.enabled) {
-      this.publish('off');
+      this.publish('off', notify);
       return;
     }
     if (this.status === 'connected') {
       this.available = true;
-      this.publish('connected');
+      this.publish('connected', notify);
       return;
     }
-    if (socket === 'absent') this.publish(remote ? 'unavailableSsh' : 'notRunning');
-    else if (socket === 'present' && token === 'absent') this.publish('approvalNeeded');
+    if (socket === 'absent') this.publish(remote ? 'unavailableSsh' : 'notRunning', notify);
+    else if (socket === 'present' && token === 'absent') this.publish('approvalNeeded', notify);
     else if (socket === 'present' && token === 'present') {
       const approved = await readToken(path.join(directory, 'clients', FACEPALM_CLIENT_NAME));
       if (
@@ -232,14 +232,15 @@ export class FacepalmClient implements FacepalmPort {
         this.enabled &&
         this.snapshot().status !== 'connected'
       ) {
-        this.publish(approved === undefined ? 'unchecked' : 'idle');
+        this.publish(approved === undefined ? 'unchecked' : 'idle', notify);
       }
-    } else this.publish('unchecked');
+    } else this.publish('unchecked', notify);
   }
 
   /** Publishes an observed status to the panel. */
-  private publish(status: FacepalmSnapshot['status']): void {
+  private publish(status: FacepalmSnapshot['status'], notify = true): void {
     this.status = status;
+    if (!notify) return;
     try {
       this.onStatus?.(this.snapshot());
     } catch {

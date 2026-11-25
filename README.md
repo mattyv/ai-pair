@@ -261,10 +261,19 @@ facepalm-daemon approve ai-pair
 ```
 
 Turn Facepalm on and approve AI Pair first. The AI Pair toggle does not start
-Facepalm or grant approval. Opening Settings checks local files without
-connecting or activating a camera; "Available (not connected)" is file
-evidence, while "Connected" follows a successful handshake. Choose the camera,
-calibration, and sensitivity in Facepalm itself.
+Facepalm or grant approval. Opening Settings and choosing **Recheck status**
+inspect local files without connecting or activating a camera. Finding an
+approval file is evidence that AI Pair can try to connect; **Connected**
+follows a successful handshake when a reading is requested. Camera consent
+and approval for another client such as `mcp` do not approve `ai-pair`. Run
+the approval command on your local laptop, as your usual user, without
+`sudo`. Choose the camera, calibration, and sensitivity in Facepalm itself.
+
+Opening Facepalm Settings reports whether the local launch request was
+accepted or failed. Acceptance does not prove the window is in front; check
+Facepalm if the window manager keeps it behind VS Code. Startup failures and
+lost or timed-out companion requests show a reason. Diagnostics use bounded
+failure categories rather than arbitrary process output.
 
 With that done, right after the agent asks a question or proposes a change in
 a pairing session, Facepalm reads a few seconds of the programmer's reaction
@@ -278,14 +287,16 @@ picked; one click tells Facepalm how it actually went, which tunes its later
 reads, and the panel replies "Thanks — Facepalm will learn from this." No
 technical detail, such as the reading's ID, appears anywhere in the panel.
 
-For Remote SSH, install AI Pair 0.57.0 on the remote host and AI Pair Local
-Audio 0.57.0 on your local machine. Install Facepalm only on the local machine,
+For Remote SSH, install AI Pair 0.57.1 on the remote host and AI Pair Local
+Audio 0.57.1 on your local machine. Install Facepalm only on the local machine,
 and run the approval command there. Local Audio carries Facepalm feedback and
 settings over Pair's existing companion connection, including when speech is
 disabled or uses a cloud provider. Camera frames and the approval token stay
 local. Facepalm Settings opens on your local desktop.
 
-The two Pair extensions must use matching versions. No socket forwarding or
+Install both Pair extensions from the same build bundle, then run
+**Developer: Reload Window**. Their versions and connection protocol must
+match. No socket forwarding or
 Facepalm installation on the SSH host is needed. In a local VS Code window,
 Pair can also use its existing direct connection when the companion is absent.
 

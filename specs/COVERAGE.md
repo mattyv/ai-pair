@@ -302,3 +302,13 @@ actual boundaries. Native integration covers session command dispatch.
 `rememberReply` and `recallReply` implement `ReplyHistory` Send, Up and Down;
 the keyboard and caret eligibility checks are exercised by page and browser
 tests rather than modeled.
+
+## Facepalm settings bridge
+
+| Functions | Spec |
+|---|---|
+| `FacepalmClient.refresh`, `publish` | `FacepalmSettingsControl`: passive, silent correlated recheck; existing `FacepalmSettings` socket ownership |
+| `openFacepalmSettings`, `facepalmSettingsWarning` | `FacepalmSettingsLaunch`: bounded process admission, early failure and sanitized diagnostics; acceptance is not window visibility |
+| `RemoteFacepalm.requestControl`, `finishControl`, `failControl`, `accept`, `pageChanged` | `FacepalmSettingsControl` and `FacepalmSettingsNotice`: page/request correlation, bounded settlement and stale notice rejection |
+| `CompanionFacepalm.accept`, `report` | `FacepalmSettingsControl` and `FacepalmSettingsNotice`: passive local inspection, asynchronous local launch and bounded diagnostics |
+| `CompanionSession.shutdown` | `LocalFacepalm`: physical retirement barrier; output-channel ownership follows the same single shutdown |

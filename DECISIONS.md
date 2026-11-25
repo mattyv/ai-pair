@@ -10,6 +10,33 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   GPT-6.1 Terra agents write code and tests; GPT-6 Astra agents review them.
     Resolve findings and verify the resulting changes before reporting completion.
 
+## Facepalm settings feedback and passive recheck (#148, 2026-11-25)
+
+-   Keep a single feedback toggle and local Settings action. Add conditional
+    **Recheck status** for uncertain, unavailable or missing-approval evidence.
+    It inspects files, not a camera or live service handshake. Distinguish an
+    approval found on this device from a verified connection, and explain that
+    the reading triggers the connection. Approval guidance names `ai-pair` and
+    the local machine, independently of camera consent or `mcp` approval.
+-   Bump both extensions to 0.57.1 so the new protocol-14 installers are an
+    identifiable upgrade from the shared 0.57.0 development candidate. Install
+    the matching workspace and UI companion from the same bundle.
+-   Protocol 14 adds bounded settings control results scoped to attachment,
+    page and request identity. One pending control request settles on a result,
+    timeout or disconnect; an old page cannot consume a successor's result.
+    Both extensions must come from the same bundle. This replaces protocol 13's
+    fire-and-forget settings and recheck actions without changing beat ownership.
+-   Treat spawning a GUI process as admission, not proof that a window became
+    visible. Observe early exit and startup errors and report sanitized failure
+    categories. Keep late failure callbacks scoped to the accepted request.
+    Window managers may keep Settings behind the current window; do not claim
+    success at foreground placement or bypass their focus policy.
+-   Actual cause of the user's Settings no-op is still unconfirmed: the local
+    terminal command opens Settings, while the composed button-to-channel trace
+    after session retirement passes. Source-confirmed gaps in error visibility
+    are fixed independently of that diagnosis. Native per-file coverage and
+    actual two-host/desktop confirmation remain separate verification gates.
+
 ## Local Facepalm in Remote SSH (#148, 2026-11-24)
 
 -   Keep the camera service, consent, token and settings launcher on the UI

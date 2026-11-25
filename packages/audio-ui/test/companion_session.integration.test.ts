@@ -18,7 +18,11 @@ const fake = vi.hoisted(() => ({
 vi.mock('vscode', () => ({
   Uri: { file: (value: string) => ({ fsPath: value }), joinPath: (base: unknown) => base },
   commands: { executeCommand: fake.execute },
-  window: { registerWebviewViewProvider: fake.register, showWarningMessage: fake.warning },
+  window: {
+    registerWebviewViewProvider: fake.register,
+    showWarningMessage: fake.warning,
+    createOutputChannel: () => ({ info: () => {}, dispose: () => {} }),
+  },
 }));
 // The shortcut labels have their own tests; here the companion only needs a watcher to make and dispose.
 vi.mock('../../vscode/src/shortcut_watcher', () => ({
@@ -51,6 +55,7 @@ vi.mock('../../vscode/src/panel', () => ({
     }
     showRemoteUpdate = vi.fn();
     showSpeechTransport = fake.showSpeechTransport;
+    showFacepalmStatus = vi.fn();
   },
 }));
 

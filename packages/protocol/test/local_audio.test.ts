@@ -7,13 +7,13 @@ beforeEach(() => {
   fake.problem.mockReset();
 });
 
-const base = { version: 13, connectionEpoch: 'connection-1', sequence: 1 };
+const base = { version: 14, connectionEpoch: 'connection-1', sequence: 1 };
 const owner = { jobId: 'job-1', pageEpoch: 1 };
 
 describe('local audio command frames', () => {
-  it('accepts version 13 and rejects version 12 companion frames', () => {
-    expect(localAudioFrame.safeParse({ ...base, version: 13, type: 'attach' }).success).toBe(true);
-    expect(localAudioFrame.safeParse({ ...base, version: 12, type: 'attach' }).success).toBe(false);
+  it('accepts version 14 and rejects version 13 companion frames', () => {
+    expect(localAudioFrame.safeParse({ ...base, version: 14, type: 'attach' }).success).toBe(true);
+    expect(localAudioFrame.safeParse({ ...base, version: 13, type: 'attach' }).success).toBe(false);
   });
   it('accepts the bounded commands and terminal acknowledgements', () => {
     for (const frame of [
@@ -87,11 +87,35 @@ describe('local Facepalm frames', () => {
       { ...base, ...facepalmOwner, type: 'facepalmRetire' },
       { ...base, ...facepalmOwner, type: 'facepalmFeel', id: 1, feeling: 'agreement' },
       { ...base, type: 'facepalmEnabled', enabled: false },
-      { ...base, type: 'facepalmRefresh' },
-      { ...base, type: 'facepalmOpenSettings' },
+      { ...base, type: 'facepalmRefresh', pageEpoch: 1, requestId: 1 },
+      { ...base, type: 'facepalmOpenSettings', pageEpoch: 1, requestId: 1 },
+      {
+        ...base,
+        type: 'facepalmControlResult',
+        pageEpoch: 1,
+        requestId: 1,
+        result: { operation: 'open', outcome: { state: 'failed', reason: 'display' } },
+      },
+      { ...base, type: 'facepalmControlResult', pageEpoch: 1, requestId: 2, result: { operation: 'open', outcome: { state: 'accepted' } } },
+      {
+        ...base,
+        type: 'facepalmControlResult',
+        pageEpoch: 1,
+        requestId: 3,
+        result: {
+          operation: 'recheck',
+          outcome: { state: 'checked', snapshot: { enabled: true, status: 'idle', available: true, canOpenSettings: false } },
+        },
+      },
+      { ...base, type: 'facepalmSettingsNotice', pageEpoch: 1, requestId: 2, failure: { state: 'failed', reason: 'handoff' } },
       { ...base, ...facepalmOwner, type: 'facepalmResult', requestId: 1, cue: { id: 1, feeling: 'agreement', feelings: ['agreement'] } },
       { ...base, ...facepalmOwner, type: 'facepalmResult', requestId: 1 },
-      { ...base, type: 'facepalmStatus', snapshot: { enabled: true, status: 'idle', available: true, canOpenSettings: true } },
+      {
+        ...base,
+        type: 'facepalmStatus',
+        pageEpoch: 1,
+        snapshot: { enabled: true, status: 'idle', available: true, canOpenSettings: true },
+      },
     ]) {
       expect(localAudioFrame.safeParse(frame).success).toBe(true);
     }
@@ -104,6 +128,35 @@ describe('local Facepalm frames', () => {
       { ...beat, requestId: 0 },
       { ...beat, generation: -1 },
       { ...beat, token: 'secret' },
+      { ...base, type: 'facepalmOpenSettings', pageEpoch: 1, requestId: 0 },
+      { ...base, type: 'facepalmSettingsNotice', pageEpoch: 1, requestId: 1, failure: { state: 'accepted' } },
+      {
+        ...base,
+        type: 'facepalmControlResult',
+        pageEpoch: 1,
+        requestId: 1,
+        result: {
+          operation: 'recheck',
+          outcome: {
+            state: 'checked',
+            snapshot: { enabled: true, status: 'idle', available: true, canOpenSettings: true, token: 'secret' },
+          },
+        },
+      },
+      {
+        ...base,
+        type: 'facepalmControlResult',
+        pageEpoch: 1,
+        requestId: 1,
+        result: { operation: 'open', outcome: { state: 'failed', reason: 'exit', code: 256 } },
+      },
+      {
+        ...base,
+        type: 'facepalmControlResult',
+        pageEpoch: 1,
+        requestId: 1,
+        result: { operation: 'open', outcome: { state: 'failed', reason: 'display', stderr: 'secret' } },
+      },
       { ...beat, kind: 'other' },
       {
         ...base,

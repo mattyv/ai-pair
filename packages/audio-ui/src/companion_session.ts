@@ -77,6 +77,7 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
   let host: SpeechHost;
   let channel: CommandChannel<LocalAudioFrame>;
   const localFacepalm = new FacepalmClient();
+  const localLog = vscode.window.createOutputChannel('AI Pair Local Audio', { log: true });
   let facepalm: CompanionFacepalm;
   const assembler = new PanelChunkAssembler();
   const diagnostics = new Diagnostics({ version: AI_PAIR_VERSION, build: AI_PAIR_BUILD_ID });
@@ -113,6 +114,9 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
       facepalmStopped = facepalm.dispose();
     });
     attempt(() => {
+      panel?.showFacepalmStatus(localFacepalm.snapshot());
+    });
+    attempt(() => {
       speechStopped = Promise.resolve(host.dispose());
     });
     attempt(() => {
@@ -127,6 +131,11 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
           `AI Pair Local Audio lost its workspace connection: ${lost}. Reload the window to reconnect.`,
         );
       });
+    }
+    try {
+      localLog.dispose();
+    } catch {
+      /* A diagnostic channel cannot prevent retirement. */
     }
     void Promise.allSettled([facepalmStopped, speechStopped]).then((results) => {
       for (const result of results) {
@@ -161,20 +170,26 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
   });
   facepalm = new CompanionFacepalm({
     client: localFacepalm,
+    diagnostic: (message) => {
+      localLog.info(message);
+    },
     epoch,
     page: () => panel?.speechReadyPageId(),
     nextSequence,
     send: (frame) => {
       void channel.send(frame);
     },
-    openSettings: () => {
-      void openFacepalmSettings(process.platform, false).then((opened) => {
-        if (!opened) void vscode.window.showWarningMessage('Could not open Facepalm settings.');
-      });
-    },
+    openSettings: (onLateFailure) => openFacepalmSettings(process.platform, false, onLateFailure),
   });
   localFacepalm.onStatus = (snapshot) => {
-    void channel.send({ version: LOCAL_AUDIO_VERSION, connectionEpoch: epoch, sequence: nextSequence(), type: 'facepalmStatus', snapshot });
+    void channel.send({
+      version: LOCAL_AUDIO_VERSION,
+      connectionEpoch: epoch,
+      sequence: nextSequence(),
+      type: 'facepalmStatus',
+      pageEpoch: panel?.speechReadyPageId() ?? 0,
+      snapshot,
+    });
   };
   narration = new CompanionNarration({
     epoch,
@@ -247,6 +262,11 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
   }
   panel.useCompanion({
     forward: (action, page) => {
+      // specs/FacepalmSettingsControl.tla, ReplaceOwner: a lost attachment cannot accept controls.
+      if (closed && (action.type === 'facepalmOpenSettings' || action.type === 'facepalmRefresh' || action.type === 'facepalmEnabled')) {
+        void vscode.window.showWarningMessage('AI Pair Local Audio is disconnected. Reload the window to use Facepalm.');
+        return;
+      }
       if (action.type === 'ready') {
         if (readyPage !== undefined && readyPage !== page) facepalm.retire();
         readyPage = page;

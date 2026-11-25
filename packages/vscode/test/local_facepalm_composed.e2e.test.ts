@@ -11,12 +11,16 @@ describe('local Facepalm attachment', () => {
       markBeat: vi.fn().mockResolvedValue(cue),
       feel: vi.fn().mockResolvedValue(undefined),
       retire: vi.fn(),
+      snapshot: vi.fn().mockReturnValue({ enabled: true, status: 'idle', available: true, canOpenSettings: true }),
       dispose: vi.fn().mockResolvedValue(undefined),
       setEnabled: vi.fn(),
       refresh: vi.fn().mockResolvedValue(undefined),
     };
     let localSequence = 0;
     let workspace: WorkspaceSession;
+    const openSettings = vi
+      .fn<() => Promise<import('@ai-pair/protocol').FacepalmSettingsLaunch>>()
+      .mockResolvedValue({ state: 'accepted' });
     const companion = new CompanionFacepalm({
       client,
       epoch: 'connection',
@@ -25,7 +29,7 @@ describe('local Facepalm attachment', () => {
       send: (frame) => {
         workspace.accept(frame);
       },
-      openSettings: vi.fn<() => void>(),
+      openSettings,
     });
     const connection = new LocalConnection({
       leaseMs: 60_000,
@@ -60,6 +64,7 @@ describe('local Facepalm attachment', () => {
         connectionEpoch: 'connection',
         sequence: ++localSequence,
         type: 'facepalmStatus',
+        pageEpoch: 1,
         snapshot: { enabled: true, status: 'idle', available: true, canOpenSettings: true },
       }),
     ).toBe(true);
@@ -68,6 +73,24 @@ describe('local Facepalm attachment', () => {
     await vi.waitFor(() => {
       expect(client.feel).toHaveBeenCalledWith(9, 'agreement');
     });
+    workspace.facepalm.retire();
+    expect(await workspace.facepalm.openSettings()).toEqual({ state: 'accepted' });
+    expect(openSettings).toHaveBeenCalledOnce();
+    workspace.facepalm.onSettingsFailure = () => {
+      throw new Error('observer');
+    };
+    expect(
+      workspace.accept({
+        version: LOCAL_AUDIO_VERSION,
+        connectionEpoch: 'connection',
+        sequence: ++localSequence,
+        type: 'facepalmSettingsNotice',
+        pageEpoch: 1,
+        requestId: 1,
+        failure: { state: 'failed', reason: 'qt' },
+      }),
+    ).toBe(true);
+    expect(await workspace.facepalm.markBeat('question', 1)).toEqual(cue);
     workspace.accept({
       version: LOCAL_AUDIO_VERSION,
       connectionEpoch: 'connection',
