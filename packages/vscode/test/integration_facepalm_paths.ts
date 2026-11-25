@@ -11,6 +11,7 @@ import * as fs from 'node:fs';
 import * as net from 'node:net';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import * as vscode from 'vscode';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import type { Api } from '../src/extension';
@@ -253,11 +254,29 @@ export async function facepalmPaths(api: Api, root: string): Promise<void> {
           ? ['/usr/bin/facepalm-menu', path.join(os.homedir(), '.local', 'facepalm', 'bin', 'facepalm-menu')]
           : [];
     if (localMenus.every((menu) => !fs.existsSync(menu))) {
-      api.panelMessage({ type: 'facepalmOpenSettings' });
-      api.panelMessage({ type: 'facepalmOpenSettings' });
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 300);
-      });
+      const warningDescriptor = Object.getOwnPropertyDescriptor(vscode.window, 'showWarningMessage');
+      assert.ok(warningDescriptor !== undefined);
+      const warnings: string[] = [];
+      try {
+        Object.defineProperty(vscode.window, 'showWarningMessage', {
+          ...warningDescriptor,
+          value: (message: string) => {
+            warnings.push(message);
+            return Promise.resolve(undefined);
+          },
+        });
+        api.panelMessage({ type: 'facepalmOpenSettings' });
+        for (let attempt = 0; attempt < 100 && warnings.length === 0; attempt++) {
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, 20);
+          });
+        }
+        assert.deepEqual(warnings, [
+          'Could not open Facepalm settings: the local menu was not found. Try opening settings from the Facepalm menu or tray.',
+        ]);
+      } finally {
+        Object.defineProperty(vscode.window, 'showWarningMessage', warningDescriptor);
+      }
       assert.equal(daemon.lines.length, 0, 'opening unavailable settings joined Facepalm');
       assert.equal(daemon.openConnections, 0);
       api.panelMessage({ type: 'facepalmRefresh' });
