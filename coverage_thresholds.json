@@ -158,6 +158,13 @@
       "functions": 100
     }
   },
+  "packages/audio-ui/src/view_slot.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
+      "functions": 100
+    }
+  },
   "packages/core/src/bridge.ts": {
     "unit": {
       "lines": 100,
@@ -628,6 +635,13 @@
     "integration": {
       "lines": 100,
       "branches": 95,
+      "functions": 100
+    }
+  },
+  "packages/vscode/src/companion_reconnect.ts": {
+    "unit": {
+      "lines": 100,
+      "branches": 100,
       "functions": 100
     }
   },

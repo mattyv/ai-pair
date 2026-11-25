@@ -3,6 +3,8 @@ import * as vscode from 'vscode';
 import { LOCAL_AUDIO_VERSION, localAudioPrepared } from '@ai-pair/protocol';
 import { AttachmentGate } from './attachment_gate';
 import { createCompanionSession, type CompanionSession } from './companion_session';
+import { NarrationPanel } from '../../vscode/src/panel';
+import { ViewSlot } from './view_slot';
 
 /** The companion's version, which the build defines from its manifest. */
 declare const AI_PAIR_VERSION: string;
@@ -19,12 +21,21 @@ let retiring: Promise<void> | undefined;
 export function activate(context: vscode.ExtensionContext): void {
   if (closeActive !== undefined) void closeActive().catch(() => {});
   let session: CompanionSession | undefined;
+  /** The epoch of the running session. */
+  let sessionEpoch: string | undefined;
+  /** The epoch whose session is to start once retirement settles: the latest commit's (#127 review). */
+  let wanted: string | undefined;
   let commitEpoch = '';
   let closing: Promise<void> | undefined;
   let registration: Promise<void> | undefined;
   let stopped = false;
+  /** The one Pair view provider, registered at the first commit and kept across reconnects (#127). */
+  const slot = new ViewSlot();
+  let provider: vscode.Disposable | undefined;
   function close(): Promise<void> {
     stopped = true;
+    provider?.dispose();
+    provider = undefined;
     if (closing !== undefined) return closing;
     if (session === undefined) return retiring ?? Promise.resolve();
     closing = Promise.resolve(session.dispose());
@@ -39,19 +50,49 @@ export function activate(context: vscode.ExtensionContext): void {
   }
   closeActive = close;
   function start(epoch: string): void {
-    if (!stopped) session = createCompanionSession(context, epoch);
+    if (stopped) return;
+    // specs/PanelPlacement.tla, Register: the provider registers only once a connection is committed.
+    provider ??= vscode.window.registerWebviewViewProvider(NarrationPanel.viewId, slot, {
+      webviewOptions: { retainContextWhenHidden: true },
+    });
+    session = createCompanionSession(context, epoch, slot);
+    sessionEpoch = epoch;
+  }
+  /**
+   * Retires the current session, provider included, for a new connection that replaces it; the next session starts once
+   * this one has (specs/LocalAudioReconnect.tla, CompanionCommit; #127). Unlike close(), the extension keeps running.
+   */
+  function retireSession(): void {
+    if (session === undefined) return;
+    const retired = Promise.resolve(session.dispose());
+    session = undefined;
+    sessionEpoch = undefined;
+    registration = undefined;
+    retiring = retired;
+    // No session starts, so none is retired again, before this retirement settles. One that fails keeps refusing new
+    // connections, as a failed close does, so a second provider never registers.
+    void retired.then(
+      () => {
+        retiring = undefined;
+      },
+      () => {},
+    );
   }
   const gate = new AttachmentGate({
     token: randomUUID,
     extension: { version: AI_PAIR_VERSION, build: AI_PAIR_BUILD_ID },
     timeoutMs: PREPARE_TIMEOUT_MS,
+    retire: retireSession,
     register: () => {
       const epoch = commitEpoch;
+      wanted = epoch;
       if (retiring === undefined) {
         start(epoch);
       } else {
+        // specs/LocalAudioReconnect.tla, RetireDone: of the commits waiting on retirement, only the latest starts
+        // (SingleSession); one the workspace gave up on and replaced does not.
         registration = retiring.then(() => {
-          start(epoch);
+          if (wanted === epoch) start(epoch);
         });
       }
     },
@@ -81,8 +122,10 @@ export function activate(context: vscode.ExtensionContext): void {
       commitEpoch = parsed.data.epoch;
       if (!gate.commit(parsed.data)) return false;
       if (registration === undefined) return true;
+      const epoch = parsed.data.epoch;
+      // specs/LocalAudioReconnect.tla, WorkspaceAck: true only once this epoch's own session runs (ConnectedIsLive).
       return registration.then(
-        () => !stopped && session !== undefined,
+        () => !stopped && sessionEpoch === epoch,
         () => false,
       );
     }),

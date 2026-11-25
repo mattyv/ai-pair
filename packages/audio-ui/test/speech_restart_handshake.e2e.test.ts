@@ -65,6 +65,8 @@ vi.mock('../../vscode/src/panel', () => ({
     speechReadyPageId() {
       return 7;
     }
+    resolveWebviewView() {}
+    release() {}
     showSpeechTransport() {}
     showFacepalmStatus() {}
     showSpeechReadiness() {}

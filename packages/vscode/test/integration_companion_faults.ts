@@ -16,6 +16,10 @@ export async function companionFaults(api: Api): Promise<void> {
   let lostWarnings = 0;
   let anyLost = 0;
   let delayNextFrame = 0;
+  let commits = 0;
+  let prepares = 0;
+  /** While set, no prepare reaches the companion: every reconnect attempt fails at once. */
+  let companionGone = false;
   let target = '';
   let failures = 0;
   let invalidGpu = false;
@@ -24,6 +28,11 @@ export async function companionFaults(api: Api): Promise<void> {
     Object.defineProperty(vscode.commands, 'executeCommand', {
       ...executeDescriptor,
       value: (command: string, ...args: unknown[]) => {
+        if (command === 'aiPair.localAudio.commit') commits++;
+        if (command === 'aiPair.localAudio.prepare') {
+          prepares++;
+          if (companionGone) return Promise.resolve(undefined);
+        }
         if (command === 'aiPair.localAudio.gpuDiagnostics' && invalidGpu) {
           return Promise.resolve({ path: '/private/gpu-secret' });
         }
@@ -170,17 +179,48 @@ export async function companionFaults(api: Api): Promise<void> {
     assert.equal(slowPending(), false, 'no frame reached the slow acknowledgement');
     assert.equal(anyLost, 0, 'a slow acknowledgement dropped the connection');
     assert.ok(api.speechPageReady(), 'a slow acknowledgement closed the companion page');
+    // A refused frame loses the connection; the workspace reconnects with a new epoch, the companion replaces its
+    // session and provider, and the page comes back, with no warning (specs/LocalAudioReconnect.tla, #127).
+    const commitsBefore = commits;
     target = 'aiPair.localAudio.frame';
     api.panelMessage({ type: 'reply', text: 'retained after frame refusal', attach: false });
-    for (let attempt = 0; attempt < 100; attempt++) {
-      if (lostWarnings > 0) break;
+    /** Reports whether a new connection was committed and its page is ready. */
+    function reconnected(): boolean {
+      return commits > commitsBefore && api.speechPageReady();
+    }
+    for (let attempt = 0; attempt < 300 && !reconnected(); attempt++) {
       await new Promise<void>((resolve) => {
         setTimeout(resolve, 100);
       });
     }
     assert.equal(failures, 6, 'the real frame boundary was not reached');
-    assert.equal(lostWarnings, 1, 'the lost connection warning was not shown');
+    assert.ok(
+      reconnected(),
+      `the workspace did not reconnect to the companion: ${commits - commitsBefore} commits after the loss, page ready ${String(api.speechPageReady())}`,
+    );
+    assert.equal(lostWarnings, 0, 'a reconnected loss was announced');
+    assert.equal(anyLost, 0, 'a reconnected loss was announced');
     assert.ok(api.history().some((event) => event.type === 'programmer' && event.text === 'retained after frame refusal'));
+    // The reconnected session is lost in turn, and the companion no longer answers: after the five attempts, about
+    // 38 seconds, and not before, the programmer is told to reload (NoNeedlessWarning; #127).
+    const preparesBefore = prepares;
+    companionGone = true;
+    target = 'aiPair.localAudio.frame';
+    api.panelMessage({ type: 'reply', text: 'sent before the companion went', attach: false });
+    /** Reports whether the reload warning has shown. */
+    function gaveUp(): boolean {
+      return anyLost > 0;
+    }
+    const attempts = 5;
+    for (let attempt = 0; attempt < 600 && !gaveUp(); attempt++) {
+      if (prepares - preparesBefore < attempts) assert.equal(anyLost, 0, 'the reload warning came before the last attempt');
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 100);
+      });
+    }
+    assert.ok(gaveUp(), `no reload warning after ${prepares - preparesBefore} failed attempts`);
+    assert.equal(prepares - preparesBefore, attempts, 'the workspace did not make five attempts');
+    assert.equal(lostWarnings, 0, 'the old warning for a refused frame showed');
   } finally {
     Object.defineProperty(vscode.commands, 'executeCommand', executeDescriptor);
     Object.defineProperty(vscode.window, 'showErrorMessage', errorDescriptor);
