@@ -2,6 +2,7 @@ import { LOCAL_AUDIO_VERSION, MAC_MODIFIERS, type ChannelLoss, type LocalAudioFr
 import { beforeEach, expect, it, vi } from 'vitest';
 import { mock } from 'vitest-mock-extended';
 import type * as vscode from 'vscode';
+import type { ViewSlot } from '../src/view_slot';
 import { createCompanionSession } from '../src/companion_session';
 import { shortcutPlatform } from '../../vscode/src/shortcut_labels';
 
@@ -49,6 +50,7 @@ const fake = vi.hoisted(() => ({
   warning: vi.fn(),
   register: vi.fn(),
   providerDispose: vi.fn(),
+  slot: { attach: vi.fn(), detach: vi.fn() },
   hostDispose: vi.fn(),
   narrationDispose: vi.fn(),
   connectionDispose: vi.fn(),
@@ -258,6 +260,7 @@ function session() {
       globalStorageUri: mock<vscode.Uri>({ path: '/user/globalStorage/mattyv.ai-pair-local-audio' }),
     }),
     'epoch',
+    mock<ViewSlot>(fake.slot),
   );
 }
 function routing(): Routing {
@@ -265,9 +268,11 @@ function routing(): Routing {
   return fake.routing;
 }
 
-it('registers one provider and forwards local commands and diagnostics', async () => {
+it('attaches to the view slot and forwards local commands and diagnostics', async () => {
   const current = session();
-  expect(fake.register).toHaveBeenCalledOnce();
+  // The companion's one provider gives the panel the view (#127): the session attaches to it, and registers none.
+  expect(fake.register).not.toHaveBeenCalled();
+  expect(fake.slot.attach).toHaveBeenCalledOnce();
   expect(fake.attach).toHaveBeenCalledWith({ version: LOCAL_AUDIO_VERSION, connectionEpoch: 'epoch', sequence: 1, type: 'attach' });
   fake.accept.mockReturnValue(true);
   expect(current.accept({ frame: 'test' })).toBe(true);
@@ -297,7 +302,7 @@ it('registers one provider and forwards local commands and diagnostics', async (
   expect(fake.execute).toHaveBeenCalledOnce();
   void current.dispose();
   expect(await current.ready('epoch')).toBe(false);
-  expect(fake.providerDispose).toHaveBeenCalledOnce();
+  expect(fake.slot.detach).toHaveBeenCalledExactlyOnceWith(fake.slot.attach.mock.calls[0]?.[0]);
   expect(fake.hostDispose).toHaveBeenCalledOnce();
   expect(fake.narrationDispose).toHaveBeenCalledOnce();
   expect(fake.connectionDispose).toHaveBeenCalledOnce();
@@ -447,13 +452,10 @@ it('stops locally on connection loss and handles repeated shutdown safely', () =
   const current = session();
   fake.connectionOptions?.lost();
   expect(fake.showSpeechTransport).toHaveBeenCalledWith(false);
-  // The companion's warning names its side and the lease it lost (#115).
-  expect(fake.warning).toHaveBeenCalledWith(
-    'AI Pair Local Audio lost its workspace connection: no heartbeat from the workspace for 20 seconds. Reload the window to reconnect.',
-  );
   fake.channelOptions?.lost('timeout');
   expect(fake.hostDispose).toHaveBeenCalledOnce();
-  expect(fake.warning).toHaveBeenCalledOnce();
+  // NoNeedlessWarning: the workspace reconnects, replacing this session, and warns only if it cannot (#127).
+  expect(fake.warning).not.toHaveBeenCalled();
   void current.dispose();
 });
 
@@ -539,15 +541,14 @@ it('rejects malformed diagnostics from a local snapshot', () => {
   void current.dispose();
 });
 
-it('closes local audio and warns when the outbound command channel is lost', () => {
+it('closes local audio, without a warning, when the outbound command channel is lost', () => {
   const current = session();
   fake.channelOptions?.lost('timeout');
   expect(fake.narrationDispose).toHaveBeenCalledOnce();
   expect(fake.hostDispose).toHaveBeenCalledOnce();
   expect(fake.connectionDispose).toHaveBeenCalledOnce();
-  expect(fake.warning).toHaveBeenCalledWith(
-    'AI Pair Local Audio lost its workspace connection: the workspace did not answer a message in time. Reload the window to reconnect.',
-  );
+  // NoNeedlessWarning: the workspace reconnects, and warns only if every attempt fails (#127).
+  expect(fake.warning).not.toHaveBeenCalled();
   void current.dispose();
 });
 

@@ -59,6 +59,7 @@ import { gpuCheckPaths, lookaheadHintPaths, speechCoveragePaths } from './integr
 import { vscodeCoveragePaths } from './integration_vscode_coverage_paths';
 import { diagnosticCoveragePaths } from './integration_diagnostic_coverage_paths';
 import { attentionPaths } from './integration_attention_paths';
+import { pausedScrollPaths } from './integration_paused_scroll';
 import { shortcutCommandPaths, shortcutLabelPaths } from './integration_shortcuts';
 
 const EXPECTED_TODOS = `export interface Todo {
@@ -277,6 +278,7 @@ export async function run(): Promise<void> {
   const folder = vscode.workspace.workspaceFolders?.[0];
   assert.ok(folder, 'no workspace folder is open');
   const root = folder.uri.fsPath;
+  await pausedScrollPaths(api, root);
   function file(name: string): string {
     return path.join(root, name);
   }

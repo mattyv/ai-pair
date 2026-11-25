@@ -570,6 +570,8 @@ const fakes = vi.hoisted(() => {
     providerGate: undefined as Promise<void> | undefined,
     computeGate: undefined as Promise<void> | undefined,
     commentaryGate: undefined as Promise<void> | undefined,
+    /** IDs randomUUID hands out before falling back to 'test-epoch', for reconnect epochs (#127). */
+    uuids: [] as string[],
     /** Holds a setting's next write until the test settles it (#119). */
     updateGates: new Map<string, Promise<void>>(),
     updated: [] as Array<[string, unknown, unknown]>,
@@ -736,7 +738,7 @@ vi.mock('vscode', () => ({
     },
   },
 }));
-vi.mock('node:crypto', () => ({ randomUUID: () => 'test-epoch' }));
+vi.mock('node:crypto', () => ({ randomUUID: () => fakes.uuids.shift() ?? 'test-epoch' }));
 vi.mock('node:os', () => ({ homedir: () => '/home' }));
 vi.mock('@ai-pair/core', () => ({
   Bridge: fakes.FakeBridge,
@@ -752,7 +754,7 @@ vi.mock('../src/panel_placement', () => ({
     choose(): Promise<import('../src/panel_placement').PanelOwner> {
       fakes.placementChoose();
       if (fakes.placementChoice !== undefined) return fakes.placementChoice;
-      if (this.options.companionInstalled === true) return Promise.resolve('incompatible');
+      if (this.options.companionInstalled === true && !fakes.companionAvailable) return Promise.resolve('incompatible');
       if (fakes.companionAvailable) {
         this.options.beforeCommit?.();
         if (fakes.placementCommit !== undefined) {
@@ -942,6 +944,7 @@ afterEach(() => {
   fakes.delaySettings = false;
   fakes.commentaryGate = undefined;
   fakes.updateGates.clear();
+  fakes.uuids.length = 0;
   fakes.providerGate = undefined;
   fakes.commands.clear();
   for (const list of [fakes.made.controllers, fakes.made.bridges, fakes.made.editors, fakes.made.panels, fakes.made.calibrations]) {
@@ -2693,12 +2696,79 @@ it('routes companion controls, keys, frame acknowledgements and connection notic
   expect(fakes.logged).toContainEqual(['warn', 'Local Audio connection lost: timeout, waiting on a speak frame']);
   options.lost('timeout');
   options.unavailable?.();
-  // The warning says why this side gave up (#115).
-  expect(fakes.infos).toContain(
-    'AI Pair lost its local audio connection: Local Audio did not answer a message in time. Reload the window to reconnect.',
-  );
+  // A loss is logged with its reason; the programmer hears of it only if reconnecting fails (#127).
+  expect(fakes.infos.some((message) => message.includes('lost its local audio connection'))).toBe(false);
   expect(fakes.logged).toContainEqual(['warn', 'Local Audio connection lost: timeout']);
   expect(fakes.infos.some((message) => message.includes('too large'))).toBe(true);
+});
+
+it('LossSettles, WorkspaceAck: a lost connection reconnects with a new epoch and no warning (#127)', async () => {
+  fakes.companionAvailable = true;
+  const h = activated();
+  await h.api.ready;
+  const first = fakes.workspaceOptions;
+  const firstEpoch = fakes.placementOptions?.epoch;
+  if (first === undefined) throw new Error('No session');
+  vi.useFakeTimers();
+  try {
+    fakes.uuids.push('reconnect-1');
+    first.lost('timeout');
+    await vi.advanceTimersByTimeAsync(999);
+    expect(fakes.workspaceOptions).toBe(first);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fakes.workspaceOptions).not.toBe(first);
+    expect(firstEpoch).toBe('test-epoch');
+    expect(fakes.placementOptions?.epoch).toBe('reconnect-1');
+    expect(fakes.workspaceOptions?.epoch).toBe('reconnect-1');
+    expect(fakes.placementOptions?.companionInstalled).toBe(true);
+    expect(fakes.placementOptions?.activate).toBeUndefined();
+    expect(fakes.logged).toContainEqual(['info', 'Local Audio reconnected after 1 attempt']);
+    expect(h.panel.showLocalAudio).toHaveBeenCalled();
+    expect(fakes.infos.some((message) => message.includes('lost its local audio connection'))).toBe(false);
+    // A loss of the reconnected session reconnects again; here the companion answers only the second attempt.
+    const second = fakes.workspaceOptions;
+    if (second === undefined) throw new Error('No reconnected session');
+    fakes.companionAvailable = false;
+    fakes.uuids.push('reconnect-2', 'reconnect-3');
+    second.lost('timeout');
+    await vi.advanceTimersByTimeAsync(1000);
+    fakes.companionAvailable = true;
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(fakes.workspaceOptions?.epoch).toBe('reconnect-3');
+    expect(fakes.logged).toContainEqual(['info', 'Local Audio reconnected after 2 attempts']);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('NoNeedlessWarning: warns to reload only once every reconnect attempt has failed (#127)', async () => {
+  fakes.companionAvailable = true;
+  const h = activated();
+  await h.api.ready;
+  const first = fakes.workspaceOptions;
+  if (first === undefined) throw new Error('No session');
+  vi.useFakeTimers();
+  try {
+    // The first attempt reaches the companion, but its commit is not acknowledged; the rest find no companion.
+    fakes.placementCommit = Promise.resolve(false);
+    fakes.uuids.push('try-1', 'try-2', 'try-3', 'try-4', 'try-5');
+    first.lost('refused');
+    await vi.advanceTimersByTimeAsync(1000);
+    fakes.placementCommit = undefined;
+    fakes.companionAvailable = false;
+    await vi.advanceTimersByTimeAsync(36_999);
+    expect(fakes.infos.some((message) => message.includes('could not reconnect'))).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fakes.infos).toContain('AI Pair lost its local audio connection and could not reconnect. Reload the window to reconnect.');
+    expect(fakes.infos.some((message) => message.includes('could not complete'))).toBe(false);
+    expect(fakes.logged).toContainEqual(['warn', 'Local Audio did not reconnect']);
+    // Pair Settings no longer says connected, though the first attempt's prepare succeeded (#127 review).
+    expect(h.panel.showLocalAudio).toHaveBeenLastCalledWith({ state: 'failed', reason: 'timeout' });
+    // Each attempt waits as long as an acknowledgement: its commit waits on the old session's retirement.
+    expect(fakes.placementOptions?.timeoutMs).toBe(30_000);
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it('exposes fixed prepare and commit commands and merges only valid local diagnostics', async () => {

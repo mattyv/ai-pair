@@ -74,6 +74,7 @@ Last updated: css, 2026-11-25.
 | `packages/audio-ui/src/extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 87.8% B 67.5% F 100.0% | - | - | - | - |
 | `packages/audio-ui/src/local_connection.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.6% B 60.0% F 100.0% | - | - | - | - |
 | `packages/audio-ui/src/speech_host.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 73.2% B 56.9% F 55.1% | - | - | - | - |
+| `packages/audio-ui/src/view_slot.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/audio-ui/test/attachment_gate.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/bridge.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/build_identity.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -88,12 +89,14 @@ Last updated: css, 2026-11-25.
 | `packages/audio-ui/test/local_connection.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/native_output.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/packaging.integration.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/reconnect_queue.e2e.test.ts` | TypeScript | test | - | test | - | - | - |
 | `packages/audio-ui/test/sentence_pipeline.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_context_flow.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_host.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_host.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_restart_handshake.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/speech_tempo_composed.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/audio-ui/test/view_slot.test.ts` | TypeScript | test | - | test | - | - | - |
 | `packages/audio-ui/test/worker_diagnostics.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/core/src/bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/config.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
@@ -212,6 +215,7 @@ Last updated: css, 2026-11-25.
 | `packages/vscode/scripts/vscode_bin.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/src/agents.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 76.4% B 68.0% F 79.5% | - | - | - | - |
 | `packages/vscode/src/calibration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.2% F 100.0% | - | - | - | - |
+| `packages/vscode/src/companion_reconnect.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/demo.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.8% B 83.9% F 100.0% | - | - | - | - |
 | `packages/vscode/src/diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.5% B 72.1% F 100.0% | - | - | - | - |
 | `packages/vscode/src/diagnostics_collector.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.8% B 91.3% F 100.0% | - | - | - | - |
@@ -335,6 +339,7 @@ Last updated: css, 2026-11-25.
 | `packages/vscode/test/attention_composed.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/calibration.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/command_approval_composed.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/companion_reconnect.test.ts` | TypeScript | test | - | test | - | - | - |
 | `packages/vscode/test/css.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.e2e.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/demo.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -687,11 +692,13 @@ Last updated: css, 2026-11-25.
 | `specs/LocalFacepalm.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/LocalFacepalm.tla` | TLA+ | - | - | - | - | - | - |
 | `specs/LocalFacepalm_Service.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/LocalAudioReconnect.cfg` | TLC config | - | - | - | - | - | - |
+| `specs/LocalAudioReconnect.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
 | `specs/LocalPanelReplay.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/LocalPanelReplay.tla` | TLA+ | - | - | 7 of 7 actions | - | - | - |
 | `specs/LocalPanelReplay_Delivery.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/MessageReceipt.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/MessageReceipt.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
+| `specs/MessageReceipt.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
 | `specs/ModelStatus.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ModelStatus.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/MultipartAudioLease.cfg` | TLC config | - | - | - | - | - | - |
@@ -778,7 +785,7 @@ Last updated: css, 2026-11-25.
 | `specs/ReplyHistory.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/ReplyHistory.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
 | `specs/ReplyReport.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/ReplyReport.tla` | TLA+ | - | - | 4 of 5 actions (never: ResumeAfter) | - | - | - |
+| `specs/ReplyReport.tla` | TLA+ | - | - | 5 of 6 actions (never: ResumeAfter) | - | - | - |
 | `specs/Resume.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/Resume.tla` | TLA+ | - | - | 11 of 11 actions | - | - | - |
 | `specs/RevealCursor.cfg` | TLC config | - | - | - | - | - | - |
@@ -799,7 +806,7 @@ Last updated: css, 2026-11-25.
 | `specs/SessionSpeechCost.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SessionSpeechCost.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/SettingRoundTrip.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/SettingRoundTrip.tla` | TLA+ | - | - | 5 of 5 actions | - | - | - |
+| `specs/SettingRoundTrip.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/SettingsAccess.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SettingsAccess.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/SettingsSections.cfg` | TLC config | - | - | - | - | - | - |
@@ -813,13 +820,13 @@ Last updated: css, 2026-11-25.
 | `specs/SpeechBackendHandoff.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechBackendHandoff.tla` | TLA+ | - | - | 6 of 6 actions | - | - | - |
 | `specs/SpeechContext.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/SpeechContext.tla` | TLA+ | - | - | 9 of 9 actions | - | - | - |
+| `specs/SpeechContext.tla` | TLA+ | - | - | 10 of 10 actions | - | - | - |
 | `specs/SpeechCue.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/SpeechCue.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/SpeechCue.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/SpeechLifecycle.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechLifecycle.tla` | TLA+ | - | - | 5 of 6 actions (never: StaleCallback) | - | - | - |
 | `specs/SpeechLookahead.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/SpeechLookahead.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/SpeechLookahead.tla` | TLA+ | - | - | 19 of 19 actions | - | - | - |
 | `specs/SpeechOverlap.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/SpeechOverlap.tla` | TLA+ | - | - | 8 of 8 actions | - | - | - |
 | `specs/SpeechOverlap_Continue.cfg` | TLC config | - | - | - | - | - | - |
@@ -867,7 +874,7 @@ Last updated: css, 2026-11-25.
 | `specs/VoiceIndicator.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/VoiceIndicator.tla` | TLA+ | - | - | 2 of 2 actions | - | - | - |
 | `specs/VoiceLanguage.cfg` | TLC config | - | - | - | - | - | - |
-| `specs/VoiceLanguage.tla` | TLA+ | - | - | - | - | - | - |
+| `specs/VoiceLanguage.tla` | TLA+ | - | - | 0 of 0 actions | - | - | - |
 | `specs/WarmSynthesisWorker.cfg` | TLC config | - | - | - | - | - | - |
 | `specs/WarmSynthesisWorker.tla` | TLA+ | - | - | 16 of 16 actions | - | - | - |
 | `specs/WarmSynthesisWorker_Cancellation.cfg` | TLC config | - | - | - | - | - | - |

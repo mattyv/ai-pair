@@ -4,7 +4,6 @@ import {
   LOCAL_AUDIO_VERSION,
   PanelChunkAssembler,
   localSpeechReport,
-  type ChannelLoss,
   type LocalAudioFrame,
   type LocalPanelAction,
   type LocalSpeechReport,
@@ -20,30 +19,22 @@ import { CompanionFacepalm } from './companion_facepalm';
 import { FacepalmClient } from '../../vscode/src/facepalm_client';
 import { openFacepalmSettings } from '../../vscode/src/facepalm_settings_launcher';
 import { LocalConnection } from './local_connection';
+import type { ViewSlot } from './view_slot';
 import { createSpeechHost, type LocalSpeechObservation, type SpeechHost } from './speech_host';
 
 /** Values compiled into this companion bundle. */
 declare const AI_PAIR_VERSION: string;
 declare const AI_PAIR_BUILD_ID: string;
 
-/** Maximum delay for a command acknowledgement, as long as the workspace waits for one (#115). */
-const COMMAND_TIMEOUT_MS = 10_000;
-/** Milliseconds in a second, for a lease stated in seconds. */
-const MS_PER_SECOND = 1000;
-/** Why this side dropped its workspace connection, as its warning says (#115). */
-const CHANNEL_LOSS: Record<ChannelLoss, string> = {
-  timeout: 'the workspace did not answer a message in time',
-  refused: 'the workspace refused a message',
-  overflow: 'too many messages were waiting for the workspace',
-  closed: 'the connection was closed',
-};
+/** Maximum delay for a command acknowledgement, as long as the workspace waits for one (#115, #127). */
+const COMMAND_TIMEOUT_MS = 30_000;
 /** Maximum queued outbound commands. */
 const MAX_PENDING_COMMANDS = 128;
 /**
- * Local silence follows a missed heartbeat within this lease. It outlasts the workspace's 10 s wait for
- * one acknowledgement plus a heartbeat interval, so a stall the workspace survives cannot end it (#115).
+ * Local silence follows a missed heartbeat within this lease. It outlasts the workspace's 30 s wait for
+ * one acknowledgement plus a heartbeat interval, so a stall the workspace survives cannot end it (#115, #127).
  */
-const LEASE_MS = 20_000;
+const LEASE_MS = 60_000;
 
 /** Operations exposed to the private activation commands. */
 export interface CompanionSession {
@@ -65,7 +56,7 @@ function workspaceOnly(): never {
 }
 
 /** Creates the one UI-local provider, speech service and command receiver. */
-export function createCompanionSession(context: vscode.ExtensionContext, epoch: string): CompanionSession {
+export function createCompanionSession(context: vscode.ExtensionContext, epoch: string, slot: ViewSlot): CompanionSession {
   let sequence = 0;
   let closed = false;
   let shutdownPromise: Promise<void> | undefined;
@@ -84,8 +75,11 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
   function nextSequence(): number {
     return ++sequence;
   }
-  /** Retires the session once; a lost connection is reported with the reason this side gave up (#115). */
-  function shutdown(lost?: string): Promise<void> {
+  /**
+   * Retires the session once. A lost connection is not announced here: the workspace reconnects, replacing this
+   * session, and tells the programmer only if it cannot (specs/LocalAudioReconnect.tla, NoNeedlessWarning; #127).
+   */
+  function shutdown(): Promise<void> {
     if (shutdownPromise !== undefined) return shutdownPromise;
     // Install the barrier before observers or disposal can synchronously reenter shutdown.
     const completion = Promise.withResolvers<void>();
@@ -125,13 +119,6 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
     attempt(() => {
       channel.dispose();
     });
-    if (lost !== undefined) {
-      attempt(() => {
-        void vscode.window.showWarningMessage(
-          `AI Pair Local Audio lost its workspace connection: ${lost}. Reload the window to reconnect.`,
-        );
-      });
-    }
     try {
       localLog.dispose();
     } catch {
@@ -149,8 +136,8 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
   channel = new CommandChannel<LocalAudioFrame>({
     timeoutMs: COMMAND_TIMEOUT_MS,
     maxPending: MAX_PENDING_COMMANDS,
-    lost: (reason) => {
-      void shutdown(CHANNEL_LOSS[reason]);
+    lost: () => {
+      void shutdown();
     },
     send: async (frame) => {
       await vscode.commands.executeCommand('aiPair.localAudio.workspace', frame);
@@ -208,7 +195,7 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
   connection = new LocalConnection({
     leaseMs: LEASE_MS,
     lost: () => {
-      void shutdown(`no heartbeat from the workspace for ${LEASE_MS / MS_PER_SECOND} seconds`);
+      void shutdown();
     },
     receive: (frame) => {
       if (frame.type === 'panelChunk') {
@@ -325,9 +312,10 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
       narration.setLocalPause(false, 'draft');
     },
   });
-  const provider = vscode.window.registerWebviewViewProvider(NarrationPanel.viewId, panel, {
-    webviewOptions: { retainContextWhenHidden: true },
-  });
+  // The companion's one view provider gives this panel the open view; a session that replaces this one after a
+  // reconnect takes it over (specs/LocalAudioReconnect.tla, CompanionCommit; #127).
+  slot.attach(panel);
+  const attached = panel;
   // The page runs here, so its tooltips name this machine's shortcuts (#94). VS Code's User folder holds globalStorage.
   const shortcutPanel = panel;
   const shortcuts = new ShortcutWatcher(
@@ -352,7 +340,7 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
       return report.success ? report.data : undefined;
     },
     dispose: () => {
-      provider.dispose();
+      slot.detach(attached);
       shortcuts.dispose();
       return shutdown();
     },

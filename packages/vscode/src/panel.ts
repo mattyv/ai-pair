@@ -155,6 +155,8 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
   private replyPageReady = false;
   private replyFocusPending = false;
   private decodeToken?: string;
+  /** The listeners this panel added to its views, which release() removes. */
+  private readonly viewListeners: vscode.Disposable[] = [];
   private readonly speechDecoder = new SpeechDecodeBridge({
     post: (message) =>
       this.decodeToken === undefined || this.view === undefined
@@ -476,7 +478,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
     const script = view.webview.asWebviewUri(vscode.Uri.joinPath(dist, 'panel.js')).toString();
     view.webview.html = panelHtml(view.webview.cspSource, style, script, this.buildInfo.version, this.buildInfo.build);
     // The page posts only FromPanel messages; VS Code types them `any`.
-    view.webview.onDidReceiveMessage((m: FromPanel) => {
+    const onMessage = view.webview.onDidReceiveMessage((m: FromPanel) => {
       const decoded = speechDecodeFromPage.safeParse(m);
       if (this.view !== view) {
         // A predecessor may still retire its own physical decode until its view is disposed.
@@ -534,7 +536,7 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
       if (typeof m === 'object' && m !== null && 'type' in m && typeof m.type === 'string' && m.type.startsWith('speechDecode')) return;
       this.receive(m, pageId);
     });
-    view.onDidDispose(() => {
+    const onDispose = view.onDidDispose(() => {
       if (document !== undefined) this.speechDecoder.destroy(document);
       if (pending !== undefined) this.speechDecoder.destroy(pending.document);
       // specs/OutputReplacement.tla, Dispose: only destruction retires a replaced page.
@@ -555,6 +557,20 @@ export class NarrationPanel implements PanelPort, vscode.WebviewViewProvider {
         }
       }
     });
+    this.viewListeners.push(onMessage, onDispose);
+  }
+
+  /**
+   * Lets go of the view, for a panel that replaces this one in the same view after a reconnect: messages from it are
+   * ignored from now on (specs/LocalAudioReconnect.tla, CompanionCommit; #127).
+   */
+  release(): void {
+    this.view = undefined;
+    this.speechPageReady = false;
+    this.replyPageReady = false;
+    this.decodeToken = undefined;
+    // The view outlives this panel, so the listeners this panel added to it go now, not with the view (#127 review).
+    for (const listener of this.viewListeners.splice(0)) listener.dispose();
   }
 
   /** Routes workspace actions out of a UI-local companion panel. */
