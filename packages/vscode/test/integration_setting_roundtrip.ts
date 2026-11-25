@@ -31,6 +31,12 @@ export async function settingRoundTripPaths(api: Api): Promise<void> {
   await until(() => settings().get('chatOrder') === 'oldestFirst', 'the chat order was not saved');
   await settings().update('chatOrder', undefined, global);
 
+  const workerBefore = {
+    enabled: settings().get('worker.enabled'),
+    codex: settings().get('worker.codexModel'),
+    claude: settings().get('worker.claudeModel'),
+    visibility: settings().get('worker.visibility'),
+  };
   const configDescriptor = Object.getOwnPropertyDescriptor(vscode.workspace, 'getConfiguration');
   const errorDescriptor = Object.getOwnPropertyDescriptor(vscode.window, 'showErrorMessage');
   assert.ok(configDescriptor && errorDescriptor, 'VS Code settings APIs are unavailable');
@@ -66,6 +72,10 @@ export async function settingRoundTripPaths(api: Api): Promise<void> {
       [{ type: 'chatOrder', value: 'oldestFirst' }, 'chat order'],
       [{ type: 'showTerminals', value: true }, 'show terminals'],
       [{ type: 'commandApprovalSound', value: true }, 'command approval sound'],
+      [{ type: 'workerEnabled', value: workerBefore.enabled !== true }, 'worker enabled'],
+      [{ type: 'workerModel', provider: 'codex', value: 'integration-rollback' }, 'Codex worker model'],
+      [{ type: 'workerModel', provider: 'claude', value: 'integration-rollback' }, 'Claude worker model'],
+      [{ type: 'workerVisibility', value: workerBefore.visibility === 'everything' ? 'off' : 'everything' }, 'worker visibility'],
     ];
     for (const [message, label] of changes) {
       api.panelMessage(message);
@@ -73,6 +83,10 @@ export async function settingRoundTripPaths(api: Api): Promise<void> {
       await until(() => errors.includes(expected), `no warning for the ${label} setting`);
     }
     assert.equal(settings().get('chatOrder'), 'newestFirst', 'a failed save changed the chat order');
+    assert.equal(settings().get('worker.enabled'), workerBefore.enabled, 'a failed save changed worker admission');
+    assert.equal(settings().get('worker.codexModel'), workerBefore.codex, 'a failed save changed the Codex model');
+    assert.equal(settings().get('worker.claudeModel'), workerBefore.claude, 'a failed save changed the Claude model');
+    assert.equal(settings().get('worker.visibility'), workerBefore.visibility, 'a failed save changed worker visibility');
   } finally {
     Object.defineProperty(vscode.workspace, 'getConfiguration', configDescriptor);
     Object.defineProperty(vscode.window, 'showErrorMessage', errorDescriptor);

@@ -67,20 +67,20 @@ Last updated: css, 2026-11-24.
 | `packages/audio-ui/scripts/speech_runtime.mts` | TypeScript | - | - | - | - | - | - |
 | `packages/audio-ui/scripts/speech_runtime.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/src/attachment_gate.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.1% B 75.0% F 100.0% | - | - | - | - |
-| `packages/audio-ui/src/companion_facepalm.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/audio-ui/src/companion_narration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 73.1% B 29.4% F 81.8% | - | - | - | - |
+| `packages/audio-ui/src/companion_facepalm.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 93.4% B 81.6% F 100.0% | - | - | - | - |
+| `packages/audio-ui/src/companion_narration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 70.5% B 27.8% F 81.8% | - | - | - | - |
 | `packages/audio-ui/src/companion_output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 46.4% B 63.6% F 53.8% | - | - | - | - |
-| `packages/audio-ui/src/companion_session.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 82.2% B 87.5% F 54.2% | - | - | - | - |
-| `packages/audio-ui/src/extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 87.2% B 67.5% F 100.0% | - | - | - | - |
-| `packages/audio-ui/src/local_connection.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.5% B 60.0% F 100.0% | - | - | - | - |
-| `packages/audio-ui/src/speech_host.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 72.9% B 57.0% F 54.4% | - | - | - | - |
+| `packages/audio-ui/src/companion_session.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 83.1% B 85.7% F 56.6% | - | - | - | - |
+| `packages/audio-ui/src/extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 87.8% B 67.5% F 100.0% | - | - | - | - |
+| `packages/audio-ui/src/local_connection.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.6% B 60.0% F 100.0% | - | - | - | - |
+| `packages/audio-ui/src/speech_host.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 73.2% B 56.9% F 55.1% | - | - | - | - |
 | `packages/audio-ui/test/attachment_gate.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/bridge.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/build_identity.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/audio-ui/test/companion_facepalm.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/audio-ui/test/companion_facepalm.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/audio-ui/test/companion_narration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/companion_output.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/audio-ui/test/companion_retirement.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/audio-ui/test/companion_retirement.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/audio-ui/test/companion_session.integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/companion_session.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/audio-ui/test/extension.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -100,15 +100,15 @@ Last updated: css, 2026-11-24.
 | `packages/core/src/controller.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/diagnostic_delivery.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/diff.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.5% F 100.0% | - | - | - | - |
-| `packages/core/src/facepalm_cue.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/core/src/facepalm_cue.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/index.ts` | TypeScript | - | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/lines.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.7% F 100.0% | - | - | - | - |
 | `packages/core/src/paths.ts` | TypeScript | - | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/places.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/core/src/player.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 99.3% F 100.0% | - | - | - | - |
+| `packages/core/src/player.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 99.2% F 100.0% | - | - | - | - |
 | `packages/core/src/ports.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/rehearsal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/core/src/speech_context.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 75.0% B 100.0% F 83.3% | - | - | - | - |
+| `packages/core/src/speech_context.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 78.6% B 86.7% F 60.0% | - | - | - | - |
 | `packages/core/src/speech_reminder.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/core/src/structural_typing.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 66.7% F 100.0% | - | - | - | - |
 | `packages/core/src/text.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
@@ -120,7 +120,7 @@ Last updated: css, 2026-11-24.
 | `packages/core/test/diagnostic_delivery.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/core/test/diagnostics_bridge.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/core/test/diff.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/core/test/facepalm_cue.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/core/test/facepalm_cue.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/core/test/fake.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/lines.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/places.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -134,14 +134,14 @@ Last updated: css, 2026-11-24.
 | `packages/core/test/timeline.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/timing.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/core/test/typing.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/protocol/src/command_channel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.5% B 77.3% F 100.0% | - | - | - | - |
+| `packages/protocol/src/command_channel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 92.1% B 92.6% F 100.0% | - | - | - | - |
 | `packages/protocol/src/diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/protocol/src/facepalm.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/protocol/src/facepalm.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/gpu_diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/index.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/protocol/src/keybindings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/protocol/src/keybindings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/local_audio.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/protocol/src/local_audio_status.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/protocol/src/local_audio_status.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/local_diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/openrouter.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/panel_action.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
@@ -149,39 +149,39 @@ Last updated: css, 2026-11-24.
 | `packages/protocol/src/panel_update.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/paths.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 84.6% F 100.0% | - | - | - | - |
 | `packages/protocol/src/schemas.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/protocol/src/speech_accents.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/protocol/src/speech_accents.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/speech_decode.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/src/wire.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/protocol/test/command_channel.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/protocol/test/facepalm.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/protocol/test/facepalm.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/protocol/test/gpu_diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/index.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/protocol/test/keybindings.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/protocol/test/keybindings.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/local_audio.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/protocol/test/local_audio_status.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/protocol/test/local_audio_status.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/protocol/test/local_diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/openrouter.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/panel_action.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/panel_chunks.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/panel_update.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/paths.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/protocol/test/schemas.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/protocol/test/speech_accents.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/protocol/test/schemas.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/protocol/test/speech_accents.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/protocol/test/speech_decode.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/protocol/test/wire.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/relay/src/codex_worker.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/relay/src/codex_worker.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.6% B 65.1% F 100.0% | - | - | - | - |
 | `packages/relay/src/guide.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.6% B 88.9% F 100.0% | - | - | - | - |
 | `packages/relay/src/link.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/relay/src/main.ts` | TypeScript | - | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/relay/src/md.d.ts` | TypeScript | - | - | - | - | - | - |
-| `packages/relay/src/render.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 87.5% B 78.8% F 100.0% | - | - | - | - |
-| `packages/relay/src/server.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 97.0% B 87.2% F 100.0% | - | - | - | - |
+| `packages/relay/src/render.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 90.2% B 80.3% F 100.0% | - | - | - | - |
+| `packages/relay/src/server.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 97.4% B 88.3% F 100.0% | - | - | - | - |
 | `packages/relay/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 50.0% F 100.0% | - | - | - | - |
 | `packages/relay/src/tools.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/relay/src/worker_output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/relay/src/worker_output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 85.3% B 59.0% F 100.0% | - | - | - | - |
 | `packages/relay/test/agent_guide.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/relay/test/codex_worker.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/relay/test/codex_worker.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/relay/test/guide.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/link.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/relay.test.ts` | TypeScript | test | test | test | test | test | test |
@@ -194,9 +194,9 @@ Last updated: css, 2026-11-24.
 | `packages/relay/test/timings.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/relay/test/tools.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/relay/test/validation.test.ts` | TypeScript | test | test | test | test | test | test |
-| `packages/relay/test/worker_output.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/relay/test/worker_output.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/scripts/audio_helper.mts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/scripts/audio_helper.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/scripts/audio_helper.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/scripts/build.mts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/scripts/build.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/scripts/icon/Package.swift` | Swift | - | - | - | - | - | - |
@@ -209,39 +209,39 @@ Last updated: css, 2026-11-24.
 | `packages/vscode/scripts/speech_runtime.mts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/scripts/vscode_bin.mts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/scripts/vscode_bin.test.ts` | TypeScript | test | test | test | test | - | test |
-| `packages/vscode/src/agents.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 83.0% B 68.8% F 89.7% | - | - | - | - |
+| `packages/vscode/src/agents.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 76.4% B 68.0% F 79.5% | - | - | - | - |
 | `packages/vscode/src/calibration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.2% F 100.0% | - | - | - | - |
 | `packages/vscode/src/demo.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.8% B 83.9% F 100.0% | - | - | - | - |
 | `packages/vscode/src/diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.5% B 72.1% F 100.0% | - | - | - | - |
-| `packages/vscode/src/diagnostics_collector.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.3% B 90.5% F 100.0% | - | - | - | - |
+| `packages/vscode/src/diagnostics_collector.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.8% B 91.3% F 100.0% | - | - | - | - |
 | `packages/vscode/src/editor.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.1% B 88.7% F 100.0% | - | - | - | - |
-| `packages/vscode/src/extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 96.3% B 92.3% F 94.5% | - | - | - | - |
-| `packages/vscode/src/facepalm_client.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/facepalm_settings_launcher.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/old_extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 95.9% B 92.1% F 94.3% | - | - | - | - |
+| `packages/vscode/src/facepalm_client.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 93.3% B 76.5% F 100.0% | - | - | - | - |
+| `packages/vscode/src/facepalm_settings_launcher.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 16.4% B 100.0% F 0.0% | - | - | - | - |
+| `packages/vscode/src/old_extension.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/outside.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 95.5% F 100.0% | - | - | - | - |
 | `packages/vscode/src/outside_watch.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 96.5% F 100.0% | - | - | - | - |
-| `packages/vscode/src/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.8% B 84.1% F 95.2% | - | - | - | - |
-| `packages/vscode/src/panel_html.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 80.0% F 100.0% | - | - | - | - |
+| `packages/vscode/src/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.9% B 84.7% F 95.3% | - | - | - | - |
+| `packages/vscode/src/panel_html.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 83.3% F 100.0% | - | - | - | - |
 | `packages/vscode/src/panel_messages.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
-| `packages/vscode/src/panel_placement.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 90.9% B 67.6% F 100.0% | - | - | - | - |
-| `packages/vscode/src/panel_update_sender.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 91.5% B 82.6% F 100.0% | - | - | - | - |
+| `packages/vscode/src/panel_placement.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 91.2% B 69.0% F 100.0% | - | - | - | - |
+| `packages/vscode/src/panel_update_sender.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 91.7% B 82.3% F 100.0% | - | - | - | - |
 | `packages/vscode/src/passage.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/python_diagnostics.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.3% B 62.5% F 100.0% | - | - | - | - |
-| `packages/vscode/src/remote_facepalm.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/remote_narration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 78.6% B 39.4% F 86.7% | - | - | - | - |
+| `packages/vscode/src/remote_facepalm.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 92.3% B 77.3% F 90.9% | - | - | - | - |
+| `packages/vscode/src/remote_narration.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 77.3% B 38.9% F 82.3% | - | - | - | - |
 | `packages/vscode/src/session_speech_cost.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 66.3% B 90.9% F 66.7% | - | - | - | - |
-| `packages/vscode/src/setting_store.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 85.1% B 85.4% F 83.3% | - | - | - | - |
-| `packages/vscode/src/shortcut_labels.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/shortcut_watcher.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/setting_store.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 85.0% B 76.0% F 87.5% | - | - | - | - |
+| `packages/vscode/src/setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 83.8% B 81.6% F 66.7% | - | - | - | - |
+| `packages/vscode/src/shortcut_labels.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 91.7% F 100.0% | - | - | - | - |
+| `packages/vscode/src/shortcut_watcher.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_catalog.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.9% B 89.7% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_compute_types.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_context_capabilities.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/vscode/src/speech_coreml.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_coreml.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 53.5% B 75.0% F 33.3% | - | - | - | - |
 | `packages/vscode/src/speech_credentials.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
-| `packages/vscode/src/speech_decode_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 59.9% B 40.5% F 63.1% | - | - | - | - |
+| `packages/vscode/src/speech_decode_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 59.9% B 42.1% F 63.1% | - | - | - | - |
 | `packages/vscode/src/speech_decode_lifecycle.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 81.0% B 68.4% F 78.6% | - | - | - | - |
 | `packages/vscode/src/speech_elevenlabs.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 89.2% B 75.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_engine.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -249,7 +249,7 @@ Last updated: css, 2026-11-24.
 | `packages/vscode/src/speech_gpu_assets.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 38.3% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_gpu_binding.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 25.2% B 100.0% F 25.0% | - | - | - | - |
 | `packages/vscode/src/speech_gpu_bundled_assets.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 75.0% B 100.0% F 0.0% | - | - | - | - |
-| `packages/vscode/src/speech_gpu_capability.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 40.5% B 100.0% F 0.0% | - | - | - | - |
+| `packages/vscode/src/speech_gpu_capability.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 39.7% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_gpu_check.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 41.5% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_gpu_client.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 23.5% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_gpu_driver.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 36.7% B 100.0% F 0.0% | - | - | - | - |
@@ -285,16 +285,16 @@ Last updated: css, 2026-11-24.
 | `packages/vscode/src/speech_gpu_worker.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_gpu_worker_host.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_gpu_worker_runtime.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_lifecycle.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 56.6% B 56.7% F 54.2% | - | - | - | - |
-| `packages/vscode/src/speech_local_client.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 43.9% B 100.0% F 0.0% | - | - | - | - |
+| `packages/vscode/src/speech_lifecycle.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 65.4% B 45.9% F 56.0% | - | - | - | - |
+| `packages/vscode/src/speech_local_client.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 44.3% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_local_protocol.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.2% B 100.0% F 50.0% | - | - | - | - |
 | `packages/vscode/src/speech_model_manifest.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_native_output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 29.7% B 66.7% F 36.4% | - | - | - | - |
-| `packages/vscode/src/speech_openrouter.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 76.1% B 43.6% F 86.7% | - | - | - | - |
-| `packages/vscode/src/speech_openrouter_catalog.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.6% B 83.3% F 100.0% | - | - | - | - |
+| `packages/vscode/src/speech_openrouter.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 76.2% B 43.6% F 86.7% | - | - | - | - |
+| `packages/vscode/src/speech_openrouter_catalog.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 88.6% B 84.6% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_openrouter_usage.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 25.3% B 100.0% F 50.0% | - | - | - | - |
-| `packages/vscode/src/speech_output_preferences.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 85.7% B 75.0% F 100.0% | - | - | - | - |
-| `packages/vscode/src/speech_output_router.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 68.9% B 50.0% F 80.0% | - | - | - | - |
+| `packages/vscode/src/speech_output_preferences.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 85.7% B 76.3% F 100.0% | - | - | - | - |
+| `packages/vscode/src/speech_output_router.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 69.9% B 52.0% F 81.8% | - | - | - | - |
 | `packages/vscode/src/speech_output_types.ts` | TypeScript | L 0.0% B 0.0% F 0.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_pcm.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 52.0% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_phonemizer_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
@@ -303,10 +303,10 @@ Last updated: css, 2026-11-24.
 | `packages/vscode/src/speech_readiness.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 68.6% B 65.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_runtime_status.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 90.9% B 33.3% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_segments.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 94.9% B 22.2% F 100.0% | - | - | - | - |
-| `packages/vscode/src/speech_service.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 65.5% B 51.0% F 74.5% | - | - | - | - |
+| `packages/vscode/src/speech_service.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 61.7% B 53.2% F 68.3% | - | - | - | - |
 | `packages/vscode/src/speech_setup.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 33.5% B 36.4% F 57.1% | - | - | - | - |
 | `packages/vscode/src/speech_synthesis.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/speech_system_output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/speech_system_output.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 58.7% B 66.7% F 44.4% | - | - | - | - |
 | `packages/vscode/src/speech_tempo.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/speech_tempo_client.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 36.0% B 66.7% F 25.0% | - | - | - | - |
 | `packages/vscode/src/speech_tempo_messages.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
@@ -317,18 +317,18 @@ Last updated: css, 2026-11-24.
 | `packages/vscode/src/speech_waveform.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 57.8% B 100.0% F 0.0% | - | - | - | - |
 | `packages/vscode/src/speech_worker.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/speech_worker_host.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/terminal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 98.5% F 100.0% | - | - | - | - |
+| `packages/vscode/src/terminal.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 98.6% F 100.0% | - | - | - | - |
 | `packages/vscode/src/timings.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 100.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/view.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 88.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/voice_indicator.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/voice_language.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
+| `packages/vscode/src/voice_language.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 100.0% B 85.0% F 100.0% | - | - | - | - |
 | `packages/vscode/src/webview/approval_sound.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/panel.css` | CSS | - | - | - | - | - | 185 of 185 rules matched |
 | `packages/vscode/src/webview/panel.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/speech_audio.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
 | `packages/vscode/src/webview/speech_decode.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | - | - | - | - | - |
-| `packages/vscode/src/workspace_panel_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 89.1% B 68.4% F 100.0% | - | - | - | - |
-| `packages/vscode/src/workspace_session.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.6% B 95.0% F 93.3% | - | - | - | - |
+| `packages/vscode/src/workspace_panel_bridge.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 89.8% B 82.1% F 100.0% | - | - | - | - |
+| `packages/vscode/src/workspace_session.ts` | TypeScript | L 100.0% B 100.0% F 100.0% | L 98.3% B 92.6% F 94.7% | - | - | - | - |
 | `packages/vscode/test/agents.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/attention_audio_composed.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/attention_composed.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -342,10 +342,10 @@ Last updated: css, 2026-11-24.
 | `packages/vscode/test/diagnostics_collector.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/editor.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/extension.test.ts` | TypeScript | test | test | test | test | - | test |
-| `packages/vscode/test/facepalm_client.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/facepalm_integration.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/facepalm_replay_composed.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/facepalm_settings_launcher.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/facepalm_client.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/facepalm_integration.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/facepalm_replay_composed.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/facepalm_settings_launcher.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/test/fixtures/packaged_mcp_check.mts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/fixtures/tempo_schema_fake.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration.ts` | TypeScript | test | test | test | test | test | test |
@@ -362,19 +362,19 @@ Last updated: css, 2026-11-24.
 | `packages/vscode/test/integration_core_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_deferred_settlement.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_diagnostic_coverage_paths.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_facepalm_paths.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/integration_facepalm_paths.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/test/integration_flow_gate.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_gap_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_gpu_process.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_guided_diagnostics.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_invalid_calibration.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_legacy_speech_paths.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_message_receipt.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/integration_message_receipt.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/test/integration_model_status.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_no_workspace.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_notification.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_old_extension.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/integration_old_extension_dismissed.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/integration_old_extension.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/integration_old_extension_dismissed.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_panel_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_paths.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/integration_player_faults.ts` | TypeScript | test | test | test | - | - | test |
@@ -384,23 +384,23 @@ Last updated: css, 2026-11-24.
 | `packages/vscode/test/integration_release_extension_owner_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_release_extension_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_render_diagnostic.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_reply_report.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/integration_reply_report.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/test/integration_restricted_runtime.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_runtime_identity.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_setting_roundtrip.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/integration_shortcuts.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/integration_setting_roundtrip.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/integration_shortcuts.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_speech_coverage_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_speech_reminder.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_startup_paths.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_terminal_cleanup.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/integration_vscode_coverage_paths.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/integration_worker.ts` | TypeScript | test | - | - | - | - | test |
-| `packages/vscode/test/integration_worker_cli.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/integration_worker.ts` | TypeScript | test | test | - | - | - | test |
+| `packages/vscode/test/integration_worker_cli.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/test/integration_workspace_incompatible.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/launcher.e2e.test.ts` | TypeScript | test | test | test | test | - | test |
-| `packages/vscode/test/local_facepalm_composed.e2e.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/local_facepalm_composed.e2e.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/test/navigator_editor.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/old_extension.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/old_extension.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/output.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/outside.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/outside_watch.test.ts` | TypeScript | test | test | test | test | - | test |
@@ -414,21 +414,21 @@ Last updated: css, 2026-11-24.
 | `packages/vscode/test/passage.test.ts` | TypeScript | test | test | test | test | - | test |
 | `packages/vscode/test/python_diagnostics.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/python_diagnostics.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/remote_facepalm.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/remote_facepalm.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/test/remote_narration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/session_speech_cost.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/setting_store.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/setting_store.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/test/setup.test.ts` | TypeScript | test | test | test | test | - | test |
-| `packages/vscode/test/shortcut_labels.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/shortcut_watcher.test.ts` | TypeScript | test | - | test | - | - | test |
-| `packages/vscode/test/shortcuts_manifest.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/shortcut_labels.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/shortcut_watcher.test.ts` | TypeScript | test | test | test | - | - | test |
+| `packages/vscode/test/shortcuts_manifest.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/smoke_integration.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/speech_accent_manifest.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/speech_accent_manifest.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/test/speech_audio.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_cached_assets.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_catalog.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_context_capabilities.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/speech_coreml.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_coreml.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_credentials.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_decode_bridge.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_decode_lifecycle.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -519,7 +519,7 @@ Last updated: css, 2026-11-24.
 | `packages/vscode/test/speech_smoke_integration.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_smoke_integration.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_synthesis.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/speech_system_output.test.ts` | TypeScript | test | - | test | - | - | test |
+| `packages/vscode/test/speech_system_output.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_tempo.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_tempo_client.e2e.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/speech_tempo_client.test.ts` | TypeScript | test | test | test | - | - | test |
@@ -540,7 +540,7 @@ Last updated: css, 2026-11-24.
 | `packages/vscode/test/visual/chat_order.spec.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/visual/panel.spec.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/voice_indicator.test.ts` | TypeScript | test | test | test | - | - | test |
-| `packages/vscode/test/voice_language.test.ts` | TypeScript | test | - | - | - | - | test |
+| `packages/vscode/test/voice_language.test.ts` | TypeScript | test | test | - | - | - | test |
 | `packages/vscode/test/webview/approval_sound.test.ts` | TypeScript | test | test | test | - | - | test |
 | `packages/vscode/test/webview/panel.test.ts` | TypeScript | test | test | test | test | test | test |
 | `packages/vscode/test/workspace_panel_bridge.test.ts` | TypeScript | test | test | test | - | - | test |
