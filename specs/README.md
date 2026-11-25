@@ -4773,8 +4773,10 @@ answer, delivery, and stale reply dropping.
 `FacepalmSettingsLaunch` models one process launch, the spawn deadline, the
 Linux startup grace, a clean forwarder exit, and early failure. Weak fairness
 of `Grace` and `Deadline` assumes timers run. Acceptance records process
-admission only; it does not prove that a window was displayed. The config has
-seven distinct states and passes TLC.
+admission only; it does not prove that a window was displayed. Local-only
+diagnostics classify a failed close without changing modeled transitions or
+sending process details across the companion protocol. The config has seven
+distinct states and passes TLC.
 
 | Property | Mutation witness | Named implementation test |
 |---|---|---|

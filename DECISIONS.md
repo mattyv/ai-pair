@@ -10,6 +10,14 @@ Issue discussions and working notes hold the detailed evidence and history.
 -   GPT-6.1 Terra agents write code and tests; GPT-6 Astra agents review them.
     Resolve findings and verify the resulting changes before reporting completion.
 
+## Local Facepalm settings diagnostics (#148, 2026-11-25)
+
+-   Record only an allowlisted process signal and the existing coarse failure
+    category in the local host output channel. Never record raw stderr or send
+    process details over the companion protocol. The cause of the reported
+    immediate failure remains unconfirmed; these facts support investigation
+    without changing the launch environment or claiming window visibility.
+
 ## Facepalm settings feedback and passive recheck (#148, 2026-11-25)
 
 -   Keep a single feedback toggle and local Settings action. Add conditional

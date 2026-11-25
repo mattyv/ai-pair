@@ -66,7 +66,9 @@ const fake = vi.hoisted(() => ({
   disposeFacepalm: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
   facepalmOptions: undefined as import('../src/companion_facepalm').CompanionFacepalmOptions | undefined,
   facepalmClient: undefined as { onStatus?: (snapshot: import('@ai-pair/protocol').FacepalmSnapshot) => void } | undefined,
-  openSettings: vi.fn().mockResolvedValue({ state: 'accepted' }),
+  openSettings: vi
+    .fn<typeof import('../../vscode/src/facepalm_settings_launcher').openFacepalmSettings>()
+    .mockResolvedValue({ state: 'accepted' }),
   attach: vi.fn(),
   accept: vi.fn(),
   setPause: vi.fn(),
@@ -88,7 +90,7 @@ vi.mock('vscode', () => ({
   window: {
     registerWebviewViewProvider: fake.register,
     showWarningMessage: fake.warning,
-    createOutputChannel: () => ({ info: fake.localLog, dispose: fake.localLogDispose }),
+    createOutputChannel: () => ({ info: fake.localLog, warn: fake.localLog, dispose: fake.localLogDispose }),
   },
 }));
 vi.mock('@ai-pair/protocol', async () => ({
@@ -630,6 +632,8 @@ it('connects local Facepalm status, page, settings and ordered result output', a
   expect(fake.send).toHaveBeenCalledWith(frame);
   fake.openSettings.mockResolvedValueOnce({ state: 'failed', reason: 'display' });
   await expect(fake.facepalmOptions?.openSettings(() => {})).resolves.toEqual({ state: 'failed', reason: 'display' });
+  fake.openSettings.mock.lastCall?.[3]?.({ reason: 'exit', signal: 'SIGTERM' });
+  expect(fake.localLog).toHaveBeenCalledWith('Facepalm settings process: reason=exit, signal=SIGTERM');
   await expect(fake.facepalmOptions?.openSettings(() => {})).resolves.toEqual({ state: 'accepted' });
   const snapshot = { enabled: true, status: 'idle' as const, available: true, canOpenSettings: true };
   fake.facepalmClient?.onStatus?.(snapshot);

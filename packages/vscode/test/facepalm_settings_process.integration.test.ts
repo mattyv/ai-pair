@@ -37,13 +37,13 @@ afterEach(async () => {
 });
 
 it('reports a real child process failing immediately after spawn', async () => {
-  fake.script = "process.stderr.write('qt.qpa.xcb: could not connect to display /private\\n', () => process.exit(7));";
+  fake.script = "require('node:fs').writeSync(2, 'qt.qpa.xcb: could not connect to display /private\\n'); process.exit(7);";
   await expect(openFacepalmSettings('linux', false)).resolves.toEqual({ state: 'failed', reason: 'display' });
 });
 
 it('classifies a real unacknowledged tray handoff', async () => {
   fake.script =
-    "process.stderr.write('facepalm-menu: settings request was not acknowledged by the running tray\\n', () => process.exit(1));";
+    "require('node:fs').writeSync(2, 'facepalm-menu: settings request was not acknowledged by the running tray\\n'); process.exit(1);";
   await expect(openFacepalmSettings('linux', false)).resolves.toEqual({ state: 'failed', reason: 'handoff' });
 });
 
@@ -55,4 +55,11 @@ it('accepts a real cleanly exiting forwarder', async () => {
 it('accepts a real menu that remains alive through the observation period', async () => {
   fake.script = 'setTimeout(() => process.exit(0), 10000);';
   await expect(openFacepalmSettings('linux', false)).resolves.toEqual({ state: 'accepted' });
+});
+
+it('reports the signal from a real child without exposing stderr', async () => {
+  fake.script = "process.stderr.write('TOKEN=private', () => process.kill(process.pid, 'SIGTERM'));";
+  const diagnostic = vi.fn<(event: import('../src/facepalm_settings_launcher').FacepalmSettingsDiagnostic) => void>();
+  await expect(openFacepalmSettings('linux', false, undefined, diagnostic)).resolves.toEqual({ state: 'failed', reason: 'exit' });
+  expect(diagnostic).toHaveBeenCalledWith({ reason: 'exit', signal: 'SIGTERM' });
 });

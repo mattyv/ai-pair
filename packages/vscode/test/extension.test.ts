@@ -42,6 +42,7 @@ const facepalmFake = vi.hoisted(() => {
           platform: NodeJS.Platform,
           remote: boolean,
           late?: (failure: Extract<import('@ai-pair/protocol').FacepalmSettingsLaunch, { state: 'failed' }>) => void,
+          diagnostic?: (event: import('../src/facepalm_settings_launcher').FacepalmSettingsDiagnostic) => void,
         ) => Promise<import('@ai-pair/protocol').FacepalmSettingsLaunch>
       >()
       .mockResolvedValue({ state: 'accepted' }),
@@ -1632,7 +1633,9 @@ describe('activate', () => {
     facepalmFake.open.mockResolvedValueOnce({ state: 'failed', reason: 'display' });
     wiring.openSettings();
     await settle();
-    expect(facepalmFake.open).toHaveBeenLastCalledWith(process.platform, false, expect.any(Function));
+    expect(facepalmFake.open).toHaveBeenLastCalledWith(process.platform, false, expect.any(Function), expect.any(Function));
+    facepalmFake.open.mock.lastCall?.[3]?.({ reason: 'exit', signal: 'SIGABRT' });
+    expect(fakes.logged).toContainEqual(['warn', 'Facepalm settings process: reason=exit, signal=SIGABRT']);
     expect(fakes.infos).toContain('safe Facepalm warning');
     facepalmFake.open.mockResolvedValueOnce({ state: 'accepted' });
     wiring.openSettings();

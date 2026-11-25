@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.57.2
+
+- Log bounded local Facepalm settings process failure diagnostics (#148).
+- Clarify the question format and timing for Facepalm smoke tests (#148).
+
 ## 0.57.1
 
 -   Explain local Facepalm approval and on-demand connection, add passive status

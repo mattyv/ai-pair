@@ -171,6 +171,87 @@ describe('Facepalm settings launcher', () => {
     await expect(two).resolves.toEqual({ state: 'accepted' });
   });
 
+  it('reports only bounded signal and failure category to a local observer', async () => {
+    installed();
+    const child = childProcess();
+    fakes.spawn.mockReturnValue(child);
+    const diagnostic = vi.fn<(event: import('../src/facepalm_settings_launcher').FacepalmSettingsDiagnostic) => void>();
+    const result = openFacepalmSettings('linux', false, undefined, diagnostic);
+    await vi.waitFor(() => {
+      expect(fakes.spawn).toHaveBeenCalled();
+    });
+    child.emit('spawn');
+    child.stderr.emit('data', Buffer.from('private TOKEN=secret'));
+    // Node uses null for an exit caused by a signal.
+    // oxlint-disable-next-line unicorn/no-null
+    child.emit('close', null, 'SIGABRT');
+    await expect(result).resolves.toEqual({ state: 'failed', reason: 'exit' });
+    expect(diagnostic).toHaveBeenCalledWith({ reason: 'exit', signal: 'SIGABRT' });
+  });
+
+  it('contains a diagnostic observer failure and unknown signals after admission', async () => {
+    vi.useFakeTimers();
+    installed();
+    const child = childProcess();
+    fakes.spawn.mockReturnValue(child);
+    const late = vi.fn<(failure: Extract<import('@ai-pair/protocol').FacepalmSettingsLaunch, { state: 'failed' }>) => void>();
+    const diagnostic = vi.fn(() => {
+      throw new Error('private');
+    });
+    const result = openFacepalmSettings('linux', false, late, diagnostic);
+    await vi.advanceTimersByTimeAsync(0);
+    child.emit('spawn');
+    await vi.advanceTimersByTimeAsync(2000);
+    await expect(result).resolves.toEqual({ state: 'accepted' });
+    child.stderr.emit('data', Buffer.from('could not connect to display /private'));
+    // Node uses null for an exit caused by a signal.
+    // oxlint-disable-next-line unicorn/no-null
+    child.emit('close', null, 'SIGUSR1');
+    expect(diagnostic).toHaveBeenCalledWith({ reason: 'display', signal: 'other' });
+    expect(late).toHaveBeenCalledWith({ state: 'failed', reason: 'display' });
+  });
+
+  it.each(['SIGPIPE', 'SIGSYS'] as const)('reports %s as an allowlisted signal', async (signal) => {
+    installed();
+    const child = childProcess();
+    fakes.spawn.mockReturnValue(child);
+    const diagnostic = vi.fn<(event: import('../src/facepalm_settings_launcher').FacepalmSettingsDiagnostic) => void>();
+    const result = openFacepalmSettings('linux', false, undefined, diagnostic);
+    await vi.waitFor(() => {
+      expect(fakes.spawn).toHaveBeenCalled();
+    });
+    child.emit('spawn');
+    // Node uses null for an exit caused by a signal.
+    // oxlint-disable-next-line unicorn/no-null
+    child.emit('close', null, signal);
+    await result;
+    expect(diagnostic).toHaveBeenCalledWith({ reason: 'exit', signal });
+  });
+
+  it('reports a normal failure without a signal and ignores a timeout kill', async () => {
+    vi.useFakeTimers();
+    installed();
+    const first = childProcess();
+    const second = childProcess();
+    fakes.spawn.mockReturnValueOnce(first).mockReturnValueOnce(second);
+    const diagnostic = vi.fn<(event: import('../src/facepalm_settings_launcher').FacepalmSettingsDiagnostic) => void>();
+    const one = openFacepalmSettings('linux', false, undefined, diagnostic);
+    await vi.advanceTimersByTimeAsync(0);
+    first.emit('spawn');
+    // Node uses null when a process exits without a signal.
+    // oxlint-disable-next-line unicorn/no-null
+    first.emit('close', 1, null);
+    await expect(one).resolves.toEqual({ state: 'failed', reason: 'exit', code: 1 });
+    expect(diagnostic).toHaveBeenCalledWith({ reason: 'exit', signal: 'none' });
+    const two = openFacepalmSettings('linux', false, undefined, diagnostic);
+    await vi.advanceTimersByTimeAsync(2000);
+    await expect(two).resolves.toEqual({ state: 'failed', reason: 'timeout' });
+    // Node uses null for an exit caused by a signal.
+    // oxlint-disable-next-line unicorn/no-null
+    second.emit('close', null, 'SIGTERM');
+    expect(diagnostic).toHaveBeenCalledTimes(1);
+  });
+
   it('recognizes an unacknowledged tray request without exposing raw stderr', async () => {
     installed();
     const child = childProcess();

@@ -179,7 +179,10 @@ export function createCompanionSession(context: vscode.ExtensionContext, epoch: 
     send: (frame) => {
       void channel.send(frame);
     },
-    openSettings: (onLateFailure) => openFacepalmSettings(process.platform, false, onLateFailure),
+    openSettings: (onLateFailure) =>
+      openFacepalmSettings(process.platform, false, onLateFailure, (diagnostic) => {
+        localLog.warn(`Facepalm settings process: reason=${diagnostic.reason}, signal=${diagnostic.signal}`);
+      }),
   });
   localFacepalm.onStatus = (snapshot) => {
     void channel.send({

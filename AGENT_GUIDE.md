@@ -375,6 +375,13 @@ type_fast ";▌"
     confusion, or that it can't tell. Use it, if at all, only to decide whether
     to check in or slow down; it never answers a question, approves a command,
     or overrides what the programmer actually said.
+-   **A question beat requires a `say` whose entire text, after trimming
+    whitespace, ends in `?`.** Text after the question, such as an instruction
+    to nod or shake, prevents that `say` from marking a question beat. For a
+    smoke test, use a standalone `say: "Shall I create a tiny scratch file?"`.
+    The reaction window lasts 1.5 seconds after the batch finishes playback;
+    retrieve the finished batch in a subsequent report. A missing Facepalm
+    line does not establish that the camera is off.
 -   **A Facepalm line may add where they were looking, in parentheses: "looking
     away" or "glancing away".** This is context, never a reading of its own,
     and it never changes the feeling it follows. The one case worth noticing:

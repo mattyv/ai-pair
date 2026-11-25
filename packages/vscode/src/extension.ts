@@ -846,9 +846,16 @@ export function activate(context: vscode.ExtensionContext): Api {
             function current(): boolean {
               return selectedFacepalm === target && panel.speechReadyPageId() === page && localControlSerial === serial;
             }
-            void openFacepalmSettings(process.platform, false, (failure) => {
-              if (current()) void vscode.window.showWarningMessage(facepalmSettingsWarning(failure));
-            }).then(
+            void openFacepalmSettings(
+              process.platform,
+              false,
+              (failure) => {
+                if (current()) void vscode.window.showWarningMessage(facepalmSettingsWarning(failure));
+              },
+              (diagnostic) => {
+                log.warn(`Facepalm settings process: reason=${diagnostic.reason}, signal=${diagnostic.signal}`);
+              },
+            ).then(
               (result) => {
                 finishLocalControl(serial);
                 if (!current()) return;

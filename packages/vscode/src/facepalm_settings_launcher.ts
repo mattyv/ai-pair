@@ -12,6 +12,48 @@ const STARTUP_GRACE_MS = 2000;
 /** Maximum diagnostic text inspected; raw diagnostics are never displayed. */
 const MAX_DIAGNOSTIC_CHARS = 4096;
 
+/** Local-only, bounded facts about a failed menu process. */
+export interface FacepalmSettingsDiagnostic {
+  reason: Extract<FacepalmSettingsLaunch, { state: 'failed' }>['reason'];
+  signal:
+    | 'SIGABRT'
+    | 'SIGTERM'
+    | 'SIGKILL'
+    | 'SIGSEGV'
+    | 'SIGILL'
+    | 'SIGBUS'
+    | 'SIGTRAP'
+    | 'SIGPIPE'
+    | 'SIGSYS'
+    | 'SIGHUP'
+    | 'SIGINT'
+    | 'other'
+    | 'none';
+}
+
+/** Reduces the operating system signal to a fixed allowlist. */
+function diagnosticSignal(signal: NodeJS.Signals | null): FacepalmSettingsDiagnostic['signal'] {
+  const normalized = signal ?? undefined;
+  switch (normalized) {
+    case 'SIGABRT':
+    case 'SIGTERM':
+    case 'SIGKILL':
+    case 'SIGSEGV':
+    case 'SIGILL':
+    case 'SIGBUS':
+    case 'SIGTRAP':
+    case 'SIGPIPE':
+    case 'SIGSYS':
+    case 'SIGHUP':
+    case 'SIGINT':
+      return normalized;
+    case undefined:
+      return 'none';
+    default:
+      return 'other';
+  }
+}
+
 /** Gives a bounded, actionable message without exposing the child's raw stderr. */
 export function facepalmSettingsWarning(
   result: Extract<FacepalmSettingsLaunch, { state: 'failed' }>,
@@ -39,6 +81,7 @@ export async function openFacepalmSettings(
   platform: NodeJS.Platform,
   remote: boolean,
   onLateFailure?: (failure: Extract<FacepalmSettingsLaunch, { state: 'failed' }>) => void,
+  onDiagnostic?: (diagnostic: FacepalmSettingsDiagnostic) => void,
 ): Promise<FacepalmSettingsLaunch> {
   if (remote) return { state: 'failed', reason: 'unavailable' };
   const candidates =
@@ -102,7 +145,7 @@ export async function openFacepalmSettings(
             finish({ state: 'accepted' });
           }, STARTUP_GRACE_MS);
         });
-        child.once('close', (code) => {
+        child.once('close', (code, signal) => {
           // specs/FacepalmSettingsLaunch.tla, CleanExit and Fail: a forwarder may exit cleanly.
           if (code === 0 && (spawned || platform === 'darwin')) {
             finish({ state: 'accepted' });
@@ -118,6 +161,13 @@ export async function openFacepalmSettings(
               : text.includes('qt platform plugin')
                 ? { state: 'failed', reason: 'qt' }
                 : { state: 'failed', reason: 'exit', ...(code === null ? {} : { code }) };
+          if (!settled || accepted) {
+            try {
+              onDiagnostic?.({ reason: failure.reason, signal: diagnosticSignal(signal) });
+            } catch {
+              /* Diagnostics cannot affect the launcher. */
+            }
+          }
           if (settled && accepted) {
             try {
               onLateFailure?.(failure);
